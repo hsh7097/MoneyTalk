@@ -63,8 +63,8 @@ class HomeViewModel @Inject constructor(
                 // 카테고리별 지출
                 val categoryExpenses = expenseRepository.getExpenseSumByCategory(monthStart, monthEnd)
 
-                // 최근 지출 5건
-                val recentExpenses = expenseRepository.getRecentExpenses(5)
+                // 최근 지출 20건
+                val recentExpenses = expenseRepository.getRecentExpenses(20)
 
                 _uiState.update {
                     it.copy(

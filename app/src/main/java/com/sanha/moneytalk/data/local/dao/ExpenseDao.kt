@@ -48,9 +48,47 @@ interface ExpenseDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM expenses WHERE smsId = :smsId)")
     suspend fun existsBySmsId(smsId: String): Boolean
+
+    // 카드사별 필터링
+    @Query("SELECT * FROM expenses WHERE cardName = :cardName ORDER BY dateTime DESC")
+    fun getExpensesByCardName(cardName: String): Flow<List<ExpenseEntity>>
+
+    // 카드사 + 기간 필터링
+    @Query("SELECT * FROM expenses WHERE cardName = :cardName AND dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
+    fun getExpensesByCardNameAndDateRange(cardName: String, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>>
+
+    // 카테고리 + 기간 필터링
+    @Query("SELECT * FROM expenses WHERE category = :category AND dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
+    fun getExpensesByCategoryAndDateRange(category: String, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>>
+
+    // 모든 필터 적용 (카드사 + 카테고리 + 기간)
+    @Query("SELECT * FROM expenses WHERE (:cardName IS NULL OR cardName = :cardName) AND (:category IS NULL OR category = :category) AND dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
+    fun getExpensesFiltered(cardName: String?, category: String?, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>>
+
+    // 모든 카드사 목록 가져오기
+    @Query("SELECT DISTINCT cardName FROM expenses ORDER BY cardName")
+    suspend fun getAllCardNames(): List<String>
+
+    // 날짜별 총액 (일별 합계)
+    @Query("SELECT date(dateTime/1000, 'unixepoch', 'localtime') as date, SUM(amount) as total FROM expenses WHERE dateTime BETWEEN :startTime AND :endTime GROUP BY date ORDER BY date DESC")
+    suspend fun getDailyTotals(startTime: Long, endTime: Long): List<DailySum>
+
+    // 월별 총액
+    @Query("SELECT strftime('%Y-%m', dateTime/1000, 'unixepoch', 'localtime') as month, SUM(amount) as total FROM expenses GROUP BY month ORDER BY month DESC")
+    suspend fun getMonthlyTotals(): List<MonthlySum>
 }
 
 data class CategorySum(
     val category: String,
+    val total: Int
+)
+
+data class DailySum(
+    val date: String,
+    val total: Int
+)
+
+data class MonthlySum(
+    val month: String,
     val total: Int
 )

@@ -160,68 +160,116 @@ object SmsParser {
         )
     }
 
+    // 제외할 가게명 패턴 (URL, 발신 표시, 기타 비가게명)
+    private val excludeStorePatterns = listOf(
+        "Web발신", "web발신", "WEB발신",
+        "ltcard", "card.kr", ".kr", ".com", ".co.kr", "http", "www",
+        "기준", "누적", "잔액", "한도", "가용",
+        "일시불", "할부", "취소", "승인", "결제", "출금", "사용",
+        "체크", "신용", "님", "고객", "회원",
+        "원", "건", "월", "일", "시", "분",
+        "SMS", "MMS", "안내", "알림"
+    )
+
     /**
      * 가게명 추출
-     * SMS 형식 분석하여 금액 근처의 가게명 추출
+     * 한국 카드사 SMS 형식에 맞춰 가게명 추출
+     * 일반적인 형식: [카드사] MM/DD HH:mm 가게명 금액원 승인
      */
     fun extractStoreName(message: String): String {
-        // 불필요한 정보 제거
-        val cleanKeywords = listOf(
-            "일시불", "할부", "취소", "승인", "결제", "출금",
-            "누적", "잔액", "체크", "신용", "님"
-        )
-
-        // 금액 패턴 - 금액 앞뒤로 가게명이 있을 가능성이 높음
-        val amountPattern = Regex("""([\d,]+)원""")
-        val amountMatch = amountPattern.find(message) ?: return "기타"
-
-        // 금액 뒤에서 가게명 추출 시도
-        val afterAmount = message.substring(amountMatch.range.last + 1).trim()
-        val beforeAmount = message.substring(0, amountMatch.range.first).trim()
-
-        // 금액 뒤에 있는 텍스트에서 가게명 추출
-        var storeName = extractStoreNameFromText(afterAmount, cleanKeywords)
-
-        // 금액 뒤에서 찾지 못하면 금액 앞에서 추출 시도
-        if (storeName.isBlank() || storeName == "기타") {
-            storeName = extractStoreNameFromText(beforeAmount, cleanKeywords)
-        }
-
-        // 특수 패턴 처리: [카드사] 날짜 시간 금액 가게명
-        if (storeName.isBlank() || storeName == "기타") {
-            // 시간 패턴 이후의 텍스트 추출
-            val timePattern = Regex("""\d{1,2}:\d{2}""")
-            val timeMatch = timePattern.find(message)
-            if (timeMatch != null) {
-                val afterTime = message.substring(timeMatch.range.last + 1).trim()
-                storeName = extractStoreNameFromText(afterTime, cleanKeywords)
+        // 패턴 1: 시간 뒤에 가게명이 오는 경우 (가장 흔함)
+        // 예: "KB국민 12/25 14:30 스타벅스 15,000원 승인"
+        val timePattern = Regex("""(\d{1,2}:\d{2})\s*(.+?)[\s]*[\d,]+원""")
+        val timeMatch = timePattern.find(message)
+        if (timeMatch != null) {
+            val potentialStore = timeMatch.groupValues[2].trim()
+            val cleanStore = cleanStoreName(potentialStore)
+            if (isValidStoreName(cleanStore)) {
+                return cleanStore
             }
         }
 
-        return if (storeName.isNotBlank()) storeName else "기타"
+        // 패턴 2: 금액 바로 앞에 가게명이 오는 경우
+        // 예: "신한카드 스타벅스 15,000원 결제"
+        val beforeAmountPattern = Regex("""(.+?)\s*([\d,]+)원""")
+        val beforeMatch = beforeAmountPattern.find(message)
+        if (beforeMatch != null) {
+            val beforeText = beforeMatch.groupValues[1]
+            // 마지막 공백 이후 단어 추출
+            val words = beforeText.split(Regex("""[\s\[\]()\/\n]+""")).filter { it.isNotBlank() }
+            for (i in words.indices.reversed()) {
+                val word = cleanStoreName(words[i])
+                if (isValidStoreName(word) && !cardKeywords.any { word.contains(it) }) {
+                    return word
+                }
+            }
+        }
+
+        // 패턴 3: 금액 뒤에 가게명이 오는 경우
+        // 예: "15,000원 스타벅스 승인"
+        val afterAmountPattern = Regex("""[\d,]+원\s*(.+?)(?:승인|결제|사용|일시불|할부|\s*$)""")
+        val afterMatch = afterAmountPattern.find(message)
+        if (afterMatch != null) {
+            val potentialStore = afterMatch.groupValues[1].trim()
+            val cleanStore = cleanStoreName(potentialStore)
+            if (isValidStoreName(cleanStore)) {
+                return cleanStore
+            }
+        }
+
+        // 패턴 4: 전체 메시지에서 유효한 가게명 추출
+        val words = message.split(Regex("""[\s\[\]()\/,\n]+"""))
+            .map { cleanStoreName(it) }
+            .filter { isValidStoreName(it) && !cardKeywords.any { keyword -> it.contains(keyword) } }
+
+        return words.firstOrNull() ?: "결제"
     }
 
     /**
-     * 텍스트에서 가게명 후보 추출
+     * 가게명 정리 (불필요한 문자 제거)
+     */
+    private fun cleanStoreName(name: String): String {
+        var cleaned = name.trim()
+        // 앞뒤 특수문자 제거
+        cleaned = cleaned.replace(Regex("""^[^\w가-힣]+|[^\w가-힣]+$"""), "")
+        // 최대 15자로 제한
+        return cleaned.take(15)
+    }
+
+    /**
+     * 유효한 가게명인지 확인
+     */
+    private fun isValidStoreName(name: String): Boolean {
+        if (name.isBlank() || name.length < 2) return false
+
+        // 숫자로만 구성된 경우 제외
+        if (name.matches(Regex("""[\d,.:]+"""))) return false
+
+        // 날짜/시간 패턴 제외
+        if (name.matches(Regex("""\d{1,2}[/.-]\d{1,2}"""))) return false
+        if (name.matches(Regex("""\d{1,2}:\d{2}"""))) return false
+
+        // 제외 패턴에 해당하는 경우 제외
+        for (pattern in excludeStorePatterns) {
+            if (name.equals(pattern, ignoreCase = true) || name.contains(pattern, ignoreCase = true)) {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    /**
+     * 텍스트에서 가게명 후보 추출 (레거시 - 호환성 유지)
      */
     private fun extractStoreNameFromText(text: String, excludeKeywords: List<String>): String {
         if (text.isBlank()) return ""
 
-        // 공백이나 특수문자로 분리
         val parts = text.split(Regex("""[\s\[\]()\/,\n]+"""))
-            .map { it.trim() }
-            .filter { part ->
-                part.isNotBlank() &&
-                part.length >= 2 &&
-                !part.matches(Regex("""[\d,]+""")) && // 숫자만 있는 건 제외
-                !part.matches(Regex("""\d{1,2}[/.-]\d{1,2}""")) && // 날짜 패턴 제외
-                !part.matches(Regex("""\d{1,2}:\d{2}""")) && // 시간 패턴 제외
-                !excludeKeywords.any { keyword -> part.contains(keyword) } &&
-                !cardKeywords.any { keyword -> part.contains(keyword) }
-            }
+            .map { cleanStoreName(it) }
+            .filter { isValidStoreName(it) && !excludeKeywords.any { keyword -> it.contains(keyword) } }
 
-        // 첫 번째 유효한 부분 반환 (가게명일 확률이 높음)
-        return parts.firstOrNull()?.take(20) ?: "" // 최대 20자
+        return parts.firstOrNull() ?: ""
     }
 
     /**

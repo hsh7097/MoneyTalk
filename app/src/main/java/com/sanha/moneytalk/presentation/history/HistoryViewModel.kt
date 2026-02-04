@@ -2,10 +2,12 @@ package com.sanha.moneytalk.presentation.history
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sanha.moneytalk.data.local.dao.DailySum
 import com.sanha.moneytalk.data.local.entity.ExpenseEntity
 import com.sanha.moneytalk.data.repository.ExpenseRepository
 import com.sanha.moneytalk.util.DateUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -14,6 +16,12 @@ data class HistoryUiState(
     val isLoading: Boolean = false,
     val expenses: List<ExpenseEntity> = emptyList(),
     val selectedCategory: String? = null,
+    val selectedCardName: String? = null,
+    val selectedYear: Int = DateUtils.getCurrentYear(),
+    val selectedMonth: Int = DateUtils.getCurrentMonth(),
+    val cardNames: List<String> = emptyList(),
+    val monthlyTotal: Int = 0,
+    val dailyTotals: List<DailySum> = emptyList(),
     val errorMessage: String? = null
 )
 
@@ -25,15 +33,49 @@ class HistoryViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(HistoryUiState())
     val uiState: StateFlow<HistoryUiState> = _uiState.asStateFlow()
 
+    private var loadJob: Job? = null
+
     init {
-        loadAllExpenses()
+        loadCardNames()
+        loadExpenses()
     }
 
-    private fun loadAllExpenses() {
+    private fun loadCardNames() {
         viewModelScope.launch {
+            try {
+                val cardNames = expenseRepository.getAllCardNames()
+                _uiState.update { it.copy(cardNames = cardNames) }
+            } catch (e: Exception) {
+                // 카드 목록 로딩 실패 시 무시
+            }
+        }
+    }
+
+    private fun loadExpenses() {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
 
-            expenseRepository.getAllExpenses()
+            val state = _uiState.value
+            val startTime = DateUtils.getMonthStartTimestamp(state.selectedYear, state.selectedMonth)
+            val endTime = DateUtils.getMonthEndTimestamp(state.selectedYear, state.selectedMonth)
+
+            // 월별 총액 로드
+            try {
+                val monthlyTotal = expenseRepository.getTotalExpenseByDateRange(startTime, endTime)
+                val dailyTotals = expenseRepository.getDailyTotals(startTime, endTime)
+                _uiState.update { it.copy(monthlyTotal = monthlyTotal, dailyTotals = dailyTotals) }
+            } catch (e: Exception) {
+                // 총액 로딩 실패 시 무시
+            }
+
+            // 필터링된 지출 내역 로드
+            expenseRepository.getExpensesFiltered(
+                cardName = state.selectedCardName,
+                category = state.selectedCategory,
+                startTime = startTime,
+                endTime = endTime
+            )
                 .catch { e ->
                     _uiState.update {
                         it.copy(isLoading = false, errorMessage = e.message)
@@ -47,32 +89,49 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
-    fun filterByCategory(category: String?) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(selectedCategory = category, isLoading = true) }
+    fun setMonth(year: Int, month: Int) {
+        _uiState.update { it.copy(selectedYear = year, selectedMonth = month) }
+        loadExpenses()
+    }
 
-            if (category == null) {
-                loadAllExpenses()
-            } else {
-                expenseRepository.getExpensesByCategory(category)
-                    .catch { e ->
-                        _uiState.update {
-                            it.copy(isLoading = false, errorMessage = e.message)
-                        }
-                    }
-                    .collect { expenses ->
-                        _uiState.update {
-                            it.copy(isLoading = false, expenses = expenses)
-                        }
-                    }
-            }
+    fun previousMonth() {
+        val state = _uiState.value
+        var newYear = state.selectedYear
+        var newMonth = state.selectedMonth - 1
+        if (newMonth < 1) {
+            newMonth = 12
+            newYear -= 1
         }
+        setMonth(newYear, newMonth)
+    }
+
+    fun nextMonth() {
+        val state = _uiState.value
+        var newYear = state.selectedYear
+        var newMonth = state.selectedMonth + 1
+        if (newMonth > 12) {
+            newMonth = 1
+            newYear += 1
+        }
+        setMonth(newYear, newMonth)
+    }
+
+    fun filterByCategory(category: String?) {
+        _uiState.update { it.copy(selectedCategory = category) }
+        loadExpenses()
+    }
+
+    fun filterByCardName(cardName: String?) {
+        _uiState.update { it.copy(selectedCardName = cardName) }
+        loadExpenses()
     }
 
     fun deleteExpense(expense: ExpenseEntity) {
         viewModelScope.launch {
             try {
                 expenseRepository.delete(expense)
+                // 삭제 후 새로고침
+                loadExpenses()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
             }

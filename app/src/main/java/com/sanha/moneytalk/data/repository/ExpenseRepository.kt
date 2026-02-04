@@ -1,7 +1,9 @@
 package com.sanha.moneytalk.data.repository
 
 import com.sanha.moneytalk.data.local.dao.CategorySum
+import com.sanha.moneytalk.data.local.dao.DailySum
 import com.sanha.moneytalk.data.local.dao.ExpenseDao
+import com.sanha.moneytalk.data.local.dao.MonthlySum
 import com.sanha.moneytalk.data.local.entity.ExpenseEntity
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
@@ -18,6 +20,18 @@ class ExpenseRepository @Inject constructor(
 
     fun getExpensesByCategory(category: String): Flow<List<ExpenseEntity>> =
         expenseDao.getExpensesByCategory(category)
+
+    fun getExpensesByCardName(cardName: String): Flow<List<ExpenseEntity>> =
+        expenseDao.getExpensesByCardName(cardName)
+
+    fun getExpensesByCardNameAndDateRange(cardName: String, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>> =
+        expenseDao.getExpensesByCardNameAndDateRange(cardName, startTime, endTime)
+
+    fun getExpensesByCategoryAndDateRange(category: String, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>> =
+        expenseDao.getExpensesByCategoryAndDateRange(category, startTime, endTime)
+
+    fun getExpensesFiltered(cardName: String?, category: String?, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>> =
+        expenseDao.getExpensesFiltered(cardName, category, startTime, endTime)
 
     suspend fun insert(expense: ExpenseEntity): Long = expenseDao.insert(expense)
 
@@ -43,4 +57,13 @@ class ExpenseRepository @Inject constructor(
 
     suspend fun getRecentExpenses(limit: Int): List<ExpenseEntity> =
         expenseDao.getRecentExpenses(limit)
+
+    suspend fun getAllCardNames(): List<String> =
+        expenseDao.getAllCardNames()
+
+    suspend fun getDailyTotals(startTime: Long, endTime: Long): List<DailySum> =
+        expenseDao.getDailyTotals(startTime, endTime)
+
+    suspend fun getMonthlyTotals(): List<MonthlySum> =
+        expenseDao.getMonthlyTotals()
 }

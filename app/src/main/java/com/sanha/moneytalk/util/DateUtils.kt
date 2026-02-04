@@ -112,4 +112,71 @@ object DateUtils {
         calendar.set(Calendar.MILLISECOND, 0)
         return calendar.timeInMillis
     }
+
+    /**
+     * 특정 년월의 시작 timestamp
+     */
+    fun getMonthStartTimestamp(year: Int, month: Int): Long {
+        val calendar = Calendar.getInstance()
+        calendar.set(Calendar.YEAR, year)
+        calendar.set(Calendar.MONTH, month - 1) // Calendar.MONTH는 0부터 시작
+        calendar.set(Calendar.DAY_OF_MONTH, 1)
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        return calendar.timeInMillis
+    }
+
+    /**
+     * 특정 년월의 끝 timestamp
+     */
+    fun getMonthEndTimestamp(year: Int, month: Int): Long {
+        val calendar = Calendar.getInstance()
+        calendar.set(Calendar.YEAR, year)
+        calendar.set(Calendar.MONTH, month - 1)
+        calendar.set(Calendar.DAY_OF_MONTH, calendar.getActualMaximum(Calendar.DAY_OF_MONTH))
+        calendar.set(Calendar.HOUR_OF_DAY, 23)
+        calendar.set(Calendar.MINUTE, 59)
+        calendar.set(Calendar.SECOND, 59)
+        calendar.set(Calendar.MILLISECOND, 999)
+        return calendar.timeInMillis
+    }
+
+    /**
+     * 현재 년도 가져오기
+     */
+    fun getCurrentYear(): Int {
+        return Calendar.getInstance().get(Calendar.YEAR)
+    }
+
+    /**
+     * 현재 월 가져오기 (1-12)
+     */
+    fun getCurrentMonth(): Int {
+        return Calendar.getInstance().get(Calendar.MONTH) + 1
+    }
+
+    /**
+     * 년월 표시 문자열 "yyyy년 M월"
+     */
+    fun formatYearMonth(year: Int, month: Int): String {
+        return "${year}년 ${month}월"
+    }
+
+    /**
+     * 날짜 문자열 "yyyy-MM-dd"를 "M월 d일" 형식으로 변환
+     */
+    fun formatDateString(dateString: String): String {
+        return try {
+            val date = dateFormat.parse(dateString)
+            if (date != null) {
+                SimpleDateFormat("M월 d일", Locale.KOREA).format(date)
+            } else {
+                dateString
+            }
+        } catch (e: Exception) {
+            dateString
+        }
+    }
 }
