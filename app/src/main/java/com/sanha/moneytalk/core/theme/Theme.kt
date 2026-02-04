@@ -85,20 +85,14 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun MoneyTalkTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = true, // 뱅크샐러드 스타일 - 항상 다크 모드
     // Dynamic color is available on Android 12+
     // 앱 브랜드 색상을 유지하려면 false로 설정
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
+    // 항상 다크 테마 사용 (뱅크샐러드 스타일)
+    val colorScheme = DarkColorScheme
 
     // 상태바 색상 설정
     val view = LocalView.current
