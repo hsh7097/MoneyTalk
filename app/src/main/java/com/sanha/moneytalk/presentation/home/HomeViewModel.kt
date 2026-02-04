@@ -138,10 +138,16 @@ class HomeViewModel @Inject constructor(
     }
 
     fun setApiKey(key: String) {
-        claudeRepository.setApiKey(key)
+        viewModelScope.launch {
+            claudeRepository.setApiKey(key)
+        }
     }
 
-    fun hasApiKey(): Boolean = claudeRepository.hasApiKey()
+    fun hasApiKey(callback: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            callback(claudeRepository.hasApiKey())
+        }
+    }
 
     fun refresh() {
         loadData()
