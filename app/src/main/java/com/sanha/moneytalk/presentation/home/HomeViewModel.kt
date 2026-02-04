@@ -99,10 +99,11 @@ class HomeViewModel @Inject constructor(
                         continue
                     }
 
-                    // Claude로 분석
-                    val result = claudeRepository.analyzeSms(sms.body)
+                    // 로컬 정규식으로 파싱 (API 호출 없음)
+                    val analysis = SmsParser.parseSms(sms.body, sms.date)
 
-                    result.onSuccess { analysis ->
+                    // 금액이 0보다 큰 경우에만 저장
+                    if (analysis.amount > 0) {
                         val expense = ExpenseEntity(
                             amount = analysis.amount,
                             storeName = analysis.storeName,
