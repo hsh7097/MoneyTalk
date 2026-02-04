@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.sanha.moneytalk.BuildConfig
@@ -24,6 +25,7 @@ class SettingsDataStore @Inject constructor(
     companion object {
         private val CLAUDE_API_KEY = stringPreferencesKey("claude_api_key")
         private val MONTHLY_INCOME = intPreferencesKey("monthly_income")
+        private val LAST_SYNC_TIME = longPreferencesKey("last_sync_time")
     }
 
     // API 키 저장
@@ -62,5 +64,17 @@ class SettingsDataStore @Inject constructor(
 
     suspend fun getMonthlyIncome(): Int {
         return context.dataStore.data.first()[MONTHLY_INCOME] ?: 0
+    }
+
+    // 마지막 동기화 시간 저장
+    suspend fun saveLastSyncTime(timestamp: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[LAST_SYNC_TIME] = timestamp
+        }
+    }
+
+    // 마지막 동기화 시간 가져오기
+    suspend fun getLastSyncTime(): Long {
+        return context.dataStore.data.first()[LAST_SYNC_TIME] ?: 0L
     }
 }

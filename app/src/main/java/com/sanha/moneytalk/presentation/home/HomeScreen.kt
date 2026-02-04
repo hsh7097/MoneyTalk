@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.presentation.home
 
+import android.content.ContentResolver
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -24,9 +26,19 @@ import java.util.*
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
-    onRequestSmsPermission: () -> Unit
+    onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
+    autoSyncOnStart: Boolean = false
 ) {
+    val context = LocalContext.current
+    val contentResolver = context.contentResolver
     val uiState by viewModel.uiState.collectAsState()
+
+    // 앱 시작 시 자동 동기화
+    LaunchedEffect(autoSyncOnStart) {
+        if (autoSyncOnStart) {
+            viewModel.syncSmsMessages(contentResolver)
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -40,7 +52,11 @@ fun HomeScreen(
                 income = uiState.monthlyIncome,
                 expense = uiState.monthlyExpense,
                 remaining = uiState.remainingBudget,
-                onSyncClick = onRequestSmsPermission,
+                onSyncClick = {
+                    onRequestSmsPermission {
+                        viewModel.syncSmsMessages(contentResolver)
+                    }
+                },
                 isSyncing = uiState.isSyncing
             )
         }

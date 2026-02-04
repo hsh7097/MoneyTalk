@@ -164,11 +164,8 @@ fun MoneyTalkApp(
         ) {
             NavGraph(
                 navController = navController,
-                onRequestSmsPermission = {
-                    onRequestSmsPermission {
-                        // 권한 획득 후 처리
-                    }
-                }
+                onRequestSmsPermission = onRequestSmsPermission,
+                autoSyncOnStart = permissionGranted
             )
         }
     }

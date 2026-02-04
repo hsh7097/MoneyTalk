@@ -12,7 +12,8 @@ import com.sanha.moneytalk.presentation.settings.SettingsScreen
 @Composable
 fun NavGraph(
     navController: NavHostController,
-    onRequestSmsPermission: () -> Unit
+    onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
+    autoSyncOnStart: Boolean = false
 ) {
     NavHost(
         navController = navController,
@@ -20,7 +21,8 @@ fun NavGraph(
     ) {
         composable(Screen.Home.route) {
             HomeScreen(
-                onRequestSmsPermission = onRequestSmsPermission
+                onRequestSmsPermission = onRequestSmsPermission,
+                autoSyncOnStart = autoSyncOnStart
             )
         }
 

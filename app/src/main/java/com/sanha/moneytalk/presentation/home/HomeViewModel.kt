@@ -3,6 +3,7 @@ package com.sanha.moneytalk.presentation.home
 import android.content.ContentResolver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sanha.moneytalk.data.local.SettingsDataStore
 import com.sanha.moneytalk.data.local.dao.CategorySum
 import com.sanha.moneytalk.data.local.entity.ExpenseEntity
 import com.sanha.moneytalk.data.repository.ClaudeRepository
@@ -34,7 +35,8 @@ class HomeViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val claudeRepository: ClaudeRepository,
-    private val smsReader: SmsReader
+    private val smsReader: SmsReader,
+    private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -85,12 +87,22 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun syncSmsMessages(contentResolver: ContentResolver) {
+    fun syncSmsMessages(contentResolver: ContentResolver, forceFullSync: Boolean = false) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSyncing = true) }
 
             try {
-                val smsList = smsReader.readAllCardSms(contentResolver)
+                // 마지막 동기화 시간 가져오기
+                val lastSyncTime = if (forceFullSync) 0L else settingsDataStore.getLastSyncTime()
+                val currentTime = System.currentTimeMillis()
+
+                // 마지막 동기화 이후의 SMS만 가져오기 (증분 동기화)
+                val smsList = if (lastSyncTime > 0) {
+                    smsReader.readCardSmsByDateRange(contentResolver, lastSyncTime, currentTime)
+                } else {
+                    smsReader.readAllCardSms(contentResolver)
+                }
+
                 var newCount = 0
 
                 for (sms in smsList) {
@@ -118,13 +130,16 @@ class HomeViewModel @Inject constructor(
                     }
                 }
 
+                // 마지막 동기화 시간 저장
+                settingsDataStore.saveLastSyncTime(currentTime)
+
                 // 데이터 새로고침
                 loadData()
 
                 _uiState.update {
                     it.copy(
                         isSyncing = false,
-                        errorMessage = if (newCount > 0) "${newCount}건의 새 지출이 추가되었습니다" else null
+                        errorMessage = if (newCount > 0) "${newCount}건의 새 지출이 추가되었습니다" else "새로운 지출이 없습니다"
                     )
                 }
             } catch (e: Exception) {
