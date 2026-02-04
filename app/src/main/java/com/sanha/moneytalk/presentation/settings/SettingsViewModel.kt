@@ -13,6 +13,7 @@ data class SettingsUiState(
     val apiKey: String = "",
     val hasApiKey: Boolean = false,
     val monthlyIncome: Int = 0,
+    val monthStartDay: Int = 1,
     val isLoading: Boolean = false,
     val message: String? = null
 )
@@ -47,6 +48,13 @@ class SettingsViewModel @Inject constructor(
             // 월 수입 로드
             settingsDataStore.monthlyIncomeFlow.collect { income ->
                 _uiState.update { it.copy(monthlyIncome = income) }
+            }
+        }
+
+        viewModelScope.launch {
+            // 월 시작일 로드
+            settingsDataStore.monthStartDayFlow.collect { day ->
+                _uiState.update { it.copy(monthStartDay = day) }
             }
         }
     }
@@ -96,6 +104,29 @@ class SettingsViewModel @Inject constructor(
                         isLoading = false,
                         monthlyIncome = income,
                         message = "월 수입이 저장되었습니다"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = "저장 실패: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    fun saveMonthStartDay(day: Int) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                settingsDataStore.saveMonthStartDay(day)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        monthStartDay = day,
+                        message = "월 시작일이 ${day}일로 설정되었습니다"
                     )
                 }
             } catch (e: Exception) {

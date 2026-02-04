@@ -1,18 +1,20 @@
 package com.sanha.moneytalk.presentation.home
 
-import android.content.ContentResolver
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.data.local.dao.CategorySum
@@ -49,9 +51,15 @@ fun HomeScreen(
         // 월간 현황 카드
         item {
             MonthlyOverviewCard(
+                year = uiState.selectedYear,
+                month = uiState.selectedMonth,
+                monthStartDay = uiState.monthStartDay,
+                periodLabel = uiState.periodLabel,
                 income = uiState.monthlyIncome,
                 expense = uiState.monthlyExpense,
                 remaining = uiState.remainingBudget,
+                onPreviousMonth = { viewModel.previousMonth() },
+                onNextMonth = { viewModel.nextMonth() },
                 onSyncClick = {
                     onRequestSmsPermission {
                         viewModel.syncSmsMessages(contentResolver)
@@ -100,9 +108,15 @@ fun HomeScreen(
 
 @Composable
 fun MonthlyOverviewCard(
+    year: Int,
+    month: Int,
+    monthStartDay: Int,
+    periodLabel: String,
     income: Int,
     expense: Int,
     remaining: Int,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit,
     onSyncClick: () -> Unit,
     isSyncing: Boolean
 ) {
@@ -119,30 +133,60 @@ fun MonthlyOverviewCard(
         Column(
             modifier = Modifier.padding(20.dp)
         ) {
+            // 월 선택기
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "💰 ${DateUtils.getCurrentYearMonth().replace("-", "년 ")}월 현황",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                IconButton(
-                    onClick = onSyncClick,
-                    enabled = !isSyncing
+                IconButton(onClick = onPreviousMonth) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        contentDescription = "이전 달"
+                    )
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (isSyncing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp
+                    Text(
+                        text = DateUtils.formatCustomYearMonth(year, month, monthStartDay),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    if (periodLabel.isNotBlank()) {
+                        Text(
+                            text = periodLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center
                         )
-                    } else {
+                    }
+                }
+
+                Row {
+                    IconButton(onClick = onNextMonth) {
                         Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "동기화"
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = "다음 달"
                         )
+                    }
+                    IconButton(
+                        onClick = onSyncClick,
+                        enabled = !isSyncing
+                    ) {
+                        if (isSyncing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "동기화"
+                            )
+                        }
                     }
                 }
             }
@@ -215,7 +259,7 @@ fun CategoryExpenseCard(
             modifier = Modifier.padding(20.dp)
         ) {
             Text(
-                text = "📊 카테고리별 지출",
+                text = "카테고리별 지출",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )

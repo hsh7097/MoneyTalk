@@ -26,6 +26,7 @@ class SettingsDataStore @Inject constructor(
         private val CLAUDE_API_KEY = stringPreferencesKey("claude_api_key")
         private val MONTHLY_INCOME = intPreferencesKey("monthly_income")
         private val LAST_SYNC_TIME = longPreferencesKey("last_sync_time")
+        private val MONTH_START_DAY = intPreferencesKey("month_start_day")
     }
 
     // API 키 저장
@@ -76,5 +77,21 @@ class SettingsDataStore @Inject constructor(
     // 마지막 동기화 시간 가져오기
     suspend fun getLastSyncTime(): Long {
         return context.dataStore.data.first()[LAST_SYNC_TIME] ?: 0L
+    }
+
+    // 월 시작일 저장 (1-31)
+    suspend fun saveMonthStartDay(day: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[MONTH_START_DAY] = day.coerceIn(1, 31)
+        }
+    }
+
+    // 월 시작일 가져오기 (기본값: 1일)
+    val monthStartDayFlow: Flow<Int> = context.dataStore.data.map { preferences ->
+        preferences[MONTH_START_DAY] ?: 1
+    }
+
+    suspend fun getMonthStartDay(): Int {
+        return context.dataStore.data.first()[MONTH_START_DAY] ?: 1
     }
 }

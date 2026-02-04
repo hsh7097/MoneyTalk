@@ -27,6 +27,7 @@ fun SettingsScreen(
 
     var showIncomeDialog by remember { mutableStateOf(false) }
     var showApiKeyDialog by remember { mutableStateOf(false) }
+    var showMonthStartDayDialog by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -68,6 +69,16 @@ fun SettingsScreen(
                             "고정 수입을 설정하세요"
                         },
                         onClick = { showIncomeDialog = true }
+                    )
+                    SettingsItem(
+                        icon = Icons.Default.CalendarMonth,
+                        title = "월 시작일 설정",
+                        subtitle = if (uiState.monthStartDay == 1) {
+                            "매월 1일부터 (기본)"
+                        } else {
+                            "매월 ${uiState.monthStartDay}일부터"
+                        },
+                        onClick = { showMonthStartDayDialog = true }
                     )
                     SettingsItem(
                         icon = Icons.Default.PieChart,
@@ -159,6 +170,18 @@ fun SettingsScreen(
             onConfirm = { key ->
                 viewModel.saveApiKey(key)
                 showApiKeyDialog = false
+            }
+        )
+    }
+
+    // 월 시작일 설정 다이얼로그
+    if (showMonthStartDayDialog) {
+        MonthStartDayDialog(
+            initialValue = uiState.monthStartDay,
+            onDismiss = { showMonthStartDayDialog = false },
+            onConfirm = { day ->
+                viewModel.saveMonthStartDay(day)
+                showMonthStartDayDialog = false
             }
         )
     }
@@ -333,6 +356,67 @@ fun ApiKeySettingDialog(
             TextButton(
                 onClick = { onConfirm(apiKey) },
                 enabled = apiKey.isNotBlank()
+            ) {
+                Text("저장")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("취소")
+            }
+        }
+    )
+}
+
+@Composable
+fun MonthStartDayDialog(
+    initialValue: Int = 1,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var dayText by remember {
+        mutableStateOf(initialValue.toString())
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("월 시작일 설정") },
+        text = {
+            Column {
+                Text(
+                    text = "월급일 등 월 시작 기준일을 설정하세요.\n예: 21일로 설정하면 21일~다음달 20일이 한 달로 계산됩니다.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = dayText,
+                    onValueChange = {
+                        val filtered = it.filter { char -> char.isDigit() }
+                        val number = filtered.toIntOrNull() ?: 0
+                        if (number <= 31) {
+                            dayText = filtered
+                        }
+                    },
+                    label = { Text("시작일") },
+                    suffix = { Text("일") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "1~31 사이의 숫자를 입력하세요",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val day = dayText.toIntOrNull()?.coerceIn(1, 31) ?: 1
+                    onConfirm(day)
+                },
+                enabled = dayText.isNotBlank()
             ) {
                 Text("저장")
             }

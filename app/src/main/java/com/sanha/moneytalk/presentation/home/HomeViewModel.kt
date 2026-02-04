@@ -9,7 +9,6 @@ import com.sanha.moneytalk.data.local.entity.ExpenseEntity
 import com.sanha.moneytalk.data.repository.ClaudeRepository
 import com.sanha.moneytalk.data.repository.ExpenseRepository
 import com.sanha.moneytalk.data.repository.IncomeRepository
-import com.sanha.moneytalk.domain.model.Category
 import com.sanha.moneytalk.util.DateUtils
 import com.sanha.moneytalk.util.SmsParser
 import com.sanha.moneytalk.util.SmsReader
@@ -20,12 +19,15 @@ import javax.inject.Inject
 
 data class HomeUiState(
     val isLoading: Boolean = false,
+    val selectedYear: Int = DateUtils.getCurrentYear(),
+    val selectedMonth: Int = DateUtils.getCurrentMonth(),
+    val monthStartDay: Int = 1,
     val monthlyIncome: Int = 0,
     val monthlyExpense: Int = 0,
     val remainingBudget: Int = 0,
     val categoryExpenses: List<CategorySum> = emptyList(),
     val recentExpenses: List<ExpenseEntity> = emptyList(),
-    val aiInsight: String = "",
+    val periodLabel: String = "",
     val errorMessage: String? = null,
     val isSyncing: Boolean = false
 )
@@ -42,11 +44,29 @@ class HomeViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    private val monthStart = DateUtils.getMonthStartTimestamp()
-    private val monthEnd = DateUtils.getMonthEndTimestamp()
-
     init {
-        loadData()
+        loadSettings()
+    }
+
+    private fun loadSettings() {
+        viewModelScope.launch {
+            val monthStartDay = settingsDataStore.getMonthStartDay()
+
+            // 현재 커스텀 월 기간 계산
+            val (startTs, _) = DateUtils.getCurrentCustomMonthPeriod(monthStartDay)
+            val calendar = java.util.Calendar.getInstance().apply { timeInMillis = startTs }
+            val year = calendar.get(java.util.Calendar.YEAR)
+            val month = calendar.get(java.util.Calendar.MONTH) + 1
+
+            _uiState.update {
+                it.copy(
+                    monthStartDay = monthStartDay,
+                    selectedYear = year,
+                    selectedMonth = month
+                )
+            }
+            loadData()
+        }
     }
 
     private fun loadData() {
@@ -54,10 +74,24 @@ class HomeViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
 
             try {
-                // 이번 달 지출 합계
+                val state = _uiState.value
+                val (monthStart, monthEnd) = DateUtils.getCustomMonthPeriod(
+                    state.selectedYear,
+                    state.selectedMonth,
+                    state.monthStartDay
+                )
+
+                // 기간 레이블 생성
+                val periodLabel = DateUtils.formatCustomMonthPeriod(
+                    state.selectedYear,
+                    state.selectedMonth,
+                    state.monthStartDay
+                )
+
+                // 이번 기간 지출 합계
                 val totalExpense = expenseRepository.getTotalExpenseByDateRange(monthStart, monthEnd)
 
-                // 이번 달 수입 합계
+                // 이번 기간 수입 합계
                 val totalIncome = incomeRepository.getTotalIncomeByDateRange(monthStart, monthEnd)
 
                 // 카테고리별 지출
@@ -69,6 +103,7 @@ class HomeViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
+                        periodLabel = periodLabel,
                         monthlyIncome = totalIncome,
                         monthlyExpense = totalExpense,
                         remainingBudget = totalIncome - totalExpense,
@@ -85,6 +120,30 @@ class HomeViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun previousMonth() {
+        val state = _uiState.value
+        var newYear = state.selectedYear
+        var newMonth = state.selectedMonth - 1
+        if (newMonth < 1) {
+            newMonth = 12
+            newYear -= 1
+        }
+        _uiState.update { it.copy(selectedYear = newYear, selectedMonth = newMonth) }
+        loadData()
+    }
+
+    fun nextMonth() {
+        val state = _uiState.value
+        var newYear = state.selectedYear
+        var newMonth = state.selectedMonth + 1
+        if (newMonth > 12) {
+            newMonth = 1
+            newYear += 1
+        }
+        _uiState.update { it.copy(selectedYear = newYear, selectedMonth = newMonth) }
+        loadData()
     }
 
     fun syncSmsMessages(contentResolver: ContentResolver, forceFullSync: Boolean = false) {
@@ -166,7 +225,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun refresh() {
-        loadData()
+        loadSettings()
     }
 
     fun clearError() {

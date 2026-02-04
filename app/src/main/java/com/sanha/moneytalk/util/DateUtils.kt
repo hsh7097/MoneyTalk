@@ -179,4 +179,88 @@ object DateUtils {
             dateString
         }
     }
+
+    /**
+     * 커스텀 월 기간 계산 (월급일 기준)
+     * @param year 기준 연도
+     * @param month 기준 월
+     * @param monthStartDay 월 시작일 (예: 21일이면 21일부터 다음달 20일까지)
+     * @return Pair<시작 timestamp, 종료 timestamp>
+     */
+    fun getCustomMonthPeriod(year: Int, month: Int, monthStartDay: Int): Pair<Long, Long> {
+        val calendar = Calendar.getInstance()
+
+        // 시작일 계산
+        calendar.set(Calendar.YEAR, year)
+        calendar.set(Calendar.MONTH, month - 1)
+        calendar.set(Calendar.DAY_OF_MONTH, monthStartDay.coerceAtMost(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)))
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        val startTimestamp = calendar.timeInMillis
+
+        // 종료일 계산 (다음 달 시작일 전날)
+        calendar.add(Calendar.MONTH, 1)
+        calendar.set(Calendar.DAY_OF_MONTH, (monthStartDay - 1).coerceAtLeast(1).coerceAtMost(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)))
+        calendar.set(Calendar.HOUR_OF_DAY, 23)
+        calendar.set(Calendar.MINUTE, 59)
+        calendar.set(Calendar.SECOND, 59)
+        calendar.set(Calendar.MILLISECOND, 999)
+        val endTimestamp = calendar.timeInMillis
+
+        return Pair(startTimestamp, endTimestamp)
+    }
+
+    /**
+     * 현재 날짜 기준으로 현재 커스텀 월 기간 계산
+     * @param monthStartDay 월 시작일
+     * @return Pair<시작 timestamp, 종료 timestamp>
+     */
+    fun getCurrentCustomMonthPeriod(monthStartDay: Int): Pair<Long, Long> {
+        val calendar = Calendar.getInstance()
+        val today = calendar.get(Calendar.DAY_OF_MONTH)
+        val currentMonth = calendar.get(Calendar.MONTH) + 1
+        val currentYear = calendar.get(Calendar.YEAR)
+
+        // 오늘이 시작일 이전이면 이전 달 기준으로 계산
+        return if (today < monthStartDay) {
+            val prevMonth = if (currentMonth == 1) 12 else currentMonth - 1
+            val prevYear = if (currentMonth == 1) currentYear - 1 else currentYear
+            getCustomMonthPeriod(prevYear, prevMonth, monthStartDay)
+        } else {
+            getCustomMonthPeriod(currentYear, currentMonth, monthStartDay)
+        }
+    }
+
+    /**
+     * 커스텀 월 기간 표시 문자열
+     * @param year 기준 연도
+     * @param month 기준 월
+     * @param monthStartDay 월 시작일
+     * @return "M/D ~ M/D" 형식
+     */
+    fun formatCustomMonthPeriod(year: Int, month: Int, monthStartDay: Int): String {
+        val (startTs, endTs) = getCustomMonthPeriod(year, month, monthStartDay)
+        val startCal = Calendar.getInstance().apply { timeInMillis = startTs }
+        val endCal = Calendar.getInstance().apply { timeInMillis = endTs }
+
+        val startMonth = startCal.get(Calendar.MONTH) + 1
+        val startDay = startCal.get(Calendar.DAY_OF_MONTH)
+        val endMonth = endCal.get(Calendar.MONTH) + 1
+        val endDay = endCal.get(Calendar.DAY_OF_MONTH)
+
+        return "${startMonth}/${startDay} ~ ${endMonth}/${endDay}"
+    }
+
+    /**
+     * 커스텀 월 기간 표시 (년월 포함)
+     */
+    fun formatCustomYearMonth(year: Int, month: Int, monthStartDay: Int): String {
+        return if (monthStartDay == 1) {
+            "${year}년 ${month}월"
+        } else {
+            "${year}년 ${month}월 (${monthStartDay}일~)"
+        }
+    }
 }
