@@ -16,9 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.sanha.moneytalk.presentation.navigation.NavGraph
-import com.sanha.moneytalk.presentation.navigation.bottomNavItems
-import com.sanha.moneytalk.ui.theme.MoneyTalkTheme
+import com.sanha.moneytalk.navigation.NavGraph
+import com.sanha.moneytalk.navigation.bottomNavItems
+import com.sanha.moneytalk.core.theme.MoneyTalkTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint

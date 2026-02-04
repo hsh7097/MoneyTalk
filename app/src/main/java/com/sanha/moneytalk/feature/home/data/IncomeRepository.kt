@@ -1,0 +1,32 @@
+package com.sanha.moneytalk.feature.home.data
+
+import com.sanha.moneytalk.core.database.dao.IncomeDao
+import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import kotlinx.coroutines.flow.Flow
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class IncomeRepository @Inject constructor(
+    private val incomeDao: IncomeDao
+) {
+    fun getAllIncomes(): Flow<List<IncomeEntity>> = incomeDao.getAllIncomes()
+
+    fun getRecurringIncomes(): Flow<List<IncomeEntity>> = incomeDao.getRecurringIncomes()
+
+    fun getIncomesByDateRange(startTime: Long, endTime: Long): Flow<List<IncomeEntity>> =
+        incomeDao.getIncomesByDateRange(startTime, endTime)
+
+    suspend fun insert(income: IncomeEntity): Long = incomeDao.insert(income)
+
+    suspend fun update(income: IncomeEntity) = incomeDao.update(income)
+
+    suspend fun delete(income: IncomeEntity) = incomeDao.delete(income)
+
+    suspend fun deleteById(id: Long) = incomeDao.deleteById(id)
+
+    suspend fun getIncomeById(id: Long): IncomeEntity? = incomeDao.getIncomeById(id)
+
+    suspend fun getTotalIncomeByDateRange(startTime: Long, endTime: Long): Int =
+        incomeDao.getTotalIncomeByDateRange(startTime, endTime) ?: 0
+}

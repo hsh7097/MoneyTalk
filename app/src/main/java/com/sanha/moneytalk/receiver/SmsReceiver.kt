@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
 import android.util.Log
-import com.sanha.moneytalk.util.SmsParser
+import com.sanha.moneytalk.core.util.SmsParser
 
 /**
  * 실시간 SMS 수신 BroadcastReceiver
