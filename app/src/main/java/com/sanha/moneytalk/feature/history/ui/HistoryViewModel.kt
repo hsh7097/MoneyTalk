@@ -4,12 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.dao.DailySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.core.util.DateUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.*
 import javax.inject.Inject
 
 data class HistoryUiState(
@@ -19,15 +21,17 @@ data class HistoryUiState(
     val selectedCardName: String? = null,
     val selectedYear: Int = DateUtils.getCurrentYear(),
     val selectedMonth: Int = DateUtils.getCurrentMonth(),
+    val monthStartDay: Int = 1,
     val cardNames: List<String> = emptyList(),
     val monthlyTotal: Int = 0,
-    val dailyTotals: List<DailySum> = emptyList(),
+    val dailyTotals: Map<String, Int> = emptyMap(), // "yyyy-MM-dd" -> amount
     val errorMessage: String? = null
 )
 
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
-    private val expenseRepository: ExpenseRepository
+    private val expenseRepository: ExpenseRepository,
+    private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HistoryUiState())
@@ -36,8 +40,17 @@ class HistoryViewModel @Inject constructor(
     private var loadJob: Job? = null
 
     init {
+        loadSettings()
         loadCardNames()
-        loadExpenses()
+    }
+
+    private fun loadSettings() {
+        viewModelScope.launch {
+            settingsDataStore.monthStartDayFlow.collect { startDay ->
+                _uiState.update { it.copy(monthStartDay = startDay) }
+                loadExpenses()
+            }
+        }
     }
 
     private fun loadCardNames() {
@@ -57,14 +70,18 @@ class HistoryViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
 
             val state = _uiState.value
-            val startTime = DateUtils.getMonthStartTimestamp(state.selectedYear, state.selectedMonth)
-            val endTime = DateUtils.getMonthEndTimestamp(state.selectedYear, state.selectedMonth)
+            val (startTime, endTime) = DateUtils.getCustomMonthPeriod(
+                state.selectedYear,
+                state.selectedMonth,
+                state.monthStartDay
+            )
 
-            // 월별 총액 로드
+            // 월별 총액 및 일별 총액 로드
             try {
                 val monthlyTotal = expenseRepository.getTotalExpenseByDateRange(startTime, endTime)
-                val dailyTotals = expenseRepository.getDailyTotals(startTime, endTime)
-                _uiState.update { it.copy(monthlyTotal = monthlyTotal, dailyTotals = dailyTotals) }
+                val dailySums = expenseRepository.getDailyTotals(startTime, endTime)
+                val dailyTotalsMap = dailySums.associate { it.date to it.total }
+                _uiState.update { it.copy(monthlyTotal = monthlyTotal, dailyTotals = dailyTotalsMap) }
             } catch (e: Exception) {
                 // 총액 로딩 실패 시 무시
             }

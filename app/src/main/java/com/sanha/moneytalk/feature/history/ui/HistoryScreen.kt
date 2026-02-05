@@ -111,7 +111,7 @@ fun HistoryScreen(
         PeriodSummaryCard(
             year = uiState.selectedYear,
             month = uiState.selectedMonth,
-            monthStartDay = 1, // TODO: Get from settings
+            monthStartDay = uiState.monthStartDay,
             totalExpense = uiState.monthlyTotal,
             totalIncome = 0, // TODO: Add income tracking
             onPreviousMonth = { viewModel.previousMonth() },
@@ -139,13 +139,11 @@ fun HistoryScreen(
                 )
             }
             ViewMode.CALENDAR -> {
-                CalendarView(
+                BillingCycleCalendarView(
                     year = uiState.selectedYear,
                     month = uiState.selectedMonth,
-                    expenses = uiState.expenses,
-                    dailyTotals = uiState.dailyTotals.associate {
-                        it.date.takeLast(2).toIntOrNull() ?: 0 to it.total
-                    }
+                    monthStartDay = uiState.monthStartDay,
+                    dailyTotals = uiState.dailyTotals
                 )
             }
         }
@@ -624,35 +622,53 @@ fun BanksaladExpenseItem(
     }
 }
 
+// 날짜 정보를 담는 데이터 클래스
+data class CalendarDay(
+    val year: Int,
+    val month: Int,
+    val day: Int,
+    val dateString: String, // "yyyy-MM-dd" 형식
+    val isCurrentPeriod: Boolean, // 현재 결제 기간에 속하는지
+    val isFuture: Boolean, // 오늘 이후인지
+    val isToday: Boolean
+)
+
 @Composable
-fun CalendarView(
+fun BillingCycleCalendarView(
     year: Int,
     month: Int,
-    expenses: List<ExpenseEntity>,
-    dailyTotals: Map<Int, Int>
+    monthStartDay: Int,
+    dailyTotals: Map<String, Int> // "yyyy-MM-dd" -> amount
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
-    val calendar = Calendar.getInstance().apply {
-        set(Calendar.YEAR, year)
-        set(Calendar.MONTH, month - 1)
-        set(Calendar.DAY_OF_MONTH, 1)
+    val today = Calendar.getInstance()
+    val todayYear = today.get(Calendar.YEAR)
+    val todayMonth = today.get(Calendar.MONTH) + 1
+    val todayDay = today.get(Calendar.DAY_OF_MONTH)
+
+    // 결제 기간에 해당하는 날짜 목록 생성
+    val calendarDays = remember(year, month, monthStartDay) {
+        generateBillingCycleDays(year, month, monthStartDay, todayYear, todayMonth, todayDay)
     }
 
-    val firstDayOfWeek = calendar.get(Calendar.DAY_OF_WEEK) - 1
-    val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-    val today = Calendar.getInstance()
-    val isCurrentMonth = today.get(Calendar.YEAR) == year && today.get(Calendar.MONTH) == month - 1
-    val currentDay = today.get(Calendar.DAY_OF_MONTH)
+    // 주 단위로 그룹핑
+    val weeks = remember(calendarDays) {
+        calendarDays.chunked(7)
+    }
 
     // 주별 합계 계산
-    val weeklyTotals = mutableMapOf<Int, Int>()
-    var weekIndex = 0
-    var dayCounter = 0
-    for (day in 1..daysInMonth) {
-        val dayOfWeek = (firstDayOfWeek + day - 1) % 7
-        weeklyTotals[weekIndex] = (weeklyTotals[weekIndex] ?: 0) + (dailyTotals[day] ?: 0)
-        if (dayOfWeek == 6 || day == daysInMonth) {
-            weekIndex++
+    val weeklyTotals = remember(weeks, dailyTotals) {
+        weeks.map { week ->
+            week.filter { it.isCurrentPeriod }.sumOf { day ->
+                dailyTotals[day.dateString] ?: 0
+            }
+        }
+    }
+
+    // 무지출일 계산 (오늘까지만)
+    val noSpendDays = remember(calendarDays, dailyTotals) {
+        calendarDays.count { day ->
+            day.isCurrentPeriod && !day.isFuture && (dailyTotals[day.dateString] ?: 0) == 0
         }
     }
 
@@ -662,7 +678,6 @@ fun CalendarView(
             .padding(horizontal = 8.dp)
     ) {
         // 무지출일 배너
-        val noSpendDays = (1..daysInMonth).count { dailyTotals[it] == null || dailyTotals[it] == 0 }
         if (noSpendDays > 0) {
             Card(
                 modifier = Modifier
@@ -689,7 +704,7 @@ fun CalendarView(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "이번 달 무지출",
+                            text = "${month}월 무지출",
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
@@ -725,36 +740,12 @@ fun CalendarView(
 
         // 달력 그리드
         LazyColumn {
-            var dayNum = 1
-            var currentWeek = 0
-
-            while (dayNum <= daysInMonth) {
-                val weekDays = mutableListOf<Int?>()
-                val startDay = if (currentWeek == 0) firstDayOfWeek else 0
-
-                // 첫 주 빈 칸 채우기
-                if (currentWeek == 0) {
-                    repeat(firstDayOfWeek) {
-                        weekDays.add(null)
-                    }
-                }
-
-                // 날짜 채우기
-                while (weekDays.size < 7 && dayNum <= daysInMonth) {
-                    weekDays.add(dayNum)
-                    dayNum++
-                }
-
-                // 마지막 주 빈 칸 채우기
-                while (weekDays.size < 7) {
-                    weekDays.add(null)
-                }
-
-                val weekTotal = weeklyTotals[currentWeek] ?: 0
+            weeks.forEachIndexed { weekIndex, week ->
+                val weekTotal = weeklyTotals.getOrNull(weekIndex) ?: 0
 
                 item {
                     Column {
-                        // 주간 합계
+                        // 주간 합계 (오른쪽 정렬)
                         if (weekTotal > 0) {
                             Text(
                                 text = "-${numberFormat.format(weekTotal)}",
@@ -772,60 +763,20 @@ fun CalendarView(
                         Row(
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            weekDays.forEach { day ->
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(2.dp)
-                                        .aspectRatio(0.8f),
-                                    contentAlignment = Alignment.TopCenter
-                                ) {
-                                    if (day != null) {
-                                        val isToday = isCurrentMonth && day == currentDay
-                                        val dayTotal = dailyTotals[day] ?: 0
-
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            // 날짜
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(28.dp)
-                                                    .clip(CircleShape)
-                                                    .background(
-                                                        if (isToday) Color(0xFF00BCD4)
-                                                        else Color.Transparent
-                                                    ),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    text = day.toString(),
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                                                    color = if (isToday) Color.White
-                                                    else MaterialTheme.colorScheme.onSurface
-                                                )
-                                            }
-
-                                            // 일별 지출
-                                            if (dayTotal > 0) {
-                                                Text(
-                                                    text = "-${numberFormat.format(dayTotal)}",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontSize = 9.sp,
-                                                    color = MaterialTheme.colorScheme.error,
-                                                    maxLines = 1
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
+                            week.forEach { calendarDay ->
+                                CalendarDayCell(
+                                    calendarDay = calendarDay,
+                                    dayTotal = dailyTotals[calendarDay.dateString] ?: 0,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            // 부족한 셀 채우기
+                            repeat(7 - week.size) {
+                                Spacer(modifier = Modifier.weight(1f))
                             }
                         }
                     }
                 }
-
-                currentWeek++
             }
 
             item {
@@ -833,4 +784,152 @@ fun CalendarView(
             }
         }
     }
+}
+
+@Composable
+fun CalendarDayCell(
+    calendarDay: CalendarDay,
+    dayTotal: Int,
+    modifier: Modifier = Modifier
+) {
+    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+
+    Box(
+        modifier = modifier
+            .padding(2.dp)
+            .aspectRatio(0.8f),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // 날짜
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(
+                        when {
+                            calendarDay.isToday -> Color(0xFF4CAF50)
+                            else -> Color.Transparent
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = calendarDay.day.toString(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (calendarDay.isToday) FontWeight.Bold else FontWeight.Normal,
+                    color = when {
+                        calendarDay.isToday -> Color.White
+                        calendarDay.isFuture -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        !calendarDay.isCurrentPeriod -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        else -> MaterialTheme.colorScheme.onSurface
+                    }
+                )
+            }
+
+            // 일별 지출 (미래 날짜는 표시 안함)
+            if (dayTotal > 0 && !calendarDay.isFuture && calendarDay.isCurrentPeriod) {
+                Text(
+                    text = "-${numberFormat.format(dayTotal)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 9.sp,
+                    color = MaterialTheme.colorScheme.error,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 결제 기간에 해당하는 날짜 목록 생성
+ * 예: monthStartDay가 21이면, 이전 달 21일 ~ 이번 달 20일
+ */
+private fun generateBillingCycleDays(
+    year: Int,
+    month: Int,
+    monthStartDay: Int,
+    todayYear: Int,
+    todayMonth: Int,
+    todayDay: Int
+): List<CalendarDay> {
+    val days = mutableListOf<CalendarDay>()
+    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
+
+    // 시작 날짜 계산
+    val startCal = Calendar.getInstance().apply {
+        set(Calendar.YEAR, year)
+        set(Calendar.MONTH, month - 1)
+
+        // 시작일이 1이 아니면 이전 달로 이동
+        if (monthStartDay > 1) {
+            add(Calendar.MONTH, -1)
+        }
+        set(Calendar.DAY_OF_MONTH, monthStartDay.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH)))
+    }
+
+    // 종료 날짜 계산 (시작일 - 1 또는 월말)
+    val endCal = Calendar.getInstance().apply {
+        set(Calendar.YEAR, year)
+        set(Calendar.MONTH, month - 1)
+        if (monthStartDay > 1) {
+            set(Calendar.DAY_OF_MONTH, (monthStartDay - 1).coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH)))
+        } else {
+            set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+        }
+    }
+
+    // 시작 주의 일요일로 이동 (캘린더 첫 행 시작)
+    val displayStartCal = startCal.clone() as Calendar
+    while (displayStartCal.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY) {
+        displayStartCal.add(Calendar.DAY_OF_MONTH, -1)
+    }
+
+    // 종료 주의 토요일로 이동 (캘린더 마지막 행 끝)
+    val displayEndCal = endCal.clone() as Calendar
+    while (displayEndCal.get(Calendar.DAY_OF_WEEK) != Calendar.SATURDAY) {
+        displayEndCal.add(Calendar.DAY_OF_MONTH, 1)
+    }
+
+    // 날짜 목록 생성
+    val currentCal = displayStartCal.clone() as Calendar
+    while (!currentCal.after(displayEndCal)) {
+        val calYear = currentCal.get(Calendar.YEAR)
+        val calMonth = currentCal.get(Calendar.MONTH) + 1
+        val calDay = currentCal.get(Calendar.DAY_OF_MONTH)
+        val dateString = dateFormat.format(currentCal.time)
+
+        // 현재 결제 기간에 속하는지 확인
+        val isInPeriod = !currentCal.before(startCal) && !currentCal.after(endCal)
+
+        // 미래 날짜인지 확인
+        val isFuture = when {
+            calYear > todayYear -> true
+            calYear < todayYear -> false
+            calMonth > todayMonth -> true
+            calMonth < todayMonth -> false
+            else -> calDay > todayDay
+        }
+
+        // 오늘인지 확인
+        val isToday = calYear == todayYear && calMonth == todayMonth && calDay == todayDay
+
+        days.add(
+            CalendarDay(
+                year = calYear,
+                month = calMonth,
+                day = calDay,
+                dateString = dateString,
+                isCurrentPeriod = isInPeriod,
+                isFuture = isFuture,
+                isToday = isToday
+            )
+        )
+
+        currentCal.add(Calendar.DAY_OF_MONTH, 1)
+    }
+
+    return days
 }
