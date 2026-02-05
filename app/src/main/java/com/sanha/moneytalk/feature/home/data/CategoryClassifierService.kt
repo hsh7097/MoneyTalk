@@ -123,4 +123,48 @@ class CategoryClassifierService @Inject constructor(
     suspend fun getUnclassifiedCount(): Int {
         return expenseRepository.getExpensesByCategoryOnce("기타").size
     }
+
+    /**
+     * 미분류 항목이 없을 때까지 반복 분류
+     * @param onProgress 진행 상황 콜백 (현재 라운드, 분류된 수, 남은 미분류 수)
+     * @param maxRounds 최대 반복 횟수 (무한 루프 방지)
+     * @return 총 분류된 항목 수
+     */
+    suspend fun classifyAllUntilComplete(
+        onProgress: suspend (round: Int, classifiedInRound: Int, remaining: Int) -> Unit,
+        maxRounds: Int = 10
+    ): Int {
+        var totalClassified = 0
+        var round = 0
+
+        while (round < maxRounds) {
+            round++
+            val remainingBefore = getUnclassifiedCount()
+
+            if (remainingBefore == 0) {
+                Log.d("CategoryClassifier", "모든 항목 분류 완료 (라운드 $round)")
+                break
+            }
+
+            Log.d("CategoryClassifier", "라운드 $round 시작: $remainingBefore 개 미분류")
+
+            val classifiedInRound = classifyUnclassifiedExpenses()
+            totalClassified += classifiedInRound
+
+            val remainingAfter = getUnclassifiedCount()
+            onProgress(round, classifiedInRound, remainingAfter)
+
+            // 더 이상 분류가 안 되면 종료 (진전이 없음)
+            if (classifiedInRound == 0 || remainingAfter == remainingBefore) {
+                Log.d("CategoryClassifier", "더 이상 분류 불가, 종료 (남은 미분류: $remainingAfter)")
+                break
+            }
+
+            // Rate Limit 방지를 위한 딜레이
+            kotlinx.coroutines.delay(2000)
+        }
+
+        Log.d("CategoryClassifier", "전체 분류 완료: 총 $totalClassified 건 분류됨")
+        return totalClassified
+    }
 }

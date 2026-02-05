@@ -204,4 +204,13 @@
     <!-- API Key Dialog (Settings) -->
     <string name="dialog_api_key_message_settings">Get a free API key from\nGoogle AI Studio (aistudio.google.com)</string>
     <string name="dialog_api_key_current">Currently set</string>
+
+    <!-- Category Classification Dialog -->
+    <string name="classify_dialog_title">Auto-Classify Categories</string>
+    <string name="classify_dialog_message">%d items need classification.\n\nAI will automatically classify categories.\nThis may take a moment on first run.</string>
+    <string name="classify_dialog_confirm">Start Classification</string>
+    <string name="classify_dialog_later">Later</string>
+    <string name="classify_progress_title">Classifying Categories</string>
+    <string name="classify_complete">%d items classified!</string>
+    <string name="classify_complete_with_remaining">%1$d items classified. %2$d items need manual classification.</string>
 </resources>

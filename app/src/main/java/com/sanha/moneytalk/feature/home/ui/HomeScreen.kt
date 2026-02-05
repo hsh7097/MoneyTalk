@@ -210,6 +210,56 @@ fun HomeScreen(
             viewModel.clearError()
         }
     }
+
+    // 카테고리 분류 확인 다이얼로그
+    if (uiState.showClassifyDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissClassifyDialog() },
+            title = { Text(stringResource(R.string.classify_dialog_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.classify_dialog_message,
+                        uiState.unclassifiedCount
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.startFullClassification() }) {
+                    Text(stringResource(R.string.classify_dialog_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissClassifyDialog() }) {
+                    Text(stringResource(R.string.classify_dialog_later))
+                }
+            }
+        )
+    }
+
+    // 분류 진행 중 다이얼로그
+    if (uiState.isClassifying) {
+        AlertDialog(
+            onDismissRequest = { /* 진행 중에는 닫기 불가 */ },
+            title = { Text(stringResource(R.string.classify_progress_title)) },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.padding(16.dp)
+                    )
+                    Text(
+                        text = uiState.classifyProgress,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            },
+            confirmButton = { }
+        )
+    }
 }
 
 @Composable

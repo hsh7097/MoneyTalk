@@ -48,7 +48,12 @@ data class HomeUiState(
     val recentExpenses: List<ExpenseEntity> = emptyList(),
     val periodLabel: String = "",
     val errorMessage: String? = null,
-    val isSyncing: Boolean = false
+    val isSyncing: Boolean = false,
+    // 카테고리 분류 관련
+    val showClassifyDialog: Boolean = false,
+    val unclassifiedCount: Int = 0,
+    val isClassifying: Boolean = false,
+    val classifyProgress: String = ""
 )
 
 /**
@@ -317,6 +322,9 @@ class HomeViewModel @Inject constructor(
                         errorMessage = resultMessage
                     )
                 }
+
+                // 동기화 완료 후 미분류 항목 확인
+                checkUnclassifiedAfterSync()
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -440,6 +448,87 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             val count = categoryClassifierService.getUnclassifiedCount()
             onResult(count)
+        }
+    }
+
+    /**
+     * 동기화 완료 후 미분류 항목 확인하고 분류 다이얼로그 표시
+     */
+    fun checkUnclassifiedAfterSync() {
+        viewModelScope.launch {
+            val count = categoryClassifierService.getUnclassifiedCount()
+            val hasApiKey = categoryClassifierService.hasGeminiApiKey()
+
+            if (count > 0 && hasApiKey) {
+                _uiState.update {
+                    it.copy(
+                        showClassifyDialog = true,
+                        unclassifiedCount = count
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * 분류 다이얼로그 닫기
+     */
+    fun dismissClassifyDialog() {
+        _uiState.update { it.copy(showClassifyDialog = false) }
+    }
+
+    /**
+     * 미분류 항목 전체 분류 시작 (최대 3라운드)
+     */
+    fun startFullClassification() {
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    showClassifyDialog = false,
+                    isClassifying = true,
+                    classifyProgress = "분류 준비 중..."
+                )
+            }
+
+            try {
+                val totalClassified = categoryClassifierService.classifyAllUntilComplete(
+                    onProgress = { round, classifiedInRound, remaining ->
+                        _uiState.update {
+                            it.copy(
+                                classifyProgress = "라운드 $round: ${classifiedInRound}건 분류 완료 (남은 미분류: ${remaining}건)"
+                            )
+                        }
+                    },
+                    maxRounds = 3  // 최대 3라운드로 제한
+                )
+
+                // 분류 완료 후 데이터 새로고침
+                loadData()
+
+                val finalRemaining = categoryClassifierService.getUnclassifiedCount()
+                val resultMessage = if (finalRemaining > 0) {
+                    "${totalClassified}건 분류 완료. ${finalRemaining}건은 수동 분류가 필요합니다."
+                } else {
+                    "${totalClassified}건 분류 완료!"
+                }
+
+                _uiState.update {
+                    it.copy(
+                        isClassifying = false,
+                        classifyProgress = "",
+                        errorMessage = resultMessage
+                    )
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "전체 분류 실패: ${e.message}")
+                _uiState.update {
+                    it.copy(
+                        isClassifying = false,
+                        classifyProgress = "",
+                        errorMessage = "분류 실패: ${e.message}"
+                    )
+                }
+            }
         }
     }
 
