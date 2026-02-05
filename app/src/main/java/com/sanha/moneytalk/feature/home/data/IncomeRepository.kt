@@ -29,4 +29,14 @@ class IncomeRepository @Inject constructor(
 
     suspend fun getTotalIncomeByDateRange(startTime: Long, endTime: Long): Int =
         incomeDao.getTotalIncomeByDateRange(startTime, endTime) ?: 0
+
+    // 백업용 - 모든 수입 한번에 가져오기
+    suspend fun getAllIncomesOnce(): List<IncomeEntity> =
+        incomeDao.getAllIncomesOnce()
+
+    // 여러 건 삽입
+    suspend fun insertAll(incomes: List<IncomeEntity>) = incomeDao.insertAll(incomes)
+
+    // 모든 데이터 삭제
+    suspend fun deleteAll() = incomeDao.deleteAll()
 }

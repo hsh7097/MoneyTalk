@@ -66,4 +66,11 @@ class ExpenseRepository @Inject constructor(
 
     suspend fun getMonthlyTotals(): List<MonthlySum> =
         expenseDao.getMonthlyTotals()
+
+    // 백업용 - 모든 지출 한번에 가져오기
+    suspend fun getAllExpensesOnce(): List<ExpenseEntity> =
+        expenseDao.getAllExpensesOnce()
+
+    // 모든 데이터 삭제
+    suspend fun deleteAll() = expenseDao.deleteAll()
 }

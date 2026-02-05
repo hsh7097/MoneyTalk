@@ -33,4 +33,16 @@ interface IncomeDao {
 
     @Query("SELECT * FROM incomes WHERE dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
     fun getIncomesByDateRange(startTime: Long, endTime: Long): Flow<List<IncomeEntity>>
+
+    // 백업용 - 모든 수입 한번에 가져오기
+    @Query("SELECT * FROM incomes ORDER BY dateTime DESC")
+    suspend fun getAllIncomesOnce(): List<IncomeEntity>
+
+    // 여러 건 삽입
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(incomes: List<IncomeEntity>)
+
+    // 모든 데이터 삭제 (초기화용)
+    @Query("DELETE FROM incomes")
+    suspend fun deleteAll()
 }

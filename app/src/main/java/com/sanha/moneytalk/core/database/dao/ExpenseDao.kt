@@ -76,6 +76,14 @@ interface ExpenseDao {
     // 월별 총액
     @Query("SELECT strftime('%Y-%m', dateTime/1000, 'unixepoch', 'localtime') as month, SUM(amount) as total FROM expenses GROUP BY month ORDER BY month DESC")
     suspend fun getMonthlyTotals(): List<MonthlySum>
+
+    // 백업용 - 모든 지출 한번에 가져오기
+    @Query("SELECT * FROM expenses ORDER BY dateTime DESC")
+    suspend fun getAllExpensesOnce(): List<ExpenseEntity>
+
+    // 모든 데이터 삭제 (초기화용)
+    @Query("DELETE FROM expenses")
+    suspend fun deleteAll()
 }
 
 data class CategorySum(
