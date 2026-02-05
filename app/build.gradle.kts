@@ -32,6 +32,7 @@ android {
 
         // BuildConfig에 API 키 추가
         buildConfigField("String", "CLAUDE_API_KEY", "\"${localProperties.getProperty("CLAUDE_API_KEY", "")}\"")
+        buildConfigField("String", "GEMINI_API_KEY", "\"${localProperties.getProperty("GEMINI_API_KEY", "")}\"")
     }
 
     buildTypes {
@@ -117,6 +118,9 @@ dependencies {
     implementation(libs.google.api.services.drive) {
         exclude(group = "org.apache.httpcomponents")
     }
+
+    // Google Generative AI (Gemini)
+    implementation(libs.generative.ai)
 
     // Test
     testImplementation(libs.junit)

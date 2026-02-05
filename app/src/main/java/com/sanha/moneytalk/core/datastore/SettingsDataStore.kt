@@ -24,6 +24,7 @@ class SettingsDataStore @Inject constructor(
 ) {
     companion object {
         private val CLAUDE_API_KEY = stringPreferencesKey("claude_api_key")
+        private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
         private val MONTHLY_INCOME = intPreferencesKey("monthly_income")
         private val LAST_SYNC_TIME = longPreferencesKey("last_sync_time")
         private val MONTH_START_DAY = intPreferencesKey("month_start_day")
@@ -46,6 +47,28 @@ class SettingsDataStore @Inject constructor(
         val storedKey = context.dataStore.data.first()[CLAUDE_API_KEY]
         return if (storedKey.isNullOrBlank()) {
             BuildConfig.CLAUDE_API_KEY
+        } else {
+            storedKey
+        }
+    }
+
+    // Gemini API 키 저장
+    suspend fun saveGeminiApiKey(apiKey: String) {
+        context.dataStore.edit { preferences ->
+            preferences[GEMINI_API_KEY] = apiKey
+        }
+    }
+
+    // Gemini API 키 가져오기 (DataStore에 없으면 BuildConfig에서 가져옴)
+    val geminiApiKeyFlow: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[GEMINI_API_KEY] ?: BuildConfig.GEMINI_API_KEY
+    }
+
+    // Gemini API 키 즉시 가져오기
+    suspend fun getGeminiApiKey(): String {
+        val storedKey = context.dataStore.data.first()[GEMINI_API_KEY]
+        return if (storedKey.isNullOrBlank()) {
+            BuildConfig.GEMINI_API_KEY
         } else {
             storedKey
         }

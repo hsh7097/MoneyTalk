@@ -167,11 +167,11 @@ fun SettingsScreen(
                     SettingsSection(title = "AI 설정") {
                         SettingsItem(
                             icon = Icons.Default.Key,
-                            title = "Claude API 키",
+                            title = "Gemini API 키",
                             subtitle = if (uiState.hasApiKey) {
                                 "설정됨: ${uiState.apiKey}"
                             } else {
-                                "AI 상담을 위한 API 키 설정"
+                                "AI 상담을 위한 API 키 설정 (무료)"
                             },
                             onClick = { showApiKeyDialog = true }
                         )
@@ -890,11 +890,11 @@ fun ApiKeySettingDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Claude API 키 설정") },
+        title = { Text("Gemini API 키 설정") },
         text = {
             Column {
                 Text(
-                    text = "Anthropic 콘솔(console.anthropic.com)에서\n발급받은 API 키를 입력해주세요.",
+                    text = "Google AI Studio(aistudio.google.com)에서\n무료로 API 키를 발급받을 수 있습니다.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 if (currentKeyHint.isNotEmpty()) {
@@ -910,7 +910,7 @@ fun ApiKeySettingDialog(
                     value = apiKey,
                     onValueChange = { apiKey = it },
                     label = { Text("API Key") },
-                    placeholder = { Text("sk-ant-...") },
+                    placeholder = { Text("AIza...") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

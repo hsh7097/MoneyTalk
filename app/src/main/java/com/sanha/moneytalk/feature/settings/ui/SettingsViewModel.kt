@@ -12,7 +12,7 @@ import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
 import com.sanha.moneytalk.core.util.GoogleDriveHelper
-import com.sanha.moneytalk.feature.chat.data.ClaudeRepository
+import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -42,7 +42,7 @@ data class SettingsUiState(
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
-    private val claudeRepository: ClaudeRepository,
+    private val geminiRepository: GeminiRepository,
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val googleDriveHelper: GoogleDriveHelper
@@ -58,8 +58,8 @@ class SettingsViewModel @Inject constructor(
 
     private fun loadSettings() {
         viewModelScope.launch {
-            // API 키 로드
-            settingsDataStore.apiKeyFlow.collect { key ->
+            // Gemini API 키 로드
+            settingsDataStore.geminiApiKeyFlow.collect { key ->
                 _uiState.update {
                     it.copy(
                         apiKey = maskApiKey(key),
@@ -117,13 +117,13 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                claudeRepository.setApiKey(key)
+                geminiRepository.setApiKey(key)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         hasApiKey = true,
                         apiKey = maskApiKey(key),
-                        message = "API 키가 저장되었습니다"
+                        message = "Gemini API 키가 저장되었습니다"
                     )
                 }
             } catch (e: Exception) {

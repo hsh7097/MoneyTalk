@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.entity.ChatEntity
-import com.sanha.moneytalk.feature.chat.data.ClaudeRepository
+import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.core.model.Category
@@ -32,7 +32,7 @@ data class ChatUiState(
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
-    private val claudeRepository: ClaudeRepository,
+    private val geminiRepository: GeminiRepository,
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val chatDao: ChatDao
@@ -70,7 +70,7 @@ class ChatViewModel @Inject constructor(
 
     private fun checkApiKey() {
         viewModelScope.launch {
-            _uiState.update { it.copy(hasApiKey = claudeRepository.hasApiKey()) }
+            _uiState.update { it.copy(hasApiKey = geminiRepository.hasApiKey()) }
         }
     }
 
@@ -108,8 +108,8 @@ class ChatViewModel @Inject constructor(
                     "${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${numberFormat.format(expense.amount)}원"
                 }.ifEmpty { "최근 지출 내역이 없습니다." }
 
-                // Claude에게 질문
-                val result = claudeRepository.chat(
+                // Gemini에게 질문
+                val result = geminiRepository.chat(
                     userMessage = message,
                     monthlyIncome = monthlyIncome,
                     totalExpense = totalExpense,
@@ -145,7 +145,7 @@ class ChatViewModel @Inject constructor(
 
     fun setApiKey(key: String) {
         viewModelScope.launch {
-            claudeRepository.setApiKey(key)
+            geminiRepository.setApiKey(key)
             checkApiKey()
         }
     }
