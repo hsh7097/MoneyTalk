@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.feature.chat.data
 
+import android.util.Log
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
 import com.google.ai.client.generativeai.type.generationConfig
@@ -25,6 +26,8 @@ class GeminiRepository @Inject constructor(
     private var financialAdvisorModel: GenerativeModel? = null
 
     companion object {
+        private const val TAG = "GeminiChat"
+
         // 재무 상담사 시스템 명령어
         private const val FINANCIAL_ADVISOR_SYSTEM_INSTRUCTION = """당신은 '머니톡'이라는 친근한 개인 재무 상담 AI입니다.
 
@@ -141,7 +144,7 @@ class GeminiRepository @Inject constructor(
 
         if (queryAnalyzerModel == null || cachedApiKey != apiKey) {
             queryAnalyzerModel = GenerativeModel(
-                modelName = "gemini-1.5-flash",
+                modelName = "gemini-2.0-flash",
                 apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.3f  // 쿼리 분석은 정확도가 중요
@@ -162,7 +165,7 @@ class GeminiRepository @Inject constructor(
 
         if (financialAdvisorModel == null || cachedApiKey != apiKey) {
             financialAdvisorModel = GenerativeModel(
-                modelName = "gemini-1.5-flash",
+                modelName = "gemini-2.0-flash",
                 apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.7f
@@ -195,10 +198,17 @@ class GeminiRepository @Inject constructor(
      */
     suspend fun analyzeQueryNeeds(userMessage: String): Result<DataQueryRequest?> {
         return try {
+            Log.d(TAG, "=== analyzeQueryNeeds 시작 ===")
+            Log.d(TAG, "사용자 메시지: $userMessage")
+
             val model = getQueryAnalyzerModel()
             if (model == null) {
+                Log.e(TAG, "API 키가 설정되지 않음")
                 return Result.failure(Exception("API 키가 설정되지 않았습니다."))
             }
+
+            val apiKey = getApiKey()
+            Log.d(TAG, "API 키 (앞 10자): ${apiKey.take(10)}...")
 
             // 오늘 날짜 정보만 추가 (스키마는 System Instruction에 있음)
             val calendar = Calendar.getInstance()
@@ -210,12 +220,19 @@ class GeminiRepository @Inject constructor(
 
 위 질문에 필요한 데이터 쿼리를 JSON으로 반환해줘:"""
 
+            Log.d(TAG, "프롬프트 전송 중...")
             val response = model.generateContent(prompt)
             val responseText = response.text ?: return Result.success(null)
 
+            Log.d(TAG, "Gemini 응답: $responseText")
+
             val queryRequest = DataQueryParser.parseQueryRequest(responseText)
+            Log.d(TAG, "파싱된 쿼리: $queryRequest")
             Result.success(queryRequest)
         } catch (e: Exception) {
+            Log.e(TAG, "쿼리 분석 실패", e)
+            Log.e(TAG, "에러 메시지: ${e.message}")
+            Log.e(TAG, "에러 클래스: ${e.javaClass.simpleName}")
             Result.failure(Exception("쿼리 분석 실패: ${e.message}"))
         }
     }
@@ -231,8 +248,14 @@ class GeminiRepository @Inject constructor(
         actionResults: List<ActionResult> = emptyList()
     ): Result<String> {
         return try {
+            Log.d(TAG, "=== generateFinalAnswer 시작 ===")
+            Log.d(TAG, "사용자 메시지: $userMessage")
+            Log.d(TAG, "쿼리 결과 수: ${queryResults.size}")
+            Log.d(TAG, "액션 결과 수: ${actionResults.size}")
+
             val model = getFinancialAdvisorModel()
             if (model == null) {
+                Log.e(TAG, "API 키가 설정되지 않음")
                 return Result.failure(Exception("API 키가 설정되지 않았습니다."))
             }
 
@@ -255,11 +278,19 @@ $dataContext$actionContext
 [사용자 질문]
 $userMessage"""
 
+            Log.d(TAG, "최종 답변 프롬프트:\n$prompt")
+            Log.d(TAG, "Gemini 호출 중...")
+
             val response = model.generateContent(prompt)
             val responseText = response.text ?: "응답을 받지 못했어요."
 
+            Log.d(TAG, "Gemini 최종 응답: $responseText")
+
             Result.success(responseText)
         } catch (e: Exception) {
+            Log.e(TAG, "최종 답변 생성 실패", e)
+            Log.e(TAG, "에러 메시지: ${e.message}")
+            Log.e(TAG, "에러 클래스: ${e.javaClass.simpleName}")
             Result.failure(Exception("요청 실패: ${e.message}"))
         }
     }
@@ -269,16 +300,26 @@ $userMessage"""
      */
     suspend fun simpleChat(userMessage: String): Result<String> {
         return try {
+            Log.d(TAG, "=== simpleChat 시작 ===")
+            Log.d(TAG, "사용자 메시지: $userMessage")
+
             val model = getFinancialAdvisorModel()
             if (model == null) {
+                Log.e(TAG, "API 키가 설정되지 않음")
                 return Result.failure(Exception("API 키가 설정되지 않았습니다. 설정에서 Gemini API 키를 입력해주세요."))
             }
 
+            Log.d(TAG, "Gemini 호출 중...")
             val response = model.generateContent(userMessage)
             val responseText = response.text ?: "응답을 받지 못했어요."
 
+            Log.d(TAG, "Gemini 응답: $responseText")
+
             Result.success(responseText)
         } catch (e: Exception) {
+            Log.e(TAG, "simpleChat 실패", e)
+            Log.e(TAG, "에러 메시지: ${e.message}")
+            Log.e(TAG, "에러 클래스: ${e.javaClass.simpleName}")
             Result.failure(Exception("요청 실패: ${e.message}"))
         }
     }

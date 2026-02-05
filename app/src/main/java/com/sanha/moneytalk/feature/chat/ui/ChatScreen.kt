@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.feature.chat.ui
 
+import android.util.Log
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -564,6 +565,8 @@ fun ChatBubble(message: ChatMessage) {
             },
             modifier = Modifier.widthIn(max = 300.dp)
         ) {
+            if(message.isUser.not())
+                Log.e("sanhakb","message.content ${message.content}")
             Text(
                 text = message.content,
                 modifier = Modifier.padding(12.dp),
