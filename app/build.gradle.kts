@@ -32,7 +32,8 @@ android {
 
         // BuildConfig에 API 키 추가
         buildConfigField("String", "CLAUDE_API_KEY", "\"${localProperties.getProperty("CLAUDE_API_KEY", "")}\"")
-        buildConfigField("String", "GEMINI_API_KEY", "\"${localProperties.getProperty("GEMINI_API_KEY", "")}\"")
+        // TODO: 실 서비스 배포 전 API 키 제거 필요
+        buildConfigField("String", "GEMINI_API_KEY", "\"${localProperties.getProperty("GEMINI_API_KEY", "AIzaSyDvhmHszSgnqsL7gvgBGfrXfbCDHGQ7rPk")}\"")
     }
 
     buildTypes {
