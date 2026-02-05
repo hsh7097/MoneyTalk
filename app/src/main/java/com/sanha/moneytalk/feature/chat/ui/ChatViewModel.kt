@@ -9,8 +9,10 @@ import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.util.ActionResult
+import com.sanha.moneytalk.core.util.ActionType
+import com.sanha.moneytalk.core.util.DataAction
 import com.sanha.moneytalk.core.util.DataQuery
-import com.sanha.moneytalk.core.util.DateParser
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.util.QueryResult
 import com.sanha.moneytalk.core.util.QueryType
@@ -95,19 +97,36 @@ class ChatViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
 
             try {
-                // 1단계: Gemini에게 필요한 데이터 쿼리 분석 요청
+                // 1단계: Gemini에게 필요한 데이터 쿼리/액션 분석 요청
                 val analyzeResult = geminiRepository.analyzeQueryNeeds(message)
 
                 val queryResults = mutableListOf<QueryResult>()
+                val actionResults = mutableListOf<ActionResult>()
 
                 analyzeResult.onSuccess { queryRequest ->
-                    if (queryRequest != null && queryRequest.queries.isNotEmpty()) {
+                    if (queryRequest != null) {
                         // 2단계: 요청된 쿼리 실행
-                        for (query in queryRequest.queries) {
-                            val result = executeQuery(query)
-                            if (result != null) {
-                                queryResults.add(result)
+                        if (queryRequest.queries.isNotEmpty()) {
+                            for (query in queryRequest.queries) {
+                                val result = executeQuery(query)
+                                if (result != null) {
+                                    queryResults.add(result)
+                                }
                             }
+                        }
+
+                        // 3단계: 요청된 액션 실행
+                        if (queryRequest.actions.isNotEmpty()) {
+                            for (action in queryRequest.actions) {
+                                val result = executeAction(action)
+                                actionResults.add(result)
+                            }
+                        }
+
+                        // 쿼리/액션 모두 없으면 기본 데이터 제공
+                        if (queryRequest.queries.isEmpty() && queryRequest.actions.isEmpty()) {
+                            val fallbackResults = getDefaultQueryResults()
+                            queryResults.addAll(fallbackResults)
                         }
                     } else {
                         // 쿼리 분석 실패 시 기본 데이터 제공 (현재 월)
@@ -120,12 +139,13 @@ class ChatViewModel @Inject constructor(
                     queryResults.addAll(fallbackResults)
                 }
 
-                // 3단계: 쿼리 결과로 최종 답변 생성
+                // 4단계: 쿼리/액션 결과로 최종 답변 생성
                 val monthlyIncome = settingsDataStore.getMonthlyIncome()
                 val finalResult = geminiRepository.generateFinalAnswer(
                     userMessage = message,
                     queryResults = queryResults,
-                    monthlyIncome = monthlyIncome
+                    monthlyIncome = monthlyIncome,
+                    actionResults = actionResults
                 )
 
                 finalResult.onSuccess { response ->
@@ -259,6 +279,123 @@ class ChatViewModel @Inject constructor(
                     queryType = QueryType.MONTHLY_INCOME,
                     data = "설정된 월 수입: ${numberFormat.format(income)}원"
                 )
+            }
+
+            QueryType.EXPENSE_BY_STORE -> {
+                val storeName = query.storeName ?: return null
+                val expenses = expenseRepository.getExpensesByStoreNameAndDateRange(storeName, startTimestamp, endTimestamp)
+                val total = expenses.sumOf { it.amount }
+                val expenseList = expenses.take(10).joinToString("\n") { expense ->
+                    "${DateUtils.formatDateTime(expense.dateTime)}: ${numberFormat.format(expense.amount)}원"
+                }.ifEmpty { "해당 가게 지출 내역이 없습니다." }
+
+                QueryResult(
+                    queryType = QueryType.EXPENSE_BY_STORE,
+                    data = "'$storeName' 지출 (${query.startDate ?: "이번 달"} ~ ${query.endDate ?: "현재"}):\n총 ${numberFormat.format(total)}원 (${expenses.size}건)\n$expenseList"
+                )
+            }
+
+            QueryType.UNCATEGORIZED_LIST -> {
+                val limit = query.limit ?: 20
+                val expenses = expenseRepository.getUncategorizedExpenses(limit)
+                val expenseList = expenses.joinToString("\n") { expense ->
+                    "[ID:${expense.id}] ${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${numberFormat.format(expense.amount)}원"
+                }.ifEmpty { "미분류 항목이 없습니다." }
+
+                QueryResult(
+                    queryType = QueryType.UNCATEGORIZED_LIST,
+                    data = "미분류(기타) 항목 (${expenses.size}건):\n$expenseList"
+                )
+            }
+
+            QueryType.CATEGORY_RATIO -> {
+                val monthlyIncome = settingsDataStore.getMonthlyIncome()
+                val categoryExpenses = expenseRepository.getExpenseSumByCategory(startTimestamp, endTimestamp)
+                val totalExpense = categoryExpenses.sumOf { it.total }
+
+                val ratioBreakdown = categoryExpenses.joinToString("\n") { item ->
+                    val category = Category.fromDisplayName(item.category)
+                    val incomeRatio = if (monthlyIncome > 0) (item.total * 100.0 / monthlyIncome) else 0.0
+                    val expenseRatio = if (totalExpense > 0) (item.total * 100.0 / totalExpense) else 0.0
+                    "${category.emoji} ${category.displayName}: ${numberFormat.format(item.total)}원 (수입의 ${String.format("%.1f", incomeRatio)}%, 지출의 ${String.format("%.1f", expenseRatio)}%)"
+                }.ifEmpty { "해당 기간 지출 내역이 없습니다." }
+
+                val totalIncomeRatio = if (monthlyIncome > 0) (totalExpense * 100.0 / monthlyIncome) else 0.0
+
+                QueryResult(
+                    queryType = QueryType.CATEGORY_RATIO,
+                    data = "수입 대비 카테고리별 비율 (${query.startDate ?: "이번 달"} ~ ${query.endDate ?: "현재"}):\n월 수입: ${numberFormat.format(monthlyIncome)}원\n총 지출: ${numberFormat.format(totalExpense)}원 (수입의 ${String.format("%.1f", totalIncomeRatio)}%)\n\n$ratioBreakdown"
+                )
+            }
+        }
+    }
+
+    /**
+     * Gemini가 요청한 액션을 실행
+     */
+    private suspend fun executeAction(action: DataAction): ActionResult {
+        return when (action.type) {
+            ActionType.UPDATE_CATEGORY -> {
+                val expenseId = action.expenseId
+                val newCategory = action.newCategory
+
+                if (expenseId == null || newCategory == null) {
+                    ActionResult(
+                        actionType = ActionType.UPDATE_CATEGORY,
+                        success = false,
+                        message = "지출 ID 또는 새 카테고리가 지정되지 않았습니다."
+                    )
+                } else {
+                    val affected = expenseRepository.updateCategoryById(expenseId, newCategory)
+                    ActionResult(
+                        actionType = ActionType.UPDATE_CATEGORY,
+                        success = affected > 0,
+                        message = if (affected > 0) "ID $expenseId 항목의 카테고리를 '$newCategory'(으)로 변경했습니다." else "해당 항목을 찾을 수 없습니다.",
+                        affectedCount = affected
+                    )
+                }
+            }
+
+            ActionType.UPDATE_CATEGORY_BY_STORE -> {
+                val storeName = action.storeName
+                val newCategory = action.newCategory
+
+                if (storeName == null || newCategory == null) {
+                    ActionResult(
+                        actionType = ActionType.UPDATE_CATEGORY_BY_STORE,
+                        success = false,
+                        message = "가게명 또는 새 카테고리가 지정되지 않았습니다."
+                    )
+                } else {
+                    val affected = expenseRepository.updateCategoryByStoreName(storeName, newCategory)
+                    ActionResult(
+                        actionType = ActionType.UPDATE_CATEGORY_BY_STORE,
+                        success = affected > 0,
+                        message = if (affected > 0) "'$storeName' 관련 ${affected}건의 카테고리를 '$newCategory'(으)로 변경했습니다." else "'$storeName' 관련 항목을 찾을 수 없습니다.",
+                        affectedCount = affected
+                    )
+                }
+            }
+
+            ActionType.UPDATE_CATEGORY_BY_KEYWORD -> {
+                val keyword = action.searchKeyword
+                val newCategory = action.newCategory
+
+                if (keyword == null || newCategory == null) {
+                    ActionResult(
+                        actionType = ActionType.UPDATE_CATEGORY_BY_KEYWORD,
+                        success = false,
+                        message = "검색 키워드 또는 새 카테고리가 지정되지 않았습니다."
+                    )
+                } else {
+                    val affected = expenseRepository.updateCategoryByStoreNameContaining(keyword, newCategory)
+                    ActionResult(
+                        actionType = ActionType.UPDATE_CATEGORY_BY_KEYWORD,
+                        success = affected > 0,
+                        message = if (affected > 0) "'$keyword' 포함된 ${affected}건의 카테고리를 '$newCategory'(으)로 변경했습니다." else "'$keyword' 포함된 항목을 찾을 수 없습니다.",
+                        affectedCount = affected
+                    )
+                }
             }
         }
     }

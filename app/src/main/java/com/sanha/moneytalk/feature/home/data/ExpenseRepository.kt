@@ -79,4 +79,36 @@ class ExpenseRepository @Inject constructor(
 
     // 모든 데이터 삭제
     suspend fun deleteAll() = expenseDao.deleteAll()
+
+    // 가게명으로 지출 조회
+    suspend fun getExpensesByStoreName(storeName: String): List<ExpenseEntity> =
+        expenseDao.getExpensesByStoreName(storeName)
+
+    // 가게명 + 기간으로 지출 조회
+    suspend fun getExpensesByStoreNameAndDateRange(storeName: String, startTime: Long, endTime: Long): List<ExpenseEntity> =
+        expenseDao.getExpensesByStoreNameAndDateRange(storeName, startTime, endTime)
+
+    // 가게명에 키워드 포함된 지출 조회
+    suspend fun getExpensesByStoreNameContaining(keyword: String): List<ExpenseEntity> =
+        expenseDao.getExpensesByStoreNameContaining(keyword)
+
+    // 가게명으로 총 지출 조회
+    suspend fun getTotalExpenseByStoreName(storeName: String, startTime: Long, endTime: Long): Int =
+        expenseDao.getTotalExpenseByStoreName(storeName, startTime, endTime) ?: 0
+
+    // 미분류 항목 조회
+    suspend fun getUncategorizedExpenses(limit: Int): List<ExpenseEntity> =
+        expenseDao.getUncategorizedExpenses(limit)
+
+    // 가게명으로 카테고리 일괄 변경
+    suspend fun updateCategoryByStoreName(storeName: String, newCategory: String): Int =
+        expenseDao.updateCategoryByStoreName(storeName, newCategory)
+
+    // 키워드 포함 가게명 카테고리 일괄 변경
+    suspend fun updateCategoryByStoreNameContaining(keyword: String, newCategory: String): Int =
+        expenseDao.updateCategoryByStoreNameContaining(keyword, newCategory)
+
+    // 특정 ID의 카테고리 변경
+    suspend fun updateCategoryById(expenseId: Long, newCategory: String): Int =
+        expenseDao.updateCategoryById(expenseId, newCategory)
 }

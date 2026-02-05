@@ -91,6 +91,38 @@ interface ExpenseDao {
     // 모든 데이터 삭제 (초기화용)
     @Query("DELETE FROM expenses")
     suspend fun deleteAll()
+
+    // 가게명으로 지출 조회 (정확히 일치)
+    @Query("SELECT * FROM expenses WHERE storeName = :storeName ORDER BY dateTime DESC")
+    suspend fun getExpensesByStoreName(storeName: String): List<ExpenseEntity>
+
+    // 가게명으로 지출 조회 + 기간 필터
+    @Query("SELECT * FROM expenses WHERE storeName = :storeName AND dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
+    suspend fun getExpensesByStoreNameAndDateRange(storeName: String, startTime: Long, endTime: Long): List<ExpenseEntity>
+
+    // 가게명에 키워드 포함된 지출 조회
+    @Query("SELECT * FROM expenses WHERE storeName LIKE '%' || :keyword || '%' ORDER BY dateTime DESC")
+    suspend fun getExpensesByStoreNameContaining(keyword: String): List<ExpenseEntity>
+
+    // 가게명으로 총 지출 조회 + 기간 필터
+    @Query("SELECT SUM(amount) FROM expenses WHERE storeName = :storeName AND dateTime BETWEEN :startTime AND :endTime")
+    suspend fun getTotalExpenseByStoreName(storeName: String, startTime: Long, endTime: Long): Int?
+
+    // 미분류(기타) 항목 조회
+    @Query("SELECT * FROM expenses WHERE category = '기타' ORDER BY dateTime DESC LIMIT :limit")
+    suspend fun getUncategorizedExpenses(limit: Int): List<ExpenseEntity>
+
+    // 가게명으로 카테고리 일괄 변경
+    @Query("UPDATE expenses SET category = :newCategory WHERE storeName = :storeName")
+    suspend fun updateCategoryByStoreName(storeName: String, newCategory: String): Int
+
+    // 키워드 포함 가게명의 카테고리 일괄 변경
+    @Query("UPDATE expenses SET category = :newCategory WHERE storeName LIKE '%' || :keyword || '%'")
+    suspend fun updateCategoryByStoreNameContaining(keyword: String, newCategory: String): Int
+
+    // 특정 ID의 카테고리 변경
+    @Query("UPDATE expenses SET category = :newCategory WHERE id = :expenseId")
+    suspend fun updateCategoryById(expenseId: Long, newCategory: String): Int
 }
 
 data class CategorySum(
