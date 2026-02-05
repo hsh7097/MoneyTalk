@@ -155,10 +155,16 @@ class HomeViewModel @Inject constructor(
                 val lastSyncTime = if (forceFullSync) 0L else settingsDataStore.getLastSyncTime()
                 val currentTime = System.currentTimeMillis()
 
+                android.util.Log.e("sanha", "=== syncSmsMessages 시작 ===")
+                android.util.Log.e("sanha", "forceFullSync: $forceFullSync, lastSyncTime: $lastSyncTime")
+                android.util.Log.e("sanha", "lastSyncTime 날짜: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.KOREA).format(java.util.Date(lastSyncTime))}")
+
                 // 마지막 동기화 이후의 SMS만 가져오기 (증분 동기화)
                 val smsList = if (lastSyncTime > 0) {
+                    android.util.Log.e("sanha", "증분 동기화 모드")
                     smsReader.readCardSmsByDateRange(contentResolver, lastSyncTime, currentTime)
                 } else {
+                    android.util.Log.e("sanha", "전체 동기화 모드")
                     smsReader.readAllCardSms(contentResolver)
                 }
 

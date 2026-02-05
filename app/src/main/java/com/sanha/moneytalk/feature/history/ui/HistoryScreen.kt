@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
+import com.sanha.moneytalk.core.ui.component.ExpenseItemCard
 import com.sanha.moneytalk.core.util.DateUtils
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -425,6 +427,7 @@ fun ExpenseListView(
     onDelete: (ExpenseEntity) -> Unit
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
 
     if (isLoading) {
         Box(
@@ -521,14 +524,14 @@ fun ExpenseListView(
                 )
             }
 
-            // 지출 항목
+            // 지출 항목 (공통 컴포넌트 사용)
             items(
                 items = dayExpenses,
                 key = { it.id }
             ) { expense ->
-                BanksaladExpenseItem(
+                ExpenseItemCard(
                     expense = expense,
-                    onDelete = { onDelete(expense) }
+                    onClick = { selectedExpense = expense }
                 )
             }
         }
@@ -537,97 +540,17 @@ fun ExpenseListView(
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
-}
 
-@Composable
-fun BanksaladExpenseItem(
-    expense: ExpenseEntity,
-    onDelete: () -> Unit
-) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
-    val categoryStyle = getCategoryStyle(expense.category)
-    var showDeleteDialog by remember { mutableStateOf(false) }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { showDeleteDialog = true }
-            .padding(vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
-        ) {
-            // 카테고리 아이콘
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(categoryStyle.color.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = categoryStyle.icon,
-                    fontSize = 18.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column {
-                // 가게명
-                Text(
-                    text = expense.storeName,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                // 카테고리 | 카드 정보
-                Text(
-                    text = "${expense.category} | ${expense.cardName}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-
-        // 금액
-        Text(
-            text = "-${numberFormat.format(expense.amount)}원",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.error
-        )
-    }
-
-    if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text(stringResource(R.string.history_delete_title)) },
-            text = { Text(stringResource(R.string.history_delete_message, expense.storeName)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDelete()
-                        showDeleteDialog = false
-                    }
-                ) {
-                    Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            }
+    // 지출 상세 다이얼로그 (삭제 기능 포함)
+    selectedExpense?.let { expense ->
+        ExpenseDetailDialog(
+            expense = expense,
+            onDismiss = { selectedExpense = null },
+            onDelete = { onDelete(expense) }
         )
     }
 }
+
 
 // 날짜 정보를 담는 데이터 클래스
 data class CalendarDay(

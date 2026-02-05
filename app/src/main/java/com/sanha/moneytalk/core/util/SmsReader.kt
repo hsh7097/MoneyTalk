@@ -3,6 +3,10 @@ package com.sanha.moneytalk.core.util
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.Telephony
+import android.util.Log
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -73,6 +77,10 @@ class SmsReader @Inject constructor() {
         endDate: Long
     ): List<SmsMessage> {
         val smsList = mutableListOf<SmsMessage>()
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA)
+
+        Log.e("sanha", "=== readCardSmsByDateRange 시작 ===")
+        Log.e("sanha", "조회 범위: ${dateFormat.format(Date(startDate))} ~ ${dateFormat.format(Date(endDate))}")
 
         val cursor = contentResolver.query(
             Uri.parse("content://sms/inbox"),
@@ -87,6 +95,9 @@ class SmsReader @Inject constructor() {
             "${Telephony.Sms.DATE} DESC"
         )
 
+        var totalCount = 0
+        var cardCount = 0
+
         cursor?.use {
             val idIndex = it.getColumnIndex(Telephony.Sms._ID)
             val addressIndex = it.getColumnIndex(Telephony.Sms.ADDRESS)
@@ -94,12 +105,16 @@ class SmsReader @Inject constructor() {
             val dateIndex = it.getColumnIndex(Telephony.Sms.DATE)
 
             while (it.moveToNext()) {
+                totalCount++
                 val id = it.getString(idIndex) ?: continue
                 val address = it.getString(addressIndex) ?: continue
                 val body = it.getString(bodyIndex) ?: continue
                 val date = it.getLong(dateIndex)
 
+                Log.e("sanha", "SMS[$totalCount] 날짜: ${dateFormat.format(Date(date))}, 발신: $address")
+
                 if (SmsParser.isCardPaymentSms(body)) {
+                    cardCount++
                     smsList.add(
                         SmsMessage(
                             id = SmsParser.generateSmsId(address, body, date),
@@ -111,6 +126,8 @@ class SmsReader @Inject constructor() {
                 }
             }
         }
+
+        Log.e("sanha", "=== 조회 결과: 전체 $totalCount 건, 카드결제 $cardCount 건 ===")
 
         return smsList
     }

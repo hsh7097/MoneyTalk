@@ -192,7 +192,7 @@ object SmsParser {
     fun isCardPaymentSms(message: String): Boolean {
         // 제외 키워드가 있으면 false
         if (excludeKeywords.any { message.contains(it) }) {
-            Log.e("sanha","제외 케워드 $message")
+            Log.e("sanha","제외 키워드 $message")
             return false
         }
 
@@ -206,10 +206,11 @@ object SmsParser {
 
         val isCardPayment = hasCardKeyword && hasPaymentKeyword && hasAmount
         if(isCardPayment){
-            Log.e("sanha","성공 키워드 $message")
+            Log.e("sanha","성공 키워드 [${message.length}자] $message")
         }else{
-            Log.e("sanha","실패 케워드 $message hasCardKeyword : $hasCardKeyword hasPaymentKeyword : $hasPaymentKeyword hasAmount : $hasAmount")
-
+            // message가 너무 길면 앞 50자만 출력
+            val previewMsg = if (message.length > 50) message.take(50) + "..." else message
+            Log.e("sanha","실패 키워드 [${message.length}자] $previewMsg | hasCard:$hasCardKeyword hasPay:$hasPaymentKeyword hasAmt:$hasAmount")
         }
 
         return isCardPayment

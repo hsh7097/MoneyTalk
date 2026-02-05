@@ -27,6 +27,8 @@ import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
+import com.sanha.moneytalk.core.ui.component.ExpenseItemCard
 import com.sanha.moneytalk.core.util.DateUtils
 import java.text.NumberFormat
 import java.util.*
@@ -108,7 +110,7 @@ fun HomeScreen(
             }
         } else {
             items(uiState.recentExpenses) { expense ->
-                ExpenseItem(
+                ExpenseItemCard(
                     expense = expense,
                     onClick = { selectedExpense = expense }
                 )
@@ -116,11 +118,12 @@ fun HomeScreen(
         }
     }
 
-    // 지출 상세 다이얼로그
+    // 지출 상세 다이얼로그 (공통 컴포넌트 사용)
     selectedExpense?.let { expense ->
         ExpenseDetailDialog(
             expense = expense,
-            onDismiss = { selectedExpense = null }
+            onDismiss = { selectedExpense = null },
+            onDelete = null  // 홈에서는 삭제 기능 없음
         )
     }
 
@@ -358,165 +361,8 @@ fun CategoryExpenseCard(
     }
 }
 
-@Composable
-fun ExpenseItem(
-    expense: ExpenseEntity,
-    onClick: () -> Unit = {}
-) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
-    val category = Category.fromDisplayName(expense.category)
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = category.emoji,
-                    style = MaterialTheme.typography.titleLarge
-                )
-                Column {
-                    Text(
-                        text = expense.storeName,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = DateUtils.formatDisplayDate(expense.dateTime),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-            }
-            Text(
-                text = "-${numberFormat.format(expense.amount)}원",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.error
-            )
-        }
-    }
-}
 
-@Composable
-fun ExpenseDetailDialog(
-    expense: ExpenseEntity,
-    onDismiss: () -> Unit
-) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
-    val category = Category.fromDisplayName(expense.category)
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = {
-            Text(
-                text = category.emoji,
-                style = MaterialTheme.typography.displaySmall
-            )
-        },
-        title = {
-            Text(
-                text = expense.storeName,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // 금액
-                DetailRow(label = stringResource(R.string.detail_amount), value = "-${numberFormat.format(expense.amount)}원")
-
-                // 카테고리
-                DetailRow(label = stringResource(R.string.detail_category), value = "${category.emoji} ${category.displayName}")
-
-                // 카드
-                DetailRow(label = stringResource(R.string.detail_card), value = expense.cardName)
-
-                // 결제 시간
-                DetailRow(label = stringResource(R.string.detail_payment_time), value = DateUtils.formatDisplayDateTime(expense.dateTime))
-
-                // 메모
-                expense.memo?.let { memo ->
-                    if (memo.isNotBlank()) {
-                        DetailRow(label = stringResource(R.string.detail_memo), value = memo)
-                    }
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                // 원본 문자
-                Text(
-                    text = stringResource(R.string.detail_original_sms),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Sms,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = expense.originalSms,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_close))
-            }
-        }
-    )
-}
-
-@Composable
-private fun DetailRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
 
 @Composable
 fun EmptyExpenseCard() {
