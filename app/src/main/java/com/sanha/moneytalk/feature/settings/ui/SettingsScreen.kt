@@ -1,12 +1,17 @@
 package com.sanha.moneytalk.feature.settings.ui
 
+import android.app.Activity
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -16,17 +21,26 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.common.api.ApiException
 import com.sanha.moneytalk.core.util.DataBackupManager
+import com.sanha.moneytalk.core.util.DriveBackupFile
+import com.sanha.moneytalk.core.util.ExportFilter
+import com.sanha.moneytalk.core.util.ExportFormat
+import com.sanha.moneytalk.core.util.GoogleDriveHelper
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
 import java.util.*
 
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
 
@@ -35,15 +49,33 @@ fun SettingsScreen(
     var showMonthStartDayDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var showRestoreConfirmDialog by remember { mutableStateOf(false) }
+    var showExportDialog by remember { mutableStateOf(false) }
+    var showGoogleDriveDialog by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // 구글 로그인 런처
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(ApiException::class.java)
+                viewModel.handleGoogleSignInResult(context, account)
+                viewModel.loadDriveBackupFiles()
+            } catch (e: ApiException) {
+                // 로그인 실패
+            }
+        }
+    }
+
     // 백업 파일 생성 런처
     val backupLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json")
+        contract = ActivityResultContracts.CreateDocument("*/*")
     ) { uri ->
-        uri?.let { viewModel.exportBackup(it) }
+        uri?.let { viewModel.exportBackup(context, it) }
     }
 
     // 복원 파일 선택 런처
@@ -56,11 +88,18 @@ fun SettingsScreen(
         }
     }
 
-    // 백업 JSON이 준비되면 파일 저장 다이얼로그 열기
-    LaunchedEffect(uiState.backupJson) {
-        uiState.backupJson?.let {
-            val fileName = DataBackupManager.generateBackupFileName()
-            backupLauncher.launch(fileName)
+    // 구글 로그인 상태 체크
+    LaunchedEffect(Unit) {
+        viewModel.checkGoogleSignIn(context)
+    }
+
+    // 백업 콘텐츠가 준비되면 파일 저장 다이얼로그 열기
+    LaunchedEffect(uiState.backupContent) {
+        uiState.backupContent?.let {
+            if (!showExportDialog && !showGoogleDriveDialog) {
+                val fileName = DataBackupManager.generateBackupFileName(uiState.exportFormat)
+                backupLauncher.launch(fileName)
+            }
         }
     }
 
@@ -144,13 +183,31 @@ fun SettingsScreen(
                     SettingsSection(title = "데이터 관리") {
                         SettingsItem(
                             icon = Icons.Default.Backup,
-                            title = "데이터 백업",
-                            subtitle = "데이터를 파일로 내보내기",
-                            onClick = { viewModel.prepareBackup() }
+                            title = "데이터 내보내기",
+                            subtitle = "필터 적용 후 JSON 또는 엑셀로 내보내기",
+                            onClick = { showExportDialog = true }
+                        )
+                        SettingsItem(
+                            icon = Icons.Default.Cloud,
+                            title = "구글 드라이브",
+                            subtitle = if (uiState.isGoogleSignedIn) {
+                                "연결됨: ${uiState.googleAccountName}"
+                            } else {
+                                "클라우드 백업/복원"
+                            },
+                            onClick = {
+                                if (uiState.isGoogleSignedIn) {
+                                    viewModel.loadDriveBackupFiles()
+                                    showGoogleDriveDialog = true
+                                } else {
+                                    val signInIntent = GoogleDriveHelper().getSignInIntent(context)
+                                    googleSignInLauncher.launch(signInIntent)
+                                }
+                            }
                         )
                         SettingsItem(
                             icon = Icons.Default.Restore,
-                            title = "데이터 복원",
+                            title = "로컬 파일에서 복원",
                             subtitle = "백업 파일에서 복원",
                             onClick = { restoreLauncher.launch(arrayOf("application/json")) }
                         )
@@ -244,6 +301,55 @@ fun SettingsScreen(
         )
     }
 
+    // 내보내기 다이얼로그
+    if (showExportDialog) {
+        ExportDialog(
+            availableCards = uiState.availableCards,
+            availableCategories = uiState.availableCategories,
+            currentFilter = uiState.exportFilter,
+            currentFormat = uiState.exportFormat,
+            isGoogleSignedIn = uiState.isGoogleSignedIn,
+            onDismiss = { showExportDialog = false },
+            onFilterChange = { viewModel.setExportFilter(it) },
+            onFormatChange = { viewModel.setExportFormat(it) },
+            onExportLocal = {
+                viewModel.prepareBackup()
+                showExportDialog = false
+            },
+            onExportGoogleDrive = {
+                viewModel.prepareBackup()
+                showExportDialog = false
+                // prepareBackup 완료 후 드라이브에 업로드
+                viewModel.exportToGoogleDrive()
+            },
+            onSignInGoogle = {
+                val signInIntent = GoogleDriveHelper().getSignInIntent(context)
+                googleSignInLauncher.launch(signInIntent)
+            }
+        )
+    }
+
+    // 구글 드라이브 다이얼로그
+    if (showGoogleDriveDialog) {
+        GoogleDriveDialog(
+            backupFiles = uiState.driveBackupFiles,
+            accountName = uiState.googleAccountName,
+            onDismiss = { showGoogleDriveDialog = false },
+            onRefresh = { viewModel.loadDriveBackupFiles() },
+            onRestore = { fileId ->
+                viewModel.restoreFromGoogleDrive(fileId)
+                showGoogleDriveDialog = false
+            },
+            onDelete = { fileId ->
+                viewModel.deleteDriveBackupFile(fileId)
+            },
+            onSignOut = {
+                viewModel.signOutGoogle(context)
+                showGoogleDriveDialog = false
+            }
+        )
+    }
+
     // 전체 삭제 확인 다이얼로그
     if (showDeleteConfirmDialog) {
         AlertDialog(
@@ -305,7 +411,7 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        pendingRestoreUri?.let { viewModel.importBackup(it) }
+                        pendingRestoreUri?.let { viewModel.importBackup(context, it) }
                         showRestoreConfirmDialog = false
                         pendingRestoreUri = null
                     }
@@ -324,6 +430,324 @@ fun SettingsScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+fun ExportDialog(
+    availableCards: List<String>,
+    availableCategories: List<String>,
+    currentFilter: ExportFilter,
+    currentFormat: ExportFormat,
+    isGoogleSignedIn: Boolean,
+    onDismiss: () -> Unit,
+    onFilterChange: (ExportFilter) -> Unit,
+    onFormatChange: (ExportFormat) -> Unit,
+    onExportLocal: () -> Unit,
+    onExportGoogleDrive: () -> Unit,
+    onSignInGoogle: () -> Unit
+) {
+    var selectedCards by remember { mutableStateOf(currentFilter.cardNames.toSet()) }
+    var selectedCategories by remember { mutableStateOf(currentFilter.categories.toSet()) }
+    var includeExpenses by remember { mutableStateOf(currentFilter.includeExpenses) }
+    var includeIncomes by remember { mutableStateOf(currentFilter.includeIncomes) }
+    var selectedFormat by remember { mutableStateOf(currentFormat) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("데이터 내보내기") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // 형식 선택
+                Text("내보내기 형식", style = MaterialTheme.typography.labelLarge)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = selectedFormat == ExportFormat.JSON,
+                        onClick = {
+                            selectedFormat = ExportFormat.JSON
+                            onFormatChange(ExportFormat.JSON)
+                        },
+                        label = { Text("JSON (복원용)") },
+                        leadingIcon = if (selectedFormat == ExportFormat.JSON) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                        } else null
+                    )
+                    FilterChip(
+                        selected = selectedFormat == ExportFormat.CSV,
+                        onClick = {
+                            selectedFormat = ExportFormat.CSV
+                            onFormatChange(ExportFormat.CSV)
+                        },
+                        label = { Text("CSV (엑셀)") },
+                        leadingIcon = if (selectedFormat == ExportFormat.CSV) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                        } else null
+                    )
+                }
+
+                HorizontalDivider()
+
+                // 데이터 유형
+                Text("데이터 유형", style = MaterialTheme.typography.labelLarge)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = includeExpenses,
+                        onClick = {
+                            includeExpenses = !includeExpenses
+                            onFilterChange(currentFilter.copy(includeExpenses = !includeExpenses))
+                        },
+                        label = { Text("지출") },
+                        leadingIcon = if (includeExpenses) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                        } else null
+                    )
+                    FilterChip(
+                        selected = includeIncomes,
+                        onClick = {
+                            includeIncomes = !includeIncomes
+                            onFilterChange(currentFilter.copy(includeIncomes = !includeIncomes))
+                        },
+                        label = { Text("수입") },
+                        leadingIcon = if (includeIncomes) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                        } else null
+                    )
+                }
+
+                // 카드 필터
+                if (availableCards.isNotEmpty()) {
+                    HorizontalDivider()
+                    Text("카드 필터 (선택 안함 = 전체)", style = MaterialTheme.typography.labelLarge)
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        availableCards.forEach { card ->
+                            FilterChip(
+                                selected = card in selectedCards,
+                                onClick = {
+                                    selectedCards = if (card in selectedCards) {
+                                        selectedCards - card
+                                    } else {
+                                        selectedCards + card
+                                    }
+                                    onFilterChange(currentFilter.copy(cardNames = selectedCards.toList()))
+                                },
+                                label = { Text(card, maxLines = 1) }
+                            )
+                        }
+                    }
+                }
+
+                // 카테고리 필터
+                if (availableCategories.isNotEmpty()) {
+                    HorizontalDivider()
+                    Text("카테고리 필터 (선택 안함 = 전체)", style = MaterialTheme.typography.labelLarge)
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        availableCategories.take(10).forEach { category ->
+                            FilterChip(
+                                selected = category in selectedCategories,
+                                onClick = {
+                                    selectedCategories = if (category in selectedCategories) {
+                                        selectedCategories - category
+                                    } else {
+                                        selectedCategories + category
+                                    }
+                                    onFilterChange(currentFilter.copy(categories = selectedCategories.toList()))
+                                },
+                                label = { Text(category, maxLines = 1) }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Column {
+                // 로컬 저장
+                Button(
+                    onClick = onExportLocal,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Download, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("로컬에 저장")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 구글 드라이브
+                if (isGoogleSignedIn) {
+                    OutlinedButton(
+                        onClick = onExportGoogleDrive,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Cloud, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("구글 드라이브에 저장")
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = onSignInGoogle,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Cloud, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("구글 로그인")
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("취소")
+            }
+        }
+    )
+}
+
+@Composable
+fun GoogleDriveDialog(
+    backupFiles: List<DriveBackupFile>,
+    accountName: String?,
+    onDismiss: () -> Unit,
+    onRefresh: () -> Unit,
+    onRestore: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onSignOut: () -> Unit
+) {
+    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("구글 드라이브 백업")
+                IconButton(onClick = onRefresh) {
+                    Icon(Icons.Default.Refresh, contentDescription = "새로고침")
+                }
+            }
+        },
+        text = {
+            Column {
+                // 계정 정보
+                accountName?.let {
+                    Text(
+                        text = "계정: $it",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                if (backupFiles.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "저장된 백업 파일이 없습니다",
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 300.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(backupFiles) { file ->
+                            DriveBackupFileItem(
+                                file = file,
+                                dateFormat = dateFormat,
+                                onRestore = { onRestore(file.id) },
+                                onDelete = { onDelete(file.id) }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("닫기")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onSignOut,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("로그아웃")
+            }
+        }
+    )
+}
+
+@Composable
+fun DriveBackupFileItem(
+    file: DriveBackupFile,
+    dateFormat: SimpleDateFormat,
+    onRestore: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = file.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = dateFormat.format(Date(file.createdTime)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+            Row {
+                IconButton(onClick = onRestore) {
+                    Icon(
+                        Icons.Default.Restore,
+                        contentDescription = "복원",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "삭제",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
     }
 }
 

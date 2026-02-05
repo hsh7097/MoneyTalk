@@ -76,6 +76,11 @@ material-icons-extended = { group = "androidx.compose.material", name = "materia
 # Lottie
 lottie-compose = { group = "com.airbnb.android", name = "lottie-compose", version.ref = "lottie" }
 
+# Google Play Services & Drive
+play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version = "21.0.0" }
+google-api-client-android = { group = "com.google.api-client", name = "google-api-client-android", version = "2.2.0" }
+google-api-services-drive = { group = "com.google.apis", name = "google-api-services-drive", version = "v3-rev20231128-2.0.0" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 jetbrains-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

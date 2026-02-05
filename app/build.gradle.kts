@@ -111,6 +111,13 @@ dependencies {
     // Lottie
     implementation(libs.lottie.compose)
 
+    // Google Play Services & Drive
+    implementation(libs.play.services.auth)
+    implementation(libs.google.api.client.android)
+    implementation(libs.google.api.services.drive) {
+        exclude(group = "org.apache.httpcomponents")
+    }
+
     // Test
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -14,6 +14,26 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 /**
+ * 내보내기 필터 옵션
+ */
+data class ExportFilter(
+    val startDate: Long? = null,
+    val endDate: Long? = null,
+    val cardNames: List<String> = emptyList(),
+    val categories: List<String> = emptyList(),
+    val includeExpenses: Boolean = true,
+    val includeIncomes: Boolean = true
+)
+
+/**
+ * 내보내기 형식
+ */
+enum class ExportFormat {
+    JSON,
+    CSV
+}
+
+/**
  * 백업 데이터 모델
  */
 data class BackupData(
@@ -55,6 +75,74 @@ object DataBackupManager {
         .setPrettyPrinting()
         .create()
 
+    private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA)
+
+    /**
+     * 필터를 적용한 지출 데이터 필터링
+     */
+    fun filterExpenses(
+        expenses: List<ExpenseEntity>,
+        filter: ExportFilter
+    ): List<ExpenseEntity> {
+        var filtered = expenses
+
+        // 날짜 필터
+        if (filter.startDate != null) {
+            filtered = filtered.filter {
+                parseDateTime(it.dateTime)?.time ?: 0L >= filter.startDate
+            }
+        }
+        if (filter.endDate != null) {
+            filtered = filtered.filter {
+                parseDateTime(it.dateTime)?.time ?: Long.MAX_VALUE <= filter.endDate
+            }
+        }
+
+        // 카드 필터
+        if (filter.cardNames.isNotEmpty()) {
+            filtered = filtered.filter { it.cardName in filter.cardNames }
+        }
+
+        // 카테고리 필터
+        if (filter.categories.isNotEmpty()) {
+            filtered = filtered.filter { it.category in filter.categories }
+        }
+
+        return filtered
+    }
+
+    /**
+     * 필터를 적용한 수입 데이터 필터링
+     */
+    fun filterIncomes(
+        incomes: List<IncomeEntity>,
+        filter: ExportFilter
+    ): List<IncomeEntity> {
+        var filtered = incomes
+
+        // 날짜 필터
+        if (filter.startDate != null) {
+            filtered = filtered.filter {
+                parseDateTime(it.dateTime)?.time ?: 0L >= filter.startDate
+            }
+        }
+        if (filter.endDate != null) {
+            filtered = filtered.filter {
+                parseDateTime(it.dateTime)?.time ?: Long.MAX_VALUE <= filter.endDate
+            }
+        }
+
+        return filtered
+    }
+
+    private fun parseDateTime(dateTimeStr: String): Date? {
+        return try {
+            dateTimeFormat.parse(dateTimeStr)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /**
      * 백업 데이터를 JSON 문자열로 변환
      */
@@ -93,16 +181,116 @@ object DataBackupManager {
     }
 
     /**
+     * 지출 데이터를 CSV 문자열로 변환
+     */
+    fun createExpensesCsv(expenses: List<ExpenseEntity>): String {
+        val sb = StringBuilder()
+
+        // BOM for Excel UTF-8 recognition
+        sb.append('\uFEFF')
+
+        // 헤더
+        sb.appendLine("날짜,가맹점,카테고리,카드,금액")
+
+        // 데이터
+        expenses.forEach { expense ->
+            sb.appendLine(
+                "${escapeCsv(expense.dateTime)}," +
+                "${escapeCsv(expense.storeName)}," +
+                "${escapeCsv(expense.category)}," +
+                "${escapeCsv(expense.cardName)}," +
+                "${expense.amount}"
+            )
+        }
+
+        return sb.toString()
+    }
+
+    /**
+     * 수입 데이터를 CSV 문자열로 변환
+     */
+    fun createIncomesCsv(incomes: List<IncomeEntity>): String {
+        val sb = StringBuilder()
+
+        // BOM for Excel UTF-8 recognition
+        sb.append('\uFEFF')
+
+        // 헤더
+        sb.appendLine("날짜,출처,메모,금액")
+
+        // 데이터
+        incomes.forEach { income ->
+            sb.appendLine(
+                "${escapeCsv(income.dateTime)}," +
+                "${escapeCsv(income.source)}," +
+                "${escapeCsv(income.note)}," +
+                "${income.amount}"
+            )
+        }
+
+        return sb.toString()
+    }
+
+    /**
+     * 전체 데이터를 CSV 문자열로 변환 (지출 + 수입 통합)
+     */
+    fun createCombinedCsv(expenses: List<ExpenseEntity>, incomes: List<IncomeEntity>): String {
+        val sb = StringBuilder()
+
+        // BOM for Excel UTF-8 recognition
+        sb.append('\uFEFF')
+
+        // 헤더
+        sb.appendLine("유형,날짜,이름,카테고리,카드/출처,메모,금액")
+
+        // 지출 데이터
+        expenses.forEach { expense ->
+            sb.appendLine(
+                "지출," +
+                "${escapeCsv(expense.dateTime)}," +
+                "${escapeCsv(expense.storeName)}," +
+                "${escapeCsv(expense.category)}," +
+                "${escapeCsv(expense.cardName)}," +
+                "," +
+                "-${expense.amount}"
+            )
+        }
+
+        // 수입 데이터
+        incomes.forEach { income ->
+            sb.appendLine(
+                "수입," +
+                "${escapeCsv(income.dateTime)}," +
+                "${escapeCsv(income.source)}," +
+                "," +
+                "," +
+                "${escapeCsv(income.note)}," +
+                "+${income.amount}"
+            )
+        }
+
+        return sb.toString()
+    }
+
+    private fun escapeCsv(value: String): String {
+        return if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+            "\"${value.replace("\"", "\"\"")}\""
+        } else {
+            value
+        }
+    }
+
+    /**
      * 백업 파일을 Uri에 저장
      */
     suspend fun exportToUri(
         context: Context,
         uri: Uri,
-        backupJson: String
+        content: String
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                outputStream.write(backupJson.toByteArray(Charsets.UTF_8))
+                outputStream.write(content.toByteArray(Charsets.UTF_8))
             }
             Result.success(Unit)
         } catch (e: Exception) {
@@ -165,8 +353,12 @@ object DataBackupManager {
     /**
      * 백업 파일 이름 생성
      */
-    fun generateBackupFileName(): String {
+    fun generateBackupFileName(format: ExportFormat = ExportFormat.JSON): String {
         val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.KOREA)
-        return "moneytalk_backup_${dateFormat.format(Date())}.json"
+        val extension = when (format) {
+            ExportFormat.JSON -> "json"
+            ExportFormat.CSV -> "csv"
+        }
+        return "moneytalk_backup_${dateFormat.format(Date())}.$extension"
     }
 }

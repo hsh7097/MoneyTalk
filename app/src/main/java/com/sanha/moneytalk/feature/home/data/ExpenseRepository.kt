@@ -61,6 +61,9 @@ class ExpenseRepository @Inject constructor(
     suspend fun getAllCardNames(): List<String> =
         expenseDao.getAllCardNames()
 
+    suspend fun getAllCategories(): List<String> =
+        expenseDao.getAllCategories()
+
     suspend fun getDailyTotals(startTime: Long, endTime: Long): List<DailySum> =
         expenseDao.getDailyTotals(startTime, endTime)
 

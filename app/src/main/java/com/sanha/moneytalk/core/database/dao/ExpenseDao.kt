@@ -69,6 +69,10 @@ interface ExpenseDao {
     @Query("SELECT DISTINCT cardName FROM expenses ORDER BY cardName")
     suspend fun getAllCardNames(): List<String>
 
+    // 모든 카테고리 목록 가져오기
+    @Query("SELECT DISTINCT category FROM expenses ORDER BY category")
+    suspend fun getAllCategories(): List<String>
+
     // 날짜별 총액 (일별 합계)
     @Query("SELECT date(dateTime/1000, 'unixepoch', 'localtime') as date, SUM(amount) as total FROM expenses WHERE dateTime BETWEEN :startTime AND :endTime GROUP BY date ORDER BY date DESC")
     suspend fun getDailyTotals(startTime: Long, endTime: Long): List<DailySum>
