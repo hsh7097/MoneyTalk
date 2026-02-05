@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -13,10 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.sanha.moneytalk.navigation.NavGraph
+import com.sanha.moneytalk.navigation.Screen
 import com.sanha.moneytalk.navigation.bottomNavItems
 import com.sanha.moneytalk.core.theme.MoneyTalkTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -58,7 +62,8 @@ class MainActivity : ComponentActivity() {
                     permissionGranted = permissionGranted.value,
                     onRequestSmsPermission = { onGranted ->
                         checkAndRequestSmsPermission(onGranted)
-                    }
+                    },
+                    onExitApp = { finish() }
                 )
             }
         }
@@ -106,11 +111,22 @@ class MainActivity : ComponentActivity() {
 fun MoneyTalkApp(
     permissionChecked: Boolean,
     permissionGranted: Boolean,
-    onRequestSmsPermission: (onGranted: () -> Unit) -> Unit
+    onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
+    onExitApp: () -> Unit
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+
+    // 스플래시 화면에서는 하단 네비게이션 숨김
+    val showBottomBar = currentRoute != Screen.Splash.route
+
+    // 뒤로가기 처리
+    BackPressHandler(
+        navController = navController,
+        currentRoute = currentRoute,
+        onExitApp = onExitApp
+    )
 
     // 권한 체크 중일 때 로딩 표시
     if (!permissionChecked) {
@@ -126,33 +142,35 @@ fun MoneyTalkApp(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            NavigationBar {
-                bottomNavItems.forEach { item ->
-                    NavigationBarItem(
-                        selected = currentRoute == item.route,
-                        onClick = {
-                            if (currentRoute != item.route) {
-                                navController.navigate(item.route) {
-                                    popUpTo(navController.graph.startDestinationId) {
-                                        saveState = true
+            if (showBottomBar) {
+                NavigationBar {
+                    bottomNavItems.forEach { item ->
+                        NavigationBarItem(
+                            selected = currentRoute == item.route,
+                            onClick = {
+                                if (currentRoute != item.route) {
+                                    navController.navigate(item.route) {
+                                        popUpTo(Screen.Home.route) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
-                                    launchSingleTop = true
-                                    restoreState = true
                                 }
-                            }
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = if (currentRoute == item.route) {
-                                    item.selectedIcon
-                                } else {
-                                    item.unselectedIcon
-                                },
-                                contentDescription = item.title
-                            )
-                        },
-                        label = { Text(item.title) }
-                    )
+                            },
+                            icon = {
+                                Icon(
+                                    imageVector = if (currentRoute == item.route) {
+                                        item.selectedIcon
+                                    } else {
+                                        item.unselectedIcon
+                                    },
+                                    contentDescription = item.title
+                                )
+                            },
+                            label = { Text(item.title) }
+                        )
+                    }
                 }
             }
         }
@@ -167,6 +185,40 @@ fun MoneyTalkApp(
                 onRequestSmsPermission = onRequestSmsPermission,
                 autoSyncOnStart = permissionGranted
             )
+        }
+    }
+}
+
+@Composable
+fun BackPressHandler(
+    navController: NavHostController,
+    currentRoute: String?,
+    onExitApp: () -> Unit
+) {
+    val context = LocalContext.current
+    var backPressedTime by remember { mutableStateOf(0L) }
+
+    BackHandler(enabled = currentRoute != Screen.Splash.route) {
+        when (currentRoute) {
+            Screen.Home.route -> {
+                // 홈화면에서는 두 번 눌러 종료
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - backPressedTime < 2000) {
+                    onExitApp()
+                } else {
+                    backPressedTime = currentTime
+                    Toast.makeText(context, "한 번 더 누르면 종료됩니다", Toast.LENGTH_SHORT).show()
+                }
+            }
+            else -> {
+                // 다른 화면에서는 홈으로 이동
+                navController.navigate(Screen.Home.route) {
+                    popUpTo(Screen.Home.route) {
+                        inclusive = true
+                    }
+                    launchSingleTop = true
+                }
+            }
         }
     }
 }
