@@ -30,14 +30,25 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.core.util.DateUtils
 
-// 가이드 질문 목록
+// 가이드 질문 목록 - 카테고리별 그룹핑
+private data class GuideQuestion(
+    val category: String,
+    val question: String
+)
+
 private val guideQuestions = listOf(
-    "이번 달 지출 현황 알려줘",
-    "지난 달 대비 지출이 늘었어?",
-    "식비가 수입 대비 적절해?",
-    "쿠팡에서 얼마나 썼어?",
-    "미분류 항목 보여줘",
-    "카테고리별 지출 비율 알려줘"
+    // 지출 조회
+    GuideQuestion("지출 조회", "2월에 쿠팡에서 얼마 썼어?"),
+    GuideQuestion("지출 조회", "이번 달 스타벅스 사용 내역 보여줘"),
+    GuideQuestion("지출 조회", "지난 3개월 배달비 얼마야?"),
+    // 분석
+    GuideQuestion("분석", "식비가 수입 대비 적절해?"),
+    GuideQuestion("분석", "지난 달 대비 지출이 늘었어?"),
+    GuideQuestion("분석", "카테고리별 지출 비율 분석해줘"),
+    // 카테고리 관리
+    GuideQuestion("카테고리 관리", "쿠팡은 쇼핑으로 분류해줘"),
+    GuideQuestion("카테고리 관리", "배달의민족 포함된 건 식비로 바꿔줘"),
+    GuideQuestion("카테고리 관리", "미분류 항목 보여줘")
 )
 
 @Composable
@@ -256,86 +267,93 @@ fun ChatScreen(
 
 @Composable
 fun GuideQuestionsOverlay(
-    questions: List<String>,
+    questions: List<GuideQuestion>,
     hasApiKey: Boolean,
     onQuestionClick: (String) -> Unit
 ) {
-    Column(
+    val groupedQuestions = questions.groupBy { it.category }
+    val categoryEmojis = mapOf(
+        "지출 조회" to "🔍",
+        "분석" to "📊",
+        "카테고리 관리" to "🏷️"
+    )
+
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp)
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                )
             ) {
-                Text(
-                    text = "안녕하세요!",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "저는 AI 재무 상담사 머니톡이에요.\n아래 질문을 눌러 시작해보세요!",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = "이런 질문을 해보세요",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                questions.forEach { question ->
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .clickable(enabled = hasApiKey) { onQuestionClick(question) },
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surface
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "💬",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = question,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (hasApiKey) {
-                                    MaterialTheme.colorScheme.onSurface
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                }
-                            )
-                        }
-                    }
-                }
-
-                if (!hasApiKey) {
-                    Spacer(modifier = Modifier.height(12.dp))
+                Column(
+                    modifier = Modifier.padding(20.dp)
+                ) {
                     Text(
-                        text = "* API 키를 먼저 설정해주세요",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error
+                        text = "안녕하세요!",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "저는 AI 재무 상담사 머니톡이에요.\n아래 질문을 눌러 시작해보세요!",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    )
+
+                    if (!hasApiKey) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "* API 키를 먼저 설정해주세요",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    groupedQuestions.forEach { (category, categoryQuestions) ->
+                        Text(
+                            text = "${categoryEmojis[category] ?: "💬"} $category",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        categoryQuestions.forEach { guideQuestion ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp)
+                                    .clickable(enabled = hasApiKey) {
+                                        onQuestionClick(guideQuestion.question)
+                                    },
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surface
+                            ) {
+                                Text(
+                                    text = guideQuestion.question,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (hasApiKey) {
+                                        MaterialTheme.colorScheme.onSurface
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
                 }
             }
         }
