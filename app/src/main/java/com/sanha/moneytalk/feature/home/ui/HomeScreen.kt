@@ -56,6 +56,11 @@ fun HomeScreen(
         }
     }
 
+    // 화면이 표시될 때마다 데이터 새로고침 (다른 탭에서 데이터 변경 시 반영)
+    LaunchedEffect(Unit) {
+        viewModel.refreshData()
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()

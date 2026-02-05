@@ -77,10 +77,10 @@ class SmsReader @Inject constructor() {
         endDate: Long
     ): List<SmsMessage> {
         val smsList = mutableListOf<SmsMessage>()
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA)
+        val dateFormat = SimpleDateFormat("MM/dd HH:mm", Locale.KOREA)
 
         Log.e("sanha", "=== readCardSmsByDateRange 시작 ===")
-        Log.e("sanha", "조회 범위: ${dateFormat.format(Date(startDate))} ~ ${dateFormat.format(Date(endDate))}")
+        Log.e("sanha", "조회 범위: ${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(Date(startDate))} ~ ${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(Date(endDate))}")
 
         val cursor = contentResolver.query(
             Uri.parse("content://sms/inbox"),
@@ -97,6 +97,8 @@ class SmsReader @Inject constructor() {
 
         var totalCount = 0
         var cardCount = 0
+        // 은행/발신자별로 그룹화
+        val smsByAddress = mutableMapOf<String, MutableList<Pair<String, String>>>() // address -> [(날짜, 내용미리보기)]
 
         cursor?.use {
             val idIndex = it.getColumnIndex(Telephony.Sms._ID)
@@ -111,7 +113,10 @@ class SmsReader @Inject constructor() {
                 val body = it.getString(bodyIndex) ?: continue
                 val date = it.getLong(dateIndex)
 
-                Log.e("sanha", "SMS[$totalCount] 날짜: ${dateFormat.format(Date(date))}, 발신: $address")
+                // 발신자별로 그룹화 (날짜, 본문 앞 30자)
+                val dateStr = dateFormat.format(Date(date))
+                val preview = if (body.length > 30) body.take(30).replace("\n", " ") + "..." else body.replace("\n", " ")
+                smsByAddress.getOrPut(address) { mutableListOf() }.add(dateStr to preview)
 
                 if (SmsParser.isCardPaymentSms(body)) {
                     cardCount++
@@ -127,6 +132,17 @@ class SmsReader @Inject constructor() {
             }
         }
 
+        // 은행/발신자별 로그 출력
+        Log.e("sanha", "=== 발신자(은행)별 SMS 목록 ===")
+        smsByAddress.forEach { (address, messages) ->
+            Log.e("sanha", "[$address] ${messages.size}건")
+            messages.take(10).forEach { (date, preview) ->
+                Log.e("sanha", "  $date | $preview")
+            }
+            if (messages.size > 10) {
+                Log.e("sanha", "  ... 외 ${messages.size - 10}건")
+            }
+        }
         Log.e("sanha", "=== 조회 결과: 전체 $totalCount 건, 카드결제 $cardCount 건 ===")
 
         return smsList

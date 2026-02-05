@@ -146,6 +146,13 @@ class HomeViewModel @Inject constructor(
         loadData()
     }
 
+    /**
+     * 화면이 다시 표시될 때 데이터 새로고침
+     */
+    fun refreshData() {
+        loadData()
+    }
+
     fun syncSmsMessages(contentResolver: ContentResolver, forceFullSync: Boolean = false) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSyncing = true) }

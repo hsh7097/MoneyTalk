@@ -374,6 +374,8 @@ class SettingsViewModel @Inject constructor(
                 // 설정 초기화
                 settingsDataStore.saveMonthlyIncome(0)
                 settingsDataStore.saveMonthStartDay(1)
+                // 마지막 동기화 시간 초기화 (다음 동기화 시 전체 동기화 되도록)
+                settingsDataStore.saveLastSyncTime(0L)
 
                 _uiState.update {
                     it.copy(
