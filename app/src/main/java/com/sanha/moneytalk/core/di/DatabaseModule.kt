@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.sanha.moneytalk.core.database.AppDatabase
 import com.sanha.moneytalk.core.database.dao.BudgetDao
+import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
@@ -26,7 +27,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
-            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
             .build()
     }
 
@@ -52,5 +53,11 @@ object DatabaseModule {
     @Singleton
     fun provideChatDao(database: AppDatabase): ChatDao {
         return database.chatDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideCategoryMappingDao(database: AppDatabase): CategoryMappingDao {
+        return database.categoryMappingDao()
     }
 }

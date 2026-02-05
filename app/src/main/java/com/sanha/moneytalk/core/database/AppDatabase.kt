@@ -5,10 +5,12 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.sanha.moneytalk.core.database.dao.BudgetDao
+import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
 import com.sanha.moneytalk.core.database.entity.BudgetEntity
+import com.sanha.moneytalk.core.database.entity.CategoryMappingEntity
 import com.sanha.moneytalk.core.database.entity.ChatEntity
 import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
@@ -20,9 +22,10 @@ import com.sanha.moneytalk.core.database.entity.IncomeEntity
         IncomeEntity::class,
         BudgetEntity::class,
         ChatEntity::class,
-        ChatSessionEntity::class
+        ChatSessionEntity::class,
+        CategoryMappingEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -30,6 +33,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun incomeDao(): IncomeDao
     abstract fun budgetDao(): BudgetDao
     abstract fun chatDao(): ChatDao
+    abstract fun categoryMappingDao(): CategoryMappingDao
 
     companion object {
         const val DATABASE_NAME = "moneytalk_db"
@@ -80,6 +84,23 @@ abstract class AppDatabase : RoomDatabase() {
 
                 // 6. 인덱스 생성
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_chat_history_sessionId ON chat_history(sessionId)")
+            }
+        }
+
+        // 마이그레이션 2 → 3: 카테고리 매핑 테이블 추가
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS category_mappings (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        storeName TEXT NOT NULL,
+                        category TEXT NOT NULL,
+                        source TEXT NOT NULL DEFAULT 'local',
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                """)
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_category_mappings_storeName ON category_mappings(storeName)")
             }
         }
     }
