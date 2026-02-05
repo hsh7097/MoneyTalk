@@ -32,6 +32,8 @@ import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
 import com.sanha.moneytalk.core.util.GoogleDriveHelper
+import androidx.compose.ui.res.stringResource
+import com.sanha.moneytalk.R
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
@@ -124,7 +126,7 @@ fun SettingsScreen(
             ) {
                 item {
                     Text(
-                        text = "설정",
+                        text = stringResource(R.string.settings_title),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -132,31 +134,31 @@ fun SettingsScreen(
 
                 // 수입/예산 관리
                 item {
-                    SettingsSection(title = "수입/예산 관리") {
+                    SettingsSection(title = stringResource(R.string.settings_section_budget)) {
                         SettingsItem(
                             icon = Icons.Default.AttachMoney,
-                            title = "월 수입 설정",
+                            title = stringResource(R.string.settings_income_title),
                             subtitle = if (uiState.monthlyIncome > 0) {
-                                "${numberFormat.format(uiState.monthlyIncome)}원"
+                                stringResource(R.string.common_won, numberFormat.format(uiState.monthlyIncome))
                             } else {
-                                "고정 수입을 설정하세요"
+                                stringResource(R.string.settings_income_subtitle_empty)
                             },
                             onClick = { showIncomeDialog = true }
                         )
                         SettingsItem(
                             icon = Icons.Default.CalendarMonth,
-                            title = "월 시작일 설정",
+                            title = stringResource(R.string.settings_month_start_title),
                             subtitle = if (uiState.monthStartDay == 1) {
-                                "매월 1일부터 (기본)"
+                                stringResource(R.string.settings_month_start_default)
                             } else {
-                                "매월 ${uiState.monthStartDay}일부터"
+                                stringResource(R.string.settings_month_start_custom, uiState.monthStartDay)
                             },
                             onClick = { showMonthStartDayDialog = true }
                         )
                         SettingsItem(
                             icon = Icons.Default.PieChart,
-                            title = "카테고리별 예산",
-                            subtitle = "카테고리별 한도를 설정하세요",
+                            title = stringResource(R.string.settings_category_budget_title),
+                            subtitle = stringResource(R.string.settings_category_budget_subtitle),
                             onClick = { /* TODO */ }
                         )
                     }
@@ -164,14 +166,14 @@ fun SettingsScreen(
 
                 // API 설정
                 item {
-                    SettingsSection(title = "AI 설정") {
+                    SettingsSection(title = stringResource(R.string.settings_section_ai)) {
                         SettingsItem(
                             icon = Icons.Default.Key,
-                            title = "Gemini API 키",
+                            title = stringResource(R.string.settings_api_key_title),
                             subtitle = if (uiState.hasApiKey) {
-                                "설정됨: ${uiState.apiKey}"
+                                stringResource(R.string.settings_api_key_set, uiState.apiKey)
                             } else {
-                                "AI 상담을 위한 API 키 설정 (무료)"
+                                stringResource(R.string.settings_api_key_not_set)
                             },
                             onClick = { showApiKeyDialog = true }
                         )
@@ -180,20 +182,20 @@ fun SettingsScreen(
 
                 // 데이터 관리
                 item {
-                    SettingsSection(title = "데이터 관리") {
+                    SettingsSection(title = stringResource(R.string.settings_section_data)) {
                         SettingsItem(
                             icon = Icons.Default.Backup,
-                            title = "데이터 내보내기",
-                            subtitle = "필터 적용 후 JSON 또는 엑셀로 내보내기",
+                            title = stringResource(R.string.settings_export_title),
+                            subtitle = stringResource(R.string.settings_export_subtitle),
                             onClick = { showExportDialog = true }
                         )
                         SettingsItem(
                             icon = Icons.Default.Cloud,
-                            title = "구글 드라이브",
+                            title = stringResource(R.string.settings_google_drive_title),
                             subtitle = if (uiState.isGoogleSignedIn) {
-                                "연결됨: ${uiState.googleAccountName}"
+                                stringResource(R.string.settings_google_drive_connected, uiState.googleAccountName ?: "")
                             } else {
-                                "클라우드 백업/복원"
+                                stringResource(R.string.settings_google_drive_not_connected)
                             },
                             onClick = {
                                 if (uiState.isGoogleSignedIn) {
@@ -207,14 +209,14 @@ fun SettingsScreen(
                         )
                         SettingsItem(
                             icon = Icons.Default.Restore,
-                            title = "로컬 파일에서 복원",
-                            subtitle = "백업 파일에서 복원",
+                            title = stringResource(R.string.settings_restore_local_title),
+                            subtitle = stringResource(R.string.settings_restore_local_subtitle),
                             onClick = { restoreLauncher.launch(arrayOf("application/json")) }
                         )
                         SettingsItem(
                             icon = Icons.Default.DeleteForever,
-                            title = "전체 삭제",
-                            subtitle = "모든 데이터를 삭제합니다",
+                            title = stringResource(R.string.settings_delete_all_title),
+                            subtitle = stringResource(R.string.settings_delete_all_subtitle),
                             onClick = { showDeleteConfirmDialog = true },
                             isDestructive = true
                         )
@@ -223,16 +225,16 @@ fun SettingsScreen(
 
                 // 앱 정보
                 item {
-                    SettingsSection(title = "앱 정보") {
+                    SettingsSection(title = stringResource(R.string.settings_section_app)) {
                         SettingsItem(
                             icon = Icons.Default.Info,
-                            title = "버전",
+                            title = stringResource(R.string.settings_version_title),
                             subtitle = "1.0.0",
                             onClick = { }
                         )
                         SettingsItem(
                             icon = Icons.Default.Description,
-                            title = "개인정보 처리방침",
+                            title = stringResource(R.string.settings_privacy_title),
                             subtitle = "",
                             onClick = { /* TODO */ }
                         )
@@ -258,7 +260,7 @@ fun SettingsScreen(
                     ) {
                         CircularProgressIndicator()
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("처리 중...")
+                        Text(stringResource(R.string.common_processing))
                     }
                 }
             }
@@ -361,11 +363,9 @@ fun SettingsScreen(
                     tint = MaterialTheme.colorScheme.error
                 )
             },
-            title = { Text("전체 데이터 삭제") },
+            title = { Text(stringResource(R.string.dialog_delete_all_title)) },
             text = {
-                Text(
-                    "모든 지출 및 수입 데이터가 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.\n\n정말 삭제하시겠습니까?"
-                )
+                Text(stringResource(R.string.dialog_delete_all_message))
             },
             confirmButton = {
                 TextButton(
@@ -377,12 +377,12 @@ fun SettingsScreen(
                         contentColor = MaterialTheme.colorScheme.error
                     )
                 ) {
-                    Text("삭제")
+                    Text(stringResource(R.string.common_delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirmDialog = false }) {
-                    Text("취소")
+                    Text(stringResource(R.string.common_cancel))
                 }
             }
         )
@@ -402,11 +402,9 @@ fun SettingsScreen(
                     tint = MaterialTheme.colorScheme.primary
                 )
             },
-            title = { Text("데이터 복원") },
+            title = { Text(stringResource(R.string.dialog_restore_title)) },
             text = {
-                Text(
-                    "백업 파일에서 데이터를 복원합니다.\n기존 데이터는 모두 삭제되고 백업 데이터로 대체됩니다.\n\n계속하시겠습니까?"
-                )
+                Text(stringResource(R.string.dialog_restore_message))
             },
             confirmButton = {
                 TextButton(
@@ -416,7 +414,7 @@ fun SettingsScreen(
                         pendingRestoreUri = null
                     }
                 ) {
-                    Text("복원")
+                    Text(stringResource(R.string.common_restore))
                 }
             },
             dismissButton = {
@@ -426,7 +424,7 @@ fun SettingsScreen(
                         pendingRestoreUri = null
                     }
                 ) {
-                    Text("취소")
+                    Text(stringResource(R.string.common_cancel))
                 }
             }
         )
@@ -455,14 +453,14 @@ fun ExportDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("데이터 내보내기") },
+        title = { Text(stringResource(R.string.export_dialog_title)) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // 형식 선택
-                Text("내보내기 형식", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.export_format), style = MaterialTheme.typography.labelLarge)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -472,7 +470,7 @@ fun ExportDialog(
                             selectedFormat = ExportFormat.JSON
                             onFormatChange(ExportFormat.JSON)
                         },
-                        label = { Text("JSON (복원용)") },
+                        label = { Text(stringResource(R.string.export_format_json)) },
                         leadingIcon = if (selectedFormat == ExportFormat.JSON) {
                             { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
                         } else null
@@ -483,7 +481,7 @@ fun ExportDialog(
                             selectedFormat = ExportFormat.CSV
                             onFormatChange(ExportFormat.CSV)
                         },
-                        label = { Text("CSV (엑셀)") },
+                        label = { Text(stringResource(R.string.export_format_csv)) },
                         leadingIcon = if (selectedFormat == ExportFormat.CSV) {
                             { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
                         } else null
@@ -493,7 +491,7 @@ fun ExportDialog(
                 HorizontalDivider()
 
                 // 데이터 유형
-                Text("데이터 유형", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.export_data_type), style = MaterialTheme.typography.labelLarge)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -503,7 +501,7 @@ fun ExportDialog(
                             includeExpenses = !includeExpenses
                             onFilterChange(currentFilter.copy(includeExpenses = !includeExpenses))
                         },
-                        label = { Text("지출") },
+                        label = { Text(stringResource(R.string.export_expense)) },
                         leadingIcon = if (includeExpenses) {
                             { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
                         } else null
@@ -514,7 +512,7 @@ fun ExportDialog(
                             includeIncomes = !includeIncomes
                             onFilterChange(currentFilter.copy(includeIncomes = !includeIncomes))
                         },
-                        label = { Text("수입") },
+                        label = { Text(stringResource(R.string.export_income)) },
                         leadingIcon = if (includeIncomes) {
                             { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
                         } else null
@@ -524,7 +522,7 @@ fun ExportDialog(
                 // 카드 필터
                 if (availableCards.isNotEmpty()) {
                     HorizontalDivider()
-                    Text("카드 필터 (선택 안함 = 전체)", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.export_card_filter), style = MaterialTheme.typography.labelLarge)
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -549,7 +547,7 @@ fun ExportDialog(
                 // 카테고리 필터
                 if (availableCategories.isNotEmpty()) {
                     HorizontalDivider()
-                    Text("카테고리 필터 (선택 안함 = 전체)", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.export_category_filter), style = MaterialTheme.typography.labelLarge)
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -581,7 +579,7 @@ fun ExportDialog(
                 ) {
                     Icon(Icons.Default.Download, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("로컬에 저장")
+                    Text(stringResource(R.string.export_save_local))
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -594,7 +592,7 @@ fun ExportDialog(
                     ) {
                         Icon(Icons.Default.Cloud, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("구글 드라이브에 저장")
+                        Text(stringResource(R.string.export_save_google_drive))
                     }
                 } else {
                     OutlinedButton(
@@ -603,14 +601,14 @@ fun ExportDialog(
                     ) {
                         Icon(Icons.Default.Cloud, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("구글 로그인")
+                        Text(stringResource(R.string.export_google_login))
                     }
                 }
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("취소")
+                Text(stringResource(R.string.common_cancel))
             }
         }
     )
@@ -636,9 +634,9 @@ fun GoogleDriveDialog(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("구글 드라이브 백업")
+                Text(stringResource(R.string.google_drive_title))
                 IconButton(onClick = onRefresh) {
-                    Icon(Icons.Default.Refresh, contentDescription = "새로고침")
+                    Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.common_refresh))
                 }
             }
         },
@@ -647,7 +645,7 @@ fun GoogleDriveDialog(
                 // 계정 정보
                 accountName?.let {
                     Text(
-                        text = "계정: $it",
+                        text = stringResource(R.string.google_drive_account, it),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
@@ -662,7 +660,7 @@ fun GoogleDriveDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "저장된 백업 파일이 없습니다",
+                            text = stringResource(R.string.google_drive_no_backup),
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                     }
@@ -685,7 +683,7 @@ fun GoogleDriveDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("닫기")
+                Text(stringResource(R.string.common_close))
             }
         },
         dismissButton = {
@@ -695,7 +693,7 @@ fun GoogleDriveDialog(
                     contentColor = MaterialTheme.colorScheme.error
                 )
             ) {
-                Text("로그아웃")
+                Text(stringResource(R.string.google_drive_logout))
             }
         }
     )
@@ -735,14 +733,14 @@ fun DriveBackupFileItem(
                 IconButton(onClick = onRestore) {
                     Icon(
                         Icons.Default.Restore,
-                        contentDescription = "복원",
+                        contentDescription = stringResource(R.string.common_restore),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "삭제",
+                        contentDescription = stringResource(R.string.common_delete),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -844,18 +842,18 @@ fun IncomeSettingDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("월 수입 설정") },
+        title = { Text(stringResource(R.string.dialog_income_title)) },
         text = {
             Column {
                 Text(
-                    text = "매월 고정 수입을 입력해주세요.",
+                    text = stringResource(R.string.dialog_income_message),
                     style = MaterialTheme.typography.bodySmall
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(
                     value = incomeText,
                     onValueChange = { incomeText = it.filter { char -> char.isDigit() } },
-                    label = { Text("월 수입") },
+                    label = { Text(stringResource(R.string.dialog_income_label)) },
                     suffix = { Text("원") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -869,12 +867,12 @@ fun IncomeSettingDialog(
                 },
                 enabled = incomeText.isNotBlank()
             ) {
-                Text("저장")
+                Text(stringResource(R.string.common_save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("취소")
+                Text(stringResource(R.string.common_cancel))
             }
         }
     )
@@ -890,11 +888,11 @@ fun ApiKeySettingDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Gemini API 키 설정") },
+        title = { Text(stringResource(R.string.dialog_api_key_title)) },
         text = {
             Column {
                 Text(
-                    text = "Google AI Studio(aistudio.google.com)에서\n무료로 API 키를 발급받을 수 있습니다.",
+                    text = stringResource(R.string.dialog_api_key_message_settings),
                     style = MaterialTheme.typography.bodySmall
                 )
                 if (currentKeyHint.isNotEmpty()) {
@@ -909,8 +907,8 @@ fun ApiKeySettingDialog(
                 OutlinedTextField(
                     value = apiKey,
                     onValueChange = { apiKey = it },
-                    label = { Text("API Key") },
-                    placeholder = { Text("AIza...") },
+                    label = { Text(stringResource(R.string.dialog_api_key_label)) },
+                    placeholder = { Text(stringResource(R.string.dialog_api_key_placeholder)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -921,12 +919,12 @@ fun ApiKeySettingDialog(
                 onClick = { onConfirm(apiKey) },
                 enabled = apiKey.isNotBlank()
             ) {
-                Text("저장")
+                Text(stringResource(R.string.common_save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("취소")
+                Text(stringResource(R.string.common_cancel))
             }
         }
     )
@@ -944,11 +942,11 @@ fun MonthStartDayDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("월 시작일 설정") },
+        title = { Text(stringResource(R.string.dialog_month_start_title)) },
         text = {
             Column {
                 Text(
-                    text = "월급일 등 월 시작 기준일을 설정하세요.\n예: 21일로 설정하면 21일~다음달 20일이 한 달로 계산됩니다.",
+                    text = stringResource(R.string.dialog_month_start_message),
                     style = MaterialTheme.typography.bodySmall
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -961,14 +959,14 @@ fun MonthStartDayDialog(
                             dayText = filtered
                         }
                     },
-                    label = { Text("시작일") },
+                    label = { Text(stringResource(R.string.dialog_month_start_label)) },
                     suffix = { Text("일") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "1~31 사이의 숫자를 입력하세요",
+                    text = stringResource(R.string.dialog_month_start_hint),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
@@ -982,12 +980,12 @@ fun MonthStartDayDialog(
                 },
                 enabled = dayText.isNotBlank()
             ) {
-                Text("저장")
+                Text(stringResource(R.string.common_save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("취소")
+                Text(stringResource(R.string.common_cancel))
             }
         }
     )

@@ -19,9 +19,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.model.Category
@@ -94,7 +96,7 @@ fun HomeScreen(
         // 최근 지출 내역
         item {
             Text(
-                text = "최근 지출",
+                text = stringResource(R.string.home_recent_expense),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -170,7 +172,7 @@ fun MonthlyOverviewCard(
                 IconButton(onClick = onPreviousMonth) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                        contentDescription = "이전 달"
+                        contentDescription = stringResource(R.string.home_previous_month)
                     )
                 }
 
@@ -197,7 +199,7 @@ fun MonthlyOverviewCard(
                     IconButton(onClick = onNextMonth) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = "다음 달"
+                            contentDescription = stringResource(R.string.home_next_month)
                         )
                     }
 
@@ -215,7 +217,7 @@ fun MonthlyOverviewCard(
                             } else {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
-                                    contentDescription = "동기화"
+                                    contentDescription = stringResource(R.string.home_sync)
                                 )
                             }
                         }
@@ -225,7 +227,7 @@ fun MonthlyOverviewCard(
                             onDismissRequest = { showSyncMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("새 문자만 동기화") },
+                                text = { Text(stringResource(R.string.home_sync_new_only)) },
                                 onClick = {
                                     showSyncMenu = false
                                     onIncrementalSync()
@@ -235,7 +237,7 @@ fun MonthlyOverviewCard(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("전체 문자 다시 읽기") },
+                                text = { Text(stringResource(R.string.home_sync_full)) },
                                 onClick = {
                                     showSyncMenu = false
                                     onFullSync()
@@ -257,24 +259,24 @@ fun MonthlyOverviewCard(
             ) {
                 Column {
                     Text(
-                        text = "수입",
+                        text = stringResource(R.string.home_income),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                     )
                     Text(
-                        text = "${numberFormat.format(income)}원",
+                        text = stringResource(R.string.common_won, numberFormat.format(income)),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "지출",
+                        text = stringResource(R.string.home_expense),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                     )
                     Text(
-                        text = "${numberFormat.format(expense)}원",
+                        text = stringResource(R.string.common_won, numberFormat.format(expense)),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.error
@@ -295,7 +297,7 @@ fun MonthlyOverviewCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "남은 예산: ${numberFormat.format(remaining)}원",
+                text = stringResource(R.string.home_remaining_budget, numberFormat.format(remaining)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (remaining >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
             )
@@ -317,7 +319,7 @@ fun CategoryExpenseCard(
             modifier = Modifier.padding(20.dp)
         ) {
             Text(
-                text = "카테고리별 지출",
+                text = stringResource(R.string.home_category_expense),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -326,7 +328,7 @@ fun CategoryExpenseCard(
 
             if (categoryExpenses.isEmpty()) {
                 Text(
-                    text = "아직 지출 내역이 없어요",
+                    text = stringResource(R.string.home_no_expense),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
@@ -345,7 +347,7 @@ fun CategoryExpenseCard(
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Text(
-                            text = "${numberFormat.format(item.total)}원",
+                            text = stringResource(R.string.common_won, numberFormat.format(item.total)),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
@@ -437,21 +439,21 @@ fun ExpenseDetailDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // 금액
-                DetailRow(label = "금액", value = "-${numberFormat.format(expense.amount)}원")
+                DetailRow(label = stringResource(R.string.detail_amount), value = "-${numberFormat.format(expense.amount)}원")
 
                 // 카테고리
-                DetailRow(label = "카테고리", value = "${category.emoji} ${category.displayName}")
+                DetailRow(label = stringResource(R.string.detail_category), value = "${category.emoji} ${category.displayName}")
 
                 // 카드
-                DetailRow(label = "카드", value = expense.cardName)
+                DetailRow(label = stringResource(R.string.detail_card), value = expense.cardName)
 
                 // 결제 시간
-                DetailRow(label = "결제 시간", value = DateUtils.formatDisplayDateTime(expense.dateTime))
+                DetailRow(label = stringResource(R.string.detail_payment_time), value = DateUtils.formatDisplayDateTime(expense.dateTime))
 
                 // 메모
                 expense.memo?.let { memo ->
                     if (memo.isNotBlank()) {
-                        DetailRow(label = "메모", value = memo)
+                        DetailRow(label = stringResource(R.string.detail_memo), value = memo)
                     }
                 }
 
@@ -459,7 +461,7 @@ fun ExpenseDetailDialog(
 
                 // 원본 문자
                 Text(
-                    text = "원본 문자",
+                    text = stringResource(R.string.detail_original_sms),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -491,7 +493,7 @@ fun ExpenseDetailDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("닫기")
+                Text(stringResource(R.string.common_close))
             }
         }
     )
@@ -529,16 +531,16 @@ fun EmptyExpenseCard() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "📭",
+                text = "\uD83D\uDCED",
                 style = MaterialTheme.typography.displayMedium
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "아직 지출 내역이 없어요",
+                text = stringResource(R.string.home_empty_expense_title),
                 style = MaterialTheme.typography.bodyLarge
             )
             Text(
-                text = "문자를 동기화해서 지출을 추가해보세요",
+                text = stringResource(R.string.home_empty_expense_subtitle),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )

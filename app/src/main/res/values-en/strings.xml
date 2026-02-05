@@ -1,0 +1,198 @@
+<resources>
+    <string name="app_name">MoneyTalk</string>
+
+    <!-- Common -->
+    <string name="common_close">Close</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_confirm">Confirm</string>
+    <string name="common_save">Save</string>
+    <string name="common_restore">Restore</string>
+    <string name="common_refresh">Refresh</string>
+    <string name="common_filter">Filter</string>
+    <string name="common_all">All</string>
+    <string name="common_search">Search</string>
+    <string name="common_add">Add</string>
+    <string name="common_processing">Processing…</string>
+    <string name="common_won">₩%s</string>
+    <string name="error_response">Sorry, an error occurred while getting a response: %s</string>
+    <string name="error_general">An error occurred: %s</string>
+
+    <!-- Splash Screen -->
+    <string name="splash_logo_description">MoneyTalk Logo</string>
+    <string name="splash_tagline">Smart Money Manager</string>
+
+    <!-- Chat Screen -->
+    <string name="chat_title">AI Financial Advisor</string>
+    <string name="chat_subtitle_with_api">Chat with Gemini</string>
+    <string name="chat_subtitle_no_api">Please set up API key</string>
+    <string name="chat_input_placeholder">Type a message…</string>
+    <string name="chat_send">Send</string>
+    <string name="chat_thinking">Thinking…</string>
+    <string name="chat_session_list">Conversations</string>
+    <string name="chat_new_session">New Chat</string>
+    <string name="chat_close">Close</string>
+    <string name="chat_delete">Delete</string>
+    <string name="chat_no_sessions">No conversations yet</string>
+    <string name="chat_start_new">Start New Chat</string>
+    <string name="chat_default_session_title">New Chat</string>
+    <string name="chat_previous_session_title">Previous Chat</string>
+
+    <!-- Session Delete Dialog -->
+    <string name="dialog_delete_session_title">Delete Conversation</string>
+    <string name="dialog_delete_session_message">Delete this conversation?\nThis action cannot be undone.</string>
+    <string name="dialog_confirm">Confirm</string>
+    <string name="dialog_cancel">Cancel</string>
+
+    <!-- API Key Dialog -->
+    <string name="dialog_api_key_title">Gemini API Key Setup</string>
+    <string name="dialog_api_key_message">Enter your API key from Google AI Studio.</string>
+    <string name="dialog_api_key_label">API Key</string>
+    <string name="dialog_api_key_placeholder">AIza…</string>
+    <string name="api_key_setting">API Key Settings</string>
+
+    <!-- Guide Questions -->
+    <string name="guide_welcome">Hello!</string>
+    <string name="guide_intro">I\'m MoneyTalk, your AI financial advisor.\nTap a question below to get started!</string>
+    <string name="guide_api_key_required">* Please set up API key first</string>
+
+    <!-- Guide Question Categories -->
+    <string name="guide_category_expense_search">Expenses</string>
+    <string name="guide_category_analysis">Analysis</string>
+    <string name="guide_category_manage">Categories</string>
+
+    <!-- Guide Question Examples -->
+    <string name="guide_q_expense_coupang">How much did I spend at Coupang in February?</string>
+    <string name="guide_q_expense_starbucks">Show me this month\'s Starbucks purchases</string>
+    <string name="guide_q_expense_delivery">How much on delivery fees in the last 3 months?</string>
+    <string name="guide_q_analysis_food">Is my food spending appropriate for my income?</string>
+    <string name="guide_q_analysis_compare">Did my spending increase compared to last month?</string>
+    <string name="guide_q_analysis_category">Analyze my spending ratio by category</string>
+    <string name="guide_q_manage_coupang">Categorize Coupang as Shopping</string>
+    <string name="guide_q_manage_baemin">Change Baemin transactions to Food</string>
+    <string name="guide_q_manage_uncategorized">Show me uncategorized items</string>
+
+    <!-- Home Screen -->
+    <string name="home_previous_month">Previous Month</string>
+    <string name="home_next_month">Next Month</string>
+    <string name="home_sync">Sync</string>
+    <string name="home_sync_new_only">Sync new messages only</string>
+    <string name="home_sync_full">Re-sync all messages</string>
+    <string name="home_income">Income</string>
+    <string name="home_expense">Expenses</string>
+    <string name="home_remaining_budget">Remaining: ₩%s</string>
+    <string name="home_category_expense">Spending by Category</string>
+    <string name="home_no_expense">No expenses yet</string>
+    <string name="home_recent_expense">Recent Expenses</string>
+    <string name="home_empty_expense_title">No expenses yet</string>
+    <string name="home_empty_expense_subtitle">Sync your messages to add expenses</string>
+
+    <!-- Expense Detail Dialog -->
+    <string name="detail_amount">Amount</string>
+    <string name="detail_category">Category</string>
+    <string name="detail_card">Card</string>
+    <string name="detail_payment_time">Payment Time</string>
+    <string name="detail_memo">Memo</string>
+    <string name="detail_original_sms">Original Message</string>
+
+    <!-- History Screen -->
+    <string name="history_title">Transactions</string>
+    <string name="history_view_list">List</string>
+    <string name="history_view_calendar">Calendar</string>
+    <string name="history_no_expense">No expenses</string>
+    <string name="history_delete_title">Confirm Delete</string>
+    <string name="history_delete_message">Delete %s expense?</string>
+    <string name="history_no_spend_month">No-spend %d</string>
+    <string name="history_no_spend_total">%d days total ></string>
+
+    <!-- Days of Week -->
+    <string name="day_sun">S</string>
+    <string name="day_mon">M</string>
+    <string name="day_tue">T</string>
+    <string name="day_wed">W</string>
+    <string name="day_thu">T</string>
+    <string name="day_fri">F</string>
+    <string name="day_sat">S</string>
+    <string name="day_sunday">Sunday</string>
+    <string name="day_monday">Monday</string>
+    <string name="day_tuesday">Tuesday</string>
+    <string name="day_wednesday">Wednesday</string>
+    <string name="day_thursday">Thursday</string>
+    <string name="day_friday">Friday</string>
+    <string name="day_saturday">Saturday</string>
+    <string name="history_day_header">%d %s</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_budget">Income/Budget</string>
+    <string name="settings_income_title">Monthly Income</string>
+    <string name="settings_income_subtitle_empty">Set your fixed income</string>
+    <string name="settings_month_start_title">Month Start Date</string>
+    <string name="settings_month_start_default">1st of each month (default)</string>
+    <string name="settings_month_start_custom">%dth of each month</string>
+    <string name="settings_category_budget_title">Category Budgets</string>
+    <string name="settings_category_budget_subtitle">Set limits for each category</string>
+
+    <string name="settings_section_ai">AI Settings</string>
+    <string name="settings_api_key_title">Gemini API Key</string>
+    <string name="settings_api_key_set">Set: %s</string>
+    <string name="settings_api_key_not_set">Set up API key for AI chat (free)</string>
+
+    <string name="settings_section_data">Data Management</string>
+    <string name="settings_export_title">Export Data</string>
+    <string name="settings_export_subtitle">Export to JSON or CSV with filters</string>
+    <string name="settings_google_drive_title">Google Drive</string>
+    <string name="settings_google_drive_connected">Connected: %s</string>
+    <string name="settings_google_drive_not_connected">Cloud backup/restore</string>
+    <string name="settings_restore_local_title">Restore from Local</string>
+    <string name="settings_restore_local_subtitle">Restore from backup file</string>
+    <string name="settings_delete_all_title">Delete All</string>
+    <string name="settings_delete_all_subtitle">Delete all data</string>
+
+    <string name="settings_section_app">App Info</string>
+    <string name="settings_version_title">Version</string>
+    <string name="settings_privacy_title">Privacy Policy</string>
+
+    <!-- Delete All Dialog -->
+    <string name="dialog_delete_all_title">Delete All Data</string>
+    <string name="dialog_delete_all_message">All expense and income data will be deleted.\nThis action cannot be undone.\n\nAre you sure?</string>
+
+    <!-- Restore Dialog -->
+    <string name="dialog_restore_title">Restore Data</string>
+    <string name="dialog_restore_message">Restore data from backup file.\nAll existing data will be replaced.\n\nContinue?</string>
+
+    <!-- Export Dialog -->
+    <string name="export_dialog_title">Export Data</string>
+    <string name="export_format">Export Format</string>
+    <string name="export_format_json">JSON (for restore)</string>
+    <string name="export_format_csv">CSV (Excel)</string>
+    <string name="export_data_type">Data Type</string>
+    <string name="export_expense">Expenses</string>
+    <string name="export_income">Income</string>
+    <string name="export_card_filter">Card Filter (none = all)</string>
+    <string name="export_category_filter">Category Filter (none = all)</string>
+    <string name="export_save_local">Save Locally</string>
+    <string name="export_save_google_drive">Save to Google Drive</string>
+    <string name="export_google_login">Sign in with Google</string>
+
+    <!-- Google Drive Dialog -->
+    <string name="google_drive_title">Google Drive Backup</string>
+    <string name="google_drive_account">Account: %s</string>
+    <string name="google_drive_no_backup">No backup files found</string>
+    <string name="google_drive_logout">Sign Out</string>
+
+    <!-- Income Setting Dialog -->
+    <string name="dialog_income_title">Monthly Income</string>
+    <string name="dialog_income_message">Enter your monthly fixed income.</string>
+    <string name="dialog_income_label">Monthly Income</string>
+
+    <!-- Month Start Day Dialog -->
+    <string name="dialog_month_start_title">Month Start Date</string>
+    <string name="dialog_month_start_message">Set the start date for your monthly budget.\nE.g., setting 21 means 21st to 20th of next month.</string>
+    <string name="dialog_month_start_label">Start Day</string>
+    <string name="dialog_month_start_hint">Enter a number between 1-31</string>
+
+    <!-- API Key Dialog (Settings) -->
+    <string name="dialog_api_key_message_settings">Get a free API key from\nGoogle AI Studio (aistudio.google.com)</string>
+    <string name="dialog_api_key_current">Currently set</string>
+</resources>

@@ -26,8 +26,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.util.DateUtils
 import java.text.NumberFormat
@@ -101,7 +103,7 @@ fun HistoryScreen(
     ) {
         // 헤더
         Text(
-            text = "가계부",
+            text = stringResource(R.string.history_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
@@ -201,7 +203,7 @@ fun PeriodSummaryCard(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                    contentDescription = "이전 달",
+                    contentDescription = stringResource(R.string.home_previous_month),
                     modifier = Modifier.size(28.dp)
                 )
             }
@@ -230,12 +232,12 @@ fun PeriodSummaryCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "지출 ",
+                        text = stringResource(R.string.home_expense) + " ",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
                     Text(
-                        text = "${numberFormat.format(totalExpense)}원",
+                        text = stringResource(R.string.common_won, numberFormat.format(totalExpense)),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -244,12 +246,12 @@ fun PeriodSummaryCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "수입 ",
+                        text = stringResource(R.string.home_income) + " ",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
                     Text(
-                        text = "${numberFormat.format(totalIncome)}원",
+                        text = stringResource(R.string.common_won, numberFormat.format(totalIncome)),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF4CAF50)
@@ -264,7 +266,7 @@ fun PeriodSummaryCard(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = "다음 달",
+                    contentDescription = stringResource(R.string.home_next_month),
                     modifier = Modifier.size(28.dp)
                 )
             }
@@ -311,7 +313,7 @@ fun ViewToggleRow(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.List,
-                        contentDescription = "목록",
+                        contentDescription = stringResource(R.string.history_view_list),
                         modifier = Modifier.size(16.dp),
                         tint = if (currentMode == ViewMode.LIST)
                             MaterialTheme.colorScheme.onPrimary
@@ -320,7 +322,7 @@ fun ViewToggleRow(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "목록",
+                        text = stringResource(R.string.history_view_list),
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (currentMode == ViewMode.LIST)
                             MaterialTheme.colorScheme.onPrimary
@@ -346,7 +348,7 @@ fun ViewToggleRow(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.DateRange,
-                        contentDescription = "달력",
+                        contentDescription = stringResource(R.string.history_view_calendar),
                         modifier = Modifier.size(16.dp),
                         tint = if (currentMode == ViewMode.CALENDAR)
                             MaterialTheme.colorScheme.onPrimary
@@ -355,7 +357,7 @@ fun ViewToggleRow(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "달력",
+                        text = stringResource(R.string.history_view_calendar),
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (currentMode == ViewMode.CALENDAR)
                             MaterialTheme.colorScheme.onPrimary
@@ -374,7 +376,7 @@ fun ViewToggleRow(
                     onClick = { showFilterMenu = true },
                     label = {
                         Text(
-                            text = selectedCardName ?: "필터",
+                            text = selectedCardName ?: stringResource(R.string.common_filter),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -385,7 +387,7 @@ fun ViewToggleRow(
                     onDismissRequest = { showFilterMenu = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("전체") },
+                        text = { Text(stringResource(R.string.common_all)) },
                         onClick = {
                             onCardNameSelected(null)
                             showFilterMenu = false
@@ -406,11 +408,11 @@ fun ViewToggleRow(
             Spacer(modifier = Modifier.width(8.dp))
 
             IconButton(onClick = { /* TODO: Search */ }) {
-                Icon(Icons.Default.Search, contentDescription = "검색")
+                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.common_search))
             }
 
             IconButton(onClick = { /* TODO: Add */ }) {
-                Icon(Icons.Default.Add, contentDescription = "추가")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.common_add))
             }
         }
     }
@@ -441,12 +443,12 @@ fun ExpenseListView(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "📭",
+                    text = "\uD83D\uDCED",
                     style = MaterialTheme.typography.displayLarge
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "지출 내역이 없어요",
+                    text = stringResource(R.string.history_no_expense),
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -475,15 +477,15 @@ fun ExpenseListView(
             val dailyTotal = dayExpenses.sumOf { it.amount }
             val calendar = Calendar.getInstance().apply { time = date }
             val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
-            val dayOfWeek = when (calendar.get(Calendar.DAY_OF_WEEK)) {
-                Calendar.SUNDAY -> "일요일"
-                Calendar.MONDAY -> "월요일"
-                Calendar.TUESDAY -> "화요일"
-                Calendar.WEDNESDAY -> "수요일"
-                Calendar.THURSDAY -> "목요일"
-                Calendar.FRIDAY -> "금요일"
-                Calendar.SATURDAY -> "토요일"
-                else -> ""
+            val dayOfWeekResId = when (calendar.get(Calendar.DAY_OF_WEEK)) {
+                Calendar.SUNDAY -> R.string.day_sunday
+                Calendar.MONDAY -> R.string.day_monday
+                Calendar.TUESDAY -> R.string.day_tuesday
+                Calendar.WEDNESDAY -> R.string.day_wednesday
+                Calendar.THURSDAY -> R.string.day_thursday
+                Calendar.FRIDAY -> R.string.day_friday
+                Calendar.SATURDAY -> R.string.day_saturday
+                else -> R.string.day_sunday
             }
 
             // 날짜 헤더
@@ -497,12 +499,12 @@ fun ExpenseListView(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${dayOfMonth}일 $dayOfWeek",
+                        text = stringResource(R.string.history_day_header, dayOfMonth, stringResource(dayOfWeekResId)),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
                     Text(
-                        text = "-${numberFormat.format(dailyTotal)}원",
+                        text = "-" + stringResource(R.string.common_won, numberFormat.format(dailyTotal)),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.error
@@ -601,8 +603,8 @@ fun BanksaladExpenseItem(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("삭제 확인") },
-            text = { Text("${expense.storeName} 지출 내역을 삭제할까요?") },
+            title = { Text(stringResource(R.string.history_delete_title)) },
+            text = { Text(stringResource(R.string.history_delete_message, expense.storeName)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -610,12 +612,12 @@ fun BanksaladExpenseItem(
                         showDeleteDialog = false
                     }
                 ) {
-                    Text("삭제", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("취소")
+                    Text(stringResource(R.string.common_cancel))
                 }
             }
         )
@@ -704,12 +706,12 @@ fun BillingCycleCalendarView(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "${month}월 무지출",
+                            text = stringResource(R.string.history_no_spend_month, month),
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
                     Text(
-                        text = "총 ${noSpendDays}일 >",
+                        text = stringResource(R.string.history_no_spend_total, noSpendDays),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
@@ -718,14 +720,18 @@ fun BillingCycleCalendarView(
         }
 
         // 요일 헤더
+        val dayLabels = listOf(
+            R.string.day_sun, R.string.day_mon, R.string.day_tue,
+            R.string.day_wed, R.string.day_thu, R.string.day_fri, R.string.day_sat
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 8.dp)
         ) {
-            listOf("일", "월", "화", "수", "목", "금", "토").forEachIndexed { index, day ->
+            dayLabels.forEachIndexed { index, dayResId ->
                 Text(
-                    text = day,
+                    text = stringResource(dayResId),
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodySmall,
