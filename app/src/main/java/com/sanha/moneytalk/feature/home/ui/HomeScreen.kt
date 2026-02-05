@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
@@ -60,9 +61,14 @@ fun HomeScreen(
                 remaining = uiState.remainingBudget,
                 onPreviousMonth = { viewModel.previousMonth() },
                 onNextMonth = { viewModel.nextMonth() },
-                onSyncClick = {
+                onIncrementalSync = {
                     onRequestSmsPermission {
-                        viewModel.syncSmsMessages(contentResolver)
+                        viewModel.syncSmsMessages(contentResolver, forceFullSync = false)
+                    }
+                },
+                onFullSync = {
+                    onRequestSmsPermission {
+                        viewModel.syncSmsMessages(contentResolver, forceFullSync = true)
                     }
                 },
                 isSyncing = uiState.isSyncing
@@ -117,11 +123,13 @@ fun MonthlyOverviewCard(
     remaining: Int,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
-    onSyncClick: () -> Unit,
+    onIncrementalSync: () -> Unit,
+    onFullSync: () -> Unit,
     isSyncing: Boolean
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     val progress = if (income > 0) expense.toFloat() / income.toFloat() else 0f
+    var showSyncMenu by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -172,19 +180,49 @@ fun MonthlyOverviewCard(
                             contentDescription = "다음 달"
                         )
                     }
-                    IconButton(
-                        onClick = onSyncClick,
-                        enabled = !isSyncing
-                    ) {
-                        if (isSyncing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp
+
+                    // 동기화 버튼 + 드롭다운 메뉴
+                    Box {
+                        IconButton(
+                            onClick = { showSyncMenu = true },
+                            enabled = !isSyncing
+                        ) {
+                            if (isSyncing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "동기화"
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = showSyncMenu,
+                            onDismissRequest = { showSyncMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("새 문자만 동기화") },
+                                onClick = {
+                                    showSyncMenu = false
+                                    onIncrementalSync()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Refresh, contentDescription = null)
+                                }
                             )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "동기화"
+                            DropdownMenuItem(
+                                text = { Text("전체 문자 다시 읽기") },
+                                onClick = {
+                                    showSyncMenu = false
+                                    onFullSync()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.MoreVert, contentDescription = null)
+                                }
                             )
                         }
                     }
