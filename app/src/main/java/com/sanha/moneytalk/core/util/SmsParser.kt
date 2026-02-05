@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.core.util
 
+import android.util.Log
 import com.sanha.moneytalk.feature.chat.data.SmsAnalysisResult
 import java.text.SimpleDateFormat
 import java.util.*
@@ -191,6 +192,7 @@ object SmsParser {
     fun isCardPaymentSms(message: String): Boolean {
         // 제외 키워드가 있으면 false
         if (excludeKeywords.any { message.contains(it) }) {
+            Log.e("sanha","제외 케워드 $message")
             return false
         }
 
@@ -202,7 +204,15 @@ object SmsParser {
         val amountPattern = Regex("""[\d,]+원""")
         val hasAmount = amountPattern.containsMatchIn(message)
 
-        return hasCardKeyword && hasPaymentKeyword && hasAmount
+        val isCardPayment = hasCardKeyword && hasPaymentKeyword && hasAmount
+        if(isCardPayment){
+            Log.e("sanha","성공 키워드 $message")
+        }else{
+            Log.e("sanha","실패 케워드 $message hasCardKeyword : $hasCardKeyword hasPaymentKeyword : $hasPaymentKeyword hasAmount : $hasAmount")
+
+        }
+
+        return isCardPayment
     }
 
     /**
