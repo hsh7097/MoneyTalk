@@ -18,6 +18,9 @@ class ExpenseRepository @Inject constructor(
     fun getExpensesByDateRange(startTime: Long, endTime: Long): Flow<List<ExpenseEntity>> =
         expenseDao.getExpensesByDateRange(startTime, endTime)
 
+    suspend fun getExpensesByDateRangeOnce(startTime: Long, endTime: Long): List<ExpenseEntity> =
+        expenseDao.getExpensesByDateRangeOnce(startTime, endTime)
+
     fun getExpensesByCategory(category: String): Flow<List<ExpenseEntity>> =
         expenseDao.getExpensesByCategory(category)
 

@@ -3,7 +3,10 @@ package com.sanha.moneytalk.feature.chat.data
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.generationConfig
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.util.DataQueryParser
+import com.sanha.moneytalk.core.util.DataQueryRequest
 import com.sanha.moneytalk.core.util.PromptTemplates
+import com.sanha.moneytalk.core.util.QueryResult
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -66,7 +69,8 @@ class GeminiRepository @Inject constructor(
         monthlyIncome: Int,
         totalExpense: Int,
         categoryBreakdown: String,
-        recentExpenses: String
+        recentExpenses: String,
+        periodContext: String = "이번 달"
     ): Result<String> {
         return try {
             val model = getModel()
@@ -82,7 +86,8 @@ class GeminiRepository @Inject constructor(
                     totalExpense = totalExpense,
                     categoryBreakdown = categoryBreakdown,
                     recentExpenses = recentExpenses,
-                    userQuestion = userMessage
+                    userQuestion = userMessage,
+                    periodContext = periodContext
                 ))
             }
 
@@ -107,6 +112,56 @@ class GeminiRepository @Inject constructor(
                 appendLine()
                 appendLine(userMessage)
             }
+
+            val response = model.generateContent(prompt)
+            val responseText = response.text ?: "응답을 받지 못했어요."
+
+            Result.success(responseText)
+        } catch (e: Exception) {
+            Result.failure(Exception("요청 실패: ${e.message}"))
+        }
+    }
+
+    /**
+     * 1단계: 사용자 질문을 분석하여 필요한 데이터 쿼리 결정
+     */
+    suspend fun analyzeQueryNeeds(userMessage: String): Result<DataQueryRequest?> {
+        return try {
+            val model = getModel()
+            if (model == null) {
+                return Result.failure(Exception("API 키가 설정되지 않았습니다."))
+            }
+
+            val prompt = DataQueryParser.createQueryAnalysisPrompt(userMessage)
+            val response = model.generateContent(prompt)
+            val responseText = response.text ?: return Result.success(null)
+
+            val queryRequest = DataQueryParser.parseQueryRequest(responseText)
+            Result.success(queryRequest)
+        } catch (e: Exception) {
+            Result.failure(Exception("쿼리 분석 실패: ${e.message}"))
+        }
+    }
+
+    /**
+     * 2단계: 쿼리 결과를 바탕으로 최종 답변 생성
+     */
+    suspend fun generateFinalAnswer(
+        userMessage: String,
+        queryResults: List<QueryResult>,
+        monthlyIncome: Int
+    ): Result<String> {
+        return try {
+            val model = getModel()
+            if (model == null) {
+                return Result.failure(Exception("API 키가 설정되지 않았습니다."))
+            }
+
+            val prompt = DataQueryParser.createFinalAnswerPrompt(
+                userMessage = userMessage,
+                queryResults = queryResults,
+                monthlyIncome = monthlyIncome
+            )
 
             val response = model.generateContent(prompt)
             val responseText = response.text ?: "응답을 받지 못했어요."

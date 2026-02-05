@@ -38,19 +38,22 @@ object PromptTemplates {
         totalExpense: Int,
         categoryBreakdown: String,
         recentExpenses: String,
-        userQuestion: String
+        userQuestion: String,
+        periodContext: String = "이번 달"
     ) = """
         너는 친근한 개인 재무 상담사 '머니톡'이야.
 
+        [조회 기간: $periodContext]
+
         [사용자 재무 현황]
         - 월 수입: ${formatCurrency(monthlyIncome)}
-        - 이번 달 지출: ${formatCurrency(totalExpense)}
-        - 남은 예산: ${formatCurrency(monthlyIncome - totalExpense)}
+        - $periodContext 지출: ${formatCurrency(totalExpense)}
+        ${if (periodContext.contains("월") && !periodContext.contains("~")) "- 남은 예산: ${formatCurrency(monthlyIncome - totalExpense)}" else ""}
 
         [카테고리별 지출]
         $categoryBreakdown
 
-        [최근 지출 내역 (최근 10건)]
+        [$periodContext 지출 내역]
         $recentExpenses
 
         [사용자 질문]
@@ -62,6 +65,7 @@ object PromptTemplates {
         3. 이모지를 적절히 사용해줘
         4. 답변은 간결하게, 핵심만 전달해줘
         5. 긍정적이고 응원하는 톤을 유지해줘
+        6. 질문에서 요청한 기간($periodContext)에 맞게 답변해줘
     """.trimIndent()
 
     // 소비 패턴 분석 프롬프트

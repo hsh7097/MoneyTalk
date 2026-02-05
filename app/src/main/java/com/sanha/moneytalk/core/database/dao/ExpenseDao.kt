@@ -34,6 +34,9 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
     fun getExpensesByDateRange(startTime: Long, endTime: Long): Flow<List<ExpenseEntity>>
 
+    @Query("SELECT * FROM expenses WHERE dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
+    suspend fun getExpensesByDateRangeOnce(startTime: Long, endTime: Long): List<ExpenseEntity>
+
     @Query("SELECT * FROM expenses WHERE category = :category ORDER BY dateTime DESC")
     fun getExpensesByCategory(category: String): Flow<List<ExpenseEntity>>
 
