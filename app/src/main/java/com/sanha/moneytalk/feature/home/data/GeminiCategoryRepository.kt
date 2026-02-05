@@ -213,21 +213,43 @@ class GeminiCategoryRepository @Inject constructor(
 
     private fun buildClassificationPrompt(storeNames: List<String>, categories: List<String>): String {
         return """
-다음 가게명들을 아래 카테고리 중 하나로 분류해주세요.
+당신은 가계부 앱의 카테고리 분류 전문가입니다.
+아래 가게명들을 반드시 주어진 카테고리 목록 중 하나로만 분류해주세요.
 
-카테고리 목록:
-${categories.joinToString(", ")}
+## 사용 가능한 카테고리 (이 목록에 있는 것만 사용):
+${categories.mapIndexed { idx, cat -> "${idx + 1}. $cat" }.joinToString("\n")}
 
-가게명 목록:
+## 카테고리 분류 가이드:
+- 식비: 음식점, 식당, 배달음식, 편의점 음식, 마트 식료품 등
+- 카페: 커피숍, 카페, 베이커리, 디저트 전문점 등
+- 교통: 택시, 버스, 지하철, 주유소, 주차, 톨게이트 등
+- 쇼핑: 마트, 백화점, 의류, 잡화, 온라인쇼핑 등
+- 구독: 넷플릭스, 유튜브, 음악 스트리밍, 정기결제 서비스 등
+- 의료/건강: 병원, 약국, 헬스장, 의료기기 등
+- 문화/여가: 영화관, 놀이공원, 여행, 숙박, 공연 등
+- 교육: 학원, 강의, 도서, 교육 관련 등
+- 생활: 공과금, 통신비, 미용실, 세탁소, 관리비 등
+- 기타: 위 카테고리에 해당하지 않거나 분류 불가능한 경우
+
+## 분류할 가게명:
 ${storeNames.mapIndexed { idx, name -> "${idx + 1}. $name" }.joinToString("\n")}
 
-응답 형식 (각 줄에 "가게명: 카테고리" 형태로):
-예시)
+## 중요 규칙:
+1. 반드시 위 10개 카테고리 중 하나만 사용하세요.
+2. "의료/건강", "문화/여가" 처럼 슬래시가 포함된 카테고리명도 정확히 그대로 사용하세요.
+3. 카드 결제, 페이 결제, 출금 등 결제 수단 자체는 "기타"로 분류하세요.
+4. 확실하지 않은 경우 "기타"로 분류하세요.
+
+## 응답 형식 (정확히 이 형식으로만 응답):
+가게명: 카테고리
+
+예시:
 스타벅스: 카페
 이마트: 쇼핑
-맥도날드: 식비
+서울대학교병원: 의료/건강
+CGV강남: 문화/여가
 
-분류 결과:
+## 분류 결과:
 """.trimIndent()
     }
 
@@ -235,24 +257,101 @@ ${storeNames.mapIndexed { idx, name -> "${idx + 1}. $name" }.joinToString("\n")}
         val results = mutableMapOf<String, String>()
         val validCategories = Category.entries.map { it.displayName }.toSet()
 
+        // 잘못된 카테고리명을 올바른 카테고리명으로 매핑
+        val categoryMapping = mapOf(
+            // 의료/건강 관련
+            "의료" to "의료/건강",
+            "건강" to "의료/건강",
+            "병원" to "의료/건강",
+            "약국" to "의료/건강",
+            "헬스" to "의료/건강",
+            // 문화/여가 관련
+            "문화" to "문화/여가",
+            "여가" to "문화/여가",
+            "엔터테인먼트" to "문화/여가",
+            "오락" to "문화/여가",
+            "레저" to "문화/여가",
+            // 교통 관련
+            "대중교통" to "교통",
+            "택시" to "교통",
+            "주유" to "교통",
+            // 쇼핑 관련
+            "마트" to "쇼핑",
+            "온라인쇼핑" to "쇼핑",
+            "편의점" to "쇼핑",
+            // 생활 관련
+            "공과금" to "생활",
+            "통신" to "생활",
+            // 기타 표현들
+            "미분류" to "기타",
+            "알수없음" to "기타",
+            "불명" to "기타"
+        )
+
         response.lines().forEach { line ->
-            val parts = line.split(":")
+            // ":" 또는 " - " 등 다양한 구분자 처리
+            val parts = line.split(Regex("[:\\-]"), limit = 2)
             if (parts.size >= 2) {
                 val storeName = parts[0].trim().replace(Regex("^\\d+\\.\\s*"), "")
-                val category = parts[1].trim()
+                var category = parts[1].trim()
+
+                // 카테고리 정규화
+                category = normalizeCategory(category, validCategories, categoryMapping)
 
                 // 유효한 카테고리인지 확인
-                if (category in validCategories && storeNames.any { it.contains(storeName) || storeName.contains(it) }) {
-                    // 원래 가게명 찾기
-                    val originalName = storeNames.find { it.contains(storeName) || storeName.contains(it) }
+                if (category in validCategories) {
+                    // 원래 가게명 찾기 (정확히 일치 우선, 그 다음 부분 일치)
+                    val originalName = storeNames.find { it == storeName }
+                        ?: storeNames.find { it.contains(storeName) || storeName.contains(it) }
+
                     if (originalName != null) {
                         results[originalName] = category
+                        Log.d(TAG, "파싱 성공: $originalName -> $category")
                     }
+                } else {
+                    Log.w(TAG, "유효하지 않은 카테고리 무시: $storeName -> $category")
                 }
             }
         }
 
         return results
+    }
+
+    /**
+     * 카테고리명 정규화 - 유효하지 않은 카테고리명을 앱의 카테고리로 변환
+     */
+    private fun normalizeCategory(
+        rawCategory: String,
+        validCategories: Set<String>,
+        categoryMapping: Map<String, String>
+    ): String {
+        val trimmed = rawCategory.trim()
+
+        // 이미 유효한 카테고리면 그대로 반환
+        if (trimmed in validCategories) {
+            return trimmed
+        }
+
+        // 매핑 테이블에서 찾기
+        categoryMapping[trimmed]?.let { return it }
+
+        // 부분 일치로 찾기
+        validCategories.forEach { validCat ->
+            if (trimmed.contains(validCat) || validCat.contains(trimmed)) {
+                return validCat
+            }
+        }
+
+        // 매핑 테이블 키와 부분 일치
+        categoryMapping.entries.forEach { (key, value) ->
+            if (trimmed.contains(key, ignoreCase = true)) {
+                return value
+            }
+        }
+
+        // 찾지 못하면 기타로 반환
+        Log.w(TAG, "알 수 없는 카테고리 -> 기타로 변환: $rawCategory")
+        return "기타"
     }
 
     /**
