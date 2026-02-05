@@ -40,6 +40,9 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE category = :category ORDER BY dateTime DESC")
     fun getExpensesByCategory(category: String): Flow<List<ExpenseEntity>>
 
+    @Query("SELECT * FROM expenses WHERE category = :category ORDER BY dateTime DESC")
+    suspend fun getExpensesByCategoryOnce(category: String): List<ExpenseEntity>
+
     @Query("SELECT SUM(amount) FROM expenses WHERE dateTime BETWEEN :startTime AND :endTime")
     suspend fun getTotalExpenseByDateRange(startTime: Long, endTime: Long): Int?
 
@@ -123,6 +126,26 @@ interface ExpenseDao {
     // 특정 ID의 카테고리 변경
     @Query("UPDATE expenses SET category = :newCategory WHERE id = :expenseId")
     suspend fun updateCategoryById(expenseId: Long, newCategory: String): Int
+
+    // 중복 데이터 조회 (금액, 가게명, 날짜시간이 동일한 항목)
+    @Query("""
+        SELECT * FROM expenses
+        WHERE id NOT IN (
+            SELECT MIN(id) FROM expenses
+            GROUP BY amount, storeName, dateTime
+        )
+    """)
+    suspend fun getDuplicateExpenses(): List<ExpenseEntity>
+
+    // 중복 데이터 삭제 (금액, 가게명, 날짜시간이 동일한 항목 중 가장 오래된 것만 남김)
+    @Query("""
+        DELETE FROM expenses
+        WHERE id NOT IN (
+            SELECT MIN(id) FROM expenses
+            GROUP BY amount, storeName, dateTime
+        )
+    """)
+    suspend fun deleteDuplicates(): Int
 }
 
 data class CategorySum(

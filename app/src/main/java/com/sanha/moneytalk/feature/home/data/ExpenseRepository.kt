@@ -111,4 +111,16 @@ class ExpenseRepository @Inject constructor(
     // 특정 ID의 카테고리 변경
     suspend fun updateCategoryById(expenseId: Long, newCategory: String): Int =
         expenseDao.updateCategoryById(expenseId, newCategory)
+
+    // 미분류("기타") 카테고리 지출 조회 (한번에)
+    suspend fun getExpensesByCategoryOnce(category: String): List<ExpenseEntity> =
+        expenseDao.getExpensesByCategoryOnce(category)
+
+    // 중복 데이터 조회
+    suspend fun getDuplicateExpenses(): List<ExpenseEntity> =
+        expenseDao.getDuplicateExpenses()
+
+    // 중복 데이터 삭제 (금액, 가게명, 날짜시간이 동일한 항목 중 하나만 남김)
+    suspend fun deleteDuplicates(): Int =
+        expenseDao.deleteDuplicates()
 }

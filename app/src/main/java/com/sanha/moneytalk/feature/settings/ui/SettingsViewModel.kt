@@ -13,6 +13,7 @@ import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
 import com.sanha.moneytalk.core.util.GoogleDriveHelper
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
+import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -36,7 +37,10 @@ data class SettingsUiState(
     // 구글 드라이브 관련
     val isGoogleSignedIn: Boolean = false,
     val googleAccountName: String? = null,
-    val driveBackupFiles: List<DriveBackupFile> = emptyList()
+    val driveBackupFiles: List<DriveBackupFile> = emptyList(),
+    // 카테고리 분류 관련
+    val unclassifiedCount: Int = 0,
+    val isClassifying: Boolean = false
 )
 
 @HiltViewModel
@@ -45,7 +49,8 @@ class SettingsViewModel @Inject constructor(
     private val geminiRepository: GeminiRepository,
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
-    private val googleDriveHelper: GoogleDriveHelper
+    private val googleDriveHelper: GoogleDriveHelper,
+    private val categoryClassifierService: CategoryClassifierService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -54,6 +59,7 @@ class SettingsViewModel @Inject constructor(
     init {
         loadSettings()
         loadFilterOptions()
+        loadUnclassifiedCount()
     }
 
     private fun loadSettings() {
@@ -576,5 +582,87 @@ class SettingsViewModel @Inject constructor(
 
     fun clearMessage() {
         _uiState.update { it.copy(message = null) }
+    }
+
+    // ========== 카테고리 분류 관련 ==========
+
+    /**
+     * 미분류 항목 수 조회
+     */
+    private fun loadUnclassifiedCount() {
+        viewModelScope.launch {
+            try {
+                val count = categoryClassifierService.getUnclassifiedCount()
+                _uiState.update { it.copy(unclassifiedCount = count) }
+            } catch (e: Exception) {
+                // 무시
+            }
+        }
+    }
+
+    /**
+     * 미분류 항목 Gemini로 자동 분류
+     */
+    fun classifyUnclassifiedExpenses() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isClassifying = true) }
+            try {
+                val count = categoryClassifierService.classifyUnclassifiedExpenses()
+                loadUnclassifiedCount()
+                _uiState.update {
+                    it.copy(
+                        isClassifying = false,
+                        message = if (count > 0) {
+                            "${count}건의 지출이 자동 분류되었습니다"
+                        } else {
+                            "분류할 항목이 없거나 분류에 실패했습니다"
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isClassifying = false,
+                        message = "분류 실패: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Gemini API 키 존재 여부 확인
+     */
+    fun hasGeminiApiKey(): Boolean {
+        return _uiState.value.hasApiKey
+    }
+
+    /**
+     * 중복 데이터 삭제
+     */
+    fun deleteDuplicates() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                val deletedCount = expenseRepository.deleteDuplicates()
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = if (deletedCount > 0) {
+                            "중복 데이터 ${deletedCount}건이 삭제되었습니다"
+                        } else {
+                            "중복 데이터가 없습니다"
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = "중복 삭제 실패: ${e.message}"
+                    )
+                }
+            }
+        }
     }
 }

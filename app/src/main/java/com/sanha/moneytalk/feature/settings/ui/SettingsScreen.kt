@@ -178,6 +178,20 @@ fun SettingsScreen(
                             },
                             onClick = { showApiKeyDialog = true }
                         )
+                        SettingsItem(
+                            icon = Icons.Default.AutoAwesome,
+                            title = "AI 카테고리 자동 분류",
+                            subtitle = if (uiState.unclassifiedCount > 0) {
+                                "미분류 ${uiState.unclassifiedCount}건"
+                            } else {
+                                "미분류 항목 없음"
+                            },
+                            onClick = {
+                                if (uiState.hasApiKey && uiState.unclassifiedCount > 0) {
+                                    viewModel.classifyUnclassifiedExpenses()
+                                }
+                            }
+                        )
                     }
                 }
 
@@ -215,6 +229,12 @@ fun SettingsScreen(
                             onClick = { restoreLauncher.launch(arrayOf("application/json")) }
                         )
                         SettingsItem(
+                            icon = Icons.Default.ContentCopy,
+                            title = "중복 데이터 삭제",
+                            subtitle = "금액, 가게명, 시간이 같은 중복 항목 제거",
+                            onClick = { viewModel.deleteDuplicates() }
+                        )
+                        SettingsItem(
                             icon = Icons.Default.DeleteForever,
                             title = stringResource(R.string.settings_delete_all_title),
                             subtitle = stringResource(R.string.settings_delete_all_subtitle),
@@ -245,7 +265,7 @@ fun SettingsScreen(
         }
 
         // 로딩 인디케이터
-        if (uiState.isLoading) {
+        if (uiState.isLoading || uiState.isClassifying) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
