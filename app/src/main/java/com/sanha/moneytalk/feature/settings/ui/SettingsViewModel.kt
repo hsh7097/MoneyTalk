@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.database.dao.BudgetDao
+import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.util.BackupData
 import com.sanha.moneytalk.core.util.DataBackupManager
 import com.sanha.moneytalk.core.util.DriveBackupFile
@@ -14,6 +16,7 @@ import com.sanha.moneytalk.core.util.ExportFormat
 import com.sanha.moneytalk.core.util.GoogleDriveHelper
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
+import com.sanha.moneytalk.feature.home.data.CategoryRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -50,7 +53,10 @@ class SettingsViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val googleDriveHelper: GoogleDriveHelper,
-    private val categoryClassifierService: CategoryClassifierService
+    private val categoryClassifierService: CategoryClassifierService,
+    private val categoryRepository: CategoryRepository,
+    private val chatDao: ChatDao,
+    private val budgetDao: BudgetDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -367,7 +373,12 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * 모든 데이터 삭제
+     * 모든 데이터 삭제 (전체 초기화)
+     * - 지출/수입 데이터
+     * - 채팅 기록 (세션 포함)
+     * - 카테고리 매핑 정보
+     * - 예산 설정
+     * - 앱 설정
      */
     fun deleteAllData() {
         viewModelScope.launch {
@@ -377,6 +388,12 @@ class SettingsViewModel @Inject constructor(
                 expenseRepository.deleteAll()
                 // 수입 데이터 삭제
                 incomeRepository.deleteAll()
+                // 채팅 기록 삭제
+                chatDao.deleteAll()
+                // 카테고리 매핑 삭제
+                categoryRepository.deleteAllMappings()
+                // 예산 데이터 삭제
+                budgetDao.deleteAll()
                 // 설정 초기화
                 settingsDataStore.saveMonthlyIncome(0)
                 settingsDataStore.saveMonthStartDay(1)
@@ -388,6 +405,7 @@ class SettingsViewModel @Inject constructor(
                         isLoading = false,
                         monthlyIncome = 0,
                         monthStartDay = 1,
+                        unclassifiedCount = 0,
                         message = "모든 데이터가 삭제되었습니다"
                     )
                 }
@@ -587,6 +605,15 @@ class SettingsViewModel @Inject constructor(
     // ========== 카테고리 분류 관련 ==========
 
     /**
+     * 화면 진입 시 데이터 새로고침
+     * 다른 탭(홈)에서 SMS 동기화 후 설정 탭으로 돌아올 때 최신 데이터 반영
+     */
+    fun refresh() {
+        loadUnclassifiedCount()
+        loadFilterOptions()
+    }
+
+    /**
      * 미분류 항목 수 조회
      */
     private fun loadUnclassifiedCount() {
@@ -605,6 +632,22 @@ class SettingsViewModel @Inject constructor(
      */
     fun classifyUnclassifiedExpenses() {
         viewModelScope.launch {
+            // API 키 확인
+            if (!_uiState.value.hasApiKey) {
+                _uiState.update {
+                    it.copy(message = "API 키를 먼저 설정해주세요")
+                }
+                return@launch
+            }
+
+            // 미분류 항목 확인
+            if (_uiState.value.unclassifiedCount == 0) {
+                _uiState.update {
+                    it.copy(message = "분류할 미분류 항목이 없습니다")
+                }
+                return@launch
+            }
+
             _uiState.update { it.copy(isClassifying = true) }
             try {
                 val count = categoryClassifierService.classifyUnclassifiedExpenses()
@@ -615,7 +658,7 @@ class SettingsViewModel @Inject constructor(
                         message = if (count > 0) {
                             "${count}건의 지출이 자동 분류되었습니다"
                         } else {
-                            "분류할 항목이 없거나 분류에 실패했습니다"
+                            "분류에 실패했습니다. API 키를 확인해주세요."
                         }
                     )
                 }

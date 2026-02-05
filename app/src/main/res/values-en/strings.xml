@@ -104,6 +104,14 @@
     <string name="history_delete_message">Delete %s expense?</string>
     <string name="history_no_spend_month">No-spend %d</string>
     <string name="history_no_spend_total">%d days total ></string>
+    <string name="history_search_hint">Search by store, category</string>
+    <string name="history_add_expense_title">Add Expense</string>
+    <string name="history_amount">Amount</string>
+    <string name="history_store_name">Store Name</string>
+    <string name="history_category">Category</string>
+    <string name="history_payment_method">Payment Method</string>
+    <string name="common_back">Back</string>
+    <string name="common_clear">Clear</string>
 
     <!-- Days of Week -->
     <string name="day_sun">S</string>

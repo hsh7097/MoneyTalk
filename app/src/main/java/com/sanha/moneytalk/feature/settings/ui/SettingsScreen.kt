@@ -91,9 +91,10 @@ fun SettingsScreen(
         }
     }
 
-    // 구글 로그인 상태 체크
+    // 구글 로그인 상태 체크 및 데이터 새로고침
     LaunchedEffect(Unit) {
         viewModel.checkGoogleSignIn(context)
+        viewModel.refresh()  // 다른 탭에서 변경된 데이터 반영 (미분류 항목 수 등)
     }
 
     // 백업 콘텐츠가 준비되면 파일 저장 다이얼로그 열기
@@ -181,15 +182,15 @@ fun SettingsScreen(
                         SettingsItem(
                             icon = Icons.Default.AutoAwesome,
                             title = "AI 카테고리 자동 분류",
-                            subtitle = if (uiState.unclassifiedCount > 0) {
+                            subtitle = if (!uiState.hasApiKey) {
+                                "API 키를 먼저 설정해주세요"
+                            } else if (uiState.unclassifiedCount > 0) {
                                 "미분류 ${uiState.unclassifiedCount}건"
                             } else {
                                 "미분류 항목 없음"
                             },
                             onClick = {
-                                if (uiState.hasApiKey && uiState.unclassifiedCount > 0) {
-                                    viewModel.classifyUnclassifiedExpenses()
-                                }
+                                viewModel.classifyUnclassifiedExpenses()
                             }
                         )
                     }

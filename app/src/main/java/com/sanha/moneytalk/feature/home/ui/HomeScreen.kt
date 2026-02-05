@@ -181,7 +181,7 @@ fun MonthlyOverviewCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
+            containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
         Column(
@@ -213,7 +213,7 @@ fun MonthlyOverviewCard(
                         Text(
                             text = periodLabel,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             textAlign = TextAlign.Center
                         )
                     }
@@ -285,7 +285,7 @@ fun MonthlyOverviewCard(
                     Text(
                         text = stringResource(R.string.home_income),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                     Text(
                         text = stringResource(R.string.common_won, numberFormat.format(income)),
@@ -297,7 +297,7 @@ fun MonthlyOverviewCard(
                     Text(
                         text = stringResource(R.string.home_expense),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                     Text(
                         text = stringResource(R.string.common_won, numberFormat.format(expense)),
@@ -315,7 +315,7 @@ fun MonthlyOverviewCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(8.dp),
-                trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f),
+                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
             )
 
             Spacer(modifier = Modifier.height(8.dp))

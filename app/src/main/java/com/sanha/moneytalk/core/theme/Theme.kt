@@ -94,13 +94,15 @@ fun MoneyTalkTheme(
     // 항상 다크 테마 사용 (뱅크샐러드 스타일)
     val colorScheme = DarkColorScheme
 
-    // 상태바 색상 설정
+    // 상태바 색상 설정 - 배경색과 동일하게 (투명하게 보이도록)
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            // 상태바를 배경색과 동일하게 설정 (색상 제거)
+            window.statusBarColor = colorScheme.background.toArgb()
+            // 다크 테마이므로 상태바 아이콘은 밝게
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
         }
     }
 

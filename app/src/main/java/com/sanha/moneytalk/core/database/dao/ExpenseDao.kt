@@ -146,6 +146,16 @@ interface ExpenseDao {
         )
     """)
     suspend fun deleteDuplicates(): Int
+
+    // 검색 (가게명, 카테고리, 카드명에서 검색)
+    @Query("""
+        SELECT * FROM expenses
+        WHERE storeName LIKE '%' || :query || '%'
+           OR category LIKE '%' || :query || '%'
+           OR cardName LIKE '%' || :query || '%'
+        ORDER BY dateTime DESC
+    """)
+    suspend fun searchExpenses(query: String): List<ExpenseEntity>
 }
 
 data class CategorySum(

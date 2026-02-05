@@ -152,10 +152,13 @@ fun MoneyTalkApp(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
             if (showBottomBar) {
-                NavigationBar {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ) {
                     bottomNavItems.forEach { item ->
+                        val isSelected = currentRoute == item.route
                         NavigationBarItem(
-                            selected = currentRoute == item.route,
+                            selected = isSelected,
                             onClick = {
                                 if (currentRoute != item.route) {
                                     navController.navigate(item.route) {
@@ -169,7 +172,7 @@ fun MoneyTalkApp(
                             },
                             icon = {
                                 Icon(
-                                    imageVector = if (currentRoute == item.route) {
+                                    imageVector = if (isSelected) {
                                         item.selectedIcon
                                     } else {
                                         item.unselectedIcon
@@ -177,7 +180,14 @@ fun MoneyTalkApp(
                                     contentDescription = item.title
                                 )
                             },
-                            label = { Text(item.title) }
+                            label = { Text(item.title) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.onSurface,
+                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                            )
                         )
                     }
                 }

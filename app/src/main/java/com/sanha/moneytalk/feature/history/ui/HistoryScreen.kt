@@ -14,6 +14,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import com.sanha.moneytalk.core.model.Category
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
@@ -99,71 +103,250 @@ fun HistoryScreen(
     val uiState by viewModel.uiState.collectAsState()
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
+    var showAddDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    // Pull-to-Refresh
-    PullToRefreshBox(
-        isRefreshing = uiState.isRefreshing,
-        onRefresh = { viewModel.refresh() },
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Column(
+    // 메시지 표시
+    LaunchedEffect(uiState.message) {
+        uiState.message?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearMessage()
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { paddingValues ->
+        // Pull-to-Refresh
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.refresh() },
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .padding(paddingValues)
         ) {
-            // 헤더
-            Text(
-                text = stringResource(R.string.history_title),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
-            )
-
-            // 기간 선택 및 지출/수입 요약
-            PeriodSummaryCard(
-                year = uiState.selectedYear,
-                month = uiState.selectedMonth,
-                monthStartDay = uiState.monthStartDay,
-                totalExpense = uiState.monthlyTotal,
-                totalIncome = 0, // TODO: Add income tracking
-                onPreviousMonth = { viewModel.previousMonth() },
-                onNextMonth = { viewModel.nextMonth() }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 뷰 토글 및 필터
-            ViewToggleRow(
-                currentMode = viewMode,
-                onModeChange = { viewMode = it },
-                cardNames = uiState.cardNames,
-                selectedCardName = uiState.selectedCardName,
-                onCardNameSelected = { viewModel.filterByCardName(it) }
-            )
-
-            // 콘텐츠
-            when (viewMode) {
-                ViewMode.LIST -> {
-                    ExpenseListView(
-                        expenses = uiState.expenses,
-                        isLoading = uiState.isLoading,
-                        onDelete = { viewModel.deleteExpense(it) },
-                        onCategoryChange = { expense, newCategory ->
-                            viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
-                        }
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
+                // 검색 모드일 때 검색 바, 아니면 일반 헤더
+                if (uiState.isSearchMode) {
+                    SearchBar(
+                        query = uiState.searchQuery,
+                        onQueryChange = { viewModel.search(it) },
+                        onClose = { viewModel.exitSearchMode() }
                     )
-                }
-                ViewMode.CALENDAR -> {
-                    BillingCycleCalendarView(
+                } else {
+                    // 헤더
+                    Text(
+                        text = stringResource(R.string.history_title),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+                    )
+
+                    // 기간 선택 및 지출/수입 요약
+                    PeriodSummaryCard(
                         year = uiState.selectedYear,
                         month = uiState.selectedMonth,
                         monthStartDay = uiState.monthStartDay,
-                        dailyTotals = uiState.dailyTotals
+                        totalExpense = uiState.monthlyTotal,
+                        totalIncome = 0,
+                        onPreviousMonth = { viewModel.previousMonth() },
+                        onNextMonth = { viewModel.nextMonth() }
                     )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 뷰 토글 및 필터
+                ViewToggleRow(
+                    currentMode = viewMode,
+                    onModeChange = { viewMode = it },
+                    cardNames = uiState.cardNames,
+                    selectedCardName = uiState.selectedCardName,
+                    onCardNameSelected = { viewModel.filterByCardName(it) },
+                    onSearchClick = { viewModel.enterSearchMode() },
+                    onAddClick = { showAddDialog = true },
+                    isSearchMode = uiState.isSearchMode,
+                    sortOrder = uiState.sortOrder,
+                    onSortOrderChange = { viewModel.setSortOrder(it) }
+                )
+
+                // 콘텐츠
+                when (viewMode) {
+                    ViewMode.LIST -> {
+                        ExpenseListView(
+                            expenses = uiState.expenses,
+                            isLoading = uiState.isLoading,
+                            onDelete = { viewModel.deleteExpense(it) },
+                            onCategoryChange = { expense, newCategory ->
+                                viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
+                            }
+                        )
+                    }
+                    ViewMode.CALENDAR -> {
+                        BillingCycleCalendarView(
+                            year = uiState.selectedYear,
+                            month = uiState.selectedMonth,
+                            monthStartDay = uiState.monthStartDay,
+                            dailyTotals = uiState.dailyTotals
+                        )
+                    }
                 }
             }
         }
     }
+
+    // 수동 지출 추가 다이얼로그
+    if (showAddDialog) {
+        AddExpenseDialog(
+            onDismiss = { showAddDialog = false },
+            onConfirm = { amount, storeName, category, cardName ->
+                viewModel.addManualExpense(amount, storeName, category, cardName)
+                showAddDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+fun SearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onClose: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onClose) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = stringResource(R.string.common_back)
+            )
+        }
+
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier.weight(1f),
+            placeholder = { Text(stringResource(R.string.history_search_hint)) },
+            singleLine = true,
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { onQueryChange("") }) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear))
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun AddExpenseDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (amount: Int, storeName: String, category: String, cardName: String) -> Unit
+) {
+    var amountText by remember { mutableStateOf("") }
+    var storeName by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf("기타") }
+    var cardName by remember { mutableStateOf("현금") }
+    var showCategoryDropdown by remember { mutableStateOf(false) }
+
+    val categories = Category.entries.map { it.displayName }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.history_add_expense_title)) },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // 금액 입력
+                OutlinedTextField(
+                    value = amountText,
+                    onValueChange = { amountText = it.filter { c -> c.isDigit() } },
+                    label = { Text(stringResource(R.string.history_amount)) },
+                    suffix = { Text("원") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // 가게명 입력
+                OutlinedTextField(
+                    value = storeName,
+                    onValueChange = { storeName = it },
+                    label = { Text(stringResource(R.string.history_store_name)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // 카테고리 선택
+                Box {
+                    OutlinedTextField(
+                        value = selectedCategory,
+                        onValueChange = {},
+                        label = { Text(stringResource(R.string.history_category)) },
+                        readOnly = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showCategoryDropdown = true },
+                        trailingIcon = {
+                            IconButton(onClick = { showCategoryDropdown = true }) {
+                                Icon(Icons.Default.List, contentDescription = null)
+                            }
+                        }
+                    )
+                    DropdownMenu(
+                        expanded = showCategoryDropdown,
+                        onDismissRequest = { showCategoryDropdown = false }
+                    ) {
+                        categories.forEach { category ->
+                            DropdownMenuItem(
+                                text = { Text(category) },
+                                onClick = {
+                                    selectedCategory = category
+                                    showCategoryDropdown = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // 결제수단 입력
+                OutlinedTextField(
+                    value = cardName,
+                    onValueChange = { cardName = it },
+                    label = { Text(stringResource(R.string.history_payment_method)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val amount = amountText.toIntOrNull() ?: 0
+                    if (amount > 0 && storeName.isNotBlank()) {
+                        onConfirm(amount, storeName, selectedCategory, cardName)
+                    }
+                },
+                enabled = amountText.isNotBlank() && storeName.isNotBlank()
+            ) {
+                Text(stringResource(R.string.common_add))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        }
+    )
 }
 
 enum class ViewMode {
@@ -294,9 +477,15 @@ fun ViewToggleRow(
     onModeChange: (ViewMode) -> Unit,
     cardNames: List<String>,
     selectedCardName: String?,
-    onCardNameSelected: (String?) -> Unit
+    onCardNameSelected: (String?) -> Unit,
+    onSearchClick: () -> Unit = {},
+    onAddClick: () -> Unit = {},
+    isSearchMode: Boolean = false,
+    sortOrder: SortOrder = SortOrder.DATE_DESC,
+    onSortOrderChange: (SortOrder) -> Unit = {}
 ) {
     var showFilterMenu by remember { mutableStateOf(false) }
+    var showSortMenu by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
@@ -419,14 +608,80 @@ fun ViewToggleRow(
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            if (!isSearchMode) {
+                Spacer(modifier = Modifier.width(8.dp))
 
-            IconButton(onClick = { /* TODO: Search */ }) {
-                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.common_search))
-            }
+                // 정렬 버튼
+                Box {
+                    IconButton(onClick = { showSortMenu = true }) {
+                        Icon(
+                            Icons.Default.SwapVert,
+                            contentDescription = "정렬",
+                            tint = if (sortOrder != SortOrder.DATE_DESC)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showSortMenu,
+                        onDismissRequest = { showSortMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "최신순",
+                                    color = if (sortOrder == SortOrder.DATE_DESC)
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.onSurface
+                                )
+                            },
+                            onClick = {
+                                onSortOrderChange(SortOrder.DATE_DESC)
+                                showSortMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "금액 높은순",
+                                    color = if (sortOrder == SortOrder.AMOUNT_DESC)
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.onSurface
+                                )
+                            },
+                            onClick = {
+                                onSortOrderChange(SortOrder.AMOUNT_DESC)
+                                showSortMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "사용처별",
+                                    color = if (sortOrder == SortOrder.STORE_FREQ)
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.onSurface
+                                )
+                            },
+                            onClick = {
+                                onSortOrderChange(SortOrder.STORE_FREQ)
+                                showSortMenu = false
+                            }
+                        )
+                    }
+                }
 
-            IconButton(onClick = { /* TODO: Add */ }) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.common_add))
+                IconButton(onClick = onSearchClick) {
+                    Icon(Icons.Default.Search, contentDescription = stringResource(R.string.common_search))
+                }
+
+                IconButton(onClick = onAddClick) {
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.common_add))
+                }
             }
         }
     }

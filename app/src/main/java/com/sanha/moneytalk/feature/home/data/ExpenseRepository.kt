@@ -193,4 +193,15 @@ class ExpenseRepository @Inject constructor(
      */
     suspend fun deleteDuplicates(): Int =
         expenseDao.deleteDuplicates()
+
+    // ========================
+    // 검색 기능
+    // ========================
+
+    /**
+     * 지출 검색
+     * 가게명, 카테고리, 카드명에서 검색어 포함 여부 확인
+     */
+    suspend fun searchExpenses(query: String): List<ExpenseEntity> =
+        expenseDao.searchExpenses(query)
 }

@@ -16,6 +16,15 @@ import java.util.*
 import javax.inject.Inject
 
 /**
+ * 정렬 방식
+ */
+enum class SortOrder {
+    DATE_DESC,      // 최신순 (기본값)
+    AMOUNT_DESC,    // 금액 높은순
+    STORE_FREQ      // 사용처별 (많이 사용한 곳 순)
+}
+
+/**
  * 내역 화면 UI 상태
  *
  * @property isLoading 데이터 로딩 중 여부
@@ -30,6 +39,10 @@ import javax.inject.Inject
  * @property monthlyTotal 해당 월 총 지출
  * @property dailyTotals 일별 지출 합계 (캘린더 표시용, "yyyy-MM-dd" -> 금액)
  * @property errorMessage 에러 메시지 (null이면 에러 없음)
+ * @property searchQuery 검색어
+ * @property isSearchMode 검색 모드 여부
+ * @property message 사용자 메시지 (토스트용)
+ * @property sortOrder 정렬 순서
  */
 data class HistoryUiState(
     val isLoading: Boolean = false,
@@ -43,7 +56,11 @@ data class HistoryUiState(
     val cardNames: List<String> = emptyList(),
     val monthlyTotal: Int = 0,
     val dailyTotals: Map<String, Int> = emptyMap(),
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val searchQuery: String = "",
+    val isSearchMode: Boolean = false,
+    val message: String? = null,
+    val sortOrder: SortOrder = SortOrder.DATE_DESC
 )
 
 /**
@@ -142,11 +159,36 @@ class HistoryViewModel @Inject constructor(
                     }
                 }
                 .collect { expenses ->
+                    val sortedExpenses = sortExpenses(expenses, _uiState.value.sortOrder)
                     _uiState.update {
-                        it.copy(isLoading = false, expenses = expenses)
+                        it.copy(isLoading = false, expenses = sortedExpenses)
                     }
                 }
         }
+    }
+
+    /** 정렬 방식에 따라 지출 내역 정렬 */
+    private fun sortExpenses(expenses: List<ExpenseEntity>, sortOrder: SortOrder): List<ExpenseEntity> {
+        return when (sortOrder) {
+            SortOrder.DATE_DESC -> expenses.sortedByDescending { it.dateTime }
+            SortOrder.AMOUNT_DESC -> expenses.sortedByDescending { it.amount }
+            SortOrder.STORE_FREQ -> {
+                // 가게별 사용 빈도 계산
+                val storeFrequency = expenses.groupingBy { it.storeName }.eachCount()
+                // 빈도 높은 순 정렬, 같은 가게 내에서는 최신순
+                expenses.sortedWith(
+                    compareByDescending<ExpenseEntity> { storeFrequency[it.storeName] ?: 0 }
+                        .thenByDescending { it.dateTime }
+                )
+            }
+        }
+    }
+
+    /** 정렬 순서 변경 */
+    fun setSortOrder(sortOrder: SortOrder) {
+        val currentExpenses = _uiState.value.expenses
+        val sortedExpenses = sortExpenses(currentExpenses, sortOrder)
+        _uiState.update { it.copy(sortOrder = sortOrder, expenses = sortedExpenses) }
     }
 
     /** 특정 년/월로 이동 */
@@ -234,6 +276,90 @@ class HistoryViewModel @Inject constructor(
             loadExpensesSync()
             _uiState.update { it.copy(isRefreshing = false) }
         }
+    }
+
+    // ========== 검색 기능 ==========
+
+    /** 검색 모드 진입 */
+    fun enterSearchMode() {
+        _uiState.update { it.copy(isSearchMode = true) }
+    }
+
+    /** 검색 모드 종료 */
+    fun exitSearchMode() {
+        _uiState.update { it.copy(isSearchMode = false, searchQuery = "") }
+        loadExpenses()
+    }
+
+    /** 검색어 변경 및 검색 실행 */
+    fun search(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
+        if (query.isBlank()) {
+            loadExpenses()
+        } else {
+            searchExpenses(query)
+        }
+    }
+
+    /** 지출 내역 검색 */
+    private fun searchExpenses(query: String) {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+
+            try {
+                val results = expenseRepository.searchExpenses(query)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        expenses = results,
+                        monthlyTotal = results.sumOf { e -> e.amount }
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isLoading = false, errorMessage = e.message)
+                }
+            }
+        }
+    }
+
+    // ========== 수동 지출 추가 기능 ==========
+
+    /**
+     * 수동으로 지출 추가
+     * SMS가 아닌 현금 결제 등을 직접 입력할 때 사용
+     */
+    fun addManualExpense(
+        amount: Int,
+        storeName: String,
+        category: String,
+        cardName: String = "현금",
+        dateTime: Long = System.currentTimeMillis()
+    ) {
+        viewModelScope.launch {
+            try {
+                val expense = ExpenseEntity(
+                    amount = amount,
+                    storeName = storeName,
+                    cardName = cardName,
+                    dateTime = dateTime,
+                    category = category,
+                    originalSms = "수동 입력",
+                    smsId = "manual_${System.currentTimeMillis()}"
+                )
+                expenseRepository.insert(expense)
+                _uiState.update { it.copy(message = "지출이 추가되었습니다") }
+                loadExpenses()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "지출 추가 실패: ${e.message}") }
+            }
+        }
+    }
+
+    /** 메시지 초기화 */
+    fun clearMessage() {
+        _uiState.update { it.copy(message = null) }
     }
 
     /**

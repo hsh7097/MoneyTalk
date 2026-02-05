@@ -104,6 +104,14 @@
     <string name="history_delete_message">%s 지출 내역을 삭제할까요?</string>
     <string name="history_no_spend_month">%d월 무지출</string>
     <string name="history_no_spend_total">총 %d일 ></string>
+    <string name="history_search_hint">가게명, 카테고리로 검색</string>
+    <string name="history_add_expense_title">지출 추가</string>
+    <string name="history_amount">금액</string>
+    <string name="history_store_name">가게명</string>
+    <string name="history_category">카테고리</string>
+    <string name="history_payment_method">결제수단</string>
+    <string name="common_back">뒤로</string>
+    <string name="common_clear">지우기</string>
 
     <!-- 요일 -->
     <string name="day_sun">일</string>
