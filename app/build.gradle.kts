@@ -30,10 +30,9 @@ android {
             useSupportLibrary = true
         }
 
-        // BuildConfig에 API 키 추가
+        // BuildConfig에 API 키 추가 (local.properties에서 읽음)
         buildConfigField("String", "CLAUDE_API_KEY", "\"${localProperties.getProperty("CLAUDE_API_KEY", "")}\"")
-        // TODO: 실 서비스 배포 전 API 키 제거 필요
-        buildConfigField("String", "GEMINI_API_KEY", "\"${localProperties.getProperty("GEMINI_API_KEY", "AIzaSyDvhmHszSgnqsL7gvgBGfrXfbCDHGQ7rPk")}\"")
+        buildConfigField("String", "GEMINI_API_KEY", "\"${localProperties.getProperty("GEMINI_API_KEY", "")}\"")
     }
 
     buildTypes {
