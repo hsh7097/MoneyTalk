@@ -10,6 +10,14 @@ import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * SMS 메시지 데이터 클래스
+ *
+ * @property id 고유 ID (발신번호 + 시간 + 본문 해시로 생성)
+ * @property address 발신 번호
+ * @property body SMS 본문
+ * @property date 수신 시간 (밀리초)
+ */
 data class SmsMessage(
     val id: String,
     val address: String,
@@ -17,11 +25,25 @@ data class SmsMessage(
     val date: Long
 )
 
+/**
+ * SMS 읽기 유틸리티
+ *
+ * 기기의 SMS 수신함에서 카드 결제 문자를 읽어옵니다.
+ * ContentResolver를 통해 SMS 데이터베이스에 접근합니다.
+ *
+ * 주의: SMS 권한(READ_SMS)이 필요합니다.
+ */
 @Singleton
 class SmsReader @Inject constructor() {
 
     /**
-     * 저장된 모든 카드 결제 문자 읽기
+     * 모든 카드 결제 문자 읽기 (전체 동기화용)
+     *
+     * 기기에 저장된 모든 SMS 중 카드 결제 문자만 필터링하여 반환합니다.
+     * 최초 동기화 또는 전체 재동기화 시 사용합니다.
+     *
+     * @param contentResolver ContentResolver
+     * @return 카드 결제 문자 목록 (최신순 정렬)
      */
     fun readAllCardSms(contentResolver: ContentResolver): List<SmsMessage> {
         val smsList = mutableListOf<SmsMessage>()
@@ -69,7 +91,15 @@ class SmsReader @Inject constructor() {
     }
 
     /**
-     * 특정 기간 동안의 카드 결제 문자 읽기
+     * 특정 기간의 카드 결제 문자 읽기 (증분 동기화용)
+     *
+     * 지정된 기간 내의 SMS 중 카드 결제 문자만 필터링하여 반환합니다.
+     * 마지막 동기화 이후 새로 수신된 문자만 처리할 때 사용합니다.
+     *
+     * @param contentResolver ContentResolver
+     * @param startDate 시작 시간 (밀리초)
+     * @param endDate 종료 시간 (밀리초)
+     * @return 카드 결제 문자 목록 (최신순 정렬)
      */
     fun readCardSmsByDateRange(
         contentResolver: ContentResolver,

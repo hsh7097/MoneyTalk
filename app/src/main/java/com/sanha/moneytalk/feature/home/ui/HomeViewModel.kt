@@ -18,9 +18,26 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * 홈 화면 UI 상태
+ *
+ * @property isLoading 데이터 로딩 중 여부
+ * @property isRefreshing Pull-to-Refresh 진행 중 여부
+ * @property selectedYear 선택된 연도
+ * @property selectedMonth 선택된 월
+ * @property monthStartDay 월 시작일 (1~28, 사용자 설정)
+ * @property monthlyIncome 해당 월 총 수입
+ * @property monthlyExpense 해당 월 총 지출
+ * @property remainingBudget 잔여 예산 (수입 - 지출)
+ * @property categoryExpenses 카테고리별 지출 합계 목록
+ * @property recentExpenses 최근 지출 내역 목록
+ * @property periodLabel 표시용 기간 레이블 (예: "1/25 ~ 2/24")
+ * @property errorMessage 에러 메시지 (null이면 에러 없음)
+ * @property isSyncing SMS 동기화 진행 중 여부
+ */
 data class HomeUiState(
     val isLoading: Boolean = false,
-    val isRefreshing: Boolean = false, // Pull-to-Refresh 상태
+    val isRefreshing: Boolean = false,
     val selectedYear: Int = DateUtils.getCurrentYear(),
     val selectedMonth: Int = DateUtils.getCurrentMonth(),
     val monthStartDay: Int = 1,
@@ -34,6 +51,20 @@ data class HomeUiState(
     val isSyncing: Boolean = false
 )
 
+/**
+ * 홈 화면 ViewModel
+ *
+ * 홈 화면의 월간 지출 현황, 카테고리별 지출, 최근 지출 내역을 관리합니다.
+ * SMS 동기화 기능을 통해 카드 결제 문자에서 자동으로 지출 내역을 추출합니다.
+ *
+ * 주요 기능:
+ * - 월별 수입/지출/잔여 예산 표시
+ * - 카테고리별 지출 합계 표시
+ * - 최근 지출 내역 목록 표시
+ * - SMS 동기화 (증분/전체)
+ * - Pull-to-Refresh 지원
+ * - 카테고리 수동 변경
+ */
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
@@ -51,11 +82,15 @@ class HomeViewModel @Inject constructor(
         loadSettings()
     }
 
+    /**
+     * 설정 로드 및 초기 데이터 로드
+     * 월 시작일 설정을 가져와서 현재 커스텀 월 기간을 계산합니다.
+     */
     private fun loadSettings() {
         viewModelScope.launch {
             val monthStartDay = settingsDataStore.getMonthStartDay()
 
-            // 현재 커스텀 월 기간 계산
+            // 현재 커스텀 월 기간 계산 (예: 25일 시작이면 1/25 ~ 2/24)
             val (startTs, _) = DateUtils.getCurrentCustomMonthPeriod(monthStartDay)
             val calendar = java.util.Calendar.getInstance().apply { timeInMillis = startTs }
             val year = calendar.get(java.util.Calendar.YEAR)
@@ -72,6 +107,10 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 홈 화면 데이터 로드
+     * 선택된 월의 수입, 지출, 카테고리별 합계, 최근 지출 내역을 조회합니다.
+     */
     private fun loadData() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
@@ -126,6 +165,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /** 이전 월로 이동 */
     fun previousMonth() {
         val state = _uiState.value
         var newYear = state.selectedYear
@@ -138,6 +178,7 @@ class HomeViewModel @Inject constructor(
         loadData()
     }
 
+    /** 다음 월로 이동 */
     fun nextMonth() {
         val state = _uiState.value
         var newYear = state.selectedYear
@@ -150,13 +191,20 @@ class HomeViewModel @Inject constructor(
         loadData()
     }
 
-    /**
-     * 화면이 다시 표시될 때 데이터 새로고침
-     */
+    /** 화면이 다시 표시될 때 데이터 새로고침 (LaunchedEffect에서 호출) */
     fun refreshData() {
         loadData()
     }
 
+    /**
+     * SMS 메시지 동기화
+     *
+     * 카드 결제 문자를 읽어서 지출 내역으로 변환합니다.
+     * 로컬 정규식 파싱을 사용하며, 카테고리는 Room DB 매핑 또는 로컬 키워드 매칭으로 결정됩니다.
+     *
+     * @param contentResolver SMS 읽기용 ContentResolver
+     * @param forceFullSync true면 전체 동기화, false면 마지막 동기화 이후만 (증분 동기화)
+     */
     fun syncSmsMessages(contentResolver: ContentResolver, forceFullSync: Boolean = false) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSyncing = true) }
@@ -235,12 +283,14 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /** Claude API 키 설정 (레거시, 현재 미사용) */
     fun setApiKey(key: String) {
         viewModelScope.launch {
             claudeRepository.setApiKey(key)
         }
     }
 
+    /** Claude API 키 존재 여부 확인 (레거시, 현재 미사용) */
     fun hasApiKey(callback: (Boolean) -> Unit) {
         viewModelScope.launch {
             callback(claudeRepository.hasApiKey())
@@ -315,6 +365,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /** 에러 메시지 초기화 */
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
     }

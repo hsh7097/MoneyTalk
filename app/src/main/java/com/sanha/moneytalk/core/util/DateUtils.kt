@@ -3,7 +3,25 @@ package com.sanha.moneytalk.core.util
 import java.text.SimpleDateFormat
 import java.util.*
 
+/**
+ * 날짜/시간 유틸리티
+ *
+ * 앱 전반에서 사용되는 날짜/시간 관련 헬퍼 메소드를 제공합니다.
+ *
+ * 주요 기능:
+ * - 날짜/시간 포맷 변환 (timestamp <-> 문자열)
+ * - 기간 계산 (월 시작/끝, 오늘, N일 전 등)
+ * - 커스텀 월 기간 계산 (월급일 기준 사용자 정의 기간)
+ *
+ * 커스텀 월 기간:
+ * 사용자가 월 시작일을 설정하면 (예: 25일) 해당 날짜부터 다음 달 24일까지가 한 달이 됩니다.
+ * 월급일 기준으로 지출을 관리하고 싶은 사용자를 위한 기능입니다.
+ */
 object DateUtils {
+
+    // ========================
+    // 날짜 포맷터 정의
+    // ========================
 
     private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA)
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)

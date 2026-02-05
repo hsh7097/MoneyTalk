@@ -5,9 +5,31 @@ import com.sanha.moneytalk.feature.chat.data.SmsAnalysisResult
 import java.text.SimpleDateFormat
 import java.util.*
 
+/**
+ * SMS 파싱 유틸리티
+ *
+ * 카드 결제 문자에서 지출 정보를 추출하는 로컬 파서입니다.
+ * Claude/Gemini API 없이 정규식과 키워드 매칭으로 SMS를 분석합니다.
+ *
+ * 지원 기능:
+ * - 카드 결제 문자 판별 (광고/안내 문자 제외)
+ * - 금액 추출 (다양한 형식 지원: "원" 단위, 줄바꿈 숫자 등)
+ * - 가게명 추출 (KB 등 특수 형식 포함)
+ * - 날짜/시간 추출
+ * - 카테고리 추론 (키워드 기반)
+ * - 카드사 판별
+ *
+ * 지원 카드사:
+ * KB국민, 신한, 삼성, 현대, 롯데, 하나, 우리, NH농협, BC, 씨티,
+ * 카카오뱅크, 토스, 케이뱅크 등 주요 국내 카드사
+ */
 object SmsParser {
 
-    // 카드사 키워드 목록
+    // ========================
+    // 키워드 정의
+    // ========================
+
+    /** 카드사 식별 키워드 목록 */
     private val cardKeywords = listOf(
         // KB국민 (다양한 형식 지원)
         "KB국민", "국민카드", "KB카드", "KB체크", "국민체크", "노리", "노리2",
@@ -64,19 +86,22 @@ object SmsParser {
         "체크카드", "신용카드", "선불", "후불"
     )
 
-    // 결제 관련 키워드
+    /** 결제 관련 키워드 (결제 문자 판별용) */
     private val paymentKeywords = listOf(
         "결제", "승인", "사용", "출금", "이용"
     )
 
-    // 제외할 키워드 (광고, 안내 등)
+    /** 제외할 키워드 (광고/안내 문자 필터링용) */
     private val excludeKeywords = listOf(
         "광고", "[광고]", "(광고)",
         "홍보", "이벤트", "혜택안내", "포인트 적립",
         "명세서", "청구서", "이용대금"
     )
 
-    // 카테고리 매핑 (가게명 키워드 기반) - 뱅크샐러드 스타일
+    /**
+     * 카테고리 매핑 (가게명 키워드 기반)
+     * 뱅크샐러드 스타일의 세분화된 카테고리 분류
+     */
     private val categoryKeywords = mapOf(
         // 음식 관련
         "고기" to listOf(
@@ -211,8 +236,21 @@ object SmsParser {
         )
     )
 
+    // ========================
+    // 공개 파싱 메소드
+    // ========================
+
     /**
-     * 카드 결제 문자인지 확인
+     * 카드 결제 문자인지 판별
+     *
+     * 조건:
+     * 1. 광고/안내 키워드가 없어야 함
+     * 2. 카드사 키워드가 있어야 함
+     * 3. 결제 관련 키워드가 있어야 함
+     * 4. 금액 패턴이 있어야 함
+     *
+     * @param message SMS 본문
+     * @return 카드 결제 문자이면 true
      */
     fun isCardPaymentSms(message: String): Boolean {
         // 제외 키워드가 있으면 false
@@ -256,7 +294,9 @@ object SmsParser {
     }
 
     /**
-     * 문자에서 카드사 추출
+     * SMS에서 카드사명 추출
+     * @param message SMS 본문
+     * @return 카드사명 (매칭 안 되면 "기타")
      */
     fun extractCardName(message: String): String {
         for (keyword in cardKeywords) {
@@ -268,8 +308,15 @@ object SmsParser {
     }
 
     /**
-     * 문자에서 금액 추출 (간단 파싱)
-     * KB 등 일부 은행은 "원" 없이 금액만 표시
+     * SMS에서 결제 금액 추출
+     *
+     * 지원 형식:
+     * 1. KB 스타일: "체크카드출금\n금액\n잔액..." (원 단위 없음)
+     * 2. 일반 형식: "금액원" (예: 15,000원)
+     * 3. 줄바꿈 숫자: 순수 숫자만 있는 줄
+     *
+     * @param message SMS 본문
+     * @return 금액 (100원 이상), 추출 실패 시 null
      */
     fun extractAmount(message: String): Int? {
         val lines = message.split("\n").map { it.trim() }
@@ -324,15 +371,22 @@ object SmsParser {
     }
 
     /**
-     * SMS ID 생성 (중복 방지용)
+     * SMS 고유 ID 생성
+     * 중복 저장 방지를 위해 발신번호 + 시간 + 본문 해시로 구성
      */
     fun generateSmsId(address: String, body: String, date: Long): String {
         return "${address}_${date}_${body.hashCode()}"
     }
 
     /**
-     * SMS 메시지 전체 파싱 (로컬 정규식 기반)
-     * Claude API 대신 로컬에서 처리
+     * SMS 전체 파싱 (메인 메소드)
+     *
+     * 로컬 정규식 기반으로 SMS에서 모든 정보를 추출합니다.
+     * API 호출 없이 빠르게 처리할 수 있습니다.
+     *
+     * @param message SMS 본문
+     * @param smsTimestamp SMS 수신 시간 (밀리초)
+     * @return SmsAnalysisResult (금액, 가게명, 카테고리, 날짜시간, 카드명)
      */
     fun parseSms(message: String, smsTimestamp: Long): SmsAnalysisResult {
         val amount = extractAmount(message) ?: 0
@@ -350,7 +404,11 @@ object SmsParser {
         )
     }
 
-    // 제외할 가게명 패턴 (URL, 발신 표시, 기타 비가게명)
+    // ========================
+    // 내부 파싱 헬퍼
+    // ========================
+
+    /** 제외할 가게명 패턴 (URL, 발신 표시, 기타 비가게명) */
     private val excludeStorePatterns = listOf(
         "Web발신", "web발신", "WEB발신",
         "ltcard", "card.kr", ".kr", ".com", ".co.kr", "http", "www",
@@ -362,18 +420,26 @@ object SmsParser {
     )
 
     /**
-     * 가게명 추출
-     * 한국 카드사 SMS 형식에 맞춰 가게명 추출
-     * 일반적인 형식: [카드사] MM/DD HH:mm 가게명 금액원 승인
+     * SMS에서 가게명 추출
      *
-     * KB 스타일 SMS 형식:
-     * [KB]
-     * 02/05 22:47
-     * 801302**775 (카드번호)
-     * *60원캐쉬백주식회사 (가게명)
-     * 체크카드출금
-     * 11,940 (금액)
-     * 잔액45,091
+     * 한국 카드사 SMS 형식에 맞춰 가게명을 추출합니다.
+     *
+     * 지원 형식:
+     * 1. KB 스타일: 줄바꿈으로 구분된 형식 (체크카드출금 위 줄 탐색)
+     *    [KB]
+     *    02/05 22:47
+     *    801302**775 (카드번호)
+     *    *60원캐쉬백주식회사 (가게명)
+     *    체크카드출금
+     *    11,940 (금액)
+     *    잔액45,091
+     *
+     * 2. 일반 형식: [카드사] MM/DD HH:mm 가게명 금액원 승인
+     * 3. 금액 앞 형식: 가게명 금액원
+     * 4. 금액 뒤 형식: 금액원 가게명 승인
+     *
+     * @param message SMS 본문
+     * @return 가게명 (추출 실패 시 "결제")
      */
     fun extractStoreName(message: String): String {
         // KB 스타일 패턴 - "체크카드출금" 위 줄들을 탐색
@@ -464,7 +530,9 @@ object SmsParser {
 
     /**
      * 가게명 정리 (불필요한 문자 제거)
-     * 예: "*60원캐쉬백주식회사" -> "캐쉬백주식회사"
+     * - 앞뒤 특수문자 제거
+     * - 앞쪽 "숫자원" 패턴 제거 (예: "*60원캐쉬백주식회사" -> "캐쉬백주식회사")
+     * - 최대 15자로 제한
      */
     private fun cleanStoreName(name: String): String {
         var cleaned = name.trim()
@@ -477,7 +545,11 @@ object SmsParser {
     }
 
     /**
-     * 유효한 가게명인지 확인
+     * 유효한 가게명인지 검증
+     * - 2자 이상
+     * - 숫자로만 구성되지 않음
+     * - 날짜/시간 패턴이 아님
+     * - 제외 패턴에 해당하지 않음
      */
     private fun isValidStoreName(name: String): Boolean {
         if (name.isBlank() || name.length < 2) return false
@@ -499,9 +571,7 @@ object SmsParser {
         return true
     }
 
-    /**
-     * 텍스트에서 가게명 후보 추출 (레거시 - 호환성 유지)
-     */
+    /** 텍스트에서 가게명 후보 추출 (레거시 - 호환성 유지) */
     private fun extractStoreNameFromText(text: String, excludeKeywords: List<String>): String {
         if (text.isBlank()) return ""
 
@@ -513,7 +583,14 @@ object SmsParser {
     }
 
     /**
-     * 날짜/시간 추출
+     * SMS에서 날짜/시간 추출
+     *
+     * SMS 본문에서 날짜와 시간 정보를 추출합니다.
+     * 날짜 형식: MM/DD, MM-DD, MM.DD, M월 D일
+     * 시간 형식: HH:mm
+     *
+     * 추출 실패 시 SMS 수신 시간을 기본값으로 사용합니다.
+     *
      * @param message SMS 본문
      * @param smsTimestamp SMS 수신 시간 (밀리초)
      * @return "YYYY-MM-DD HH:mm" 형식
@@ -564,7 +641,14 @@ object SmsParser {
     }
 
     /**
-     * 카테고리 추론 (가게명 기반)
+     * 카테고리 추론 (키워드 기반)
+     *
+     * 가게명과 SMS 본문에서 키워드를 찾아 카테고리를 결정합니다.
+     * categoryKeywords 맵에 정의된 키워드와 매칭합니다.
+     *
+     * @param storeName 가게명
+     * @param message SMS 본문 (추가 키워드 탐색용)
+     * @return 매칭된 카테고리 (없으면 "기타")
      */
     fun inferCategory(storeName: String, message: String): String {
         val combinedText = "$storeName $message".lowercase()

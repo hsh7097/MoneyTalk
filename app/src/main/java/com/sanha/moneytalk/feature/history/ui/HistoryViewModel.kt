@@ -15,9 +15,25 @@ import kotlinx.coroutines.launch
 import java.util.*
 import javax.inject.Inject
 
+/**
+ * 내역 화면 UI 상태
+ *
+ * @property isLoading 데이터 로딩 중 여부
+ * @property isRefreshing Pull-to-Refresh 진행 중 여부
+ * @property expenses 필터링된 지출 내역 목록
+ * @property selectedCategory 선택된 카테고리 필터 (null이면 전체)
+ * @property selectedCardName 선택된 카드 필터 (null이면 전체)
+ * @property selectedYear 선택된 연도
+ * @property selectedMonth 선택된 월
+ * @property monthStartDay 월 시작일 (1~28, 사용자 설정)
+ * @property cardNames 필터 드롭다운용 카드명 목록
+ * @property monthlyTotal 해당 월 총 지출
+ * @property dailyTotals 일별 지출 합계 (캘린더 표시용, "yyyy-MM-dd" -> 금액)
+ * @property errorMessage 에러 메시지 (null이면 에러 없음)
+ */
 data class HistoryUiState(
     val isLoading: Boolean = false,
-    val isRefreshing: Boolean = false, // Pull-to-Refresh 상태
+    val isRefreshing: Boolean = false,
     val expenses: List<ExpenseEntity> = emptyList(),
     val selectedCategory: String? = null,
     val selectedCardName: String? = null,
@@ -26,10 +42,23 @@ data class HistoryUiState(
     val monthStartDay: Int = 1,
     val cardNames: List<String> = emptyList(),
     val monthlyTotal: Int = 0,
-    val dailyTotals: Map<String, Int> = emptyMap(), // "yyyy-MM-dd" -> amount
+    val dailyTotals: Map<String, Int> = emptyMap(),
     val errorMessage: String? = null
 )
 
+/**
+ * 내역 화면 ViewModel
+ *
+ * 월별 지출 내역을 조회하고 필터링하는 기능을 제공합니다.
+ * 카테고리별, 카드별 필터와 월 이동 기능을 지원합니다.
+ *
+ * 주요 기능:
+ * - 월별 지출 내역 조회
+ * - 카테고리/카드별 필터링
+ * - 지출 항목 삭제
+ * - 카테고리 수동 변경
+ * - Pull-to-Refresh 지원
+ */
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
@@ -40,6 +69,7 @@ class HistoryViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(HistoryUiState())
     val uiState: StateFlow<HistoryUiState> = _uiState.asStateFlow()
 
+    /** 현재 실행 중인 데이터 로드 작업 (취소 가능) */
     private var loadJob: Job? = null
 
     init {
@@ -47,6 +77,10 @@ class HistoryViewModel @Inject constructor(
         loadCardNames()
     }
 
+    /**
+     * 설정 로드 및 월 시작일 변경 감지
+     * 월 시작일이 변경되면 자동으로 지출 내역을 다시 로드합니다.
+     */
     private fun loadSettings() {
         viewModelScope.launch {
             settingsDataStore.monthStartDayFlow.collect { startDay ->
@@ -56,6 +90,7 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
+    /** 필터 드롭다운용 카드명 목록 로드 */
     private fun loadCardNames() {
         viewModelScope.launch {
             try {
@@ -67,6 +102,11 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 지출 내역 로드
+     * 선택된 월과 필터 조건에 맞는 지출 내역을 조회합니다.
+     * 기존 로드 작업이 있으면 취소하고 새로 시작합니다.
+     */
     private fun loadExpenses() {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
@@ -109,11 +149,13 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
+    /** 특정 년/월로 이동 */
     fun setMonth(year: Int, month: Int) {
         _uiState.update { it.copy(selectedYear = year, selectedMonth = month) }
         loadExpenses()
     }
 
+    /** 이전 월로 이동 */
     fun previousMonth() {
         val state = _uiState.value
         var newYear = state.selectedYear
@@ -125,6 +167,7 @@ class HistoryViewModel @Inject constructor(
         setMonth(newYear, newMonth)
     }
 
+    /** 다음 월로 이동 */
     fun nextMonth() {
         val state = _uiState.value
         var newYear = state.selectedYear
@@ -136,21 +179,23 @@ class HistoryViewModel @Inject constructor(
         setMonth(newYear, newMonth)
     }
 
+    /** 카테고리 필터 적용 (null이면 전체) */
     fun filterByCategory(category: String?) {
         _uiState.update { it.copy(selectedCategory = category) }
         loadExpenses()
     }
 
+    /** 카드 필터 적용 (null이면 전체) */
     fun filterByCardName(cardName: String?) {
         _uiState.update { it.copy(selectedCardName = cardName) }
         loadExpenses()
     }
 
+    /** 지출 항목 삭제 */
     fun deleteExpense(expense: ExpenseEntity) {
         viewModelScope.launch {
             try {
                 expenseRepository.delete(expense)
-                // 삭제 후 새로고침
                 loadExpenses()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
@@ -158,6 +203,7 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
+    /** 에러 메시지 초기화 */
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
     }
