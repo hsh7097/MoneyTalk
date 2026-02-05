@@ -222,20 +222,34 @@ object SmsParser {
         }
 
         // 카드사 키워드가 있고, 결제 관련 키워드가 있으면 true
-        val hasCardKeyword = cardKeywords.any { message.contains(it) }
-        val hasPaymentKeyword = paymentKeywords.any { message.contains(it) }
+        val matchedCardKeyword = cardKeywords.find { message.contains(it) }
+        val hasCardKeyword = matchedCardKeyword != null
+        val matchedPaymentKeyword = paymentKeywords.find { message.contains(it) }
+        val hasPaymentKeyword = matchedPaymentKeyword != null
 
-        // 금액 패턴 확인 (숫자+원 또는 숫자+,+원)
-        val amountPattern = Regex("""[\d,]+원""")
-        val hasAmount = amountPattern.containsMatchIn(message)
+        // 금액 패턴 확인 (숫자+원 또는 숫자만 있는 경우도 포함 - KB 등)
+        // 패턴1: 숫자+원 (예: 2,800원)
+        // 패턴2: 줄바꿈 후 숫자만 (예: 체크카드출금\n2,800)
+        val amountPatternWithWon = Regex("""[\d,]+원""")
+        val amountPatternNumberOnly = Regex("""\n[\d,]{3,}\n""") // 3자리 이상 숫자 (줄바꿈 사이)
+        val hasAmount = amountPatternWithWon.containsMatchIn(message) || amountPatternNumberOnly.containsMatchIn(message)
+
+        // KB 관련 디버그 로그
+        if (message.contains("KB") || message.contains("kb") || message.contains("국민")) {
+            Log.e("sanhakb", "=== KB 감지 ===")
+            Log.e("sanhakb", "메시지: ${message.take(100)}")
+            Log.e("sanhakb", "매칭된 카드키워드: $matchedCardKeyword")
+            Log.e("sanhakb", "매칭된 결제키워드: $matchedPaymentKeyword")
+            Log.e("sanhakb", "금액있음: $hasAmount")
+        }
 
         val isCardPayment = hasCardKeyword && hasPaymentKeyword && hasAmount
         if(isCardPayment){
-            Log.e("sanha","성공 키워드 [${message.length}자] $message")
+            Log.e("sanha","성공 키워드 [$matchedCardKeyword] [${message.length}자] $message")
         }else{
             // message가 너무 길면 앞 50자만 출력
             val previewMsg = if (message.length > 50) message.take(50) + "..." else message
-            Log.e("sanha","실패 키워드 [${message.length}자] $previewMsg | hasCard:$hasCardKeyword hasPay:$hasPaymentKeyword hasAmt:$hasAmount")
+            Log.e("sanha","실패 키워드 [${message.length}자] $previewMsg | hasCard:$hasCardKeyword($matchedCardKeyword) hasPay:$hasPaymentKeyword hasAmt:$hasAmount")
         }
 
         return isCardPayment
@@ -255,11 +269,58 @@ object SmsParser {
 
     /**
      * 문자에서 금액 추출 (간단 파싱)
+     * KB 등 일부 은행은 "원" 없이 금액만 표시
      */
     fun extractAmount(message: String): Int? {
-        val amountPattern = Regex("""([\d,]+)원""")
-        val match = amountPattern.find(message)
-        return match?.groupValues?.get(1)?.replace(",", "")?.toIntOrNull()
+        val lines = message.split("\n").map { it.trim() }
+
+        // KB 스타일 우선 처리 - "체크카드출금" 또는 "출금" 다음 줄의 숫자
+        // 예: 체크카드출금\n11,940\n잔액45,091
+        for (i in lines.indices) {
+            if (lines[i].contains("체크카드출금") || lines[i] == "출금") {
+                // 바로 다음 줄이 금액
+                if (i + 1 < lines.size) {
+                    val nextLine = lines[i + 1]
+                    // 순수 숫자 (콤마 포함 가능)
+                    if (nextLine.matches(Regex("""[\d,]+"""))) {
+                        val amount = nextLine.replace(",", "").toIntOrNull()
+                        if (amount != null && amount >= 100) {
+                            Log.d("SmsParser", "KB 스타일 금액 추출: $amount")
+                            return amount
+                        }
+                    }
+                }
+            }
+        }
+
+        // 패턴1: 숫자+원 (예: 2,800원) - 하지만 가게명에 포함된 금액은 제외
+        // "*60원캐쉬백" 같은 경우를 피하기 위해 "원" 뒤에 한글이 바로 붙지 않은 경우만 추출
+        val amountPatternWithWon = Regex("""([\d,]+)원(?![가-힣])""")
+        val matchWithWon = amountPatternWithWon.find(message)
+        if (matchWithWon != null) {
+            val amount = matchWithWon.groupValues[1].replace(",", "").toIntOrNull()
+            if (amount != null && amount >= 100) {
+                return amount
+            }
+        }
+
+        // 패턴2: 줄바꿈 사이의 금액 (잔액 제외)
+        for (i in lines.indices) {
+            val line = lines[i]
+            // 잔액 라인은 건너뛰기
+            if (line.startsWith("잔액")) continue
+            // 가게명 패턴 제외 (숫자+원+한글)
+            if (line.matches(Regex(""".*\d+원[가-힣]+.*"""))) continue
+            // 순수 숫자 또는 콤마 포함 숫자 (100 이상)
+            if (line.matches(Regex("""[\d,]+""")) && line.replace(",", "").length >= 3) {
+                val amount = line.replace(",", "").toIntOrNull()
+                if (amount != null && amount >= 100) {
+                    return amount
+                }
+            }
+        }
+
+        return null
     }
 
     /**
@@ -304,8 +365,55 @@ object SmsParser {
      * 가게명 추출
      * 한국 카드사 SMS 형식에 맞춰 가게명 추출
      * 일반적인 형식: [카드사] MM/DD HH:mm 가게명 금액원 승인
+     *
+     * KB 스타일 SMS 형식:
+     * [KB]
+     * 02/05 22:47
+     * 801302**775 (카드번호)
+     * *60원캐쉬백주식회사 (가게명)
+     * 체크카드출금
+     * 11,940 (금액)
+     * 잔액45,091
      */
     fun extractStoreName(message: String): String {
+        // KB 스타일 패턴 - "체크카드출금" 위 줄들을 탐색
+        val lines = message.split("\n").map { it.trim() }
+        for (i in lines.indices) {
+            if (lines[i].contains("체크카드출금") || lines[i] == "출금") {
+                // 위로 올라가면서 유효한 가게명 찾기
+                for (j in (i - 1) downTo 0) {
+                    val potentialStore = lines[j]
+
+                    // 카드번호 패턴 제외 (예: 801302**775)
+                    if (potentialStore.contains("**") || potentialStore.matches(Regex("""[\d*]+"""))) {
+                        continue
+                    }
+
+                    // 날짜/시간 패턴 제외 (예: 02/05 22:47)
+                    if (potentialStore.matches(Regex("""\d{1,2}[/.-]\d{1,2}\s+\d{1,2}:\d{2}"""))) {
+                        continue
+                    }
+
+                    // [KB] 같은 카드사 표시 제외
+                    if (potentialStore.matches(Regex("""\[.+\]"""))) {
+                        continue
+                    }
+
+                    // 빈 줄 제외
+                    if (potentialStore.isBlank()) {
+                        continue
+                    }
+
+                    // 유효한 가게명인지 확인
+                    val cleanStore = cleanStoreName(potentialStore)
+                    if (cleanStore.length >= 2) {
+                        Log.d("SmsParser", "KB 스타일 가게명 추출: $cleanStore (원본: $potentialStore)")
+                        return cleanStore
+                    }
+                }
+            }
+        }
+
         // 패턴 1: 시간 뒤에 가게명이 오는 경우 (가장 흔함)
         // 예: "KB국민 12/25 14:30 스타벅스 15,000원 승인"
         val timePattern = Regex("""(\d{1,2}:\d{2})\s*(.+?)[\s]*[\d,]+원""")
@@ -356,11 +464,14 @@ object SmsParser {
 
     /**
      * 가게명 정리 (불필요한 문자 제거)
+     * 예: "*60원캐쉬백주식회사" -> "캐쉬백주식회사"
      */
     private fun cleanStoreName(name: String): String {
         var cleaned = name.trim()
         // 앞뒤 특수문자 제거
         cleaned = cleaned.replace(Regex("""^[^\w가-힣]+|[^\w가-힣]+$"""), "")
+        // 앞쪽의 "숫자원" 패턴 제거 (예: "60원캐쉬백" -> "캐쉬백")
+        cleaned = cleaned.replace(Regex("""^\d+원"""), "")
         // 최대 15자로 제한
         return cleaned.take(15)
     }
