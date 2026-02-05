@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,64 +62,71 @@ fun HomeScreen(
         viewModel.refreshData()
     }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+    // Pull-to-Refresh
+    PullToRefreshBox(
+        isRefreshing = uiState.isRefreshing,
+        onRefresh = { viewModel.refresh() },
+        modifier = Modifier.fillMaxSize()
     ) {
-        // 월간 현황 카드
-        item {
-            MonthlyOverviewCard(
-                year = uiState.selectedYear,
-                month = uiState.selectedMonth,
-                monthStartDay = uiState.monthStartDay,
-                periodLabel = uiState.periodLabel,
-                income = uiState.monthlyIncome,
-                expense = uiState.monthlyExpense,
-                remaining = uiState.remainingBudget,
-                onPreviousMonth = { viewModel.previousMonth() },
-                onNextMonth = { viewModel.nextMonth() },
-                onIncrementalSync = {
-                    onRequestSmsPermission {
-                        viewModel.syncSmsMessages(contentResolver, forceFullSync = false)
-                    }
-                },
-                onFullSync = {
-                    onRequestSmsPermission {
-                        viewModel.syncSmsMessages(contentResolver, forceFullSync = true)
-                    }
-                },
-                isSyncing = uiState.isSyncing
-            )
-        }
-
-        // 카테고리별 지출
-        item {
-            CategoryExpenseCard(
-                categoryExpenses = uiState.categoryExpenses
-            )
-        }
-
-        // 최근 지출 내역
-        item {
-            Text(
-                text = stringResource(R.string.home_recent_expense),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        if (uiState.recentExpenses.isEmpty()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // 월간 현황 카드
             item {
-                EmptyExpenseCard()
-            }
-        } else {
-            items(uiState.recentExpenses) { expense ->
-                ExpenseItemCard(
-                    expense = expense,
-                    onClick = { selectedExpense = expense }
+                MonthlyOverviewCard(
+                    year = uiState.selectedYear,
+                    month = uiState.selectedMonth,
+                    monthStartDay = uiState.monthStartDay,
+                    periodLabel = uiState.periodLabel,
+                    income = uiState.monthlyIncome,
+                    expense = uiState.monthlyExpense,
+                    remaining = uiState.remainingBudget,
+                    onPreviousMonth = { viewModel.previousMonth() },
+                    onNextMonth = { viewModel.nextMonth() },
+                    onIncrementalSync = {
+                        onRequestSmsPermission {
+                            viewModel.syncSmsMessages(contentResolver, forceFullSync = false)
+                        }
+                    },
+                    onFullSync = {
+                        onRequestSmsPermission {
+                            viewModel.syncSmsMessages(contentResolver, forceFullSync = true)
+                        }
+                    },
+                    isSyncing = uiState.isSyncing
                 )
+            }
+
+            // 카테고리별 지출
+            item {
+                CategoryExpenseCard(
+                    categoryExpenses = uiState.categoryExpenses
+                )
+            }
+
+            // 최근 지출 내역
+            item {
+                Text(
+                    text = stringResource(R.string.home_recent_expense),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            if (uiState.recentExpenses.isEmpty()) {
+                item {
+                    EmptyExpenseCard()
+                }
+            } else {
+                items(uiState.recentExpenses) { expense ->
+                    ExpenseItemCard(
+                        expense = expense,
+                        onClick = { selectedExpense = expense }
+                    )
+                }
             }
         }
     }

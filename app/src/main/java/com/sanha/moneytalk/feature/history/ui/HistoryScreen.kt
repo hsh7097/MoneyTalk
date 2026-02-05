@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,6 +91,7 @@ private fun getCategoryStyle(category: String): CategoryStyle {
     return categoryStyles[category] ?: categoryStyles["기타"]!!
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel()
@@ -98,60 +100,67 @@ fun HistoryScreen(
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+    // Pull-to-Refresh
+    PullToRefreshBox(
+        isRefreshing = uiState.isRefreshing,
+        onRefresh = { viewModel.refresh() },
+        modifier = Modifier.fillMaxSize()
     ) {
-        // 헤더
-        Text(
-            text = stringResource(R.string.history_title),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            // 헤더
+            Text(
+                text = stringResource(R.string.history_title),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+            )
 
-        // 기간 선택 및 지출/수입 요약
-        PeriodSummaryCard(
-            year = uiState.selectedYear,
-            month = uiState.selectedMonth,
-            monthStartDay = uiState.monthStartDay,
-            totalExpense = uiState.monthlyTotal,
-            totalIncome = 0, // TODO: Add income tracking
-            onPreviousMonth = { viewModel.previousMonth() },
-            onNextMonth = { viewModel.nextMonth() }
-        )
+            // 기간 선택 및 지출/수입 요약
+            PeriodSummaryCard(
+                year = uiState.selectedYear,
+                month = uiState.selectedMonth,
+                monthStartDay = uiState.monthStartDay,
+                totalExpense = uiState.monthlyTotal,
+                totalIncome = 0, // TODO: Add income tracking
+                onPreviousMonth = { viewModel.previousMonth() },
+                onNextMonth = { viewModel.nextMonth() }
+            )
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        // 뷰 토글 및 필터
-        ViewToggleRow(
-            currentMode = viewMode,
-            onModeChange = { viewMode = it },
-            cardNames = uiState.cardNames,
-            selectedCardName = uiState.selectedCardName,
-            onCardNameSelected = { viewModel.filterByCardName(it) }
-        )
+            // 뷰 토글 및 필터
+            ViewToggleRow(
+                currentMode = viewMode,
+                onModeChange = { viewMode = it },
+                cardNames = uiState.cardNames,
+                selectedCardName = uiState.selectedCardName,
+                onCardNameSelected = { viewModel.filterByCardName(it) }
+            )
 
-        // 콘텐츠
-        when (viewMode) {
-            ViewMode.LIST -> {
-                ExpenseListView(
-                    expenses = uiState.expenses,
-                    isLoading = uiState.isLoading,
-                    onDelete = { viewModel.deleteExpense(it) },
-                    onCategoryChange = { expense, newCategory ->
-                        viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
-                    }
-                )
-            }
-            ViewMode.CALENDAR -> {
-                BillingCycleCalendarView(
-                    year = uiState.selectedYear,
-                    month = uiState.selectedMonth,
-                    monthStartDay = uiState.monthStartDay,
-                    dailyTotals = uiState.dailyTotals
-                )
+            // 콘텐츠
+            when (viewMode) {
+                ViewMode.LIST -> {
+                    ExpenseListView(
+                        expenses = uiState.expenses,
+                        isLoading = uiState.isLoading,
+                        onDelete = { viewModel.deleteExpense(it) },
+                        onCategoryChange = { expense, newCategory ->
+                            viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
+                        }
+                    )
+                }
+                ViewMode.CALENDAR -> {
+                    BillingCycleCalendarView(
+                        year = uiState.selectedYear,
+                        month = uiState.selectedMonth,
+                        monthStartDay = uiState.monthStartDay,
+                        dailyTotals = uiState.dailyTotals
+                    )
+                }
             }
         }
     }

@@ -20,6 +20,7 @@ import javax.inject.Inject
 
 data class HomeUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false, // Pull-to-Refresh 상태
     val selectedYear: Int = DateUtils.getCurrentYear(),
     val selectedMonth: Int = DateUtils.getCurrentMonth(),
     val monthStartDay: Int = 1,
@@ -246,8 +247,72 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Pull-to-Refresh 및 외부에서 호출 가능한 데이터 새로고침
+     * 다른 화면에서 DB 변경 시에도 호출됨
+     */
     fun refresh() {
-        loadSettings()
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRefreshing = true) }
+            loadDataSync()
+            _uiState.update { it.copy(isRefreshing = false) }
+        }
+    }
+
+    /**
+     * 데이터 동기 로드 (refresh에서 사용)
+     */
+    private suspend fun loadDataSync() {
+        try {
+            val monthStartDay = settingsDataStore.getMonthStartDay()
+            val (startTs, _) = DateUtils.getCurrentCustomMonthPeriod(monthStartDay)
+            val calendar = java.util.Calendar.getInstance().apply { timeInMillis = startTs }
+            val year = calendar.get(java.util.Calendar.YEAR)
+            val month = calendar.get(java.util.Calendar.MONTH) + 1
+
+            _uiState.update {
+                it.copy(
+                    monthStartDay = monthStartDay,
+                    selectedYear = year,
+                    selectedMonth = month
+                )
+            }
+
+            val state = _uiState.value
+            val (monthStart, monthEnd) = DateUtils.getCustomMonthPeriod(
+                state.selectedYear,
+                state.selectedMonth,
+                state.monthStartDay
+            )
+
+            val periodLabel = DateUtils.formatCustomMonthPeriod(
+                state.selectedYear,
+                state.selectedMonth,
+                state.monthStartDay
+            )
+
+            val totalExpense = expenseRepository.getTotalExpenseByDateRange(monthStart, monthEnd)
+            val totalIncome = incomeRepository.getTotalIncomeByDateRange(monthStart, monthEnd)
+            val categoryExpenses = expenseRepository.getExpenseSumByCategory(monthStart, monthEnd)
+            val recentExpenses = expenseRepository.getExpensesByDateRangeOnce(monthStart, monthEnd)
+                .sortedByDescending { it.dateTime }
+
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    periodLabel = periodLabel,
+                    monthlyIncome = totalIncome,
+                    monthlyExpense = totalExpense,
+                    remainingBudget = totalIncome - totalExpense,
+                    categoryExpenses = categoryExpenses,
+                    recentExpenses = recentExpenses
+                )
+            }
+        } catch (e: Exception) {
+            _uiState.update {
+                it.copy(isLoading = false, errorMessage = e.message)
+            }
+        }
     }
 
     fun clearError() {

@@ -17,6 +17,7 @@ import javax.inject.Inject
 
 data class HistoryUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false, // Pull-to-Refresh 상태
     val expenses: List<ExpenseEntity> = emptyList(),
     val selectedCategory: String? = null,
     val selectedCardName: String? = null,
@@ -173,6 +174,56 @@ class HistoryViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "카테고리 변경 실패: ${e.message}") }
             }
+        }
+    }
+
+    /**
+     * Pull-to-Refresh 및 외부에서 호출 가능한 데이터 새로고침
+     * 다른 화면에서 DB 변경 시에도 호출됨
+     */
+    fun refresh() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRefreshing = true) }
+            loadCardNames()
+            loadExpensesSync()
+            _uiState.update { it.copy(isRefreshing = false) }
+        }
+    }
+
+    /**
+     * 지출 내역 동기 로드 (refresh에서 사용)
+     */
+    private suspend fun loadExpensesSync() {
+        val state = _uiState.value
+        val (startTime, endTime) = DateUtils.getCustomMonthPeriod(
+            state.selectedYear,
+            state.selectedMonth,
+            state.monthStartDay
+        )
+
+        try {
+            val monthlyTotal = expenseRepository.getTotalExpenseByDateRange(startTime, endTime)
+            val dailySums = expenseRepository.getDailyTotals(startTime, endTime)
+            val dailyTotalsMap = dailySums.associate { it.date to it.total }
+            val expenses = expenseRepository.getExpensesByDateRangeOnce(startTime, endTime)
+                .let { list ->
+                    // 필터 적용
+                    list.filter { expense ->
+                        (state.selectedCardName == null || expense.cardName == state.selectedCardName) &&
+                        (state.selectedCategory == null || expense.category == state.selectedCategory)
+                    }
+                }
+
+            _uiState.update {
+                it.copy(
+                    monthlyTotal = monthlyTotal,
+                    dailyTotals = dailyTotalsMap,
+                    expenses = expenses,
+                    isLoading = false
+                )
+            }
+        } catch (e: Exception) {
+            _uiState.update { it.copy(errorMessage = e.message, isLoading = false) }
         }
     }
 }
