@@ -16,6 +16,7 @@ import com.sanha.moneytalk.core.util.DataQuery
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.util.QueryResult
 import com.sanha.moneytalk.core.util.QueryType
+import com.sanha.moneytalk.core.util.StoreAliasManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.text.SimpleDateFormat
 import kotlinx.coroutines.flow.*
@@ -283,15 +284,25 @@ class ChatViewModel @Inject constructor(
 
             QueryType.EXPENSE_BY_STORE -> {
                 val storeName = query.storeName ?: return null
-                val expenses = expenseRepository.getExpensesByStoreNameAndDateRange(storeName, startTimestamp, endTimestamp)
-                val total = expenses.sumOf { it.amount }
-                val expenseList = expenses.take(10).joinToString("\n") { expense ->
-                    "${DateUtils.formatDateTime(expense.dateTime)}: ${numberFormat.format(expense.amount)}원"
+
+                // StoreAliasManager를 사용하여 모든 별칭으로 검색
+                val aliases = StoreAliasManager.getAllAliases(storeName)
+                val allExpenses = aliases.flatMap { alias ->
+                    expenseRepository.getExpensesByStoreNameContaining(alias)
+                        .filter { it.dateTime in startTimestamp..endTimestamp }
+                }.distinctBy { it.id }
+                    .sortedByDescending { it.dateTime }
+
+                val total = allExpenses.sumOf { it.amount }
+                val expenseList = allExpenses.take(10).joinToString("\n") { expense ->
+                    "${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${numberFormat.format(expense.amount)}원"
                 }.ifEmpty { "해당 가게 지출 내역이 없습니다." }
+
+                val aliasInfo = if (aliases.size > 1) " (${aliases.joinToString(", ")})" else ""
 
                 QueryResult(
                     queryType = QueryType.EXPENSE_BY_STORE,
-                    data = "'$storeName' 지출 (${query.startDate ?: "이번 달"} ~ ${query.endDate ?: "현재"}):\n총 ${numberFormat.format(total)}원 (${expenses.size}건)\n$expenseList"
+                    data = "'$storeName'$aliasInfo 지출 (${query.startDate ?: "이번 달"} ~ ${query.endDate ?: "현재"}):\n총 ${numberFormat.format(total)}원 (${allExpenses.size}건)\n$expenseList"
                 )
             }
 
@@ -367,12 +378,17 @@ class ChatViewModel @Inject constructor(
                         message = "가게명 또는 새 카테고리가 지정되지 않았습니다."
                     )
                 } else {
-                    val affected = expenseRepository.updateCategoryByStoreName(storeName, newCategory)
+                    // StoreAliasManager를 사용하여 모든 별칭에 대해 업데이트
+                    val aliases = StoreAliasManager.getAllAliases(storeName)
+                    var totalAffected = 0
+                    for (alias in aliases) {
+                        totalAffected += expenseRepository.updateCategoryByStoreNameContaining(alias, newCategory)
+                    }
                     ActionResult(
                         actionType = ActionType.UPDATE_CATEGORY_BY_STORE,
-                        success = affected > 0,
-                        message = if (affected > 0) "'$storeName' 관련 ${affected}건의 카테고리를 '$newCategory'(으)로 변경했습니다." else "'$storeName' 관련 항목을 찾을 수 없습니다.",
-                        affectedCount = affected
+                        success = totalAffected > 0,
+                        message = if (totalAffected > 0) "'$storeName' 관련 ${totalAffected}건의 카테고리를 '$newCategory'(으)로 변경했습니다." else "'$storeName' 관련 항목을 찾을 수 없습니다.",
+                        affectedCount = totalAffected
                     )
                 }
             }
@@ -388,12 +404,17 @@ class ChatViewModel @Inject constructor(
                         message = "검색 키워드 또는 새 카테고리가 지정되지 않았습니다."
                     )
                 } else {
-                    val affected = expenseRepository.updateCategoryByStoreNameContaining(keyword, newCategory)
+                    // StoreAliasManager를 사용하여 모든 별칭에 대해 업데이트
+                    val aliases = StoreAliasManager.getAllAliases(keyword)
+                    var totalAffected = 0
+                    for (alias in aliases) {
+                        totalAffected += expenseRepository.updateCategoryByStoreNameContaining(alias, newCategory)
+                    }
                     ActionResult(
                         actionType = ActionType.UPDATE_CATEGORY_BY_KEYWORD,
-                        success = affected > 0,
-                        message = if (affected > 0) "'$keyword' 포함된 ${affected}건의 카테고리를 '$newCategory'(으)로 변경했습니다." else "'$keyword' 포함된 항목을 찾을 수 없습니다.",
-                        affectedCount = affected
+                        success = totalAffected > 0,
+                        message = if (totalAffected > 0) "'$keyword' 관련 ${totalAffected}건의 카테고리를 '$newCategory'(으)로 변경했습니다." else "'$keyword' 관련 항목을 찾을 수 없습니다.",
+                        affectedCount = totalAffected
                     )
                 }
             }
