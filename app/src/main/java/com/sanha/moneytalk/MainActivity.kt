@@ -31,6 +31,7 @@ class MainActivity : ComponentActivity() {
     private var pendingSyncAction: (() -> Unit)? = null
     private var permissionChecked = mutableStateOf(false)
     private var permissionGranted = mutableStateOf(false)
+    private var shouldAutoSync = mutableStateOf(false)
 
     private val smsPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -41,6 +42,8 @@ class MainActivity : ComponentActivity() {
 
         if (allGranted) {
             Toast.makeText(this, "SMS 권한이 허용되었습니다", Toast.LENGTH_SHORT).show()
+            // 앱 시작 시 권한 획득 후 자동 동기화 플래그 설정
+            shouldAutoSync.value = true
             pendingSyncAction?.invoke()
         } else {
             Toast.makeText(this, "SMS 권한이 거부되었습니다. 설정에서 권한을 허용해주세요.", Toast.LENGTH_LONG).show()
@@ -60,6 +63,8 @@ class MainActivity : ComponentActivity() {
                 MoneyTalkApp(
                     permissionChecked = permissionChecked.value,
                     permissionGranted = permissionGranted.value,
+                    shouldAutoSync = shouldAutoSync.value,
+                    onAutoSyncConsumed = { shouldAutoSync.value = false },
                     onRequestSmsPermission = { onGranted ->
                         checkAndRequestSmsPermission(onGranted)
                     },
@@ -82,6 +87,8 @@ class MainActivity : ComponentActivity() {
         if (allGranted) {
             permissionGranted.value = true
             permissionChecked.value = true
+            // 이미 권한이 있으면 자동 동기화 실행
+            shouldAutoSync.value = true
         } else {
             // 앱 시작 시 권한 요청
             smsPermissionLauncher.launch(permissions)
@@ -111,6 +118,8 @@ class MainActivity : ComponentActivity() {
 fun MoneyTalkApp(
     permissionChecked: Boolean,
     permissionGranted: Boolean,
+    shouldAutoSync: Boolean,
+    onAutoSyncConsumed: () -> Unit,
     onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
     onExitApp: () -> Unit
 ) {
@@ -183,7 +192,8 @@ fun MoneyTalkApp(
             NavGraph(
                 navController = navController,
                 onRequestSmsPermission = onRequestSmsPermission,
-                autoSyncOnStart = permissionGranted
+                autoSyncOnStart = shouldAutoSync,
+                onAutoSyncConsumed = onAutoSyncConsumed
             )
         }
     }

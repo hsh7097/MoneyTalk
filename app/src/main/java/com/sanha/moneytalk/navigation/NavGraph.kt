@@ -15,6 +15,7 @@ fun NavGraph(
     navController: NavHostController,
     onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
     autoSyncOnStart: Boolean = false,
+    onAutoSyncConsumed: () -> Unit = {},
     showSplash: Boolean = true
 ) {
     NavHost(
@@ -34,7 +35,8 @@ fun NavGraph(
         composable(Screen.Home.route) {
             HomeScreen(
                 onRequestSmsPermission = onRequestSmsPermission,
-                autoSyncOnStart = autoSyncOnStart
+                autoSyncOnStart = autoSyncOnStart,
+                onAutoSyncConsumed = onAutoSyncConsumed
             )
         }
 

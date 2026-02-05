@@ -34,7 +34,8 @@ import java.util.*
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
     onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
-    autoSyncOnStart: Boolean = false
+    autoSyncOnStart: Boolean = false,
+    onAutoSyncConsumed: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val contentResolver = context.contentResolver
@@ -47,6 +48,7 @@ fun HomeScreen(
     LaunchedEffect(autoSyncOnStart) {
         if (autoSyncOnStart) {
             viewModel.syncSmsMessages(contentResolver)
+            onAutoSyncConsumed()
         }
     }
 
