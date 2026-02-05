@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.feature.chat.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,31 +25,33 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.util.DateUtils
 
 // 가이드 질문 목록 - 카테고리별 그룹핑
 private data class GuideQuestion(
-    val category: String,
-    val question: String
+    @StringRes val categoryRes: Int,
+    @StringRes val questionRes: Int
 )
 
 private val guideQuestions = listOf(
     // 지출 조회
-    GuideQuestion("지출 조회", "2월에 쿠팡에서 얼마 썼어?"),
-    GuideQuestion("지출 조회", "이번 달 스타벅스 사용 내역 보여줘"),
-    GuideQuestion("지출 조회", "지난 3개월 배달비 얼마야?"),
+    GuideQuestion(R.string.guide_category_expense_search, R.string.guide_q_expense_coupang),
+    GuideQuestion(R.string.guide_category_expense_search, R.string.guide_q_expense_starbucks),
+    GuideQuestion(R.string.guide_category_expense_search, R.string.guide_q_expense_delivery),
     // 분석
-    GuideQuestion("분석", "식비가 수입 대비 적절해?"),
-    GuideQuestion("분석", "지난 달 대비 지출이 늘었어?"),
-    GuideQuestion("분석", "카테고리별 지출 비율 분석해줘"),
+    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_food),
+    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_compare),
+    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_category),
     // 카테고리 관리
-    GuideQuestion("카테고리 관리", "쿠팡은 쇼핑으로 분류해줘"),
-    GuideQuestion("카테고리 관리", "배달의민족 포함된 건 식비로 바꿔줘"),
-    GuideQuestion("카테고리 관리", "미분류 항목 보여줘")
+    GuideQuestion(R.string.guide_category_manage, R.string.guide_q_manage_coupang),
+    GuideQuestion(R.string.guide_category_manage, R.string.guide_q_manage_baemin),
+    GuideQuestion(R.string.guide_category_manage, R.string.guide_q_manage_uncategorized)
 )
 
 @Composable
@@ -92,18 +95,22 @@ fun ChatScreen(
                         IconButton(onClick = { viewModel.toggleSessionList() }) {
                             Icon(
                                 imageVector = Icons.Default.Menu,
-                                contentDescription = "대화 목록"
+                                contentDescription = stringResource(R.string.chat_session_list)
                             )
                         }
 
                         Column {
                             Text(
-                                text = "AI 재무 상담",
+                                text = stringResource(R.string.chat_title),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = if (uiState.hasApiKey) "Gemini와 대화하세요" else "API 키를 설정해주세요",
+                                text = if (uiState.hasApiKey) {
+                                    stringResource(R.string.chat_subtitle_with_api)
+                                } else {
+                                    stringResource(R.string.chat_subtitle_no_api)
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
@@ -117,13 +124,13 @@ fun ChatScreen(
                         IconButton(onClick = { viewModel.createNewSession() }) {
                             Icon(
                                 imageVector = Icons.Default.Add,
-                                contentDescription = "새 대화"
+                                contentDescription = stringResource(R.string.chat_new_session)
                             )
                         }
 
                         if (!uiState.hasApiKey) {
                             TextButton(onClick = { showApiKeyDialog = true }) {
-                                Text("API 키 설정")
+                                Text(stringResource(R.string.api_key_setting))
                             }
                         }
                     }
@@ -185,7 +192,7 @@ fun ChatScreen(
                         value = messageText,
                         onValueChange = { messageText = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("메시지를 입력하세요...") },
+                        placeholder = { Text(stringResource(R.string.chat_input_placeholder)) },
                         shape = RoundedCornerShape(24.dp),
                         maxLines = 3,
                         enabled = uiState.hasApiKey && !uiState.isLoading
@@ -202,7 +209,7 @@ fun ChatScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "전송"
+                            contentDescription = stringResource(R.string.chat_send)
                         )
                     }
                 }
@@ -241,8 +248,8 @@ fun ChatScreen(
     showDeleteConfirm?.let { sessionId ->
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
-            title = { Text("대화 삭제") },
-            text = { Text("이 대화를 삭제하시겠습니까?\n삭제된 대화는 복구할 수 없습니다.") },
+            title = { Text(stringResource(R.string.dialog_delete_session_title)) },
+            text = { Text(stringResource(R.string.dialog_delete_session_message)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -253,12 +260,12 @@ fun ChatScreen(
                         contentColor = MaterialTheme.colorScheme.error
                     )
                 ) {
-                    Text("삭제")
+                    Text(stringResource(R.string.chat_delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = null }) {
-                    Text("취소")
+                    Text(stringResource(R.string.dialog_cancel))
                 }
             }
         )
@@ -271,12 +278,25 @@ fun GuideQuestionsOverlay(
     hasApiKey: Boolean,
     onQuestionClick: (String) -> Unit
 ) {
-    val groupedQuestions = questions.groupBy { it.category }
+    val categoryExpenseSearch = stringResource(R.string.guide_category_expense_search)
+    val categoryAnalysis = stringResource(R.string.guide_category_analysis)
+    val categoryManage = stringResource(R.string.guide_category_manage)
+
     val categoryEmojis = mapOf(
-        "지출 조회" to "🔍",
-        "분석" to "📊",
-        "카테고리 관리" to "🏷️"
+        categoryExpenseSearch to "\uD83D\uDD0D",
+        categoryAnalysis to "\uD83D\uDCCA",
+        categoryManage to "\uD83C\uDFF7\uFE0F"
     )
+
+    // 질문들을 카테고리 문자열로 그룹핑
+    data class ResolvedQuestion(val category: String, val question: String)
+    val resolvedQuestions = questions.map { q ->
+        ResolvedQuestion(
+            category = stringResource(q.categoryRes),
+            question = stringResource(q.questionRes)
+        )
+    }
+    val groupedQuestions = resolvedQuestions.groupBy { it.category }
 
     LazyColumn(
         modifier = Modifier
@@ -297,13 +317,13 @@ fun GuideQuestionsOverlay(
                     modifier = Modifier.padding(20.dp)
                 ) {
                     Text(
-                        text = "안녕하세요!",
+                        text = stringResource(R.string.guide_welcome),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "저는 AI 재무 상담사 머니톡이에요.\n아래 질문을 눌러 시작해보세요!",
+                        text = stringResource(R.string.guide_intro),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                     )
@@ -311,7 +331,7 @@ fun GuideQuestionsOverlay(
                     if (!hasApiKey) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "* API 키를 먼저 설정해주세요",
+                            text = stringResource(R.string.guide_api_key_required),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -321,26 +341,26 @@ fun GuideQuestionsOverlay(
 
                     groupedQuestions.forEach { (category, categoryQuestions) ->
                         Text(
-                            text = "${categoryEmojis[category] ?: "💬"} $category",
+                            text = "${categoryEmojis[category] ?: "\uD83D\uDCAC"} $category",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                         )
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        categoryQuestions.forEach { guideQuestion ->
+                        categoryQuestions.forEach { resolvedQuestion ->
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 3.dp)
                                     .clickable(enabled = hasApiKey) {
-                                        onQuestionClick(guideQuestion.question)
+                                        onQuestionClick(resolvedQuestion.question)
                                     },
                                 shape = RoundedCornerShape(10.dp),
                                 color = MaterialTheme.colorScheme.surface
                             ) {
                                 Text(
-                                    text = guideQuestion.question,
+                                    text = resolvedQuestion.question,
                                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = if (hasApiKey) {
@@ -389,7 +409,7 @@ fun SessionListPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "대화 목록",
+                        text = stringResource(R.string.chat_session_list),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -397,13 +417,13 @@ fun SessionListPanel(
                         IconButton(onClick = onNewSession) {
                             Icon(
                                 imageVector = Icons.Default.Add,
-                                contentDescription = "새 대화"
+                                contentDescription = stringResource(R.string.chat_new_session)
                             )
                         }
                         IconButton(onClick = onDismiss) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "닫기"
+                                contentDescription = stringResource(R.string.chat_close)
                             )
                         }
                     }
@@ -422,12 +442,12 @@ fun SessionListPanel(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "💬",
+                            text = "\uD83D\uDCAC",
                             style = MaterialTheme.typography.displayMedium
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "대화 내역이 없습니다",
+                            text = stringResource(R.string.chat_no_sessions),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
@@ -438,7 +458,7 @@ fun SessionListPanel(
                         }) {
                             Icon(Icons.Default.Add, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("새 대화 시작")
+                            Text(stringResource(R.string.chat_start_new))
                         }
                     }
                 }
@@ -515,7 +535,7 @@ fun SessionItem(
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = "삭제",
+                    contentDescription = stringResource(R.string.chat_delete),
                     tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
                     modifier = Modifier.size(20.dp)
                 )
@@ -585,7 +605,7 @@ fun TypingIndicator() {
         }
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = "생각 중...",
+            text = stringResource(R.string.chat_thinking),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
@@ -601,19 +621,19 @@ fun ApiKeyDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Gemini API 키 설정") },
+        title = { Text(stringResource(R.string.dialog_api_key_title)) },
         text = {
             Column {
                 Text(
-                    text = "Google AI Studio에서 발급받은 API 키를 입력해주세요.",
+                    text = stringResource(R.string.dialog_api_key_message),
                     style = MaterialTheme.typography.bodySmall
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(
                     value = apiKey,
                     onValueChange = { apiKey = it },
-                    label = { Text("API Key") },
-                    placeholder = { Text("AIza...") },
+                    label = { Text(stringResource(R.string.dialog_api_key_label)) },
+                    placeholder = { Text(stringResource(R.string.dialog_api_key_placeholder)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -624,12 +644,12 @@ fun ApiKeyDialog(
                 onClick = { onConfirm(apiKey) },
                 enabled = apiKey.isNotBlank()
             ) {
-                Text("확인")
+                Text(stringResource(R.string.dialog_confirm))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("취소")
+                Text(stringResource(R.string.dialog_cancel))
             }
         }
     )
