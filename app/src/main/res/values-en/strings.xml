@@ -13,6 +13,7 @@
     <string name="common_all">All</string>
     <string name="common_search">Search</string>
     <string name="common_add">Add</string>
+    <string name="common_scroll_to_top">Scroll to Top</string>
     <string name="common_processing">Processing…</string>
     <string name="common_won">₩%s</string>
     <string name="error_response">Sorry, an error occurred while getting a response: %s</string>

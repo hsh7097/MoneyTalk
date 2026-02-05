@@ -186,7 +186,7 @@ fun MoneyTalkApp(
                                 selectedTextColor = MaterialTheme.colorScheme.onSurface,
                                 unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                                 unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                indicatorColor = MaterialTheme.colorScheme.surface
                             )
                         )
                     }

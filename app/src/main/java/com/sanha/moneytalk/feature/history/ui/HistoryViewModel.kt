@@ -386,11 +386,14 @@ class HistoryViewModel @Inject constructor(
                     }
                 }
 
+            // 정렬 적용
+            val sortedExpenses = sortExpenses(expenses, state.sortOrder)
+
             _uiState.update {
                 it.copy(
                     monthlyTotal = monthlyTotal,
                     dailyTotals = dailyTotalsMap,
-                    expenses = expenses,
+                    expenses = sortedExpenses,
                     isLoading = false
                 )
             }

@@ -1,16 +1,21 @@
 package com.sanha.moneytalk.feature.history.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.List
@@ -34,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
@@ -696,6 +702,11 @@ fun ExpenseListView(
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    val showScrollToTop by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 5 }
+    }
 
     if (isLoading) {
         Box(
@@ -743,69 +754,97 @@ fun ExpenseListView(
         }
     }.toSortedMap(compareByDescending { it })
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        groupedExpenses.forEach { (date, dayExpenses) ->
-            val dailyTotal = dayExpenses.sumOf { it.amount }
-            val calendar = Calendar.getInstance().apply { time = date }
-            val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
-            val dayOfWeekResId = when (calendar.get(Calendar.DAY_OF_WEEK)) {
-                Calendar.SUNDAY -> R.string.day_sunday
-                Calendar.MONDAY -> R.string.day_monday
-                Calendar.TUESDAY -> R.string.day_tuesday
-                Calendar.WEDNESDAY -> R.string.day_wednesday
-                Calendar.THURSDAY -> R.string.day_thursday
-                Calendar.FRIDAY -> R.string.day_friday
-                Calendar.SATURDAY -> R.string.day_saturday
-                else -> R.string.day_sunday
-            }
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            groupedExpenses.forEach { (date, dayExpenses) ->
+                val dailyTotal = dayExpenses.sumOf { it.amount }
+                val calendar = Calendar.getInstance().apply { time = date }
+                val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
+                val dayOfWeekResId = when (calendar.get(Calendar.DAY_OF_WEEK)) {
+                    Calendar.SUNDAY -> R.string.day_sunday
+                    Calendar.MONDAY -> R.string.day_monday
+                    Calendar.TUESDAY -> R.string.day_tuesday
+                    Calendar.WEDNESDAY -> R.string.day_wednesday
+                    Calendar.THURSDAY -> R.string.day_thursday
+                    Calendar.FRIDAY -> R.string.day_friday
+                    Calendar.SATURDAY -> R.string.day_saturday
+                    else -> R.string.day_sunday
+                }
 
-            // 날짜 헤더
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.history_day_header, dayOfMonth, stringResource(dayOfWeekResId)),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                    Text(
-                        text = "-" + stringResource(R.string.common_won, numberFormat.format(dailyTotal)),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.error
+                // 날짜 헤더
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.history_day_header, dayOfMonth, stringResource(dayOfWeekResId)),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Text(
+                            text = "-" + stringResource(R.string.common_won, numberFormat.format(dailyTotal)),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                        thickness = 0.5.dp
                     )
                 }
-                HorizontalDivider(
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                    thickness = 0.5.dp
-                )
+
+                // 지출 항목 (공통 컴포넌트 사용)
+                items(
+                    items = dayExpenses,
+                    key = { it.id }
+                ) { expense ->
+                    ExpenseItemCard(
+                        expense = expense,
+                        onClick = { selectedExpense = expense }
+                    )
+                }
             }
 
-            // 지출 항목 (공통 컴포넌트 사용)
-            items(
-                items = dayExpenses,
-                key = { it.id }
-            ) { expense ->
-                ExpenseItemCard(
-                    expense = expense,
-                    onClick = { selectedExpense = expense }
-                )
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
 
-        item {
-            Spacer(modifier = Modifier.height(16.dp))
+        // Scroll to Top FAB
+        AnimatedVisibility(
+            visible = showScrollToTop,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+        ) {
+            FloatingActionButton(
+                onClick = {
+                    coroutineScope.launch {
+                        listState.animateScrollToItem(0)
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            ) {
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowUp,
+                    contentDescription = stringResource(R.string.common_scroll_to_top)
+                )
+            }
         }
     }
 

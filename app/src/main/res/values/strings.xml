@@ -13,6 +13,7 @@
     <string name="common_all">전체</string>
     <string name="common_search">검색</string>
     <string name="common_add">추가</string>
+    <string name="common_scroll_to_top">맨 위로</string>
     <string name="common_processing">처리 중…</string>
     <string name="common_won">%s원</string>
     <string name="error_response">죄송해요, 응답을 받는 중 오류가 발생했어요: %s</string>
