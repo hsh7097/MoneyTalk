@@ -459,9 +459,14 @@ fun ExpenseListView(
     // 날짜별 그룹핑
     val groupedExpenses = expenses.groupBy { expense ->
         try {
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
-            val date = dateFormat.parse(expense.dateTime.take(10))
-            date ?: Date()
+            val calendar = Calendar.getInstance().apply {
+                timeInMillis = expense.dateTime
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            calendar.time
         } catch (e: Exception) {
             Date()
         }

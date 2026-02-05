@@ -54,16 +54,20 @@ data class ExpenseBackup(
     val amount: Int,
     val storeName: String,
     val category: String,
-    val dateTime: String,
+    val dateTime: Long,
     val cardName: String,
-    val smsId: String
+    val originalSms: String,
+    val smsId: String,
+    val memo: String?
 )
 
 data class IncomeBackup(
     val amount: Int,
-    val source: String,
-    val dateTime: String,
-    val note: String
+    val type: String,
+    val description: String,
+    val isRecurring: Boolean,
+    val recurringDay: Int?,
+    val dateTime: Long
 )
 
 /**
@@ -89,12 +93,12 @@ object DataBackupManager {
         // 날짜 필터
         if (filter.startDate != null) {
             filtered = filtered.filter {
-                parseDateTime(it.dateTime)?.time ?: 0L >= filter.startDate
+                it.dateTime >= filter.startDate
             }
         }
         if (filter.endDate != null) {
             filtered = filtered.filter {
-                parseDateTime(it.dateTime)?.time ?: Long.MAX_VALUE <= filter.endDate
+                it.dateTime <= filter.endDate
             }
         }
 
@@ -123,12 +127,12 @@ object DataBackupManager {
         // 날짜 필터
         if (filter.startDate != null) {
             filtered = filtered.filter {
-                parseDateTime(it.dateTime)?.time ?: 0L >= filter.startDate
+                it.dateTime >= filter.startDate
             }
         }
         if (filter.endDate != null) {
             filtered = filtered.filter {
-                parseDateTime(it.dateTime)?.time ?: Long.MAX_VALUE <= filter.endDate
+                it.dateTime <= filter.endDate
             }
         }
 
@@ -164,15 +168,19 @@ object DataBackupManager {
                     category = expense.category,
                     dateTime = expense.dateTime,
                     cardName = expense.cardName,
-                    smsId = expense.smsId
+                    originalSms = expense.originalSms,
+                    smsId = expense.smsId,
+                    memo = expense.memo
                 )
             },
             incomes = incomes.map { income ->
                 IncomeBackup(
                     amount = income.amount,
-                    source = income.source,
-                    dateTime = income.dateTime,
-                    note = income.note
+                    type = income.type,
+                    description = income.description,
+                    isRecurring = income.isRecurring,
+                    recurringDay = income.recurringDay,
+                    dateTime = income.dateTime
                 )
             }
         )
@@ -195,7 +203,7 @@ object DataBackupManager {
         // 데이터
         expenses.forEach { expense ->
             sb.appendLine(
-                "${escapeCsv(expense.dateTime)}," +
+                "${escapeCsv(dateTimeFormat.format(Date(expense.dateTime)))}," +
                 "${escapeCsv(expense.storeName)}," +
                 "${escapeCsv(expense.category)}," +
                 "${escapeCsv(expense.cardName)}," +
@@ -216,14 +224,16 @@ object DataBackupManager {
         sb.append('\uFEFF')
 
         // 헤더
-        sb.appendLine("날짜,출처,메모,금액")
+        sb.appendLine("날짜,유형,설명,고정수입,입금일,금액")
 
         // 데이터
         incomes.forEach { income ->
             sb.appendLine(
-                "${escapeCsv(income.dateTime)}," +
-                "${escapeCsv(income.source)}," +
-                "${escapeCsv(income.note)}," +
+                "${escapeCsv(dateTimeFormat.format(Date(income.dateTime)))}," +
+                "${escapeCsv(income.type)}," +
+                "${escapeCsv(income.description)}," +
+                "${income.isRecurring}," +
+                "${income.recurringDay ?: ""}," +
                 "${income.amount}"
             )
         }
@@ -247,11 +257,11 @@ object DataBackupManager {
         expenses.forEach { expense ->
             sb.appendLine(
                 "지출," +
-                "${escapeCsv(expense.dateTime)}," +
+                "${escapeCsv(dateTimeFormat.format(Date(expense.dateTime)))}," +
                 "${escapeCsv(expense.storeName)}," +
                 "${escapeCsv(expense.category)}," +
                 "${escapeCsv(expense.cardName)}," +
-                "," +
+                "${escapeCsv(expense.memo ?: "")}," +
                 "-${expense.amount}"
             )
         }
@@ -260,11 +270,11 @@ object DataBackupManager {
         incomes.forEach { income ->
             sb.appendLine(
                 "수입," +
-                "${escapeCsv(income.dateTime)}," +
-                "${escapeCsv(income.source)}," +
+                "${escapeCsv(dateTimeFormat.format(Date(income.dateTime)))}," +
+                "${escapeCsv(income.type)}," +
                 "," +
                 "," +
-                "${escapeCsv(income.note)}," +
+                "${escapeCsv(income.description)}," +
                 "+${income.amount}"
             )
         }
@@ -329,10 +339,12 @@ object DataBackupManager {
                 amount = backup.amount,
                 storeName = backup.storeName,
                 category = backup.category,
-                dateTime = backup.dateTime,
                 cardName = backup.cardName,
+                dateTime = backup.dateTime,
+                originalSms = backup.originalSms,
                 smsId = backup.smsId,
-                timestamp = System.currentTimeMillis()
+                memo = backup.memo,
+                createdAt = System.currentTimeMillis()
             )
         }
     }
@@ -342,10 +354,12 @@ object DataBackupManager {
             IncomeEntity(
                 id = 0, // Room이 자동 생성
                 amount = backup.amount,
-                source = backup.source,
+                type = backup.type,
+                description = backup.description,
+                isRecurring = backup.isRecurring,
+                recurringDay = backup.recurringDay,
                 dateTime = backup.dateTime,
-                note = backup.note,
-                timestamp = System.currentTimeMillis()
+                createdAt = System.currentTimeMillis()
             )
         }
     }

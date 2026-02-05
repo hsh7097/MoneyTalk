@@ -273,7 +273,7 @@ fun ChatScreen(
 }
 
 @Composable
-fun GuideQuestionsOverlay(
+private fun GuideQuestionsOverlay(
     questions: List<GuideQuestion>,
     hasApiKey: Boolean,
     onQuestionClick: (String) -> Unit
