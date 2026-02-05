@@ -1,10 +1,145 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
+    <!-- Main color https://gds.gmarket.com/foundation/color#main-color-2 -->
+    <color name="green_50">#E5FCE3</color>
+    <color name="green_100">#A5F4A0</color>
+    <color name="green_200">#6CEF64</color>
+    <color name="green_300">#39E532</color>
+    <color name="green_400">#11D70D</color>
+    <color name="green_500">#00C400</color>
+    <color name="green_600">#01A900</color>
+    <color name="green_700">#018600</color>
+    <color name="green_800">#015F00</color>
+    <color name="green_900">#013600</color>
+
+    <!-- Semantic color https://gds.gmarket.com/foundation/color#semantic-color-5 -->
+    <color name="blue_50">#EEF7FF</color>
+    <color name="blue_100">#CBE8FF</color>
+    <color name="blue_200">#A7D9FF</color>
+    <color name="blue_300">#68BBFF</color>
+    <color name="blue_400">#329CFF</color>
+    <color name="blue_500">#067DFD</color>
+    <color name="blue_600">#0062E5</color>
+    <color name="blue_700">#0048C8</color>
+    <color name="blue_800">#0231A6</color>
+    <color name="blue_900">#072182</color>
+
+    <color name="red_50">#FFF5F5</color>
+    <color name="red_100">#FFDADB</color>
+    <color name="red_200">#FFBFBF</color>
+    <color name="red_300">#FF8585</color>
+    <color name="red_400">#FF5454</color>
+    <color name="red_500">#EF2B2A</color>
+    <color name="red_600">#DA120D</color>
+    <color name="red_700">#BF0A03</color>
+    <color name="red_800">#9F0A01</color>
+    <color name="red_900">#7D0800</color>
+
+    <color name="orange_50">#FFF6F2</color>
+    <color name="orange_100">#FFE1D3</color>
+    <color name="orange_200">#FFCCB2</color>
+    <color name="orange_300">#FF9E70</color>
+    <color name="orange_400">#FF7638</color>
+    <color name="orange_500">#F9560E</color>
+    <color name="orange_600">#DA4000</color>
+    <color name="orange_700">#B43200</color>
+    <color name="orange_800">#882400</color>
+    <color name="orange_900">#5E2700</color>
+
+    <!-- Gray color https://gds.gmarket.com/foundation/color#gray-color-12 -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+
+    <color name="gray_50">#FAFAFA</color>
+    <color name="gray_100">#F5F5F5</color>
+    <color name="gray_200">#EEEEEE</color>
+    <color name="gray_300">#E0E0E0</color>
+    <color name="gray_400">#BDBDBD</color>
+    <color name="gray_500">#9E9E9E</color>
+    <color name="gray_600">#757575</color>
+    <color name="gray_700">#616161</color>
+    <color name="gray_800">#424242</color>
+    <color name="gray_900">#222222</color>
+
+    <!-- Service brand color https://gds.gmarket.com/foundation/color#service-brand-color-18 -->
+    <color name="smile">#282864</color>
+    <color name="smilepay_sub">#313191</color>
+    <color name="smile_stamp">#5939DA</color>
+    <color name="smileclub_biz">#102775</color>
+    <color name="smile_catch">#280082</color>
+
+    <!-- Smile club color https://gds.gmarket.com/foundation/color#smile-club-20 -->
+    <color name="smileclub">#FFD200</color>
+    <color name="smileclub_300">#BC9A6E</color>
+    <color name="smileclub_400">#A78353</color>
+    <color name="smileclub_500">#966E46</color>
+
+    <color name="big_smile">#7B00E7</color>
+
+    <!-- Sinsegae Service color -->
+    <color name="emartmall">#FFCF03</color>
+    <color name="emartmall_sub">#F9B233</color>
+    <color name="star_delivery_purple">#7130F3</color>
+    <color name="star_delivery_yellow">#F7BE00</color>
+
+    <!-- Sub color https://gds.gmarket.com/foundation/color#sub-colors-21 -->
+    <color name="yellow_50">#FFFCE5</color>
+    <color name="yellow_100">#FDF8CB</color>
+    <color name="yellow_200">#FFF6A3</color>
+    <color name="yellow_300">#FFE65C</color>
+    <color name="yellow_400">#FFCC1F</color>
+    <color name="yellow_500">#EAAD06</color>
+    <color name="yellow_600">#CF8B00</color>
+    <color name="yellow_700">#AC6600</color>
+    <color name="yellow_800">#864300</color>
+    <color name="yellow_900">#592500</color>
+
+    <color name="teal_50">#EAF9FA</color>
+    <color name="teal_100">#D1F5F8</color>
+    <color name="teal_200">#B8F0F6</color>
+    <color name="teal_300">#89E5EE</color>
+    <color name="teal_400">#62D4E2</color>
+    <color name="teal_500">#43BED0</color>
+    <color name="teal_600">#2DA2B8</color>
+    <color name="teal_700">#1D7F97</color>
+    <color name="teal_800">#125A6F</color>
+    <color name="teal_900">#0A3545</color>
+
+    <color name="indigo_50">#F5F5FF</color>
+    <color name="indigo_100">#E4E4FF</color>
+    <color name="indigo_200">#D2D2FF</color>
+    <color name="indigo_300">#ABABFF</color>
+    <color name="indigo_400">#8A8AFF</color>
+    <color name="indigo_500">#706FF7</color>
+    <color name="indigo_600">#5855E2</color>
+    <color name="indigo_700">#4741C7</color>
+    <color name="indigo_800">#3931A8</color>
+    <color name="indigo_900">#2D2587</color>
+
+    <color name="purple_50">#FBF5FF</color>
+    <color name="purple_100">#F0DCFE</color>
+    <color name="purple_200">#E5C4FC</color>
+    <color name="purple_300">#CE95F8</color>
+    <color name="purple_400">#B66EF0</color>
+    <color name="purple_500">#9D50E5</color>
+    <color name="purple_600">#823AD5</color>
+    <color name="purple_700">#662AC0</color>
+    <color name="purple_800">#4C1FA7</color>
+    <color name="purple_900">#37188C</color>
+
+    <color name="pink_50">#FFF2FC</color>
+    <color name="pink_100">#FECFF2</color>
+    <color name="pink_200">#FCADE9</color>
+    <color name="pink_300">#F76DD9</color>
+    <color name="pink_400">#EF39CC</color>
+    <color name="pink_500">#E413C3</color>
+    <color name="pink_600">#D300BE</color>
+    <color name="pink_700">#BD00B8</color>
+    <color name="pink_800">#9C00A3</color>
+    <color name="pink_900">#64009A</color>
+
+    <!-- GDS component support -->
+    <color name="cta">#0028AC</color>
+    <color name="gds_thumbnail_black_04">#0a000000</color>
+    <color name="transparent">#00000000</color>
 </resources>
