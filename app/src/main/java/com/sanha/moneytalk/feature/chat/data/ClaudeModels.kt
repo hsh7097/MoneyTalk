@@ -4,10 +4,22 @@ import com.google.gson.annotations.SerializedName
 
 // Request
 data class ClaudeRequest(
-    val model: String = "claude-3-haiku-20240307",
+    val model: String = "claude-3-5-haiku-20241022",
     @SerializedName("max_tokens")
     val maxTokens: Int = 1024,
+    val system: String? = null,
     val messages: List<ClaudeMessage>
+)
+
+// Error Response
+data class ClaudeErrorResponse(
+    val type: String?,
+    val error: ClaudeError?
+)
+
+data class ClaudeError(
+    val type: String?,
+    val message: String?
 )
 
 data class ClaudeMessage(
