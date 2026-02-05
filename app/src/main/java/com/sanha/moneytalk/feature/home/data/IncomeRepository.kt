@@ -27,6 +27,12 @@ class IncomeRepository @Inject constructor(
 
     suspend fun getIncomeById(id: Long): IncomeEntity? = incomeDao.getIncomeById(id)
 
+    suspend fun getIncomeBySmsId(smsId: String): IncomeEntity? = incomeDao.getIncomeBySmsId(smsId)
+
+    suspend fun existsBySmsId(smsId: String): Boolean = incomeDao.getIncomeBySmsId(smsId) != null
+
+    suspend fun getAllSmsIds(): List<String> = incomeDao.getAllSmsIds()
+
     suspend fun getTotalIncomeByDateRange(startTime: Long, endTime: Long): Int =
         incomeDao.getTotalIncomeByDateRange(startTime, endTime) ?: 0
 

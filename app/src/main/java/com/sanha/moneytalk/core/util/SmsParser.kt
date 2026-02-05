@@ -91,6 +91,19 @@ object SmsParser {
         "결제", "승인", "사용", "출금", "이용"
     )
 
+    /** 수입 관련 키워드 (입금 문자 판별용) */
+    private val incomeKeywords = listOf(
+        "입금", "이체입금", "급여", "월급", "보너스", "상여",
+        "환급", "정산", "송금", "받으셨습니다", "입금되었습니다",
+        "자동이체입금", "무통장입금", "계좌입금"
+    )
+
+    /** 수입 제외 키워드 (자동이체 출금 등 제외) */
+    private val incomeExcludeKeywords = listOf(
+        "자동이체출금", "출금예정", "결제예정", "납부",
+        "보험료", "카드대금", "통신료", "공과금"
+    )
+
     /** 제외할 키워드 (광고/안내 문자 필터링용) */
     private val excludeKeywords = listOf(
         "광고", "[광고]", "(광고)",
@@ -294,6 +307,106 @@ object SmsParser {
     }
 
     /**
+     * 수입(입금) 문자인지 판별
+     *
+     * 다음 조건을 만족하면 수입 문자로 판별:
+     * 1. 제외 키워드(광고 등)가 없음
+     * 2. 은행 키워드가 있음
+     * 3. 입금 관련 키워드가 있음
+     * 4. 금액 패턴이 있음
+     * 5. 출금/결제 관련 키워드가 없음 (수입 제외 키워드 체크)
+     *
+     * @param message SMS 본문
+     * @return 수입 문자이면 true
+     */
+    fun isIncomeSms(message: String): Boolean {
+        // 광고 등 제외 키워드가 있으면 false
+        if (excludeKeywords.any { message.contains(it) }) {
+            return false
+        }
+
+        // 수입 제외 키워드가 있으면 false (자동이체 출금 등)
+        if (incomeExcludeKeywords.any { message.contains(it) }) {
+            return false
+        }
+
+        // 은행 키워드 확인
+        val hasBankKeyword = cardKeywords.any { message.contains(it) }
+
+        // 입금 관련 키워드 확인
+        val hasIncomeKeyword = incomeKeywords.any { message.contains(it) }
+
+        // 금액 패턴 확인
+        val amountPatternWithWon = Regex("""[\d,]+원""")
+        val amountPatternNumberOnly = Regex("""\n[\d,]{3,}\n""")
+        val hasAmount = amountPatternWithWon.containsMatchIn(message) || amountPatternNumberOnly.containsMatchIn(message)
+
+        // 지출(결제) 관련 키워드가 있으면 수입으로 판단하지 않음
+        val hasPaymentKeyword = paymentKeywords.any { message.contains(it) }
+
+        val isIncome = hasBankKeyword && hasIncomeKeyword && hasAmount && !hasPaymentKeyword
+        if (isIncome) {
+            Log.d("SmsParser", "수입 SMS 감지: ${message.take(50)}...")
+        }
+
+        return isIncome
+    }
+
+    /**
+     * 수입 SMS에서 금액 추출
+     *
+     * @param message SMS 본문
+     * @return 입금 금액 (추출 실패 시 0)
+     */
+    fun extractIncomeAmount(message: String): Int {
+        // 일반 금액 추출 로직 재사용
+        return extractAmount(message) ?: 0
+    }
+
+    /**
+     * 수입 SMS에서 입금 유형 추출
+     *
+     * @param message SMS 본문
+     * @return 입금 유형 (급여, 이체, 환급 등)
+     */
+    fun extractIncomeType(message: String): String {
+        return when {
+            message.contains("급여") || message.contains("월급") -> "급여"
+            message.contains("보너스") || message.contains("상여") -> "보너스"
+            message.contains("환급") -> "환급"
+            message.contains("정산") -> "정산"
+            message.contains("이체") -> "이체"
+            message.contains("송금") -> "송금"
+            else -> "입금"
+        }
+    }
+
+    /**
+     * 수입 SMS에서 송금인/출처 추출
+     *
+     * @param message SMS 본문
+     * @return 송금인/출처 (추출 실패 시 빈 문자열)
+     */
+    fun extractIncomeSource(message: String): String {
+        // 패턴 1: "OOO님으로부터" 또는 "OOO으로부터"
+        val fromPattern = Regex("""([가-힣a-zA-Z0-9]+)(님)?으?로부터""")
+        fromPattern.find(message)?.let {
+            return it.groupValues[1]
+        }
+
+        // 패턴 2: "입금 OOO" 또는 "OOO 입금"
+        val depositPattern = Regex("""입금\s*([가-힣a-zA-Z0-9]{2,10})|([가-힣a-zA-Z0-9]{2,10})\s*입금""")
+        depositPattern.find(message)?.let {
+            val source = it.groupValues[1].ifEmpty { it.groupValues[2] }
+            if (source.isNotBlank() && !incomeKeywords.any { keyword -> source == keyword }) {
+                return source
+            }
+        }
+
+        return ""
+    }
+
+    /**
      * SMS에서 카드사명 추출
      * @param message SMS 본문
      * @return 카드사명 (매칭 안 되면 "기타")
@@ -410,13 +523,28 @@ object SmsParser {
 
     /** 제외할 가게명 패턴 (URL, 발신 표시, 기타 비가게명) */
     private val excludeStorePatterns = listOf(
-        "Web발신", "web발신", "WEB발신",
+        "Web발신", "web발신", "WEB발신", "국외발신", "국제발신", "해외발신",
         "ltcard", "card.kr", ".kr", ".com", ".co.kr", "http", "www",
         "기준", "누적", "잔액", "한도", "가용",
-        "일시불", "할부", "취소", "승인", "결제", "출금", "사용",
+        "일시불", "할부", "취소", "승인", "결제", "출금", "사용", "입금", "이체",
         "체크", "신용", "님", "고객", "회원",
         "원", "건", "월", "일", "시", "분",
-        "SMS", "MMS", "안내", "알림"
+        "SMS", "MMS", "안내", "알림", "통지",
+        "민생회복", "입출통지"
+    )
+
+    /** 의미 없는 가게명 패턴 (랜덤 코드, 날짜 형식 등) */
+    private val invalidStorePatterns = listOf(
+        // KB] 날짜시간 형식 (예: KB]08/07 11:28)
+        Regex("""^KB\]\d{2}/\d{2}\s+\d{2}:\d{2}$"""),
+        // 랜덤 문자열 (영문+숫자 혼합, 대소문자 혼합, 7자 이하)
+        Regex("""^[a-zA-Z0-9]{5,8}$"""),
+        // 숫자로 끝나는 보험/금융 코드 (예: 삼성화08003, 현대해08036, 메리츠080071)
+        Regex("""^.{2,4}(화|해|츠)\d{5,6}$"""),
+        // 카드번호 형식 (예: 롯데카드2508)
+        Regex("""^.+카드\d{4}$"""),
+        // 월 입출통지 형식 (예: 07월입출통지)
+        Regex("""^\d{2}월.+$""")
     )
 
     /**
@@ -550,6 +678,7 @@ object SmsParser {
      * - 숫자로만 구성되지 않음
      * - 날짜/시간 패턴이 아님
      * - 제외 패턴에 해당하지 않음
+     * - 의미 없는 패턴(랜덤 코드, 보험/금융 코드 등)이 아님
      */
     private fun isValidStoreName(name: String): Boolean {
         if (name.isBlank() || name.length < 2) return false
@@ -564,6 +693,14 @@ object SmsParser {
         // 제외 패턴에 해당하는 경우 제외
         for (pattern in excludeStorePatterns) {
             if (name.equals(pattern, ignoreCase = true) || name.contains(pattern, ignoreCase = true)) {
+                return false
+            }
+        }
+
+        // 의미 없는 패턴에 해당하는 경우 제외
+        for (pattern in invalidStorePatterns) {
+            if (pattern.matches(name)) {
+                Log.d("SmsParser", "의미 없는 가게명 패턴 제외: $name")
                 return false
             }
         }

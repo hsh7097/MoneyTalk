@@ -260,16 +260,61 @@ class HomeViewModel @Inject constructor(
                     }
                 }
 
+                // 수입 SMS 동기화
+                var incomeCount = 0
+                val incomeSmsList = if (lastSyncTime > 0) {
+                    smsReader.readIncomeSmsByDateRange(contentResolver, lastSyncTime, currentTime)
+                } else {
+                    smsReader.readAllIncomeSms(contentResolver)
+                }
+
+                for (sms in incomeSmsList) {
+                    // 이미 처리된 문자인지 확인
+                    if (incomeRepository.existsBySmsId(sms.id)) {
+                        continue
+                    }
+
+                    // 수입 정보 파싱
+                    val amount = SmsParser.extractIncomeAmount(sms.body)
+                    val incomeType = SmsParser.extractIncomeType(sms.body)
+                    val source = SmsParser.extractIncomeSource(sms.body)
+                    val dateTime = SmsParser.extractDateTime(sms.body, sms.date)
+
+                    // 금액이 0보다 큰 경우에만 저장
+                    if (amount > 0) {
+                        val income = com.sanha.moneytalk.core.database.entity.IncomeEntity(
+                            smsId = sms.id,
+                            amount = amount,
+                            type = incomeType,
+                            source = source,
+                            description = if (source.isNotBlank()) "${source}에서 $incomeType" else incomeType,
+                            isRecurring = incomeType == "급여",
+                            dateTime = DateUtils.parseDateTime(dateTime),
+                            originalSms = sms.body
+                        )
+                        incomeRepository.insert(income)
+                        incomeCount++
+                    }
+                }
+
                 // 마지막 동기화 시간 저장
                 settingsDataStore.saveLastSyncTime(currentTime)
 
                 // 데이터 새로고침
                 loadData()
 
+                // 결과 메시지 생성
+                val resultMessage = when {
+                    newCount > 0 && incomeCount > 0 -> "${newCount}건의 지출, ${incomeCount}건의 수입이 추가되었습니다"
+                    newCount > 0 -> "${newCount}건의 새 지출이 추가되었습니다"
+                    incomeCount > 0 -> "${incomeCount}건의 새 수입이 추가되었습니다"
+                    else -> "새로운 내역이 없습니다"
+                }
+
                 _uiState.update {
                     it.copy(
                         isSyncing = false,
-                        errorMessage = if (newCount > 0) "${newCount}건의 새 지출이 추가되었습니다" else "새로운 지출이 없습니다"
+                        errorMessage = resultMessage
                     )
                 }
             } catch (e: Exception) {

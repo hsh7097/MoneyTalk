@@ -25,6 +25,12 @@ interface IncomeDao {
     @Query("SELECT * FROM incomes WHERE id = :id")
     suspend fun getIncomeById(id: Long): IncomeEntity?
 
+    @Query("SELECT * FROM incomes WHERE smsId = :smsId LIMIT 1")
+    suspend fun getIncomeBySmsId(smsId: String): IncomeEntity?
+
+    @Query("SELECT smsId FROM incomes WHERE smsId IS NOT NULL")
+    suspend fun getAllSmsIds(): List<String>
+
     @Query("SELECT * FROM incomes WHERE isRecurring = 1")
     fun getRecurringIncomes(): Flow<List<IncomeEntity>>
 
