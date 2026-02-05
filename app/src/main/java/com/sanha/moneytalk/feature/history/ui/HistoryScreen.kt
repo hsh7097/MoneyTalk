@@ -139,7 +139,10 @@ fun HistoryScreen(
                 ExpenseListView(
                     expenses = uiState.expenses,
                     isLoading = uiState.isLoading,
-                    onDelete = { viewModel.deleteExpense(it) }
+                    onDelete = { viewModel.deleteExpense(it) },
+                    onCategoryChange = { expense, newCategory ->
+                        viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
+                    }
                 )
             }
             ViewMode.CALENDAR -> {
@@ -424,7 +427,8 @@ fun ViewToggleRow(
 fun ExpenseListView(
     expenses: List<ExpenseEntity>,
     isLoading: Boolean,
-    onDelete: (ExpenseEntity) -> Unit
+    onDelete: (ExpenseEntity) -> Unit,
+    onCategoryChange: (ExpenseEntity, String) -> Unit = { _, _ -> }
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
@@ -541,12 +545,16 @@ fun ExpenseListView(
         }
     }
 
-    // 지출 상세 다이얼로그 (삭제 기능 포함)
+    // 지출 상세 다이얼로그 (삭제 및 카테고리 변경 기능 포함)
     selectedExpense?.let { expense ->
         ExpenseDetailDialog(
             expense = expense,
             onDismiss = { selectedExpense = null },
-            onDelete = { onDelete(expense) }
+            onDelete = { onDelete(expense) },
+            onCategoryChange = { newCategory ->
+                onCategoryChange(expense, newCategory)
+                selectedExpense = null
+            }
         )
     }
 }

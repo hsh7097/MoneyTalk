@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.dao.DailySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.core.util.DateUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -31,7 +32,8 @@ data class HistoryUiState(
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val categoryClassifierService: CategoryClassifierService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HistoryUiState())
@@ -157,5 +159,20 @@ class HistoryViewModel @Inject constructor(
 
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    /**
+     * 특정 지출의 카테고리 변경
+     * Room 매핑도 함께 업데이트하여 동일 가게명에 대해 학습
+     */
+    fun updateExpenseCategory(expenseId: Long, storeName: String, newCategory: String) {
+        viewModelScope.launch {
+            try {
+                categoryClassifierService.updateExpenseCategory(expenseId, storeName, newCategory)
+                loadExpenses() // 화면 새로고침
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "카테고리 변경 실패: ${e.message}") }
+            }
+        }
     }
 }

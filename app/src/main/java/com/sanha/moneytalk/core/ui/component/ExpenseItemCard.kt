@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.core.ui.component
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -9,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -45,7 +47,18 @@ fun ExpenseItemCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable {
+                Log.e("sanhakb", "=== 아이템 클릭 ===")
+                Log.e("sanhakb", "ID: ${expense.id}")
+                Log.e("sanhakb", "가게명(storeName): ${expense.storeName}")
+                Log.e("sanhakb", "금액: ${expense.amount}")
+                Log.e("sanhakb", "카테고리: ${expense.category}")
+                Log.e("sanhakb", "카드: ${expense.cardName}")
+                Log.e("sanhakb", "날짜: ${DateUtils.formatDisplayDateTime(expense.dateTime)}")
+                Log.e("sanhakb", "원본SMS: ${expense.originalSms}")
+                Log.e("sanhakb", "==================")
+                onClick()
+            }
             .padding(vertical = 12.dp, horizontal = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -103,16 +116,23 @@ fun ExpenseItemCard(
 /**
  * 지출 상세 다이얼로그
  * 홈 화면과 내역 화면에서 공통 사용
+ *
+ * @param expense 지출 정보
+ * @param onDismiss 다이얼로그 닫기
+ * @param onDelete 삭제 콜백 (null이면 삭제 버튼 숨김)
+ * @param onCategoryChange 카테고리 변경 콜백 (null이면 수정 불가)
  */
 @Composable
 fun ExpenseDetailDialog(
     expense: ExpenseEntity,
     onDismiss: () -> Unit,
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    onCategoryChange: ((String) -> Unit)? = null
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     val category = Category.fromDisplayName(expense.category)
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showCategoryPicker by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -140,11 +160,46 @@ fun ExpenseDetailDialog(
                     value = "-${numberFormat.format(expense.amount)}원"
                 )
 
-                // 카테고리
-                DetailRow(
-                    label = stringResource(R.string.detail_category),
-                    value = "${category.emoji} ${category.displayName}"
-                )
+                // 카테고리 (수정 가능하면 클릭 가능)
+                if (onCategoryChange != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { showCategoryPicker = true }
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.detail_category),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "${category.emoji} ${category.displayName}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "카테고리 변경",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                } else {
+                    DetailRow(
+                        label = stringResource(R.string.detail_category),
+                        value = "${category.emoji} ${category.displayName}"
+                    )
+                }
 
                 // 카드
                 DetailRow(
@@ -223,6 +278,18 @@ fun ExpenseDetailDialog(
         } else null
     )
 
+    // 카테고리 선택 다이얼로그
+    if (showCategoryPicker && onCategoryChange != null) {
+        CategoryPickerDialog(
+            currentCategory = expense.category,
+            onDismiss = { showCategoryPicker = false },
+            onCategorySelected = { newCategory ->
+                onCategoryChange(newCategory)
+                showCategoryPicker = false
+            }
+        )
+    }
+
     // 삭제 확인 다이얼로그
     if (showDeleteConfirm && onDelete != null) {
         AlertDialog(
@@ -247,6 +314,72 @@ fun ExpenseDetailDialog(
             }
         )
     }
+}
+
+/**
+ * 카테고리 선택 다이얼로그
+ */
+@Composable
+fun CategoryPickerDialog(
+    currentCategory: String,
+    onDismiss: () -> Unit,
+    onCategorySelected: (String) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("카테고리 선택") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Category.entries.forEach { category ->
+                    val isSelected = category.displayName == currentCategory
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onCategorySelected(category.displayName) },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSelected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surface
+                            }
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = category.emoji,
+                                fontSize = 24.sp
+                            )
+                            Text(
+                                text = category.displayName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        }
+    )
 }
 
 @Composable

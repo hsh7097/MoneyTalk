@@ -7,6 +7,7 @@ import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.feature.chat.data.ClaudeRepository
+import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.core.util.DateUtils
@@ -37,6 +38,7 @@ class HomeViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val claudeRepository: ClaudeRepository,
+    private val categoryClassifierService: CategoryClassifierService,
     private val smsReader: SmsReader,
     private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
@@ -97,8 +99,9 @@ class HomeViewModel @Inject constructor(
                 // 카테고리별 지출
                 val categoryExpenses = expenseRepository.getExpenseSumByCategory(monthStart, monthEnd)
 
-                // 최근 지출 20건
-                val recentExpenses = expenseRepository.getRecentExpenses(20)
+                // 해당 기간 지출 내역 (전체)
+                val recentExpenses = expenseRepository.getExpensesByDateRangeOnce(monthStart, monthEnd)
+                    .sortedByDescending { it.dateTime }
 
                 _uiState.update {
                     it.copy(
@@ -188,10 +191,16 @@ class HomeViewModel @Inject constructor(
 
                     // 금액이 0보다 큰 경우에만 저장
                     if (analysis.amount > 0) {
+                        // Room DB에서 카테고리 조회 (저장된 매핑 우선 사용)
+                        val category = categoryClassifierService.getCategory(
+                            storeName = analysis.storeName,
+                            originalSms = sms.body
+                        )
+
                         val expense = ExpenseEntity(
                             amount = analysis.amount,
                             storeName = analysis.storeName,
-                            category = analysis.category,
+                            category = category,
                             cardName = analysis.cardName,
                             dateTime = DateUtils.parseDateTime(analysis.dateTime),
                             originalSms = sms.body,
@@ -243,5 +252,57 @@ class HomeViewModel @Inject constructor(
 
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    /**
+     * 미분류 항목을 Gemini로 일괄 분류
+     */
+    fun classifyUnclassifiedExpenses(onResult: (Int) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val count = categoryClassifierService.classifyUnclassifiedExpenses()
+                if (count > 0) {
+                    loadData()
+                }
+                onResult(count)
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "분류 실패: ${e.message}")
+                onResult(0)
+            }
+        }
+    }
+
+    /**
+     * 미분류 항목 수 조회
+     */
+    fun getUnclassifiedCount(onResult: (Int) -> Unit) {
+        viewModelScope.launch {
+            val count = categoryClassifierService.getUnclassifiedCount()
+            onResult(count)
+        }
+    }
+
+    /**
+     * Gemini API 키 존재 여부 확인
+     */
+    fun hasGeminiApiKey(callback: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            callback(categoryClassifierService.hasGeminiApiKey())
+        }
+    }
+
+    /**
+     * 특정 지출의 카테고리 변경
+     * Room 매핑도 함께 업데이트하여 동일 가게명에 대해 학습
+     */
+    fun updateExpenseCategory(expenseId: Long, storeName: String, newCategory: String) {
+        viewModelScope.launch {
+            try {
+                categoryClassifierService.updateExpenseCategory(expenseId, storeName, newCategory)
+                loadData() // 화면 새로고침
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "카테고리 변경 실패: ${e.message}")
+            }
+        }
     }
 }

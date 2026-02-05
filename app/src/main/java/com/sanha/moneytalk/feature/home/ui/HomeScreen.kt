@@ -128,7 +128,15 @@ fun HomeScreen(
         ExpenseDetailDialog(
             expense = expense,
             onDismiss = { selectedExpense = null },
-            onDelete = null  // 홈에서는 삭제 기능 없음
+            onDelete = null,  // 홈에서는 삭제 기능 없음
+            onCategoryChange = { newCategory ->
+                viewModel.updateExpenseCategory(
+                    expenseId = expense.id,
+                    storeName = expense.storeName,
+                    newCategory = newCategory
+                )
+                selectedExpense = null
+            }
         )
     }
 
