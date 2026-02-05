@@ -1,12 +1,16 @@
 package com.sanha.moneytalk.feature.home.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
@@ -35,6 +39,9 @@ fun HomeScreen(
     val context = LocalContext.current
     val contentResolver = context.contentResolver
     val uiState by viewModel.uiState.collectAsState()
+
+    // 선택된 지출 항목 (상세보기용)
+    var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
 
     // 앱 시작 시 자동 동기화
     LaunchedEffect(autoSyncOnStart) {
@@ -97,9 +104,20 @@ fun HomeScreen(
             }
         } else {
             items(uiState.recentExpenses) { expense ->
-                ExpenseItem(expense = expense)
+                ExpenseItem(
+                    expense = expense,
+                    onClick = { selectedExpense = expense }
+                )
             }
         }
+    }
+
+    // 지출 상세 다이얼로그
+    selectedExpense?.let { expense ->
+        ExpenseDetailDialog(
+            expense = expense,
+            onDismiss = { selectedExpense = null }
+        )
     }
 
     // 에러 메시지 스낵바
@@ -337,12 +355,17 @@ fun CategoryExpenseCard(
 }
 
 @Composable
-fun ExpenseItem(expense: ExpenseEntity) {
+fun ExpenseItem(
+    expense: ExpenseEntity,
+    onClick: () -> Unit = {}
+) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     val category = Category.fromDisplayName(expense.category)
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(
@@ -380,6 +403,114 @@ fun ExpenseItem(expense: ExpenseEntity) {
                 color = MaterialTheme.colorScheme.error
             )
         }
+    }
+}
+
+@Composable
+fun ExpenseDetailDialog(
+    expense: ExpenseEntity,
+    onDismiss: () -> Unit
+) {
+    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val category = Category.fromDisplayName(expense.category)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Text(
+                text = category.emoji,
+                style = MaterialTheme.typography.displaySmall
+            )
+        },
+        title = {
+            Text(
+                text = expense.storeName,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // 금액
+                DetailRow(label = "금액", value = "-${numberFormat.format(expense.amount)}원")
+
+                // 카테고리
+                DetailRow(label = "카테고리", value = "${category.emoji} ${category.displayName}")
+
+                // 카드
+                DetailRow(label = "카드", value = expense.cardName)
+
+                // 결제 시간
+                DetailRow(label = "결제 시간", value = DateUtils.formatDisplayDateTime(expense.dateTime))
+
+                // 메모
+                expense.memo?.let { memo ->
+                    if (memo.isNotBlank()) {
+                        DetailRow(label = "메모", value = memo)
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // 원본 문자
+                Text(
+                    text = "원본 문자",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sms,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = expense.originalSms,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("닫기")
+            }
+        }
+    )
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 

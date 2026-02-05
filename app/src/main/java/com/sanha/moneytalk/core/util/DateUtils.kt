@@ -9,6 +9,7 @@ object DateUtils {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
     private val yearMonthFormat = SimpleDateFormat("yyyy-MM", Locale.KOREA)
     private val displayDateFormat = SimpleDateFormat("M월 d일 (E)", Locale.KOREA)
+    private val displayDateTimeFormat = SimpleDateFormat("M월 d일 (E) HH:mm", Locale.KOREA)
     private val displayTimeFormat = SimpleDateFormat("HH:mm", Locale.KOREA)
 
     /**
@@ -23,6 +24,13 @@ object DateUtils {
      */
     fun formatDisplayDate(timestamp: Long): String {
         return displayDateFormat.format(Date(timestamp))
+    }
+
+    /**
+     * timestamp를 "M월 d일 (E) HH:mm" 형식으로 변환
+     */
+    fun formatDisplayDateTime(timestamp: Long): String {
+        return displayDateTimeFormat.format(Date(timestamp))
     }
 
     /**
