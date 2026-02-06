@@ -21,11 +21,13 @@
 |------|------|
 | 언어 | Kotlin |
 | UI | Jetpack Compose + Material Design 3 |
-| 로컬 DB | Room |
+| 로컬 DB | Room (moneytalk_v4.db) |
 | DI | Hilt |
-| 네트워크 | Retrofit + OkHttp |
+| 네트워크 | OkHttp (Embedding REST API) |
 | 비동기 | Coroutines + Flow |
-| AI | Claude API (Anthropic) |
+| AI (채팅/분류) | Gemini 2.5 Flash (Google AI SDK) |
+| AI (SMS 추출) | Gemini 2.5 Flash Lite |
+| AI (임베딩) | Gemini gemini-embedding-001 (벡터 유사도) |
 | 아키텍처 | MVVM + Clean Architecture |
 
 ---
@@ -38,15 +40,25 @@
 - 카드사 문자 자동 필터링 (KB, 신한, 삼성 등)
 - 중복 처리 방지 (smsId 기반)
 
-### 2.2 AI 분석 (Claude)
-- 문자에서 금액, 가게명, 날짜 자동 추출
-- 카테고리 자동 분류 (식비, 교통, 쇼핑 등)
-- 소비 패턴 분석
+### 2.2 3-Tier 하이브리드 SMS 분류
+- **Tier 1 (Regex)**: 정규식으로 빠르게 분류 (비용 0)
+- **Tier 2 (Vector)**: 임베딩 벡터 유사도로 패턴 매칭
+- **Tier 3 (LLM)**: Gemini로 비표준 SMS 추출
+- 자가 학습: 성공 결과를 벡터 DB에 축적
+- 대량 배치 처리: 그룹핑 + 대표 샘플링으로 LLM 호출 최소화
+- 상세: [SMS_PARSING.md](./SMS_PARSING.md)
 
-### 2.3 AI 재무 상담
-- 자연어로 질문 가능
-- 내 재무 데이터 기반 맞춤 조언
-- 예: "이번 달 커피값 얼마야?", "식비 줄이려면?"
+### 2.3 카테고리 자동 분류 (4-Tier)
+- Tier 1: Room 매핑 캐시 → Tier 1.5: 벡터 유사도 → Tier 2: 로컬 키워드 → Tier 3: Gemini 배치
+- 시맨틱 그룹핑으로 Gemini 호출 ~40% 절감
+- 자가 학습: 사용자 수정 → 유사 가게 자동 전파
+- 상세: [CATEGORY_CLASSIFICATION.md](./CATEGORY_CLASSIFICATION.md)
+
+### 2.4 AI 재무 상담 (Gemini)
+- 2-Phase 처리: 쿼리 분석 → 데이터 조회 → 답변 생성
+- Rolling Summary로 긴 대화 맥락 유지
+- 자연어로 데이터 조회 및 카테고리 변경 가능
+- 상세: [CHAT_SYSTEM.md](./CHAT_SYSTEM.md)
 
 ### 2.4 수입/예산 관리
 - 월 수입 등록
@@ -191,18 +203,19 @@ enum class Category(val emoji: String, val displayName: String) {
 
 ## 6. API 연동
 
-### Claude API
-- **Base URL**: `https://api.anthropic.com/`
-- **Endpoint**: `POST /v1/messages`
-- **Model**: `claude-3-haiku-20240307` (비용 효율적)
-- **API Key 저장 방식**:
-  1. `local.properties`에 기본값 설정 → BuildConfig로 빌드 시 포함
-  2. DataStore로 영구 저장 (사용자가 앱 내에서 변경 가능)
-  3. 우선순위: DataStore > BuildConfig
+### Gemini API (Google AI)
+- **SDK**: `com.google.ai.client.generativeai` (Android SDK)
+- **채팅 모델**: `gemini-2.5-flash` (쿼리 분석, 상담, 요약)
+- **SMS 추출 모델**: `gemini-2.5-flash-lite` (결제 정보 JSON 추출)
+- **임베딩 모델**: `gemini-embedding-001` (REST API, OkHttp 직접 호출)
+- **API Key 저장**: DataStore 영구 저장 (설정 화면에서 입력)
 
-### 프롬프트 템플릿
-1. **문자 분석**: 카드 문자 → JSON (금액, 가게, 카테고리)
-2. **재무 상담**: 사용자 질문 + 재무 데이터 → 맞춤 조언
+### Gemini 사용 용도
+1. **SMS 결제 정보 추출**: 비표준 SMS → JSON (금액, 가게명, 카드사, 카테고리)
+2. **재무 상담**: 2-Phase 처리 (쿼리 분석 + 데이터 기반 답변)
+3. **Rolling Summary**: 긴 대화의 과거 내용 요약
+4. **카테고리 분류**: 미분류 가게명 일괄 AI 분류
+5. **임베딩 생성**: SMS 벡터 유사도 검색용 768차원 벡터
 
 ---
 
@@ -280,4 +293,4 @@ C:\Users\hsh70\OneDrive\문서\Android\MoneyTalk\docs\PROJECT_CONTEXT.md
 
 ---
 
-*마지막 업데이트: 2026-02-05*
+*마지막 업데이트: 2026-02-07*
