@@ -14,7 +14,8 @@ enum class Category(val emoji: String, val displayName: String) {
     HOUSING("🏢", "주거"),
     LIVING("🏠", "생활"),
     EVENTS("🎁", "경조"),
-    ETC("📦", "기타");
+    ETC("📦", "기타"),
+    UNCLASSIFIED("❓", "미분류");
 
     companion object {
         fun fromDisplayName(name: String): Category {
@@ -24,5 +25,9 @@ enum class Category(val emoji: String, val displayName: String) {
         fun fromName(name: String): Category {
             return entries.find { it.name == name } ?: ETC
         }
+
+        /** 분류용 카테고리 목록 (미분류 제외) */
+        val classifiableEntries: List<Category>
+            get() = entries.filter { it != UNCLASSIFIED }
     }
 }

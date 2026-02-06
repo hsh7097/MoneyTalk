@@ -780,7 +780,7 @@ object SmsParser {
      *
      * @param storeName 가게명
      * @param message SMS 본문 (추가 키워드 탐색용)
-     * @return 매칭된 카테고리 (없으면 "기타")
+     * @return 매칭된 카테고리 (없으면 "미분류")
      */
     fun inferCategory(storeName: String, message: String): String {
         val combinedText = "$storeName $message".lowercase()
@@ -793,6 +793,6 @@ object SmsParser {
             }
         }
 
-        return "기타"
+        return "미분류"
     }
 }

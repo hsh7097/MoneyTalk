@@ -74,6 +74,10 @@ interface ExpenseDao {
     @Query("SELECT EXISTS(SELECT 1 FROM expenses WHERE smsId = :smsId)")
     suspend fun existsBySmsId(smsId: String): Boolean
 
+    /** 모든 smsId 목록 조회 (배치 중복 체크용 인메모리 Set 구성) */
+    @Query("SELECT smsId FROM expenses")
+    suspend fun getAllSmsIds(): List<String>
+
     // 카드사별 필터링
     @Query("SELECT * FROM expenses WHERE cardName = :cardName ORDER BY dateTime DESC")
     fun getExpensesByCardName(cardName: String): Flow<List<ExpenseEntity>>
@@ -130,8 +134,8 @@ interface ExpenseDao {
     @Query("SELECT SUM(amount) FROM expenses WHERE storeName = :storeName AND dateTime BETWEEN :startTime AND :endTime")
     suspend fun getTotalExpenseByStoreName(storeName: String, startTime: Long, endTime: Long): Int?
 
-    // 미분류(기타) 항목 조회
-    @Query("SELECT * FROM expenses WHERE category = '기타' ORDER BY dateTime DESC LIMIT :limit")
+    // 미분류 항목 조회
+    @Query("SELECT * FROM expenses WHERE category = '미분류' ORDER BY dateTime DESC LIMIT :limit")
     suspend fun getUncategorizedExpenses(limit: Int): List<ExpenseEntity>
 
     // 가게명으로 카테고리 일괄 변경

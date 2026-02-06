@@ -31,6 +31,11 @@ class SmsEmbeddingService @Inject constructor(
         private const val TAG = "SmsEmbedding"
         private const val EMBEDDING_MODEL = "gemini-embedding-001"
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+
+        /** 429 Rate Limit 재시도 최대 횟수 */
+        private const val MAX_RETRIES = 3
+        /** 초기 재시도 대기 시간 (ms) - 지수 백오프: 2s, 4s */
+        private const val INITIAL_RETRY_DELAY_MS = 2000L
     }
 
     private val client = OkHttpClient.Builder()
@@ -128,6 +133,7 @@ class SmsEmbeddingService @Inject constructor(
 
     /**
      * 배치 임베딩 생성 (여러 텍스트를 한번에)
+     * 429 Rate Limit 발생 시 지수 백오프로 최대 3회 재시도합니다.
      *
      * @param texts 임베딩할 텍스트 목록
      * @return 각 텍스트의 임베딩 벡터 목록, 실패한 항목은 null
@@ -154,37 +160,64 @@ class SmsEmbeddingService @Inject constructor(
             val requestBody = mapOf("requests" to requests)
             val jsonBody = gson.toJson(requestBody)
 
-            val request = Request.Builder()
-                .url(url)
-                .post(jsonBody.toRequestBody("application/json".toMediaType()))
-                .build()
-
             Log.d(TAG, "배치 임베딩 요청: ${texts.size}개")
 
-            val response = client.newCall(request).execute()
-            val responseBody = response.body?.string()
+            // 429 Rate Limit 재시도 (지수 백오프)
+            // Quota 초과("exceeded your current quota")는 재시도 불가 → 즉시 실패
+            var lastError: String? = null
+            for (attempt in 0 until MAX_RETRIES) {
+                if (attempt > 0) {
+                    val delayMs = INITIAL_RETRY_DELAY_MS * (1L shl (attempt - 1)) // 2s, 4s
+                    Log.w(TAG, "429 재시도 ${attempt}/${MAX_RETRIES - 1}, ${delayMs}ms 대기...")
+                    kotlinx.coroutines.delay(delayMs)
+                }
 
-            if (!response.isSuccessful) {
-                Log.e(TAG, "배치 임베딩 API 실패: ${response.code} - ${responseBody?.take(200)}")
-                return@withContext texts.map { null }
+                val request = Request.Builder()
+                    .url(url)
+                    .post(jsonBody.toRequestBody("application/json".toMediaType()))
+                    .build()
+
+                val response = client.newCall(request).execute()
+                val responseBody = response.body?.string()
+
+                if (response.code == 429) {
+                    lastError = responseBody?.take(300)
+                    // Quota 초과 vs Rate Limit 구분
+                    val isQuotaExceeded = responseBody?.contains("exceeded your current quota") == true
+                    if (isQuotaExceeded) {
+                        Log.e(TAG, "임베딩 일일 할당량(Quota) 초과 - 재시도 불가. 플랜/결제 확인 필요")
+                        return@withContext texts.map { null }
+                    }
+                    Log.w(TAG, "배치 임베딩 429 Rate Limit (시도 ${attempt + 1}/$MAX_RETRIES)")
+                    continue // Rate Limit은 재시도
+                }
+
+                if (!response.isSuccessful) {
+                    Log.e(TAG, "배치 임베딩 API 실패: ${response.code} - ${responseBody?.take(200)}")
+                    return@withContext texts.map { null }
+                }
+
+                if (responseBody == null) {
+                    return@withContext texts.map { null }
+                }
+
+                // JSON 파싱: { "embeddings": [{ "values": [...] }, ...] }
+                val json = JsonParser.parseString(responseBody).asJsonObject
+                val embeddings = json.getAsJsonArray("embeddings")
+
+                val result = embeddings.map { embeddingElement ->
+                    val embeddingObj = embeddingElement.asJsonObject
+                    val values = embeddingObj.getAsJsonArray("values")
+                    values.map { it.asFloat }
+                }
+
+                Log.d(TAG, "배치 임베딩 성공: ${result.size}개")
+                return@withContext result
             }
 
-            if (responseBody == null) {
-                return@withContext texts.map { null }
-            }
-
-            // JSON 파싱: { "embeddings": [{ "values": [...] }, ...] }
-            val json = JsonParser.parseString(responseBody).asJsonObject
-            val embeddings = json.getAsJsonArray("embeddings")
-
-            val result = embeddings.map { embeddingElement ->
-                val embeddingObj = embeddingElement.asJsonObject
-                val values = embeddingObj.getAsJsonArray("values")
-                values.map { it.asFloat }
-            }
-
-            Log.d(TAG, "배치 임베딩 성공: ${result.size}개")
-            result
+            // 모든 재시도 실패
+            Log.e(TAG, "배치 임베딩 최종 실패 (${MAX_RETRIES}회 시도): $lastError")
+            texts.map { null }
         } catch (e: Exception) {
             Log.e(TAG, "배치 임베딩 실패: ${e.message}", e)
             texts.map { null }

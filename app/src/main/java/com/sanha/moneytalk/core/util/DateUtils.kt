@@ -227,26 +227,51 @@ object DateUtils {
     fun getCustomMonthPeriod(year: Int, month: Int, monthStartDay: Int): Pair<Long, Long> {
         val calendar = Calendar.getInstance()
 
-        // 시작일 계산
-        calendar.set(Calendar.YEAR, year)
-        calendar.set(Calendar.MONTH, month - 1)
-        calendar.set(Calendar.DAY_OF_MONTH, monthStartDay.coerceAtMost(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)))
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        val startTimestamp = calendar.timeInMillis
+        if (monthStartDay == 1) {
+            // monthStartDay=1: 해당 월 1일 ~ 해당 월 말일
+            calendar.set(Calendar.YEAR, year)
+            calendar.set(Calendar.MONTH, month - 1)
+            calendar.set(Calendar.DAY_OF_MONTH, 1)
+            calendar.set(Calendar.HOUR_OF_DAY, 0)
+            calendar.set(Calendar.MINUTE, 0)
+            calendar.set(Calendar.SECOND, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+            val startTimestamp = calendar.timeInMillis
 
-        // 종료일 계산 (다음 달 시작일 전날)
-        calendar.add(Calendar.MONTH, 1)
-        calendar.set(Calendar.DAY_OF_MONTH, (monthStartDay - 1).coerceAtLeast(1).coerceAtMost(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)))
-        calendar.set(Calendar.HOUR_OF_DAY, 23)
-        calendar.set(Calendar.MINUTE, 59)
-        calendar.set(Calendar.SECOND, 59)
-        calendar.set(Calendar.MILLISECOND, 999)
-        val endTimestamp = calendar.timeInMillis
+            calendar.set(Calendar.DAY_OF_MONTH, calendar.getActualMaximum(Calendar.DAY_OF_MONTH))
+            calendar.set(Calendar.HOUR_OF_DAY, 23)
+            calendar.set(Calendar.MINUTE, 59)
+            calendar.set(Calendar.SECOND, 59)
+            calendar.set(Calendar.MILLISECOND, 999)
+            val endTimestamp = calendar.timeInMillis
 
-        return Pair(startTimestamp, endTimestamp)
+            return Pair(startTimestamp, endTimestamp)
+        } else {
+            // monthStartDay>1: 이전 달 monthStartDay ~ 이번 달 (monthStartDay-1)
+            // 예: month=1, monthStartDay=21 → 12/21 ~ 1/20
+            calendar.set(Calendar.YEAR, year)
+            calendar.set(Calendar.MONTH, month - 1)
+            // 이전 달로 이동
+            calendar.add(Calendar.MONTH, -1)
+            calendar.set(Calendar.DAY_OF_MONTH, monthStartDay.coerceAtMost(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)))
+            calendar.set(Calendar.HOUR_OF_DAY, 0)
+            calendar.set(Calendar.MINUTE, 0)
+            calendar.set(Calendar.SECOND, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+            val startTimestamp = calendar.timeInMillis
+
+            // 종료일: 이번 달 (monthStartDay - 1)
+            calendar.set(Calendar.YEAR, year)
+            calendar.set(Calendar.MONTH, month - 1)
+            calendar.set(Calendar.DAY_OF_MONTH, (monthStartDay - 1).coerceAtMost(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)))
+            calendar.set(Calendar.HOUR_OF_DAY, 23)
+            calendar.set(Calendar.MINUTE, 59)
+            calendar.set(Calendar.SECOND, 59)
+            calendar.set(Calendar.MILLISECOND, 999)
+            val endTimestamp = calendar.timeInMillis
+
+            return Pair(startTimestamp, endTimestamp)
+        }
     }
 
     /**
@@ -260,11 +285,20 @@ object DateUtils {
         val currentMonth = calendar.get(Calendar.MONTH) + 1
         val currentYear = calendar.get(Calendar.YEAR)
 
-        // 오늘이 시작일 이전이면 이전 달 기준으로 계산
-        return if (today < monthStartDay) {
-            val prevMonth = if (currentMonth == 1) 12 else currentMonth - 1
-            val prevYear = if (currentMonth == 1) currentYear - 1 else currentYear
-            getCustomMonthPeriod(prevYear, prevMonth, monthStartDay)
+        if (monthStartDay == 1) {
+            // monthStartDay=1이면 단순히 현재 월
+            return getCustomMonthPeriod(currentYear, currentMonth, monthStartDay)
+        }
+
+        // monthStartDay>1: getCustomMonthPeriod(year, month, startDay)는
+        // (month-1)의 startDay ~ month의 (startDay-1)을 반환
+        // 오늘이 startDay 이상이면 현재 기간은 다음 달 기준
+        // 예: startDay=21, today=25 → 기간은 이번달 21 ~ 다음달 20 = getCustomMonthPeriod(nextMonth)
+        // 예: startDay=21, today=7  → 기간은 지난달 21 ~ 이번달 20 = getCustomMonthPeriod(currentMonth)
+        return if (today >= monthStartDay) {
+            val nextMonth = if (currentMonth == 12) 1 else currentMonth + 1
+            val nextYear = if (currentMonth == 12) currentYear + 1 else currentYear
+            getCustomMonthPeriod(nextYear, nextMonth, monthStartDay)
         } else {
             getCustomMonthPeriod(currentYear, currentMonth, monthStartDay)
         }

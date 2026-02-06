@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.sanha.moneytalk.core.model.Category
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -94,7 +95,8 @@ private val categoryStyles = mapOf(
     "보험" to CategoryStyle("🛡️", Color(0xFF009688)),
     "미용" to CategoryStyle("💇", Color(0xFFE91E63)),
     "식비" to CategoryStyle("🍽️", Color(0xFFFF9800)),
-    "기타" to CategoryStyle("💳", Color(0xFF9E9E9E))
+    "기타" to CategoryStyle("💳", Color(0xFF9E9E9E)),
+    "미분류" to CategoryStyle("❓", Color(0xFFBDBDBD))
 )
 
 private fun getCategoryStyle(category: String): CategoryStyle {
@@ -107,7 +109,6 @@ fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
     var showAddDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -144,13 +145,36 @@ fun HistoryScreen(
                         onClose = { viewModel.exitSearchMode() }
                     )
                 } else {
-                    // 헤더
-                    Text(
-                        text = stringResource(R.string.history_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
-                    )
+                    // 헤더: 타이틀 + 검색/추가 아이콘
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 4.dp, top = 16.dp, bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.history_title),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row {
+                            IconButton(onClick = { viewModel.enterSearchMode() }) {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = stringResource(R.string.common_search),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            IconButton(onClick = { showAddDialog = true }) {
+                                Icon(
+                                    Icons.Default.Add,
+                                    contentDescription = stringResource(R.string.common_add),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                    }
 
                     // 기간 선택 및 지출/수입 요약
                     PeriodSummaryCard(
@@ -166,16 +190,15 @@ fun HistoryScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // 뷰 토글 및 필터
-                ViewToggleRow(
+                // 탭 (목록/달력) + 필터
+                FilterTabRow(
                     currentMode = viewMode,
                     onModeChange = { viewMode = it },
                     cardNames = uiState.cardNames,
                     selectedCardName = uiState.selectedCardName,
                     onCardNameSelected = { viewModel.filterByCardName(it) },
-                    onSearchClick = { viewModel.enterSearchMode() },
-                    onAddClick = { showAddDialog = true },
-                    isSearchMode = uiState.isSearchMode,
+                    selectedCategory = uiState.selectedCategory,
+                    onCategorySelected = { viewModel.filterByCategory(it) },
                     sortOrder = uiState.sortOrder,
                     onSortOrderChange = { viewModel.setSortOrder(it) }
                 )
@@ -197,7 +220,12 @@ fun HistoryScreen(
                             year = uiState.selectedYear,
                             month = uiState.selectedMonth,
                             monthStartDay = uiState.monthStartDay,
-                            dailyTotals = uiState.dailyTotals
+                            dailyTotals = uiState.dailyTotals,
+                            expenses = uiState.expenses,
+                            onDelete = { viewModel.deleteExpense(it) },
+                            onCategoryChange = { expense, newCategory ->
+                                viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
+                            }
                         )
                     }
                 }
@@ -371,22 +399,24 @@ fun PeriodSummaryCard(
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
 
-    // 기간 계산 (21일 ~ 다음달 20일 형식)
-    val startDate = if (monthStartDay > 1) {
-        String.format("%02d.%02d.%02d", year % 100, if (month == 1) 12 else month - 1, monthStartDay)
-    } else {
-        String.format("%02d.%02d.01", year % 100, month)
-    }
-
-    val endDate = if (monthStartDay > 1) {
-        String.format("%02d.%02d.%02d", year % 100, month, monthStartDay - 1)
-    } else {
-        val lastDay = when (month) {
-            2 -> if (year % 4 == 0) 29 else 28
-            4, 6, 9, 11 -> 30
-            else -> 31
-        }
-        String.format("%02d.%02d.%02d", year % 100, month, lastDay)
+    // 기간 계산 - DateUtils와 동일한 로직 사용
+    val (startDate, endDate) = remember(year, month, monthStartDay) {
+        val (startTs, endTs) = DateUtils.getCustomMonthPeriod(year, month, monthStartDay)
+        val startCal = Calendar.getInstance().apply { timeInMillis = startTs }
+        val endCal = Calendar.getInstance().apply { timeInMillis = endTs }
+        val start = String.format(
+            "%02d.%02d.%02d",
+            startCal.get(Calendar.YEAR) % 100,
+            startCal.get(Calendar.MONTH) + 1,
+            startCal.get(Calendar.DAY_OF_MONTH)
+        )
+        val end = String.format(
+            "%02d.%02d.%02d",
+            endCal.get(Calendar.YEAR) % 100,
+            endCal.get(Calendar.MONTH) + 1,
+            endCal.get(Calendar.DAY_OF_MONTH)
+        )
+        start to end
     }
 
     Column(
@@ -477,126 +507,122 @@ fun PeriodSummaryCard(
     }
 }
 
+/**
+ * 탭(목록/달력) + 필터 아이콘 통합 Row
+ *
+ * - 좌측: TabRow (목록 | 달력)
+ * - 우측: 필터 아이콘 (카드 + 카테고리 + 정렬 통합 드롭다운)
+ */
 @Composable
-fun ViewToggleRow(
+fun FilterTabRow(
     currentMode: ViewMode,
     onModeChange: (ViewMode) -> Unit,
     cardNames: List<String>,
     selectedCardName: String?,
     onCardNameSelected: (String?) -> Unit,
-    onSearchClick: () -> Unit = {},
-    onAddClick: () -> Unit = {},
-    isSearchMode: Boolean = false,
+    selectedCategory: String? = null,
+    onCategorySelected: (String?) -> Unit = {},
     sortOrder: SortOrder = SortOrder.DATE_DESC,
     onSortOrderChange: (SortOrder) -> Unit = {}
 ) {
     var showFilterMenu by remember { mutableStateOf(false) }
-    var showSortMenu by remember { mutableStateOf(false) }
+
+    val hasActiveFilter = selectedCardName != null || selectedCategory != null || sortOrder != SortOrder.DATE_DESC
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 뷰 토글 버튼
+        // 탭 (목록 / 달력)
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // 목록 버튼
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .background(
-                        if (currentMode == ViewMode.LIST)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            Color.Transparent
+                        if (currentMode == ViewMode.LIST) MaterialTheme.colorScheme.primary
+                        else Color.Transparent
                     )
                     .clickable { onModeChange(ViewMode.LIST) }
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.List,
-                        contentDescription = stringResource(R.string.history_view_list),
-                        modifier = Modifier.size(16.dp),
-                        tint = if (currentMode == ViewMode.LIST)
-                            MaterialTheme.colorScheme.onPrimary
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = stringResource(R.string.history_view_list),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (currentMode == ViewMode.LIST)
-                            MaterialTheme.colorScheme.onPrimary
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Text(
+                    text = stringResource(R.string.history_view_list),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (currentMode == ViewMode.LIST) FontWeight.Bold else FontWeight.Normal,
+                    color = if (currentMode == ViewMode.LIST)
+                        MaterialTheme.colorScheme.onPrimary
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-
-            // 달력 버튼
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .background(
-                        if (currentMode == ViewMode.CALENDAR)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            Color.Transparent
+                        if (currentMode == ViewMode.CALENDAR) MaterialTheme.colorScheme.primary
+                        else Color.Transparent
                     )
                     .clickable { onModeChange(ViewMode.CALENDAR) }
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.DateRange,
-                        contentDescription = stringResource(R.string.history_view_calendar),
-                        modifier = Modifier.size(16.dp),
-                        tint = if (currentMode == ViewMode.CALENDAR)
-                            MaterialTheme.colorScheme.onPrimary
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = stringResource(R.string.history_view_calendar),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (currentMode == ViewMode.CALENDAR)
-                            MaterialTheme.colorScheme.onPrimary
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Text(
+                    text = stringResource(R.string.history_view_calendar),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (currentMode == ViewMode.CALENDAR) FontWeight.Bold else FontWeight.Normal,
+                    color = if (currentMode == ViewMode.CALENDAR)
+                        MaterialTheme.colorScheme.onPrimary
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
-        // 필터 버튼
-        Row {
+        // 필터 아이콘 (통합 드롭다운)
+        if (currentMode == ViewMode.LIST) {
             Box {
-                FilterChip(
-                    selected = selectedCardName != null,
+                IconButton(
                     onClick = { showFilterMenu = true },
-                    label = {
-                        Text(
-                            text = selectedCardName ?: stringResource(R.string.common_filter),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                )
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.FilterList,
+                        contentDescription = stringResource(R.string.common_filter),
+                        modifier = Modifier.size(20.dp),
+                        tint = if (hasActiveFilter)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                // 통합 필터 드롭다운
                 DropdownMenu(
                     expanded = showFilterMenu,
                     onDismissRequest = { showFilterMenu = false }
                 ) {
+                    // === 카드 필터 섹션 ===
+                    Text(
+                        text = "카드",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
                     DropdownMenuItem(
-                        text = { Text(stringResource(R.string.common_all)) },
+                        text = {
+                            Text(
+                                stringResource(R.string.common_all),
+                                fontWeight = if (selectedCardName == null) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selectedCardName == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                        },
                         onClick = {
                             onCardNameSelected(null)
                             showFilterMenu = false
@@ -604,89 +630,86 @@ fun ViewToggleRow(
                     )
                     cardNames.forEach { cardName ->
                         DropdownMenuItem(
-                            text = { Text(cardName) },
+                            text = {
+                                Text(
+                                    cardName,
+                                    fontWeight = if (selectedCardName == cardName) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (selectedCardName == cardName) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            },
                             onClick = {
                                 onCardNameSelected(cardName)
                                 showFilterMenu = false
                             }
                         )
                     }
-                }
-            }
 
-            if (!isSearchMode) {
-                Spacer(modifier = Modifier.width(8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                // 정렬 버튼
-                Box {
-                    IconButton(onClick = { showSortMenu = true }) {
-                        Icon(
-                            Icons.Default.SwapVert,
-                            contentDescription = "정렬",
-                            tint = if (sortOrder != SortOrder.DATE_DESC)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showSortMenu,
-                        onDismissRequest = { showSortMenu = false }
-                    ) {
+                    // === 카테고리 필터 섹션 ===
+                    Text(
+                        text = "카테고리",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                stringResource(R.string.common_all),
+                                fontWeight = if (selectedCategory == null) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selectedCategory == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                        },
+                        onClick = {
+                            onCategorySelected(null)
+                            showFilterMenu = false
+                        }
+                    )
+                    Category.entries.forEach { category ->
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    "최신순",
-                                    color = if (sortOrder == SortOrder.DATE_DESC)
-                                        MaterialTheme.colorScheme.primary
-                                    else
-                                        MaterialTheme.colorScheme.onSurface
+                                    "${category.emoji} ${category.displayName}",
+                                    fontWeight = if (selectedCategory == category.displayName) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (selectedCategory == category.displayName) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                 )
                             },
                             onClick = {
-                                onSortOrderChange(SortOrder.DATE_DESC)
-                                showSortMenu = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    "금액 높은순",
-                                    color = if (sortOrder == SortOrder.AMOUNT_DESC)
-                                        MaterialTheme.colorScheme.primary
-                                    else
-                                        MaterialTheme.colorScheme.onSurface
-                                )
-                            },
-                            onClick = {
-                                onSortOrderChange(SortOrder.AMOUNT_DESC)
-                                showSortMenu = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    "사용처별",
-                                    color = if (sortOrder == SortOrder.STORE_FREQ)
-                                        MaterialTheme.colorScheme.primary
-                                    else
-                                        MaterialTheme.colorScheme.onSurface
-                                )
-                            },
-                            onClick = {
-                                onSortOrderChange(SortOrder.STORE_FREQ)
-                                showSortMenu = false
+                                onCategorySelected(category.displayName)
+                                showFilterMenu = false
                             }
                         )
                     }
-                }
 
-                IconButton(onClick = onSearchClick) {
-                    Icon(Icons.Default.Search, contentDescription = stringResource(R.string.common_search))
-                }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                IconButton(onClick = onAddClick) {
-                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.common_add))
+                    // === 정렬 섹션 ===
+                    Text(
+                        text = "정렬",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+                    listOf(
+                        SortOrder.DATE_DESC to "최신순",
+                        SortOrder.AMOUNT_DESC to "금액 높은순",
+                        SortOrder.STORE_FREQ to "사용처별"
+                    ).forEach { (order, label) ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    label,
+                                    fontWeight = if (sortOrder == order) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (sortOrder == order) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            },
+                            onClick = {
+                                onSortOrderChange(order)
+                                showFilterMenu = false
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -879,13 +902,21 @@ fun BillingCycleCalendarView(
     year: Int,
     month: Int,
     monthStartDay: Int,
-    dailyTotals: Map<String, Int> // "yyyy-MM-dd" -> amount
+    dailyTotals: Map<String, Int>, // "yyyy-MM-dd" -> amount
+    expenses: List<ExpenseEntity> = emptyList(),
+    onDelete: (ExpenseEntity) -> Unit = {},
+    onCategoryChange: (ExpenseEntity, String) -> Unit = { _, _ -> }
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     val today = Calendar.getInstance()
     val todayYear = today.get(Calendar.YEAR)
     val todayMonth = today.get(Calendar.MONTH) + 1
     val todayDay = today.get(Calendar.DAY_OF_MONTH)
+
+    // 선택된 날짜 (dateString)
+    var selectedDateString by remember { mutableStateOf<String?>(null) }
+    // 상세 다이얼로그용 선택된 지출
+    var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
 
     // 결제 기간에 해당하는 날짜 목록 생성
     val calendarDays = remember(year, month, monthStartDay) {
@@ -910,6 +941,18 @@ fun BillingCycleCalendarView(
     val noSpendDays = remember(calendarDays, dailyTotals) {
         calendarDays.count { day ->
             day.isCurrentPeriod && !day.isFuture && (dailyTotals[day.dateString] ?: 0) == 0
+        }
+    }
+
+    // 선택된 날짜의 지출 목록
+    val selectedDayExpenses = remember(selectedDateString, expenses) {
+        if (selectedDateString == null) emptyList()
+        else {
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
+            expenses.filter { expense ->
+                val expenseDate = dateFormat.format(Date(expense.dateTime))
+                expenseDate == selectedDateString
+            }.sortedByDescending { it.dateTime }
         }
     }
 
@@ -990,13 +1033,22 @@ fun BillingCycleCalendarView(
 
                 item {
                     Column {
+                        // 주간 디바이더
+                        if (weekIndex > 0) {
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                                thickness = 0.5.dp,
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            )
+                        }
+
                         // 주간 합계 (오른쪽 정렬)
                         if (weekTotal > 0) {
                             Text(
                                 text = "-${numberFormat.format(weekTotal)}",
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(end = 4.dp, bottom = 2.dp),
+                                    .padding(end = 4.dp, top = 4.dp, bottom = 2.dp),
                                 textAlign = TextAlign.End,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
@@ -1012,6 +1064,16 @@ fun BillingCycleCalendarView(
                                 CalendarDayCell(
                                     calendarDay = calendarDay,
                                     dayTotal = dailyTotals[calendarDay.dateString] ?: 0,
+                                    isSelected = selectedDateString == calendarDay.dateString,
+                                    onClick = {
+                                        if (calendarDay.isCurrentPeriod && !calendarDay.isFuture) {
+                                            selectedDateString = if (selectedDateString == calendarDay.dateString) {
+                                                null // 토글: 같은 날짜 다시 클릭 시 닫기
+                                            } else {
+                                                calendarDay.dateString
+                                            }
+                                        }
+                                    },
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -1024,10 +1086,74 @@ fun BillingCycleCalendarView(
                 }
             }
 
+            // 선택된 날짜의 지출 목록
+            if (selectedDateString != null && selectedDayExpenses.isNotEmpty()) {
+                item {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        thickness = 1.dp
+                    )
+
+                    val parts = selectedDateString!!.split("-")
+                    val dayNum = parts.getOrNull(2)?.toIntOrNull() ?: 0
+                    Text(
+                        text = "${parts.getOrNull(1) ?: ""}월 ${dayNum}일 지출 내역",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                    )
+                }
+
+                items(
+                    items = selectedDayExpenses,
+                    key = { it.id }
+                ) { expense ->
+                    ExpenseItemCard(
+                        expense = expense,
+                        onClick = { selectedExpense = expense },
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                }
+            } else if (selectedDateString != null && selectedDayExpenses.isEmpty()) {
+                item {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        thickness = 1.dp
+                    )
+                    Text(
+                        text = "해당 날짜에 지출 내역이 없습니다",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
             item {
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+    }
+
+    // 지출 상세 다이얼로그 (삭제 및 카테고리 변경 기능 포함)
+    selectedExpense?.let { expense ->
+        ExpenseDetailDialog(
+            expense = expense,
+            onDismiss = { selectedExpense = null },
+            onDelete = {
+                onDelete(expense)
+                selectedExpense = null
+            },
+            onCategoryChange = { newCategory ->
+                onCategoryChange(expense, newCategory)
+                selectedExpense = null
+            }
+        )
     }
 }
 
@@ -1035,6 +1161,8 @@ fun BillingCycleCalendarView(
 fun CalendarDayCell(
     calendarDay: CalendarDay,
     dayTotal: Int,
+    isSelected: Boolean = false,
+    onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
@@ -1042,6 +1170,14 @@ fun CalendarDayCell(
     Box(
         modifier = modifier
             .padding(2.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                else Color.Transparent
+            )
+            .clickable(
+                enabled = calendarDay.isCurrentPeriod && !calendarDay.isFuture
+            ) { onClick() }
             .aspectRatio(0.8f),
         contentAlignment = Alignment.TopCenter
     ) {
@@ -1064,11 +1200,12 @@ fun CalendarDayCell(
                 Text(
                     text = calendarDay.day.toString(),
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (calendarDay.isToday) FontWeight.Bold else FontWeight.Normal,
+                    fontWeight = if (calendarDay.isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
                     color = when {
                         calendarDay.isToday -> Color.White
                         calendarDay.isFuture -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                         !calendarDay.isCurrentPeriod -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        isSelected -> MaterialTheme.colorScheme.primary
                         else -> MaterialTheme.colorScheme.onSurface
                     }
                 )

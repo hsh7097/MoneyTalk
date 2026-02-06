@@ -91,6 +91,9 @@ class ExpenseRepository @Inject constructor(
     /** SMS ID 존재 여부 확인 (중복 방지) */
     suspend fun existsBySmsId(smsId: String): Boolean = expenseDao.existsBySmsId(smsId)
 
+    /** 모든 SMS ID 조회 (배치 중복 체크용 인메모리 Set 구성) */
+    suspend fun getAllSmsIds(): Set<String> = expenseDao.getAllSmsIds().toHashSet()
+
     // ========================
     // 통계 집계 메소드
     // ========================

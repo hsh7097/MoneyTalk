@@ -59,10 +59,8 @@ fun HomeScreen(
         }
     }
 
-    // 화면이 표시될 때마다 데이터 새로고침 (다른 탭에서 데이터 변경 시 반영)
-    LaunchedEffect(Unit) {
-        viewModel.refreshData()
-    }
+    // Flow 기반 데이터 로딩: Room DB 변경 시 자동으로 UI 갱신됨
+    // (다른 탭에서 카테고리 변경, 지출 삭제 등의 변경사항이 실시간 반영)
 
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -122,7 +120,11 @@ fun HomeScreen(
                 // 카테고리별 지출
                 item {
                     CategoryExpenseSection(
-                        categoryExpenses = uiState.categoryExpenses
+                        categoryExpenses = uiState.categoryExpenses,
+                        selectedCategory = uiState.selectedCategory,
+                        onCategorySelected = { category ->
+                            viewModel.selectCategory(category)
+                        }
                     )
                 }
 
@@ -134,22 +136,51 @@ fun HomeScreen(
                     )
                 }
 
-                // 최근 지출 내역
+                // 최근 지출 내역 (카테고리 필터 적용)
                 item {
-                    Text(
-                        text = stringResource(R.string.home_recent_expense),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (uiState.selectedCategory != null) {
+                                val cat = Category.fromDisplayName(uiState.selectedCategory!!)
+                                "${cat.emoji} ${cat.displayName} 지출"
+                            } else {
+                                stringResource(R.string.home_recent_expense)
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (uiState.selectedCategory != null) {
+                            TextButton(onClick = { viewModel.selectCategory(null) }) {
+                                Text("전체 보기")
+                            }
+                        }
+                    }
                 }
 
-                if (uiState.recentExpenses.isEmpty()) {
+                val displayExpenses = if (uiState.selectedCategory != null) {
+                    uiState.recentExpenses.filter { expense ->
+                        if (uiState.selectedCategory == "기타") {
+                            expense.category == "기타" || expense.category == "미분류"
+                        } else {
+                            expense.category == uiState.selectedCategory
+                        }
+                    }
+                } else {
+                    uiState.recentExpenses
+                }
+
+                if (displayExpenses.isEmpty()) {
                     item {
                         EmptyExpenseSection()
                     }
                 } else {
-                    items(uiState.recentExpenses) { expense ->
+                    items(displayExpenses) { expense ->
                         ExpenseItemCard(
                             expense = expense,
                             onClick = { selectedExpense = expense }
@@ -427,9 +458,25 @@ fun MonthlyOverviewSection(
 
 @Composable
 fun CategoryExpenseSection(
-    categoryExpenses: List<CategorySum>
+    categoryExpenses: List<CategorySum>,
+    selectedCategory: String? = null,
+    onCategorySelected: (String?) -> Unit = {}
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+
+    // 기타 + 미분류를 하나로 합치고, 금액 내림차순 정렬
+    val mergedExpenses = remember(categoryExpenses) {
+        val etcTotal = categoryExpenses
+            .filter { it.category == "기타" || it.category == "미분류" }
+            .sumOf { it.total }
+        val others = categoryExpenses
+            .filter { it.category != "기타" && it.category != "미분류" }
+        val result = others.toMutableList()
+        if (etcTotal > 0) {
+            result.add(CategorySum("기타", etcTotal))
+        }
+        result.sortedByDescending { it.total }
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -442,30 +489,52 @@ fun CategoryExpenseSection(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        if (categoryExpenses.isEmpty()) {
+        if (mergedExpenses.isEmpty()) {
             Text(
                 text = stringResource(R.string.home_no_expense),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
         } else {
-            categoryExpenses.forEach { item ->
+            mergedExpenses.forEach { item ->
                 val category = Category.fromDisplayName(item.category)
+                val isSelected = selectedCategory == item.category
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                        .clickable {
+                            if (isSelected) {
+                                onCategorySelected(null)
+                            } else {
+                                onCategorySelected(item.category)
+                            }
+                        }
+                        .then(
+                            if (isSelected) Modifier
+                                .padding(horizontal = 0.dp)
+                                .padding(vertical = 2.dp)
+                            else Modifier.padding(vertical = 4.dp)
+                        )
+                        .then(
+                            if (isSelected) {
+                                Modifier
+                                    .padding(vertical = 2.dp)
+                            } else Modifier
+                        ),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "${category.emoji} ${category.displayName}",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = stringResource(R.string.common_won, numberFormat.format(item.total)),
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                     )
                 }
             }

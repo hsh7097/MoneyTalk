@@ -43,14 +43,109 @@ class SmsBatchProcessor @Inject constructor(
         /** 벡터 그룹핑 시 같은 그룹으로 묶는 유사도 임계값 */
         private const val GROUPING_SIMILARITY_THRESHOLD = 0.95f
 
-        /** 배치 임베딩 한 번에 처리할 최대 개수 */
-        private const val EMBEDDING_BATCH_SIZE = 50
-
-        /** LLM 호출 간 딜레이 (Rate Limit 방지) */
-        private const val LLM_DELAY_MS = 1000L
+        /** 배치 임베딩 한 번에 처리할 최대 개수 (batchEmbedContents 최대 100) */
+        private const val EMBEDDING_BATCH_SIZE = 100
 
         /** 한 번에 처리할 최대 미분류 SMS 수 */
         private const val MAX_UNCLASSIFIED_TO_PROCESS = 500
+
+        /** LLM 배치 호출 시 한번에 처리할 그룹 수 */
+        private const val LLM_BATCH_SIZE = 20
+
+        /** LLM 배치 호출 간 딜레이 (Rate Limit 방지) */
+        private const val LLM_BATCH_DELAY_MS = 2000L
+
+        /**
+         * 사전 필터링 키워드: 이 키워드가 포함된 SMS는 임베딩 생성 자체를 스킵
+         */
+        private val NON_PAYMENT_KEYWORDS = listOf(
+            // 인증/보안
+            "인증번호", "인증코드", "authentication", "verification", "code",
+            "OTP", "본인확인", "비밀번호",
+            // 해외 발신
+            "국외발신", "국제발신", "해외발신",
+            // 광고/마케팅 필수어
+            "광고", "[광고]", "(광고)", "무료수신거부", "수신거부", "080",
+            // 홍보/유혹
+            "특가", "이벤트", "증정", "당첨", "축하", "최저가", "마감직전",
+            "포인트 적립", "혜택안내", "프로모션", "할인쿠폰", "무료체험",
+            // 안내/기타
+            "안내문", "점검", "정기점검", "공지사항",
+            "회원님", "고객님", "불편을 드려",
+            // 청구/안내
+            "명세서", "청구서", "이용대금", "결제예정", "결제일",
+            "출금예정", "자동이체", "납부안내", "납입일",
+            // 배송
+            "배송", "택배", "운송장",
+            // 설문/투표
+            "설문", "survey", "투표",
+            // 예약/안내 (결제금액 없이 단순 안내)
+            "예약은", "방문때", "접수 완료",
+            "보험금", "해외원화결제시", "수수료 발생", "차단신청",
+            // 금융/부동산 (결제가 아닌 광고)
+            "금리", "대출", "투자", "수익", "분양", "모델하우스"
+        )
+
+        /** HTTP 링크 패턴 */
+        private val HTTP_PATTERN = Regex("https?://", RegexOption.IGNORE_CASE)
+
+        /** 결제 SMS 최소 금액 자릿수 (2자리 이상 연속 숫자 필요) */
+        private val AMOUNT_PATTERN = Regex("\\d{2,}")
+
+        /** 결제 관련 핵심 키워드 (이 중 하나라도 있으면 결제 가능성 있음) */
+        private val PAYMENT_HINT_KEYWORDS = listOf(
+            "승인", "결제", "출금", "이체",
+            "원", "USD", "JPY", "EUR",
+            "카드", "체크", "CMS"
+        )
+    }
+
+    /**
+     * 명백한 비결제 SMS 판별 (키워드 기반 사전 필터링)
+     */
+    private fun isObviouslyNonPayment(smsBody: String): Boolean {
+        val lowerBody = smsBody.lowercase()
+        return NON_PAYMENT_KEYWORDS.any { keyword ->
+            lowerBody.contains(keyword.lowercase())
+        }
+    }
+
+    /**
+     * 결제 SMS 최소 조건 미충족 여부 판별 (구조적 필터링)
+     *
+     * 결제 문자가 되려면 최소한:
+     * 1. 숫자가 있어야 함 (금액)
+     * 2. 너무 짧지 않아야 함
+     * 3. 2자리 이상 연속 숫자가 있어야 함 (금액 패턴)
+     * 4. 결제 관련 키워드나 금액 패턴(숫자+원)이 있어야 함
+     * 5. HTTP 링크만 있고 결제 키워드가 없으면 제외
+     *
+     * @return true면 결제 최소 조건 미충족 (필터링 대상)
+     */
+    private fun lacksPaymentRequirements(smsBody: String): Boolean {
+        // 1. 20자 미만 SMS는 결제 문자 가능성 매우 낮음
+        if (smsBody.length < 20) return true
+
+        // 2. 숫자가 하나도 없으면 결제 문자 아님
+        if (!smsBody.any { it.isDigit() }) return true
+
+        // 3. 2자리 이상 연속 숫자가 없으면 결제 금액 패턴 아님
+        if (!AMOUNT_PATTERN.containsMatchIn(smsBody)) return true
+
+        // 4. HTTP 링크가 포함되어 있으면서 '결제'나 '승인'이 없으면 제외 (광고/안내 링크)
+        if (HTTP_PATTERN.containsMatchIn(smsBody)) {
+            val hasPaymentKeyword = smsBody.contains("결제") || smsBody.contains("승인")
+            if (!hasPaymentKeyword) return true
+        }
+
+        // 5. 결제 힌트 키워드가 하나도 없고, 금액 패턴(숫자+원)도 없으면 제외
+        val hasPaymentHint = PAYMENT_HINT_KEYWORDS.any { keyword ->
+            smsBody.contains(keyword, ignoreCase = true)
+        }
+        val hasAmountWithUnit = smsBody.contains(Regex("[\\d,]+원"))
+        if (!hasPaymentHint && !hasAmountWithUnit) return true
+
+        return false
     }
 
     /**
@@ -107,9 +202,13 @@ class SmsBatchProcessor @Inject constructor(
     ): List<Pair<SmsData, SmsAnalysisResult>> {
         val results = mutableListOf<Pair<SmsData, SmsAnalysisResult>>()
 
-        // 처리 대상 제한 (너무 많으면 잘라냄)
-        val targetSms = unclassifiedSms.take(MAX_UNCLASSIFIED_TO_PROCESS)
-        Log.d(TAG, "=== 배치 처리 시작: ${targetSms.size}건 (전체 ${unclassifiedSms.size}건) ===")
+        // 사전 필터링: 1) 키워드 기반 비결제 SMS 제외 2) 결제 최소 조건 미충족 SMS 제외
+        val afterKeywordFilter = unclassifiedSms.filter { !isObviouslyNonPayment(it.body) }
+        val filtered = afterKeywordFilter.filter { !lacksPaymentRequirements(it.body) }
+        val targetSms = filtered.take(MAX_UNCLASSIFIED_TO_PROCESS)
+        val keywordFiltered = unclassifiedSms.size - afterKeywordFilter.size
+        val requirementFiltered = afterKeywordFilter.size - filtered.size
+        Log.d(TAG, "=== 배치 처리 시작: ${targetSms.size}건 (전체 ${unclassifiedSms.size}건, 키워드 필터 ${keywordFiltered}건, 조건 미달 ${requirementFiltered}건 제외) ===")
 
         if (targetSms.isEmpty()) return results
 
@@ -133,88 +232,103 @@ class SmsBatchProcessor @Inject constructor(
         val groups = groupBySimilarity(embeddedSms)
         Log.d(TAG, "그룹핑 완료: ${groups.size}개 그룹 (${embeddedSms.size}건)")
 
-        // ===== Step 4: 각 그룹의 대표만 LLM에 전송 =====
-        listener?.onProgress("AI 분석 중", 0, groups.size)
-        var llmChecked = 0
+        // ===== Step 4: 그룹 대표들을 배치 LLM으로 일괄 분석 =====
+        val llmBatches = groups.chunked(LLM_BATCH_SIZE)
+        var llmBatchCount = 0
+        var totalGroupsProcessed = 0
 
-        for ((idx, group) in groups.withIndex()) {
-            listener?.onProgress("AI 분석 중", idx + 1, groups.size)
+        Log.d(TAG, "LLM 배치 분석: ${groups.size}개 그룹 → ${llmBatches.size}개 배치 (배치 크기: $LLM_BATCH_SIZE)")
 
-            // 대표 SMS를 LLM에 검증
-            val extraction = try {
-                smsExtractor.extractFromSms(group.representative.body)
+        for ((batchIdx, groupBatch) in llmBatches.withIndex()) {
+            listener?.onProgress("AI 분석 중", totalGroupsProcessed, groups.size)
+
+            // 배치 내 대표 SMS 목록을 한번에 LLM에 전송
+            val smsTexts = groupBatch.map { it.representative.body }
+            val extractions = try {
+                smsExtractor.extractFromSmsBatch(smsTexts)
             } catch (e: Exception) {
-                Log.e(TAG, "LLM 추출 실패: ${e.message}")
-                null
+                Log.e(TAG, "LLM 배치 추출 실패: ${e.message}")
+                List(smsTexts.size) { null }
             }
 
-            llmChecked++
+            llmBatchCount++
 
-            if (extraction != null && extraction.isPayment && extraction.amount > 0) {
-                val dateTime = if (extraction.dateTime.isNotBlank()) {
-                    extraction.dateTime
-                } else {
-                    SmsParser.extractDateTime(group.representative.body, group.representative.date)
-                }
+            // 각 그룹에 결과 적용
+            for ((groupIdx, group) in groupBatch.withIndex()) {
+                val extraction = extractions.getOrNull(groupIdx)
 
-                // 대표의 파싱 결과
-                val representativeAnalysis = SmsAnalysisResult(
-                    amount = extraction.amount,
-                    storeName = extraction.storeName,
-                    category = extraction.category,
-                    dateTime = dateTime,
-                    cardName = extraction.cardName
-                )
+                if (extraction != null && extraction.isPayment && extraction.amount > 0) {
+                    val dateTime = if (extraction.dateTime.isNotBlank()) {
+                        extraction.dateTime
+                    } else {
+                        SmsParser.extractDateTime(group.representative.body, group.representative.date)
+                    }
 
-                // 대표를 벡터 DB에 등록
-                registerPattern(
-                    group.representative,
-                    group.representativeTemplate,
-                    group.representativeEmbedding,
-                    representativeAnalysis,
-                    "llm"
-                )
-
-                // 대표 SMS 결과 추가
-                results.add(group.representative to representativeAnalysis)
-
-                // 그룹 멤버들에게 파싱 결과 전파 (금액/날짜만 개별 추출)
-                for (member in group.members) {
-                    if (member.id == group.representative.id) continue
-
-                    val memberAmount = SmsParser.extractAmount(member.body) ?: extraction.amount
-                    val memberDateTime = SmsParser.extractDateTime(member.body, member.date)
-
-                    val memberAnalysis = SmsAnalysisResult(
-                        amount = memberAmount,
+                    // 대표의 파싱 결과
+                    val representativeAnalysis = SmsAnalysisResult(
+                        amount = extraction.amount,
                         storeName = extraction.storeName,
                         category = extraction.category,
-                        dateTime = memberDateTime,
+                        dateTime = dateTime,
                         cardName = extraction.cardName
                     )
 
-                    results.add(member to memberAnalysis)
+                    // 대표를 벡터 DB에 등록
+                    registerPattern(
+                        group.representative,
+                        group.representativeTemplate,
+                        group.representativeEmbedding,
+                        representativeAnalysis,
+                        "llm"
+                    )
+
+                    // 대표 SMS 결과 추가
+                    results.add(group.representative to representativeAnalysis)
+
+                    // 그룹 멤버들에게 파싱 결과 전파 (금액/날짜만 개별 추출)
+                    for (member in group.members) {
+                        if (member.id == group.representative.id) continue
+
+                        val memberAmount = SmsParser.extractAmount(member.body) ?: extraction.amount
+                        val memberDateTime = SmsParser.extractDateTime(member.body, member.date)
+
+                        val memberAnalysis = SmsAnalysisResult(
+                            amount = memberAmount,
+                            storeName = extraction.storeName,
+                            category = extraction.category,
+                            dateTime = memberDateTime,
+                            cardName = extraction.cardName
+                        )
+
+                        results.add(member to memberAnalysis)
+                    }
+
+                    Log.d(TAG, "그룹 승인: ${extraction.storeName} (${group.members.size}건)")
+                } else {
+                    Log.d(TAG, "그룹 거절 (비결제): ${group.representative.body.take(40)}...")
                 }
 
-                Log.d(TAG, "그룹 승인: ${extraction.storeName} (${group.members.size}건)")
-            } else {
-                Log.d(TAG, "그룹 거절 (비결제): ${group.representative.body.take(40)}...")
+                totalGroupsProcessed++
             }
 
-            // Rate Limit 방지 딜레이
-            if (idx < groups.size - 1) {
-                delay(LLM_DELAY_MS)
+            listener?.onProgress("AI 분석 중", totalGroupsProcessed, groups.size)
+
+            // 배치 간 Rate Limit 방지 딜레이
+            if (batchIdx < llmBatches.size - 1) {
+                delay(LLM_BATCH_DELAY_MS)
             }
         }
 
-        Log.d(TAG, "=== 배치 처리 완료: LLM ${llmChecked}건 호출, 결제 ${results.size}건 발견 ===")
+        Log.d(TAG, "=== 배치 처리 완료: LLM ${llmBatchCount}회 배치 호출 (${groups.size}개 그룹), 결제 ${results.size}건 발견 ===")
         return results
     }
 
     /**
-     * Step 1: 기존 벡터 DB 패턴과 매칭 시도
+     * Step 1: 기존 벡터 DB 패턴과 매칭 시도 (배치 임베딩 사용)
      *
-     * 벡터 DB에 이미 학습된 패턴이 있으면 LLM 없이 바로 매칭
+     * 벡터 DB에 이미 학습된 패턴이 있으면 LLM 없이 바로 매칭.
+     * 개별 embedContent 호출 대신 batchEmbedContents로 일괄 처리하여
+     * API 호출 횟수를 대폭 줄입니다.
      */
     private suspend fun matchAgainstExistingPatterns(
         smsList: List<SmsData>,
@@ -228,42 +342,53 @@ class SmsBatchProcessor @Inject constructor(
         val matched = mutableListOf<Pair<SmsData, SmsAnalysisResult>>()
         val unmatched = mutableListOf<SmsData>()
 
-        for ((idx, sms) in smsList.withIndex()) {
-            if (idx % 50 == 0) {
-                listener?.onProgress("기존 패턴 매칭 중", idx, smsList.size)
-            }
+        // 전체 SMS를 템플릿화
+        val templates = smsList.map { embeddingService.templateizeSms(it.body) }
 
-            val template = embeddingService.templateizeSms(sms.body)
-            val embedding = embeddingService.generateEmbedding(template)
+        // 배치 단위로 임베딩 생성 (EMBEDDING_BATCH_SIZE = 100건씩)
+        val batches = smsList.indices.chunked(EMBEDDING_BATCH_SIZE)
 
-            if (embedding != null) {
-                val bestMatch = VectorSearchEngine.findBestMatch(
-                    queryVector = embedding,
-                    patterns = existingPatterns,
-                    minSimilarity = VectorSearchEngine.PAYMENT_SIMILARITY_THRESHOLD
-                )
+        for ((batchIdx, batchIndices) in batches.withIndex()) {
+            listener?.onProgress("기존 패턴 매칭 중", batchIdx * EMBEDDING_BATCH_SIZE, smsList.size)
 
-                if (bestMatch != null) {
-                    // 매칭 성공! 캐시된 결과 재사용
-                    val cached = bestMatch.pattern
-                    val amount = SmsParser.extractAmount(sms.body) ?: cached.parsedAmount
-                    val dateTime = SmsParser.extractDateTime(sms.body, sms.date)
+            val batchTemplates = batchIndices.map { templates[it] }
+            val embeddings = embeddingService.generateEmbeddings(batchTemplates)
 
-                    val analysis = SmsAnalysisResult(
-                        amount = amount,
-                        storeName = cached.parsedStoreName,
-                        category = cached.parsedCategory,
-                        dateTime = dateTime,
-                        cardName = cached.parsedCardName
+            for ((i, idx) in batchIndices.withIndex()) {
+                val embedding = embeddings.getOrNull(i)
+                if (embedding != null) {
+                    val bestMatch = VectorSearchEngine.findBestMatch(
+                        queryVector = embedding,
+                        patterns = existingPatterns,
+                        minSimilarity = VectorSearchEngine.PAYMENT_SIMILARITY_THRESHOLD
                     )
 
-                    matched.add(sms to analysis)
-                    smsPatternDao.incrementMatchCount(bestMatch.pattern.id)
-                    continue
+                    if (bestMatch != null) {
+                        val cached = bestMatch.pattern
+                        val amount = SmsParser.extractAmount(smsList[idx].body) ?: cached.parsedAmount
+                        val dateTime = SmsParser.extractDateTime(smsList[idx].body, smsList[idx].date)
+
+                        val analysis = SmsAnalysisResult(
+                            amount = amount,
+                            storeName = cached.parsedStoreName,
+                            category = cached.parsedCategory,
+                            dateTime = dateTime,
+                            cardName = cached.parsedCardName
+                        )
+
+                        matched.add(smsList[idx] to analysis)
+                        smsPatternDao.incrementMatchCount(bestMatch.pattern.id)
+                        continue
+                    }
                 }
+
+                unmatched.add(smsList[idx])
             }
 
-            unmatched.add(sms)
+            // 배치 간 딜레이 (Rate Limit 방지)
+            if (batchIdx < batches.size - 1) {
+                delay(1500)
+            }
         }
 
         return matched to unmatched
@@ -297,9 +422,9 @@ class SmsBatchProcessor @Inject constructor(
                 }
             }
 
-            // API 호출 간 짧은 딜레이
+            // API 호출 간 딜레이 (Rate Limit 방지)
             if (batchIdx < batches.size - 1) {
-                delay(500)
+                delay(1500)
             }
         }
 

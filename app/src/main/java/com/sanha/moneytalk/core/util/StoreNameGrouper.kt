@@ -30,8 +30,8 @@ class StoreNameGrouper @Inject constructor(
     companion object {
         private const val TAG = "StoreNameGrouper"
 
-        /** 배치 임베딩 한 번에 처리할 최대 개수 */
-        private const val EMBEDDING_BATCH_SIZE = 50
+        /** 배치 임베딩 한 번에 처리할 최대 개수 (batchEmbedContents 최대 100) */
+        private const val EMBEDDING_BATCH_SIZE = 100
     }
 
     /**
@@ -88,7 +88,7 @@ class StoreNameGrouper @Inject constructor(
         val results = mutableListOf<Pair<String, List<Float>>>()
         val batches = storeNames.chunked(EMBEDDING_BATCH_SIZE)
 
-        for (batch in batches) {
+        for ((batchIdx, batch) in batches.withIndex()) {
             val embeddings = embeddingService.generateEmbeddings(batch)
 
             for ((i, storeName) in batch.withIndex()) {
@@ -98,9 +98,9 @@ class StoreNameGrouper @Inject constructor(
                 }
             }
 
-            // 배치 간 딜레이
-            if (batches.size > 1) {
-                kotlinx.coroutines.delay(500)
+            // 배치 간 딜레이 (마지막 배치 제외, Rate Limit 방지)
+            if (batchIdx < batches.size - 1) {
+                kotlinx.coroutines.delay(1500)
             }
         }
 

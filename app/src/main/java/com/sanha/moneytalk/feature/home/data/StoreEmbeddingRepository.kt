@@ -163,25 +163,31 @@ class StoreEmbeddingRepository @Inject constructor(
 
         try {
             val storeNames = storeCategories.keys.toList()
-            val embeddings = embeddingService.generateEmbeddings(storeNames)
+            val allEntities = mutableListOf<StoreEmbeddingEntity>()
 
-            val entities = storeNames.mapIndexedNotNull { index, storeName ->
-                val embedding = embeddings.getOrNull(index) ?: return@mapIndexedNotNull null
-                val category = storeCategories[storeName] ?: return@mapIndexedNotNull null
+            // 100건씩 청킹 (batchEmbedContents 최대 100)
+            for (chunk in storeNames.chunked(100)) {
+                val embeddings = embeddingService.generateEmbeddings(chunk)
 
-                StoreEmbeddingEntity(
-                    storeName = storeName,
-                    category = category,
-                    embedding = embedding,
-                    source = source,
-                    confidence = if (source == "user") 1.0f else 0.8f
-                )
+                val entities = chunk.mapIndexedNotNull { index, storeName ->
+                    val embedding = embeddings.getOrNull(index) ?: return@mapIndexedNotNull null
+                    val category = storeCategories[storeName] ?: return@mapIndexedNotNull null
+
+                    StoreEmbeddingEntity(
+                        storeName = storeName,
+                        category = category,
+                        embedding = embedding,
+                        source = source,
+                        confidence = if (source == "user") 1.0f else 0.8f
+                    )
+                }
+                allEntities.addAll(entities)
             }
 
-            if (entities.isNotEmpty()) {
-                storeEmbeddingDao.insertAll(entities)
+            if (allEntities.isNotEmpty()) {
+                storeEmbeddingDao.insertAll(allEntities)
                 invalidateCache()
-                Log.d(TAG, "배치 임베딩 저장: ${entities.size}건 (source=$source)")
+                Log.d(TAG, "배치 임베딩 저장: ${allEntities.size}건 (source=$source)")
             }
         } catch (e: Exception) {
             Log.e(TAG, "배치 임베딩 저장 실패: ${e.message}", e)

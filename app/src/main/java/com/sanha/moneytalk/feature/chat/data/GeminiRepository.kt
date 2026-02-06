@@ -30,6 +30,7 @@ class GeminiRepository @Inject constructor(
 
     companion object {
         private const val TAG = "GeminiChat"
+        private const val TAG_PROMPT = "PROMPT"
 
         // Rolling Summary 전용 시스템 명령어
         private const val SUMMARY_SYSTEM_INSTRUCTION = """당신은 대화 요약 전문가입니다.
@@ -90,7 +91,7 @@ class GeminiRepository @Inject constructor(
 - daily_totals: 일별 지출 합계
 - monthly_totals: 월별 지출 합계
 - monthly_income: 설정된 월 수입
-- uncategorized_list: 미분류(기타) 항목 리스트
+- uncategorized_list: 미분류 항목 리스트
 - category_ratio: 수입 대비 카테고리별 비율 분석
 
 [사용 가능한 액션 타입]
@@ -99,13 +100,13 @@ class GeminiRepository @Inject constructor(
 - update_category_by_keyword: 키워드 포함 가게명 일괄 변경 (searchKeyword, newCategory 필수)
 
 [카테고리 목록]
-식비, 카페, 교통, 쇼핑, 구독, 의료/건강, 문화/여가, 교육, 생활, 기타
+식비, 카페, 술/유흥, 교통, 쇼핑, 구독, 의료/건강, 운동, 문화/여가, 교육, 주거, 생활, 경조, 기타, 미분류
 
 [쿼리 파라미터]
 - type: 쿼리 타입 (필수)
 - startDate: 시작일 "YYYY-MM-DD" (선택)
 - endDate: 종료일 "YYYY-MM-DD" (선택)
-- category: 카테고리 필터 (선택)
+- category: 카테고리 필터 (선택, 위 카테고리 목록의 displayName 사용)
 - storeName: 가게명 필터 - 정확히 일치 (선택)
 - limit: 결과 개수 제한 (선택)
 
@@ -114,7 +115,7 @@ class GeminiRepository @Inject constructor(
 - expenseId: 특정 지출 ID (update_category 시)
 - storeName: 가게명 - 정확히 일치 (update_category_by_store 시)
 - searchKeyword: 검색 키워드 - 포함 검색 (update_category_by_keyword 시)
-- newCategory: 변경할 카테고리 (필수)
+- newCategory: 변경할 카테고리 (필수, 위 카테고리 목록에서 선택)
 
 [날짜 규칙]
 1. 날짜 형식은 "YYYY-MM-DD" 사용
@@ -125,6 +126,15 @@ class GeminiRepository @Inject constructor(
 6. "2월" (연도 없음) = 올해 2월
 7. "3개월간" = 최근 3개월
 
+[분석 규칙]
+1. 금액 관련 질문("얼마", "얼마나", "비용")이 있으면 반드시 해당하는 쿼리를 생성할 것
+2. 카테고리명이나 가게명이 언급되면 해당 필터를 적용할 것
+3. 기간이 언급되면 반드시 startDate/endDate를 설정할 것
+4. "배달비", "배달" 등 키워드는 expense_by_store로 storeName에 "배달"을 사용
+5. "줄이다", "절약" 등 조언 요청은 category_ratio를 포함하여 비율 분석 제공
+6. 특정 카테고리의 금액을 묻는 질문은 expense_by_category에 category 필터 적용
+7. 질문에 기간과 카테고리/가게가 모두 있으면 반드시 둘 다 쿼리에 포함
+
 [질문 패턴 → 쿼리 매핑 예시]
 - "2월에 쿠팡에서 얼마 썼어?" → expense_by_store (storeName: "쿠팡", 2월 기간)
 - "작년 10월부터 올해 2월까지 총 지출" → total_expense (해당 기간)
@@ -133,6 +143,9 @@ class GeminiRepository @Inject constructor(
 - "미분류 항목 보여줘" → uncategorized_list
 - "쿠팡 결제는 쇼핑으로 분류해줘" → actions: update_category_by_store
 - "배달의민족 포함된건 식비로 바꿔줘" → actions: update_category_by_keyword
+- "지난 3개월 배달비 얼마야?" → expense_by_store (storeName: "배달", 3개월 기간)
+- "술값 줄여야 할까?" → category_ratio + expense_by_category (category: "술/유흥")
+- "이번달 운동 관련 지출" → expense_by_category (category: "운동", 이번달 기간)
 
 [응답 형식]
 {
@@ -148,7 +161,9 @@ class GeminiRepository @Inject constructor(
 1. 질문에 필요한 최소한의 쿼리/액션만 요청
 2. JSON만 반환 (다른 텍스트 없이)
 3. 액션은 사용자가 명시적으로 변경을 요청할 때만 포함
-4. 분석/조언 질문은 queries만, 데이터 수정 요청은 actions 포함"""
+4. 분석/조언 질문은 queries만, 데이터 수정 요청은 actions 포함
+5. 대화 맥락([이전 대화 요약], [최근 대화])을 참고하여 대명사나 생략된 주어를 해석할 것
+6. 반드시 queries 또는 actions 중 하나 이상은 비어있지 않게 반환할 것"""
     }
 
     // DataStore에서 API 키 가져오기 (캐싱)
@@ -238,12 +253,14 @@ class GeminiRepository @Inject constructor(
 
     /**
      * 1단계: 사용자 질문을 분석하여 필요한 데이터 쿼리 결정
-     * System Instruction에 스키마가 이미 포함되어 있으므로 간단한 프롬프트만 전송
+     * System Instruction에 스키마가 이미 포함되어 있으므로,
+     * 대화 맥락(요약 + 최근 대화)과 오늘 날짜를 포함한 프롬프트를 전송
+     *
+     * @param contextualMessage ChatContextBuilder.buildQueryAnalysisContext()가 생성한 컨텍스트 포함 메시지
      */
-    suspend fun analyzeQueryNeeds(userMessage: String): Result<DataQueryRequest?> {
+    suspend fun analyzeQueryNeeds(contextualMessage: String): Result<DataQueryRequest?> {
         return try {
             Log.d(TAG, "=== analyzeQueryNeeds 시작 ===")
-            Log.d(TAG, "사용자 메시지: $userMessage")
 
             val model = getQueryAnalyzerModel()
             if (model == null) {
@@ -251,24 +268,24 @@ class GeminiRepository @Inject constructor(
                 return Result.failure(Exception("API 키가 설정되지 않았습니다."))
             }
 
-            val apiKey = getApiKey()
-            Log.d(TAG, "API 키 (앞 10자): ${apiKey.take(10)}...")
-
-            // 오늘 날짜 정보만 추가 (스키마는 System Instruction에 있음)
+            // 오늘 날짜 정보 추가 (스키마는 System Instruction에 있음)
             val calendar = Calendar.getInstance()
             val today = "${calendar.get(Calendar.YEAR)}년 ${calendar.get(Calendar.MONTH) + 1}월 ${calendar.get(Calendar.DAY_OF_MONTH)}일"
 
             val prompt = """오늘: $today
 
-사용자 질문: $userMessage
+$contextualMessage
 
 위 질문에 필요한 데이터 쿼리를 JSON으로 반환해줘:"""
 
-            Log.d(TAG, "프롬프트 전송 중...")
+            Log.d(TAG_PROMPT, "=== 쿼리 분석 프롬프트 ===")
+            Log.d(TAG_PROMPT, prompt)
+            Log.d(TAG_PROMPT, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
+
             val response = model.generateContent(prompt)
             val responseText = response.text ?: return Result.success(null)
 
-            Log.d(TAG, "Gemini 응답: $responseText")
+            Log.d(TAG, "Gemini 쿼리 분석 응답: $responseText")
 
             val queryRequest = DataQueryParser.parseQueryRequest(responseText)
             Log.d(TAG, "파싱된 쿼리: $queryRequest")
@@ -322,7 +339,9 @@ $dataContext$actionContext
 [사용자 질문]
 $userMessage"""
 
-            Log.d(TAG, "최종 답변 프롬프트:\n$prompt")
+            Log.d(TAG_PROMPT, "=== 최종 답변 프롬프트 ===")
+            Log.d(TAG_PROMPT, prompt)
+            Log.d(TAG_PROMPT, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
             Log.d(TAG, "Gemini 호출 중...")
 
             val response = model.generateContent(prompt)
@@ -351,7 +370,9 @@ $userMessage"""
     suspend fun generateFinalAnswerWithContext(contextPrompt: String): Result<String> {
         return try {
             Log.d(TAG, "=== generateFinalAnswerWithContext 시작 ===")
-            Log.d(TAG, "프롬프트 길이: ${contextPrompt.length}")
+            Log.d(TAG_PROMPT, "=== 컨텍스트 기반 최종 답변 프롬프트 ===")
+            Log.d(TAG_PROMPT, contextPrompt)
+            Log.d(TAG_PROMPT, "=== 프롬프트 끝 (길이: ${contextPrompt.length}) ===")
 
             val model = getFinancialAdvisorModel()
             if (model == null) {
@@ -375,7 +396,9 @@ $userMessage"""
     suspend fun simpleChat(userMessage: String): Result<String> {
         return try {
             Log.d(TAG, "=== simpleChat 시작 ===")
-            Log.d(TAG, "사용자 메시지: $userMessage")
+            Log.d(TAG_PROMPT, "=== 심플 채팅 프롬프트 ===")
+            Log.d(TAG_PROMPT, userMessage)
+            Log.d(TAG_PROMPT, "=== 프롬프트 끝 (길이: ${userMessage.length}) ===")
 
             val model = getFinancialAdvisorModel()
             if (model == null) {
@@ -435,7 +458,9 @@ $existingSummary
 $newMessages"""
             }
 
-            Log.d(TAG, "요약 프롬프트 길이: ${prompt.length}")
+            Log.d(TAG_PROMPT, "=== 요약 프롬프트 ===")
+            Log.d(TAG_PROMPT, prompt)
+            Log.d(TAG_PROMPT, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
             val response = model.generateContent(prompt)
             val summaryText = response.text ?: return Result.failure(Exception("요약 응답 없음"))
 

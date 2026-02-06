@@ -38,14 +38,57 @@ class CategoryClassifierService @Inject constructor(
         private const val TAG = "CategoryClassifier"
     }
 
+    // ===== 인메모리 캐시 (동기화 성능 최적화) =====
+    private var categoryCache: MutableMap<String, String>? = null
+    private val pendingMappings = mutableListOf<Triple<String, String, String>>()
+
+    /**
+     * 인메모리 캐시 초기화 (동기화 전 1회 호출)
+     * 모든 카테고리 매핑을 메모리에 로드하여 동기화 루프 중 DB 쿼리/API 호출을 제거합니다.
+     */
+    suspend fun initCategoryCache() {
+        val mappings = categoryRepository.getAllMappingsOnce()
+        categoryCache = HashMap<String, String>(mappings.size * 2).apply {
+            for (mapping in mappings) {
+                put(mapping.storeName, mapping.category)
+            }
+        }
+        Log.d(TAG, "캐시 초기화: ${mappings.size}개 매핑 로드")
+    }
+
+    /** 인메모리 캐시 해제 */
+    fun clearCategoryCache() {
+        categoryCache = null
+    }
+
+    /** 대기 중인 매핑을 Room에 일괄 저장 */
+    suspend fun flushPendingMappings() {
+        if (pendingMappings.isEmpty()) return
+        val mappings = pendingMappings.map { (store, category, _) -> store to category }
+        val source = pendingMappings.firstOrNull()?.third ?: "local"
+        categoryRepository.saveMappings(mappings, source)
+        Log.d(TAG, "매핑 일괄 저장: ${pendingMappings.size}건")
+        pendingMappings.clear()
+    }
+
     /**
      * 가게명으로 카테고리 조회 (4-Tier)
+     *
+     * 캐시 모드 활성화 시: Tier 1(캐시) + Tier 2(키워드)만 사용 (DB/API 호출 0회)
+     * 일반 모드: Tier 1(Room) → Tier 1.5(벡터) → Tier 2(키워드)
      *
      * @param storeName 가게명
      * @param originalSms 원본 SMS (키워드 매칭 보조 정보)
      * @return 분류된 카테고리
      */
     suspend fun getCategory(storeName: String, originalSms: String = ""): String {
+        // 캐시 모드: DB/API 호출 없이 인메모리에서 분류 (동기화 성능 최적화)
+        val cache = categoryCache
+        if (cache != null) {
+            return getCategoryFromCache(storeName, originalSms, cache)
+        }
+
+        // ===== 일반 모드 (개별 조회) =====
         // Tier 1: Room DB에서 저장된 매핑 확인 (비용 0)
         categoryRepository.getCategoryByStoreName(storeName)?.let {
             Log.d(TAG, "[Tier 1] Room 매핑: $storeName → $it")
@@ -71,15 +114,44 @@ class CategoryClassifierService @Inject constructor(
 
         // Tier 2: SmsParser의 로컬 키워드 매칭 (비용 0)
         val localCategory = SmsParser.inferCategory(storeName, originalSms)
-        if (localCategory != "기타") {
+        if (localCategory != "미분류") {
             // 로컬 매칭 결과를 Room에 저장
             categoryRepository.saveMapping(storeName, localCategory, "local")
             Log.d(TAG, "[Tier 2] 로컬 키워드: $storeName → $localCategory")
             return localCategory
         }
 
-        // Tier 3 대기: 기타로 반환 (Gemini 분류는 배치로 별도 처리)
-        return "기타"
+        // Tier 3 대기: 미분류로 반환 (Gemini 분류는 배치로 별도 처리)
+        return "미분류"
+    }
+
+    /**
+     * 인메모리 캐시 기반 카테고리 조회 (DB/API 호출 0회)
+     */
+    private fun getCategoryFromCache(
+        storeName: String,
+        originalSms: String,
+        cache: MutableMap<String, String>
+    ): String {
+        // 1. 캐시에서 정확 매칭
+        cache[storeName]?.let { return it }
+
+        // 2. 캐시에서 부분 매칭
+        for ((cachedName, category) in cache) {
+            if (storeName.contains(cachedName) || cachedName.contains(storeName)) {
+                return category
+            }
+        }
+
+        // 3. SmsParser 로컬 키워드 매칭
+        val localCategory = SmsParser.inferCategory(storeName, originalSms)
+        if (localCategory != "미분류") {
+            cache[storeName] = localCategory
+            pendingMappings.add(Triple(storeName, localCategory, "local"))
+            return localCategory
+        }
+
+        return "미분류"
     }
 
     /**
@@ -93,8 +165,8 @@ class CategoryClassifierService @Inject constructor(
      * @return 분류된 항목 수
      */
     suspend fun classifyUnclassifiedExpenses(): Int {
-        // 카테고리가 "기타"인 지출 조회
-        val unclassifiedExpenses = expenseRepository.getExpensesByCategoryOnce("기타")
+        // 카테고리가 "미분류"인 지출 조회
+        val unclassifiedExpenses = expenseRepository.getExpensesByCategoryOnce("미분류")
 
         if (unclassifiedExpenses.isEmpty()) {
             Log.d(TAG, "분류할 항목 없음")
@@ -245,7 +317,7 @@ class CategoryClassifierService @Inject constructor(
      * 미분류 항목 수 조회
      */
     suspend fun getUnclassifiedCount(): Int {
-        return expenseRepository.getExpensesByCategoryOnce("기타").size
+        return expenseRepository.getExpensesByCategoryOnce("미분류").size
     }
 
     /**
