@@ -5,9 +5,12 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import com.sanha.moneytalk.core.database.dao.BudgetDao
+import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.util.BackupData
 import com.sanha.moneytalk.core.util.DataBackupManager
+import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
@@ -36,7 +39,9 @@ data class SettingsUiState(
     // 구글 드라이브 관련
     val isGoogleSignedIn: Boolean = false,
     val googleAccountName: String? = null,
-    val driveBackupFiles: List<DriveBackupFile> = emptyList()
+    val driveBackupFiles: List<DriveBackupFile> = emptyList(),
+    // 카테고리별 예산
+    val categoryBudgets: List<BudgetEntity> = emptyList()
 )
 
 @HiltViewModel
@@ -45,7 +50,8 @@ class SettingsViewModel @Inject constructor(
     private val geminiRepository: GeminiRepository,
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
-    private val googleDriveHelper: GoogleDriveHelper
+    private val googleDriveHelper: GoogleDriveHelper,
+    private val budgetDao: BudgetDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -54,6 +60,7 @@ class SettingsViewModel @Inject constructor(
     init {
         loadSettings()
         loadFilterOptions()
+        loadCategoryBudgets()
     }
 
     private fun loadSettings() {
@@ -390,6 +397,45 @@ class SettingsViewModel @Inject constructor(
                         message = "삭제 실패: ${e.message}"
                     )
                 }
+            }
+        }
+    }
+
+    // ========== 카테고리별 예산 관리 ==========
+
+    private fun loadCategoryBudgets() {
+        val yearMonth = DateUtils.getCurrentYearMonth()
+        viewModelScope.launch {
+            budgetDao.getBudgetsByMonth(yearMonth).collect { budgets ->
+                _uiState.update { it.copy(categoryBudgets = budgets) }
+            }
+        }
+    }
+
+    fun saveCategoryBudget(category: String, monthlyLimit: Int) {
+        viewModelScope.launch {
+            try {
+                val yearMonth = DateUtils.getCurrentYearMonth()
+                val budget = BudgetEntity(
+                    category = category,
+                    monthlyLimit = monthlyLimit,
+                    yearMonth = yearMonth
+                )
+                budgetDao.insert(budget)
+                _uiState.update { it.copy(message = "${category} 예산이 설정되었습니다") }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(message = "예산 저장 실패: ${e.message}") }
+            }
+        }
+    }
+
+    fun deleteCategoryBudget(budget: BudgetEntity) {
+        viewModelScope.launch {
+            try {
+                budgetDao.delete(budget)
+                _uiState.update { it.copy(message = "${budget.category} 예산이 삭제되었습니다") }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(message = "삭제 실패: ${e.message}") }
             }
         }
     }

@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
+import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import com.sanha.moneytalk.core.util.DataBackupManager
 import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter
@@ -53,6 +54,8 @@ fun SettingsScreen(
     var showRestoreConfirmDialog by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showGoogleDriveDialog by remember { mutableStateOf(false) }
+    var showCategoryBudgetDialog by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -158,8 +161,12 @@ fun SettingsScreen(
                         SettingsItem(
                             icon = Icons.Default.PieChart,
                             title = stringResource(R.string.settings_category_budget_title),
-                            subtitle = stringResource(R.string.settings_category_budget_subtitle),
-                            onClick = { /* TODO */ }
+                            subtitle = if (uiState.categoryBudgets.isNotEmpty()) {
+                                "${uiState.categoryBudgets.size}개 카테고리 설정됨"
+                            } else {
+                                stringResource(R.string.settings_category_budget_subtitle)
+                            },
+                            onClick = { showCategoryBudgetDialog = true }
                         )
                     }
                 }
@@ -236,7 +243,7 @@ fun SettingsScreen(
                             icon = Icons.Default.Description,
                             title = stringResource(R.string.settings_privacy_title),
                             subtitle = "",
-                            onClick = { /* TODO */ }
+                            onClick = { showPrivacyDialog = true }
                         )
                     }
                 }
@@ -427,6 +434,24 @@ fun SettingsScreen(
                     Text(stringResource(R.string.common_cancel))
                 }
             }
+        )
+    }
+
+    // 카테고리별 예산 설정 다이얼로그
+    if (showCategoryBudgetDialog) {
+        CategoryBudgetDialog(
+            budgets = uiState.categoryBudgets,
+            availableCategories = uiState.availableCategories,
+            onDismiss = { showCategoryBudgetDialog = false },
+            onSave = { category, amount -> viewModel.saveCategoryBudget(category, amount) },
+            onDelete = { budget -> viewModel.deleteCategoryBudget(budget) }
+        )
+    }
+
+    // 개인정보 처리방침 다이얼로그
+    if (showPrivacyDialog) {
+        PrivacyPolicyDialog(
+            onDismiss = { showPrivacyDialog = false }
         )
     }
 }
@@ -986,6 +1011,159 @@ fun MonthStartDayDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.common_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+fun CategoryBudgetDialog(
+    budgets: List<BudgetEntity>,
+    availableCategories: List<String>,
+    onDismiss: () -> Unit,
+    onSave: (String, Int) -> Unit,
+    onDelete: (BudgetEntity) -> Unit
+) {
+    var showAddForm by remember { mutableStateOf(false) }
+    var selectedCategory by remember { mutableStateOf("") }
+    var amountText by remember { mutableStateOf("") }
+    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+
+    val existingCategories = budgets.map { it.category }.toSet()
+    val unsetCategories = availableCategories.filter { it !in existingCategories }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.dialog_category_budget_title)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (budgets.isEmpty() && !showAddForm) {
+                    Text(
+                        text = stringResource(R.string.settings_category_budget_none),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+
+                budgets.forEach { budget ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = budget.category,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = stringResource(R.string.common_won, numberFormat.format(budget.monthlyLimit)),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            IconButton(onClick = { onDelete(budget) }) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = stringResource(R.string.common_delete),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (showAddForm) {
+                    HorizontalDivider()
+                    Text(
+                        text = stringResource(R.string.dialog_category_budget_select),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        unsetCategories.forEach { category ->
+                            FilterChip(
+                                selected = selectedCategory == category,
+                                onClick = { selectedCategory = category },
+                                label = { Text(category) }
+                            )
+                        }
+                    }
+                    OutlinedTextField(
+                        value = amountText,
+                        onValueChange = { amountText = it.filter { char -> char.isDigit() } },
+                        label = { Text(stringResource(R.string.dialog_category_budget_amount)) },
+                        suffix = { Text("원") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        onClick = {
+                            val amount = amountText.toIntOrNull()
+                            if (selectedCategory.isNotBlank() && amount != null && amount > 0) {
+                                onSave(selectedCategory, amount)
+                                selectedCategory = ""
+                                amountText = ""
+                                showAddForm = false
+                            }
+                        },
+                        enabled = selectedCategory.isNotBlank() && amountText.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.common_save))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (!showAddForm && unsetCategories.isNotEmpty()) {
+                TextButton(onClick = { showAddForm = true }) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(stringResource(R.string.dialog_category_budget_add))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_close))
+            }
+        }
+    )
+}
+
+@Composable
+fun PrivacyPolicyDialog(
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.dialog_privacy_title)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_privacy_content),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_close))
             }
         }
     )

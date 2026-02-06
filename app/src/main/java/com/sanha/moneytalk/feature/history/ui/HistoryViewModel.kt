@@ -6,6 +6,7 @@ import com.sanha.moneytalk.core.database.dao.DailySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
+import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.core.util.DateUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -24,13 +25,18 @@ data class HistoryUiState(
     val monthStartDay: Int = 1,
     val cardNames: List<String> = emptyList(),
     val monthlyTotal: Int = 0,
-    val dailyTotals: Map<String, Int> = emptyMap(), // "yyyy-MM-dd" -> amount
+    val monthlyIncome: Int = 0,
+    val dailyTotals: Map<String, Int> = emptyMap(),
+    val searchQuery: String = "",
+    val isSearching: Boolean = false,
+    val showAddDialog: Boolean = false,
     val errorMessage: String? = null
 )
 
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
+    private val incomeRepository: IncomeRepository,
     private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
 
@@ -76,12 +82,19 @@ class HistoryViewModel @Inject constructor(
                 state.monthStartDay
             )
 
-            // 월별 총액 및 일별 총액 로드
+            // 월별 총액, 수입, 일별 총액 로드
             try {
                 val monthlyTotal = expenseRepository.getTotalExpenseByDateRange(startTime, endTime)
+                val monthlyIncome = incomeRepository.getTotalIncomeByDateRange(startTime, endTime)
                 val dailySums = expenseRepository.getDailyTotals(startTime, endTime)
                 val dailyTotalsMap = dailySums.associate { it.date to it.total }
-                _uiState.update { it.copy(monthlyTotal = monthlyTotal, dailyTotals = dailyTotalsMap) }
+                _uiState.update {
+                    it.copy(
+                        monthlyTotal = monthlyTotal,
+                        monthlyIncome = monthlyIncome,
+                        dailyTotals = dailyTotalsMap
+                    )
+                }
             } catch (e: Exception) {
                 // 총액 로딩 실패 시 무시
             }
@@ -99,8 +112,19 @@ class HistoryViewModel @Inject constructor(
                     }
                 }
                 .collect { expenses ->
+                    // 검색 필터 적용
+                    val filtered = if (state.searchQuery.isNotBlank()) {
+                        expenses.filter { expense ->
+                            expense.storeName.contains(state.searchQuery, ignoreCase = true) ||
+                                expense.category.contains(state.searchQuery, ignoreCase = true) ||
+                                expense.cardName.contains(state.searchQuery, ignoreCase = true)
+                        }
+                    } else {
+                        expenses
+                    }
+
                     _uiState.update {
-                        it.copy(isLoading = false, expenses = expenses)
+                        it.copy(isLoading = false, expenses = filtered)
                     }
                 }
         }
@@ -147,7 +171,55 @@ class HistoryViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 expenseRepository.delete(expense)
-                // 삭제 후 새로고침
+                loadExpenses()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    // 검색 기능
+    fun setSearchQuery(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
+        loadExpenses()
+    }
+
+    fun toggleSearch() {
+        val isSearching = !_uiState.value.isSearching
+        _uiState.update {
+            it.copy(
+                isSearching = isSearching,
+                searchQuery = if (!isSearching) "" else it.searchQuery
+            )
+        }
+        if (!isSearching) loadExpenses()
+    }
+
+    // 수동 지출 추가
+    fun showAddDialog() {
+        _uiState.update { it.copy(showAddDialog = true) }
+    }
+
+    fun hideAddDialog() {
+        _uiState.update { it.copy(showAddDialog = false) }
+    }
+
+    fun addExpense(amount: Int, storeName: String, category: String, cardName: String) {
+        viewModelScope.launch {
+            try {
+                val now = System.currentTimeMillis()
+                val dateTime = DateUtils.formatDateTime(now)
+                val expense = ExpenseEntity(
+                    amount = amount,
+                    storeName = storeName,
+                    category = category,
+                    cardName = cardName,
+                    dateTime = dateTime,
+                    originalSms = "",
+                    smsId = "manual_${now}"
+                )
+                expenseRepository.insert(expense)
+                _uiState.update { it.copy(showAddDialog = false) }
                 loadExpenses()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }

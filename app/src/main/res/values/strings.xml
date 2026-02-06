@@ -104,6 +104,14 @@
     <string name="history_delete_message">%s 지출 내역을 삭제할까요?</string>
     <string name="history_no_spend_month">%d월 무지출</string>
     <string name="history_no_spend_total">총 %d일 ></string>
+    <string name="history_search_placeholder">가게명, 카테고리, 카드 검색…</string>
+    <string name="history_add_title">지출 추가</string>
+    <string name="history_add_amount">금액</string>
+    <string name="history_add_store">가게명</string>
+    <string name="history_add_category">카테고리</string>
+    <string name="history_add_card">카드</string>
+    <string name="settings_privacy_content">MoneyTalk 개인정보 처리방침\n\n1. 수집하는 개인정보\n본 앱은 SMS 결제 문자를 읽어 지출을 자동 기록합니다. 수집된 데이터는 기기 내에서만 처리되며 외부 서버로 전송되지 않습니다.\n\n2. 개인정보의 이용 목적\n- 카드 결제 문자 파싱을 통한 자동 지출 기록\n- AI 재무 상담 (사용자가 직접 입력한 질문만 전송)\n\n3. 개인정보의 보관 및 파기\n모든 데이터는 기기 내 로컬 데이터베이스에 저장되며, 앱 삭제 시 함께 삭제됩니다.\n\n4. 제3자 제공\n사용자의 명시적 동의 없이 개인정보를 제3자에게 제공하지 않습니다.\n\n5. 사용자 권리\n설정 > 전체 삭제 기능으로 언제든 모든 데이터를 삭제할 수 있습니다.</string>
+    <string name="settings_category_budget_none">설정된 예산이 없습니다</string>
 
     <!-- 요일 -->
     <string name="day_sun">일</string>
@@ -195,4 +203,13 @@
     <!-- API 키 다이얼로그 (설정 화면용) -->
     <string name="dialog_api_key_message_settings">Google AI Studio(aistudio.google.com)에서\n무료로 API 키를 발급받을 수 있습니다.</string>
     <string name="dialog_api_key_current">현재 설정됨</string>
+
+    <!-- 카테고리별 예산 다이얼로그 -->
+    <string name="dialog_category_budget_title">카테고리별 예산 설정</string>
+    <string name="dialog_category_budget_add">예산 추가</string>
+    <string name="dialog_category_budget_amount">월 한도</string>
+    <string name="dialog_category_budget_select">카테고리 선택</string>
+
+    <!-- 개인정보 처리방침 다이얼로그 -->
+    <string name="dialog_privacy_title">개인정보 처리방침</string>
 </resources>

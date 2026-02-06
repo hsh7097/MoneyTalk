@@ -104,6 +104,14 @@
     <string name="history_delete_message">Delete %s expense?</string>
     <string name="history_no_spend_month">No-spend %d</string>
     <string name="history_no_spend_total">%d days total ></string>
+    <string name="history_search_placeholder">Search store, category, card…</string>
+    <string name="history_add_title">Add Expense</string>
+    <string name="history_add_amount">Amount</string>
+    <string name="history_add_store">Store Name</string>
+    <string name="history_add_category">Category</string>
+    <string name="history_add_card">Card</string>
+    <string name="settings_privacy_content">MoneyTalk Privacy Policy\n\n1. Information We Collect\nThis app reads SMS payment messages to automatically record expenses. All data is processed locally on your device and is never sent to external servers.\n\n2. Purpose of Use\n- Automatic expense recording via card payment SMS parsing\n- AI financial consulting (only user-typed questions are sent)\n\n3. Data Retention\nAll data is stored in a local database on your device and is deleted when the app is uninstalled.\n\n4. Third-Party Sharing\nWe do not share personal information with third parties without explicit consent.\n\n5. Your Rights\nYou can delete all data at any time via Settings > Delete All.</string>
+    <string name="settings_category_budget_none">No budgets set</string>
 
     <!-- Days of Week -->
     <string name="day_sun">S</string>
@@ -195,4 +203,13 @@
     <!-- API Key Dialog (Settings) -->
     <string name="dialog_api_key_message_settings">Get a free API key from\nGoogle AI Studio (aistudio.google.com)</string>
     <string name="dialog_api_key_current">Currently set</string>
+
+    <!-- Category Budget Dialog -->
+    <string name="dialog_category_budget_title">Category Budget Settings</string>
+    <string name="dialog_category_budget_add">Add Budget</string>
+    <string name="dialog_category_budget_amount">Monthly Limit</string>
+    <string name="dialog_category_budget_select">Select Category</string>
+
+    <!-- Privacy Policy Dialog -->
+    <string name="dialog_privacy_title">Privacy Policy</string>
 </resources>

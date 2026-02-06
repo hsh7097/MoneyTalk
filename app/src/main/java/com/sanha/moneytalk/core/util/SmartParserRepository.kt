@@ -392,7 +392,7 @@ JSON만 반환 (다른 텍스트 없이):
             }
 
             // 2. 기존 StoreAliasManager 별칭 매칭 시도
-            val normalizedName = StoreAliasManager.normalizeStoreName(merchantName)
+            val normalizedName = StoreAliasManager.normalizeStoreNameStatic(merchantName)
             if (normalizedName != null) {
                 val aliasMatch = merchantVectorDao.getMerchantByName(normalizedName)
                 if (aliasMatch != null) {

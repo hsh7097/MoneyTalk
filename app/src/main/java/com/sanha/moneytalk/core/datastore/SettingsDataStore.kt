@@ -28,6 +28,7 @@ class SettingsDataStore @Inject constructor(
         private val MONTHLY_INCOME = intPreferencesKey("monthly_income")
         private val LAST_SYNC_TIME = longPreferencesKey("last_sync_time")
         private val MONTH_START_DAY = intPreferencesKey("month_start_day")
+        private val CUSTOM_ALIASES = stringPreferencesKey("custom_aliases")
     }
 
     // API 키 저장
@@ -116,5 +117,38 @@ class SettingsDataStore @Inject constructor(
 
     suspend fun getMonthStartDay(): Int {
         return context.dataStore.data.first()[MONTH_START_DAY] ?: 1
+    }
+
+    // 사용자 정의 별칭 저장 (직렬화: "mainName:alias1,alias2|mainName2:alias3")
+    suspend fun saveCustomAliases(aliases: Map<String, Set<String>>) {
+        val serialized = aliases.entries.joinToString("|") { (mainName, aliasList) ->
+            "$mainName:${aliasList.joinToString(",")}"
+        }
+        context.dataStore.edit { preferences ->
+            preferences[CUSTOM_ALIASES] = serialized
+        }
+    }
+
+    // 사용자 정의 별칭 가져오기
+    suspend fun getCustomAliases(): Map<String, Set<String>> {
+        val serialized = context.dataStore.data.first()[CUSTOM_ALIASES] ?: return emptyMap()
+        return deserializeAliases(serialized)
+    }
+
+    val customAliasesFlow: Flow<Map<String, Set<String>>> = context.dataStore.data.map { preferences ->
+        val serialized = preferences[CUSTOM_ALIASES] ?: return@map emptyMap()
+        deserializeAliases(serialized)
+    }
+
+    private fun deserializeAliases(serialized: String): Map<String, Set<String>> {
+        if (serialized.isBlank()) return emptyMap()
+        return serialized.split("|").associate { entry ->
+            val parts = entry.split(":", limit = 2)
+            val mainName = parts[0]
+            val aliases = if (parts.size > 1 && parts[1].isNotBlank()) {
+                parts[1].split(",").toSet()
+            } else emptySet()
+            mainName to aliases
+        }
     }
 }

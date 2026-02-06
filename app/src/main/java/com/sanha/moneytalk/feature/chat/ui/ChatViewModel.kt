@@ -57,7 +57,8 @@ class ChatViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val chatDao: ChatDao,
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val storeAliasManager: StoreAliasManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -395,7 +396,7 @@ class ChatViewModel @Inject constructor(
                 val storeName = query.storeName ?: return null
 
                 // StoreAliasManager를 사용하여 모든 별칭으로 검색
-                val aliases = StoreAliasManager.getAllAliases(storeName)
+                val aliases = storeAliasManager.getAllAliases(storeName)
                 val allExpenses = aliases.flatMap { alias ->
                     expenseRepository.getExpensesByStoreNameContaining(alias)
                         .filter { it.dateTime in startTimestamp..endTimestamp }
@@ -488,7 +489,7 @@ class ChatViewModel @Inject constructor(
                     )
                 } else {
                     // StoreAliasManager를 사용하여 모든 별칭에 대해 업데이트
-                    val aliases = StoreAliasManager.getAllAliases(storeName)
+                    val aliases = storeAliasManager.getAllAliases(storeName)
                     var totalAffected = 0
                     for (alias in aliases) {
                         totalAffected += expenseRepository.updateCategoryByStoreNameContaining(alias, newCategory)
@@ -514,7 +515,7 @@ class ChatViewModel @Inject constructor(
                     )
                 } else {
                     // StoreAliasManager를 사용하여 모든 별칭에 대해 업데이트
-                    val aliases = StoreAliasManager.getAllAliases(keyword)
+                    val aliases = storeAliasManager.getAllAliases(keyword)
                     var totalAffected = 0
                     for (alias in aliases) {
                         totalAffected += expenseRepository.updateCategoryByStoreNameContaining(alias, newCategory)

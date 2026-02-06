@@ -31,9 +31,11 @@
 
 ## 2. 핵심 기능
 
-### 2.1 문자 수집 및 파싱
+### 2.1 문자 수집 및 파싱 (Vector-First 파이프라인)
 - `ContentResolver`로 기존 카드 문자 읽기
-- **로컬 정규식 기반 파싱** (API 호출 없음)
+- **3단계 지능형 파싱**: Vector Match → Regex → Gemini Fallback
+- Google text-embedding-004 기반 SMS 벡터화 + 코사인 유사도 매칭
+- 자가 학습: 성공적 파싱 결과를 DB에 벡터 저장 → 향후 무비용 매칭
 - 카드사 문자 자동 필터링 (KB, 신한, 삼성, 현대, 롯데, 우리, 하나, NH, BC 등)
 - 중복 처리 방지 (smsId 기반)
 - 증분 동기화 / 전체 동기화 선택 가능
@@ -63,6 +65,7 @@
 - 영문/한글 가게명 자동 매핑
 - 예: `coupang` = `쿠팡` = `쿠페이` = `쿠팡이츠`
 - 50개 이상 브랜드 기본 등록
+- **사용자 정의 별칭 DataStore 영구 저장**
 
 ### 2.5 결제 주기 기반 달력 뷰
 - 사용자 설정 결제일 기준 월 계산
@@ -83,15 +86,23 @@ app/src/main/java/com/sanha/moneytalk/
 │
 ├── core/                                 # 공통 모듈
 │   ├── database/
-│   │   ├── AppDatabase.kt               # Room Database
+│   │   ├── AppDatabase.kt               # Room Database (v3)
+│   │   ├── converter/
+│   │   │   └── VectorConverters.kt      # FloatArray ↔ ByteArray
 │   │   ├── dao/
-│   │   │   ├── ExpenseDao.kt            # 지출 DAO (가게명 검색, 카테고리 변경 등)
+│   │   │   ├── ExpenseDao.kt            # 지출 DAO
 │   │   │   ├── IncomeDao.kt             # 수입 DAO
-│   │   │   └── ChatDao.kt               # 채팅 기록 DAO
+│   │   │   ├── BudgetDao.kt             # 예산 DAO
+│   │   │   ├── ChatDao.kt               # 채팅 기록 DAO
+│   │   │   ├── SmsPatternDao.kt         # SMS 패턴 벡터 DAO
+│   │   │   └── MerchantVectorDao.kt     # 가맹점 벡터 DAO
 │   │   └── entity/
 │   │       ├── ExpenseEntity.kt         # 지출 엔티티
 │   │       ├── IncomeEntity.kt          # 수입 엔티티
-│   │       └── ChatEntity.kt            # 채팅 엔티티
+│   │       ├── BudgetEntity.kt          # 예산 엔티티
+│   │       ├── ChatEntity.kt            # 채팅 엔티티
+│   │       ├── SmsPatternEntity.kt      # SMS 패턴 벡터 엔티티
+│   │       └── MerchantVectorEntity.kt  # 가맹점 벡터 엔티티
 │   │
 │   ├── datastore/
 │   │   └── SettingsDataStore.kt         # API 키, 수입, 결제일 등 설정
@@ -106,7 +117,10 @@ app/src/main/java/com/sanha/moneytalk/
 │   └── util/
 │       ├── DateUtils.kt                 # 날짜 유틸리티
 │       ├── DataQueryParser.kt           # Gemini 쿼리/액션 JSON 파싱
-│       ├── StoreAliasManager.kt         # 가게명 별칭 매핑
+│       ├── StoreAliasManager.kt         # 가게명 별칭 매핑 (DI, DataStore 연동)
+│       ├── SmartParserRepository.kt     # 지능형 파싱 파이프라인
+│       ├── VectorUtils.kt               # 코사인 유사도 유틸
+│       ├── EmbeddingRepository.kt       # Google Embedding API + 캐시
 │       └── PromptTemplates.kt           # 프롬프트 템플릿
 │
 ├── feature/                              # 기능별 모듈
@@ -236,9 +250,9 @@ data class DataQueryRequest(
 |------|------|------|
 | 스플래시 | `splash` | 앱 로딩 화면 |
 | 홈 | `home` | 월간 현황, 카테고리별 지출, 최근 내역, 월 선택 |
-| 내역 | `history` | 뱅크샐러드 스타일 지출 목록, 필터링 |
+| 내역 | `history` | 지출 목록, 검색, 수동 추가, 필터링 |
 | 상담 | `chat` | Gemini AI와 자연어 대화 |
-| 설정 | `settings` | API 키, 월 수입, 결제일, 백업/복원 |
+| 설정 | `settings` | API 키, 월 수입, 결제일, 카테고리 예산, 백업/복원, 개인정보 처리방침 |
 
 ---
 
@@ -270,20 +284,24 @@ data class DataQueryRequest(
 - [x] 데이터 내보내기/가져오기
 - [x] 스플래시 화면
 - [x] 뒤로가기 두 번 눌러 종료
+- [x] **벡터 기반 지능형 SMS 파싱 시스템** (Vector → Regex → Gemini)
+- [x] **사용자 정의 별칭 DataStore 영구 저장**
+- [x] **HistoryScreen 검색 + 수동 지출 추가**
+- [x] **카테고리별 예산 설정 다이얼로그**
+- [x] **개인정보 처리방침 다이얼로그**
 
 ### ⏳ 향후 작업
 - [ ] 위젯 추가
 - [ ] 다크 모드 테스트
 - [ ] 알림 기능
-- [ ] 사용자 정의 별칭 추가 기능
 
 ---
 
 ## 9. 알려진 이슈 / TODO
 
-1. **사용자 정의 별칭**: StoreAliasManager에 런타임 별칭 추가 기능 있으나 UI 미구현
-2. **위젯**: 미구현
-3. **예산 설정**: 카테고리별 예산 설정 미구현
+1. **위젯**: 미구현
+2. **다크 모드**: 테스트 필요
+3. **알림 기능**: 미구현
 
 ---
 
@@ -295,10 +313,13 @@ data class DataQueryRequest(
 | 쿼리 실행 | `feature/chat/ui/ChatViewModel.kt` |
 | 가게명 별칭 | `core/util/StoreAliasManager.kt` |
 | 쿼리 모델 | `core/util/DataQueryParser.kt` |
-| SMS 파싱 | `sms/SmsParser.kt` |
+| SMS 파싱 (정규식) | `core/util/SmsParser.kt` |
+| SMS 파싱 (지능형) | `core/util/SmartParserRepository.kt` |
+| 벡터 유틸 | `core/util/VectorUtils.kt` |
+| 임베딩 API | `core/util/EmbeddingRepository.kt` |
 | 홈 화면 | `feature/home/ui/HomeScreen.kt` |
 | 설정 저장 | `core/datastore/SettingsDataStore.kt` |
 
 ---
 
-*마지막 업데이트: 2026-02-05*
+*마지막 업데이트: 2026-02-06*

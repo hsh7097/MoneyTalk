@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.feature.history.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -9,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
@@ -115,12 +117,31 @@ fun HistoryScreen(
             month = uiState.selectedMonth,
             monthStartDay = uiState.monthStartDay,
             totalExpense = uiState.monthlyTotal,
-            totalIncome = 0, // TODO: Add income tracking
+            totalIncome = uiState.monthlyIncome,
             onPreviousMonth = { viewModel.previousMonth() },
             onNextMonth = { viewModel.nextMonth() }
         )
 
         Spacer(modifier = Modifier.height(8.dp))
+
+        // 검색 바
+        AnimatedVisibility(visible = uiState.isSearching) {
+            OutlinedTextField(
+                value = uiState.searchQuery,
+                onValueChange = { viewModel.setSearchQuery(it) },
+                placeholder = { Text(stringResource(R.string.history_search_placeholder)) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    IconButton(onClick = { viewModel.toggleSearch() }) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_close))
+                    }
+                },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            )
+        }
 
         // 뷰 토글 및 필터
         ViewToggleRow(
@@ -128,7 +149,9 @@ fun HistoryScreen(
             onModeChange = { viewMode = it },
             cardNames = uiState.cardNames,
             selectedCardName = uiState.selectedCardName,
-            onCardNameSelected = { viewModel.filterByCardName(it) }
+            onCardNameSelected = { viewModel.filterByCardName(it) },
+            onSearchClick = { viewModel.toggleSearch() },
+            onAddClick = { viewModel.showAddDialog() }
         )
 
         // 콘텐츠
@@ -150,6 +173,92 @@ fun HistoryScreen(
             }
         }
     }
+
+    // 수동 지출 추가 다이얼로그
+    if (uiState.showAddDialog) {
+        AddExpenseDialog(
+            onDismiss = { viewModel.hideAddDialog() },
+            onConfirm = { amount, storeName, category, cardName ->
+                viewModel.addExpense(amount, storeName, category, cardName)
+            }
+        )
+    }
+}
+
+@Composable
+fun AddExpenseDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (Int, String, String, String) -> Unit
+) {
+    var amountText by remember { mutableStateOf("") }
+    var storeName by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf("기타") }
+    var cardName by remember { mutableStateOf("") }
+
+    val categories = listOf(
+        "식비", "카페", "교통", "쇼핑", "구독", "의료·건강",
+        "문화·여가", "교육", "생활", "기타"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.history_add_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = amountText,
+                    onValueChange = { amountText = it.filter { c -> c.isDigit() } },
+                    label = { Text(stringResource(R.string.history_add_amount)) },
+                    suffix = { Text("원") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = storeName,
+                    onValueChange = { storeName = it },
+                    label = { Text(stringResource(R.string.history_add_store)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                // 카테고리 선택
+                Text(stringResource(R.string.history_add_category), style = MaterialTheme.typography.labelMedium)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(categories) { cat ->
+                        FilterChip(
+                            selected = selectedCategory == cat,
+                            onClick = { selectedCategory = cat },
+                            label = { Text(cat, maxLines = 1) }
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = cardName,
+                    onValueChange = { cardName = it },
+                    label = { Text(stringResource(R.string.history_add_card)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val amount = amountText.toIntOrNull() ?: 0
+                    if (amount > 0 && storeName.isNotBlank()) {
+                        onConfirm(amount, storeName, selectedCategory, cardName.ifBlank { "수동입력" })
+                    }
+                },
+                enabled = amountText.isNotBlank() && storeName.isNotBlank()
+            ) {
+                Text(stringResource(R.string.common_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        }
+    )
 }
 
 enum class ViewMode {
@@ -280,7 +389,9 @@ fun ViewToggleRow(
     onModeChange: (ViewMode) -> Unit,
     cardNames: List<String>,
     selectedCardName: String?,
-    onCardNameSelected: (String?) -> Unit
+    onCardNameSelected: (String?) -> Unit,
+    onSearchClick: () -> Unit = {},
+    onAddClick: () -> Unit = {}
 ) {
     var showFilterMenu by remember { mutableStateOf(false) }
 
@@ -407,11 +518,11 @@ fun ViewToggleRow(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            IconButton(onClick = { /* TODO: Search */ }) {
+            IconButton(onClick = onSearchClick) {
                 Icon(Icons.Default.Search, contentDescription = stringResource(R.string.common_search))
             }
 
-            IconButton(onClick = { /* TODO: Add */ }) {
+            IconButton(onClick = onAddClick) {
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.common_add))
             }
         }

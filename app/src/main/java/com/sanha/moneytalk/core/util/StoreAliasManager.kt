@@ -1,11 +1,18 @@
 package com.sanha.moneytalk.core.util
 
+import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import javax.inject.Inject
+import javax.inject.Singleton
+
 /**
  * 가게명 별칭(Alias) 관리자
  * 영문명 ↔ 한글명 매핑 및 다양한 표기 변형 처리
+ * 사용자 정의 별칭은 DataStore에 영구 저장
  */
-object StoreAliasManager {
-
+@Singleton
+class StoreAliasManager @Inject constructor(
+    private val settingsDataStore: SettingsDataStore
+) {
     // 가게 별칭 매핑 (모든 키는 소문자로 저장)
     private val aliasMap: Map<String, Set<String>> = mapOf(
         // 쿠팡 관련
@@ -65,47 +72,69 @@ object StoreAliasManager {
         "토스" to setOf("toss"),
     )
 
-    // 역방향 매핑 (별칭 → 메인 이름)
-    private val reverseMap: Map<String, String> by lazy {
+    // 사용자 정의 별칭 (DataStore에서 로드됨)
+    private var customAliases = mutableMapOf<String, MutableSet<String>>()
+    private var isLoaded = false
+
+    // 역방향 매핑 캐시
+    private var reverseMap: Map<String, String> = buildReverseMap()
+
+    private fun buildReverseMap(): Map<String, String> {
         val map = mutableMapOf<String, String>()
         aliasMap.forEach { (mainName, aliases) ->
-            // 메인 이름도 자기 자신에 매핑
             map[mainName.lowercase()] = mainName
-            aliases.forEach { alias ->
-                map[alias.lowercase()] = mainName
-            }
+            aliases.forEach { alias -> map[alias.lowercase()] = mainName }
         }
-        map
+        customAliases.forEach { (mainName, aliases) ->
+            map[mainName.lowercase()] = mainName
+            aliases.forEach { alias -> map[alias.lowercase()] = mainName }
+        }
+        return map
+    }
+
+    /**
+     * DataStore에서 사용자 정의 별칭 로드
+     */
+    suspend fun loadCustomAliases() {
+        if (isLoaded) return
+        val saved = settingsDataStore.getCustomAliases()
+        customAliases = saved.mapValues { it.value.toMutableSet() }.toMutableMap()
+        reverseMap = buildReverseMap()
+        isLoaded = true
+    }
+
+    /**
+     * 사용자 정의 별칭 추가 및 DataStore에 영구 저장
+     */
+    suspend fun addCustomAlias(mainName: String, alias: String) {
+        loadCustomAliases()
+        customAliases.getOrPut(mainName) { mutableSetOf() }.add(alias.lowercase())
+        reverseMap = buildReverseMap()
+        settingsDataStore.saveCustomAliases(customAliases)
     }
 
     /**
      * 검색 키워드로 찾을 수 있는 모든 별칭 반환
-     * 예: "쿠팡" → ["쿠팡", "coupang", "쿠페이", "쿠팡이츠", ...]
-     * 예: "coupang" → ["쿠팡", "coupang", "쿠페이", "쿠팡이츠", ...]
      */
     fun getAllAliases(keyword: String): Set<String> {
         val normalizedKeyword = keyword.lowercase().trim()
-
-        // 메인 이름 찾기
         val mainName = reverseMap[normalizedKeyword]
 
         return if (mainName != null) {
-            // 메인 이름 + 모든 별칭 반환
-            setOf(mainName) + (aliasMap[mainName] ?: emptySet())
+            val builtIn = aliasMap[mainName] ?: emptySet()
+            val custom = customAliases[mainName] ?: emptySet()
+            setOf(mainName) + builtIn + custom
         } else {
-            // 매핑이 없으면 원래 키워드만 반환
             setOf(keyword)
         }
     }
 
     /**
      * 가게명이 주어진 키워드와 매칭되는지 확인
-     * 예: storeName="쿠팡(쿠페이)", keyword="coupang" → true
      */
     fun matchesStore(storeName: String, keyword: String): Boolean {
         val normalizedStore = storeName.lowercase()
         val allAliases = getAllAliases(keyword)
-
         return allAliases.any { alias ->
             normalizedStore.contains(alias.lowercase())
         }
@@ -113,11 +142,9 @@ object StoreAliasManager {
 
     /**
      * 가게명을 정규화된 메인 이름으로 변환 (가능한 경우)
-     * 예: "STARBUCKS 강남점" → "스타벅스"
      */
     fun normalizeStoreName(storeName: String): String? {
         val normalizedStore = storeName.lowercase()
-
         reverseMap.forEach { (alias, mainName) ->
             if (normalizedStore.contains(alias)) {
                 return mainName
@@ -126,13 +153,38 @@ object StoreAliasManager {
         return null
     }
 
-    /**
-     * 사용자 정의 별칭 추가 (런타임)
-     * TODO: DataStore에 저장하여 영구 보관
-     */
-    private val customAliases = mutableMapOf<String, MutableSet<String>>()
+    companion object {
+        /**
+         * 정적 메서드 (DI 없이 사용하는 기존 코드 호환용)
+         */
+        @JvmStatic
+        fun normalizeStoreNameStatic(storeName: String): String? {
+            val normalizedStore = storeName.lowercase()
+            staticReverseMap.forEach { (alias, mainName) ->
+                if (normalizedStore.contains(alias)) {
+                    return mainName
+                }
+            }
+            return null
+        }
 
-    fun addCustomAlias(mainName: String, alias: String) {
-        customAliases.getOrPut(mainName) { mutableSetOf() }.add(alias.lowercase())
+        private val staticReverseMap: Map<String, String> by lazy {
+            val map = mutableMapOf<String, String>()
+            mapOf(
+                "쿠팡" to setOf("coupang", "쿠페이", "쿠팡이츠"),
+                "배달의민족" to setOf("배민", "baemin"),
+                "스타벅스" to setOf("starbucks", "스벅"),
+                "투썸플레이스" to setOf("twosome", "투썸"),
+                "GS25" to setOf("gs25", "지에스25"),
+                "CU" to setOf("cu", "씨유"),
+                "넷플릭스" to setOf("netflix"),
+                "유튜브" to setOf("youtube"),
+                "맥도날드" to setOf("mcdonald's", "mcdonalds", "맥날"),
+            ).forEach { (mainName, aliases) ->
+                map[mainName.lowercase()] = mainName
+                aliases.forEach { alias -> map[alias.lowercase()] = mainName }
+            }
+            map
+        }
     }
 }

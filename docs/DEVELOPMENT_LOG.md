@@ -4,6 +4,112 @@
 
 ---
 
+## 2026-02-06 - TODO 항목 구현 (UI 기능 완성)
+
+### 작업 내용
+
+#### 1. StoreAliasManager DataStore 영구 저장
+- `object` → `@Singleton class`로 리팩토링 (Hilt DI)
+- 사용자 정의 별칭을 DataStore에 영구 저장/로드
+- SettingsDataStore에 `saveCustomAliases()`, `getCustomAliases()` 추가
+- 정적 호환 메서드 `normalizeStoreNameStatic()` 제공
+
+#### 2. HistoryScreen 수입 추적 연동
+- IncomeRepository를 HistoryViewModel에 주입
+- 월별 수입 로드 및 UI 표시
+
+#### 3. HistoryScreen 검색 기능
+- AnimatedVisibility 기반 검색 바
+- 가게명, 카테고리, 카드명 in-memory 필터링
+
+#### 4. HistoryScreen 수동 지출 추가
+- AddExpenseDialog composable 구현
+- 금액, 가게명, 카테고리 칩, 카드명 입력
+- HistoryViewModel에 `addExpense()` 메서드 추가
+
+#### 5. SettingsScreen 카테고리별 예산 설정
+- CategoryBudgetDialog composable 구현
+- BudgetDao를 SettingsViewModel에 통합
+- 카테고리별 예산 추가/삭제 UI
+- 기존 BudgetEntity/BudgetDao 활용
+
+#### 6. SettingsScreen 개인정보 처리방침
+- PrivacyPolicyDialog composable 구현
+- 스크롤 가능한 개인정보 처리방침 전문 표시
+
+#### 7. 버그 수정
+- `DateUtils.formatTimestamp()` → `DateUtils.formatDateTime()` 컴파일 에러 수정
+
+#### 생성/수정된 파일
+```
+app/src/main/java/com/sanha/moneytalk/
+├── core/util/
+│   └── StoreAliasManager.kt        # object → @Singleton class, DataStore 연동
+├── core/datastore/
+│   └── SettingsDataStore.kt         # 사용자 정의 별칭 저장 메서드 추가
+├── feature/history/ui/
+│   ├── HistoryScreen.kt             # 검색 바, 수동 지출 추가 다이얼로그
+│   └── HistoryViewModel.kt          # 수입 연동, 검색, 수동 추가 기능
+├── feature/settings/ui/
+│   ├── SettingsScreen.kt            # CategoryBudgetDialog, PrivacyPolicyDialog
+│   └── SettingsViewModel.kt         # BudgetDao 통합, 예산 관리 메서드
+├── feature/chat/ui/
+│   └── ChatViewModel.kt             # StoreAliasManager DI 주입
+└── res/values/
+    ├── strings.xml                   # 새 문자열 리소스 추가
+    └── values-en/strings.xml        # 영어 문자열 리소스 추가
+```
+
+---
+
+## 2026-02-06 - 벡터 기반 지능형 파싱 시스템
+
+### 작업 내용
+
+#### 1. Vector-First 파싱 파이프라인
+- SmartParserRepository: Vector → Regex → Gemini 3단계 파이프라인
+- Google text-embedding-004 API를 이용한 SMS 벡터화
+- 코사인 유사도 기반 로컬 패턴 매칭 (임계값: SMS 0.98, 가맹점 0.90)
+- 자가 학습: 성공적 파싱 결과를 DB에 저장하여 향후 무비용 매칭
+
+#### 2. Room DB 벡터 저장
+- SmsPatternEntity: 학습된 SMS 패턴 + 벡터 (BLOB)
+- MerchantVectorEntity: 가맹점 벡터 + 카테고리 매핑
+- VectorConverters: FloatArray ↔ ByteArray TypeConverter
+- DB v2 → v3 마이그레이션
+
+#### 3. 유틸리티
+- VectorUtils: 코사인 유사도, 유사 패턴 검색
+- EmbeddingRepository: Google Embedding API + LRU 캐시 (200개)
+
+#### 4. HomeViewModel 통합
+- SmartParserRepository를 SMS 동기화에 통합
+- 파싱 소스별 통계 로깅 (Vector/Regex/Gemini)
+
+#### 생성/수정된 파일
+```
+app/src/main/java/com/sanha/moneytalk/
+├── core/database/
+│   ├── converter/VectorConverters.kt    # FloatArray ↔ ByteArray (신규)
+│   ├── entity/
+│   │   ├── SmsPatternEntity.kt          # SMS 패턴 벡터 엔티티 (신규)
+│   │   └── MerchantVectorEntity.kt      # 가맹점 벡터 엔티티 (신규)
+│   ├── dao/
+│   │   ├── SmsPatternDao.kt             # SMS 패턴 DAO (신규)
+│   │   └── MerchantVectorDao.kt         # 가맹점 벡터 DAO (신규)
+│   └── AppDatabase.kt                   # v3 마이그레이션, 새 엔티티/DAO 등록
+├── core/util/
+│   ├── VectorUtils.kt                   # 코사인 유사도 유틸 (신규)
+│   ├── EmbeddingRepository.kt           # 임베딩 API + 캐시 (신규)
+│   └── SmartParserRepository.kt         # 지능형 파싱 파이프라인 (신규)
+├── core/di/
+│   └── DatabaseModule.kt                # 새 DAO 프로바이더 추가
+└── feature/home/ui/
+    └── HomeViewModel.kt                 # SmartParserRepository 통합
+```
+
+---
+
 ## 2026-02-05 - AI 자연어 데이터 조회 및 가게명 별칭 시스템
 
 ### 작업 내용
@@ -210,7 +316,9 @@ feature/
 | 2026-02-05 | 0.6.0 | Claude → Gemini 마이그레이션 |
 | 2026-02-05 | 0.7.0 | 자연어 데이터 조회 시스템 |
 | 2026-02-05 | 0.8.0 | 가게명 별칭 시스템 |
+| 2026-02-06 | 0.9.0 | 벡터 기반 지능형 파싱 시스템 |
+| 2026-02-06 | 0.10.0 | TODO 항목 구현 (UI 기능 완성) |
 
 ---
 
-*마지막 업데이트: 2026-02-05*
+*마지막 업데이트: 2026-02-06*
