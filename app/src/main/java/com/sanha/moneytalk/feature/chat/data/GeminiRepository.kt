@@ -25,8 +25,30 @@ class GeminiRepository @Inject constructor(
     // 재무 상담용 모델 (System Instruction에 상담사 역할 포함)
     private var financialAdvisorModel: GenerativeModel? = null
 
+    // 요약 전용 모델
+    private var summaryModel: GenerativeModel? = null
+
     companion object {
         private const val TAG = "GeminiChat"
+
+        // Rolling Summary 전용 시스템 명령어
+        private const val SUMMARY_SYSTEM_INSTRUCTION = """당신은 대화 요약 전문가입니다.
+
+[역할]
+기존 요약본과 새로운 대화 내용을 통합하여 하나의 간결한 누적 요약본을 생성합니다.
+
+[요약 규칙]
+1. 반드시 한국어로 작성
+2. 사용자의 핵심 관심사, 질문 의도, 선호도를 반드시 포함
+3. 상담사가 제공한 주요 조언과 데이터 포인트 유지
+4. 시간순으로 정리하되, 중복 내용은 최신 정보로 통합
+5. 금액, 카테고리, 기간 등 구체적인 숫자와 키워드는 보존
+6. 200자 이내로 간결하게 작성
+7. "~에 대해 물었음", "~를 조언받음" 등 요약체로 작성
+
+[출력 형식]
+- 요약본만 반환 (다른 텍스트 없이)
+- 마크다운이나 특수 포맷 사용 금지"""
 
         // 재무 상담사 시스템 명령어
         private const val FINANCIAL_ADVISOR_SYSTEM_INSTRUCTION = """당신은 '머니톡'이라는 친근한 개인 재무 상담 AI입니다.
@@ -144,7 +166,7 @@ class GeminiRepository @Inject constructor(
 
         if (queryAnalyzerModel == null || cachedApiKey != apiKey) {
             queryAnalyzerModel = GenerativeModel(
-                modelName = "gemini-2.0-flash",
+                modelName = "gemini-2.5-flash",
                 apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.3f  // 쿼리 분석은 정확도가 중요
@@ -165,7 +187,7 @@ class GeminiRepository @Inject constructor(
 
         if (financialAdvisorModel == null || cachedApiKey != apiKey) {
             financialAdvisorModel = GenerativeModel(
-                modelName = "gemini-2.0-flash",
+                modelName = "gemini-2.5-flash",
                 apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.7f
@@ -179,11 +201,33 @@ class GeminiRepository @Inject constructor(
         return financialAdvisorModel
     }
 
+    // 요약 전용 모델 가져오기 (System Instruction 포함)
+    private suspend fun getSummaryModel(): GenerativeModel? {
+        val apiKey = getApiKey()
+        if (apiKey.isBlank()) return null
+
+        if (summaryModel == null || cachedApiKey != apiKey) {
+            summaryModel = GenerativeModel(
+                modelName = "gemini-2.5-flash",
+                apiKey = apiKey,
+                generationConfig = generationConfig {
+                    temperature = 0.3f  // 요약은 정확도가 중요
+                    topK = 20
+                    topP = 0.9f
+                    maxOutputTokens = 512
+                },
+                systemInstruction = content { text(SUMMARY_SYSTEM_INSTRUCTION) }
+            )
+        }
+        return summaryModel
+    }
+
     // 수동으로 API 키 설정 (설정 화면에서 사용)
     suspend fun setApiKey(key: String) {
         cachedApiKey = key
         queryAnalyzerModel = null
         financialAdvisorModel = null
+        summaryModel = null
         settingsDataStore.saveGeminiApiKey(key)
     }
 
@@ -296,6 +340,36 @@ $userMessage"""
     }
 
     /**
+     * 대화 컨텍스트가 포함된 프롬프트로 최종 답변 생성
+     *
+     * ChatContextBuilder가 구성한 [요약 + 최근 대화 + 데이터 + 질문] 프롬프트를 그대로 전달
+     * Rolling Summary 전략과 함께 사용하여 대화 맥락을 유지하면서 답변 생성
+     *
+     * @param contextPrompt ChatContextBuilder.buildFinalAnswerPrompt()가 생성한 통합 프롬프트
+     * @return AI 응답 텍스트
+     */
+    suspend fun generateFinalAnswerWithContext(contextPrompt: String): Result<String> {
+        return try {
+            Log.d(TAG, "=== generateFinalAnswerWithContext 시작 ===")
+            Log.d(TAG, "프롬프트 길이: ${contextPrompt.length}")
+
+            val model = getFinancialAdvisorModel()
+            if (model == null) {
+                return Result.failure(Exception("API 키가 설정되지 않았습니다."))
+            }
+
+            val response = model.generateContent(contextPrompt)
+            val responseText = response.text ?: "응답을 받지 못했어요."
+
+            Log.d(TAG, "Gemini 최종 응답: ${responseText.take(200)}...")
+            Result.success(responseText)
+        } catch (e: Exception) {
+            Log.e(TAG, "컨텍스트 기반 답변 생성 실패", e)
+            Result.failure(Exception("요청 실패: ${e.message}"))
+        }
+    }
+
+    /**
      * 간단한 채팅 (데이터 없이 일반 대화)
      */
     suspend fun simpleChat(userMessage: String): Result<String> {
@@ -321,6 +395,55 @@ $userMessage"""
             Log.e(TAG, "에러 메시지: ${e.message}")
             Log.e(TAG, "에러 클래스: ${e.javaClass.simpleName}")
             Result.failure(Exception("요청 실패: ${e.message}"))
+        }
+    }
+
+    /**
+     * Rolling Summary 생성
+     *
+     * 기존 요약본과 새로운 대화 내용을 통합하여 누적 요약본을 생성한다.
+     *
+     * @param existingSummary 기존 누적 요약본 (첫 요약이면 null)
+     * @param newMessages 윈도우 밖으로 밀려난 새로운 메시지들 (텍스트)
+     * @return 새로운 통합 요약본
+     */
+    suspend fun generateRollingSummary(
+        existingSummary: String?,
+        newMessages: String
+    ): Result<String> {
+        return try {
+            Log.d(TAG, "=== Rolling Summary 생성 시작 ===")
+
+            val model = getSummaryModel()
+            if (model == null) {
+                return Result.failure(Exception("API 키가 설정되지 않았습니다."))
+            }
+
+            val prompt = if (existingSummary.isNullOrBlank()) {
+                // 첫 요약: 새 메시지만으로 요약 생성
+                """다음 대화 내용을 요약해주세요:
+
+$newMessages"""
+            } else {
+                // 누적 요약: 기존 요약 + 새 메시지를 통합
+                """다음 기존 요약본과 새로운 대화 내용을 통합하여 하나의 누적 요약본을 생성해주세요.
+
+[기존 요약본]
+$existingSummary
+
+[새로운 대화 내용]
+$newMessages"""
+            }
+
+            Log.d(TAG, "요약 프롬프트 길이: ${prompt.length}")
+            val response = model.generateContent(prompt)
+            val summaryText = response.text ?: return Result.failure(Exception("요약 응답 없음"))
+
+            Log.d(TAG, "생성된 요약: $summaryText")
+            Result.success(summaryText.trim())
+        } catch (e: Exception) {
+            Log.e(TAG, "Rolling Summary 생성 실패", e)
+            Result.failure(Exception("요약 생성 실패: ${e.message}"))
         }
     }
 }

@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.database.AppDatabase
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.util.BackupData
@@ -20,8 +21,10 @@ import com.sanha.moneytalk.feature.home.data.CategoryRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class SettingsUiState(
@@ -55,6 +58,7 @@ class SettingsViewModel @Inject constructor(
     private val googleDriveHelper: GoogleDriveHelper,
     private val categoryClassifierService: CategoryClassifierService,
     private val categoryRepository: CategoryRepository,
+    private val appDatabase: AppDatabase,
     private val chatDao: ChatDao,
     private val budgetDao: BudgetDao
 ) : ViewModel() {
@@ -384,16 +388,12 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                // 지출 데이터 삭제
-                expenseRepository.deleteAll()
-                // 수입 데이터 삭제
-                incomeRepository.deleteAll()
-                // 채팅 기록 삭제
-                chatDao.deleteAll()
-                // 카테고리 매핑 삭제
-                categoryRepository.deleteAllMappings()
-                // 예산 데이터 삭제
-                budgetDao.deleteAll()
+                // Room의 clearAllTables()로 모든 테이블 데이터를 안전하게 삭제
+                // (외래키 순서, 세션-메시지 관계 등을 자동 처리)
+                // clearAllTables()는 동기 메서드이므로 IO 스레드에서 실행
+                withContext(Dispatchers.IO) {
+                    appDatabase.clearAllTables()
+                }
                 // 설정 초기화
                 settingsDataStore.saveMonthlyIncome(0)
                 settingsDataStore.saveMonthStartDay(1)

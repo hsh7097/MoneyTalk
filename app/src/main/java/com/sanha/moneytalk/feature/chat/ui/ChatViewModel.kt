@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.entity.ChatEntity
 import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
+import com.sanha.moneytalk.feature.chat.data.ChatContext
+import com.sanha.moneytalk.feature.chat.data.ChatRepository
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
@@ -12,6 +14,7 @@ import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.ActionType
+import com.sanha.moneytalk.core.util.ChatContextBuilder
 import com.sanha.moneytalk.core.util.DataAction
 import com.sanha.moneytalk.core.util.DataQuery
 import com.sanha.moneytalk.core.util.DateUtils
@@ -54,6 +57,7 @@ data class ChatUiState(
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val geminiRepository: GeminiRepository,
+    private val chatRepository: ChatRepository,
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val chatDao: ChatDao,
@@ -187,29 +191,27 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
-            // 사용자 메시지 저장
-            val userChat = ChatEntity(
-                sessionId = sessionId,
-                message = message,
-                isUser = true
-            )
-            chatDao.insert(userChat)
-
-            // 세션 업데이트 시간 갱신
-            chatDao.updateSessionTimestamp(sessionId)
-
             _uiState.update { it.copy(isLoading = true) }
 
             try {
-                // 1단계: Gemini에게 필요한 데이터 쿼리/액션 분석 요청
-                val analyzeResult = geminiRepository.analyzeQueryNeeds(message)
+                // ===== Rolling Summary + Windowed Context 전략 적용 =====
+
+                // 1단계: 메시지 저장 + 요약 갱신 + 컨텍스트 구성
+                val chatContext = chatRepository.sendMessageAndBuildContext(
+                    sessionId = sessionId,
+                    userMessage = message
+                )
+
+                // 2단계: 대화 맥락을 포함하여 쿼리 분석 요청
+                val contextualMessage = ChatContextBuilder.buildQueryAnalysisContext(chatContext)
+                val analyzeResult = geminiRepository.analyzeQueryNeeds(contextualMessage)
 
                 val queryResults = mutableListOf<QueryResult>()
                 val actionResults = mutableListOf<ActionResult>()
 
                 analyzeResult.onSuccess { queryRequest ->
                     if (queryRequest != null) {
-                        // 2단계: 요청된 쿼리 실행
+                        // 3단계: 요청된 쿼리 실행
                         if (queryRequest.queries.isNotEmpty()) {
                             for (query in queryRequest.queries) {
                                 val result = executeQuery(query)
@@ -219,7 +221,7 @@ class ChatViewModel @Inject constructor(
                             }
                         }
 
-                        // 3단계: 요청된 액션 실행
+                        // 4단계: 요청된 액션 실행
                         if (queryRequest.actions.isNotEmpty()) {
                             for (action in queryRequest.actions) {
                                 val result = executeAction(action)
@@ -233,52 +235,47 @@ class ChatViewModel @Inject constructor(
                             queryResults.addAll(fallbackResults)
                         }
                     } else {
-                        // 쿼리 분석 실패 시 기본 데이터 제공 (현재 월)
                         val fallbackResults = getDefaultQueryResults()
                         queryResults.addAll(fallbackResults)
                     }
                 }.onFailure {
-                    // 쿼리 분석 실패 시 기본 데이터 제공
                     val fallbackResults = getDefaultQueryResults()
                     queryResults.addAll(fallbackResults)
                 }
 
-                // 4단계: 쿼리/액션 결과로 최종 답변 생성
+                // 5단계: 대화 맥락 + 쿼리 결과로 최종 답변 생성
                 val monthlyIncome = settingsDataStore.getMonthlyIncome()
-                val finalResult = geminiRepository.generateFinalAnswer(
-                    userMessage = message,
-                    queryResults = queryResults,
+
+                val dataContext = queryResults.joinToString("\n\n") { result ->
+                    "[${result.queryType.name}]\n${result.data}"
+                }
+                val actionContext = actionResults.joinToString("\n") { "- ${it.message}" }
+
+                val finalPrompt = ChatContextBuilder.buildFinalAnswerPrompt(
+                    context = chatContext,
+                    queryResults = dataContext,
                     monthlyIncome = monthlyIncome,
-                    actionResults = actionResults
+                    actionResults = actionContext
                 )
 
-                finalResult.onSuccess { response ->
-                    val aiChat = ChatEntity(
-                        sessionId = sessionId,
-                        message = response,
-                        isUser = false
-                    )
-                    chatDao.insert(aiChat)
-                }.onFailure { e ->
-                    val errorChat = ChatEntity(
-                        sessionId = sessionId,
-                        message = "죄송해요, 응답을 받는 중 오류가 발생했어요: ${e.message}",
-                        isUser = false
-                    )
-                    chatDao.insert(errorChat)
-                }
+                val finalResult = geminiRepository.generateFinalAnswerWithContext(finalPrompt)
 
-                // 세션 업데이트 시간 갱신
-                chatDao.updateSessionTimestamp(sessionId)
+                finalResult.onSuccess { response ->
+                    // AI 응답 저장 + 요약 갱신
+                    chatRepository.saveAiResponseAndUpdateSummary(sessionId, response)
+                }.onFailure { e ->
+                    chatRepository.saveAiResponseAndUpdateSummary(
+                        sessionId,
+                        "죄송해요, 응답을 받는 중 오류가 발생했어요: ${e.message}"
+                    )
+                }
 
                 _uiState.update { it.copy(isLoading = false) }
             } catch (e: Exception) {
-                val errorChat = ChatEntity(
-                    sessionId = sessionId,
-                    message = "오류가 발생했어요: ${e.message}",
-                    isUser = false
+                chatRepository.saveAiResponseAndUpdateSummary(
+                    sessionId,
+                    "오류가 발생했어요: ${e.message}"
                 )
-                chatDao.insert(errorChat)
                 _uiState.update { it.copy(isLoading = false) }
             }
         }
@@ -580,6 +577,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value.currentSessionId?.let { sessionId ->
                 chatDao.deleteChatsBySession(sessionId)
+                chatRepository.clearSessionSummary(sessionId)
                 // 세션 제목 초기화
                 chatDao.updateSessionTitle(sessionId, "새 대화")
             }
