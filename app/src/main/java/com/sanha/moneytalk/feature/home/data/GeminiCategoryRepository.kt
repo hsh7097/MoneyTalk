@@ -72,7 +72,7 @@ class GeminiCategoryRepository @Inject constructor(
         if (apiKey.isBlank()) return
 
         generativeModel = GenerativeModel(
-            modelName = "gemini-2.0-flash",
+            modelName = "gemini-2.5-flash-lite",
             apiKey = apiKey,
             generationConfig = generationConfig {
                 temperature = 0.1f  // 낮은 온도로 일관된 분류
@@ -156,7 +156,7 @@ class GeminiCategoryRepository @Inject constructor(
                 val prompt = buildClassificationPrompt(batch, categories)
 
                 Log.d(TAG, "=== REQUEST [배치 ${batchIndex + 1}/$totalBatches, 시도 $attempt] ===")
-                Log.d(TAG, "모델: gemini-2.0-flash, 배치 크기: ${batch.size}개")
+                Log.d(TAG, "모델: gemini-2.5-flash-lite, 배치 크기: ${batch.size}개")
                 Log.d(TAG, "가게명 목록: ${batch.joinToString(", ")}")
                 logLongString(TAG, "PROMPT", prompt)
 

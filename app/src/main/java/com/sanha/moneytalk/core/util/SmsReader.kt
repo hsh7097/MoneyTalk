@@ -179,6 +179,64 @@ class SmsReader @Inject constructor() {
     }
 
     /**
+     * 특정 기간의 모든 SMS 읽기 (필터링 없이)
+     *
+     * 하이브리드 분류기에서 사용: 정규식으로 걸러지지 않은 SMS도
+     * 벡터/LLM 분류를 위해 전달합니다.
+     *
+     * @param contentResolver ContentResolver
+     * @param startDate 시작 시간 (밀리초)
+     * @param endDate 종료 시간 (밀리초)
+     * @return 모든 SMS 목록 (최신순 정렬)
+     */
+    fun readAllSmsByDateRange(
+        contentResolver: ContentResolver,
+        startDate: Long,
+        endDate: Long
+    ): List<SmsMessage> {
+        val smsList = mutableListOf<SmsMessage>()
+
+        val cursor = contentResolver.query(
+            Uri.parse("content://sms/inbox"),
+            arrayOf(
+                Telephony.Sms._ID,
+                Telephony.Sms.ADDRESS,
+                Telephony.Sms.BODY,
+                Telephony.Sms.DATE
+            ),
+            "${Telephony.Sms.DATE} BETWEEN ? AND ?",
+            arrayOf(startDate.toString(), endDate.toString()),
+            "${Telephony.Sms.DATE} DESC"
+        )
+
+        cursor?.use {
+            val idIndex = it.getColumnIndex(Telephony.Sms._ID)
+            val addressIndex = it.getColumnIndex(Telephony.Sms.ADDRESS)
+            val bodyIndex = it.getColumnIndex(Telephony.Sms.BODY)
+            val dateIndex = it.getColumnIndex(Telephony.Sms.DATE)
+
+            while (it.moveToNext()) {
+                val id = it.getString(idIndex) ?: continue
+                val address = it.getString(addressIndex) ?: continue
+                val body = it.getString(bodyIndex) ?: continue
+                val date = it.getLong(dateIndex)
+
+                smsList.add(
+                    SmsMessage(
+                        id = SmsParser.generateSmsId(address, body, date),
+                        address = address,
+                        body = body,
+                        date = date
+                    )
+                )
+            }
+        }
+
+        Log.d("SmsReader", "전체 SMS 읽기 완료: ${smsList.size}건 ($startDate ~ $endDate)")
+        return smsList
+    }
+
+    /**
      * 모든 수입(입금) 문자 읽기
      *
      * 기기에 저장된 모든 SMS 중 입금 문자만 필터링하여 반환합니다.

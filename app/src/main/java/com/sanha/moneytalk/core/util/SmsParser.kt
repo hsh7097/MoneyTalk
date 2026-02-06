@@ -266,9 +266,12 @@ object SmsParser {
      * @return 카드 결제 문자이면 true
      */
     fun isCardPaymentSms(message: String): Boolean {
+        // 빈 메시지 조기 반환
+        if (message.isBlank()) return false
+
         // 제외 키워드가 있으면 false
         if (excludeKeywords.any { message.contains(it) }) {
-            Log.e("sanha","제외 키워드 $message")
+            Log.d("sanha","제외 키워드 ${message.take(30)}")
             return false
         }
 
@@ -287,20 +290,12 @@ object SmsParser {
 
         // KB 관련 디버그 로그
         if (message.contains("KB") || message.contains("kb") || message.contains("국민")) {
-            Log.e("sanhakb", "=== KB 감지 ===")
-            Log.e("sanhakb", "메시지: ${message.take(100)}")
-            Log.e("sanhakb", "매칭된 카드키워드: $matchedCardKeyword")
-            Log.e("sanhakb", "매칭된 결제키워드: $matchedPaymentKeyword")
-            Log.e("sanhakb", "금액있음: $hasAmount")
+            Log.d("sanhakb", "KB 감지: ${message.take(60)} | card:$matchedCardKeyword pay:$matchedPaymentKeyword amt:$hasAmount")
         }
 
         val isCardPayment = hasCardKeyword && hasPaymentKeyword && hasAmount
         if(isCardPayment){
-            Log.e("sanha","성공 키워드 [$matchedCardKeyword] [${message.length}자] $message")
-        }else{
-            // message가 너무 길면 앞 50자만 출력
-            val previewMsg = if (message.length > 50) message.take(50) + "..." else message
-            Log.e("sanha","실패 키워드 [${message.length}자] $previewMsg | hasCard:$hasCardKeyword($matchedCardKeyword) hasPay:$hasPaymentKeyword hasAmt:$hasAmount")
+            Log.d("sanha","성공 키워드 [$matchedCardKeyword] [${message.length}자] ${message.take(80)}")
         }
 
         return isCardPayment
