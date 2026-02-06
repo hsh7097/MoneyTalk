@@ -4,9 +4,18 @@ import androidx.room.*
 import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * 예산 DAO
+ *
+ * 카테고리별 월간 예산 한도에 대한 CRUD를 제공합니다.
+ * yearMonth 기준으로 월별 독립적인 예산을 관리합니다.
+ *
+ * @see BudgetEntity
+ */
 @Dao
 interface BudgetDao {
 
+    /** 예산 설정 삽입/업데이트 (충돌 시 교체) */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(budget: BudgetEntity)
 

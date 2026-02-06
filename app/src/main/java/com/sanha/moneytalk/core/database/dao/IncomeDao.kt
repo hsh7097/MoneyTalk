@@ -4,9 +4,23 @@ import androidx.room.*
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * 수입 내역 DAO
+ *
+ * 입금 SMS에서 자동 파싱된 수입 및 수동 입력 수입에 대한 CRUD를 제공합니다.
+ *
+ * 주요 기능:
+ * - 기본 CRUD (삽입, 수정, 삭제)
+ * - 기간별 수입 조회 및 합계
+ * - 고정 수입 조회 (isRecurring = true)
+ * - SMS ID 기반 중복 방지
+ *
+ * @see IncomeEntity
+ */
 @Dao
 interface IncomeDao {
 
+    /** 단일 수입 삽입 */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(income: IncomeEntity): Long
 

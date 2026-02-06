@@ -4,9 +4,28 @@ import androidx.room.*
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * 지출 내역 DAO
+ *
+ * 카드 결제 SMS에서 파싱된 지출 데이터에 대한 CRUD 및 다양한 조회 쿼리를 제공합니다.
+ *
+ * 주요 기능:
+ * - 기본 CRUD (삽입, 수정, 삭제)
+ * - 기간별/카테고리별/카드사별 필터링 조회
+ * - 통계 쿼리 (일별/월별 합계, 카테고리별 합계)
+ * - 중복 데이터 관리 (중복 조회/삭제)
+ * - 카테고리 일괄 변경 (가게명 기준)
+ * - 검색 (가게명, 카테고리, 카드명)
+ *
+ * Flow 반환: 실시간 UI 업데이트용 (Compose에서 collectAsState)
+ * suspend 반환: 일회성 조회/수정용
+ *
+ * @see ExpenseEntity
+ */
 @Dao
 interface ExpenseDao {
 
+    /** 단일 지출 삽입 (충돌 시 교체) */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(expense: ExpenseEntity): Long
 
