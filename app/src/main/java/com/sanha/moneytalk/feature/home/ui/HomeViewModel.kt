@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.feature.home.ui
 
 import android.content.ContentResolver
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
@@ -10,6 +11,8 @@ import com.sanha.moneytalk.feature.chat.data.ClaudeRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.core.util.ParseSource
+import com.sanha.moneytalk.core.util.SmartParserRepository
 import com.sanha.moneytalk.core.util.SmsParser
 import com.sanha.moneytalk.core.util.SmsReader
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -38,8 +41,13 @@ class HomeViewModel @Inject constructor(
     private val incomeRepository: IncomeRepository,
     private val claudeRepository: ClaudeRepository,
     private val smsReader: SmsReader,
+    private val smartParserRepository: SmartParserRepository,
     private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "HomeViewModel"
+    }
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -146,6 +154,14 @@ class HomeViewModel @Inject constructor(
         loadData()
     }
 
+    /**
+     * SMS 동기화 - 벡터 기반 지능형 파싱 파이프라인 적용
+     *
+     * 처리 순서:
+     * 1. SMS 읽기 (ContentResolver)
+     * 2. SmartParserRepository로 파싱 (Vector → Regex → Gemini)
+     * 3. 성공 시 DB 저장 + 자가 학습
+     */
     fun syncSmsMessages(contentResolver: ContentResolver, forceFullSync: Boolean = false) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSyncing = true) }
@@ -163,6 +179,9 @@ class HomeViewModel @Inject constructor(
                 }
 
                 var newCount = 0
+                var vectorMatchCount = 0
+                var regexCount = 0
+                var geminiCount = 0
 
                 for (sms in smsList) {
                     // 이미 처리된 문자인지 확인
@@ -170,8 +189,19 @@ class HomeViewModel @Inject constructor(
                         continue
                     }
 
-                    // 로컬 정규식으로 파싱 (API 호출 없음)
-                    val analysis = SmsParser.parseSms(sms.body, sms.date)
+                    // 벡터 우선 지능형 파싱 (Vector → Regex → Gemini Fallback)
+                    val smartResult = smartParserRepository.smartParseWithCategoryMapping(
+                        smsBody = sms.body,
+                        smsTimestamp = sms.date
+                    )
+                    val analysis = smartResult.result
+
+                    // 파싱 소스 통계
+                    when (smartResult.source) {
+                        ParseSource.VECTOR_MATCH -> vectorMatchCount++
+                        ParseSource.REGEX_LOCAL -> regexCount++
+                        ParseSource.GEMINI_LLM -> geminiCount++
+                    }
 
                     // 금액이 0보다 큰 경우에만 저장
                     if (analysis.amount > 0) {
@@ -192,16 +222,27 @@ class HomeViewModel @Inject constructor(
                 // 마지막 동기화 시간 저장
                 settingsDataStore.saveLastSyncTime(currentTime)
 
+                // 학습 통계 로그
+                val stats = smartParserRepository.getLearningStats()
+                Log.d(TAG, "Sync complete: new=$newCount, vector=$vectorMatchCount, regex=$regexCount, gemini=$geminiCount")
+                Log.d(TAG, "Learning stats: patterns=${stats.patternCount}, merchants=${stats.merchantCount}, cache=${stats.cacheSize}")
+
                 // 데이터 새로고침
                 loadData()
+
+                val syncMessage = buildString {
+                    append("${newCount}건의 새 지출이 추가되었습니다")
+                    if (vectorMatchCount > 0) append(" (AI학습: ${vectorMatchCount}건)")
+                }
 
                 _uiState.update {
                     it.copy(
                         isSyncing = false,
-                        errorMessage = if (newCount > 0) "${newCount}건의 새 지출이 추가되었습니다" else "새로운 지출이 없습니다"
+                        errorMessage = if (newCount > 0) syncMessage else "새로운 지출이 없습니다"
                     )
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "Sync failed", e)
                 _uiState.update {
                     it.copy(
                         isSyncing = false,

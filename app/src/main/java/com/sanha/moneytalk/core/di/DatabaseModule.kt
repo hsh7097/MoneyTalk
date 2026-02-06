@@ -7,6 +7,8 @@ import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
+import com.sanha.moneytalk.core.database.dao.MerchantVectorDao
+import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -26,7 +28,10 @@ object DatabaseModule {
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
-            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .addMigrations(
+                AppDatabase.MIGRATION_1_2,
+                AppDatabase.MIGRATION_2_3
+            )
             .build()
     }
 
@@ -52,5 +57,17 @@ object DatabaseModule {
     @Singleton
     fun provideChatDao(database: AppDatabase): ChatDao {
         return database.chatDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideSmsPatternDao(database: AppDatabase): SmsPatternDao {
+        return database.smsPatternDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideMerchantVectorDao(database: AppDatabase): MerchantVectorDao {
+        return database.merchantVectorDao()
     }
 }

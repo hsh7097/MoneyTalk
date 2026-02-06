@@ -2,17 +2,23 @@ package com.sanha.moneytalk.core.database
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.sanha.moneytalk.core.database.converter.VectorConverters
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
+import com.sanha.moneytalk.core.database.dao.MerchantVectorDao
+import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import com.sanha.moneytalk.core.database.entity.ChatEntity
 import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.database.entity.MerchantVectorEntity
+import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 
 @Database(
     entities = [
@@ -20,16 +26,21 @@ import com.sanha.moneytalk.core.database.entity.IncomeEntity
         IncomeEntity::class,
         BudgetEntity::class,
         ChatEntity::class,
-        ChatSessionEntity::class
+        ChatSessionEntity::class,
+        SmsPatternEntity::class,
+        MerchantVectorEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
+@TypeConverters(VectorConverters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun expenseDao(): ExpenseDao
     abstract fun incomeDao(): IncomeDao
     abstract fun budgetDao(): BudgetDao
     abstract fun chatDao(): ChatDao
+    abstract fun smsPatternDao(): SmsPatternDao
+    abstract fun merchantVectorDao(): MerchantVectorDao
 
     companion object {
         const val DATABASE_NAME = "moneytalk_db"
@@ -80,6 +91,42 @@ abstract class AppDatabase : RoomDatabase() {
 
                 // 6. 인덱스 생성
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_chat_history_sessionId ON chat_history(sessionId)")
+            }
+        }
+
+        // 마이그레이션 2 → 3: 벡터 기반 SMS 패턴 및 가맹점 테이블 추가
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // SMS 패턴 테이블 생성
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS sms_patterns (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        vector BLOB NOT NULL,
+                        smsTemplate TEXT NOT NULL,
+                        cardName TEXT NOT NULL,
+                        amountPattern TEXT NOT NULL,
+                        storeNamePattern TEXT NOT NULL,
+                        dateTimePattern TEXT NOT NULL,
+                        parsingSource TEXT NOT NULL,
+                        successCount INTEGER NOT NULL DEFAULT 1,
+                        lastUsedAt INTEGER NOT NULL,
+                        createdAt INTEGER NOT NULL
+                    )
+                """)
+
+                // 가맹점 벡터 테이블 생성
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS merchant_vectors (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        merchantName TEXT NOT NULL,
+                        vector BLOB NOT NULL,
+                        category TEXT NOT NULL,
+                        aliases TEXT NOT NULL DEFAULT '',
+                        matchCount INTEGER NOT NULL DEFAULT 1,
+                        lastMatchedAt INTEGER NOT NULL,
+                        createdAt INTEGER NOT NULL
+                    )
+                """)
             }
         }
     }
