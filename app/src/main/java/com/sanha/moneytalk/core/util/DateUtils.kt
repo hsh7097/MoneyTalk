@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.core.util
 
+import android.util.Log
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -60,11 +61,21 @@ object DateUtils {
 
     /**
      * "yyyy-MM-dd HH:mm" 문자열을 timestamp로 변환
+     *
+     * 파싱 실패 시 현재 시간을 반환하고 경고 로그를 출력합니다.
+     * 이는 SMS에서 날짜를 추출하지 못했을 때의 폴백입니다.
      */
     fun parseDateTime(dateTimeString: String): Long {
         return try {
-            dateTimeFormat.parse(dateTimeString)?.time ?: System.currentTimeMillis()
+            val result = dateTimeFormat.parse(dateTimeString)?.time
+            if (result == null) {
+                Log.w("DateUtils", "parseDateTime 실패 (null 결과): '$dateTimeString' → 현재 시간 사용")
+                System.currentTimeMillis()
+            } else {
+                result
+            }
         } catch (e: Exception) {
+            Log.w("DateUtils", "parseDateTime 예외: '$dateTimeString' → 현재 시간 사용: ${e.message}")
             System.currentTimeMillis()
         }
     }

@@ -1,49 +1,95 @@
 package com.sanha.moneytalk.feature.home.data
 
 import android.util.Log
-import com.sanha.moneytalk.core.database.entity.ExpenseEntity
-import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.util.SmsParser
+import com.sanha.moneytalk.core.util.StoreNameGrouper
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 카테고리 분류 서비스
- * 1. Room DB의 저장된 매핑 확인
- * 2. SmsParser의 로컬 키워드 매칭
- * 3. 미분류 항목은 Gemini API로 분류
+ * 카테고리 분류 서비스 (4-Tier 하이브리드)
+ *
+ * 가게명을 카테고리로 분류하는 4단계 파이프라인:
+ *
+ * ```
+ * Tier 1:   Room DB 정확 매핑 (CategoryMappingEntity) → 즉시 반환 (비용 0)
+ * Tier 1.5: 벡터 유사도 매칭 (StoreEmbeddingEntity)  → 임베딩 API 1회 (~0.001$)
+ * Tier 2:   SmsParser 로컬 키워드 (250+ 키워드)       → 즉시 반환 (비용 0)
+ * Tier 3:   Gemini 배치 API (시맨틱 그룹핑 후)         → API 호출 (비용 절감)
+ * ```
+ *
+ * 자가 학습 피드백 루프:
+ * - 사용자가 카테고리를 수동 수정하면 벡터 DB에 저장 + 유사 가게에 전파
+ * - Gemini 분류 결과는 벡터 DB에도 캐싱 → 다음 유사 가게는 Tier 1.5에서 즉시 반환
+ * - 벡터 매칭 성공 시 Room에도 정확 매핑 저장 (캐시 프로모션: Tier 1.5 → Tier 1)
+ *
+ * @see StoreEmbeddingRepository 벡터 유사도 검색/캐싱 담당
+ * @see StoreNameGrouper 시맨틱 그룹핑으로 Gemini 호출 최적화
  */
 @Singleton
 class CategoryClassifierService @Inject constructor(
     private val categoryRepository: CategoryRepository,
     private val geminiRepository: GeminiCategoryRepository,
-    private val expenseRepository: ExpenseRepository
+    private val expenseRepository: ExpenseRepository,
+    private val storeEmbeddingRepository: StoreEmbeddingRepository,
+    private val storeNameGrouper: StoreNameGrouper
 ) {
+    companion object {
+        private const val TAG = "CategoryClassifier"
+    }
+
     /**
-     * 가게명으로 카테고리 조회 (Room 우선)
+     * 가게명으로 카테고리 조회 (4-Tier)
+     *
+     * @param storeName 가게명
+     * @param originalSms 원본 SMS (키워드 매칭 보조 정보)
+     * @return 분류된 카테고리
      */
     suspend fun getCategory(storeName: String, originalSms: String = ""): String {
-        // 1. Room DB에서 저장된 매핑 확인
+        // Tier 1: Room DB에서 저장된 매핑 확인 (비용 0)
         categoryRepository.getCategoryByStoreName(storeName)?.let {
-            Log.d("CategoryClassifier", "Room 매핑 사용: $storeName -> $it")
+            Log.d(TAG, "[Tier 1] Room 매핑: $storeName → $it")
             return it
         }
 
-        // 2. SmsParser의 로컬 키워드 매칭
+        // Tier 1.5: 벡터 유사도 매칭 (임베딩 API 1회)
+        try {
+            val vectorMatch = storeEmbeddingRepository.findCategoryByStoreName(storeName)
+            if (vectorMatch != null) {
+                val matchedCategory = vectorMatch.storeEmbedding.category
+                Log.d(TAG, "[Tier 1.5] 벡터 매칭: $storeName → $matchedCategory " +
+                        "(원본: ${vectorMatch.storeEmbedding.storeName}, 유사도: ${vectorMatch.similarity})")
+
+                // 캐시 프로모션: 벡터 매칭 결과를 Room에도 저장 → 다음 조회 시 Tier 1에서 즉시 반환
+                categoryRepository.saveMapping(storeName, matchedCategory, "vector")
+
+                return matchedCategory
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "[Tier 1.5] 벡터 검색 실패 (무시): ${e.message}")
+        }
+
+        // Tier 2: SmsParser의 로컬 키워드 매칭 (비용 0)
         val localCategory = SmsParser.inferCategory(storeName, originalSms)
         if (localCategory != "기타") {
             // 로컬 매칭 결과를 Room에 저장
             categoryRepository.saveMapping(storeName, localCategory, "local")
-            Log.d("CategoryClassifier", "로컬 키워드 매칭: $storeName -> $localCategory")
+            Log.d(TAG, "[Tier 2] 로컬 키워드: $storeName → $localCategory")
             return localCategory
         }
 
-        // 3. 기타로 반환 (Gemini 분류는 배치로 별도 처리)
+        // Tier 3 대기: 기타로 반환 (Gemini 분류는 배치로 별도 처리)
         return "기타"
     }
 
     /**
-     * 미분류("기타") 항목들을 Gemini로 일괄 분류
+     * 미분류("기타") 항목들을 Gemini로 일괄 분류 (시맨틱 그룹핑 최적화)
+     *
+     * 1. 미분류 가게명을 벡터 유사도로 그룹핑 (유사도 ≥ 0.88)
+     * 2. 각 그룹의 대표 가게명만 Gemini에 전송 → API 호출 수 절감
+     * 3. 대표의 분류 결과를 그룹 멤버에게 전파
+     * 4. 결과를 Room + 벡터 DB에 모두 저장
+     *
      * @return 분류된 항목 수
      */
     suspend fun classifyUnclassifiedExpenses(): Int {
@@ -51,41 +97,86 @@ class CategoryClassifierService @Inject constructor(
         val unclassifiedExpenses = expenseRepository.getExpensesByCategoryOnce("기타")
 
         if (unclassifiedExpenses.isEmpty()) {
-            Log.d("CategoryClassifier", "분류할 항목 없음")
+            Log.d(TAG, "분류할 항목 없음")
             return 0
         }
 
         // 중복 제거된 가게명 목록
         val storeNames = unclassifiedExpenses.map { it.storeName }.distinct()
-        Log.d("CategoryClassifier", "분류할 가게명: ${storeNames.size}개")
+        Log.d(TAG, "분류할 가게명: ${storeNames.size}개")
 
-        // Gemini로 분류
-        val classifications = geminiRepository.classifyStoreNames(storeNames)
+        // ===== 시맨틱 그룹핑으로 Gemini 호출 최적화 =====
+        val groups = try {
+            storeNameGrouper.groupStoreNames(storeNames)
+        } catch (e: Exception) {
+            Log.w(TAG, "시맨틱 그룹핑 실패, 개별 처리로 폴백: ${e.message}")
+            // 폴백: 각 가게명을 독립 그룹으로 취급
+            storeNames.map { StoreNameGrouper.StoreGroup(representative = it, members = listOf(it)) }
+        }
+
+        val representatives = groups.map { it.representative }
+
+        Log.d(TAG, "시맨틱 그룹핑: ${storeNames.size}개 → ${groups.size}그룹 " +
+                "(${storeNames.size - groups.size}개 Gemini 호출 절감)")
+
+        // 대표 가게명만 Gemini로 분류
+        val classifications = geminiRepository.classifyStoreNames(representatives)
 
         if (classifications.isEmpty()) {
-            Log.e("CategoryClassifier", "Gemini 분류 실패")
+            Log.e(TAG, "Gemini 분류 실패")
             return 0
         }
 
-        // 분류 결과를 Room에 저장
-        val mappings = classifications.map { (store, category) -> store to category }
+        // ===== 그룹 멤버들에게 분류 결과 전파 =====
+        val allClassifications = mutableMapOf<String, String>()
+
+        for (group in groups) {
+            val category = classifications[group.representative] ?: continue
+
+            // 대표 가게명 매핑
+            allClassifications[group.representative] = category
+
+            // 그룹 멤버들에게 같은 카테고리 전파
+            for (member in group.members) {
+                if (member != group.representative) {
+                    allClassifications[member] = category
+                    Log.d(TAG, "그룹 전파: '${group.representative}' → '$member' = $category")
+                }
+            }
+        }
+
+        // Room 매핑 저장
+        val mappings = allClassifications.map { (store, category) -> store to category }
         categoryRepository.saveMappings(mappings, "gemini")
+
+        // ===== 벡터 DB에도 캐싱 (Tier 1.5 학습) =====
+        try {
+            storeEmbeddingRepository.saveStoreEmbeddings(allClassifications, "gemini")
+            Log.d(TAG, "벡터 DB 캐싱: ${allClassifications.size}건")
+        } catch (e: Exception) {
+            Log.w(TAG, "벡터 DB 캐싱 실패 (무시): ${e.message}")
+        }
 
         // 지출 항목 카테고리 업데이트
         var updatedCount = 0
         for (expense in unclassifiedExpenses) {
-            classifications[expense.storeName]?.let { newCategory ->
+            allClassifications[expense.storeName]?.let { newCategory ->
                 expenseRepository.updateCategoryById(expense.id, newCategory)
                 updatedCount++
             }
         }
 
-        Log.d("CategoryClassifier", "분류 완료: $updatedCount 건")
+        Log.d(TAG, "분류 완료: ${updatedCount}건 (Gemini ${classifications.size}건, 전파 ${allClassifications.size - classifications.size}건)")
         return updatedCount
     }
 
     /**
-     * 특정 지출의 카테고리를 수동 변경 (사용자 지정)
+     * 특정 지출의 카테고리를 수동 변경 (사용자 지정 + 자가 학습)
+     *
+     * 1. Room 매핑 업데이트
+     * 2. 지출 항목 업데이트
+     * 3. 벡터 DB에 source="user"로 저장
+     * 4. 유사 가게명에 카테고리 전파 (유사도 ≥ 0.90)
      */
     suspend fun updateExpenseCategory(expenseId: Long, storeName: String, newCategory: String) {
         // Room 매핑 업데이트/추가
@@ -94,11 +185,28 @@ class CategoryClassifierService @Inject constructor(
         // 지출 항목 업데이트
         expenseRepository.updateCategoryById(expenseId, newCategory)
 
-        Log.d("CategoryClassifier", "수동 분류: $storeName -> $newCategory")
+        // 벡터 DB에 저장 (source="user"로 최고 신뢰도)
+        try {
+            if (storeEmbeddingRepository.hasEmbedding(storeName)) {
+                storeEmbeddingRepository.updateCategory(storeName, newCategory, "user")
+            } else {
+                storeEmbeddingRepository.saveStoreEmbedding(storeName, newCategory, "user", 1.0f)
+            }
+
+            // 유사 가게에 전파
+            val propagated = storeEmbeddingRepository.propagateCategoryToSimilarStores(storeName, newCategory)
+            if (propagated > 0) {
+                Log.d(TAG, "유사 가게 ${propagated}건에 카테고리 전파됨")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "벡터 DB 업데이트/전파 실패 (무시): ${e.message}")
+        }
+
+        Log.d(TAG, "수동 분류: $storeName → $newCategory")
     }
 
     /**
-     * 동일 가게명을 가진 모든 지출의 카테고리 일괄 변경
+     * 동일 가게명을 가진 모든 지출의 카테고리 일괄 변경 (자가 학습 포함)
      */
     suspend fun updateCategoryForAllSameStore(storeName: String, newCategory: String) {
         // Room 매핑 업데이트/추가
@@ -107,7 +215,23 @@ class CategoryClassifierService @Inject constructor(
         // 해당 가게명의 모든 지출 업데이트
         expenseRepository.updateCategoryByStoreName(storeName, newCategory)
 
-        Log.d("CategoryClassifier", "일괄 분류: $storeName -> $newCategory (모든 항목)")
+        // 벡터 DB에 저장 + 유사 가게 전파
+        try {
+            if (storeEmbeddingRepository.hasEmbedding(storeName)) {
+                storeEmbeddingRepository.updateCategory(storeName, newCategory, "user")
+            } else {
+                storeEmbeddingRepository.saveStoreEmbedding(storeName, newCategory, "user", 1.0f)
+            }
+
+            val propagated = storeEmbeddingRepository.propagateCategoryToSimilarStores(storeName, newCategory)
+            if (propagated > 0) {
+                Log.d(TAG, "유사 가게 ${propagated}건에 카테고리 전파됨")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "벡터 DB 업데이트/전파 실패 (무시): ${e.message}")
+        }
+
+        Log.d(TAG, "일괄 분류: $storeName → $newCategory (모든 항목)")
     }
 
     /**
@@ -122,6 +246,13 @@ class CategoryClassifierService @Inject constructor(
      */
     suspend fun getUnclassifiedCount(): Int {
         return expenseRepository.getExpensesByCategoryOnce("기타").size
+    }
+
+    /**
+     * 벡터 DB 학습 현황 조회
+     */
+    suspend fun getVectorCacheCount(): Int {
+        return storeEmbeddingRepository.getEmbeddingCount()
     }
 
     /**
@@ -142,11 +273,11 @@ class CategoryClassifierService @Inject constructor(
             val remainingBefore = getUnclassifiedCount()
 
             if (remainingBefore == 0) {
-                Log.d("CategoryClassifier", "모든 항목 분류 완료 (라운드 $round)")
+                Log.d(TAG, "모든 항목 분류 완료 (라운드 $round)")
                 break
             }
 
-            Log.d("CategoryClassifier", "라운드 $round 시작: $remainingBefore 개 미분류")
+            Log.d(TAG, "라운드 $round 시작: ${remainingBefore}개 미분류")
 
             val classifiedInRound = classifyUnclassifiedExpenses()
             totalClassified += classifiedInRound
@@ -156,7 +287,7 @@ class CategoryClassifierService @Inject constructor(
 
             // 더 이상 분류가 안 되면 종료 (진전이 없음)
             if (classifiedInRound == 0 || remainingAfter == remainingBefore) {
-                Log.d("CategoryClassifier", "더 이상 분류 불가, 종료 (남은 미분류: $remainingAfter)")
+                Log.d(TAG, "더 이상 분류 불가, 종료 (남은 미분류: $remainingAfter)")
                 break
             }
 
@@ -164,7 +295,7 @@ class CategoryClassifierService @Inject constructor(
             kotlinx.coroutines.delay(2000)
         }
 
-        Log.d("CategoryClassifier", "전체 분류 완료: 총 $totalClassified 건 분류됨")
+        Log.d(TAG, "전체 분류 완료: 총 ${totalClassified}건 분류됨 (벡터 캐시 ${getVectorCacheCount()}건)")
         return totalClassified
     }
 }

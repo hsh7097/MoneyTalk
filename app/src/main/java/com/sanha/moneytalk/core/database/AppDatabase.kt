@@ -2,20 +2,46 @@ package com.sanha.moneytalk.core.database
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
-import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.room.TypeConverters
+import com.sanha.moneytalk.core.database.converter.FloatListConverter
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
+import com.sanha.moneytalk.core.database.dao.SmsPatternDao
+import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import com.sanha.moneytalk.core.database.entity.CategoryMappingEntity
 import com.sanha.moneytalk.core.database.entity.ChatEntity
 import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
+import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
 
+/**
+ * MoneyTalk 앱의 Room 데이터베이스 정의
+ *
+ * 앱에서 사용하는 모든 엔티티와 DAO를 관리하는 중앙 데이터베이스 클래스입니다.
+ *
+ * 포함 엔티티:
+ * - ExpenseEntity: 지출 내역 (SMS 파싱 결과)
+ * - IncomeEntity: 수입 내역 (입금 SMS 파싱 결과 또는 수동 입력)
+ * - BudgetEntity: 카테고리별 월간 예산
+ * - ChatEntity: 채팅 메시지 (사용자/AI 대화 내역)
+ * - ChatSessionEntity: 채팅 세션 (Rolling Summary 포함)
+ * - CategoryMappingEntity: 가게명→카테고리 매핑 캐시
+ * - SmsPatternEntity: SMS 임베딩 패턴 (벡터 유사도 분류용)
+ * - StoreEmbeddingEntity: 가게명 임베딩 벡터 (카테고리 벡터 캐싱용)
+ *
+ * TypeConverters:
+ * - FloatListConverter: 임베딩 벡터(List<Float>)를 JSON String으로 변환
+ *
+ * DB 파일: moneytalk_v4.db (v4: StoreEmbeddingEntity 추가)
+ *
+ * @see DatabaseModule Hilt DI 모듈에서 싱글톤으로 생성
+ */
 @Database(
     entities = [
         ExpenseEntity::class,
@@ -23,85 +49,39 @@ import com.sanha.moneytalk.core.database.entity.IncomeEntity
         BudgetEntity::class,
         ChatEntity::class,
         ChatSessionEntity::class,
-        CategoryMappingEntity::class
+        CategoryMappingEntity::class,
+        SmsPatternEntity::class,
+        StoreEmbeddingEntity::class
     ],
-    version = 3,
+    version = 1,
     exportSchema = false
 )
+@TypeConverters(FloatListConverter::class)
 abstract class AppDatabase : RoomDatabase() {
+
+    /** 지출 내역 DAO */
     abstract fun expenseDao(): ExpenseDao
+
+    /** 수입 내역 DAO */
     abstract fun incomeDao(): IncomeDao
+
+    /** 예산 관리 DAO */
     abstract fun budgetDao(): BudgetDao
+
+    /** 채팅 메시지 및 세션 DAO */
     abstract fun chatDao(): ChatDao
+
+    /** 카테고리 매핑 DAO */
     abstract fun categoryMappingDao(): CategoryMappingDao
 
+    /** SMS 패턴 임베딩 DAO (벡터 유사도 분류용) */
+    abstract fun smsPatternDao(): SmsPatternDao
+
+    /** 가게명 임베딩 DAO (카테고리 벡터 캐싱용) */
+    abstract fun storeEmbeddingDao(): StoreEmbeddingDao
+
     companion object {
-        const val DATABASE_NAME = "moneytalk_db"
-
-        // 마이그레이션 1 → 2: 채팅 세션 테이블 추가 및 기존 채팅에 세션 연결
-        val MIGRATION_1_2 = object : Migration(1, 2) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                // 1. chat_sessions 테이블 생성
-                db.execSQL("""
-                    CREATE TABLE IF NOT EXISTS chat_sessions (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        title TEXT NOT NULL DEFAULT '새 대화',
-                        createdAt INTEGER NOT NULL,
-                        updatedAt INTEGER NOT NULL
-                    )
-                """)
-
-                // 2. 기존 채팅이 있으면 기본 세션 생성
-                db.execSQL("""
-                    INSERT OR IGNORE INTO chat_sessions (id, title, createdAt, updatedAt)
-                    SELECT 1, '이전 대화',
-                           COALESCE((SELECT MIN(timestamp) FROM chat_history), ${System.currentTimeMillis()}),
-                           COALESCE((SELECT MAX(timestamp) FROM chat_history), ${System.currentTimeMillis()})
-                    WHERE EXISTS (SELECT 1 FROM chat_history LIMIT 1)
-                """)
-
-                // 3. 새 chat_history 테이블 생성 (sessionId 포함)
-                db.execSQL("""
-                    CREATE TABLE IF NOT EXISTS chat_history_new (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        sessionId INTEGER NOT NULL DEFAULT 1,
-                        message TEXT NOT NULL,
-                        isUser INTEGER NOT NULL,
-                        timestamp INTEGER NOT NULL,
-                        FOREIGN KEY(sessionId) REFERENCES chat_sessions(id) ON DELETE CASCADE
-                    )
-                """)
-
-                // 4. 기존 데이터 마이그레이션
-                db.execSQL("""
-                    INSERT INTO chat_history_new (id, sessionId, message, isUser, timestamp)
-                    SELECT id, 1, message, isUser, timestamp FROM chat_history
-                """)
-
-                // 5. 기존 테이블 삭제 및 새 테이블 이름 변경
-                db.execSQL("DROP TABLE chat_history")
-                db.execSQL("ALTER TABLE chat_history_new RENAME TO chat_history")
-
-                // 6. 인덱스 생성
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_chat_history_sessionId ON chat_history(sessionId)")
-            }
-        }
-
-        // 마이그레이션 2 → 3: 카테고리 매핑 테이블 추가
-        val MIGRATION_2_3 = object : Migration(2, 3) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("""
-                    CREATE TABLE IF NOT EXISTS category_mappings (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        storeName TEXT NOT NULL,
-                        category TEXT NOT NULL,
-                        source TEXT NOT NULL DEFAULT 'local',
-                        createdAt INTEGER NOT NULL,
-                        updatedAt INTEGER NOT NULL
-                    )
-                """)
-                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_category_mappings_storeName ON category_mappings(storeName)")
-            }
-        }
+        /** 데이터베이스 파일명 (v4: StoreEmbeddingEntity 추가) */
+        const val DATABASE_NAME = "moneytalk_v4.db"
     }
 }
