@@ -23,9 +23,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.OnPrimary
 import com.sanha.moneytalk.core.theme.Primary
 import com.sanha.moneytalk.core.theme.PrimaryDark
@@ -78,7 +80,7 @@ fun SplashScreen(
         ) {
             Icon(
                 imageVector = Icons.Default.AccountBalanceWallet,
-                contentDescription = "MoneyTalk Logo",
+                contentDescription = stringResource(R.string.splash_logo_description),
                 modifier = Modifier.size(100.dp),
                 tint = OnPrimary
             )
@@ -86,7 +88,7 @@ fun SplashScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "MoneyTalk",
+                text = stringResource(R.string.app_name),
                 fontSize = 36.sp,
                 fontWeight = FontWeight.Bold,
                 color = OnPrimary
@@ -95,7 +97,7 @@ fun SplashScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "스마트한 가계부",
+                text = stringResource(R.string.splash_tagline),
                 fontSize = 16.sp,
                 color = OnPrimary.copy(alpha = 0.8f)
             )

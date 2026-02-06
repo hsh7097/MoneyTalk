@@ -1,3 +1,198 @@
 <resources>
     <string name="app_name">MoneyTalk</string>
+
+    <!-- 공통 -->
+    <string name="common_close">닫기</string>
+    <string name="common_delete">삭제</string>
+    <string name="common_cancel">취소</string>
+    <string name="common_confirm">확인</string>
+    <string name="common_save">저장</string>
+    <string name="common_restore">복원</string>
+    <string name="common_refresh">새로고침</string>
+    <string name="common_filter">필터</string>
+    <string name="common_all">전체</string>
+    <string name="common_search">검색</string>
+    <string name="common_add">추가</string>
+    <string name="common_processing">처리 중…</string>
+    <string name="common_won">%s원</string>
+    <string name="error_response">죄송해요, 응답을 받는 중 오류가 발생했어요: %s</string>
+    <string name="error_general">오류가 발생했어요: %s</string>
+
+    <!-- 스플래시 화면 -->
+    <string name="splash_logo_description">MoneyTalk 로고</string>
+    <string name="splash_tagline">스마트한 가계부</string>
+
+    <!-- 채팅 화면 -->
+    <string name="chat_title">AI 재무 상담</string>
+    <string name="chat_subtitle_with_api">Gemini와 대화하세요</string>
+    <string name="chat_subtitle_no_api">API 키를 설정해주세요</string>
+    <string name="chat_input_placeholder">메시지를 입력하세요…</string>
+    <string name="chat_send">전송</string>
+    <string name="chat_thinking">생각 중…</string>
+    <string name="chat_session_list">대화 목록</string>
+    <string name="chat_new_session">새 대화</string>
+    <string name="chat_close">닫기</string>
+    <string name="chat_delete">삭제</string>
+    <string name="chat_no_sessions">대화 내역이 없습니다</string>
+    <string name="chat_start_new">새 대화 시작</string>
+    <string name="chat_default_session_title">새 대화</string>
+    <string name="chat_previous_session_title">이전 대화</string>
+
+    <!-- 세션 삭제 다이얼로그 -->
+    <string name="dialog_delete_session_title">대화 삭제</string>
+    <string name="dialog_delete_session_message">이 대화를 삭제하시겠습니까?\n삭제된 대화는 복구할 수 없습니다.</string>
+    <string name="dialog_confirm">확인</string>
+    <string name="dialog_cancel">취소</string>
+
+    <!-- API 키 설정 다이얼로그 -->
+    <string name="dialog_api_key_title">Gemini API 키 설정</string>
+    <string name="dialog_api_key_message">Google AI Studio에서 발급받은 API 키를 입력해주세요.</string>
+    <string name="dialog_api_key_label">API Key</string>
+    <string name="dialog_api_key_placeholder">AIza…</string>
+    <string name="api_key_setting">API 키 설정</string>
+
+    <!-- 가이드 질문 -->
+    <string name="guide_welcome">안녕하세요!</string>
+    <string name="guide_intro">저는 AI 재무 상담사 머니톡이에요.\n아래 질문을 눌러 시작해보세요!</string>
+    <string name="guide_api_key_required">* API 키를 먼저 설정해주세요</string>
+
+    <!-- 가이드 질문 카테고리 -->
+    <string name="guide_category_expense_search">지출 조회</string>
+    <string name="guide_category_analysis">분석</string>
+    <string name="guide_category_manage">카테고리 관리</string>
+
+    <!-- 가이드 질문 예시 -->
+    <string name="guide_q_expense_coupang">2월에 쿠팡에서 얼마 썼어?</string>
+    <string name="guide_q_expense_starbucks">이번 달 스타벅스 사용 내역 보여줘</string>
+    <string name="guide_q_expense_delivery">지난 3개월 배달비 얼마야?</string>
+    <string name="guide_q_analysis_food">식비가 수입 대비 적절해?</string>
+    <string name="guide_q_analysis_compare">지난 달 대비 지출이 늘었어?</string>
+    <string name="guide_q_analysis_category">카테고리별 지출 비율 분석해줘</string>
+    <string name="guide_q_manage_coupang">쿠팡은 쇼핑으로 분류해줘</string>
+    <string name="guide_q_manage_baemin">배달의민족 포함된 건 식비로 바꿔줘</string>
+    <string name="guide_q_manage_uncategorized">미분류 항목 보여줘</string>
+
+    <!-- 홈 화면 -->
+    <string name="home_previous_month">이전 달</string>
+    <string name="home_next_month">다음 달</string>
+    <string name="home_sync">동기화</string>
+    <string name="home_sync_new_only">새 문자만 동기화</string>
+    <string name="home_sync_full">전체 문자 다시 읽기</string>
+    <string name="home_income">수입</string>
+    <string name="home_expense">지출</string>
+    <string name="home_remaining_budget">남은 예산: %s원</string>
+    <string name="home_category_expense">카테고리별 지출</string>
+    <string name="home_no_expense">아직 지출 내역이 없어요</string>
+    <string name="home_recent_expense">최근 지출</string>
+    <string name="home_empty_expense_title">아직 지출 내역이 없어요</string>
+    <string name="home_empty_expense_subtitle">문자를 동기화해서 지출을 추가해보세요</string>
+
+    <!-- 지출 상세 다이얼로그 -->
+    <string name="detail_amount">금액</string>
+    <string name="detail_category">카테고리</string>
+    <string name="detail_card">카드</string>
+    <string name="detail_payment_time">결제 시간</string>
+    <string name="detail_memo">메모</string>
+    <string name="detail_original_sms">원본 문자</string>
+
+    <!-- 가계부 화면 -->
+    <string name="history_title">가계부</string>
+    <string name="history_view_list">목록</string>
+    <string name="history_view_calendar">달력</string>
+    <string name="history_no_expense">지출 내역이 없어요</string>
+    <string name="history_delete_title">삭제 확인</string>
+    <string name="history_delete_message">%s 지출 내역을 삭제할까요?</string>
+    <string name="history_no_spend_month">%d월 무지출</string>
+    <string name="history_no_spend_total">총 %d일 ></string>
+
+    <!-- 요일 -->
+    <string name="day_sun">일</string>
+    <string name="day_mon">월</string>
+    <string name="day_tue">화</string>
+    <string name="day_wed">수</string>
+    <string name="day_thu">목</string>
+    <string name="day_fri">금</string>
+    <string name="day_sat">토</string>
+    <string name="day_sunday">일요일</string>
+    <string name="day_monday">월요일</string>
+    <string name="day_tuesday">화요일</string>
+    <string name="day_wednesday">수요일</string>
+    <string name="day_thursday">목요일</string>
+    <string name="day_friday">금요일</string>
+    <string name="day_saturday">토요일</string>
+    <string name="history_day_header">%d일 %s</string>
+
+    <!-- 설정 화면 -->
+    <string name="settings_title">설정</string>
+    <string name="settings_section_budget">수입/예산 관리</string>
+    <string name="settings_income_title">월 수입 설정</string>
+    <string name="settings_income_subtitle_empty">고정 수입을 설정하세요</string>
+    <string name="settings_month_start_title">월 시작일 설정</string>
+    <string name="settings_month_start_default">매월 1일부터 (기본)</string>
+    <string name="settings_month_start_custom">매월 %d일부터</string>
+    <string name="settings_category_budget_title">카테고리별 예산</string>
+    <string name="settings_category_budget_subtitle">카테고리별 한도를 설정하세요</string>
+
+    <string name="settings_section_ai">AI 설정</string>
+    <string name="settings_api_key_title">Gemini API 키</string>
+    <string name="settings_api_key_set">설정됨: %s</string>
+    <string name="settings_api_key_not_set">AI 상담을 위한 API 키 설정 (무료)</string>
+
+    <string name="settings_section_data">데이터 관리</string>
+    <string name="settings_export_title">데이터 내보내기</string>
+    <string name="settings_export_subtitle">필터 적용 후 JSON 또는 엑셀로 내보내기</string>
+    <string name="settings_google_drive_title">구글 드라이브</string>
+    <string name="settings_google_drive_connected">연결됨: %s</string>
+    <string name="settings_google_drive_not_connected">클라우드 백업/복원</string>
+    <string name="settings_restore_local_title">로컬 파일에서 복원</string>
+    <string name="settings_restore_local_subtitle">백업 파일에서 복원</string>
+    <string name="settings_delete_all_title">전체 삭제</string>
+    <string name="settings_delete_all_subtitle">모든 데이터를 삭제합니다</string>
+
+    <string name="settings_section_app">앱 정보</string>
+    <string name="settings_version_title">버전</string>
+    <string name="settings_privacy_title">개인정보 처리방침</string>
+
+    <!-- 전체 삭제 다이얼로그 -->
+    <string name="dialog_delete_all_title">전체 데이터 삭제</string>
+    <string name="dialog_delete_all_message">모든 지출 및 수입 데이터가 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.\n\n정말 삭제하시겠습니까?</string>
+
+    <!-- 복원 다이얼로그 -->
+    <string name="dialog_restore_title">데이터 복원</string>
+    <string name="dialog_restore_message">백업 파일에서 데이터를 복원합니다.\n기존 데이터는 모두 삭제되고 백업 데이터로 대체됩니다.\n\n계속하시겠습니까?</string>
+
+    <!-- 내보내기 다이얼로그 -->
+    <string name="export_dialog_title">데이터 내보내기</string>
+    <string name="export_format">내보내기 형식</string>
+    <string name="export_format_json">JSON (복원용)</string>
+    <string name="export_format_csv">CSV (엑셀)</string>
+    <string name="export_data_type">데이터 유형</string>
+    <string name="export_expense">지출</string>
+    <string name="export_income">수입</string>
+    <string name="export_card_filter">카드 필터 (선택 안함 = 전체)</string>
+    <string name="export_category_filter">카테고리 필터 (선택 안함 = 전체)</string>
+    <string name="export_save_local">로컬에 저장</string>
+    <string name="export_save_google_drive">구글 드라이브에 저장</string>
+    <string name="export_google_login">구글 로그인</string>
+
+    <!-- 구글 드라이브 다이얼로그 -->
+    <string name="google_drive_title">구글 드라이브 백업</string>
+    <string name="google_drive_account">계정: %s</string>
+    <string name="google_drive_no_backup">저장된 백업 파일이 없습니다</string>
+    <string name="google_drive_logout">로그아웃</string>
+
+    <!-- 수입 설정 다이얼로그 -->
+    <string name="dialog_income_title">월 수입 설정</string>
+    <string name="dialog_income_message">매월 고정 수입을 입력해주세요.</string>
+    <string name="dialog_income_label">월 수입</string>
+
+    <!-- 월 시작일 설정 다이얼로그 -->
+    <string name="dialog_month_start_title">월 시작일 설정</string>
+    <string name="dialog_month_start_message">월급일 등 월 시작 기준일을 설정하세요.\n예: 21일로 설정하면 21일~다음달 20일이 한 달로 계산됩니다.</string>
+    <string name="dialog_month_start_label">시작일</string>
+    <string name="dialog_month_start_hint">1~31 사이의 숫자를 입력하세요</string>
+
+    <!-- API 키 다이얼로그 (설정 화면용) -->
+    <string name="dialog_api_key_message_settings">Google AI Studio(aistudio.google.com)에서\n무료로 API 키를 발급받을 수 있습니다.</string>
+    <string name="dialog_api_key_current">현재 설정됨</string>
 </resources>

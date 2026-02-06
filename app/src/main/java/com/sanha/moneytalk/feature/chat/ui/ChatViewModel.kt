@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.entity.ChatEntity
+import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
@@ -32,11 +33,22 @@ data class ChatMessage(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+data class ChatSession(
+    val id: Long = 0,
+    val title: String,
+    val createdAt: Long,
+    val updatedAt: Long,
+    val messageCount: Int = 0
+)
+
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
+    val sessions: List<ChatSession> = emptyList(),
+    val currentSessionId: Long? = null,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-    val hasApiKey: Boolean = false
+    val hasApiKey: Boolean = false,
+    val showSessionList: Boolean = false
 )
 
 @HiltViewModel
@@ -54,13 +66,46 @@ class ChatViewModel @Inject constructor(
     private val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
 
     init {
-        loadChatHistory()
+        loadSessions()
         checkApiKey()
     }
 
-    private fun loadChatHistory() {
+    private fun loadSessions() {
         viewModelScope.launch {
-            chatDao.getAllChats()
+            chatDao.getAllSessions()
+                .collect { sessions ->
+                    val sessionList = sessions.map { session ->
+                        ChatSession(
+                            id = session.id,
+                            title = session.title,
+                            createdAt = session.createdAt,
+                            updatedAt = session.updatedAt
+                        )
+                    }
+
+                    val currentId = _uiState.value.currentSessionId
+                    val validCurrentId = if (currentId != null && sessionList.any { it.id == currentId }) {
+                        currentId
+                    } else {
+                        sessionList.firstOrNull()?.id
+                    }
+
+                    _uiState.update {
+                        it.copy(
+                            sessions = sessionList,
+                            currentSessionId = validCurrentId
+                        )
+                    }
+
+                    // 현재 세션의 메시지 로드
+                    validCurrentId?.let { loadMessagesForSession(it) }
+                }
+        }
+    }
+
+    private fun loadMessagesForSession(sessionId: Long) {
+        viewModelScope.launch {
+            chatDao.getChatsBySession(sessionId)
                 .collect { chats ->
                     _uiState.update {
                         it.copy(
@@ -78,6 +123,41 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    fun selectSession(sessionId: Long) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(currentSessionId = sessionId, showSessionList = false) }
+            loadMessagesForSession(sessionId)
+        }
+    }
+
+    fun createNewSession() {
+        viewModelScope.launch {
+            val newSession = ChatSessionEntity(
+                title = "새 대화",
+                createdAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis()
+            )
+            val sessionId = chatDao.insertSession(newSession)
+            _uiState.update { it.copy(currentSessionId = sessionId, showSessionList = false) }
+            loadMessagesForSession(sessionId)
+        }
+    }
+
+    fun deleteSession(sessionId: Long) {
+        viewModelScope.launch {
+            chatDao.deleteSessionById(sessionId)
+            // 삭제 후 다른 세션 선택 (loadSessions에서 자동 처리)
+        }
+    }
+
+    fun toggleSessionList() {
+        _uiState.update { it.copy(showSessionList = !it.showSessionList) }
+    }
+
+    fun hideSessionList() {
+        _uiState.update { it.copy(showSessionList = false) }
+    }
+
     private fun checkApiKey() {
         viewModelScope.launch {
             _uiState.update { it.copy(hasApiKey = geminiRepository.hasApiKey()) }
@@ -88,12 +168,35 @@ class ChatViewModel @Inject constructor(
         if (message.isBlank()) return
 
         viewModelScope.launch {
+            // 현재 세션 ID 확인, 없으면 새 세션 생성
+            var sessionId = _uiState.value.currentSessionId
+            if (sessionId == null) {
+                val newSession = ChatSessionEntity(
+                    title = message.take(30) + if (message.length > 30) "..." else "",
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                sessionId = chatDao.insertSession(newSession)
+                _uiState.update { it.copy(currentSessionId = sessionId) }
+            } else {
+                // 첫 메시지면 세션 제목 업데이트
+                val messageCount = chatDao.getMessageCountBySession(sessionId)
+                if (messageCount == 0) {
+                    val title = message.take(30) + if (message.length > 30) "..." else ""
+                    chatDao.updateSessionTitle(sessionId, title)
+                }
+            }
+
             // 사용자 메시지 저장
             val userChat = ChatEntity(
+                sessionId = sessionId,
                 message = message,
                 isUser = true
             )
             chatDao.insert(userChat)
+
+            // 세션 업데이트 시간 갱신
+            chatDao.updateSessionTimestamp(sessionId)
 
             _uiState.update { it.copy(isLoading = true) }
 
@@ -151,21 +254,27 @@ class ChatViewModel @Inject constructor(
 
                 finalResult.onSuccess { response ->
                     val aiChat = ChatEntity(
+                        sessionId = sessionId,
                         message = response,
                         isUser = false
                     )
                     chatDao.insert(aiChat)
                 }.onFailure { e ->
                     val errorChat = ChatEntity(
+                        sessionId = sessionId,
                         message = "죄송해요, 응답을 받는 중 오류가 발생했어요: ${e.message}",
                         isUser = false
                     )
                     chatDao.insert(errorChat)
                 }
 
+                // 세션 업데이트 시간 갱신
+                chatDao.updateSessionTimestamp(sessionId)
+
                 _uiState.update { it.copy(isLoading = false) }
             } catch (e: Exception) {
                 val errorChat = ChatEntity(
+                    sessionId = sessionId,
                     message = "오류가 발생했어요: ${e.message}",
                     isUser = false
                 )
@@ -467,7 +576,17 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun clearChatHistory() {
+    fun clearCurrentSessionHistory() {
+        viewModelScope.launch {
+            _uiState.value.currentSessionId?.let { sessionId ->
+                chatDao.deleteChatsBySession(sessionId)
+                // 세션 제목 초기화
+                chatDao.updateSessionTitle(sessionId, "새 대화")
+            }
+        }
+    }
+
+    fun clearAllHistory() {
         viewModelScope.launch {
             chatDao.deleteAll()
         }
