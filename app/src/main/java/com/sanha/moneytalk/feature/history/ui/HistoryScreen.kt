@@ -56,48 +56,28 @@ data class CategoryStyle(
     val color: Color
 )
 
-private val categoryStyles = mapOf(
-    "편의점" to CategoryStyle("🛒", Color(0xFF4CAF50)),
-    "마트" to CategoryStyle("🛒", Color(0xFF4CAF50)),
-    "고기" to CategoryStyle("🍖", Color(0xFFE91E63)),
-    "일식" to CategoryStyle("🍣", Color(0xFFFF5722)),
-    "중식" to CategoryStyle("🥟", Color(0xFFFF9800)),
-    "한식" to CategoryStyle("🍚", Color(0xFF8BC34A)),
-    "치킨" to CategoryStyle("🍗", Color(0xFFFFEB3B)),
-    "피자" to CategoryStyle("🍕", Color(0xFFFF5722)),
-    "패스트푸드" to CategoryStyle("🍔", Color(0xFFFFC107)),
-    "분식" to CategoryStyle("🍜", Color(0xFFFF9800)),
-    "배달" to CategoryStyle("🛵", Color(0xFF2196F3)),
-    "카페" to CategoryStyle("☕", Color(0xFF795548)),
-    "베이커리" to CategoryStyle("🥐", Color(0xFFFFCA28)),
-    "아이스크림/빙수" to CategoryStyle("🍦", Color(0xFFE1BEE7)),
-    "택시" to CategoryStyle("🚕", Color(0xFFFFEB3B)),
-    "대중교통" to CategoryStyle("🚇", Color(0xFF2196F3)),
-    "주유" to CategoryStyle("⛽", Color(0xFF607D8B)),
-    "주차" to CategoryStyle("🅿️", Color(0xFF9E9E9E)),
-    "온라인쇼핑" to CategoryStyle("📦", Color(0xFF3F51B5)),
-    "패션" to CategoryStyle("👕", Color(0xFF9C27B0)),
-    "뷰티" to CategoryStyle("💄", Color(0xFFE91E63)),
-    "생활용품" to CategoryStyle("🏠", Color(0xFF00BCD4)),
-    "구독" to CategoryStyle("📱", Color(0xFF673AB7)),
-    "병원" to CategoryStyle("🏥", Color(0xFFF44336)),
-    "약국" to CategoryStyle("💊", Color(0xFF4CAF50)),
-    "운동" to CategoryStyle("💪", Color(0xFF00BCD4)),
-    "영화" to CategoryStyle("🎬", Color(0xFF9C27B0)),
-    "놀이공원" to CategoryStyle("🎢", Color(0xFFFF5722)),
-    "게임/오락" to CategoryStyle("🎮", Color(0xFF3F51B5)),
-    "여행/숙박" to CategoryStyle("✈️", Color(0xFF00BCD4)),
-    "공연/전시" to CategoryStyle("🎭", Color(0xFF9C27B0)),
-    "교육" to CategoryStyle("📚", Color(0xFF2196F3)),
-    "도서" to CategoryStyle("📖", Color(0xFF795548)),
-    "통신" to CategoryStyle("📶", Color(0xFF607D8B)),
-    "공과금" to CategoryStyle("💡", Color(0xFFFFEB3B)),
-    "보험" to CategoryStyle("🛡️", Color(0xFF009688)),
-    "미용" to CategoryStyle("💇", Color(0xFFE91E63)),
-    "식비" to CategoryStyle("🍽️", Color(0xFFFF9800)),
-    "기타" to CategoryStyle("💳", Color(0xFF9E9E9E)),
-    "미분류" to CategoryStyle("❓", Color(0xFFBDBDBD))
-)
+private val categoryStyles = Category.entries.associate { category ->
+    category.displayName to CategoryStyle(
+        icon = category.emoji,
+        color = when (category) {
+            Category.FOOD -> Color(0xFFFF9800)
+            Category.CAFE -> Color(0xFF795548)
+            Category.DRINKING -> Color(0xFFE91E63)
+            Category.TRANSPORT -> Color(0xFF2196F3)
+            Category.SHOPPING -> Color(0xFF3F51B5)
+            Category.SUBSCRIPTION -> Color(0xFF673AB7)
+            Category.HEALTH -> Color(0xFFF44336)
+            Category.FITNESS -> Color(0xFF00BCD4)
+            Category.CULTURE -> Color(0xFF9C27B0)
+            Category.EDUCATION -> Color(0xFF2196F3)
+            Category.HOUSING -> Color(0xFF607D8B)
+            Category.LIVING -> Color(0xFF4CAF50)
+            Category.EVENTS -> Color(0xFFFF5722)
+            Category.ETC -> Color(0xFF9E9E9E)
+            Category.UNCLASSIFIED -> Color(0xFFBDBDBD)
+        }
+    )
+}
 
 private fun getCategoryStyle(category: String): CategoryStyle {
     return categoryStyles[category] ?: categoryStyles["기타"]!!
@@ -511,7 +491,7 @@ fun PeriodSummaryCard(
  * 탭(목록/달력) + 필터 아이콘 통합 Row
  *
  * - 좌측: TabRow (목록 | 달력)
- * - 우측: 필터 아이콘 (카드 + 카테고리 + 정렬 통합 드롭다운)
+ * - 우측: 필터 아이콘 → 클릭 시 카드/카테고리/정렬 가로 병렬 드롭다운
  */
 @Composable
 fun FilterTabRow(
@@ -525,71 +505,71 @@ fun FilterTabRow(
     sortOrder: SortOrder = SortOrder.DATE_DESC,
     onSortOrderChange: (SortOrder) -> Unit = {}
 ) {
-    var showFilterMenu by remember { mutableStateOf(false) }
+    var showFilterPanel by remember { mutableStateOf(false) }
 
     val hasActiveFilter = selectedCardName != null || selectedCategory != null || sortOrder != SortOrder.DATE_DESC
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // 탭 (목록 / 달력)
+    Column {
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
+            // 탭 (목록 / 달력)
+            Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        if (currentMode == ViewMode.LIST) MaterialTheme.colorScheme.primary
-                        else Color.Transparent
-                    )
-                    .clickable { onModeChange(ViewMode.LIST) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = stringResource(R.string.history_view_list),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = if (currentMode == ViewMode.LIST) FontWeight.Bold else FontWeight.Normal,
-                    color = if (currentMode == ViewMode.LIST)
-                        MaterialTheme.colorScheme.onPrimary
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        if (currentMode == ViewMode.CALENDAR) MaterialTheme.colorScheme.primary
-                        else Color.Transparent
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (currentMode == ViewMode.LIST) MaterialTheme.colorScheme.primary
+                            else Color.Transparent
+                        )
+                        .clickable { onModeChange(ViewMode.LIST) }
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.history_view_list),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (currentMode == ViewMode.LIST) FontWeight.Bold else FontWeight.Normal,
+                        color = if (currentMode == ViewMode.LIST)
+                            MaterialTheme.colorScheme.onPrimary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    .clickable { onModeChange(ViewMode.CALENDAR) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.history_view_calendar),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = if (currentMode == ViewMode.CALENDAR) FontWeight.Bold else FontWeight.Normal,
-                    color = if (currentMode == ViewMode.CALENDAR)
-                        MaterialTheme.colorScheme.onPrimary
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (currentMode == ViewMode.CALENDAR) MaterialTheme.colorScheme.primary
+                            else Color.Transparent
+                        )
+                        .clickable { onModeChange(ViewMode.CALENDAR) }
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.history_view_calendar),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (currentMode == ViewMode.CALENDAR) FontWeight.Bold else FontWeight.Normal,
+                        color = if (currentMode == ViewMode.CALENDAR)
+                            MaterialTheme.colorScheme.onPrimary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
-        }
 
-        // 필터 아이콘 (통합 드롭다운)
-        if (currentMode == ViewMode.LIST) {
-            Box {
+            // 필터 아이콘
+            if (currentMode == ViewMode.LIST) {
                 IconButton(
-                    onClick = { showFilterMenu = true },
+                    onClick = { showFilterPanel = !showFilterPanel },
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
@@ -602,117 +582,189 @@ fun FilterTabRow(
                             MaterialTheme.colorScheme.onSurface
                     )
                 }
+            }
+        }
 
-                // 통합 필터 드롭다운
-                DropdownMenu(
-                    expanded = showFilterMenu,
-                    onDismissRequest = { showFilterMenu = false }
-                ) {
-                    // === 카드 필터 섹션 ===
-                    Text(
-                        text = "카드",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                    )
+        // 필터 패널 (병렬 드롭다운 3개)
+        AnimatedVisibility(visible = showFilterPanel && currentMode == ViewMode.LIST) {
+            FilterPanel(
+                cardNames = cardNames,
+                selectedCardName = selectedCardName,
+                onCardNameSelected = onCardNameSelected,
+                selectedCategory = selectedCategory,
+                onCategorySelected = onCategorySelected,
+                sortOrder = sortOrder,
+                onSortOrderChange = onSortOrderChange
+            )
+        }
+    }
+}
+
+/**
+ * 필터 패널: 카드사/카테고리/정렬을 가로로 병렬 배치
+ */
+@Composable
+fun FilterPanel(
+    cardNames: List<String>,
+    selectedCardName: String?,
+    onCardNameSelected: (String?) -> Unit,
+    selectedCategory: String?,
+    onCategorySelected: (String?) -> Unit,
+    sortOrder: SortOrder,
+    onSortOrderChange: (SortOrder) -> Unit
+) {
+    var showCardMenu by remember { mutableStateOf(false) }
+    var showCategoryMenu by remember { mutableStateOf(false) }
+    var showSortMenu by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // 카드 필터
+        Box(modifier = Modifier.weight(1f)) {
+            FilterChipButton(
+                label = selectedCardName ?: "카드 전체",
+                isActive = selectedCardName != null,
+                onClick = { showCardMenu = true },
+                modifier = Modifier.fillMaxWidth()
+            )
+            DropdownMenu(
+                expanded = showCardMenu,
+                onDismissRequest = { showCardMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            "전체",
+                            fontWeight = if (selectedCardName == null) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selectedCardName == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    },
+                    onClick = { onCardNameSelected(null); showCardMenu = false }
+                )
+                cardNames.forEach { cardName ->
                     DropdownMenuItem(
                         text = {
                             Text(
-                                stringResource(R.string.common_all),
-                                fontWeight = if (selectedCardName == null) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selectedCardName == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                cardName,
+                                fontWeight = if (selectedCardName == cardName) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selectedCardName == cardName) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                             )
                         },
-                        onClick = {
-                            onCardNameSelected(null)
-                            showFilterMenu = false
-                        }
+                        onClick = { onCardNameSelected(cardName); showCardMenu = false }
                     )
-                    cardNames.forEach { cardName ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    cardName,
-                                    fontWeight = if (selectedCardName == cardName) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selectedCardName == cardName) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
-                            },
-                            onClick = {
-                                onCardNameSelected(cardName)
-                                showFilterMenu = false
-                            }
-                        )
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                    // === 카테고리 필터 섹션 ===
-                    Text(
-                        text = "카테고리",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(R.string.common_all),
-                                fontWeight = if (selectedCategory == null) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selectedCategory == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
-                        },
-                        onClick = {
-                            onCategorySelected(null)
-                            showFilterMenu = false
-                        }
-                    )
-                    Category.entries.forEach { category ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    "${category.emoji} ${category.displayName}",
-                                    fontWeight = if (selectedCategory == category.displayName) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selectedCategory == category.displayName) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
-                            },
-                            onClick = {
-                                onCategorySelected(category.displayName)
-                                showFilterMenu = false
-                            }
-                        )
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                    // === 정렬 섹션 ===
-                    Text(
-                        text = "정렬",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                    )
-                    listOf(
-                        SortOrder.DATE_DESC to "최신순",
-                        SortOrder.AMOUNT_DESC to "금액 높은순",
-                        SortOrder.STORE_FREQ to "사용처별"
-                    ).forEach { (order, label) ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    label,
-                                    fontWeight = if (sortOrder == order) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (sortOrder == order) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
-                            },
-                            onClick = {
-                                onSortOrderChange(order)
-                                showFilterMenu = false
-                            }
-                        )
-                    }
                 }
             }
         }
+
+        // 카테고리 필터
+        Box(modifier = Modifier.weight(1f)) {
+            FilterChipButton(
+                label = selectedCategory ?: "카테고리 전체",
+                isActive = selectedCategory != null,
+                onClick = { showCategoryMenu = true },
+                modifier = Modifier.fillMaxWidth()
+            )
+            DropdownMenu(
+                expanded = showCategoryMenu,
+                onDismissRequest = { showCategoryMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            "전체",
+                            fontWeight = if (selectedCategory == null) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selectedCategory == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    },
+                    onClick = { onCategorySelected(null); showCategoryMenu = false }
+                )
+                Category.entries.forEach { category ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "${category.emoji} ${category.displayName}",
+                                fontWeight = if (selectedCategory == category.displayName) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selectedCategory == category.displayName) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                        },
+                        onClick = { onCategorySelected(category.displayName); showCategoryMenu = false }
+                    )
+                }
+            }
+        }
+
+        // 정렬
+        Box(modifier = Modifier.weight(1f)) {
+            val sortLabel = when (sortOrder) {
+                SortOrder.DATE_DESC -> "최신순"
+                SortOrder.AMOUNT_DESC -> "금액순"
+                SortOrder.STORE_FREQ -> "사용처별"
+            }
+            FilterChipButton(
+                label = sortLabel,
+                isActive = sortOrder != SortOrder.DATE_DESC,
+                onClick = { showSortMenu = true },
+                modifier = Modifier.fillMaxWidth()
+            )
+            DropdownMenu(
+                expanded = showSortMenu,
+                onDismissRequest = { showSortMenu = false }
+            ) {
+                listOf(
+                    SortOrder.DATE_DESC to "최신순",
+                    SortOrder.AMOUNT_DESC to "금액 높은순",
+                    SortOrder.STORE_FREQ to "사용처별"
+                ).forEach { (order, label) ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                label,
+                                fontWeight = if (sortOrder == order) FontWeight.Bold else FontWeight.Normal,
+                                color = if (sortOrder == order) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                        },
+                        onClick = { onSortOrderChange(order); showSortMenu = false }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 필터 칩 버튼 (일관된 스타일)
+ */
+@Composable
+fun FilterChipButton(
+    label: String,
+    isActive: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (isActive) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surfaceVariant
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

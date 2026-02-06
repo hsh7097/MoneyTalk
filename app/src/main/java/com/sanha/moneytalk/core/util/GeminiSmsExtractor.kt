@@ -6,6 +6,7 @@ import com.google.ai.client.generativeai.type.content
 import com.google.ai.client.generativeai.type.generationConfig
 import com.google.gson.JsonParser
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.model.Category
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -82,6 +83,77 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 
         /** 배치 추출 최대 재시도 */
         private const val BATCH_MAX_RETRIES = 2
+
+        /** 앱에서 사용하는 유효한 카테고리 목록 (미분류 제외) */
+        private val VALID_CATEGORIES = Category.entries
+            .filter { it != Category.UNCLASSIFIED }
+            .map { it.displayName }
+            .toSet()
+
+        /**
+         * LLM이 반환한 카테고리를 앱의 유효 카테고리로 정규화
+         *
+         * LLM이 "온라인쇼핑", "편의점", "헬스" 등 앱에 없는 카테고리를 반환할 수 있으므로
+         * 매핑 테이블을 통해 교정합니다.
+         */
+        private val CATEGORY_MAPPING = mapOf(
+            // 쇼핑 관련
+            "온라인쇼핑" to "쇼핑", "편의점" to "식비", "마트" to "쇼핑",
+            "인터넷쇼핑" to "쇼핑", "온라인" to "쇼핑",
+            // 의료/건강 관련
+            "의료" to "의료/건강", "건강" to "의료/건강", "병원" to "의료/건강",
+            "약국" to "의료/건강", "보험" to "기타",
+            // 문화/여가 관련
+            "문화" to "문화/여가", "여가" to "문화/여가", "여행" to "문화/여가",
+            "엔터테인먼트" to "문화/여가", "오락" to "문화/여가", "레저" to "문화/여가",
+            // 술/유흥 관련
+            "술" to "술/유흥", "유흥" to "술/유흥", "음주" to "술/유흥",
+            "바" to "술/유흥", "호프" to "술/유흥",
+            // 교통 관련
+            "대중교통" to "교통", "택시" to "교통", "주유" to "교통",
+            // 운동 관련
+            "헬스" to "운동", "피트니스" to "운동", "스포츠" to "운동", "체육" to "운동",
+            // 주거 관련
+            "부동산" to "주거", "임대" to "주거", "월세" to "주거", "전세" to "주거",
+            // 생활 관련
+            "공과금" to "생활", "통신" to "생활",
+            // 경조 관련
+            "경조사" to "경조", "축의금" to "경조", "조의금" to "경조", "부조" to "경조",
+            // 기타 변환
+            "미분류" to "기타", "알수없음" to "기타", "불명" to "기타",
+            "음식" to "식비", "식사" to "식비", "배달" to "식비",
+            "커피" to "카페", "디저트" to "카페"
+        )
+
+        /**
+         * LLM 응답 카테고리를 앱의 유효 카테고리로 변환
+         */
+        fun normalizeCategory(rawCategory: String): String {
+            val trimmed = rawCategory.trim()
+
+            // 이미 유효한 카테고리면 그대로 반환
+            if (trimmed in VALID_CATEGORIES) return trimmed
+
+            // 매핑 테이블에서 정확히 찾기
+            CATEGORY_MAPPING[trimmed]?.let { return it }
+
+            // 부분 일치: 유효 카테고리 중 포함 관계 확인
+            VALID_CATEGORIES.forEach { validCat ->
+                if (trimmed.contains(validCat) || validCat.contains(trimmed)) {
+                    return validCat
+                }
+            }
+
+            // 매핑 테이블 키와 부분 일치
+            CATEGORY_MAPPING.entries.forEach { (key, value) ->
+                if (trimmed.contains(key, ignoreCase = true)) {
+                    return value
+                }
+            }
+
+            Log.w(TAG, "알 수 없는 LLM 카테고리 → 기타로 변환: '$rawCategory'")
+            return "기타"
+        }
     }
 
     private var extractorModel: GenerativeModel? = null
@@ -181,13 +253,16 @@ $smsBody"""
 
             val json = JsonParser.parseString(jsonStr).asJsonObject
 
+            val rawCategory = json.get("category")?.asString ?: "기타"
+            val normalizedCategory = normalizeCategory(rawCategory)
+
             LlmExtractionResult(
                 isPayment = json.get("isPayment")?.asBoolean ?: false,
                 amount = json.get("amount")?.asInt ?: 0,
                 storeName = json.get("storeName")?.asString ?: "결제",
                 cardName = json.get("cardName")?.asString ?: "기타",
                 dateTime = json.get("dateTime")?.asString ?: "",
-                category = json.get("category")?.asString ?: "기타"
+                category = normalizedCategory
             )
         } catch (e: Exception) {
             Log.e(TAG, "LLM 응답 파싱 실패: ${e.message}")
@@ -306,13 +381,16 @@ $smsListText"""
                     val json = element.asJsonObject
                     val no = json.get("no")?.asInt ?: continue
 
+                    val batchRawCategory = json.get("category")?.asString ?: "기타"
+                    val batchNormalizedCategory = normalizeCategory(batchRawCategory)
+
                     val result = LlmExtractionResult(
                         isPayment = json.get("isPayment")?.asBoolean ?: false,
                         amount = json.get("amount")?.asInt ?: 0,
                         storeName = json.get("storeName")?.asString ?: "결제",
                         cardName = json.get("cardName")?.asString ?: "기타",
                         dateTime = try { json.get("dateTime")?.asString ?: "" } catch (e: Exception) { "" },
-                        category = json.get("category")?.asString ?: "기타"
+                        category = batchNormalizedCategory
                     )
 
                     resultMap[no] = result
