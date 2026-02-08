@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.FilterList
@@ -75,6 +76,7 @@ private val categoryStyles = Category.entries.associate { category ->
             Category.EDUCATION -> Color(0xFF2196F3)
             Category.HOUSING -> Color(0xFF607D8B)
             Category.LIVING -> Color(0xFF4CAF50)
+            Category.INSURANCE -> Color(0xFF00796B)
             Category.EVENTS -> Color(0xFFFF5722)
             Category.DELIVERY -> Color(0xFFFF6D00)
             Category.ETC -> Color(0xFF9E9E9E)
@@ -190,7 +192,8 @@ fun HistoryScreen(
                     IncomeListView(
                         incomes = uiState.incomes,
                         isLoading = uiState.isLoading,
-                        onDeleteIncome = { viewModel.deleteIncome(it) }
+                        onDeleteIncome = { viewModel.deleteIncome(it) },
+                        onIncomeMemoChange = { id, memo -> viewModel.updateIncomeMemo(id, memo) }
                     )
                 } else when (viewMode) {
                     ViewMode.LIST -> {
@@ -203,7 +206,9 @@ fun HistoryScreen(
                             onDeleteIncome = { viewModel.deleteIncome(it) },
                             onCategoryChange = { expense, newCategory ->
                                 viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
-                            }
+                            },
+                            onExpenseMemoChange = { id, memo -> viewModel.updateExpenseMemo(id, memo) },
+                            onIncomeMemoChange = { id, memo -> viewModel.updateIncomeMemo(id, memo) }
                         )
                     }
                     ViewMode.CALENDAR -> {
@@ -216,7 +221,8 @@ fun HistoryScreen(
                             onDelete = { viewModel.deleteExpense(it) },
                             onCategoryChange = { expense, newCategory ->
                                 viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
-                            }
+                            },
+                            onExpenseMemoChange = { id, memo -> viewModel.updateExpenseMemo(id, memo) }
                         )
                     }
                 }
@@ -816,7 +822,9 @@ fun ExpenseListView(
     isLoading: Boolean,
     onDelete: (ExpenseEntity) -> Unit,
     onDeleteIncome: (IncomeEntity) -> Unit = {},
-    onCategoryChange: (ExpenseEntity, String) -> Unit = { _, _ -> }
+    onCategoryChange: (ExpenseEntity, String) -> Unit = { _, _ -> },
+    onExpenseMemoChange: (Long, String?) -> Unit = { _, _ -> },
+    onIncomeMemoChange: (Long, String?) -> Unit = { _, _ -> }
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
@@ -1108,6 +1116,10 @@ fun ExpenseListView(
             onCategoryChange = { newCategory ->
                 onCategoryChange(expense, newCategory)
                 selectedExpense = null
+            },
+            onMemoChange = { memo ->
+                onExpenseMemoChange(expense.id, memo)
+                selectedExpense = null
             }
         )
     }
@@ -1117,7 +1129,11 @@ fun ExpenseListView(
         IncomeDetailDialog(
             income = income,
             onDismiss = { selectedIncome = null },
-            onDelete = { onDeleteIncome(income) }
+            onDelete = { onDeleteIncome(income) },
+            onMemoChange = { memo ->
+                onIncomeMemoChange(income.id, memo)
+                selectedIncome = null
+            }
         )
     }
 }
@@ -1130,7 +1146,8 @@ fun ExpenseListView(
 fun IncomeListView(
     incomes: List<IncomeEntity>,
     isLoading: Boolean,
-    onDeleteIncome: (IncomeEntity) -> Unit = {}
+    onDeleteIncome: (IncomeEntity) -> Unit = {},
+    onIncomeMemoChange: (Long, String?) -> Unit = { _, _ -> }
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     var selectedIncome by remember { mutableStateOf<IncomeEntity?>(null) }
@@ -1252,7 +1269,11 @@ fun IncomeListView(
         IncomeDetailDialog(
             income = income,
             onDismiss = { selectedIncome = null },
-            onDelete = { onDeleteIncome(income) }
+            onDelete = { onDeleteIncome(income) },
+            onMemoChange = { memo ->
+                onIncomeMemoChange(income.id, memo)
+                selectedIncome = null
+            }
         )
     }
 }
@@ -1346,7 +1367,8 @@ fun BillingCycleCalendarView(
     dailyTotals: Map<String, Int>, // "yyyy-MM-dd" -> amount
     expenses: List<ExpenseEntity> = emptyList(),
     onDelete: (ExpenseEntity) -> Unit = {},
-    onCategoryChange: (ExpenseEntity, String) -> Unit = { _, _ -> }
+    onCategoryChange: (ExpenseEntity, String) -> Unit = { _, _ -> },
+    onExpenseMemoChange: (Long, String?) -> Unit = { _, _ -> }
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     val today = Calendar.getInstance()
@@ -1593,6 +1615,10 @@ fun BillingCycleCalendarView(
             onCategoryChange = { newCategory ->
                 onCategoryChange(expense, newCategory)
                 selectedExpense = null
+            },
+            onMemoChange = { memo ->
+                onExpenseMemoChange(expense.id, memo)
+                selectedExpense = null
             }
         )
     }
@@ -1674,9 +1700,12 @@ fun CalendarDayCell(
 fun IncomeDetailDialog(
     income: IncomeEntity,
     onDismiss: () -> Unit,
-    onDelete: () -> Unit = {}
+    onDelete: () -> Unit = {},
+    onMemoChange: ((String?) -> Unit)? = null
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var isEditingMemo by remember { mutableStateOf(false) }
+    var memoText by remember { mutableStateOf(income.memo ?: "") }
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     val dateFormat = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA)
 
@@ -1792,6 +1821,65 @@ fun IncomeDetailDialog(
                     }
                 }
 
+                // 메모 (편집 가능)
+                if (onMemoChange != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { isEditingMemo = true }
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "메모",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = if (memoText.isBlank()) "메모 추가" else memoText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = if (memoText.isBlank()) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = 180.dp)
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "메모 편집",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                } else {
+                    income.memo?.let { memo ->
+                        if (memo.isNotBlank()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "메모",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                                Text(
+                                    text = memo,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                 // 원본 문자
@@ -1871,6 +1959,36 @@ fun IncomeDetailDialog(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
+    }
+
+    // 메모 편집 다이얼로그
+    if (isEditingMemo && onMemoChange != null) {
+        AlertDialog(
+            onDismissRequest = { isEditingMemo = false },
+            title = { Text("메모 편집") },
+            text = {
+                OutlinedTextField(
+                    value = memoText,
+                    onValueChange = { memoText = it },
+                    placeholder = { Text("메모를 입력하세요") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onMemoChange(memoText.ifBlank { null })
+                    isEditingMemo = false
+                }) {
+                    Text("저장")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isEditingMemo = false }) {
                     Text(stringResource(R.string.common_cancel))
                 }
             }

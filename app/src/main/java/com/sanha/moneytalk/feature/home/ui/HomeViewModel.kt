@@ -902,4 +902,31 @@ class HomeViewModel @Inject constructor(
             }
         }
     }
+
+    fun deleteExpense(expense: ExpenseEntity) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    expenseRepository.delete(expense)
+                }
+                _uiState.update { it.copy(errorMessage = "지출이 삭제되었습니다") }
+                loadData()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "삭제 실패: ${e.message}") }
+            }
+        }
+    }
+
+    fun updateExpenseMemo(expenseId: Long, memo: String?) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    expenseRepository.updateMemo(expenseId, memo?.ifBlank { null })
+                }
+                loadData()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "메모 저장 실패: ${e.message}") }
+            }
+        }
+    }
 }

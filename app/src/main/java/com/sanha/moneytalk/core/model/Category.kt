@@ -26,6 +26,7 @@ enum class Category(
     EDUCATION("📚", "교육"),
     HOUSING("🏢", "주거"),
     LIVING("🏠", "생활"),
+    INSURANCE("🛡️", "보험"),
     EVENTS("🎁", "경조"),
     DELIVERY("🛵", "배달", FOOD),  // 식비의 소 카테고리
     ETC("📦", "기타"),

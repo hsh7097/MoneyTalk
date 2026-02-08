@@ -222,13 +222,20 @@ fun HomeScreen(
         ExpenseDetailDialog(
             expense = expense,
             onDismiss = { selectedExpense = null },
-            onDelete = null,  // 홈에서는 삭제 기능 없음
+            onDelete = {
+                viewModel.deleteExpense(expense)
+                selectedExpense = null
+            },
             onCategoryChange = { newCategory ->
                 viewModel.updateExpenseCategory(
                     expenseId = expense.id,
                     storeName = expense.storeName,
                     newCategory = newCategory
                 )
+                selectedExpense = null
+            },
+            onMemoChange = { memo ->
+                viewModel.updateExpenseMemo(expense.id, memo)
                 selectedExpense = null
             }
         )
