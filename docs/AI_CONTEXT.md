@@ -27,9 +27,10 @@ app/src/main/java/com/sanha/moneytalk/
 │   ├── database/          # Room DB (entity, dao)
 │   ├── datastore/         # DataStore (설정값)
 │   ├── di/                # Hilt DI 모듈
-│   ├── model/             # Category enum 등
+│   ├── model/             # Category enum, SmsAnalysisResult 등
 │   ├── ui/component/      # 공통 UI 컴포넌트
-│   └── util/              # 핵심 유틸 (SMS파싱, 벡터엔진, 분류기 등)
+│   ├── similarity/        # 유사도 판정 정책 (SimilarityPolicy 구현체)
+│   └── util/              # 핵심 유틸 (SMS파싱, 벡터엔진, 분류기, CategoryReferenceProvider 등)
 ├── feature/
 │   ├── home/              # 홈 화면 (월간 현황, SMS 동기화)
 │   │   ├── data/          # Repository (Expense, Income, StoreEmbedding)
@@ -167,15 +168,18 @@ SMS 동기화 (HomeViewModel.syncSmsMessages)
 
 ### 5-2. 카테고리 자동 분류 흐름
 ```
-CategoryClassifierService.classifyUnclassifiedExpenses()
+CategoryClassifierService.getCategory(storeName)
    → Tier 1: Room DB 정확 매칭 (storeName → category)
-   → Tier 1.5: StoreEmbeddingRepository.findCategoryByStoreName()
-      → 벡터 매칭 → StoreNameSimilarityPolicy.shouldAutoApply(0.92) → 자동 적용
-   → Tier 2: 로컬 키워드 매칭
-   → Tier 3: StoreNameGrouper로 그룹핑
-      → StoreNameSimilarityPolicy.shouldGroup(0.88) → Gemini 배치 호출
+   → Tier 1.5: 임베딩 1회 생성 → 1.5a/b 모두에서 재사용
+      → 1.5a: findCategoryByStoreName(storeName, queryVector)
+         → 벡터 매칭 → StoreNameSimilarityPolicy.shouldAutoApply(0.92) → 자동 적용
+      → 1.5b: findCategoryByGroup(storeName, queryVector)
+         → 그룹 매칭 → StoreNameSimilarityPolicy.shouldGroup(0.88) → 다수결 적용
+   → Tier 2: 로컬 키워드 매칭 (SmsParser.inferCategory)
+   → Tier 3: StoreNameGrouper로 그룹핑 → Gemini 배치 호출 (별도 트리거)
    → 결과 전파: CategoryPropagationPolicy.shouldPropagateWithConfidence()
       → 유사도(≥0.90) + confidence(≥0.6) 모두 충족 시만 전파
+   → 참조 리스트: CategoryReferenceProvider → 모든 LLM 프롬프트에 주입
 ```
 
 ### 5-3. AI 채팅 흐름

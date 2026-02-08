@@ -1,0 +1,277 @@
+# MoneyTalk 앱 구조
+
+## 개요
+
+MoneyTalk는 SMS 문자 메시지를 분석하여 지출/수입을 자동으로 추적하는 Android 앱입니다.
+Jetpack Compose, Hilt DI, Room Database, MVVM 아키텍처를 사용하며,
+Google Gemini AI를 활용한 SMS 파싱, 카테고리 분류, 재무 상담 기능을 제공합니다.
+
+## 패키지 구조
+
+```
+com.sanha.moneytalk/
+├── MainActivity.kt                        # 앱 진입점
+├── MoneyTalkApplication.kt                # Application 클래스 (Hilt)
+│
+├── core/                                  # 공통 모듈
+│   ├── database/                          # Room 데이터베이스
+│   │   ├── AppDatabase.kt                 # Room Database 정의
+│   │   ├── converter/
+│   │   │   └── FloatListConverter.kt      # Float 리스트 타입 컨버터
+│   │   ├── dao/                           # Data Access Objects
+│   │   │   ├── BudgetDao.kt              # 예산 DAO
+│   │   │   ├── CategoryMappingDao.kt     # 카테고리 매핑 DAO
+│   │   │   ├── ChatDao.kt               # 채팅 DAO
+│   │   │   ├── ExpenseDao.kt            # 지출 DAO
+│   │   │   ├── IncomeDao.kt             # 수입 DAO
+│   │   │   ├── SmsPatternDao.kt         # SMS 패턴 캐시 DAO
+│   │   │   └── StoreEmbeddingDao.kt     # 가게명 임베딩 DAO
+│   │   └── entity/                       # Room Entities
+│   │       ├── BudgetEntity.kt           # 예산 Entity
+│   │       ├── CategoryMappingEntity.kt  # 카테고리 매핑 Entity
+│   │       ├── ChatEntity.kt            # 채팅 메시지 Entity
+│   │       ├── ChatSessionEntity.kt     # 채팅 세션(방) Entity
+│   │       ├── ExpenseEntity.kt         # 지출 Entity
+│   │       ├── IncomeEntity.kt          # 수입 Entity
+│   │       ├── SmsPatternEntity.kt      # SMS 패턴 캐시 Entity
+│   │       └── StoreEmbeddingEntity.kt  # 가게명 벡터 임베딩 Entity
+│   │
+│   ├── datastore/                        # DataStore 설정
+│   │   └── SettingsDataStore.kt          # 앱 설정 저장소
+│   │
+│   ├── di/                               # Hilt DI 모듈
+│   │   ├── DatabaseModule.kt             # DB 의존성 주입
+│   │   ├── NetworkModule.kt              # 네트워크 의존성 주입
+│   │   └── RepositoryModule.kt           # Repository 의존성 주입
+│   │
+│   ├── model/                            # 공통 모델
+│   │   ├── Category.kt                   # 지출 카테고리 Enum
+│   │   └── SmsAnalysisResult.kt          # SMS 분석 결과 모델
+│   │
+│   ├── similarity/                       # 유사도 정책 (SSOT)
+│   │   ├── SimilarityPolicy.kt           # 유사도 정책 인터페이스
+│   │   ├── SimilarityProfile.kt          # 유사도 프로필 데이터 클래스
+│   │   ├── SmsPatternSimilarityPolicy.kt # SMS 패턴 유사도 임계값
+│   │   ├── StoreNameSimilarityPolicy.kt  # 가게명 유사도 임계값
+│   │   └── CategoryPropagationPolicy.kt  # 카테고리 전파 정책
+│   │
+│   ├── theme/                            # Compose 테마
+│   │   ├── Color.kt                      # 색상 정의
+│   │   ├── Theme.kt                      # 테마 정의
+│   │   └── Type.kt                       # 타이포그래피 정의
+│   │
+│   ├── ui/component/                     # 공통 UI 컴포넌트
+│   │   └── ExpenseItemCard.kt            # 지출 항목 카드
+│   │
+│   └── util/                             # 유틸리티
+│       ├── SmsParser.kt                  # SMS 정규식 파싱 (Tier 1)
+│       ├── SmsReader.kt                  # SMS ContentResolver 읽기
+│       ├── HybridSmsClassifier.kt        # SMS 3-tier 분류 엔진
+│       ├── GeminiSmsExtractor.kt         # Gemini LLM SMS 추출 (Tier 3)
+│       ├── SmsBatchProcessor.kt          # SMS 배치 처리기
+│       ├── SmsEmbeddingService.kt        # SMS 임베딩 서비스
+│       ├── VectorSearchEngine.kt         # 벡터 유사도 검색 엔진
+│       ├── CategoryReferenceProvider.kt  # 카테고리 참조 데이터 제공
+│       ├── StoreNameGrouper.kt           # 가게명 그룹화
+│       ├── StoreAliasManager.kt          # 가게명 별칭 관리
+│       ├── ChatContextBuilder.kt         # 채팅 컨텍스트 빌더
+│       ├── DataQueryParser.kt            # 데이터 쿼리 파서
+│       ├── DateParser.kt                 # 날짜 파서
+│       ├── DateUtils.kt                  # 날짜/시간 유틸리티
+│       ├── DataBackupManager.kt          # 데이터 백업/복원 관리
+│       ├── DataRefreshEvent.kt           # 데이터 새로고침 이벤트
+│       └── GoogleDriveHelper.kt          # Google Drive API 헬퍼
+│
+├── feature/                              # 기능별 모듈
+│   ├── home/                             # 홈 탭
+│   │   ├── data/
+│   │   │   ├── ExpenseRepository.kt          # 지출 Repository
+│   │   │   ├── IncomeRepository.kt           # 수입 Repository
+│   │   │   ├── CategoryRepository.kt         # 카테고리 매핑 Repository
+│   │   │   ├── StoreEmbeddingRepository.kt   # 가게 임베딩 Repository
+│   │   │   ├── GeminiCategoryRepository.kt   # Gemini 카테고리 분류
+│   │   │   └── CategoryClassifierService.kt  # 4-tier 카테고리 분류 서비스
+│   │   └── ui/
+│   │       ├── HomeScreen.kt                 # 홈 화면 UI
+│   │       └── HomeViewModel.kt              # 홈 ViewModel
+│   │
+│   ├── history/                          # 내역 탭
+│   │   └── ui/
+│   │       ├── HistoryScreen.kt          # 내역 화면 UI
+│   │       └── HistoryViewModel.kt       # 내역 ViewModel
+│   │
+│   ├── chat/                             # AI 상담 탭
+│   │   ├── data/
+│   │   │   ├── ChatPrompts.kt            # AI 프롬프트 템플릿 (3종)
+│   │   │   ├── ChatRepository.kt         # 채팅 Repository 인터페이스
+│   │   │   ├── ChatRepositoryImpl.kt     # 채팅 Repository 구현체
+│   │   │   └── GeminiRepository.kt       # Gemini API Repository
+│   │   └── ui/
+│   │       ├── ChatScreen.kt             # 채팅 화면 UI
+│   │       └── ChatViewModel.kt          # 채팅 ViewModel
+│   │
+│   ├── settings/                         # 설정 탭
+│   │   └── ui/
+│   │       ├── SettingsScreen.kt         # 설정 화면 UI
+│   │       └── SettingsViewModel.kt      # 설정 ViewModel
+│   │
+│   └── splash/                           # 스플래시
+│       └── ui/
+│           └── SplashScreen.kt           # 스플래시 화면
+│
+├── navigation/                           # 네비게이션
+│   ├── NavGraph.kt                       # Navigation Graph
+│   ├── Screen.kt                         # Screen 정의
+│   └── BottomNavItem.kt                  # 하단 탭 아이템
+│
+└── receiver/                             # BroadcastReceiver
+    └── SmsReceiver.kt                    # SMS 수신 리시버 (goAsync)
+```
+
+**총 74개 .kt 파일**
+
+## 주요 기능
+
+### 1. 홈 (Home)
+- 월간 수입/지출 현황 표시
+- 카테고리별 지출 요약 (원형 차트)
+- 최근 지출 내역 (20건)
+- SMS 동기화 (증분 동기화, 배치 처리)
+- 미분류 항목 자동 카테고리 분류
+- 월 이동 (이전/다음 월)
+- 커스텀 월 시작일 지원 (월급일 기준)
+
+### 2. 내역 (History)
+- 전체 지출/수입 내역 조회
+- 월별 필터링
+- 카드사별, 카테고리별 필터링
+- 일별/월별 합계
+- 지출 수정 (카테고리, 메모, 금액, 가게명)
+- 지출 삭제
+
+### 3. AI 상담 (Chat)
+- Gemini AI 기반 재무 상담 (3-step pipeline)
+- 채팅방 관리 (생성, 삭제, 제목 편집)
+- DB 쿼리 자동 실행 (지출 조회, 분석)
+- 채팅 액션 지원 (삭제, 추가, 수정 등 9가지)
+- 대화 요약 기능 (컨텍스트 유지)
+
+### 4. 설정 (Settings)
+- 월 수입 / 월 시작일 설정
+- Gemini API 키 설정
+- SMS 동기화 / 카테고리 분류 (진행률 표시)
+- 데이터 내보내기 (JSON/CSV, 필터 지원)
+- Google Drive 백업/복원
+- 로컬 파일 복원
+- 중복 데이터 삭제
+- 전체 데이터 삭제
+
+## 핵심 시스템
+
+### SMS 파싱 (3-tier)
+
+```
+SMS 수신 → Tier 1 (Regex) → Tier 2 (Vector 캐시) → Tier 3 (Gemini LLM)
+```
+
+| Tier | 엔진 | 비용 | 설명 |
+|------|------|------|------|
+| 1 | SmsParser.kt (정규식) | 0 | 로컬 정규식으로 금액, 가게명, 카드사 추출 |
+| 2 | VectorSearchEngine.kt | 0 | 기존 패턴과 벡터 유사도 비교 (캐시 재사용) |
+| 3 | GeminiSmsExtractor.kt | API | Gemini LLM으로 구조화 데이터 추출 |
+
+### 카테고리 분류 (4-tier)
+
+| Tier | 방식 | 설명 |
+|------|------|------|
+| 1 | Room DB 정확 매칭 | CategoryMappingDao에서 가게명 정확 매칭 |
+| 1.5a | 벡터 유사도 (개별) | 가게명 임베딩 유사도로 카테고리 추론 |
+| 1.5b | 벡터 유사도 (그룹 투표) | 유사 가게명 그룹의 다수결 투표 |
+| 2 | 로컬 키워드 | SmsParser.inferCategory 키워드 매칭 |
+| 3 | Gemini 배치 호출 | GeminiCategoryRepository 배치 분류 |
+
+### AI 채팅 (3-step pipeline)
+
+```
+사용자 질문 → Step 1: QUERY_ANALYZER → Step 2: DB 조회/액션 실행 → Step 3: FINANCIAL_ADVISOR → 답변
+```
+
+| Step | 모델 | 프롬프트 위치 | 역할 |
+|------|------|-------------|------|
+| 1 | gemini-2.5-pro | ChatPrompts.kt (QUERY_ANALYZER) | 질문 → 쿼리/액션 JSON 변환 |
+| 2 | - | ChatViewModel.kt | DB 조회 및 액션 실행 |
+| 3 | gemini-2.5-pro | ChatPrompts.kt (FINANCIAL_ADVISOR) | 데이터 기반 최종 답변 생성 |
+
+## AI 프롬프트 위치
+
+| 프롬프트 | 파일 | 모델 | 목적 |
+|---------|------|------|------|
+| QUERY_ANALYZER | `feature/chat/data/ChatPrompts.kt` | gemini-2.5-pro | 사용자 질문 → 쿼리/액션 JSON |
+| FINANCIAL_ADVISOR | `feature/chat/data/ChatPrompts.kt` | gemini-2.5-pro | 재무 상담 답변 생성 |
+| SUMMARY | `feature/chat/data/ChatPrompts.kt` | gemini-2.5-flash | 대화 요약 |
+| SMS 추출 (단일) | `core/util/GeminiSmsExtractor.kt` | gemini-2.5-flash-lite | SMS → 결제 정보 추출 |
+| SMS 추출 (배치) | `core/util/GeminiSmsExtractor.kt` | gemini-2.5-flash-lite | 다건 SMS 배치 추출 |
+| 카테고리 분류 | `feature/home/data/GeminiCategoryRepository.kt` | gemini-2.5-flash-lite | 가게명 → 카테고리 분류 |
+
+## 유사도 정책 (core/similarity/)
+
+모든 임계값은 `core/similarity/` 패키지에서 SSOT로 관리:
+
+| 정책 | 판정 | 캐시 재사용 | 비결제 캐시 |
+|------|------|-----------|-----------|
+| SmsPatternSimilarityPolicy | 0.92 | 0.95 | 0.97 |
+| StoreNameSimilarityPolicy | 0.88 (그룹핑) | 0.90 (전파) | 0.92 (자동적용) |
+| CategoryPropagationPolicy | confidence < 0.6 차단 | - | - |
+
+## 데이터 흐름
+
+### SMS → 지출 저장
+```
+SMS 수신 (SmsReceiver)
+  → SmsReader (ContentResolver)
+  → HybridSmsClassifier (3-tier 분류)
+    → Tier 1: SmsParser (정규식)
+    → Tier 2: VectorSearchEngine (벡터 캐시)
+    → Tier 3: GeminiSmsExtractor (LLM)
+  → ExpenseEntity → Room DB
+  → CategoryClassifierService (4-tier 카테고리 분류)
+  → UI 반영
+```
+
+### 채팅 질의
+```
+사용자 질문
+  → ChatViewModel.sendMessage()
+  → QUERY_ANALYZER (Gemini) → JSON {queries, actions}
+  → DataQueryParser.executeQuery() / executeAction()
+  → FINANCIAL_ADVISOR (Gemini) + DB 결과
+  → 최종 답변 → UI
+```
+
+## 기술 스택
+
+| 분류 | 기술 | 버전 |
+|------|------|------|
+| **UI** | Jetpack Compose, Material 3 | BOM 2024.11.00 |
+| **Architecture** | MVVM, Repository Pattern | - |
+| **DI** | Hilt | 2.50 |
+| **Database** | Room | 2.6.1 |
+| **Preferences** | DataStore | 1.0.0 |
+| **Network** | OkHttp | 4.12.0 |
+| **AI** | Google Generative AI (Gemini) | 0.9.0 |
+| **Cloud** | Google Drive API, Play Services Auth | v3, 21.0.0 |
+| **Navigation** | Compose Navigation | 2.7.7 |
+| **Animation** | Lottie | 6.3.0 |
+| **Serialization** | Gson | 2.10.1 |
+| **Language** | Kotlin | 1.9.22 |
+
+## 빌드 설정
+
+- Gradle: 8.5
+- AGP: 8.2.2
+- Kotlin: 1.9.22
+- KSP: 1.9.22-1.0.17
+- compileSdk: 34
+- minSdk: 26
+- targetSdk: 34
+- JVM Target: 17

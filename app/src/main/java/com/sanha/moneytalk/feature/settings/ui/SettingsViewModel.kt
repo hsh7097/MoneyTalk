@@ -50,7 +50,9 @@ data class SettingsUiState(
     val isClassifying: Boolean = false,
     val classifyProgress: String = "",
     val classifyProgressCurrent: Int = 0,
-    val classifyProgressTotal: Int = 0
+    val classifyProgressTotal: Int = 0,
+    // 내 카드 관리
+    val ownedCards: List<com.sanha.moneytalk.core.database.entity.OwnedCardEntity> = emptyList()
 )
 
 @HiltViewModel
@@ -65,7 +67,8 @@ class SettingsViewModel @Inject constructor(
     private val appDatabase: AppDatabase,
     private val chatDao: ChatDao,
     private val budgetDao: BudgetDao,
-    private val dataRefreshEvent: DataRefreshEvent
+    private val dataRefreshEvent: DataRefreshEvent,
+    private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -75,6 +78,7 @@ class SettingsViewModel @Inject constructor(
         loadSettings()
         loadFilterOptions()
         loadUnclassifiedCount()
+        loadOwnedCards()
     }
 
     private fun loadSettings() {
@@ -416,6 +420,7 @@ class SettingsViewModel @Inject constructor(
                     chatDao.deleteAllSessions()  // chat_sessions 삭제
                     budgetDao.deleteAll()
                     categoryRepository.deleteAllMappings()
+                    ownedCardRepository.deleteAll()
 
                     // 설정 초기화
                     settingsDataStore.saveMonthlyIncome(0)
@@ -664,6 +669,36 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    // ========== 내 카드 관리 ==========
+
+    /**
+     * 보유 카드 목록 로드 (Flow 구독)
+     */
+    private fun loadOwnedCards() {
+        viewModelScope.launch {
+            ownedCardRepository.getAllCards().collect { cards ->
+                _uiState.update { it.copy(ownedCards = cards) }
+            }
+        }
+    }
+
+    /**
+     * 카드 소유 여부 변경
+     */
+    fun updateCardOwnership(cardName: String, isOwned: Boolean) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    ownedCardRepository.updateOwnership(cardName, isOwned)
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(message = "카드 설정 실패: ${e.message}")
+                }
+            }
+        }
+    }
+
     fun clearBackupContent() {
         _uiState.update { it.copy(backupContent = null) }
     }
@@ -721,10 +756,10 @@ class SettingsViewModel @Inject constructor(
                 return@launch
             }
 
-            // 미분류 항목 확인
+            // 미정리 항목 확인
             if (_uiState.value.unclassifiedCount == 0) {
                 _uiState.update {
-                    it.copy(message = "분류할 미분류 항목이 없습니다")
+                    it.copy(message = "정리할 항목이 없습니다")
                 }
                 return@launch
             }
@@ -733,7 +768,7 @@ class SettingsViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     isClassifying = true,
-                    classifyProgress = "분류 준비 중...",
+                    classifyProgress = "정리 준비 중...",
                     classifyProgressCurrent = 0,
                     classifyProgressTotal = initialCount
                 )
@@ -743,7 +778,11 @@ class SettingsViewModel @Inject constructor(
                     categoryClassifierService.classifyUnclassifiedExpenses { step, current, total ->
                         _uiState.update {
                             val progressText = if (total > 0) "$step ($current/$total)" else step
-                            it.copy(classifyProgress = progressText)
+                            it.copy(
+                                classifyProgress = progressText,
+                                classifyProgressCurrent = current,
+                                classifyProgressTotal = if (total > 0) total else it.classifyProgressTotal
+                            )
                         }
                     }
                 }
@@ -755,9 +794,9 @@ class SettingsViewModel @Inject constructor(
                         classifyProgressCurrent = 0,
                         classifyProgressTotal = 0,
                         message = if (count > 0) {
-                            "${count}건의 지출이 자동 분류되었습니다"
+                            "${count}건의 카테고리가 정리되었습니다"
                         } else {
-                            "분류에 실패했습니다. API 키를 확인해주세요."
+                            "정리에 실패했습니다. API 키를 확인해주세요."
                         }
                     )
                 }
@@ -768,7 +807,7 @@ class SettingsViewModel @Inject constructor(
                         classifyProgress = "",
                         classifyProgressCurrent = 0,
                         classifyProgressTotal = 0,
-                        message = "분류 실패: ${e.message}"
+                        message = "카테고리 정리 실패: ${e.message}"
                     )
                 }
             }

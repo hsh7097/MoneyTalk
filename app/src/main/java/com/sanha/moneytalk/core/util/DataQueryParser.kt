@@ -42,14 +42,14 @@ data class DataQuery(
 )
 
 /**
- * 데이터 수정 액션 (카테고리 변경, 삭제 등)
+ * 데이터 수정 액션 (카테고리 변경, 삭제, 추가, 수정 등)
  */
 data class DataAction(
     @SerializedName("type")
     val type: ActionType,
 
     @SerializedName("storeName")
-    val storeName: String? = null,      // 가게명으로 찾기
+    val storeName: String? = null,      // 가게명으로 찾기 / 추가 시 가게명
 
     @SerializedName("expenseId")
     val expenseId: Long? = null,        // 특정 지출 ID
@@ -58,7 +58,25 @@ data class DataAction(
     val newCategory: String? = null,    // 변경할 카테고리
 
     @SerializedName("searchKeyword")
-    val searchKeyword: String? = null   // 검색 키워드 (가게명에 포함된)
+    val searchKeyword: String? = null,  // 검색 키워드 (가게명에 포함된)
+
+    @SerializedName("amount")
+    val amount: Int? = null,            // 금액 (추가/수정 시)
+
+    @SerializedName("date")
+    val date: String? = null,           // 날짜 "YYYY-MM-DD" (추가 시)
+
+    @SerializedName("cardName")
+    val cardName: String? = null,       // 카드명 (추가 시)
+
+    @SerializedName("memo")
+    val memo: String? = null,           // 메모 (추가/수정 시)
+
+    @SerializedName("newStoreName")
+    val newStoreName: String? = null,   // 변경할 가게명 (가게명 수정 시)
+
+    @SerializedName("newAmount")
+    val newAmount: Int? = null          // 변경할 금액 (금액 수정 시)
 )
 
 enum class QueryType {
@@ -110,19 +128,34 @@ enum class QueryType {
 
 enum class ActionType {
     @SerializedName("update_category")
-    UPDATE_CATEGORY,            // 카테고리 변경
+    UPDATE_CATEGORY,            // 카테고리 변경 (expenseId, newCategory 필수)
 
     @SerializedName("update_category_by_store")
-    UPDATE_CATEGORY_BY_STORE,   // 가게명 기준 카테고리 일괄 변경
+    UPDATE_CATEGORY_BY_STORE,   // 가게명 기준 카테고리 일괄 변경 (storeName, newCategory 필수)
 
     @SerializedName("update_category_by_keyword")
-    UPDATE_CATEGORY_BY_KEYWORD, // 키워드 포함 가게명 일괄 변경
+    UPDATE_CATEGORY_BY_KEYWORD, // 키워드 포함 가게명 일괄 변경 (searchKeyword, newCategory 필수)
 
     @SerializedName("delete_expense")
-    DELETE_EXPENSE,             // 특정 지출 삭제
+    DELETE_EXPENSE,             // 특정 지출 삭제 (expenseId 필수)
+
+    @SerializedName("delete_by_keyword")
+    DELETE_BY_KEYWORD,          // 키워드 기반 일괄 삭제 (searchKeyword 필수)
 
     @SerializedName("delete_duplicates")
-    DELETE_DUPLICATES           // 중복 지출 일괄 삭제
+    DELETE_DUPLICATES,          // 중복 지출 일괄 삭제
+
+    @SerializedName("add_expense")
+    ADD_EXPENSE,                // 지출 수동 추가 (storeName, amount, date 필수)
+
+    @SerializedName("update_memo")
+    UPDATE_MEMO,                // 메모 수정 (expenseId, memo 필수)
+
+    @SerializedName("update_store_name")
+    UPDATE_STORE_NAME,          // 가게명 수정 (expenseId, newStoreName 필수)
+
+    @SerializedName("update_amount")
+    UPDATE_AMOUNT               // 금액 수정 (expenseId, newAmount 필수)
 }
 
 /**

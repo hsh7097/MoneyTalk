@@ -87,7 +87,7 @@ class SmsReader @Inject constructor() {
             val dateIndex = it.getColumnIndex(Telephony.Sms.DATE)
 
             while (it.moveToNext()) {
-                val id = it.getString(idIndex) ?: continue
+                it.getString(idIndex) ?: continue  // null이면 skip
                 val address = it.getString(addressIndex) ?: continue
                 val body = it.getString(bodyIndex) ?: continue
                 val date = it.getLong(dateIndex)
@@ -158,7 +158,7 @@ class SmsReader @Inject constructor() {
 
             while (it.moveToNext()) {
                 totalCount++
-                val id = it.getString(idIndex) ?: continue
+                it.getString(idIndex) ?: continue  // null이면 skip
                 val address = it.getString(addressIndex) ?: continue
                 val body = it.getString(bodyIndex) ?: continue
                 val date = it.getLong(dateIndex)
@@ -263,7 +263,7 @@ class SmsReader @Inject constructor() {
             val dateIndex = it.getColumnIndex(Telephony.Sms.DATE)
 
             while (it.moveToNext()) {
-                val id = it.getString(idIndex) ?: continue
+                it.getString(idIndex) ?: continue  // null이면 skip
                 val address = it.getString(addressIndex) ?: continue
                 val body = it.getString(bodyIndex) ?: continue
                 val date = it.getLong(dateIndex)
@@ -314,7 +314,7 @@ class SmsReader @Inject constructor() {
             val dateIndex = it.getColumnIndex(Telephony.Sms.DATE)
 
             while (it.moveToNext()) {
-                val id = it.getString(idIndex) ?: continue
+                it.getString(idIndex) ?: continue  // null이면 skip
                 val address = it.getString(addressIndex) ?: continue
                 val body = it.getString(bodyIndex) ?: continue
                 val date = it.getLong(dateIndex)
@@ -372,7 +372,7 @@ class SmsReader @Inject constructor() {
             val dateIndex = it.getColumnIndex(Telephony.Sms.DATE)
 
             while (it.moveToNext()) {
-                val id = it.getString(idIndex) ?: continue
+                it.getString(idIndex) ?: continue  // null이면 skip
                 val address = it.getString(addressIndex) ?: continue
                 val body = it.getString(bodyIndex) ?: continue
                 val date = it.getLong(dateIndex)
@@ -996,7 +996,7 @@ class SmsReader @Inject constructor() {
 
                 while (it.moveToNext()) {
                     totalCount++
-                    val id = it.getString(idIndex) ?: continue
+                    it.getString(idIndex) ?: continue  // null이면 skip
                     val address = it.getString(addressIndex) ?: continue
                     val rawBody = it.getString(bodyIndex) ?: continue
                     val date = it.getLong(dateIndex)
@@ -1121,7 +1121,7 @@ class SmsReader @Inject constructor() {
                 val dateIndex = it.getColumnIndex("date")
 
                 while (it.moveToNext()) {
-                    val id = it.getString(idIndex) ?: continue
+                    it.getString(idIndex) ?: continue  // null이면 skip
                     val address = it.getString(addressIndex) ?: continue
                     val rawBody = it.getString(bodyIndex) ?: continue
                     val date = it.getLong(dateIndex)
@@ -1170,7 +1170,7 @@ class SmsReader @Inject constructor() {
                 val dateIndex = it.getColumnIndex("date")
 
                 while (it.moveToNext()) {
-                    val id = it.getString(idIndex) ?: continue
+                    it.getString(idIndex) ?: continue  // null이면 skip
                     val address = it.getString(addressIndex) ?: continue
                     val rawBody = it.getString(bodyIndex) ?: continue
                     val date = it.getLong(dateIndex)
@@ -1225,7 +1225,7 @@ class SmsReader @Inject constructor() {
                 val dateIndex = it.getColumnIndex("date")
 
                 while (it.moveToNext()) {
-                    val id = it.getString(idIndex) ?: continue
+                    it.getString(idIndex) ?: continue  // null이면 skip
                     val address = it.getString(addressIndex) ?: continue
                     val rawBody = it.getString(bodyIndex) ?: continue
                     val date = it.getLong(dateIndex)

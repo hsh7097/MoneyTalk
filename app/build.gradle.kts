@@ -63,6 +63,9 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "/META-INF/DEPENDENCIES"
         }
+        jniLibs {
+            useLegacyPackaging = false
+        }
     }
 }
 
@@ -94,9 +97,7 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    // Retrofit & OkHttp
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.gson)
+    // OkHttp (SMS 임베딩 API 호출용)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
 

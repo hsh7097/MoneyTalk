@@ -20,11 +20,21 @@
 - [x] confidence < 0.6 전파 차단 정책 추가
 - [x] 빌드 성공 확인
 
+**벡터 그룹핑 + 참조 리스트 + 계좌이체 수정**: ✅ 완료
+- [x] 계좌이체/출금 분류 버그 수정 (체크카드출금은 일반 카드 결제로 처리)
+- [x] Tier 1.5b 그룹 기반 매칭 추가 (다수결, 유사도 ≥ 0.88)
+- [x] 임베딩 1회 생성으로 Tier 1.5a/b 최적화 (이전: 2회 API 호출)
+- [x] CategoryReferenceProvider 신설 (동적 참조 리스트 → 모든 LLM 프롬프트 주입)
+- [x] 모든 프롬프트에 보험/계좌이체 카테고리 추가
+- [x] SmsParser categoryKeywords 보험 매핑 수정 (기타→보험)
+- [x] 문서 업데이트 (SMS_PARSING, CATEGORY_CLASSIFICATION, AI_CONTEXT, AI_HANDOFF)
+
 ### 대기 중인 작업: Phase 2 후보 (우선순위 미정)
 
 - **2-A**: 부트스트랩 모드 게이트 제거 → 패턴 10개 후에도 LLM 호출 허용
 - **2-B**: 캐시 재사용 임계값 조정 (0.97→0.95) → 동일 가게 변형 캐시 히트율 향상
 - **2-C**: 벡터 학습 실패 시 사용자 알림 → fire-and-forget에서 에러 표시로 개선
+- **2-D**: 채팅에서 카테고리 설정 시 CategoryReferenceProvider에 자동 추가
 
 ---
 
@@ -86,6 +96,12 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | 2026-02-08 | 채팅방 나갈 때 대화 기반 자동 타이틀 설정 | 완료, 빌드 성공 |
 | 2026-02-08 | 채팅 UI 리팩토링 (방 리스트/내부 분리) | 완료 |
 | 2026-02-08 | 수입 내역 통합 표시 (목록 모드) | 완료 |
+| 2026-02-08 | 벡터 그룹핑 (Tier 1.5b) + CategoryReferenceProvider + 계좌이체/보험 수정 | 완료 |
+| 2026-02-08 | 채팅 액션 5개 추가 (delete_by_keyword, add_expense, update_memo, update_store_name, update_amount) | 완료, 빌드 성공 |
+| 2026-02-08 | FINANCIAL_ADVISOR 할루시네이션 방지 규칙 추가 | 완료 |
+| 2026-02-08 | SMS 동기화/카테고리 분류 다이얼로그 진행률 표시 개선 | 완료, 빌드 성공 |
+| 2026-02-08 | Claude 레거시 코드 완전 제거 (4개 파일 삭제 + Retrofit 의존성 제거) | 완료, 빌드 성공 |
+| 2026-02-08 | SmsAnalysisResult core/model/ 분리 + ExpenseRepo/Dao 미사용 메서드 제거 | 완료, 빌드 성공 |
 
 ---
 
@@ -101,11 +117,12 @@ feature/home/data/StoreEmbeddingRepository.kt  ← 가게명 벡터 캐시 + 전
 feature/home/data/CategoryClassifierService.kt ← 4-tier 카테고리 분류
 ```
 
-### 새로 생성할 파일
+### 생성된 파일
 ```
 core/similarity/SimilarityPolicy.kt           ← 인터페이스
 core/similarity/SimilarityProfile.kt          ← 임계값 데이터 클래스
 core/similarity/SmsPatternSimilarityPolicy.kt ← SMS 분류 정책
 core/similarity/StoreNameSimilarityPolicy.kt  ← 가게명 매칭 정책
 core/similarity/CategoryPropagationPolicy.kt  ← 카테고리 전파 정책
+core/util/CategoryReferenceProvider.kt        ← 동적 참조 리스트 (프롬프트 주입)
 ```

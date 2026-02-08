@@ -1,10 +1,12 @@
 package com.sanha.moneytalk.feature.chat.ui
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.entity.ChatEntity
 import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
+import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.feature.chat.data.ChatContext
 import com.sanha.moneytalk.feature.chat.data.ChatRepository
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
@@ -26,6 +28,8 @@ import java.text.SimpleDateFormat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.text.NumberFormat
 import java.util.*
@@ -73,6 +77,9 @@ class ChatViewModel @Inject constructor(
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     private val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+
+    /** sendMessage 동시 호출 방지용 Mutex */
+    private val sendMutex = Mutex()
 
     /** 재시도를 위한 마지막 사용자 메시지 저장 */
     private var lastUserMessage: String? = null
@@ -129,10 +136,20 @@ class ChatViewModel @Inject constructor(
                     val newTitle = geminiRepository.generateChatTitle(recentMessages)
                     if (newTitle != null) {
                         chatDao.updateSessionTitle(sessionId, newTitle)
+                    } else {
+                        // LLM이 null 반환 시 첫 사용자 메시지로 폴백
+                        val fallbackTitle = messages.firstOrNull { it.isUser }?.content?.take(30) ?: "대화"
+                        chatDao.updateSessionTitle(sessionId, fallbackTitle)
                     }
                 } catch (e: Exception) {
-                    // 타이틀 생성 실패해도 무시 (기존 타이틀 유지)
-                    android.util.Log.w("ChatViewModel", "자동 타이틀 생성 실패: ${e.message}")
+                    // 타이틀 생성 실패 시 첫 사용자 메시지로 폴백
+                    Log.w("ChatViewModel", "자동 타이틀 생성 실패, 폴백 적용: ${e.message}")
+                    try {
+                        val fallbackTitle = messages.firstOrNull { it.isUser }?.content?.take(30) ?: "대화"
+                        chatDao.updateSessionTitle(sessionId, fallbackTitle)
+                    } catch (inner: Exception) {
+                        Log.e("ChatViewModel", "폴백 타이틀 저장도 실패: ${inner.message}")
+                    }
                 }
             }
         }
@@ -237,11 +254,13 @@ class ChatViewModel @Inject constructor(
 
     fun sendMessage(message: String) {
         if (message.isBlank()) return
+        if (sendMutex.isLocked) return  // 이미 처리 중이면 무시
 
         lastUserMessage = message
         _uiState.update { it.copy(canRetry = false) }
 
         viewModelScope.launch {
+            sendMutex.withLock {
             // 현재 세션 ID 확인, 없으면 새 세션 생성
             var sessionId = _uiState.value.currentSessionId
             if (sessionId == null) {
@@ -357,6 +376,7 @@ class ChatViewModel @Inject constructor(
                 }
                 _uiState.update { it.copy(isLoading = false, canRetry = true) }
             }
+            } // sendMutex.withLock
         }
     }
 
@@ -387,11 +407,10 @@ class ChatViewModel @Inject constructor(
         return when (query.type) {
             QueryType.TOTAL_EXPENSE -> {
                 val total = if (query.category != null) {
-                    // 카테고리 필터가 있으면 해당 카테고리(+소 카테고리)만 합산
+                    // 카테고리 필터가 있으면 DB에서 직접 해당 카테고리(+소 카테고리)만 합산
                     val cat = Category.fromDisplayName(query.category)
                     val categoryNames = cat.displayNamesIncludingSub
-                    val allExpenses = expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp)
-                    allExpenses.filter { it.category in categoryNames }.sumOf { it.amount }
+                    expenseRepository.getTotalExpenseByCategoriesAndDateRange(categoryNames, startTimestamp, endTimestamp)
                 } else {
                     expenseRepository.getTotalExpenseByDateRange(startTimestamp, endTimestamp)
                 }
@@ -435,18 +454,14 @@ class ChatViewModel @Inject constructor(
 
             QueryType.EXPENSE_LIST -> {
                 val limit = query.limit ?: 50
-                val expenses = expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp)
-                    .let { list ->
-                        if (query.category != null) {
-                            // 대 카테고리 선택 시 소 카테고리도 포함
-                            val cat = Category.fromDisplayName(query.category)
-                            val categoryNames = cat.displayNamesIncludingSub
-                            list.filter { it.category in categoryNames }
-                        } else {
-                            list
-                        }
-                    }
-                    .take(limit)
+                val expenses = if (query.category != null) {
+                    // DB에서 직접 카테고리(+소 카테고리) 필터링
+                    val cat = Category.fromDisplayName(query.category)
+                    val categoryNames = cat.displayNamesIncludingSub
+                    expenseRepository.getExpensesByCategoriesAndDateRangeOnce(categoryNames, startTimestamp, endTimestamp)
+                } else {
+                    expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp)
+                }.take(limit)
 
                 val expenseList = expenses.joinToString("\n") { expense ->
                     "${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${numberFormat.format(expense.amount)}원 (${expense.category})${expense.memo?.let { " [메모: $it]" } ?: ""}"
@@ -725,6 +740,26 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
+            ActionType.DELETE_BY_KEYWORD -> {
+                val keyword = action.searchKeyword
+                if (keyword.isNullOrBlank()) {
+                    ActionResult(
+                        actionType = ActionType.DELETE_BY_KEYWORD,
+                        success = false,
+                        message = "삭제할 검색 키워드가 지정되지 않았습니다."
+                    )
+                } else {
+                    val deletedCount = expenseRepository.deleteByKeyword(keyword)
+                    Log.d("gemini", "키워드 기반 삭제: '$keyword' → ${deletedCount}건 삭제")
+                    ActionResult(
+                        actionType = ActionType.DELETE_BY_KEYWORD,
+                        success = deletedCount > 0,
+                        message = if (deletedCount > 0) "'$keyword' 포함 항목 ${deletedCount}건을 삭제했습니다." else "'$keyword' 포함 항목이 없습니다.",
+                        affectedCount = deletedCount
+                    )
+                }
+            }
+
             ActionType.DELETE_DUPLICATES -> {
                 val deletedCount = expenseRepository.deleteDuplicates()
                 ActionResult(
@@ -733,6 +768,138 @@ class ChatViewModel @Inject constructor(
                     message = if (deletedCount > 0) "중복 ${deletedCount}건을 삭제했습니다." else "중복 항목이 없습니다.",
                     affectedCount = deletedCount
                 )
+            }
+
+            ActionType.ADD_EXPENSE -> {
+                val storeName = action.storeName
+                val amount = action.amount
+                val dateStr = action.date
+
+                if (storeName.isNullOrBlank() || amount == null || amount <= 0) {
+                    ActionResult(
+                        actionType = ActionType.ADD_EXPENSE,
+                        success = false,
+                        message = "가게명과 금액은 필수입니다."
+                    )
+                } else {
+                    val dateTime = if (!dateStr.isNullOrBlank()) {
+                        try {
+                            SimpleDateFormat("yyyy-MM-dd", Locale.KOREA).parse(dateStr)?.time ?: System.currentTimeMillis()
+                        } catch (e: Exception) { System.currentTimeMillis() }
+                    } else {
+                        System.currentTimeMillis()
+                    }
+
+                    val expense = ExpenseEntity(
+                        storeName = storeName,
+                        amount = amount,
+                        dateTime = dateTime,
+                        cardName = action.cardName ?: "수동입력",
+                        category = action.newCategory ?: "미분류",
+                        originalSms = "",
+                        smsId = "manual_${System.currentTimeMillis()}",
+                        memo = action.memo
+                    )
+                    val id = expenseRepository.insert(expense)
+                    Log.d("gemini", "지출 추가: $storeName ${amount}원 → ID $id")
+                    ActionResult(
+                        actionType = ActionType.ADD_EXPENSE,
+                        success = true,
+                        message = "'$storeName' ${numberFormat.format(amount)}원 지출을 추가했습니다. (ID: $id)",
+                        affectedCount = 1
+                    )
+                }
+            }
+
+            ActionType.UPDATE_MEMO -> {
+                val expenseId = action.expenseId
+                if (expenseId == null) {
+                    ActionResult(
+                        actionType = ActionType.UPDATE_MEMO,
+                        success = false,
+                        message = "수정할 지출 ID가 지정되지 않았습니다."
+                    )
+                } else {
+                    val expense = expenseRepository.getExpenseById(expenseId)
+                    if (expense != null) {
+                        val count = expenseRepository.updateMemo(expenseId, action.memo)
+                        Log.d("gemini", "메모 수정: ID $expenseId → '${action.memo}'")
+                        ActionResult(
+                            actionType = ActionType.UPDATE_MEMO,
+                            success = count > 0,
+                            message = "ID $expenseId (${expense.storeName})의 메모를 '${action.memo ?: ""}'(으)로 수정했습니다.",
+                            affectedCount = count
+                        )
+                    } else {
+                        ActionResult(
+                            actionType = ActionType.UPDATE_MEMO,
+                            success = false,
+                            message = "ID $expenseId 항목을 찾을 수 없습니다."
+                        )
+                    }
+                }
+            }
+
+            ActionType.UPDATE_STORE_NAME -> {
+                val id = action.expenseId
+                val name = action.newStoreName
+                if (id == null || name.isNullOrBlank()) {
+                    ActionResult(
+                        actionType = ActionType.UPDATE_STORE_NAME,
+                        success = false,
+                        message = "수정할 지출 ID와 새 가게명은 필수입니다."
+                    )
+                } else {
+                    val expense = expenseRepository.getExpenseById(id)
+                    if (expense != null) {
+                        val oldName = expense.storeName
+                        val count = expenseRepository.updateStoreName(id, name)
+                        Log.d("gemini", "가게명 수정: ID $id '$oldName' → '$name'")
+                        ActionResult(
+                            actionType = ActionType.UPDATE_STORE_NAME,
+                            success = count > 0,
+                            message = "ID ${id}의 가게명을 '$oldName' → '$name'(으)로 수정했습니다.",
+                            affectedCount = count
+                        )
+                    } else {
+                        ActionResult(
+                            actionType = ActionType.UPDATE_STORE_NAME,
+                            success = false,
+                            message = "ID $id 항목을 찾을 수 없습니다."
+                        )
+                    }
+                }
+            }
+
+            ActionType.UPDATE_AMOUNT -> {
+                val expenseId = action.expenseId
+                val newAmount = action.newAmount
+                if (expenseId == null || newAmount == null || newAmount <= 0) {
+                    ActionResult(
+                        actionType = ActionType.UPDATE_AMOUNT,
+                        success = false,
+                        message = "수정할 지출 ID와 새 금액은 필수입니다."
+                    )
+                } else {
+                    val expense = expenseRepository.getExpenseById(expenseId)
+                    if (expense != null) {
+                        val oldAmount = expense.amount
+                        val count = expenseRepository.updateAmount(expenseId, newAmount)
+                        Log.d("gemini", "금액 수정: ID $expenseId ${oldAmount}원 → ${newAmount}원")
+                        ActionResult(
+                            actionType = ActionType.UPDATE_AMOUNT,
+                            success = count > 0,
+                            message = "ID $expenseId (${expense.storeName})의 금액을 ${numberFormat.format(oldAmount)}원 → ${numberFormat.format(newAmount)}원으로 수정했습니다.",
+                            affectedCount = count
+                        )
+                    } else {
+                        ActionResult(
+                            actionType = ActionType.UPDATE_AMOUNT,
+                            success = false,
+                            message = "ID $expenseId 항목을 찾을 수 없습니다."
+                        )
+                    }
+                }
             }
         }
     }

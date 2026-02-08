@@ -1,7 +1,7 @@
 package com.sanha.moneytalk.core.util
 
 import android.util.Log
-import com.sanha.moneytalk.feature.chat.data.SmsAnalysisResult
+import com.sanha.moneytalk.core.model.SmsAnalysisResult
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -109,8 +109,17 @@ object SmsParser {
         "광고", "[광고]", "(광고)",
         "홍보", "이벤트", "혜택안내", "포인트 적립",
         "명세서", "청구서", "이용대금",
-        "결제금액"  // 카드사 결제예정 금액 안내 (예: "01/25결제금액(01/26기준)")
+        "결제금액",  // 카드사 결제예정 금액 안내 (예: "01/25결제금액(01/26기준)")
+        "카드대금",  // 카드 대금 결제/이체 안내
+        "결제대금",  // 카드 결제대금 안내
+        "청구금액",  // 카드사 청구금액 안내
+        "출금 예정", // 자동이체 출금 예정 안내
+        "출금예정",  // 자동이체 출금예정 안내 (띄어쓰기 없는 버전)
+        "퇴직"  // 퇴직연금 안내 문자 제외
     )
+
+    /** SMS 최대 글자수 (일반 결제 SMS는 40~100자, 안내/광고성은 200자 이상) */
+    private const val MAX_SMS_LENGTH = 200
 
     /**
      * 카테고리 매핑 (가게명 키워드 기반)
@@ -212,13 +221,9 @@ object SmsParser {
         "배달" to listOf(
             "배달의민족", "요기요", "쿠팡이츠", "배민", "위메프오", "땡겨요", "배달"
         ),
-        // 계좌이체
-        "계좌이체" to listOf(
-            "이체", "송금", "계좌이체"
-        ),
-        // 기타 (보험 등)
-        "기타" to listOf(
-            "보험"
+        // 보험
+        "보험" to listOf(
+            "보험", "보험료"
         )
     )
 
@@ -241,6 +246,12 @@ object SmsParser {
     fun isCardPaymentSms(message: String): Boolean {
         // 빈 메시지 조기 반환
         if (message.isBlank()) return false
+
+        // 글자수 제한 (안내/광고성 SMS 필터링)
+        if (message.length > MAX_SMS_LENGTH) {
+            Log.d("sanha", "글자수 초과 제외 [${message.length}자] ${message.take(30)}")
+            return false
+        }
 
         // 제외 키워드가 있으면 false
         if (excludeKeywords.any { message.contains(it) }) {
@@ -773,11 +784,6 @@ object SmsParser {
      * @return 매칭된 카테고리 (없으면 "미분류")
      */
     fun inferCategory(storeName: String, message: String): String {
-        // 계좌이체 우선 감지: 계좌번호 패턴(**포함) + "출금" 키워드
-        if (message.contains("출금") && message.contains(Regex("""\d+\*+\d+"""))) {
-            return "계좌이체"
-        }
-
         val combinedText = "$storeName $message".lowercase()
 
         for ((category, keywords) in categoryKeywords) {

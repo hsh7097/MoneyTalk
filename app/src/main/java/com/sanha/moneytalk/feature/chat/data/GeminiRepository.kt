@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.feature.chat.data
 
+import android.content.Context
 import android.util.Log
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
@@ -9,13 +10,16 @@ import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.DataQueryParser
 import com.sanha.moneytalk.core.util.DataQueryRequest
 import com.sanha.moneytalk.core.util.QueryResult
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class GeminiRepository @Inject constructor(
-    private val settingsDataStore: SettingsDataStore
+    @ApplicationContext private val context: Context,
+    private val settingsDataStore: SettingsDataStore,
+    private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider
 ) {
     private var cachedApiKey: String? = null
 
@@ -29,8 +33,7 @@ class GeminiRepository @Inject constructor(
     private var summaryModel: GenerativeModel? = null
 
     companion object {
-        private const val TAG = "GeminiChat"
-        private const val TAG_PROMPT = "PROMPT"
+        private const val TAG = "gemini"
     }
 
     // DataStore에서 API 키 가져오기 (캐싱)
@@ -56,7 +59,7 @@ class GeminiRepository @Inject constructor(
                     topP = 0.9f
                     maxOutputTokens = 10000
                 },
-                systemInstruction = content { text(ChatPrompts.QUERY_ANALYZER_SYSTEM_INSTRUCTION) }
+                systemInstruction = content { text(ChatPrompts.getQueryAnalyzerSystemInstruction(context)) }
             )
         }
         return queryAnalyzerModel
@@ -77,7 +80,7 @@ class GeminiRepository @Inject constructor(
                     topP = 0.95f
                     maxOutputTokens = 10000
                 },
-                systemInstruction = content { text(ChatPrompts.FINANCIAL_ADVISOR_SYSTEM_INSTRUCTION) }
+                systemInstruction = content { text(ChatPrompts.getFinancialAdvisorSystemInstruction(context)) }
             )
         }
         return financialAdvisorModel
@@ -98,7 +101,7 @@ class GeminiRepository @Inject constructor(
                     topP = 0.9f
                     maxOutputTokens = 10000
                 },
-                systemInstruction = content { text(ChatPrompts.SUMMARY_SYSTEM_INSTRUCTION) }
+                systemInstruction = content { text(ChatPrompts.getSummarySystemInstruction(context)) }
             )
         }
         return summaryModel
@@ -139,15 +142,23 @@ class GeminiRepository @Inject constructor(
             val calendar = Calendar.getInstance()
             val today = "${calendar.get(Calendar.YEAR)}년 ${calendar.get(Calendar.MONTH) + 1}월 ${calendar.get(Calendar.DAY_OF_MONTH)}일"
 
-            val prompt = """오늘: $today
+            // 카테고리 참조 리스트 추가
+            val categoryRef = try {
+                categoryReferenceProvider.getChatReference()
+            } catch (e: Exception) { "" }
 
+            val prompt = """오늘: $today
+$categoryRef
 $contextualMessage
 
 위 질문에 필요한 데이터 쿼리를 JSON으로 반환해줘:"""
 
-            Log.d(TAG_PROMPT, "=== 쿼리 분석 프롬프트 ===")
-            Log.d(TAG_PROMPT, prompt)
-            Log.d(TAG_PROMPT, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
+            Log.d(TAG, "=== 쿼리 분석 시스템 인스트럭션 ===")
+            Log.d(TAG, ChatPrompts.getQueryAnalyzerSystemInstruction(context))
+            Log.d(TAG, "=== 시스템 인스트럭션 끝 (길이: ${ChatPrompts.getQueryAnalyzerSystemInstruction(context).length}) ===")
+            Log.d(TAG, "=== 쿼리 분석 프롬프트 ===")
+            Log.d(TAG, prompt)
+            Log.d(TAG, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
 
             val response = model.generateContent(prompt)
             val responseText = response.text ?: return Result.success(null)
@@ -198,17 +209,22 @@ $contextualMessage
                 }
             } else ""
 
+            // 카테고리 참조 리스트 추가
+            val categoryRef = try {
+                categoryReferenceProvider.getChatReference()
+            } catch (e: Exception) { "" }
+
             val prompt = """[월 수입] ${String.format("%,d", monthlyIncome)}원
 
 [조회된 데이터]
 $dataContext$actionContext
-
+$categoryRef
 [사용자 질문]
 $userMessage"""
 
-            Log.d(TAG_PROMPT, "=== 최종 답변 프롬프트 ===")
-            Log.d(TAG_PROMPT, prompt)
-            Log.d(TAG_PROMPT, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
+            Log.d(TAG, "=== 최종 답변 프롬프트 ===")
+            Log.d(TAG, prompt)
+            Log.d(TAG, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
             Log.d(TAG, "Gemini 호출 중...")
 
             val response = model.generateContent(prompt)
@@ -237,9 +253,12 @@ $userMessage"""
     suspend fun generateFinalAnswerWithContext(contextPrompt: String): Result<String> {
         return try {
             Log.d(TAG, "=== generateFinalAnswerWithContext 시작 ===")
-            Log.d(TAG_PROMPT, "=== 컨텍스트 기반 최종 답변 프롬프트 ===")
-            Log.d(TAG_PROMPT, contextPrompt)
-            Log.d(TAG_PROMPT, "=== 프롬프트 끝 (길이: ${contextPrompt.length}) ===")
+            Log.d(TAG, "=== 최종 답변 시스템 인스트럭션 ===")
+            Log.d(TAG, ChatPrompts.getFinancialAdvisorSystemInstruction(context))
+            Log.d(TAG, "=== 시스템 인스트럭션 끝 (길이: ${ChatPrompts.getFinancialAdvisorSystemInstruction(context).length}) ===")
+            Log.d(TAG, "=== 컨텍스트 기반 최종 답변 프롬프트 ===")
+            Log.d(TAG, contextPrompt)
+            Log.d(TAG, "=== 프롬프트 끝 (길이: ${contextPrompt.length}) ===")
 
             val model = getFinancialAdvisorModel()
             if (model == null) {
@@ -263,9 +282,12 @@ $userMessage"""
     suspend fun simpleChat(userMessage: String): Result<String> {
         return try {
             Log.d(TAG, "=== simpleChat 시작 ===")
-            Log.d(TAG_PROMPT, "=== 심플 채팅 프롬프트 ===")
-            Log.d(TAG_PROMPT, userMessage)
-            Log.d(TAG_PROMPT, "=== 프롬프트 끝 (길이: ${userMessage.length}) ===")
+            Log.d(TAG, "=== 심플 채팅 시스템 인스트럭션 ===")
+            Log.d(TAG, ChatPrompts.getFinancialAdvisorSystemInstruction(context))
+            Log.d(TAG, "=== 시스템 인스트럭션 끝 (길이: ${ChatPrompts.getFinancialAdvisorSystemInstruction(context).length}) ===")
+            Log.d(TAG, "=== 심플 채팅 프롬프트 ===")
+            Log.d(TAG, userMessage)
+            Log.d(TAG, "=== 프롬프트 끝 (길이: ${userMessage.length}) ===")
 
             val model = getFinancialAdvisorModel()
             if (model == null) {
@@ -315,8 +337,14 @@ $recentMessages
 
 제목:"""
 
+            Log.d(TAG, "=== [타이틀 생성] 시스템 인스트럭션 ===")
+            Log.d(TAG, ChatPrompts.getSummarySystemInstruction(context))
+            Log.d(TAG, "=== 시스템 인스트럭션 끝 ===")
+            Log.d(TAG, "=== [타이틀 생성] 요청 ===")
+            Log.d(TAG, prompt)
             val response = model.generateContent(prompt)
             val title = response.text?.trim()?.take(20)
+            Log.d(TAG, "=== [타이틀 생성] 응답: $title ===")
             if (title.isNullOrBlank()) null else title
         } catch (e: Exception) {
             Log.w(TAG, "채팅 타이틀 생성 실패: ${e.message}")
@@ -361,9 +389,12 @@ $existingSummary
 $newMessages"""
             }
 
-            Log.d(TAG_PROMPT, "=== 요약 프롬프트 ===")
-            Log.d(TAG_PROMPT, prompt)
-            Log.d(TAG_PROMPT, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
+            Log.d(TAG, "=== 요약 시스템 인스트럭션 ===")
+            Log.d(TAG, ChatPrompts.getSummarySystemInstruction(context))
+            Log.d(TAG, "=== 시스템 인스트럭션 끝 ===")
+            Log.d(TAG, "=== 요약 프롬프트 ===")
+            Log.d(TAG, prompt)
+            Log.d(TAG, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
             val response = model.generateContent(prompt)
             val summaryText = response.text ?: return Result.failure(Exception("요약 응답 없음"))
 

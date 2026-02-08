@@ -105,22 +105,32 @@ MoneyTalk은 SMS에서 추출한 가게명을 기반으로 지출 카테고리�
 | createdAt | Long | 생성 시간 |
 | updatedAt | Long | 마지막 업데이트 시간 |
 
-### 동작 원리
+### 동작 원리 (Tier 1.5a + 1.5b)
+
+임베딩 벡터는 1회만 생성하여 Tier 1.5a/b 모두에서 재사용합니다 (API 호출 최적화).
+
+**Tier 1.5a: 개별 최고 매칭**
 1. 가게명의 임베딩 벡터 생성 (Gemini Embedding API 1회)
 2. 인메모리 캐시에서 코사인 유사도 검색
 3. 유사도 >= 0.92이면 해당 카테고리 반환
 
+**Tier 1.5b: 그룹 기반 매칭 (다수결)**
+1. Tier 1.5a에서 매칭 실패 시, 동일 임베딩 벡터를 재사용
+2. 유사도 >= 0.88인 모든 유사 가게를 검색
+3. 그룹 내 가장 많은 카테고리를 다수결로 결정
+4. autoApply(0.92) 미만이더라도 group(0.88) 이상이면 분류 가능 → 분류 범위 확장
+
 ### 캐시 프로모션
-벡터 매칭 성공 시, 해당 가게명을 Room 정확 매핑(Tier 1)에도 저장합니다.
+벡터 매칭 성공 시 (1.5a/1.5b 모두), 해당 가게명을 Room 정확 매핑(Tier 1)에도 저장합니다.
 다음 조회 시 Tier 1에서 즉시 반환되어 임베딩 API 호출도 불필요합니다.
 
 ### 유사도 임계값
 
 | 상수 | 값 | 용도 |
 |------|---|------|
-| `STORE_SIMILARITY_THRESHOLD` | 0.92 | 카테고리 자동 적용 |
+| `STORE_SIMILARITY_THRESHOLD` | 0.92 | Tier 1.5a: 카테고리 자동 적용 |
+| `GROUPING_SIMILARITY_THRESHOLD` | 0.88 | Tier 1.5b: 그룹 기반 다수결 매칭 |
 | `PROPAGATION_SIMILARITY_THRESHOLD` | 0.90 | 사용자 수정 전파 |
-| `GROUPING_SIMILARITY_THRESHOLD` | 0.88 | 시맨틱 그룹핑 |
 
 ---
 
@@ -143,7 +153,9 @@ MoneyTalk은 SMS에서 추출한 가게명을 기반으로 지출 카테고리�
 | 운동 | 헬스, 필라테스 등 | 피트니스, 요가, PT |
 | 문화/여가 | CGV, 야놀자 등 | 영화, 놀이공원, 게임/오락, 여행/숙박, 공연/전시 |
 | 교육 | 학원, 교보문고 등 | 교육, 도서 |
-| 생활 | SKT, 보험 등 | 통신, 공과금, 보험, 미용 |
+| 보험 | 보험, 보험료 | 보험료 납부 |
+| 생활 | SKT 등 | 통신, 공과금, 미용 |
+| 계좌이체 | 계좌이체, 타행이체, 당행이체 등 | 명시적 이체 (체크카드출금 제외) |
 | 기타 | -- | 위 키워드에 매칭 안 됨 |
 
 ---
@@ -183,7 +195,36 @@ Room + 벡터 DB에 저장
 
 ---
 
-## 6. 자가 학습 피드백 루프
+## 6. 동적 참조 리스트 (CategoryReferenceProvider)
+
+### 파일 위치
+`core/util/CategoryReferenceProvider.kt`
+
+### 개요
+사용자가 학습시킨 가게명→카테고리 매핑을 모든 LLM 프롬프트에 동적 참조 리스트로 주입합니다.
+이를 통해 SMS 추출, 카테고리 분류, AI 채팅에서 일관된 분류가 가능합니다.
+
+### 참조 리스트 주입 대상
+
+| 프롬프트 | 메서드 | 사용처 |
+|---------|--------|--------|
+| SMS 추출 | `getSmsExtractionReference()` | GeminiSmsExtractor |
+| 카테고리 분류 | `getCategoryClassificationReference()` | GeminiCategoryRepository |
+| AI 채팅 | `getChatReference()` | GeminiRepository (chat) |
+
+### 동작 방식
+1. CategoryMappingDao에서 전체 매핑 조회
+2. source="user" 우선 정렬, 카테고리당 최대 5개 예시
+3. 전체 최대 50건으로 제한
+4. 인메모리 캐시 + 사용자 카테고리 변경 시 자동 무효화
+
+### 향후 확장
+채팅에서 사용자가 카테고리 설정을 변경하면, CategoryReferenceProvider 캐시가 무효화되어
+다음 LLM 호출부터 업데이트된 참조 리스트가 사용됩니다.
+
+---
+
+## 7. 자가 학습 피드백 루프
 
 ### Gemini 분류 결과 캐싱
 Gemini가 분류한 결과를 벡터 DB에도 저장합니다.
@@ -207,7 +248,7 @@ Gemini가 분류한 결과를 벡터 DB에도 저장합니다.
 
 ---
 
-## 7. AI 채팅에서의 카테고리 변경
+## 8. AI 채팅에서의 카테고리 변경
 
 채팅에서 자연어로 카테고리 변경을 요청할 수 있습니다:
 
@@ -219,7 +260,7 @@ Gemini가 분류한 결과를 벡터 DB에도 저장합니다.
 
 ---
 
-## 8. 카테고리 목록 (Category enum)
+## 9. 카테고리 목록 (Category enum)
 
 | Enum | 이모지 | displayName |
 |------|--------|-------------|
@@ -236,6 +277,8 @@ Gemini가 분류한 결과를 벡터 DB에도 저장합니다.
 | HOUSING | -- | 주거 |
 | LIVING | -- | 생활 |
 | DELIVERY | -- | 배달 |
+| INSURANCE | -- | 보험 |
+| TRANSFER | -- | 계좌이체 |
 | EVENTS | -- | 경조 |
 | ETC | -- | 기타 |
 

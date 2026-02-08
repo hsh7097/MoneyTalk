@@ -1,12 +1,15 @@
 package com.sanha.moneytalk.core.util
 
+import android.content.Context
 import android.util.Log
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
 import com.google.ai.client.generativeai.type.generationConfig
 import com.google.gson.JsonParser
+import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -26,65 +29,12 @@ import javax.inject.Singleton
  */
 @Singleton
 class GeminiSmsExtractor @Inject constructor(
-    private val settingsDataStore: SettingsDataStore
+    @ApplicationContext private val context: Context,
+    private val settingsDataStore: SettingsDataStore,
+    private val categoryReferenceProvider: CategoryReferenceProvider
 ) {
     companion object {
-        private const val TAG = "GeminiSmsExtractor"
-
-        private const val SYSTEM_INSTRUCTION = """당신은 한국 카드 결제 SMS에서 정보를 추출하는 전문가입니다.
-
-[역할]
-SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니다.
-
-[추출 항목]
-1. isPayment: 결제 문자인지 여부 (true/false)
-2. amount: 결제 금액 (숫자만, 콤마 없이)
-3. storeName: 가게명/상호명
-4. cardName: 카드사명
-5. dateTime: 결제 날짜와 시간 ("yyyy-MM-dd HH:mm" 형식). SMS 수신 날짜가 제공되면 해당 연도를 사용할 것.
-6. category: 추정 카테고리 (식비, 카페, 술/유흥, 교통, 쇼핑, 구독, 의료/건강, 운동, 문화/여가, 교육, 주거, 생활, 경조, 배달, 기타 중 하나. 배달의민족/요기요/쿠팡이츠 등 배달앱은 반드시 "배달"로 분류)
-
-[응답 규칙]
-1. 반드시 JSON만 반환 (다른 텍스트 없이)
-2. 금액은 정수만 (콤마 제거)
-3. 가게명이 불분명하면 "결제"로 기입
-4. 카드사가 불분명하면 "기타"로 기입
-5. 결제 문자가 아니면 isPayment: false
-6. dateTime의 연도는 반드시 SMS 수신 날짜의 연도를 따를 것
-
-[응답 형식]
-{"isPayment": true, "amount": 15000, "storeName": "스타벅스", "cardName": "KB국민", "dateTime": "2025-01-15 14:30", "category": "카페"}"""
-
-        /** 배치 추출용 시스템 명령어 */
-        private const val BATCH_SYSTEM_INSTRUCTION = """당신은 한국 카드 결제 SMS에서 정보를 추출하는 전문가입니다.
-
-[역할]
-여러 SMS 본문에서 각각 결제 정보를 추출하여 JSON 배열로 반환합니다.
-
-[추출 항목]
-1. no: SMS 번호 (입력에서 제공된 번호)
-2. isPayment: 결제 문자인지 여부 (true/false)
-3. amount: 결제 금액 (숫자만, 콤마 없이)
-4. storeName: 가게명/상호명
-5. cardName: 카드사명
-6. dateTime: 결제 날짜와 시간 ("yyyy-MM-dd HH:mm" 형식). 각 SMS에 수신 날짜가 제공되면 해당 연도를 사용할 것.
-7. category: 추정 카테고리 (식비, 카페, 술/유흥, 교통, 쇼핑, 구독, 의료/건강, 운동, 문화/여가, 교육, 주거, 생활, 경조, 배달, 기타 중 하나. 배달의민족/요기요/쿠팡이츠 등 배달앱은 반드시 "배달"로 분류)
-
-[응답 규칙]
-1. 반드시 JSON 배열만 반환 (다른 텍스트 없이)
-2. 금액은 정수만 (콤마 제거)
-3. 가게명이 불분명하면 "결제"로 기입
-4. 카드사가 불분명하면 "기타"로 기입
-5. 결제 문자가 아니면 해당 항목은 {"no": N, "isPayment": false}만 반환
-6. 입력된 모든 SMS에 대해 반드시 결과를 반환
-7. dateTime의 연도는 반드시 각 SMS의 수신 날짜 연도를 따를 것
-
-[응답 형식 예시]
-[
-  {"no": 1, "isPayment": true, "amount": 15000, "storeName": "스타벅스", "cardName": "KB국민", "dateTime": "2025-01-15 14:30", "category": "카페"},
-  {"no": 2, "isPayment": false},
-  {"no": 3, "isPayment": true, "amount": 8000, "storeName": "GS25", "cardName": "신한", "dateTime": "2025-01-15 09:00", "category": "쇼핑"}
-]"""
+        private const val TAG = "gemini"
 
         /** 배치 추출 최대 재시도 */
         private const val BATCH_MAX_RETRIES = 2
@@ -179,7 +129,7 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
                     temperature = 0.1f  // 정확한 추출을 위해 낮은 온도
                     maxOutputTokens = 256
                 },
-                systemInstruction = content { text(SYSTEM_INSTRUCTION) }
+                systemInstruction = content { text(context.getString(R.string.prompt_sms_extract_system)) }
             )
         }
         return extractorModel
@@ -198,7 +148,7 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
                     temperature = 0.1f
                     maxOutputTokens = 4096  // 배치 응답용 확장
                 },
-                systemInstruction = content { text(BATCH_SYSTEM_INSTRUCTION) }
+                systemInstruction = content { text(context.getString(R.string.prompt_sms_batch_extract_system)) }
             )
         }
         return batchExtractorModel
@@ -237,8 +187,13 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
                 "\n(SMS 수신 날짜: ${smsDateFormat.format(Date(smsTimestamp))})"
             } else ""
 
-            val prompt = """다음 SMS에서 결제 정보를 추출해주세요:$dateInfo
+            // 참조 리스트 추가
+            val referenceText = try {
+                categoryReferenceProvider.getSmsExtractionReference()
+            } catch (e: Exception) { "" }
 
+            val prompt = """다음 SMS에서 결제 정보를 추출해주세요:$dateInfo
+$referenceText
 $smsBody"""
 
             Log.d(TAG, "LLM 추출 요청: ${smsBody.take(80)}...")
@@ -322,7 +277,13 @@ $smsBody"""
                 "${idx + 1}번$dateInfo: $body"
             }.joinToString("\n\n")
 
+            // 참조 리스트 추가
+            val referenceText = try {
+                categoryReferenceProvider.getSmsExtractionReference()
+            } catch (e: Exception) { "" }
+
             val prompt = """다음 ${smsMessages.size}개 SMS에서 각각 결제 정보를 추출해주세요:
+$referenceText
 
 $smsListText"""
 

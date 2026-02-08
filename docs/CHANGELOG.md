@@ -39,6 +39,28 @@
 - Lottie 애니메이션 지원 추가
 - README.md 문서 작성
 
+### Refactored
+- **VectorSearchEngine 책임 분리 (Phase 1 완료)**
+  - Vector(연산) → Policy(판단) → Service(행동) 3계층 구조
+  - core/similarity/ 패키지 신설: SimilarityPolicy, SmsPatternSimilarityPolicy, StoreNameSimilarityPolicy, CategoryPropagationPolicy
+  - 모든 유사도 임계값을 SimilarityPolicy SSOT로 통합
+- **Claude 레거시 코드 완전 제거**
+  - ClaudeApi.kt, ClaudeRepository.kt, ClaudeModels.kt, PromptTemplates.kt 삭제
+  - Retrofit 의존성 제거 (OkHttp만 유지)
+  - NetworkModule에서 Retrofit/ClaudeApi DI 제거
+  - HomeViewModel에서 ClaudeRepository 의존성 제거
+- **SmsAnalysisResult를 core/model/로 분리** (ClaudeModels.kt에서 독립)
+- **ExpenseRepository/ExpenseDao 미사용 메서드 5개 제거**
+  - getExpensesByCardName, getExpensesByCardNameAndDateRange, getExpensesByCategoryAndDateRange, getExpensesByStoreNameAndDateRange, getTotalExpenseByStoreName
+- **Tier 1.5b 그룹 기반 벡터 매칭 추가** (다수결, 유사도 ≥ 0.88)
+- **CategoryReferenceProvider 신설** (동적 참조 리스트 → 모든 LLM 프롬프트 주입)
+- **AI 채팅 액션 시스템 확장**
+  - delete_by_keyword, add_expense, update_memo, update_store_name, update_amount 5개 액션 추가
+  - FINANCIAL_ADVISOR 할루시네이션 방지 규칙 추가
+- **SMS 동기화/카테고리 분류 다이얼로그 진행률 표시 개선**
+  - 스피너 + 진행률 바 + "N/M건" 텍스트 실시간 업데이트
+  - groupBySimilarity suspend 함수 변경 (yield로 UI 블로킹 방지)
+
 ### Changed
 - **Gemini 카테고리 분류 개선**
   - 단일 카테고리만 반환하도록 프롬프트 강화

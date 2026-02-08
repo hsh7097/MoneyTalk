@@ -12,6 +12,7 @@ import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
+import com.sanha.moneytalk.core.database.dao.OwnedCardDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import com.sanha.moneytalk.core.database.entity.CategoryMappingEntity
@@ -19,6 +20,7 @@ import com.sanha.moneytalk.core.database.entity.ChatEntity
 import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.database.entity.OwnedCardEntity
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
 
@@ -36,6 +38,7 @@ import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
  * - CategoryMappingEntity: 가게명→카테고리 매핑 캐시
  * - SmsPatternEntity: SMS 임베딩 패턴 (벡터 유사도 분류용)
  * - StoreEmbeddingEntity: 가게명 임베딩 벡터 (카테고리 벡터 캐싱용)
+ * - OwnedCardEntity: 보유 카드 관리 (사용자 카드 화이트리스트)
  *
  * TypeConverters:
  * - FloatListConverter: 임베딩 벡터(List<Float>)를 JSON String으로 변환
@@ -53,9 +56,10 @@ import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
         ChatSessionEntity::class,
         CategoryMappingEntity::class,
         SmsPatternEntity::class,
-        StoreEmbeddingEntity::class
+        StoreEmbeddingEntity::class,
+        OwnedCardEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(FloatListConverter::class)
@@ -82,6 +86,9 @@ abstract class AppDatabase : RoomDatabase() {
     /** 가게명 임베딩 DAO (카테고리 벡터 캐싱용) */
     abstract fun storeEmbeddingDao(): StoreEmbeddingDao
 
+    /** 보유 카드 DAO (카드 화이트리스트 관리) */
+    abstract fun ownedCardDao(): OwnedCardDao
+
     companion object {
         /** 데이터베이스 파일명 */
         const val DATABASE_NAME = "moneytalk_v4.db"
@@ -90,6 +97,22 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE incomes ADD COLUMN memo TEXT DEFAULT NULL")
+            }
+        }
+
+        /** v2 → v3: owned_cards 테이블 추가 (카드 화이트리스트) */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS owned_cards (
+                        cardName TEXT NOT NULL PRIMARY KEY,
+                        isOwned INTEGER NOT NULL DEFAULT 1,
+                        firstSeenAt INTEGER NOT NULL DEFAULT 0,
+                        lastSeenAt INTEGER NOT NULL DEFAULT 0,
+                        seenCount INTEGER NOT NULL DEFAULT 1,
+                        source TEXT NOT NULL DEFAULT 'sms_sync'
+                    )
+                """.trimIndent())
             }
         }
     }

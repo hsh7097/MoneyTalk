@@ -60,6 +60,7 @@ fun SettingsScreen(
     var showAppInfoDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
+    var isExportingToGoogleDrive by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -115,10 +116,10 @@ fun SettingsScreen(
         viewModel.refresh()  // 다른 탭에서 변경된 데이터 반영 (미분류 항목 수 등)
     }
 
-    // 백업 콘텐츠가 준비되면 파일 저장 다이얼로그 열기
+    // 백업 콘텐츠가 준비되면 파일 저장 다이얼로그 열기 (로컬 내보내기일 때만)
     LaunchedEffect(uiState.backupContent) {
         uiState.backupContent?.let {
-            if (!showExportDialog && !showGoogleDriveDialog) {
+            if (!showExportDialog && !showGoogleDriveDialog && !isExportingToGoogleDrive) {
                 val fileName = DataBackupManager.generateBackupFileName(uiState.exportFormat)
                 backupLauncher.launch(fileName)
             }
@@ -128,6 +129,7 @@ fun SettingsScreen(
     // 메시지 표시
     LaunchedEffect(uiState.message) {
         uiState.message?.let { message ->
+            isExportingToGoogleDrive = false
             snackbarHostState.showSnackbar(message)
             viewModel.clearMessage()
         }
@@ -184,6 +186,36 @@ fun SettingsScreen(
                     }
                 }
 
+                // 내 카드 관리
+                item {
+                    var showOwnedCardDialog by remember { mutableStateOf(false) }
+                    val ownedCount = uiState.ownedCards.count { it.isOwned }
+                    val totalCount = uiState.ownedCards.size
+
+                    SettingsSection(title = "카드 관리") {
+                        SettingsItem(
+                            icon = Icons.Default.CreditCard,
+                            title = "내 카드 설정",
+                            subtitle = if (totalCount > 0) {
+                                "등록 ${totalCount}개 중 ${ownedCount}개 선택됨"
+                            } else {
+                                "SMS 동기화 후 자동 등록됩니다"
+                            },
+                            onClick = { showOwnedCardDialog = true }
+                        )
+                    }
+
+                    if (showOwnedCardDialog) {
+                        OwnedCardDialog(
+                            cards = uiState.ownedCards,
+                            onDismiss = { showOwnedCardDialog = false },
+                            onToggleOwnership = { cardName, isOwned ->
+                                viewModel.updateCardOwnership(cardName, isOwned)
+                            }
+                        )
+                    }
+                }
+
                 // API 설정
                 item {
                     SettingsSection(title = stringResource(R.string.settings_section_ai)) {
@@ -199,13 +231,13 @@ fun SettingsScreen(
                         )
                         SettingsItem(
                             icon = Icons.Default.AutoAwesome,
-                            title = "AI 카테고리 자동 분류",
+                            title = "카테고리 정리",
                             subtitle = if (!uiState.hasApiKey) {
                                 "API 키를 먼저 설정해주세요"
                             } else if (uiState.unclassifiedCount > 0) {
-                                "미분류 ${uiState.unclassifiedCount}건"
+                                "미정리 ${uiState.unclassifiedCount}건"
                             } else {
-                                "미분류 항목 없음"
+                                "정리할 항목 없음"
                             },
                             onClick = {
                                 viewModel.classifyUnclassifiedExpenses()
@@ -305,33 +337,33 @@ fun SettingsScreen(
                             .widthIn(min = 200.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        if (uiState.isClassifying && uiState.classifyProgressTotal > 0) {
-                            // 분류 중: 진행률 바 + 상세 텍스트
-                            val progress = uiState.classifyProgressCurrent.toFloat() / uiState.classifyProgressTotal.toFloat()
-                            LinearProgressIndicator(
-                                progress = { progress.coerceIn(0f, 1f) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp),
+                        if (uiState.isClassifying) {
+                            // 스피너 (항상 표시)
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(48.dp),
+                                strokeWidth = 4.dp
                             )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "${uiState.classifyProgressCurrent} / ${uiState.classifyProgressTotal}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = uiState.classifyProgress.ifBlank { stringResource(R.string.common_processing) },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-                        } else if (uiState.isClassifying) {
-                            // 분류 중이지만 총량 모를 때
-                            CircularProgressIndicator()
                             Spacer(modifier = Modifier.height(16.dp))
+
+                            if (uiState.classifyProgressTotal > 0) {
+                                // 진행률 바 + 상세 텍스트
+                                val progress = uiState.classifyProgressCurrent.toFloat() / uiState.classifyProgressTotal.toFloat()
+                                LinearProgressIndicator(
+                                    progress = { progress.coerceIn(0f, 1f) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(8.dp),
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "${uiState.classifyProgressCurrent} / ${uiState.classifyProgressTotal}건",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+
                             Text(
                                 text = uiState.classifyProgress.ifBlank { stringResource(R.string.common_processing) },
                                 style = MaterialTheme.typography.bodySmall,
@@ -402,6 +434,7 @@ fun SettingsScreen(
                 showExportDialog = false
             },
             onExportGoogleDrive = {
+                isExportingToGoogleDrive = true
                 viewModel.prepareBackup()
                 showExportDialog = false
                 // prepareBackup 완료 후 드라이브에 업로드
@@ -1261,6 +1294,86 @@ fun PrivacyPolicyDialog(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_close))
+            }
+        }
+    )
+}
+
+@Composable
+fun OwnedCardDialog(
+    cards: List<com.sanha.moneytalk.core.database.entity.OwnedCardEntity>,
+    onDismiss: () -> Unit,
+    onToggleOwnership: (String, Boolean) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text("내 카드 설정")
+                Text(
+                    text = "선택된 카드의 지출만 홈 화면에 표시됩니다",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+        },
+        text = {
+            if (cards.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "등록된 카드가 없습니다\nSMS 동기화를 먼저 진행해주세요",
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 400.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(cards) { card ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onToggleOwnership(card.cardName, !card.isOwned)
+                                }
+                                .padding(vertical = 8.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = card.cardName,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "감지 ${card.seenCount}건",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            }
+                            Checkbox(
+                                checked = card.isOwned,
+                                onCheckedChange = { checked ->
+                                    onToggleOwnership(card.cardName, checked)
+                                }
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
