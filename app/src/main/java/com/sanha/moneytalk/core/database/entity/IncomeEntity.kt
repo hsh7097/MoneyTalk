@@ -48,6 +48,9 @@ data class IncomeEntity(
     /** 원본 SMS 메시지 (자동 파싱인 경우) */
     val originalSms: String? = null,
 
+    /** 사용자 메모 (선택) */
+    val memo: String? = null,
+
     /** 레코드 생성 시간 */
     val createdAt: Long = System.currentTimeMillis()
 )

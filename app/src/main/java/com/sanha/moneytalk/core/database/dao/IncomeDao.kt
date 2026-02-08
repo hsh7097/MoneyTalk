@@ -69,4 +69,19 @@ interface IncomeDao {
     // 모든 데이터 삭제 (초기화용)
     @Query("DELETE FROM incomes")
     suspend fun deleteAll()
+
+    /** 메모 업데이트 */
+    @Query("UPDATE incomes SET memo = :memo WHERE id = :incomeId")
+    suspend fun updateMemo(incomeId: Long, memo: String?)
+
+    /** 검색 (설명, 유형, 출처, 메모에서 검색) */
+    @Query("""
+        SELECT * FROM incomes
+        WHERE description LIKE '%' || :query || '%'
+           OR type LIKE '%' || :query || '%'
+           OR source LIKE '%' || :query || '%'
+           OR memo LIKE '%' || :query || '%'
+        ORDER BY dateTime DESC
+    """)
+    suspend fun searchIncomes(query: String): List<IncomeEntity>
 }

@@ -174,15 +174,20 @@ interface ExpenseDao {
     """)
     suspend fun deleteDuplicates(): Int
 
-    // 검색 (가게명, 카테고리, 카드명에서 검색)
+    // 검색 (가게명, 카테고리, 카드명, 메모에서 검색)
     @Query("""
         SELECT * FROM expenses
         WHERE storeName LIKE '%' || :query || '%'
            OR category LIKE '%' || :query || '%'
            OR cardName LIKE '%' || :query || '%'
+           OR memo LIKE '%' || :query || '%'
         ORDER BY dateTime DESC
     """)
     suspend fun searchExpenses(query: String): List<ExpenseEntity>
+
+    /** 메모 업데이트 */
+    @Query("UPDATE expenses SET memo = :memo WHERE id = :expenseId")
+    suspend fun updateMemo(expenseId: Long, memo: String?)
 }
 
 data class CategorySum(

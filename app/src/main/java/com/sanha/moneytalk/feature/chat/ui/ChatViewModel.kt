@@ -449,7 +449,7 @@ class ChatViewModel @Inject constructor(
                     .take(limit)
 
                 val expenseList = expenses.joinToString("\n") { expense ->
-                    "${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${numberFormat.format(expense.amount)}원 (${expense.category})"
+                    "${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${numberFormat.format(expense.amount)}원 (${expense.category})${expense.memo?.let { " [메모: $it]" } ?: ""}"
                 }.ifEmpty { "해당 기간 지출 내역이 없습니다." }
 
                 QueryResult(
@@ -556,7 +556,7 @@ class ChatViewModel @Inject constructor(
                 val total = allExpenses.sumOf { it.amount }
                 val limit = query.limit ?: 20
                 val expenseList = allExpenses.take(limit).joinToString("\n") { expense ->
-                    "${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${numberFormat.format(expense.amount)}원 (${expense.category})"
+                    "${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${numberFormat.format(expense.amount)}원 (${expense.category})${expense.memo?.let { " [메모: $it]" } ?: ""}"
                 }.ifEmpty { "해당 카드 지출 내역이 없습니다." }
 
                 QueryResult(
@@ -570,7 +570,7 @@ class ChatViewModel @Inject constructor(
                 val limit = query.limit ?: 30
                 val results = expenseRepository.searchExpenses(keyword).take(limit)
                 val resultList = results.joinToString("\n") { expense ->
-                    "[ID:${expense.id}] ${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${numberFormat.format(expense.amount)}원 (${expense.category}, ${expense.cardName})"
+                    "[ID:${expense.id}] ${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${numberFormat.format(expense.amount)}원 (${expense.category}, ${expense.cardName})${expense.memo?.let { " [메모: $it]" } ?: ""}"
                 }.ifEmpty { "'$keyword' 검색 결과가 없습니다." }
 
                 QueryResult(
@@ -595,7 +595,7 @@ class ChatViewModel @Inject constructor(
                     .take(limit)
                 val total = incomes.sumOf { it.amount }
                 val incomeList = incomes.joinToString("\n") { income ->
-                    "${DateUtils.formatDateTime(income.dateTime)} - ${income.source}: ${numberFormat.format(income.amount)}원 (${income.type})"
+                    "${DateUtils.formatDateTime(income.dateTime)} - ${income.source}: ${numberFormat.format(income.amount)}원 (${income.type})${income.memo?.let { " [메모: $it]" } ?: ""}"
                 }.ifEmpty { "해당 기간 수입 내역이 없습니다." }
 
                 QueryResult(

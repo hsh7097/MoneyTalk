@@ -207,8 +207,12 @@ class ExpenseRepository @Inject constructor(
 
     /**
      * 지출 검색
-     * 가게명, 카테고리, 카드명에서 검색어 포함 여부 확인
+     * 가게명, 카테고리, 카드명, 메모에서 검색어 포함 여부 확인
      */
     suspend fun searchExpenses(query: String): List<ExpenseEntity> =
         expenseDao.searchExpenses(query)
+
+    /** 메모 업데이트 */
+    suspend fun updateMemo(expenseId: Long, memo: String?) =
+        expenseDao.updateMemo(expenseId, memo)
 }

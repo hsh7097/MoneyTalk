@@ -417,6 +417,36 @@ class HistoryViewModel @Inject constructor(
         _uiState.update { it.copy(message = null) }
     }
 
+    /** 지출 메모 업데이트 */
+    fun updateExpenseMemo(expenseId: Long, memo: String?) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    expenseRepository.updateMemo(expenseId, memo?.ifBlank { null })
+                }
+                _uiState.update { it.copy(message = "메모가 저장되었습니다") }
+                loadExpenses()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "메모 저장 실패: ${e.message}") }
+            }
+        }
+    }
+
+    /** 수입 메모 업데이트 */
+    fun updateIncomeMemo(incomeId: Long, memo: String?) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    incomeRepository.updateMemo(incomeId, memo?.ifBlank { null })
+                }
+                _uiState.update { it.copy(message = "메모가 저장되었습니다") }
+                loadExpenses()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "메모 저장 실패: ${e.message}") }
+            }
+        }
+    }
+
     /** 수입 보기 토글 */
     fun toggleIncomeView() {
         val newValue = !_uiState.value.showIncomeView

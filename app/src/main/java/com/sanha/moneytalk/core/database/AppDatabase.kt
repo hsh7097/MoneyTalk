@@ -3,6 +3,8 @@ package com.sanha.moneytalk.core.database
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.sanha.moneytalk.core.database.converter.FloatListConverter
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
@@ -53,7 +55,7 @@ import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
         SmsPatternEntity::class,
         StoreEmbeddingEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(FloatListConverter::class)
@@ -81,7 +83,14 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun storeEmbeddingDao(): StoreEmbeddingDao
 
     companion object {
-        /** 데이터베이스 파일명 (v4: StoreEmbeddingEntity 추가) */
+        /** 데이터베이스 파일명 */
         const val DATABASE_NAME = "moneytalk_v4.db"
+
+        /** v1 → v2: incomes 테이블에 memo 컬럼 추가 */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE incomes ADD COLUMN memo TEXT DEFAULT NULL")
+            }
+        }
     }
 }
