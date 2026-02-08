@@ -9,7 +9,7 @@
 MoneyTalk은 SMS 문자에서 결제 정보를 자동으로 추출하기 위해 **3단계 하이브리드 분류 시스템**을 사용합니다.
 
 ```
-SMS 수신
+SMS/MMS/RCS 수신 (SmsReader)
   │
   ▼
 ┌─────────────────────────────────────┐
@@ -20,17 +20,18 @@ SMS 수신
         성공 │          │ 실패
              ▼          ▼
      DB 저장 +    ┌──────────────────────────┐
-     벡터 학습    │ Tier 2: Vector (벡터 유사도)│ ← API 1건, ~1초
+     벡터 학습    │ Tier 2: Vector (벡터 유사도)│ ← 임베딩 API 1건, ~1초
                   │  └ 임베딩 생성             │
                   │  └ 코사인 유사도 검색       │
                   └──────┬──────────┬──────────┘
-                   ≥0.97 │          │ ≥0.92
+                   ≥0.95 │          │ ≥0.92
                          ▼          ▼
-                    캐시 재사용   ┌──────────────────┐
-                                │ Tier 3: LLM (Gemini)│ ← API 1건, ~2초
-                                │  └ 결제 여부 판정   │
-                                │  └ 정보 추출        │
-                                └──────┬─────────────┘
+                    캐시 재사용   ┌──────────────────────┐
+                                │ Tier 3: LLM (Gemini)  │ ← API 1건, ~2초
+                                │  └ 결제 가능성 사전 체크│
+                                │  └ 결제 여부 판정      │
+                                │  └ 정보 추출           │
+                                └──────┬────────────────┘
                                   성공 │
                                        ▼
                                   DB 저장 + 벡터 학습
@@ -127,9 +128,9 @@ Gemini Embedding API (`gemini-embedding-001`)로 768차원 벡터 생성
 
 | 유사도 | 판정 | 동작 |
 |-------|------|------|
-| ≥ 0.97 | 캐시 재사용 | 저장된 파싱 결과(가게명, 카드사, 카테고리) 그대로 사용. 금액/날짜만 현재 SMS에서 재추출 |
-| ≥ 0.92 | 결제 확인 | 결제 문자로 판정, 세부 정보는 Tier 3(LLM)에 위임 |
-| < 0.92 | 미매칭 | 부트스트랩 모드면 Tier 3으로, 아니면 비결제로 판정 |
+| ≥ 0.95 | 캐시 재사용 | 저장된 파싱 결과(가게명, 카드사, 카테고리) 그대로 사용. 금액/날짜만 현재 SMS에서 재추출 |
+| ≥ 0.92 | 결제 확인 | 결제 문자로 판정, 세부 정보는 Tier 3(LLM)에 위임. LLM 실패 시 캐시 폴백 |
+| < 0.92 | 미매칭 | 결제 가능성 체크 통과 시 Tier 3으로, 미통과 시 비결제로 판정 |
 
 ### 비결제 패턴 사전 필터링
 부트스트랩 모드에서 LLM 호출 전, 명백한 비결제 SMS를 사전 필터링합니다.
@@ -149,9 +150,23 @@ LLM이 비결제로 판정한 SMS도 벡터 DB에 `isPayment=false`로 등록됩
 1. 비결제 패턴 우선 검색 (유사도 ≥ 0.97 → 즉시 비결제 판정)
 2. 결제 패턴 검색 (기존 로직)
 
-### 부트스트랩 모드
-패턴 DB에 데이터가 10개 미만이면 활성화됩니다.
-Regex 실패 시 사전 필터링을 거친 후 LLM을 호출하여 초기 패턴 데이터를 빠르게 축적합니다.
+### Tier 3 LLM 호출 조건 (결제 가능성 사전 체크)
+
+Tier 1~2 실패 시, 무조건 LLM을 호출하면 비용이 폭증합니다.
+비결제 사전 필터링 후, `hasPotentialPaymentIndicators()` 메서드로 결제 가능성을 체크합니다.
+
+**결제 가능성 판정 (3가지 지표 중 2개 이상 매칭 시 LLM 호출 허용):**
+
+| 지표 | 체크 방법 | 예시 |
+|------|----------|------|
+| 금액 패턴 | `[\d,]+원` 정규식 | "15,000원" |
+| 결제 키워드 | 승인/결제/출금/사용/이용/누적 등 | "승인" |
+| 카드사 키워드 | `SmsParser.extractCardName()` ≠ "기타" | "신한" → true |
+
+이 메커니즘으로:
+- 광고, 인증번호 등 비결제 SMS → LLM 호출 차단 (비용 절감)
+- 새 카드사나 새 형식의 결제 SMS → LLM 호출 허용 (커버리지 유지)
+- 부트스트랩 모드(패턴 < 10개) 여부와 무관하게 항상 동작
 
 ### 자가 학습
 Tier 1(Regex), Tier 3(LLM)에서 성공적으로 파싱한 SMS는 자동으로 벡터 DB에 등록됩니다.
@@ -183,7 +198,7 @@ System Instruction에 한국 카드 결제 SMS 전문가 역할을 부여하고,
 ```
 
 ### 카테고리 목록
-식비, 카페, 교통, 쇼핑, 구독, 의료/건강, 문화/여가, 교육, 생활, 기타
+식비, 카페, 술/유흥, 교통, 쇼핑, 구독, 의료/건강, 운동, 문화/여가, 교육, 주거, 생활, 경조, 배달, 기타
 
 ---
 
@@ -229,20 +244,55 @@ Step 4: 대표 샘플 LLM 검증
 
 ---
 
-## 6. SMS 읽기 (SmsReader)
+## 6. 메시지 읽기 (SmsReader)
 
 ### 파일 위치
 `core/util/SmsReader.kt`
 
-### 제공 메소드
+### 지원 메시지 유형
+
+| 유형 | Content URI | 날짜 형식 | 비고 |
+|------|-----------|----------|------|
+| SMS | `content://sms/inbox` | 밀리초 | 표준 문자 |
+| MMS | `content://mms/inbox` | **초** (×1000 변환) | 장문 문자 |
+| RCS | `content://im/chat` | 밀리초 | 삼성 기기, JSON 본문 |
+
+모든 읽기 메소드는 SMS + MMS + RCS를 통합(Unified) 조회합니다.
+
+### RCS 메시지 본문 파싱
+
+RCS 메시지의 body는 JSON 형식이며, 위젯 트리 구조로 텍스트가 포함됩니다:
+
+```json
+{
+  "messageHeader": "[Web발신]",
+  "layout": {
+    "widget": "LinearLayout",
+    "children": [
+      {
+        "widget": "TextView",
+        "text": "신한카드(5146)승인 하*현 207,200원..."
+      }
+    ]
+  }
+}
+```
+
+**`extractRcsText()` 추출 순서:**
+1. 직접 텍스트 필드 검색: `text`, `body`, `message`, `msg`, `content`
+2. `layout` 필드의 위젯 트리를 재귀 탐색 (`extractTextsFromLayout`)
+3. `widget == "TextView"` 인 노드에서 `text` 값 수집
+4. 줄바꿈(`\n`)으로 조합하여 일반 텍스트 반환
+
+### 제공 메소드 (모두 SMS+MMS+RCS 통합)
 
 | 메소드 | 용도 | 필터링 |
 |-------|------|-------|
-| `readAllCardSms()` | 전체 동기화 (결제) | 정규식 필터 |
-| `readCardSmsByDateRange()` | 증분 동기화 (결제) | 기간 + 정규식 필터 |
-| `readAllSmsByDateRange()` | 하이브리드 분류용 | 필터링 없음 (전체) |
-| `readAllIncomeSms()` | 전체 동기화 (수입) | 입금 키워드 필터 |
-| `readIncomeSmsByDateRange()` | 증분 동기화 (수입) | 기간 + 입금 필터 |
+| `readAllCardMessages()` | 전체 동기화 (결제) | 정규식 필터 |
+| `readCardMessagesByDateRange()` | 증분 동기화 (결제) | 기간 + 정규식 필터 |
+| `readAllMessagesByDateRange()` | 하이브리드 분류용 | 필터링 없음 (전체) |
+| `readAllIncomeMessages()` | 전체 동기화 (수입) | 입금 키워드 필터 |
+| `readIncomeMessagesByDateRange()` | 증분 동기화 (수입) | 기간 + 입금 필터 |
 
 ### SMS ID 생성
 `발신번호_수신시간_본문해시코드` → 중복 저장 방지
@@ -252,23 +302,26 @@ Step 4: 대표 샘플 LLM 검증
 ## 7. 동기화 흐름 (HomeViewModel.syncSmsMessages)
 
 ```
-syncSmsMessages(forceFullSync)
+syncSmsMessages(forceFullSync, todayOnly)
 │
-├── 1. Regex 분류 (readCardSmsByDateRange → SmsParser)
-│   └ 성공 → ExpenseEntity 저장 + 벡터 DB 학습
+├── 1. Regex 분류 (readCardMessagesByDateRange → SmsParser)
+│   └ 성공 → ExpenseEntity 저장 + regexLearningData 수집
 │
-├── 2. 미분류 SMS 추출 (readAllSmsByDateRange)
-│   └ 기간 제한: 전체 동기화 시 최근 1년
+├── 2. 미분류 SMS 추출 (readAllMessagesByDateRange)
+│   └ SMS+MMS+RCS 통합 조회, 기간 제한: 전체 동기화 시 최근 1년
 │
 ├── 3-a. 대량 (>50건 or 전체동기화)
 │   └ SmsBatchProcessor.processBatch()
 │
 ├── 3-b. 소량 (≤50건)
-│   └ HybridSmsClassifier.classify() (개별 처리)
+│   └ HybridSmsClassifier.batchClassify() (배치 처리)
 │
-├── 4. 수입 SMS 동기화
+├── 4. 수입 SMS 동기화 (readIncomeMessagesByDateRange)
 │
-└── 5. 오래된 패턴 정리 (30일 미사용 + 1회 매칭)
+├── 5. 벡터 DB 배치 학습 (백그라운드, 실패 시 사용자 알림)
+│   └ hybridSmsClassifier.batchLearnFromRegexResults(regexLearningData)
+│
+└── 6. 오래된 패턴 정리 (30일 미사용 + 1회 매칭)
 ```
 
 ---
@@ -295,4 +348,4 @@ syncSmsMessages(forceFullSync)
 
 ---
 
-*마지막 업데이트: 2026-02-07*
+*마지막 업데이트: 2026-02-08*
