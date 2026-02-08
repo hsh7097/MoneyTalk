@@ -1338,10 +1338,48 @@ fun OwnedCardDialog(
                     )
                 }
             } else {
+                val allSelected = cards.all { it.isOwned }
+
                 LazyColumn(
                     modifier = Modifier.heightIn(max = 400.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    // 전체선택 항목
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    val newState = !allSelected
+                                    cards.forEach { card ->
+                                        onToggleOwnership(card.cardName, newState)
+                                    }
+                                }
+                                .padding(vertical = 8.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "전체선택",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Checkbox(
+                                checked = allSelected,
+                                onCheckedChange = { checked ->
+                                    cards.forEach { card ->
+                                        onToggleOwnership(card.cardName, checked)
+                                    }
+                                }
+                            )
+                        }
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                        )
+                    }
+
                     items(cards) { card ->
                         Row(
                             modifier = Modifier
@@ -1360,7 +1398,7 @@ fun OwnedCardDialog(
                                     fontWeight = FontWeight.Medium
                                 )
                                 Text(
-                                    text = "감지 ${card.seenCount}건",
+                                    text = "${card.seenCount}건 사용",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                                 )

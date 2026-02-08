@@ -539,8 +539,8 @@ class HomeViewModel @Inject constructor(
                     // 오래된 패턴 정리
                     hybridSmsClassifier.cleanupStalePatterns()
 
-                    // ===== OwnedCard 자동 등록: 동기화된 지출의 카드명 수집 =====
-                    val allCardNames = expenseRepository.getAllCardNames()
+                    // ===== OwnedCard 자동 등록: 동기화된 지출의 카드명 수집 (중복 포함) =====
+                    val allCardNames = expenseRepository.getAllCardNamesWithDuplicates()
 
                     SyncResult(
                         regexCount = regexCount,
@@ -602,12 +602,12 @@ class HomeViewModel @Inject constructor(
 
                 // ===== 비동기 처리: Hybrid SMS 분류 + 카테고리 자동 분류 =====
                 // 로딩 다이얼로그에 표시하지 않고 백그라운드에서 처리
+                // 주의: Hybrid와 Category를 동시에 실행하면 Gemini API 경쟁 + DB 경합 → 렉 발생
+                // Hybrid가 있으면 Hybrid 완료 후 순차로 Category 실행 (내부에서 호출)
+                // Hybrid가 없으면 Category만 단독 실행
                 if (result.hybridSmsList.isNotEmpty() && result.hasGeminiKey) {
                     launchBackgroundHybridClassification(result.hybridSmsList, forceFullSync)
-                }
-
-                // 동기화 완료 후 미분류 항목 자동 분류 (얼럿 없이 바로 진행)
-                if (result.hasGeminiKey) {
+                } else if (result.hasGeminiKey) {
                     launchBackgroundCategoryClassification()
                 }
             } catch (e: Exception) {
@@ -869,14 +869,15 @@ class HomeViewModel @Inject constructor(
             )
 
             if (totalClassified > 0) {
+                // DB 쿼리는 IO에서 실행 (Main에서 호출하면 ANR 위험)
+                val remaining = categoryClassifierService.getUnclassifiedCount()
+                val message = if (remaining > 0) {
+                    "${totalClassified}건의 카테고리가 정리되었습니다"
+                } else {
+                    "카테고리 정리가 완료되었습니다"
+                }
                 withContext(Dispatchers.Main) {
                     loadData()
-                    val remaining = categoryClassifierService.getUnclassifiedCount()
-                    val message = if (remaining > 0) {
-                        "${totalClassified}건의 카테고리가 정리되었습니다"
-                    } else {
-                        "카테고리 정리가 완료되었습니다"
-                    }
                     _uiState.update { it.copy(errorMessage = message) }
                 }
             }
