@@ -1,7 +1,7 @@
 package com.sanha.moneytalk.core.util
 
 import android.util.Log
-import com.sanha.moneytalk.feature.chat.data.SmsAnalysisResult
+import com.sanha.moneytalk.core.model.SmsAnalysisResult
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -110,6 +110,11 @@ object SmsParser {
         "홍보", "이벤트", "혜택안내", "포인트 적립",
         "명세서", "청구서", "이용대금",
         "결제금액",  // 카드사 결제예정 금액 안내 (예: "01/25결제금액(01/26기준)")
+        "카드대금",  // 카드 대금 결제/이체 안내
+        "결제대금",  // 카드 결제대금 안내
+        "청구금액",  // 카드사 청구금액 안내
+        "출금 예정", // 자동이체 출금 예정 안내
+        "출금예정",  // 자동이체 출금예정 안내 (띄어쓰기 없는 버전)
         "퇴직"  // 퇴직연금 안내 문자 제외
     )
 

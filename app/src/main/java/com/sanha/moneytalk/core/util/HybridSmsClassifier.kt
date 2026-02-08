@@ -4,7 +4,7 @@ import android.util.Log
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.similarity.SmsPatternSimilarityPolicy
-import com.sanha.moneytalk.feature.chat.data.SmsAnalysisResult
+import com.sanha.moneytalk.core.model.SmsAnalysisResult
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -37,6 +37,14 @@ class HybridSmsClassifier @Inject constructor(
     companion object {
         private const val TAG = "HybridSmsClassifier"
         private const val BOOTSTRAP_THRESHOLD = 10  // 부트스트랩 모드 임계값
+        /** 임베딩 배치 처리 크기 (Google batchEmbedContents 최대값) */
+        private const val EMBEDDING_BATCH_SIZE = 100
+        /** 배치 간 Rate Limit 방지 딜레이 (밀리초) */
+        private const val RATE_LIMIT_DELAY_MS = 1500L
+        /** LLM 호출 간 Rate Limit 방지 딜레이 (밀리초) */
+        private const val LLM_RATE_LIMIT_DELAY_MS = 1000L
+        /** 오래된 패턴 판단 기준 (30일, 밀리초) */
+        private const val STALE_PATTERN_THRESHOLD_MS = 30L * 24 * 60 * 60 * 1000
 
         /**
          * LLM 호출 전 사전 필터링 키워드
@@ -52,9 +60,13 @@ class HybridSmsClassifier @Inject constructor(
             // 광고/마케팅
             "광고", "[광고]", "(광고)", "무료수신거부", "수신거부",
             "홍보", "이벤트", "혜택안내", "프로모션", "할인쿠폰",
-            // 안내/알림 (비결제)
+            // 안내/알림 (비결제) - 카드 대금/청구 관련
             "명세서", "청구서", "이용대금", "결제예정", "결제일",
             "결제금액", // 카드사 결제예정 금액 안내 (예: "01/25결제금액(01/26기준)")
+            "카드대금", // 카드 대금 결제/이체 안내
+            "결제대금", // 카드 결제대금 안내
+            "청구금액", // 카드사 청구금액 안내
+            "출금 예정", // 자동이체 출금 예정 안내 (띄어쓰기 포함)
             "출금예정", "자동이체", "납부안내",
             // 배송/택배
             "배송", "택배", "운송장",
@@ -209,14 +221,14 @@ class HybridSmsClassifier @Inject constructor(
         val allEmbeddings = mutableListOf<List<Float>?>()
 
         // 100건씩 배치 임베딩 (batchEmbedContents 최대 100)
-        val batchSize = 100
+        val batchSize = EMBEDDING_BATCH_SIZE
         val batches = templates.chunked(batchSize)
         for ((batchIdx, batch) in batches.withIndex()) {
             val embeddings = embeddingService.generateEmbeddings(batch)
             allEmbeddings.addAll(embeddings)
 
             if (batchIdx < batches.size - 1) {
-                kotlinx.coroutines.delay(1500) // Rate Limit 방지
+                kotlinx.coroutines.delay(RATE_LIMIT_DELAY_MS)
             }
         }
 
@@ -318,7 +330,7 @@ class HybridSmsClassifier @Inject constructor(
                 if (llmResult != null) {
                     results[idx] = llmResult
                 }
-                kotlinx.coroutines.delay(1000) // LLM Rate Limit
+                kotlinx.coroutines.delay(LLM_RATE_LIMIT_DELAY_MS)
             }
         }
 
@@ -381,7 +393,7 @@ class HybridSmsClassifier @Inject constructor(
         Log.d(TAG, "배치 학습 시작: ${templatedItems.size}건")
 
         // 100건씩 chunking (batchEmbedContents 최대값)
-        val chunks = templatedItems.chunked(100)
+        val chunks = templatedItems.chunked(EMBEDDING_BATCH_SIZE)
         var learnedCount = 0
 
         // 순차 처리 + 배치 간 딜레이 (429 Rate Limit 방지)
@@ -394,7 +406,7 @@ class HybridSmsClassifier @Inject constructor(
 
             // 배치 간 딜레이 (마지막 chunk 제외)
             if (chunkIdx < chunks.size - 1) {
-                kotlinx.coroutines.delay(1500)
+                kotlinx.coroutines.delay(RATE_LIMIT_DELAY_MS)
             }
         }
 
@@ -574,7 +586,10 @@ class HybridSmsClassifier @Inject constructor(
 
     /**
      * Tier 3: LLM 기반 추출
+     *
+     * @param senderAddress 향후 LLM 프롬프트에 발신자 정보 포함 시 사용 예정
      */
+    @Suppress("UNUSED_PARAMETER")
     private suspend fun classifyWithLlm(
         smsBody: String,
         smsTimestamp: Long,
@@ -719,7 +734,7 @@ class HybridSmsClassifier @Inject constructor(
      * 오래된 패턴 정리 (30일 이상 미사용 + 1회만 매칭)
      */
     suspend fun cleanupStalePatterns() {
-        val threshold = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+        val threshold = System.currentTimeMillis() - STALE_PATTERN_THRESHOLD_MS
         smsPatternDao.deleteStalePatterns(threshold)
         Log.d(TAG, "오래된 패턴 정리 완료")
     }

@@ -27,7 +27,7 @@ app/src/main/java/com/sanha/moneytalk/
 │   ├── database/          # Room DB (entity, dao)
 │   ├── datastore/         # DataStore (설정값)
 │   ├── di/                # Hilt DI 모듈
-│   ├── model/             # Category enum 등
+│   ├── model/             # Category enum, SmsAnalysisResult 등
 │   ├── ui/component/      # 공통 UI 컴포넌트
 │   ├── similarity/        # 유사도 판정 정책 (SimilarityPolicy 구현체)
 │   └── util/              # 핵심 유틸 (SMS파싱, 벡터엔진, 분류기, CategoryReferenceProvider 등)

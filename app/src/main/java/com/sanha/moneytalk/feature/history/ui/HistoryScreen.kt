@@ -87,7 +87,7 @@ private val categoryStyles = Category.entries.associate { category ->
 }
 
 private fun getCategoryStyle(category: String): CategoryStyle {
-    return categoryStyles[category] ?: categoryStyles["기타"]!!
+    return categoryStyles[category] ?: CategoryStyle("📦", Color(0xFF9E9E9E))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -329,6 +329,7 @@ fun AddExpenseDialog(
                             .clickable { showCategoryDropdown = true },
                         trailingIcon = {
                             IconButton(onClick = { showCategoryDropdown = true }) {
+                                @Suppress("DEPRECATION")
                                 Icon(Icons.Default.List, contentDescription = null)
                             }
                         }
@@ -1559,7 +1560,8 @@ fun BillingCycleCalendarView(
                         thickness = 1.dp
                     )
 
-                    val parts = selectedDateString!!.split("-")
+                    val dateStr = selectedDateString ?: ""
+                    val parts = dateStr.split("-")
                     val dayNum = parts.getOrNull(2)?.toIntOrNull() ?: 0
                     Text(
                         text = "${parts.getOrNull(1) ?: ""}월 ${dayNum}일 지출 내역",

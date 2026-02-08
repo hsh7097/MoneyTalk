@@ -9,6 +9,8 @@ import com.sanha.moneytalk.core.util.SmsParser
 
 /**
  * 실시간 SMS 수신 BroadcastReceiver
+ *
+ * goAsync()를 사용하여 onReceive() 이후에도 안전하게 작업을 완료합니다.
  */
 class SmsReceiver : BroadcastReceiver() {
 
@@ -25,28 +27,36 @@ class SmsReceiver : BroadcastReceiver() {
             return
         }
 
-        val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
+        val pendingResult = goAsync()
 
-        for (sms in messages) {
-            val body = sms.messageBody ?: continue
-            val address = sms.originatingAddress ?: "Unknown"
-            val date = sms.timestampMillis
+        try {
+            val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
 
-            Log.d(TAG, "SMS Received - From: $address, Body: $body")
+            for (sms in messages) {
+                val body = sms.messageBody ?: continue
+                val address = sms.originatingAddress ?: "Unknown"
+                val date = sms.timestampMillis
 
-            // 카드 결제 문자인지 확인
-            if (SmsParser.isCardPaymentSms(body)) {
-                Log.d(TAG, "Card payment SMS detected!")
+                Log.d(TAG, "SMS Received - From: $address, Body: $body")
 
-                // 앱 내부로 브로드캐스트 전송
-                val smsIntent = Intent(ACTION_SMS_RECEIVED).apply {
-                    setPackage(context.packageName)
-                    putExtra(EXTRA_SMS_BODY, body)
-                    putExtra(EXTRA_SMS_ADDRESS, address)
-                    putExtra(EXTRA_SMS_DATE, date)
+                // 카드 결제 문자인지 확인
+                if (SmsParser.isCardPaymentSms(body)) {
+                    Log.d(TAG, "Card payment SMS detected!")
+
+                    // 앱 내부로 브로드캐스트 전송
+                    val smsIntent = Intent(ACTION_SMS_RECEIVED).apply {
+                        setPackage(context.packageName)
+                        putExtra(EXTRA_SMS_BODY, body)
+                        putExtra(EXTRA_SMS_ADDRESS, address)
+                        putExtra(EXTRA_SMS_DATE, date)
+                    }
+                    context.sendBroadcast(smsIntent)
                 }
-                context.sendBroadcast(smsIntent)
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "SMS 처리 중 오류: ${e.message}", e)
+        } finally {
+            pendingResult.finish()
         }
     }
 }

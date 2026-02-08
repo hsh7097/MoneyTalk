@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.feature.chat.data
 
+import android.content.Context
 import android.util.Log
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
@@ -9,12 +10,14 @@ import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.DataQueryParser
 import com.sanha.moneytalk.core.util.DataQueryRequest
 import com.sanha.moneytalk.core.util.QueryResult
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class GeminiRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val settingsDataStore: SettingsDataStore,
     private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider
 ) {
@@ -56,7 +59,7 @@ class GeminiRepository @Inject constructor(
                     topP = 0.9f
                     maxOutputTokens = 10000
                 },
-                systemInstruction = content { text(ChatPrompts.QUERY_ANALYZER_SYSTEM_INSTRUCTION) }
+                systemInstruction = content { text(ChatPrompts.getQueryAnalyzerSystemInstruction(context)) }
             )
         }
         return queryAnalyzerModel
@@ -77,7 +80,7 @@ class GeminiRepository @Inject constructor(
                     topP = 0.95f
                     maxOutputTokens = 10000
                 },
-                systemInstruction = content { text(ChatPrompts.FINANCIAL_ADVISOR_SYSTEM_INSTRUCTION) }
+                systemInstruction = content { text(ChatPrompts.getFinancialAdvisorSystemInstruction(context)) }
             )
         }
         return financialAdvisorModel
@@ -98,7 +101,7 @@ class GeminiRepository @Inject constructor(
                     topP = 0.9f
                     maxOutputTokens = 10000
                 },
-                systemInstruction = content { text(ChatPrompts.SUMMARY_SYSTEM_INSTRUCTION) }
+                systemInstruction = content { text(ChatPrompts.getSummarySystemInstruction(context)) }
             )
         }
         return summaryModel
@@ -150,6 +153,9 @@ $contextualMessage
 
 위 질문에 필요한 데이터 쿼리를 JSON으로 반환해줘:"""
 
+            Log.d(TAG, "=== 쿼리 분석 시스템 인스트럭션 ===")
+            Log.d(TAG, ChatPrompts.getQueryAnalyzerSystemInstruction(context))
+            Log.d(TAG, "=== 시스템 인스트럭션 끝 (길이: ${ChatPrompts.getQueryAnalyzerSystemInstruction(context).length}) ===")
             Log.d(TAG, "=== 쿼리 분석 프롬프트 ===")
             Log.d(TAG, prompt)
             Log.d(TAG, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
@@ -247,6 +253,9 @@ $userMessage"""
     suspend fun generateFinalAnswerWithContext(contextPrompt: String): Result<String> {
         return try {
             Log.d(TAG, "=== generateFinalAnswerWithContext 시작 ===")
+            Log.d(TAG, "=== 최종 답변 시스템 인스트럭션 ===")
+            Log.d(TAG, ChatPrompts.getFinancialAdvisorSystemInstruction(context))
+            Log.d(TAG, "=== 시스템 인스트럭션 끝 (길이: ${ChatPrompts.getFinancialAdvisorSystemInstruction(context).length}) ===")
             Log.d(TAG, "=== 컨텍스트 기반 최종 답변 프롬프트 ===")
             Log.d(TAG, contextPrompt)
             Log.d(TAG, "=== 프롬프트 끝 (길이: ${contextPrompt.length}) ===")
@@ -273,6 +282,9 @@ $userMessage"""
     suspend fun simpleChat(userMessage: String): Result<String> {
         return try {
             Log.d(TAG, "=== simpleChat 시작 ===")
+            Log.d(TAG, "=== 심플 채팅 시스템 인스트럭션 ===")
+            Log.d(TAG, ChatPrompts.getFinancialAdvisorSystemInstruction(context))
+            Log.d(TAG, "=== 시스템 인스트럭션 끝 (길이: ${ChatPrompts.getFinancialAdvisorSystemInstruction(context).length}) ===")
             Log.d(TAG, "=== 심플 채팅 프롬프트 ===")
             Log.d(TAG, userMessage)
             Log.d(TAG, "=== 프롬프트 끝 (길이: ${userMessage.length}) ===")
@@ -325,6 +337,9 @@ $recentMessages
 
 제목:"""
 
+            Log.d(TAG, "=== [타이틀 생성] 시스템 인스트럭션 ===")
+            Log.d(TAG, ChatPrompts.getSummarySystemInstruction(context))
+            Log.d(TAG, "=== 시스템 인스트럭션 끝 ===")
             Log.d(TAG, "=== [타이틀 생성] 요청 ===")
             Log.d(TAG, prompt)
             val response = model.generateContent(prompt)
@@ -374,6 +389,9 @@ $existingSummary
 $newMessages"""
             }
 
+            Log.d(TAG, "=== 요약 시스템 인스트럭션 ===")
+            Log.d(TAG, ChatPrompts.getSummarySystemInstruction(context))
+            Log.d(TAG, "=== 시스템 인스트럭션 끝 ===")
             Log.d(TAG, "=== 요약 프롬프트 ===")
             Log.d(TAG, prompt)
             Log.d(TAG, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")

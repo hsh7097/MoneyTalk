@@ -1,10 +1,13 @@
 package com.sanha.moneytalk.feature.home.data
 
+import android.content.Context
 import android.util.Log
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.generationConfig
+import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -17,6 +20,7 @@ import kotlin.math.min
  */
 @Singleton
 class GeminiCategoryRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val settingsDataStore: SettingsDataStore,
     private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider
 ) {
@@ -223,67 +227,9 @@ class GeminiCategoryRepository @Inject constructor(
         categories: List<String>,
         referenceText: String = ""
     ): String {
-        return """
-당신은 가계부 앱의 카테고리 분류 전문가입니다.
-아래 가게명들을 반드시 주어진 카테고리 목록 중 하나로만 분류해주세요.
-
-## 사용 가능한 카테고리 (이 목록에 있는 것만 사용):
-${categories.mapIndexed { idx, cat -> "${idx + 1}. $cat" }.joinToString("\n")}
-
-## 카테고리 분류 가이드:
-- 식비: 음식점, 식당, 편의점 음식, 마트 식료품 등 (배달앱 제외)
-- 배달: 배달의민족, 요기요, 쿠팡이츠 등 배달앱 주문
-- 카페: 커피숍, 카페, 베이커리, 디저트 전문점 등
-- 술/유흥: 술집, 바, 호프, 노래방, 클럽, 유흥업소 등
-- 교통: 택시, 버스, 지하철, 주유소, 주차, 톨게이트 등
-- 쇼핑: 마트, 백화점, 의류, 잡화, 온라인쇼핑 등
-- 구독: 넷플릭스, 유튜브, 음악 스트리밍, 정기결제 서비스 등
-- 의료/건강: 병원, 약국, 의료기기 등
-- 운동: 헬스장, 피트니스, 필라테스, 요가, 스포츠 용품, 운동시설 등
-- 문화/여가: 영화관, 놀이공원, 여행, 숙박, 공연 등
-- 교육: 학원, 강의, 도서, 교육 관련 등
-- 주거: 월세, 전세, 관리비, 부동산 관련 등
-- 생활: 공과금, 통신비, 미용실, 세탁소 등
-- 보험: 보험회사 결제(삼성화재, 현대해상, 메리츠 등) 보험료 납부
-- 계좌이체: 명시적 계좌이체/타행이체/당행이체만 해당 (체크카드출금은 일반 카드 결제이므로 가게명 기준 분류)
-- 경조: 축의금, 조의금, 선물, 경조사 관련 등
-- 기타: 위 카테고리에 해당하지 않거나 분류 불가능한 경우
-$referenceText
-
-## 분류할 가게명:
-${storeNames.mapIndexed { idx, name -> "${idx + 1}. $name" }.joinToString("\n")}
-
-## 중요 규칙:
-1. 반드시 위 카테고리 목록 중 정확히 하나만 사용하세요. 괄호나 추가 설명 없이 카테고리명만 작성하세요.
-2. "의료/건강", "문화/여가", "술/유흥" 처럼 슬래시가 포함된 카테고리명도 정확히 그대로 사용하세요.
-3. 보험회사(삼성화재, 현대해상, 메리츠 등)는 "보험"으로 분류하세요.
-4. 카드 결제, 페이 결제 등 금융 거래 자체는 "기타"로, 계좌이체/송금/출금은 "계좌이체"로 분류하세요.
-5. 알 수 없는 코드나 의미 없는 문자열(예: KB]날짜, 랜덤문자)은 "기타"로 분류하세요.
-6. 확실하지 않은 경우 "기타"로 분류하세요.
-
-## 잘못된 응답 예시 (이렇게 하지 마세요):
-- 삼성화08003: 보험 (의료/건강) ← 괄호 안에 추가 정보 금지!
-- 코웨이: 생활 (구독) ← 괄호 안에 추가 정보 금지!
-
-## 올바른 응답 예시:
-- 삼성화08003: 기타
-- 코웨이: 구독
-
-## 응답 형식 (정확히 이 형식으로만 응답):
-가게명: 카테고리
-
-예시:
-스타벅스: 카페
-이마트: 쇼핑
-서울대학교병원: 의료/건강
-CGV강남: 문화/여가
-포차어게인: 술/유흥
-애니타임피트니스: 운동
-KB국민은행월세: 주거
-축의금: 경조
-
-## 분류 결과:
-""".trimIndent()
+        val categoriesText = categories.mapIndexed { idx, cat -> "${idx + 1}. $cat" }.joinToString("\n")
+        val storeNamesText = storeNames.mapIndexed { idx, name -> "${idx + 1}. $name" }.joinToString("\n")
+        return context.getString(R.string.prompt_category_classification, categoriesText, referenceText, storeNamesText)
     }
 
     private fun parseClassificationResponse(response: String, storeNames: List<String>): Map<String, String> {

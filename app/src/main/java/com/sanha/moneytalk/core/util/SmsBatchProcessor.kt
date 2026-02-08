@@ -5,8 +5,9 @@ import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.similarity.SmsPatternSimilarityPolicy
 import com.sanha.moneytalk.core.util.DateUtils
-import com.sanha.moneytalk.feature.chat.data.SmsAnalysisResult
+import com.sanha.moneytalk.core.model.SmsAnalysisResult
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -230,7 +231,7 @@ class SmsBatchProcessor @Inject constructor(
 
         // ===== Step 3: 벡터 유사도 기반 그룹핑 =====
         listener?.onProgress("패턴 그룹핑 중", 0, embeddedSms.size)
-        val groups = groupBySimilarity(embeddedSms)
+        val groups = groupBySimilarity(embeddedSms, listener)
         Log.d(TAG, "그룹핑 완료: ${groups.size}개 그룹 (${embeddedSms.size}건)")
 
         // ===== Step 4: 그룹 대표들을 배치 LLM으로 일괄 분석 =====
@@ -441,14 +442,21 @@ class SmsBatchProcessor @Inject constructor(
      * 유사한 SMS들을 하나의 그룹으로 묶어서 대표 1개만 LLM에 보냄.
      * 그리디 클러스터링: 첫 SMS를 그룹 중심으로, 유사도 ≥ 0.95면 같은 그룹.
      */
-    private fun groupBySimilarity(
-        embeddedSms: List<Triple<SmsData, String, List<Float>>>
+    private suspend fun groupBySimilarity(
+        embeddedSms: List<Triple<SmsData, String, List<Float>>>,
+        listener: BatchProgressListener? = null
     ): List<VectorGroup> {
         val groups = mutableListOf<VectorGroup>()
         val assigned = BooleanArray(embeddedSms.size)
 
         for (i in embeddedSms.indices) {
             if (assigned[i]) continue
+
+            // 50건마다 progress 업데이트 + yield로 다른 코루틴에 실행 기회 제공
+            if (i % 50 == 0) {
+                listener?.onProgress("패턴 그룹핑 중", i, embeddedSms.size)
+                yield()
+            }
 
             val (smsI, templateI, embeddingI) = embeddedSms[i]
 
@@ -475,6 +483,8 @@ class SmsBatchProcessor @Inject constructor(
             assigned[i] = true
             groups.add(group)
         }
+
+        listener?.onProgress("패턴 그룹핑 완료", embeddedSms.size, embeddedSms.size)
 
         // 그룹 크기가 큰 순으로 정렬 (중요한 패턴 우선 처리)
         return groups.sortedByDescending { it.members.size }

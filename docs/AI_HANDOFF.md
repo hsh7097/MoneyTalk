@@ -97,6 +97,11 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | 2026-02-08 | 채팅 UI 리팩토링 (방 리스트/내부 분리) | 완료 |
 | 2026-02-08 | 수입 내역 통합 표시 (목록 모드) | 완료 |
 | 2026-02-08 | 벡터 그룹핑 (Tier 1.5b) + CategoryReferenceProvider + 계좌이체/보험 수정 | 완료 |
+| 2026-02-08 | 채팅 액션 5개 추가 (delete_by_keyword, add_expense, update_memo, update_store_name, update_amount) | 완료, 빌드 성공 |
+| 2026-02-08 | FINANCIAL_ADVISOR 할루시네이션 방지 규칙 추가 | 완료 |
+| 2026-02-08 | SMS 동기화/카테고리 분류 다이얼로그 진행률 표시 개선 | 완료, 빌드 성공 |
+| 2026-02-08 | Claude 레거시 코드 완전 제거 (4개 파일 삭제 + Retrofit 의존성 제거) | 완료, 빌드 성공 |
+| 2026-02-08 | SmsAnalysisResult core/model/ 분리 + ExpenseRepo/Dao 미사용 메서드 제거 | 완료, 빌드 성공 |
 
 ---
 

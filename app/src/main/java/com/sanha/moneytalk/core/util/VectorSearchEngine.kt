@@ -73,6 +73,7 @@ object VectorSearchEngine {
         minSimilarity: Float
     ): List<SearchResult> {
         return patterns
+            .asSequence()
             .map { pattern ->
                 SearchResult(
                     pattern = pattern,
@@ -82,6 +83,7 @@ object VectorSearchEngine {
             .filter { it.similarity >= minSimilarity }
             .sortedByDescending { it.similarity }
             .take(topK)
+            .toList()
     }
 
     /**
@@ -170,6 +172,7 @@ object VectorSearchEngine {
         minSimilarity: Float
     ): List<StoreSearchResult> {
         return embeddings
+            .asSequence()
             .map { embedding ->
                 StoreSearchResult(
                     storeEmbedding = embedding,
@@ -178,5 +181,6 @@ object VectorSearchEngine {
             }
             .filter { it.similarity >= minSimilarity }
             .sortedByDescending { it.similarity }
+            .toList()
     }
 }

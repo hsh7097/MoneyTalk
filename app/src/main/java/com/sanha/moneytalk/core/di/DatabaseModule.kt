@@ -8,6 +8,7 @@ import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
+import com.sanha.moneytalk.core.database.dao.OwnedCardDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import dagger.Module
@@ -47,7 +48,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
-            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -99,5 +100,12 @@ object DatabaseModule {
     @Singleton
     fun provideStoreEmbeddingDao(database: AppDatabase): StoreEmbeddingDao {
         return database.storeEmbeddingDao()
+    }
+
+    /** 보유 카드 DAO 제공 - 카드 화이트리스트 관리 */
+    @Provides
+    @Singleton
+    fun provideOwnedCardDao(database: AppDatabase): OwnedCardDao {
+        return database.ownedCardDao()
     }
 }

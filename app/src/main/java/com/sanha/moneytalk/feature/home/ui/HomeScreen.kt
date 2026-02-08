@@ -149,7 +149,7 @@ fun HomeScreen(
                     ) {
                         Text(
                             text = if (uiState.selectedCategory != null) {
-                                val cat = Category.fromDisplayName(uiState.selectedCategory!!)
+                                val cat = Category.fromDisplayName(uiState.selectedCategory ?: "")
                                 "${cat.emoji} ${cat.displayName} 지출"
                             } else {
                                 stringResource(R.string.home_recent_expense)
@@ -326,12 +326,20 @@ fun HomeScreen(
     if (uiState.showSyncDialog) {
         AlertDialog(
             onDismissRequest = { /* 진행 중에는 닫기 불가 */ },
-            title = { Text("문자 동기화 중") },
+            title = { Text("지출 내역 읽는 중") },
             text = {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.fillMaxWidth()
                 ) {
+                    // 로딩 스피너
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(48.dp),
+                        strokeWidth = 4.dp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 진행률 바 (total > 0일 때만 determinate)
                     if (uiState.syncProgressTotal > 0) {
                         val progress = uiState.syncProgressCurrent.toFloat() / uiState.syncProgressTotal.toFloat()
                         LinearProgressIndicator(
@@ -343,7 +351,7 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "${uiState.syncProgressCurrent} / ${uiState.syncProgressTotal}",
+                            text = "${uiState.syncProgressCurrent} / ${uiState.syncProgressTotal}건",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
@@ -358,6 +366,8 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
+
+                    // 상태 텍스트
                     Text(
                         text = uiState.syncProgress,
                         style = MaterialTheme.typography.bodyMedium,

@@ -26,7 +26,6 @@ class ExpenseRepository @Inject constructor(
     private val expenseDao: ExpenseDao
 ) {
     /** 모든 지출 목록을 Flow로 조회 (실시간 관찰) */
-    /** 모든 지출 목록을 Flow로 조회 (실시간 관찰) */
     fun getAllExpenses(): Flow<List<ExpenseEntity>> = expenseDao.getAllExpenses()
 
     /**
@@ -47,18 +46,6 @@ class ExpenseRepository @Inject constructor(
     /** 특정 카테고리의 지출 목록 조회 (Flow) */
     fun getExpensesByCategory(category: String): Flow<List<ExpenseEntity>> =
         expenseDao.getExpensesByCategory(category)
-
-    /** 특정 카드의 지출 목록 조회 (Flow) */
-    fun getExpensesByCardName(cardName: String): Flow<List<ExpenseEntity>> =
-        expenseDao.getExpensesByCardName(cardName)
-
-    /** 카드 + 기간 복합 필터 조회 (Flow) */
-    fun getExpensesByCardNameAndDateRange(cardName: String, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>> =
-        expenseDao.getExpensesByCardNameAndDateRange(cardName, startTime, endTime)
-
-    /** 카테고리 + 기간 복합 필터 조회 (Flow) */
-    fun getExpensesByCategoryAndDateRange(category: String, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>> =
-        expenseDao.getExpensesByCategoryAndDateRange(category, startTime, endTime)
 
     /**
      * 다중 조건 필터 조회 (Flow)
@@ -89,6 +76,15 @@ class ExpenseRepository @Inject constructor(
     /** ID로 지출 항목 조회 */
     suspend fun getExpenseById(id: Long): ExpenseEntity? = expenseDao.getExpenseById(id)
 
+    /** 메모 수정 */
+    suspend fun updateMemo(expenseId: Long, memo: String?): Int = expenseDao.updateMemo(expenseId, memo)
+
+    /** 가게명 수정 */
+    suspend fun updateStoreName(expenseId: Long, newStoreName: String): Int = expenseDao.updateStoreName(expenseId, newStoreName)
+
+    /** 금액 수정 */
+    suspend fun updateAmount(expenseId: Long, newAmount: Int): Int = expenseDao.updateAmount(expenseId, newAmount)
+
     /** SMS ID로 지출 항목 조회 (중복 체크용) */
     suspend fun getExpenseBySmsId(smsId: String): ExpenseEntity? = expenseDao.getExpenseBySmsId(smsId)
 
@@ -101,6 +97,14 @@ class ExpenseRepository @Inject constructor(
     // ========================
     // 통계 집계 메소드
     // ========================
+
+    /** 기간 + 카테고리 목록으로 지출 조회 (일회성, 채팅 쿼리용) */
+    suspend fun getExpensesByCategoriesAndDateRangeOnce(categories: List<String>, startTime: Long, endTime: Long): List<ExpenseEntity> =
+        expenseDao.getExpensesByCategoriesAndDateRangeOnce(categories, startTime, endTime)
+
+    /** 기간 + 카테고리 목록으로 총 지출 합산 (채팅 쿼리용) */
+    suspend fun getTotalExpenseByCategoriesAndDateRange(categories: List<String>, startTime: Long, endTime: Long): Int =
+        expenseDao.getTotalExpenseByCategoriesAndDateRange(categories, startTime, endTime) ?: 0
 
     /** 특정 기간의 총 지출 금액 합계 */
     suspend fun getTotalExpenseByDateRange(startTime: Long, endTime: Long): Int =
@@ -149,17 +153,9 @@ class ExpenseRepository @Inject constructor(
     suspend fun getExpensesByStoreName(storeName: String): List<ExpenseEntity> =
         expenseDao.getExpensesByStoreName(storeName)
 
-    /** 가게명 + 기간으로 지출 조회 */
-    suspend fun getExpensesByStoreNameAndDateRange(storeName: String, startTime: Long, endTime: Long): List<ExpenseEntity> =
-        expenseDao.getExpensesByStoreNameAndDateRange(storeName, startTime, endTime)
-
     /** 가게명에 키워드가 포함된 지출 조회 (LIKE 검색) */
     suspend fun getExpensesByStoreNameContaining(keyword: String): List<ExpenseEntity> =
         expenseDao.getExpensesByStoreNameContaining(keyword)
-
-    /** 가게명으로 총 지출 조회 */
-    suspend fun getTotalExpenseByStoreName(storeName: String, startTime: Long, endTime: Long): Int =
-        expenseDao.getTotalExpenseByStoreName(storeName, startTime, endTime) ?: 0
 
     // ========================
     // 카테고리 분류 관련 메소드
@@ -201,6 +197,14 @@ class ExpenseRepository @Inject constructor(
     suspend fun deleteDuplicates(): Int =
         expenseDao.deleteDuplicates()
 
+    /**
+     * 키워드 기반 일괄 삭제
+     * 가게명, 카테고리, 카드명, 메모에 키워드가 포함된 항목 삭제
+     * @return 삭제된 항목 수
+     */
+    suspend fun deleteByKeyword(keyword: String): Int =
+        expenseDao.deleteByKeyword(keyword)
+
     // ========================
     // 검색 기능
     // ========================
@@ -212,7 +216,19 @@ class ExpenseRepository @Inject constructor(
     suspend fun searchExpenses(query: String): List<ExpenseEntity> =
         expenseDao.searchExpenses(query)
 
-    /** 메모 업데이트 */
-    suspend fun updateMemo(expenseId: Long, memo: String?) =
-        expenseDao.updateMemo(expenseId, memo)
+    // ========================
+    // OwnedCard 필터 메소드
+    // ========================
+
+    /** 내 카드 기준 기간별 지출 조회 (Flow) */
+    fun getExpensesByOwnedCards(ownedCardNames: List<String>, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>> =
+        expenseDao.getExpensesByOwnedCards(ownedCardNames, startTime, endTime)
+
+    /** 내 카드 기준 총 지출 합계 */
+    suspend fun getTotalExpenseByOwnedCards(ownedCardNames: List<String>, startTime: Long, endTime: Long): Int =
+        expenseDao.getTotalExpenseByOwnedCards(ownedCardNames, startTime, endTime) ?: 0
+
+    /** 내 카드 기준 카테고리별 합계 */
+    suspend fun getExpenseSumByCategoryOwned(ownedCardNames: List<String>, startTime: Long, endTime: Long): List<CategorySum> =
+        expenseDao.getExpenseSumByCategoryOwned(ownedCardNames, startTime, endTime)
 }

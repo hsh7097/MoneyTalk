@@ -38,6 +38,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 문서 | 내용 | 언제 읽나 |
 |------|------|----------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 패키지 구조, 파일 트리, 기술 스택, 데이터 흐름 | 구조 파악 시 |
 | [docs/AI_CONTEXT.md](docs/AI_CONTEXT.md) | 아키텍처, 임계값 레지스트리, 리팩토링 범위, Golden Flows | 프로젝트 이해 시 |
 | [docs/AI_HANDOFF.md](docs/AI_HANDOFF.md) | 현재 작업 상태, 주의사항, 핵심 파일 위치 | 세션 교체 시 |
 | [docs/AI_TASKS.md](docs/AI_TASKS.md) | 태스크 목록, 완료 기준, 리스크 | 작업 수행 시 |
@@ -45,6 +46,10 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | [docs/SMS_PARSING.md](docs/SMS_PARSING.md) | SMS 파싱 시스템 상세 | SMS 관련 작업 시 |
 | [docs/CATEGORY_CLASSIFICATION.md](docs/CATEGORY_CLASSIFICATION.md) | 카테고리 분류 시스템 상세 | 분류 관련 작업 시 |
 | [docs/CHAT_SYSTEM.md](docs/CHAT_SYSTEM.md) | AI 채팅 시스템 상세 | 채팅 관련 작업 시 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | 버전별 변경 이력 | 변경 히스토리 확인 시 |
+| [docs/DEVELOPMENT_LOG.md](docs/DEVELOPMENT_LOG.md) | 날짜별 개발 로그 | 작업 기록 확인 시 |
+| [docs/GIT_CONVENTION.md](docs/GIT_CONVENTION.md) | Git 컨벤션 | 커밋/브랜치 규칙 확인 시 |
+| [docs/QUICK_START.md](docs/QUICK_START.md) | 빠른 시작 가이드 | 환경 설정 시 |
 
 ---
 
