@@ -23,8 +23,10 @@ import com.sanha.moneytalk.core.util.QueryType
 import com.sanha.moneytalk.core.util.StoreAliasManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.text.SimpleDateFormat
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.NumberFormat
 import java.util.*
 import javax.inject.Inject
@@ -51,7 +53,10 @@ data class ChatUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val hasApiKey: Boolean = false,
-    val showSessionList: Boolean = false
+    val showSessionList: Boolean = false,
+    val canRetry: Boolean = false,
+    /** 채팅방 내부 화면 표시 여부 (false=목록, true=채팅방 내부) */
+    val isInChatRoom: Boolean = false
 )
 
 @HiltViewModel
@@ -69,9 +74,68 @@ class ChatViewModel @Inject constructor(
 
     private val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
 
+    /** 재시도를 위한 마지막 사용자 메시지 저장 */
+    private var lastUserMessage: String? = null
+
     init {
         loadSessions()
         checkApiKey()
+        autoCreateSessionIfEmpty()
+    }
+
+    /**
+     * 채팅방이 하나도 없으면 자동으로 하나 생성하고 바로 진입
+     */
+    private fun autoCreateSessionIfEmpty() {
+        viewModelScope.launch {
+            val sessions = withContext(Dispatchers.IO) {
+                chatDao.getAllSessionsOnce()
+            }
+            if (sessions.isEmpty()) {
+                val sessionId = withContext(Dispatchers.IO) {
+                    val newSession = ChatSessionEntity(
+                        title = "새 대화",
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    chatDao.insertSession(newSession)
+                }
+                _uiState.update { it.copy(currentSessionId = sessionId, isInChatRoom = true) }
+                loadMessagesForSession(sessionId)
+            }
+        }
+    }
+
+    /** 채팅방 내부로 진입 */
+    fun enterChatRoom(sessionId: Long) {
+        _uiState.update { it.copy(currentSessionId = sessionId, isInChatRoom = true) }
+        loadMessagesForSession(sessionId)
+    }
+
+    /** 채팅방에서 목록으로 나가기 (대화 기반 자동 타이틀 설정) */
+    fun exitChatRoom() {
+        val sessionId = _uiState.value.currentSessionId
+        val messages = _uiState.value.messages
+        _uiState.update { it.copy(isInChatRoom = false) }
+
+        // 대화가 있으면 자동 타이틀 생성 시도 (비동기, fire-and-forget)
+        if (sessionId != null && messages.isNotEmpty()) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    // 최근 메시지 6개(사용자+AI 3쌍)를 타이틀 생성에 사용
+                    val recentMessages = messages.takeLast(6).joinToString("\n") { msg ->
+                        if (msg.isUser) "사용자: ${msg.content}" else "AI: ${msg.content.take(100)}"
+                    }
+                    val newTitle = geminiRepository.generateChatTitle(recentMessages)
+                    if (newTitle != null) {
+                        chatDao.updateSessionTitle(sessionId, newTitle)
+                    }
+                } catch (e: Exception) {
+                    // 타이틀 생성 실패해도 무시 (기존 타이틀 유지)
+                    android.util.Log.w("ChatViewModel", "자동 타이틀 생성 실패: ${e.message}")
+                }
+            }
+        }
     }
 
     private fun loadSessions() {
@@ -129,26 +193,28 @@ class ChatViewModel @Inject constructor(
 
     fun selectSession(sessionId: Long) {
         viewModelScope.launch {
-            _uiState.update { it.copy(currentSessionId = sessionId, showSessionList = false) }
+            _uiState.update { it.copy(currentSessionId = sessionId, showSessionList = false, isInChatRoom = true) }
             loadMessagesForSession(sessionId)
         }
     }
 
     fun createNewSession() {
         viewModelScope.launch {
-            val newSession = ChatSessionEntity(
-                title = "새 대화",
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis()
-            )
-            val sessionId = chatDao.insertSession(newSession)
-            _uiState.update { it.copy(currentSessionId = sessionId, showSessionList = false) }
+            val sessionId = withContext(Dispatchers.IO) {
+                val newSession = ChatSessionEntity(
+                    title = "새 대화",
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                chatDao.insertSession(newSession)
+            }
+            _uiState.update { it.copy(currentSessionId = sessionId, showSessionList = false, isInChatRoom = true) }
             loadMessagesForSession(sessionId)
         }
     }
 
     fun deleteSession(sessionId: Long) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             chatDao.deleteSessionById(sessionId)
             // 삭제 후 다른 세션 선택 (loadSessions에서 자동 처리)
         }
@@ -164,30 +230,38 @@ class ChatViewModel @Inject constructor(
 
     private fun checkApiKey() {
         viewModelScope.launch {
-            _uiState.update { it.copy(hasApiKey = geminiRepository.hasApiKey()) }
+            val hasKey = withContext(Dispatchers.IO) { geminiRepository.hasApiKey() }
+            _uiState.update { it.copy(hasApiKey = hasKey) }
         }
     }
 
     fun sendMessage(message: String) {
         if (message.isBlank()) return
 
+        lastUserMessage = message
+        _uiState.update { it.copy(canRetry = false) }
+
         viewModelScope.launch {
             // 현재 세션 ID 확인, 없으면 새 세션 생성
             var sessionId = _uiState.value.currentSessionId
             if (sessionId == null) {
-                val newSession = ChatSessionEntity(
-                    title = message.take(30) + if (message.length > 30) "..." else "",
-                    createdAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis()
-                )
-                sessionId = chatDao.insertSession(newSession)
+                sessionId = withContext(Dispatchers.IO) {
+                    val newSession = ChatSessionEntity(
+                        title = message.take(30) + if (message.length > 30) "..." else "",
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    chatDao.insertSession(newSession)
+                }
                 _uiState.update { it.copy(currentSessionId = sessionId) }
             } else {
                 // 첫 메시지면 세션 제목 업데이트
-                val messageCount = chatDao.getMessageCountBySession(sessionId)
-                if (messageCount == 0) {
-                    val title = message.take(30) + if (message.length > 30) "..." else ""
-                    chatDao.updateSessionTitle(sessionId, title)
+                withContext(Dispatchers.IO) {
+                    val messageCount = chatDao.getMessageCountBySession(sessionId)
+                    if (messageCount == 0) {
+                        val title = message.take(30) + if (message.length > 30) "..." else ""
+                        chatDao.updateSessionTitle(sessionId, title)
+                    }
                 }
             }
 
@@ -195,88 +269,93 @@ class ChatViewModel @Inject constructor(
 
             try {
                 // ===== Rolling Summary + Windowed Context 전략 적용 =====
+                // 모든 DB/API 작업을 IO 스레드에서 실행
+                withContext(Dispatchers.IO) {
+                    // 1단계: 메시지 저장 + 요약 갱신 + 컨텍스트 구성
+                    val chatContext = chatRepository.sendMessageAndBuildContext(
+                        sessionId = sessionId,
+                        userMessage = message
+                    )
 
-                // 1단계: 메시지 저장 + 요약 갱신 + 컨텍스트 구성
-                val chatContext = chatRepository.sendMessageAndBuildContext(
-                    sessionId = sessionId,
-                    userMessage = message
-                )
+                    // 2단계: 대화 맥락을 포함하여 쿼리 분석 요청
+                    val contextualMessage = ChatContextBuilder.buildQueryAnalysisContext(chatContext)
+                    val analyzeResult = geminiRepository.analyzeQueryNeeds(contextualMessage)
 
-                // 2단계: 대화 맥락을 포함하여 쿼리 분석 요청
-                val contextualMessage = ChatContextBuilder.buildQueryAnalysisContext(chatContext)
-                val analyzeResult = geminiRepository.analyzeQueryNeeds(contextualMessage)
+                    val queryResults = mutableListOf<QueryResult>()
+                    val actionResults = mutableListOf<ActionResult>()
 
-                val queryResults = mutableListOf<QueryResult>()
-                val actionResults = mutableListOf<ActionResult>()
-
-                analyzeResult.onSuccess { queryRequest ->
-                    if (queryRequest != null) {
-                        // 3단계: 요청된 쿼리 실행
-                        if (queryRequest.queries.isNotEmpty()) {
-                            for (query in queryRequest.queries) {
-                                val result = executeQuery(query)
-                                if (result != null) {
-                                    queryResults.add(result)
+                    analyzeResult.onSuccess { queryRequest ->
+                        if (queryRequest != null) {
+                            // 3단계: 요청된 쿼리 실행
+                            if (queryRequest.queries.isNotEmpty()) {
+                                for (query in queryRequest.queries) {
+                                    val result = executeQuery(query)
+                                    if (result != null) {
+                                        queryResults.add(result)
+                                    }
                                 }
                             }
-                        }
 
-                        // 4단계: 요청된 액션 실행
-                        if (queryRequest.actions.isNotEmpty()) {
-                            for (action in queryRequest.actions) {
-                                val result = executeAction(action)
-                                actionResults.add(result)
+                            // 4단계: 요청된 액션 실행
+                            if (queryRequest.actions.isNotEmpty()) {
+                                for (action in queryRequest.actions) {
+                                    val result = executeAction(action)
+                                    actionResults.add(result)
+                                }
                             }
-                        }
 
-                        // 쿼리/액션 모두 없으면 기본 데이터 제공
-                        if (queryRequest.queries.isEmpty() && queryRequest.actions.isEmpty()) {
+                            // 쿼리/액션 모두 없으면 기본 데이터 제공
+                            if (queryRequest.queries.isEmpty() && queryRequest.actions.isEmpty()) {
+                                val fallbackResults = getDefaultQueryResults()
+                                queryResults.addAll(fallbackResults)
+                            }
+                        } else {
                             val fallbackResults = getDefaultQueryResults()
                             queryResults.addAll(fallbackResults)
                         }
-                    } else {
+                    }.onFailure {
                         val fallbackResults = getDefaultQueryResults()
                         queryResults.addAll(fallbackResults)
                     }
-                }.onFailure {
-                    val fallbackResults = getDefaultQueryResults()
-                    queryResults.addAll(fallbackResults)
-                }
 
-                // 5단계: 대화 맥락 + 쿼리 결과로 최종 답변 생성
-                val monthlyIncome = settingsDataStore.getMonthlyIncome()
+                    // 5단계: 대화 맥락 + 쿼리 결과로 최종 답변 생성
+                    val monthlyIncome = settingsDataStore.getMonthlyIncome()
 
-                val dataContext = queryResults.joinToString("\n\n") { result ->
-                    "[${result.queryType.name}]\n${result.data}"
-                }
-                val actionContext = actionResults.joinToString("\n") { "- ${it.message}" }
+                    val dataContext = queryResults.joinToString("\n\n") { result ->
+                        "[${result.queryType.name}]\n${result.data}"
+                    }
+                    val actionContext = actionResults.joinToString("\n") { "- ${it.message}" }
 
-                val finalPrompt = ChatContextBuilder.buildFinalAnswerPrompt(
-                    context = chatContext,
-                    queryResults = dataContext,
-                    monthlyIncome = monthlyIncome,
-                    actionResults = actionContext
-                )
-
-                val finalResult = geminiRepository.generateFinalAnswerWithContext(finalPrompt)
-
-                finalResult.onSuccess { response ->
-                    // AI 응답 저장 + 요약 갱신
-                    chatRepository.saveAiResponseAndUpdateSummary(sessionId, response)
-                }.onFailure { e ->
-                    chatRepository.saveAiResponseAndUpdateSummary(
-                        sessionId,
-                        "죄송해요, 응답을 받는 중 오류가 발생했어요: ${e.message}"
+                    val finalPrompt = ChatContextBuilder.buildFinalAnswerPrompt(
+                        context = chatContext,
+                        queryResults = dataContext,
+                        monthlyIncome = monthlyIncome,
+                        actionResults = actionContext
                     )
+
+                    val finalResult = geminiRepository.generateFinalAnswerWithContext(finalPrompt)
+
+                    finalResult.onSuccess { response ->
+                        // AI 응답 저장 + 요약 갱신
+                        chatRepository.saveAiResponseAndUpdateSummary(sessionId, response)
+                    }.onFailure { e ->
+                        chatRepository.saveAiResponseAndUpdateSummary(
+                            sessionId,
+                            "죄송해요, 응답을 받는 중 오류가 발생했어요 😢\n(${e.message})"
+                        )
+                        _uiState.update { it.copy(canRetry = true) }
+                    }
                 }
 
                 _uiState.update { it.copy(isLoading = false) }
             } catch (e: Exception) {
-                chatRepository.saveAiResponseAndUpdateSummary(
-                    sessionId,
-                    "오류가 발생했어요: ${e.message}"
-                )
-                _uiState.update { it.copy(isLoading = false) }
+                withContext(Dispatchers.IO) {
+                    chatRepository.saveAiResponseAndUpdateSummary(
+                        sessionId,
+                        "오류가 발생했어요 😢\n(${e.message})"
+                    )
+                }
+                _uiState.update { it.copy(isLoading = false, canRetry = true) }
             }
         }
     }
@@ -287,30 +366,39 @@ class ChatViewModel @Inject constructor(
     private suspend fun executeQuery(query: DataQuery): QueryResult? {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
 
-        // 날짜 파싱 (없으면 현재 월 사용)
+        // 날짜 파싱 (없으면 전체 기간 조회)
         val startTimestamp = query.startDate?.let {
             try {
-                dateFormat.parse(it)?.time ?: DateUtils.getMonthStartTimestamp()
+                dateFormat.parse(it)?.time ?: 0L
             } catch (e: Exception) {
-                DateUtils.getMonthStartTimestamp()
+                0L
             }
-        } ?: DateUtils.getMonthStartTimestamp()
+        } ?: 0L
 
         val endTimestamp = query.endDate?.let {
             try {
                 // 종료일은 해당 일의 끝까지 포함
-                (dateFormat.parse(it)?.time ?: DateUtils.getMonthEndTimestamp()) + (24 * 60 * 60 * 1000 - 1)
+                (dateFormat.parse(it)?.time ?: System.currentTimeMillis()) + (24 * 60 * 60 * 1000 - 1)
             } catch (e: Exception) {
-                DateUtils.getMonthEndTimestamp()
+                System.currentTimeMillis()
             }
-        } ?: DateUtils.getMonthEndTimestamp()
+        } ?: System.currentTimeMillis()
 
         return when (query.type) {
             QueryType.TOTAL_EXPENSE -> {
-                val total = expenseRepository.getTotalExpenseByDateRange(startTimestamp, endTimestamp)
+                val total = if (query.category != null) {
+                    // 카테고리 필터가 있으면 해당 카테고리(+소 카테고리)만 합산
+                    val cat = Category.fromDisplayName(query.category)
+                    val categoryNames = cat.displayNamesIncludingSub
+                    val allExpenses = expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp)
+                    allExpenses.filter { it.category in categoryNames }.sumOf { it.amount }
+                } else {
+                    expenseRepository.getTotalExpenseByDateRange(startTimestamp, endTimestamp)
+                }
+                val categoryLabel = query.category?.let { " ($it)" } ?: ""
                 QueryResult(
                     queryType = QueryType.TOTAL_EXPENSE,
-                    data = "총 지출: ${numberFormat.format(total)}원 (${query.startDate ?: "이번 달"} ~ ${query.endDate ?: "현재"})"
+                    data = "총 지출$categoryLabel: ${numberFormat.format(total)}원 (${query.startDate ?: "전체"} ~ ${query.endDate ?: "현재"})"
                 )
             }
 
@@ -324,22 +412,36 @@ class ChatViewModel @Inject constructor(
 
             QueryType.EXPENSE_BY_CATEGORY -> {
                 val categoryExpenses = expenseRepository.getExpenseSumByCategory(startTimestamp, endTimestamp)
+                    .let { list ->
+                        if (query.category != null) {
+                            // 특정 카테고리(+소 카테고리) 필터
+                            val cat = Category.fromDisplayName(query.category)
+                            val categoryNames = cat.displayNamesIncludingSub
+                            list.filter { it.category in categoryNames }
+                        } else {
+                            list
+                        }
+                    }
                 val breakdown = categoryExpenses.joinToString("\n") { item ->
                     val category = Category.fromDisplayName(item.category)
                     "${category.emoji} ${category.displayName}: ${numberFormat.format(item.total)}원"
                 }.ifEmpty { "해당 기간 지출 내역이 없습니다." }
+                val categoryLabel = query.category?.let { " ($it)" } ?: ""
                 QueryResult(
                     queryType = QueryType.EXPENSE_BY_CATEGORY,
-                    data = "카테고리별 지출 (${query.startDate ?: "이번 달"} ~ ${query.endDate ?: "현재"}):\n$breakdown"
+                    data = "카테고리별 지출$categoryLabel (${query.startDate ?: "전체"} ~ ${query.endDate ?: "현재"}):\n$breakdown"
                 )
             }
 
             QueryType.EXPENSE_LIST -> {
-                val limit = query.limit ?: 10
+                val limit = query.limit ?: 50
                 val expenses = expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp)
                     .let { list ->
                         if (query.category != null) {
-                            list.filter { it.category == query.category }
+                            // 대 카테고리 선택 시 소 카테고리도 포함
+                            val cat = Category.fromDisplayName(query.category)
+                            val categoryNames = cat.displayNamesIncludingSub
+                            list.filter { it.category in categoryNames }
                         } else {
                             list
                         }
@@ -347,7 +449,7 @@ class ChatViewModel @Inject constructor(
                     .take(limit)
 
                 val expenseList = expenses.joinToString("\n") { expense ->
-                    "${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${numberFormat.format(expense.amount)}원 (${expense.category})"
+                    "${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${numberFormat.format(expense.amount)}원 (${expense.category})${expense.memo?.let { " [메모: $it]" } ?: ""}"
                 }.ifEmpty { "해당 기간 지출 내역이 없습니다." }
 
                 QueryResult(
@@ -421,7 +523,7 @@ class ChatViewModel @Inject constructor(
 
                 QueryResult(
                     queryType = QueryType.UNCATEGORIZED_LIST,
-                    data = "미분류(기타) 항목 (${expenses.size}건):\n$expenseList"
+                    data = "미분류 항목 (${expenses.size}건):\n$expenseList"
                 )
             }
 
@@ -442,6 +544,75 @@ class ChatViewModel @Inject constructor(
                 QueryResult(
                     queryType = QueryType.CATEGORY_RATIO,
                     data = "수입 대비 카테고리별 비율 (${query.startDate ?: "이번 달"} ~ ${query.endDate ?: "현재"}):\n월 수입: ${numberFormat.format(monthlyIncome)}원\n총 지출: ${numberFormat.format(totalExpense)}원 (수입의 ${String.format("%.1f", totalIncomeRatio)}%)\n\n$ratioBreakdown"
+                )
+            }
+
+            QueryType.EXPENSE_BY_CARD -> {
+                val cardName = query.cardName ?: query.storeName ?: return null
+                val allExpenses = expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp)
+                    .filter { it.cardName.contains(cardName, ignoreCase = true) }
+                    .sortedByDescending { it.dateTime }
+
+                val total = allExpenses.sumOf { it.amount }
+                val limit = query.limit ?: 20
+                val expenseList = allExpenses.take(limit).joinToString("\n") { expense ->
+                    "${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${numberFormat.format(expense.amount)}원 (${expense.category})${expense.memo?.let { " [메모: $it]" } ?: ""}"
+                }.ifEmpty { "해당 카드 지출 내역이 없습니다." }
+
+                QueryResult(
+                    queryType = QueryType.EXPENSE_BY_CARD,
+                    data = "'$cardName' 카드 지출 (${query.startDate ?: "전체"} ~ ${query.endDate ?: "현재"}):\n총 ${numberFormat.format(total)}원 (${allExpenses.size}건)\n$expenseList"
+                )
+            }
+
+            QueryType.SEARCH_EXPENSE -> {
+                val keyword = query.searchKeyword ?: query.storeName ?: return null
+                val limit = query.limit ?: 30
+                val results = expenseRepository.searchExpenses(keyword).take(limit)
+                val resultList = results.joinToString("\n") { expense ->
+                    "[ID:${expense.id}] ${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${numberFormat.format(expense.amount)}원 (${expense.category}, ${expense.cardName})${expense.memo?.let { " [메모: $it]" } ?: ""}"
+                }.ifEmpty { "'$keyword' 검색 결과가 없습니다." }
+
+                QueryResult(
+                    queryType = QueryType.SEARCH_EXPENSE,
+                    data = "'$keyword' 검색 결과 (${results.size}건):\n$resultList"
+                )
+            }
+
+            QueryType.CARD_LIST -> {
+                val cardNames = expenseRepository.getAllCardNames()
+                val cardList = cardNames.joinToString(", ").ifEmpty { "등록된 카드가 없습니다." }
+
+                QueryResult(
+                    queryType = QueryType.CARD_LIST,
+                    data = "사용 중인 카드 목록 (${cardNames.size}개): $cardList"
+                )
+            }
+
+            QueryType.INCOME_LIST -> {
+                val limit = query.limit ?: 20
+                val incomes = incomeRepository.getIncomesByDateRangeOnce(startTimestamp, endTimestamp)
+                    .take(limit)
+                val total = incomes.sumOf { it.amount }
+                val incomeList = incomes.joinToString("\n") { income ->
+                    "${DateUtils.formatDateTime(income.dateTime)} - ${income.source}: ${numberFormat.format(income.amount)}원 (${income.type})${income.memo?.let { " [메모: $it]" } ?: ""}"
+                }.ifEmpty { "해당 기간 수입 내역이 없습니다." }
+
+                QueryResult(
+                    queryType = QueryType.INCOME_LIST,
+                    data = "수입 내역 (${query.startDate ?: "전체"} ~ ${query.endDate ?: "현재"}):\n총 ${numberFormat.format(total)}원 (${incomes.size}건)\n$incomeList"
+                )
+            }
+
+            QueryType.DUPLICATE_LIST -> {
+                val duplicates = expenseRepository.getDuplicateExpenses()
+                val dupList = duplicates.take(20).joinToString("\n") { expense ->
+                    "[ID:${expense.id}] ${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${numberFormat.format(expense.amount)}원 (${expense.category})"
+                }.ifEmpty { "중복 항목이 없습니다." }
+
+                QueryResult(
+                    queryType = QueryType.DUPLICATE_LIST,
+                    data = "중복 지출 항목 (${duplicates.size}건):\n$dupList"
                 )
             }
         }
@@ -524,6 +695,45 @@ class ChatViewModel @Inject constructor(
                     )
                 }
             }
+
+            ActionType.DELETE_EXPENSE -> {
+                val expenseId = action.expenseId
+
+                if (expenseId == null) {
+                    ActionResult(
+                        actionType = ActionType.DELETE_EXPENSE,
+                        success = false,
+                        message = "삭제할 지출 ID가 지정되지 않았습니다."
+                    )
+                } else {
+                    val expense = expenseRepository.getExpenseById(expenseId)
+                    if (expense != null) {
+                        expenseRepository.deleteById(expenseId)
+                        ActionResult(
+                            actionType = ActionType.DELETE_EXPENSE,
+                            success = true,
+                            message = "ID $expenseId 항목 (${expense.storeName}: ${numberFormat.format(expense.amount)}원)을 삭제했습니다.",
+                            affectedCount = 1
+                        )
+                    } else {
+                        ActionResult(
+                            actionType = ActionType.DELETE_EXPENSE,
+                            success = false,
+                            message = "ID $expenseId 항목을 찾을 수 없습니다."
+                        )
+                    }
+                }
+            }
+
+            ActionType.DELETE_DUPLICATES -> {
+                val deletedCount = expenseRepository.deleteDuplicates()
+                ActionResult(
+                    actionType = ActionType.DELETE_DUPLICATES,
+                    success = deletedCount > 0,
+                    message = if (deletedCount > 0) "중복 ${deletedCount}건을 삭제했습니다." else "중복 항목이 없습니다.",
+                    affectedCount = deletedCount
+                )
+            }
         }
     }
 
@@ -568,7 +778,7 @@ class ChatViewModel @Inject constructor(
 
     fun setApiKey(key: String) {
         viewModelScope.launch {
-            geminiRepository.setApiKey(key)
+            withContext(Dispatchers.IO) { geminiRepository.setApiKey(key) }
             checkApiKey()
         }
     }
@@ -576,17 +786,43 @@ class ChatViewModel @Inject constructor(
     fun clearCurrentSessionHistory() {
         viewModelScope.launch {
             _uiState.value.currentSessionId?.let { sessionId ->
-                chatDao.deleteChatsBySession(sessionId)
-                chatRepository.clearSessionSummary(sessionId)
-                // 세션 제목 초기화
-                chatDao.updateSessionTitle(sessionId, "새 대화")
+                withContext(Dispatchers.IO) {
+                    chatDao.deleteChatsBySession(sessionId)
+                    chatRepository.clearSessionSummary(sessionId)
+                    // 세션 제목 초기화
+                    chatDao.updateSessionTitle(sessionId, "새 대화")
+                }
             }
         }
     }
 
     fun clearAllHistory() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             chatDao.deleteAll()
+        }
+    }
+
+    /**
+     * 마지막 실패한 메시지를 재전송
+     * 실패한 AI 응답(에러 메시지)을 삭제하고, 마지막 사용자 메시지도 삭제한 뒤 다시 전송
+     */
+    fun retryLastMessage() {
+        val message = lastUserMessage ?: return
+        val sessionId = _uiState.value.currentSessionId ?: return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(canRetry = false) }
+
+            // 마지막 AI 응답(에러)과 사용자 메시지를 DB에서 삭제
+            withContext(Dispatchers.IO) {
+                val recentChats = chatDao.getRecentChatsBySession(sessionId, 2)
+                for (chat in recentChats) {
+                    chatDao.delete(chat)
+                }
+            }
+
+            // 다시 전송
+            sendMessage(message)
         }
     }
 }

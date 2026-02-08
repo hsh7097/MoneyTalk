@@ -127,12 +127,15 @@ fun ExpenseDetailDialog(
     expense: ExpenseEntity,
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)? = null,
-    onCategoryChange: ((String) -> Unit)? = null
+    onCategoryChange: ((String) -> Unit)? = null,
+    onMemoChange: ((String?) -> Unit)? = null
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     val category = Category.fromDisplayName(expense.category)
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCategoryPicker by remember { mutableStateOf(false) }
+    var isEditingMemo by remember { mutableStateOf(false) }
+    var memoText by remember { mutableStateOf(expense.memo ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -213,10 +216,48 @@ fun ExpenseDetailDialog(
                     value = DateUtils.formatDisplayDateTime(expense.dateTime)
                 )
 
-                // 메모
-                expense.memo?.let { memo ->
-                    if (memo.isNotBlank()) {
-                        DetailRow(label = stringResource(R.string.detail_memo), value = memo)
+                // 메모 (편집 가능)
+                if (onMemoChange != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { isEditingMemo = true }
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.detail_memo),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = if (memoText.isBlank()) "메모 추가" else memoText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = if (memoText.isBlank()) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = 180.dp)
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "메모 편집",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                } else {
+                    expense.memo?.let { memo ->
+                        if (memo.isNotBlank()) {
+                            DetailRow(label = stringResource(R.string.detail_memo), value = memo)
+                        }
                     }
                 }
 
@@ -286,6 +327,36 @@ fun ExpenseDetailDialog(
             onCategorySelected = { newCategory ->
                 onCategoryChange(newCategory)
                 showCategoryPicker = false
+            }
+        )
+    }
+
+    // 메모 편집 다이얼로그
+    if (isEditingMemo && onMemoChange != null) {
+        AlertDialog(
+            onDismissRequest = { isEditingMemo = false },
+            title = { Text("메모 편집") },
+            text = {
+                OutlinedTextField(
+                    value = memoText,
+                    onValueChange = { memoText = it },
+                    placeholder = { Text("메모를 입력하세요") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onMemoChange(memoText.ifBlank { null })
+                    isEditingMemo = false
+                }) {
+                    Text("저장")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isEditingMemo = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
             }
         )
     }

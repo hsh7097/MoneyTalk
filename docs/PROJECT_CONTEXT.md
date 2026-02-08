@@ -1,7 +1,6 @@
 # 머니톡 (MoneyTalk) - 프로젝트 컨텍스트
 
-> 이 문서는 Claude와 대화를 이어가기 위한 프로젝트 컨텍스트 파일입니다.
-> 새 대화 시작 시 이 파일을 공유하면 이전 작업 내용을 이어갈 수 있습니다.
+> AI 기반 자동 지출 관리 앱: SMS 파싱 + 벡터 캐싱 + Gemini 재무 상담
 
 ---
 
@@ -11,211 +10,293 @@
 - **앱 이름**: 머니톡 (MoneyTalk)
 - **슬로건**: "돈과 대화하다, AI와 함께"
 - **패키지명**: `com.sanha.moneytalk`
-- **프로젝트 경로**: `C:\Users\hsh70\OneDrive\문서\Android\MoneyTalk`
+- **실제 작업 경로**: `C:\Users\hsh70\AndroidStudioProjects\MoneyTalk`
+- **CWD 경로**: `C:\Users\hsh70\OneDrive\문서\Android\MoneyTalk` (Claude Code용, git만 공유)
 
-### 컨셉
-카드 결제 문자를 자동 수집하고, Claude AI가 분석하여 맞춤 재무 상담을 제공하는 개인 재무 비서 앱
+### 앱의 목적
+카드 결제 문자(SMS/MMS/RCS)를 자동으로 수집하고, AI가 지출 정보를 추출하여
+사용자에게 맞춤 재무 상담을 제공하는 개인 재무 비서 앱입니다.
+
+### 핵심 가치
+1. **자동화**: 문자 수신만으로 지출이 자동 기록됨 (수동 입력 불필요)
+2. **학습**: 사용할수록 AI 분류 정확도가 올라감 (벡터 캐싱 + 자가 학습)
+3. **대화형 분석**: 자연어로 지출 분석 및 재무 상담 가능
 
 ### 기술 스택
 | 항목 | 기술 |
 |------|------|
 | 언어 | Kotlin |
 | UI | Jetpack Compose + Material Design 3 |
-| 로컬 DB | Room (moneytalk_v4.db) |
+| 로컬 DB | Room |
 | DI | Hilt |
 | 네트워크 | OkHttp (Embedding REST API) |
 | 비동기 | Coroutines + Flow |
-| AI (채팅/분류) | Gemini 2.5 Flash (Google AI SDK) |
+| AI (채팅/분류) | Gemini 2.5 Pro (Google AI SDK) |
 | AI (SMS 추출) | Gemini 2.5 Flash Lite |
-| AI (임베딩) | Gemini gemini-embedding-001 (벡터 유사도) |
+| AI (요약) | Gemini 2.5 Flash |
+| AI (임베딩) | gemini-embedding-001 (768차원 벡터) |
 | 아키텍처 | MVVM + Clean Architecture |
+| 백업 | Google Drive API |
 
 ---
 
-## 2. 핵심 기능
+## 2. 앱이 할 수 있는 것
 
-### 2.1 문자 수집
-- `ContentResolver`로 기존 카드 문자 읽기
-- `BroadcastReceiver`로 실시간 문자 감지
-- 카드사 문자 자동 필터링 (KB, 신한, 삼성 등)
-- 중복 처리 방지 (smsId 기반)
+### 2.1 문자 자동 수집 & 파싱
+- SMS, MMS, RCS(삼성 기기) 메시지를 통합 읽기
+- 실시간 SMS 수신 시 자동 감지 (BroadcastReceiver)
+- 3-tier 하이브리드 분류: Regex → 벡터 유사도 → Gemini LLM
+- 결제 금액, 가게명, 카드사, 날짜, 카테고리 자동 추출
+- 수입 문자(입금, 급여 등)도 자동 감지
+- 중복 방지 (smsId 기반)
+- **상세**: [SMS_PARSING.md](./SMS_PARSING.md)
 
-### 2.2 3-Tier 하이브리드 SMS 분류
-- **Tier 1 (Regex)**: 정규식으로 빠르게 분류 (비용 0)
-- **Tier 2 (Vector)**: 임베딩 벡터 유사도로 패턴 매칭
-- **Tier 3 (LLM)**: Gemini로 비표준 SMS 추출
-- 자가 학습: 성공 결과를 벡터 DB에 축적
-- 대량 배치 처리: 그룹핑 + 대표 샘플링으로 LLM 호출 최소화
-- 상세: [SMS_PARSING.md](./SMS_PARSING.md)
+### 2.2 카테고리 자동 분류 (15개 카테고리)
+- 4-tier 분류: Room 캐시 → 벡터 유사도 → 로컬 키워드 → Gemini 배치
+- 사용자 수정 시 유사 가게에 자동 전파 (벡터 유사도 ≥ 0.90)
+- 시맨틱 그룹핑으로 Gemini API 호출 ~40% 절감
+- **상세**: [CATEGORY_CLASSIFICATION.md](./CATEGORY_CLASSIFICATION.md)
 
-### 2.3 카테고리 자동 분류 (4-Tier)
-- Tier 1: Room 매핑 캐시 → Tier 1.5: 벡터 유사도 → Tier 2: 로컬 키워드 → Tier 3: Gemini 배치
-- 시맨틱 그룹핑으로 Gemini 호출 ~40% 절감
-- 자가 학습: 사용자 수정 → 유사 가게 자동 전파
-- 상세: [CATEGORY_CLASSIFICATION.md](./CATEGORY_CLASSIFICATION.md)
-
-### 2.4 AI 재무 상담 (Gemini)
-- 2-Phase 처리: 쿼리 분석 → 데이터 조회 → 답변 생성
+### 2.3 AI 재무 상담 (채팅)
+- 자연어로 지출 데이터 조회 ("이번 달 식비 얼마야?")
+- 자연어로 카테고리 변경 ("쿠팡은 쇼핑으로 바꿔줘")
+- 수입 대비 지출 분석, 절약 조언 제공
 - Rolling Summary로 긴 대화 맥락 유지
-- 자연어로 데이터 조회 및 카테고리 변경 가능
-- 상세: [CHAT_SYSTEM.md](./CHAT_SYSTEM.md)
+- **상세**: [CHAT_SYSTEM.md](./CHAT_SYSTEM.md)
 
 ### 2.4 수입/예산 관리
-- 월 수입 등록
-- 카테고리별 예산 설정
-- 잔여 예산 실시간 표시
+- 월 수입 등록 및 지출 대비 잔여 예산 표시
+- 월 시작일 커스터마이즈 (카드 결제일 기준 설정 가능)
+- 카테고리별 예산 설정 (계획 중)
+
+### 2.5 데이터 관리
+- JSON/CSV 형식으로 내보내기 (카드/카테고리 필터 가능)
+- Google Drive 백업/복원
+- 로컬 파일 복원
+- 중복 데이터 일괄 삭제
+- 전체 데이터 초기화
 
 ---
 
-## 3. 프로젝트 구조
+## 3. 카테고리 목록
+
+| 이모지 | 카테고리 | 코드 | 비고 |
+|--------|---------|------|------|
+| 🍔 | 식비 | FOOD | |
+| ☕ | 카페 | CAFE | |
+| 🍺 | 술/유흥 | DRINKING | |
+| 🚗 | 교통 | TRANSPORT | |
+| 🛒 | 쇼핑 | SHOPPING | |
+| 📱 | 구독 | SUBSCRIPTION | |
+| 💊 | 의료/건강 | HEALTH | |
+| 💪 | 운동 | FITNESS | |
+| 🎬 | 문화/여가 | CULTURE | |
+| 📚 | 교육 | EDUCATION | |
+| 🏢 | 주거 | HOUSING | |
+| 🏠 | 생활 | LIVING | |
+| 🎁 | 경조 | EVENTS | |
+| 🛵 | 배달 | DELIVERY | |
+| 📦 | 기타 | ETC | |
+| ❓ | 미분류 | UNCLASSIFIED | AI 분류 전 기본값 |
+
+---
+
+## 4. 화면 구성 & 기능 상세
+
+### 4.1 홈 화면 (Home)
+
+**월간 현황 카드**
+- 월 선택기 (좌우 화살표로 이전/다음 달 이동)
+- 수입 / 지출 / 잔여 예산 표시
+- 수입 대비 지출 비율 프로그레스 바
+
+**동기화 버튼 (3가지 모드)**
+
+| 버튼 | 설명 |
+|------|------|
+| 신규 내역만 동기화 | 마지막 동기화 이후 새 문자만 처리 |
+| 오늘 내역만 동기화 | 오늘 자정 이후 문자만 처리 |
+| 전체 다시 동기화 | 기기의 모든 SMS/MMS/RCS를 재처리 |
+
+**카테고리별 지출 목록**
+- 카테고리 탭 → 해당 카테고리 지출만 필터
+- 금액 기준 내림차순 정렬
+
+**최근 지출 내역**
+- 이모지 + 가게명 + 카테고리/카드 + 금액 표시
+- 클릭 시 상세 다이얼로그 (카테고리 변경 가능)
+
+**자동 분류 알림**
+- 동기화 후 미분류 항목 발견 시 분류 다이얼로그 표시
+- "확인" → AI 자동 분류 시작, "나중에" → 무시
+
+---
+
+### 4.2 내역 화면 (History)
+
+**3가지 보기 모드**
+
+| 모드 | 설명 |
+|------|------|
+| 목록 (List) | 날짜별 그룹핑된 지출 리스트 |
+| 달력 (Calendar) | 달력 그리드 + 일별 합계 + 무지출일 표시 |
+| 수입 (Income) | 수입 내역만 표시 |
+
+**필터 & 정렬**
+- 카드 필터 (전체 / 특정 카드)
+- 카테고리 필터 (전체 / 특정 카테고리)
+- 정렬: 최신순 / 금액 높은순 / 사용처별
+
+**검색**
+- 가게명, 금액, 카테고리로 검색
+
+**수동 지출 추가**
+- \+ 버튼으로 금액, 가게명, 카테고리, 결제수단 입력
+
+**지출 상세 (클릭 시)**
+- 가게명, 금액, 카테고리, 카드, 결제시간, 원본 SMS 확인
+- 카테고리 변경 (연필 아이콘)
+- 삭제 (빨간색 버튼, 확인 다이얼로그)
+
+---
+
+### 4.3 상담 화면 (Chat)
+
+**세션 관리**
+- 좌측 메뉴로 대화 목록 열기
+- 새 대화 생성, 기존 대화 선택, 대화 삭제
+
+**가이드 질문 (빈 세션에서 표시)**
+- 🔍 지출 조회: "쿠팡에서 얼마 썼어?", "배달 음식 총 얼마야?"
+- 📊 분석: "이번 달 식비 분석해줘", "지난달이랑 비교해줘"
+- 🏷️ 카테고리 관리: "쿠팡을 쇼핑으로 바꿔줘", "미분류 항목 보여줘"
+
+**AI 응답**
+- 데이터 조회 → 분석 → 자연어 답변
+- 카테고리 일괄 변경 등 액션도 실행 가능
+- 실패 시 "다시 시도" 버튼
+
+**컨텍스트 관리**
+- 최근 3턴(6메시지) 전체 유지
+- 이전 대화는 Rolling Summary로 압축
+- 세션별 독립 관리
+
+---
+
+### 4.4 설정 화면 (Settings)
+
+| 설정 항목 | 설명 |
+|----------|------|
+| 월 수입 | 매월 수입 금액 입력 |
+| 월 시작일 | 카드 결제일 기준 시작일 설정 (1~31일) |
+| Gemini API 키 | Google AI API 키 입력 |
+| AI 카테고리 분류 | 미분류 항목 일괄 AI 분류 실행 |
+| 데이터 내보내기 | JSON/CSV 형식, 카드/카테고리 필터 가능 |
+| Google Drive 백업 | 클라우드 백업/복원 |
+| 로컬 복원 | 백업 파일에서 복원 |
+| 중복 삭제 | 동일 금액+가게+시간 중복 항목 제거 |
+| 전체 삭제 | 모든 데이터 초기화 (확인 필요) |
+| 버전 정보 | 앱 버전, 개발자 정보 |
+| 개인정보 처리방침 | 수집 정보, 이용 목적 등 |
+
+---
+
+## 5. 프로젝트 구조
 
 ```
 app/src/main/java/com/sanha/moneytalk/
-├── MoneyTalkApplication.kt          # Hilt Application
-├── MainActivity.kt                   # 메인 액티비티 + Navigation
+├── MoneyTalkApplication.kt              # Hilt Application
+├── MainActivity.kt                       # 메인 액티비티 + Navigation
 │
-├── data/
-│   ├── local/
-│   │   ├── AppDatabase.kt           # Room Database
+├── core/
+│   ├── database/
+│   │   ├── AppDatabase.kt               # Room Database
 │   │   ├── dao/
-│   │   │   ├── ExpenseDao.kt        # 지출 DAO
-│   │   │   ├── IncomeDao.kt         # 수입 DAO
-│   │   │   ├── BudgetDao.kt         # 예산 DAO
-│   │   │   └── ChatDao.kt           # 채팅 기록 DAO
+│   │   │   ├── ExpenseDao.kt            # 지출 DAO
+│   │   │   ├── IncomeDao.kt             # 수입 DAO
+│   │   │   ├── ChatDao.kt               # 채팅 기록 DAO
+│   │   │   ├── SmsPatternDao.kt         # SMS 벡터 패턴 DAO
+│   │   │   ├── StoreEmbeddingDao.kt     # 가게 임베딩 DAO
+│   │   │   └── CategoryMappingDao.kt    # 카테고리 매핑 DAO
 │   │   └── entity/
-│   │       ├── ExpenseEntity.kt     # 지출 엔티티
-│   │       ├── IncomeEntity.kt      # 수입 엔티티
-│   │       ├── BudgetEntity.kt      # 예산 엔티티
-│   │       └── ChatEntity.kt        # 채팅 엔티티
-│   │   └── SettingsDataStore.kt     # API 키, 수입 등 설정 저장
+│   │       ├── ExpenseEntity.kt          # 지출 엔티티
+│   │       ├── IncomeEntity.kt           # 수입 엔티티
+│   │       ├── ChatEntity.kt             # 채팅 메시지 엔티티
+│   │       ├── ChatSessionEntity.kt      # 채팅 세션 엔티티
+│   │       ├── SmsPatternEntity.kt       # SMS 벡터 패턴 (768차원)
+│   │       ├── StoreEmbeddingEntity.kt   # 가게 임베딩 (768차원)
+│   │       └── CategoryMappingEntity.kt  # 카테고리 정확 매핑 캐시
 │   │
-│   ├── remote/
-│   │   ├── api/ClaudeApi.kt         # Claude API 인터페이스
-│   │   └── dto/ClaudeModels.kt      # Request/Response DTO
+│   ├── datastore/
+│   │   └── SettingsDataStore.kt          # API 키, 수입, 설정 저장
 │   │
-│   └── repository/
-│       ├── ClaudeRepository.kt      # Claude API 연동
-│       ├── ExpenseRepository.kt     # 지출 데이터
-│       └── IncomeRepository.kt      # 수입 데이터
+│   └── util/
+│       ├── SmsReader.kt                  # SMS/MMS/RCS 통합 읽기
+│       ├── SmsParser.kt                  # 정규식 기반 SMS 파싱
+│       ├── HybridSmsClassifier.kt        # 3-tier 하이브리드 분류기
+│       ├── GeminiSmsExtractor.kt         # Gemini LLM SMS 추출
+│       ├── SmsEmbeddingService.kt        # 임베딩 생성 (768차원)
+│       ├── VectorSearchEngine.kt         # 코사인 유사도 검색
+│       ├── SmsBatchProcessor.kt          # 대량 배치 처리 최적화
+│       ├── StoreNameGrouper.kt           # 시맨틱 가게명 그룹핑
+│       ├── ChatContextBuilder.kt         # 채팅 컨텍스트 조립
+│       ├── DataQueryParser.kt            # 쿼리/액션 JSON 파싱
+│       └── DateUtils.kt                  # 날짜 유틸리티
 │
 ├── domain/
 │   └── model/
-│       └── Category.kt              # 카테고리 enum
+│       └── Category.kt                   # 카테고리 enum (17개)
 │
-├── presentation/
-│   ├── navigation/
-│   │   ├── Screen.kt                # Screen sealed class
-│   │   ├── BottomNavItem.kt         # 하단 네비 아이템
-│   │   └── NavGraph.kt              # Navigation 그래프
-│   │
+├── feature/
 │   ├── home/
-│   │   ├── HomeScreen.kt            # 홈 화면 UI
-│   │   └── HomeViewModel.kt         # 홈 ViewModel
+│   │   ├── ui/
+│   │   │   ├── HomeScreen.kt            # 홈 화면 UI
+│   │   │   └── HomeViewModel.kt         # 홈 ViewModel + 동기화
+│   │   └── data/
+│   │       ├── CategoryClassifierService.kt  # 4-tier 카테고리 분류
+│   │       ├── StoreEmbeddingRepository.kt   # 가게 벡터 DB
+│   │       └── CategoryRepository.kt         # 카테고리 매핑 DB
 │   │
 │   ├── history/
-│   │   ├── HistoryScreen.kt         # 지출 내역 화면
-│   │   └── HistoryViewModel.kt
+│   │   └── ui/
+│   │       ├── HistoryScreen.kt         # 내역 화면 (목록/달력/수입)
+│   │       └── HistoryViewModel.kt
 │   │
 │   ├── chat/
-│   │   ├── ChatScreen.kt            # AI 상담 화면
-│   │   └── ChatViewModel.kt
+│   │   ├── ui/
+│   │   │   ├── ChatScreen.kt            # AI 상담 화면
+│   │   │   └── ChatViewModel.kt
+│   │   └── data/
+│   │       ├── GeminiRepository.kt       # Gemini API (3개 모델)
+│   │       ├── ChatRepository.kt         # 채팅 데이터 인터페이스
+│   │       ├── ChatRepositoryImpl.kt     # Rolling Summary 구현
+│   │       └── ChatPrompts.kt            # 시스템 프롬프트 정의
 │   │
 │   └── settings/
-│       ├── SettingsScreen.kt        # 설정 화면
-│       └── SettingsViewModel.kt     # 설정 ViewModel
+│       └── ui/
+│           ├── SettingsScreen.kt         # 설정 화면
+│           └── SettingsViewModel.kt
 │
 ├── di/
-│   ├── DatabaseModule.kt            # Room DI
-│   └── NetworkModule.kt             # Retrofit DI
+│   ├── DatabaseModule.kt                # Room DI
+│   └── AppModule.kt                     # 앱 전역 DI
 │
-├── receiver/
-│   └── SmsReceiver.kt               # SMS 수신 BroadcastReceiver
-│
-└── util/
-    ├── SmsParser.kt                 # 카드 문자 파싱
-    ├── SmsReader.kt                 # 문자 읽기
-    ├── DateUtils.kt                 # 날짜 유틸
-    └── PromptTemplates.kt           # Claude 프롬프트 템플릿
+└── receiver/
+    └── SmsReceiver.kt                   # SMS 실시간 수신
 ```
 
 ---
 
-## 4. 데이터 모델
+## 6. Gemini API 사용처
 
-### ExpenseEntity (지출)
-```kotlin
-@Entity(tableName = "expenses")
-data class ExpenseEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val amount: Int,           // 금액
-    val storeName: String,     // 가게명
-    val category: String,      // 카테고리
-    val cardName: String,      // 카드사
-    val dateTime: Long,        // 결제 시간
-    val originalSms: String,   // 원본 문자
-    val smsId: String,         // 문자 ID (중복 방지)
-    val memo: String? = null
-)
-```
-
-### IncomeEntity (수입)
-```kotlin
-@Entity(tableName = "incomes")
-data class IncomeEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val amount: Int,
-    val type: String,          // 월급, 부수입 등
-    val description: String,
-    val isRecurring: Boolean,  // 고정 수입 여부
-    val recurringDay: Int?,    // 매월 입금일
-    val dateTime: Long
-)
-```
-
-### Category (카테고리)
-```kotlin
-enum class Category(val emoji: String, val displayName: String) {
-    FOOD("🍔", "식비"),
-    CAFE("☕", "카페"),
-    TRANSPORT("🚗", "교통"),
-    SHOPPING("🛒", "쇼핑"),
-    SUBSCRIPTION("📱", "구독"),
-    HEALTH("💊", "의료/건강"),
-    CULTURE("🎬", "문화/여가"),
-    EDUCATION("📚", "교육"),
-    LIVING("🏠", "생활"),
-    ETC("📦", "기타")
-}
-```
-
----
-
-## 5. 화면 구성
-
-| 화면 | 경로 | 설명 |
-|------|------|------|
-| 홈 | `home` | 월간 현황, 카테고리별 지출, 최근 내역 |
-| 내역 | `history` | 전체 지출 내역, 필터링, 삭제 |
-| 상담 | `chat` | Claude AI와 대화 |
-| 설정 | `settings` | 수입/예산 설정, API 키 설정 |
-
----
-
-## 6. API 연동
-
-### Gemini API (Google AI)
-- **SDK**: `com.google.ai.client.generativeai` (Android SDK)
-- **채팅 모델**: `gemini-2.5-flash` (쿼리 분석, 상담, 요약)
-- **SMS 추출 모델**: `gemini-2.5-flash-lite` (결제 정보 JSON 추출)
-- **임베딩 모델**: `gemini-embedding-001` (REST API, OkHttp 직접 호출)
-- **API Key 저장**: DataStore 영구 저장 (설정 화면에서 입력)
-
-### Gemini 사용 용도
-1. **SMS 결제 정보 추출**: 비표준 SMS → JSON (금액, 가게명, 카드사, 카테고리)
-2. **재무 상담**: 2-Phase 처리 (쿼리 분석 + 데이터 기반 답변)
-3. **Rolling Summary**: 긴 대화의 과거 내용 요약
-4. **카테고리 분류**: 미분류 가게명 일괄 AI 분류
-5. **임베딩 생성**: SMS 벡터 유사도 검색용 768차원 벡터
+| 용도 | 모델 | temp | 설명 |
+|------|------|------|------|
+| SMS 결제 정보 추출 | gemini-2.5-flash-lite | 0.1 | JSON(금액/가게/카드/카테고리) |
+| 쿼리 분석 (채팅) | gemini-2.5-pro | 0.3 | 사용자 질문→DB 쿼리 결정 |
+| 재무 상담 (채팅) | gemini-2.5-pro | 0.7 | 데이터 기반 조언 생성 |
+| 대화 요약 | gemini-2.5-flash | 0.3 | Rolling Summary 생성 |
+| 카테고리 분류 | gemini-2.5-flash | -- | 미분류 가게명 배치 분류 |
+| 임베딩 생성 | gemini-embedding-001 | -- | 768차원 벡터 (REST API) |
 
 ---
 
@@ -225,72 +306,21 @@ enum class Category(val emoji: String, val displayName: String) {
 <uses-permission android:name="android.permission.READ_SMS" />
 <uses-permission android:name="android.permission.RECEIVE_SMS" />
 <uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 ```
 
 ---
 
-## 8. 현재 진행 상황
+## 8. 참고 문서
 
-### ✅ 완료된 작업
-- [x] 프로젝트 생성 및 기본 설정
-- [x] build.gradle 의존성 추가 (Room, Hilt, Retrofit, Compose)
-- [x] 패키지 구조 생성
-- [x] Room Database (Entity, DAO, Database)
-- [x] Claude API 연동 코드
-- [x] SMS 수집 기능 (SmsReader, SmsReceiver, SmsParser)
-- [x] UI 화면 (Home, History, Chat, Settings)
-- [x] Navigation 설정
-- [x] Hilt DI 모듈
-- [x] API 키 저장 기능 (DataStore + BuildConfig)
-- [x] SettingsDataStore 클래스 생성
-- [x] SettingsViewModel 생성
-- [x] 월 수입 저장 기능
-- [x] 테마 색상 확장 (80+ 색상)
-
-### ⏳ 다음 작업
-- [ ] Android Studio에서 Gradle Sync
-- [ ] 빌드 오류 수정
-- [ ] 에뮬레이터/실기기 테스트
-- [ ] 카테고리별 예산 설정 기능 완성
-- [ ] 위젯 추가
-- [ ] 다크 모드 테스트
+| 문서 | 설명 |
+|------|------|
+| [SMS_PARSING.md](./SMS_PARSING.md) | SMS 파싱 & 벡터 캐싱 시스템 |
+| [CATEGORY_CLASSIFICATION.md](./CATEGORY_CLASSIFICATION.md) | 카테고리 분류 & 벡터 전파 시스템 |
+| [CHAT_SYSTEM.md](./CHAT_SYSTEM.md) | AI 채팅 상담 & 컨텍스트 관리 |
+| [GIT_CONVENTION.md](./GIT_CONVENTION.md) | Git 브랜치 전략 |
+| [DEVELOPMENT_LOG.md](./DEVELOPMENT_LOG.md) | 개발 이력 |
 
 ---
 
-## 9. 알려진 이슈 / TODO
-
-1. ~~**API 키 저장**: 현재 메모리에만 저장됨 → DataStore로 영구 저장 필요~~ ✅ 완료
-2. ~~**수입 등록**: 다이얼로그만 있고 실제 저장 로직 미구현~~ ✅ 완료
-3. **예산 설정**: UI만 있고 기능 미구현
-4. **백업/복원**: 기능 미구현
-5. **위젯**: 미구현
-
----
-
-## 10. 새 대화 시작 시 사용법
-
-새 Claude 대화에서 다음과 같이 시작하세요:
-
-```
-이 프로젝트 컨텍스트 파일을 읽어줘:
-C:\Users\hsh70\OneDrive\문서\Android\MoneyTalk\docs\PROJECT_CONTEXT.md
-
-그리고 [원하는 작업]을 해줘.
-```
-
-예시:
-- "빌드 오류 해결해줘"
-- "API 키 저장 기능 추가해줘"
-- "위젯 기능 만들어줘"
-
----
-
-## 11. 참고 링크
-
-- **Claude API 문서**: https://docs.anthropic.com/
-- **Anthropic 콘솔**: https://console.anthropic.com/
-- **기획서**: `C:\Users\hsh70\.claude\plans\drifting-booping-conway.md`
-
----
-
-*마지막 업데이트: 2026-02-07*
+*마지막 업데이트: 2026-02-08*

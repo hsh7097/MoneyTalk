@@ -5,30 +5,22 @@ import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
 import kotlin.math.sqrt
 
 /**
- * 벡터 유사도 검색 엔진
+ * 벡터 유사도 검색 엔진 (순수 벡터 연산)
  *
  * 임베딩 벡터간 코사인 유사도를 계산하여
- * 가장 유사한 SMS 패턴을 찾습니다.
+ * 가장 유사한 패턴을 찾는 **순수 연산 엔진**입니다.
+ *
+ * 도메인별 유사도 판정 정책(임계값, 자동 적용/전파/그룹핑 규칙)은
+ * [com.sanha.moneytalk.core.similarity.SimilarityPolicy] 구현체가 담당합니다.
  *
  * 코사인 유사도 = (A·B) / (|A| × |B|)
  * 범위: -1 ~ 1 (1에 가까울수록 유사)
+ *
+ * @see com.sanha.moneytalk.core.similarity.SmsPatternSimilarityPolicy
+ * @see com.sanha.moneytalk.core.similarity.StoreNameSimilarityPolicy
+ * @see com.sanha.moneytalk.core.similarity.CategoryPropagationPolicy
  */
 object VectorSearchEngine {
-
-    /** 결제 SMS로 판정하는 유사도 임계값 */
-    const val PAYMENT_SIMILARITY_THRESHOLD = 0.92f
-
-    /** 캐시 파싱 결과를 재사용하는 유사도 임계값 (더 높은 기준) */
-    const val CACHE_REUSE_THRESHOLD = 0.97f
-
-    /** 가게명 벡터 매칭 시 카테고리를 자동 적용하는 유사도 임계값 */
-    const val STORE_SIMILARITY_THRESHOLD = 0.92f
-
-    /** 사용자 수정 카테고리를 유사 가게에 전파하는 유사도 임계값 */
-    const val PROPAGATION_SIMILARITY_THRESHOLD = 0.90f
-
-    /** 시맨틱 그룹핑 시 같은 그룹으로 묶는 유사도 임계값 */
-    const val GROUPING_SIMILARITY_THRESHOLD = 0.88f
 
     /**
      * 두 벡터 간의 코사인 유사도 계산
@@ -78,7 +70,7 @@ object VectorSearchEngine {
         queryVector: List<Float>,
         patterns: List<SmsPatternEntity>,
         topK: Int = 3,
-        minSimilarity: Float = PAYMENT_SIMILARITY_THRESHOLD
+        minSimilarity: Float
     ): List<SearchResult> {
         return patterns
             .map { pattern ->
@@ -103,7 +95,7 @@ object VectorSearchEngine {
     fun findBestMatch(
         queryVector: List<Float>,
         patterns: List<SmsPatternEntity>,
-        minSimilarity: Float = PAYMENT_SIMILARITY_THRESHOLD
+        minSimilarity: Float
     ): SearchResult? {
         var bestMatch: SearchResult? = null
 
@@ -145,7 +137,7 @@ object VectorSearchEngine {
     fun findBestStoreMatch(
         queryVector: List<Float>,
         embeddings: List<StoreEmbeddingEntity>,
-        minSimilarity: Float = STORE_SIMILARITY_THRESHOLD
+        minSimilarity: Float
     ): StoreSearchResult? {
         var bestMatch: StoreSearchResult? = null
 
@@ -175,7 +167,7 @@ object VectorSearchEngine {
     fun findSimilarStores(
         queryVector: List<Float>,
         embeddings: List<StoreEmbeddingEntity>,
-        minSimilarity: Float = PROPAGATION_SIMILARITY_THRESHOLD
+        minSimilarity: Float
     ): List<StoreSearchResult> {
         return embeddings
             .map { embedding ->

@@ -3,6 +3,8 @@ package com.sanha.moneytalk.feature.home.data
 import android.util.Log
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
+import com.sanha.moneytalk.core.similarity.CategoryPropagationPolicy
+import com.sanha.moneytalk.core.similarity.StoreNameSimilarityPolicy
 import com.sanha.moneytalk.core.util.SmsEmbeddingService
 import com.sanha.moneytalk.core.util.VectorSearchEngine
 import javax.inject.Inject
@@ -88,7 +90,7 @@ class StoreEmbeddingRepository @Inject constructor(
             val bestMatch = VectorSearchEngine.findBestStoreMatch(
                 queryVector = queryVector,
                 embeddings = embeddings,
-                minSimilarity = VectorSearchEngine.STORE_SIMILARITY_THRESHOLD
+                minSimilarity = StoreNameSimilarityPolicy.profile.autoApply
             )
 
             if (bestMatch != null) {
@@ -163,25 +165,31 @@ class StoreEmbeddingRepository @Inject constructor(
 
         try {
             val storeNames = storeCategories.keys.toList()
-            val embeddings = embeddingService.generateEmbeddings(storeNames)
+            val allEntities = mutableListOf<StoreEmbeddingEntity>()
 
-            val entities = storeNames.mapIndexedNotNull { index, storeName ->
-                val embedding = embeddings.getOrNull(index) ?: return@mapIndexedNotNull null
-                val category = storeCategories[storeName] ?: return@mapIndexedNotNull null
+            // 100건씩 청킹 (batchEmbedContents 최대 100)
+            for (chunk in storeNames.chunked(100)) {
+                val embeddings = embeddingService.generateEmbeddings(chunk)
 
-                StoreEmbeddingEntity(
-                    storeName = storeName,
-                    category = category,
-                    embedding = embedding,
-                    source = source,
-                    confidence = if (source == "user") 1.0f else 0.8f
-                )
+                val entities = chunk.mapIndexedNotNull { index, storeName ->
+                    val embedding = embeddings.getOrNull(index) ?: return@mapIndexedNotNull null
+                    val category = storeCategories[storeName] ?: return@mapIndexedNotNull null
+
+                    StoreEmbeddingEntity(
+                        storeName = storeName,
+                        category = category,
+                        embedding = embedding,
+                        source = source,
+                        confidence = if (source == "user") 1.0f else 0.8f
+                    )
+                }
+                allEntities.addAll(entities)
             }
 
-            if (entities.isNotEmpty()) {
-                storeEmbeddingDao.insertAll(entities)
+            if (allEntities.isNotEmpty()) {
+                storeEmbeddingDao.insertAll(allEntities)
                 invalidateCache()
-                Log.d(TAG, "배치 임베딩 저장: ${entities.size}건 (source=$source)")
+                Log.d(TAG, "배치 임베딩 저장: ${allEntities.size}건 (source=$source)")
             }
         } catch (e: Exception) {
             Log.e(TAG, "배치 임베딩 저장 실패: ${e.message}", e)
@@ -199,12 +207,23 @@ class StoreEmbeddingRepository @Inject constructor(
      *
      * @param storeName 수정된 가게명
      * @param newCategory 새 카테고리
+     * @param confidence 분류 신뢰도 (기본 1.0, 사용자 수정은 항상 1.0)
      * @return 전파된 가게 수
      */
     suspend fun propagateCategoryToSimilarStores(
         storeName: String,
-        newCategory: String
+        newCategory: String,
+        confidence: Float = 1.0f
     ): Int {
+        // confidence가 낮으면 전파 차단 (오분류 전파 방지)
+        if (!CategoryPropagationPolicy.shouldPropagateWithConfidence(
+                similarity = CategoryPropagationPolicy.profile.propagate,
+                confidence = confidence
+            )) {
+            Log.d(TAG, "전파 차단: $storeName → $newCategory (confidence=$confidence < ${CategoryPropagationPolicy.MIN_PROPAGATION_CONFIDENCE})")
+            return 0
+        }
+
         try {
             val queryVector = embeddingService.generateEmbedding(storeName)
             if (queryVector == null) {
@@ -216,7 +235,7 @@ class StoreEmbeddingRepository @Inject constructor(
             val similarStores = VectorSearchEngine.findSimilarStores(
                 queryVector = queryVector,
                 embeddings = embeddings,
-                minSimilarity = VectorSearchEngine.PROPAGATION_SIMILARITY_THRESHOLD
+                minSimilarity = StoreNameSimilarityPolicy.profile.propagate
             )
 
             var propagatedCount = 0
@@ -225,6 +244,8 @@ class StoreEmbeddingRepository @Inject constructor(
                 if (result.storeEmbedding.storeName == storeName) continue
                 // 이미 같은 카테고리면 건너뜀
                 if (result.storeEmbedding.category == newCategory) continue
+                // confidence+유사도 통합 체크
+                if (!CategoryPropagationPolicy.shouldPropagateWithConfidence(result.similarity, confidence)) continue
 
                 storeEmbeddingDao.updateCategoryByIdIfNotUser(
                     id = result.storeEmbedding.id,
@@ -234,7 +255,7 @@ class StoreEmbeddingRepository @Inject constructor(
                 propagatedCount++
 
                 Log.d(TAG, "카테고리 전파: '${result.storeEmbedding.storeName}' → $newCategory " +
-                        "(유사도 ${result.similarity})")
+                        "(유사도 ${result.similarity}, confidence=$confidence)")
             }
 
             if (propagatedCount > 0) {

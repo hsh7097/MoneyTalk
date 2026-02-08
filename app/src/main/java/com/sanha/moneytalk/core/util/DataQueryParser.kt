@@ -31,12 +31,18 @@ data class DataQuery(
     @SerializedName("storeName")
     val storeName: String? = null,  // 특정 가게명 필터
 
+    @SerializedName("cardName")
+    val cardName: String? = null,   // 특정 카드명 필터
+
+    @SerializedName("searchKeyword")
+    val searchKeyword: String? = null,  // 검색 키워드
+
     @SerializedName("limit")
     val limit: Int? = null          // 결과 개수 제한
 )
 
 /**
- * 데이터 수정 액션 (카테고리 변경 등)
+ * 데이터 수정 액션 (카테고리 변경, 삭제 등)
  */
 data class DataAction(
     @SerializedName("type")
@@ -71,6 +77,9 @@ enum class QueryType {
     @SerializedName("expense_by_store")
     EXPENSE_BY_STORE,           // 특정 가게 지출
 
+    @SerializedName("expense_by_card")
+    EXPENSE_BY_CARD,            // 특정 카드 지출
+
     @SerializedName("daily_totals")
     DAILY_TOTALS,               // 일별 총액
 
@@ -84,7 +93,19 @@ enum class QueryType {
     UNCATEGORIZED_LIST,         // 미분류 항목 리스트
 
     @SerializedName("category_ratio")
-    CATEGORY_RATIO              // 수입 대비 카테고리 비율
+    CATEGORY_RATIO,             // 수입 대비 카테고리 비율
+
+    @SerializedName("search_expense")
+    SEARCH_EXPENSE,             // 가게명/카테고리/카드로 검색
+
+    @SerializedName("card_list")
+    CARD_LIST,                  // 사용 중인 카드 목록
+
+    @SerializedName("income_list")
+    INCOME_LIST,                // 수입 내역 리스트
+
+    @SerializedName("duplicate_list")
+    DUPLICATE_LIST              // 중복 지출 항목 리스트
 }
 
 enum class ActionType {
@@ -95,7 +116,13 @@ enum class ActionType {
     UPDATE_CATEGORY_BY_STORE,   // 가게명 기준 카테고리 일괄 변경
 
     @SerializedName("update_category_by_keyword")
-    UPDATE_CATEGORY_BY_KEYWORD  // 키워드 포함 가게명 일괄 변경
+    UPDATE_CATEGORY_BY_KEYWORD, // 키워드 포함 가게명 일괄 변경
+
+    @SerializedName("delete_expense")
+    DELETE_EXPENSE,             // 특정 지출 삭제
+
+    @SerializedName("delete_duplicates")
+    DELETE_DUPLICATES           // 중복 지출 일괄 삭제
 }
 
 /**

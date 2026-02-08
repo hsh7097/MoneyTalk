@@ -20,6 +20,7 @@ import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.CategoryRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
+import com.sanha.moneytalk.core.util.DataRefreshEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -46,7 +47,10 @@ data class SettingsUiState(
     val driveBackupFiles: List<DriveBackupFile> = emptyList(),
     // 카테고리 분류 관련
     val unclassifiedCount: Int = 0,
-    val isClassifying: Boolean = false
+    val isClassifying: Boolean = false,
+    val classifyProgress: String = "",
+    val classifyProgressCurrent: Int = 0,
+    val classifyProgressTotal: Int = 0
 )
 
 @HiltViewModel
@@ -60,7 +64,8 @@ class SettingsViewModel @Inject constructor(
     private val categoryRepository: CategoryRepository,
     private val appDatabase: AppDatabase,
     private val chatDao: ChatDao,
-    private val budgetDao: BudgetDao
+    private val budgetDao: BudgetDao,
+    private val dataRefreshEvent: DataRefreshEvent
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -103,8 +108,11 @@ class SettingsViewModel @Inject constructor(
     private fun loadFilterOptions() {
         viewModelScope.launch {
             try {
-                val cards = expenseRepository.getAllCardNames()
-                val categories = expenseRepository.getAllCategories()
+                val (cards, categories) = withContext(Dispatchers.IO) {
+                    val c = expenseRepository.getAllCardNames()
+                    val cat = expenseRepository.getAllCategories()
+                    Pair(c, cat)
+                }
 
                 _uiState.update {
                     it.copy(
@@ -133,7 +141,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                geminiRepository.setApiKey(key)
+                withContext(Dispatchers.IO) { geminiRepository.setApiKey(key) }
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -157,7 +165,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                settingsDataStore.saveMonthlyIncome(income)
+                withContext(Dispatchers.IO) { settingsDataStore.saveMonthlyIncome(income) }
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -180,7 +188,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                settingsDataStore.saveMonthStartDay(day)
+                withContext(Dispatchers.IO) { settingsDataStore.saveMonthStartDay(day) }
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -220,32 +228,34 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                var expenses = expenseRepository.getAllExpensesOnce()
-                var incomes = incomeRepository.getAllIncomesOnce()
                 val state = _uiState.value
-                val filter = state.exportFilter
+                val content = withContext(Dispatchers.IO) {
+                    var expenses = expenseRepository.getAllExpensesOnce()
+                    var incomes = incomeRepository.getAllIncomesOnce()
+                    val filter = state.exportFilter
 
-                // 필터 적용
-                if (filter.includeExpenses) {
-                    expenses = DataBackupManager.filterExpenses(expenses, filter)
-                } else {
-                    expenses = emptyList()
-                }
+                    // 필터 적용
+                    if (filter.includeExpenses) {
+                        expenses = DataBackupManager.filterExpenses(expenses, filter)
+                    } else {
+                        expenses = emptyList()
+                    }
 
-                if (filter.includeIncomes) {
-                    incomes = DataBackupManager.filterIncomes(incomes, filter)
-                } else {
-                    incomes = emptyList()
-                }
+                    if (filter.includeIncomes) {
+                        incomes = DataBackupManager.filterIncomes(incomes, filter)
+                    } else {
+                        incomes = emptyList()
+                    }
 
-                val content = when (state.exportFormat) {
-                    ExportFormat.JSON -> DataBackupManager.createBackupJson(
-                        expenses = expenses,
-                        incomes = incomes,
-                        monthlyIncome = state.monthlyIncome,
-                        monthStartDay = state.monthStartDay
-                    )
-                    ExportFormat.CSV -> DataBackupManager.createCombinedCsv(expenses, incomes)
+                    when (state.exportFormat) {
+                        ExportFormat.JSON -> DataBackupManager.createBackupJson(
+                            expenses = expenses,
+                            incomes = incomes,
+                            monthlyIncome = state.monthlyIncome,
+                            monthStartDay = state.monthStartDay
+                        )
+                        ExportFormat.CSV -> DataBackupManager.createCombinedCsv(expenses, incomes)
+                    }
                 }
 
                 _uiState.update {
@@ -275,24 +285,25 @@ class SettingsViewModel @Inject constructor(
                 val content = _uiState.value.backupContent
                     ?: throw Exception("백업 데이터가 준비되지 않았습니다")
 
-                DataBackupManager.exportToUri(context, uri, content)
-                    .onSuccess {
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                backupContent = null,
-                                message = "백업이 완료되었습니다"
-                            )
-                        }
+                val result = withContext(Dispatchers.IO) {
+                    DataBackupManager.exportToUri(context, uri, content)
+                }
+                result.onSuccess {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            backupContent = null,
+                            message = "백업이 완료되었습니다"
+                        )
                     }
-                    .onFailure { e ->
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                message = "백업 실패: ${e.message}"
-                            )
-                        }
+                }.onFailure { e ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            message = "백업 실패: ${e.message}"
+                        )
                     }
+                }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -311,18 +322,19 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                DataBackupManager.importFromUri(context, uri)
-                    .onSuccess { backupData ->
-                        restoreData(backupData)
+                val result = withContext(Dispatchers.IO) {
+                    DataBackupManager.importFromUri(context, uri)
+                }
+                result.onSuccess { backupData ->
+                    restoreData(backupData)
+                }.onFailure { e ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            message = "복원 실패: ${e.message}"
+                        )
                     }
-                    .onFailure { e ->
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                message = "복원 실패: ${e.message}"
-                            )
-                        }
-                    }
+                }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -339,24 +351,25 @@ class SettingsViewModel @Inject constructor(
      */
     private suspend fun restoreData(backupData: BackupData) {
         try {
-            // 설정 복원
-            settingsDataStore.saveMonthlyIncome(backupData.settings.monthlyIncome)
-            settingsDataStore.saveMonthStartDay(backupData.settings.monthStartDay)
+            val (expenseCount, incomeCount) = withContext(Dispatchers.IO) {
+                // 설정 복원
+                settingsDataStore.saveMonthlyIncome(backupData.settings.monthlyIncome)
+                settingsDataStore.saveMonthStartDay(backupData.settings.monthStartDay)
 
-            // 지출 데이터 복원
-            val expenses = DataBackupManager.convertToExpenseEntities(backupData.expenses)
-            if (expenses.isNotEmpty()) {
-                expenseRepository.insertAll(expenses)
+                // 지출 데이터 복원
+                val expenses = DataBackupManager.convertToExpenseEntities(backupData.expenses)
+                if (expenses.isNotEmpty()) {
+                    expenseRepository.insertAll(expenses)
+                }
+
+                // 수입 데이터 복원
+                val incomes = DataBackupManager.convertToIncomeEntities(backupData.incomes)
+                if (incomes.isNotEmpty()) {
+                    incomeRepository.insertAll(incomes)
+                }
+
+                Pair(expenses.size, incomes.size)
             }
-
-            // 수입 데이터 복원
-            val incomes = DataBackupManager.convertToIncomeEntities(backupData.incomes)
-            if (incomes.isNotEmpty()) {
-                incomeRepository.insertAll(incomes)
-            }
-
-            val expenseCount = expenses.size
-            val incomeCount = incomes.size
 
             _uiState.update {
                 it.copy(
@@ -378,27 +391,38 @@ class SettingsViewModel @Inject constructor(
 
     /**
      * 모든 데이터 삭제 (전체 초기화)
+     *
+     * 삭제 대상:
      * - 지출/수입 데이터
      * - 채팅 기록 (세션 포함)
      * - 카테고리 매핑 정보
      * - 예산 설정
      * - 앱 설정
+     *
+     * 보존 대상 (벡터 학습 데이터):
+     * - SmsPatternEntity: SMS 임베딩 패턴 (누적될수록 분류 정확도 향상)
+     * - StoreEmbeddingEntity: 가게명 임베딩 벡터 (카테고리 분류 캐시)
      */
     fun deleteAllData() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                // Room의 clearAllTables()로 모든 테이블 데이터를 안전하게 삭제
-                // (외래키 순서, 세션-메시지 관계 등을 자동 처리)
-                // clearAllTables()는 동기 메서드이므로 IO 스레드에서 실행
                 withContext(Dispatchers.IO) {
-                    appDatabase.clearAllTables()
+                    // 선택적 테이블 삭제 (벡터 데이터 보존)
+                    // SmsPatternEntity, StoreEmbeddingEntity는 학습 데이터이므로 유지
+                    expenseRepository.deleteAll()
+                    incomeRepository.deleteAll()
+                    chatDao.deleteAll()          // chat_history 삭제
+                    chatDao.deleteAllSessions()  // chat_sessions 삭제
+                    budgetDao.deleteAll()
+                    categoryRepository.deleteAllMappings()
+
+                    // 설정 초기화
+                    settingsDataStore.saveMonthlyIncome(0)
+                    settingsDataStore.saveMonthStartDay(1)
+                    // 마지막 동기화 시간 초기화 (다음 동기화 시 전체 동기화 되도록)
+                    settingsDataStore.saveLastSyncTime(0L)
                 }
-                // 설정 초기화
-                settingsDataStore.saveMonthlyIncome(0)
-                settingsDataStore.saveMonthStartDay(1)
-                // 마지막 동기화 시간 초기화 (다음 동기화 시 전체 동기화 되도록)
-                settingsDataStore.saveLastSyncTime(0L)
 
                 _uiState.update {
                     it.copy(
@@ -406,9 +430,12 @@ class SettingsViewModel @Inject constructor(
                         monthlyIncome = 0,
                         monthStartDay = 1,
                         unclassifiedCount = 0,
-                        message = "모든 데이터가 삭제되었습니다"
+                        message = "모든 데이터가 삭제되었습니다 (학습 데이터는 보존됨)"
                     )
                 }
+
+                // 다른 ViewModel에게 데이터 삭제 이벤트 전달
+                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.ALL_DATA_DELETED)
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -423,11 +450,17 @@ class SettingsViewModel @Inject constructor(
     // ========== 구글 드라이브 관련 ==========
 
     /**
-     * 구글 로그인 상태 확인
+     * 구글 로그인 상태 확인 (앱 시작 시)
+     * 이전에 로그인했던 계정이 있으면 Drive 서비스도 함께 초기화
      */
     fun checkGoogleSignIn(context: Context) {
-        val isSignedIn = googleDriveHelper.isSignedIn(context)
         val account = googleDriveHelper.getSignedInAccount(context)
+        val isSignedIn = account != null
+
+        // 이전 세션에서 로그인된 계정이 있으면 Drive 서비스 재초기화
+        if (isSignedIn && account != null) {
+            googleDriveHelper.initializeDriveService(context, account)
+        }
 
         _uiState.update {
             it.copy(
@@ -451,11 +484,42 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
+     * 구글 드라이브 열기 시도
+     * 1) driveService가 이미 초기화되어 있으면 바로 다이얼로그 열기
+     * 2) 아니면 silentSignIn 시도 → 성공하면 다이얼로그 열기
+     * 3) silentSignIn 실패 → interactive 로그인 필요 (콜백에서 Intent 반환)
+     *
+     * @return 로그인 Intent (interactive 로그인이 필요한 경우), null이면 로그인 성공/바로 열기 가능
+     */
+    suspend fun tryOpenGoogleDrive(context: Context): android.content.Intent? {
+        // 1) Drive 서비스가 이미 준비되어 있으면 바로 성공
+        if (googleDriveHelper.isDriveServiceReady()) {
+            _uiState.update { it.copy(isGoogleSignedIn = true) }
+            return null
+        }
+
+        // 2) Silent sign-in 시도
+        val account = googleDriveHelper.trySilentSignIn(context)
+        if (account != null) {
+            _uiState.update {
+                it.copy(
+                    isGoogleSignedIn = true,
+                    googleAccountName = account.email
+                )
+            }
+            return null
+        }
+
+        // 3) Interactive 로그인 필요
+        return googleDriveHelper.getSignInIntent(context)
+    }
+
+    /**
      * 구글 로그아웃
      */
     fun signOutGoogle(context: Context) {
         viewModelScope.launch {
-            googleDriveHelper.signOut(context)
+            withContext(Dispatchers.IO) { googleDriveHelper.signOut(context) }
             _uiState.update {
                 it.copy(
                     isGoogleSignedIn = false,
@@ -479,26 +543,27 @@ class SettingsViewModel @Inject constructor(
                 val format = _uiState.value.exportFormat
                 val fileName = DataBackupManager.generateBackupFileName(format)
 
-                googleDriveHelper.uploadFile(fileName, content, format)
-                    .onSuccess { link ->
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                backupContent = null,
-                                message = "구글 드라이브에 업로드되었습니다"
-                            )
-                        }
-                        // 목록 새로고침
-                        loadDriveBackupFiles()
+                val result = withContext(Dispatchers.IO) {
+                    googleDriveHelper.uploadFile(fileName, content, format)
+                }
+                result.onSuccess { _ ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            backupContent = null,
+                            message = "구글 드라이브에 업로드되었습니다"
+                        )
                     }
-                    .onFailure { e ->
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                message = "업로드 실패: ${e.message}"
-                            )
-                        }
+                    // 목록 새로고침
+                    loadDriveBackupFiles()
+                }.onFailure { e ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            message = "업로드 실패: ${e.message}"
+                        )
                     }
+                }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -516,23 +581,24 @@ class SettingsViewModel @Inject constructor(
     fun loadDriveBackupFiles() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            googleDriveHelper.listBackupFiles()
-                .onSuccess { files ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            driveBackupFiles = files
-                        )
-                    }
+            val result = withContext(Dispatchers.IO) {
+                googleDriveHelper.listBackupFiles()
+            }
+            result.onSuccess { files ->
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        driveBackupFiles = files
+                    )
                 }
-                .onFailure { e ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            message = "목록 로드 실패: ${e.message}"
-                        )
-                    }
+            }.onFailure { e ->
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = "목록 로드 실패: ${e.message}"
+                    )
                 }
+            }
         }
     }
 
@@ -542,28 +608,31 @@ class SettingsViewModel @Inject constructor(
     fun restoreFromGoogleDrive(fileId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            googleDriveHelper.downloadFile(fileId)
-                .onSuccess { content ->
-                    try {
-                        val backupData = com.google.gson.Gson().fromJson(content, BackupData::class.java)
-                        restoreData(backupData)
-                    } catch (e: Exception) {
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                message = "복원 실패: 잘못된 파일 형식"
-                            )
-                        }
+            val result = withContext(Dispatchers.IO) {
+                googleDriveHelper.downloadFile(fileId)
+            }
+            result.onSuccess { content ->
+                try {
+                    val backupData = withContext(Dispatchers.IO) {
+                        com.google.gson.Gson().fromJson(content, BackupData::class.java)
                     }
-                }
-                .onFailure { e ->
+                    restoreData(backupData)
+                } catch (e: Exception) {
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            message = "다운로드 실패: ${e.message}"
+                            message = "복원 실패: 잘못된 파일 형식"
                         )
                     }
                 }
+            }.onFailure { e ->
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = "다운로드 실패: ${e.message}"
+                    )
+                }
+            }
         }
     }
 
@@ -573,24 +642,25 @@ class SettingsViewModel @Inject constructor(
     fun deleteDriveBackupFile(fileId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            googleDriveHelper.deleteFile(fileId)
-                .onSuccess {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            message = "삭제되었습니다"
-                        )
-                    }
-                    loadDriveBackupFiles()
+            val result = withContext(Dispatchers.IO) {
+                googleDriveHelper.deleteFile(fileId)
+            }
+            result.onSuccess {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = "삭제되었습니다"
+                    )
                 }
-                .onFailure { e ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            message = "삭제 실패: ${e.message}"
-                        )
-                    }
+                loadDriveBackupFiles()
+            }.onFailure { e ->
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = "삭제 실패: ${e.message}"
+                    )
                 }
+            }
         }
     }
 
@@ -600,6 +670,15 @@ class SettingsViewModel @Inject constructor(
 
     fun clearMessage() {
         _uiState.update { it.copy(message = null) }
+    }
+
+    /**
+     * 구글 로그인 Intent 가져오기
+     * SettingsScreen에서 새 GoogleDriveHelper 인스턴스를 생성하지 않고
+     * ViewModel에 주입된 싱글톤을 사용하도록
+     */
+    fun getSignInIntent(context: Context): android.content.Intent {
+        return googleDriveHelper.getSignInIntent(context)
     }
 
     // ========== 카테고리 분류 관련 ==========
@@ -619,7 +698,9 @@ class SettingsViewModel @Inject constructor(
     private fun loadUnclassifiedCount() {
         viewModelScope.launch {
             try {
-                val count = categoryClassifierService.getUnclassifiedCount()
+                val count = withContext(Dispatchers.IO) {
+                    categoryClassifierService.getUnclassifiedCount()
+                }
                 _uiState.update { it.copy(unclassifiedCount = count) }
             } catch (e: Exception) {
                 // 무시
@@ -648,13 +729,31 @@ class SettingsViewModel @Inject constructor(
                 return@launch
             }
 
-            _uiState.update { it.copy(isClassifying = true) }
+            val initialCount = _uiState.value.unclassifiedCount
+            _uiState.update {
+                it.copy(
+                    isClassifying = true,
+                    classifyProgress = "분류 준비 중...",
+                    classifyProgressCurrent = 0,
+                    classifyProgressTotal = initialCount
+                )
+            }
             try {
-                val count = categoryClassifierService.classifyUnclassifiedExpenses()
+                val count = withContext(Dispatchers.IO) {
+                    categoryClassifierService.classifyUnclassifiedExpenses { step, current, total ->
+                        _uiState.update {
+                            val progressText = if (total > 0) "$step ($current/$total)" else step
+                            it.copy(classifyProgress = progressText)
+                        }
+                    }
+                }
                 loadUnclassifiedCount()
                 _uiState.update {
                     it.copy(
                         isClassifying = false,
+                        classifyProgress = "",
+                        classifyProgressCurrent = 0,
+                        classifyProgressTotal = 0,
                         message = if (count > 0) {
                             "${count}건의 지출이 자동 분류되었습니다"
                         } else {
@@ -666,6 +765,9 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isClassifying = false,
+                        classifyProgress = "",
+                        classifyProgressCurrent = 0,
+                        classifyProgressTotal = 0,
                         message = "분류 실패: ${e.message}"
                     )
                 }
@@ -687,7 +789,9 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                val deletedCount = expenseRepository.deleteDuplicates()
+                val deletedCount = withContext(Dispatchers.IO) {
+                    expenseRepository.deleteDuplicates()
+                }
                 _uiState.update {
                     it.copy(
                         isLoading = false,

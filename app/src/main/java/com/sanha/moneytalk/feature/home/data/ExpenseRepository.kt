@@ -67,6 +67,10 @@ class ExpenseRepository @Inject constructor(
     fun getExpensesFiltered(cardName: String?, category: String?, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>> =
         expenseDao.getExpensesFiltered(cardName, category, startTime, endTime)
 
+    /** 대 카테고리 포함 필터링 (소 카테고리도 포함) */
+    fun getExpensesFilteredByCategories(cardName: String?, categories: List<String>, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>> =
+        expenseDao.getExpensesFilteredByCategories(cardName, categories, startTime, endTime)
+
     /** 지출 항목 삽입 (신규) */
     suspend fun insert(expense: ExpenseEntity): Long = expenseDao.insert(expense)
 
@@ -90,6 +94,9 @@ class ExpenseRepository @Inject constructor(
 
     /** SMS ID 존재 여부 확인 (중복 방지) */
     suspend fun existsBySmsId(smsId: String): Boolean = expenseDao.existsBySmsId(smsId)
+
+    /** 모든 SMS ID 조회 (배치 중복 체크용 인메모리 Set 구성) */
+    suspend fun getAllSmsIds(): Set<String> = expenseDao.getAllSmsIds().toHashSet()
 
     // ========================
     // 통계 집계 메소드
@@ -200,8 +207,12 @@ class ExpenseRepository @Inject constructor(
 
     /**
      * 지출 검색
-     * 가게명, 카테고리, 카드명에서 검색어 포함 여부 확인
+     * 가게명, 카테고리, 카드명, 메모에서 검색어 포함 여부 확인
      */
     suspend fun searchExpenses(query: String): List<ExpenseEntity> =
         expenseDao.searchExpenses(query)
+
+    /** 메모 업데이트 */
+    suspend fun updateMemo(expenseId: Long, memo: String?) =
+        expenseDao.updateMemo(expenseId, memo)
 }

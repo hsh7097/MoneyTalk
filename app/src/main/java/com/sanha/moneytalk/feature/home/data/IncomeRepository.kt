@@ -36,6 +36,10 @@ class IncomeRepository @Inject constructor(
     suspend fun getTotalIncomeByDateRange(startTime: Long, endTime: Long): Int =
         incomeDao.getTotalIncomeByDateRange(startTime, endTime) ?: 0
 
+    /** 기간별 수입 일회성 조회 (채팅 쿼리용) */
+    suspend fun getIncomesByDateRangeOnce(startTime: Long, endTime: Long): List<IncomeEntity> =
+        incomeDao.getIncomesByDateRangeOnce(startTime, endTime)
+
     // 백업용 - 모든 수입 한번에 가져오기
     suspend fun getAllIncomesOnce(): List<IncomeEntity> =
         incomeDao.getAllIncomesOnce()
@@ -45,4 +49,12 @@ class IncomeRepository @Inject constructor(
 
     // 모든 데이터 삭제
     suspend fun deleteAll() = incomeDao.deleteAll()
+
+    /** 메모 업데이트 */
+    suspend fun updateMemo(incomeId: Long, memo: String?) =
+        incomeDao.updateMemo(incomeId, memo)
+
+    /** 수입 검색 (설명, 유형, 출처, 메모) */
+    suspend fun searchIncomes(query: String): List<IncomeEntity> =
+        incomeDao.searchIncomes(query)
 }

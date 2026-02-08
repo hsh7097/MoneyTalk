@@ -4,14 +4,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.dao.DailySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
+import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.core.util.DateUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.*
 import javax.inject.Inject
 
@@ -60,7 +65,10 @@ data class HistoryUiState(
     val searchQuery: String = "",
     val isSearchMode: Boolean = false,
     val message: String? = null,
-    val sortOrder: SortOrder = SortOrder.DATE_DESC
+    val sortOrder: SortOrder = SortOrder.DATE_DESC,
+    val showIncomeView: Boolean = false,
+    val incomes: List<IncomeEntity> = emptyList(),
+    val monthlyIncomeTotal: Int = 0
 )
 
 /**
@@ -79,6 +87,7 @@ data class HistoryUiState(
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
+    private val incomeRepository: IncomeRepository,
     private val settingsDataStore: SettingsDataStore,
     private val categoryClassifierService: CategoryClassifierService
 ) : ViewModel() {
@@ -111,7 +120,9 @@ class HistoryViewModel @Inject constructor(
     private fun loadCardNames() {
         viewModelScope.launch {
             try {
-                val cardNames = expenseRepository.getAllCardNames()
+                val cardNames = withContext(Dispatchers.IO) {
+                    expenseRepository.getAllCardNames()
+                }
                 _uiState.update { it.copy(cardNames = cardNames) }
             } catch (e: Exception) {
                 // 카드 목록 로딩 실패 시 무시
@@ -138,21 +149,46 @@ class HistoryViewModel @Inject constructor(
 
             // 월별 총액 및 일별 총액 로드
             try {
-                val monthlyTotal = expenseRepository.getTotalExpenseByDateRange(startTime, endTime)
-                val dailySums = expenseRepository.getDailyTotals(startTime, endTime)
-                val dailyTotalsMap = dailySums.associate { it.date to it.total }
-                _uiState.update { it.copy(monthlyTotal = monthlyTotal, dailyTotals = dailyTotalsMap) }
+                val (monthlyTotal, dailyTotalsMap, incomeTotal) = withContext(Dispatchers.IO) {
+                    val total = expenseRepository.getTotalExpenseByDateRange(startTime, endTime)
+                    val dailySums = expenseRepository.getDailyTotals(startTime, endTime)
+                    val map = dailySums.associate { it.date to it.total }
+                    val income = incomeRepository.getTotalIncomeByDateRange(startTime, endTime)
+                    Triple(total, map, income)
+                }
+                _uiState.update { it.copy(monthlyTotal = monthlyTotal, dailyTotals = dailyTotalsMap, monthlyIncomeTotal = incomeTotal) }
             } catch (e: Exception) {
                 // 총액 로딩 실패 시 무시
             }
 
-            // 필터링된 지출 내역 로드
-            expenseRepository.getExpensesFiltered(
-                cardName = state.selectedCardName,
-                category = state.selectedCategory,
-                startTime = startTime,
-                endTime = endTime
-            )
+            // 수입 항상 로드 (목록 모드에서도 수입 표시)
+            loadIncomes()
+
+            // 필터링된 지출 내역 로드 (Flow는 Room이 자동으로 IO에서 실행)
+            // 대 카테고리 선택 시 소 카테고리도 포함 (예: "식비" → "식비" + "배달")
+            val categoryFilter = state.selectedCategory
+            val categoriesForFilter = categoryFilter?.let {
+                val cat = Category.fromDisplayName(it)
+                cat.displayNamesIncludingSub  // 대 카테고리 + 소 카테고리 displayName 목록
+            }
+
+            val expenseFlow = if (categoriesForFilter != null) {
+                expenseRepository.getExpensesFilteredByCategories(
+                    cardName = state.selectedCardName,
+                    categories = categoriesForFilter,
+                    startTime = startTime,
+                    endTime = endTime
+                )
+            } else {
+                expenseRepository.getExpensesFiltered(
+                    cardName = state.selectedCardName,
+                    category = null,
+                    startTime = startTime,
+                    endTime = endTime
+                )
+            }
+
+            expenseFlow
                 .catch { e ->
                     _uiState.update {
                         it.copy(isLoading = false, errorMessage = e.message)
@@ -237,10 +273,23 @@ class HistoryViewModel @Inject constructor(
     fun deleteExpense(expense: ExpenseEntity) {
         viewModelScope.launch {
             try {
-                expenseRepository.delete(expense)
+                withContext(Dispatchers.IO) { expenseRepository.delete(expense) }
                 loadExpenses()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    /** 수입 항목 삭제 */
+    fun deleteIncome(income: IncomeEntity) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { incomeRepository.delete(income) }
+                _uiState.update { it.copy(message = "수입이 삭제되었습니다") }
+                loadExpenses() // 수입도 함께 다시 로드됨
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "수입 삭제 실패: ${e.message}") }
             }
         }
     }
@@ -257,7 +306,9 @@ class HistoryViewModel @Inject constructor(
     fun updateExpenseCategory(expenseId: Long, storeName: String, newCategory: String) {
         viewModelScope.launch {
             try {
-                categoryClassifierService.updateExpenseCategory(expenseId, storeName, newCategory)
+                withContext(Dispatchers.IO) {
+                    categoryClassifierService.updateExpenseCategory(expenseId, storeName, newCategory)
+                }
                 loadExpenses() // 화면 새로고침
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "카테고리 변경 실패: ${e.message}") }
@@ -308,7 +359,9 @@ class HistoryViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
 
             try {
-                val results = expenseRepository.searchExpenses(query)
+                val results = withContext(Dispatchers.IO) {
+                    expenseRepository.searchExpenses(query)
+                }
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -339,16 +392,18 @@ class HistoryViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             try {
-                val expense = ExpenseEntity(
-                    amount = amount,
-                    storeName = storeName,
-                    cardName = cardName,
-                    dateTime = dateTime,
-                    category = category,
-                    originalSms = "수동 입력",
-                    smsId = "manual_${System.currentTimeMillis()}"
-                )
-                expenseRepository.insert(expense)
+                withContext(Dispatchers.IO) {
+                    val expense = ExpenseEntity(
+                        amount = amount,
+                        storeName = storeName,
+                        cardName = cardName,
+                        dateTime = dateTime,
+                        category = category,
+                        originalSms = "수동 입력",
+                        smsId = "manual_${System.currentTimeMillis()}"
+                    )
+                    expenseRepository.insert(expense)
+                }
                 _uiState.update { it.copy(message = "지출이 추가되었습니다") }
                 loadExpenses()
             } catch (e: Exception) {
@@ -360,6 +415,77 @@ class HistoryViewModel @Inject constructor(
     /** 메시지 초기화 */
     fun clearMessage() {
         _uiState.update { it.copy(message = null) }
+    }
+
+    /** 지출 메모 업데이트 */
+    fun updateExpenseMemo(expenseId: Long, memo: String?) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    expenseRepository.updateMemo(expenseId, memo?.ifBlank { null })
+                }
+                _uiState.update { it.copy(message = "메모가 저장되었습니다") }
+                loadExpenses()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "메모 저장 실패: ${e.message}") }
+            }
+        }
+    }
+
+    /** 수입 메모 업데이트 */
+    fun updateIncomeMemo(incomeId: Long, memo: String?) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    incomeRepository.updateMemo(incomeId, memo?.ifBlank { null })
+                }
+                _uiState.update { it.copy(message = "메모가 저장되었습니다") }
+                loadExpenses()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "메모 저장 실패: ${e.message}") }
+            }
+        }
+    }
+
+    /** 수입 보기 토글 */
+    fun toggleIncomeView() {
+        val newValue = !_uiState.value.showIncomeView
+        _uiState.update { it.copy(showIncomeView = newValue) }
+        if (newValue) {
+            loadIncomes()
+        }
+    }
+
+    /** 수입 보기 끄기 */
+    fun hideIncomeView() {
+        _uiState.update { it.copy(showIncomeView = false) }
+    }
+
+    /** 수입 내역 로드 */
+    private fun loadIncomes() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val (startTime, endTime) = DateUtils.getCustomMonthPeriod(
+                state.selectedYear,
+                state.selectedMonth,
+                state.monthStartDay
+            )
+
+            try {
+                incomeRepository.getIncomesByDateRange(startTime, endTime)
+                    .collect { incomes ->
+                        val total = incomes.sumOf { it.amount }
+                        _uiState.update {
+                            it.copy(
+                                incomes = incomes.sortedByDescending { inc -> inc.dateTime },
+                                monthlyIncomeTotal = total
+                            )
+                        }
+                    }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "수입 로드 실패: ${e.message}") }
+            }
+        }
     }
 
     /**
@@ -374,20 +500,26 @@ class HistoryViewModel @Inject constructor(
         )
 
         try {
-            val monthlyTotal = expenseRepository.getTotalExpenseByDateRange(startTime, endTime)
-            val dailySums = expenseRepository.getDailyTotals(startTime, endTime)
-            val dailyTotalsMap = dailySums.associate { it.date to it.total }
-            val expenses = expenseRepository.getExpensesByDateRangeOnce(startTime, endTime)
-                .let { list ->
-                    // 필터 적용
-                    list.filter { expense ->
-                        (state.selectedCardName == null || expense.cardName == state.selectedCardName) &&
-                        (state.selectedCategory == null || expense.category == state.selectedCategory)
-                    }
+            val (monthlyTotal, dailyTotalsMap, sortedExpenses) = withContext(Dispatchers.IO) {
+                val total = expenseRepository.getTotalExpenseByDateRange(startTime, endTime)
+                val dailySums = expenseRepository.getDailyTotals(startTime, endTime)
+                val map = dailySums.associate { it.date to it.total }
+                // 대 카테고리 선택 시 소 카테고리도 포함
+                val syncCategoryFilter = state.selectedCategory?.let { catName ->
+                    Category.fromDisplayName(catName).displayNamesIncludingSub
                 }
-
-            // 정렬 적용
-            val sortedExpenses = sortExpenses(expenses, state.sortOrder)
+                val expenses = expenseRepository.getExpensesByDateRangeOnce(startTime, endTime)
+                    .let { list ->
+                        // 필터 적용
+                        list.filter { expense ->
+                            (state.selectedCardName == null || expense.cardName == state.selectedCardName) &&
+                            (syncCategoryFilter == null || expense.category in syncCategoryFilter)
+                        }
+                    }
+                // 정렬 적용
+                val sorted = sortExpenses(expenses, state.sortOrder)
+                Triple(total, map, sorted)
+            }
 
             _uiState.update {
                 it.copy(

@@ -10,12 +10,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,32 +59,27 @@ fun HomeScreen(
         }
     }
 
-    // 화면이 표시될 때마다 데이터 새로고침 (다른 탭에서 데이터 변경 시 반영)
-    LaunchedEffect(Unit) {
-        viewModel.refreshData()
-    }
+    // Flow 기반 데이터 로딩: Room DB 변경 시 자동으로 UI 갱신됨
+    // (다른 탭에서 카테고리 변경, 지출 삭제 등의 변경사항이 실시간 반영)
 
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val showScrollToTop by remember {
-        derivedStateOf { listState.firstVisibleItemIndex > 2 }
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 ||
+            (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 200)
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Pull-to-Refresh
-        PullToRefreshBox(
-            isRefreshing = uiState.isRefreshing,
-            onRefresh = { viewModel.refresh() },
-            modifier = Modifier.fillMaxSize()
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(0.dp)
-            ) {
                 // 월간 현황
                 item {
                     MonthlyOverviewSection(
@@ -100,6 +95,11 @@ fun HomeScreen(
                         onIncrementalSync = {
                             onRequestSmsPermission {
                                 viewModel.syncSmsMessages(contentResolver, forceFullSync = false)
+                            }
+                        },
+                        onTodaySync = {
+                            onRequestSmsPermission {
+                                viewModel.syncSmsMessages(contentResolver, todayOnly = true)
                             }
                         },
                         onFullSync = {
@@ -122,7 +122,11 @@ fun HomeScreen(
                 // 카테고리별 지출
                 item {
                     CategoryExpenseSection(
-                        categoryExpenses = uiState.categoryExpenses
+                        categoryExpenses = uiState.categoryExpenses,
+                        selectedCategory = uiState.selectedCategory,
+                        onCategorySelected = { category ->
+                            viewModel.selectCategory(category)
+                        }
                     )
                 }
 
@@ -134,22 +138,51 @@ fun HomeScreen(
                     )
                 }
 
-                // 최근 지출 내역
+                // 최근 지출 내역 (카테고리 필터 적용)
                 item {
-                    Text(
-                        text = stringResource(R.string.home_recent_expense),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (uiState.selectedCategory != null) {
+                                val cat = Category.fromDisplayName(uiState.selectedCategory!!)
+                                "${cat.emoji} ${cat.displayName} 지출"
+                            } else {
+                                stringResource(R.string.home_recent_expense)
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (uiState.selectedCategory != null) {
+                            TextButton(onClick = { viewModel.selectCategory(null) }) {
+                                Text("전체 보기")
+                            }
+                        }
+                    }
                 }
 
-                if (uiState.recentExpenses.isEmpty()) {
+                val displayExpenses = if (uiState.selectedCategory != null) {
+                    uiState.recentExpenses.filter { expense ->
+                        if (uiState.selectedCategory == "기타") {
+                            expense.category == "기타" || expense.category == "미분류"
+                        } else {
+                            expense.category == uiState.selectedCategory
+                        }
+                    }
+                } else {
+                    uiState.recentExpenses
+                }
+
+                if (displayExpenses.isEmpty()) {
                     item {
                         EmptyExpenseSection()
                     }
                 } else {
-                    items(uiState.recentExpenses) { expense ->
+                    items(displayExpenses) { expense ->
                         ExpenseItemCard(
                             expense = expense,
                             onClick = { selectedExpense = expense }
@@ -157,7 +190,6 @@ fun HomeScreen(
                     }
                 }
             }
-        }
 
         // Scroll to Top FAB
         AnimatedVisibility(
@@ -190,13 +222,20 @@ fun HomeScreen(
         ExpenseDetailDialog(
             expense = expense,
             onDismiss = { selectedExpense = null },
-            onDelete = null,  // 홈에서는 삭제 기능 없음
+            onDelete = {
+                viewModel.deleteExpense(expense)
+                selectedExpense = null
+            },
             onCategoryChange = { newCategory ->
                 viewModel.updateExpenseCategory(
                     expenseId = expense.id,
                     storeName = expense.storeName,
                     newCategory = newCategory
                 )
+                selectedExpense = null
+            },
+            onMemoChange = { memo ->
+                viewModel.updateExpenseMemo(expense.id, memo)
                 selectedExpense = null
             }
         )
@@ -247,13 +286,83 @@ fun HomeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.padding(16.dp)
-                    )
+                    // 진행률 바 (총 진행률)
+                    if (uiState.classifyProgressTotal > 0) {
+                        val progress = uiState.classifyProgressCurrent.toFloat() / uiState.classifyProgressTotal.toFloat()
+                        LinearProgressIndicator(
+                            progress = { progress.coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .padding(horizontal = 8.dp),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "${uiState.classifyProgressCurrent} / ${uiState.classifyProgressTotal}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    } else {
+                        CircularProgressIndicator(
+                            modifier = Modifier.padding(8.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                     Text(
                         text = uiState.classifyProgress,
                         style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = { }
+        )
+    }
+
+    // SMS 동기화 진행 다이얼로그
+    if (uiState.showSyncDialog) {
+        AlertDialog(
+            onDismissRequest = { /* 진행 중에는 닫기 불가 */ },
+            title = { Text("문자 동기화 중") },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (uiState.syncProgressTotal > 0) {
+                        val progress = uiState.syncProgressCurrent.toFloat() / uiState.syncProgressTotal.toFloat()
+                        LinearProgressIndicator(
+                            progress = { progress.coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .padding(horizontal = 8.dp),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "${uiState.syncProgressCurrent} / ${uiState.syncProgressTotal}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    } else {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .padding(horizontal = 8.dp),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    Text(
+                        text = uiState.syncProgress,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             },
@@ -274,6 +383,7 @@ fun MonthlyOverviewSection(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onIncrementalSync: () -> Unit,
+    onTodaySync: () -> Unit,
     onFullSync: () -> Unit,
     isSyncing: Boolean
 ) {
@@ -358,6 +468,16 @@ fun MonthlyOverviewSection(
                             }
                         )
                         DropdownMenuItem(
+                            text = { Text(stringResource(R.string.home_sync_today)) },
+                            onClick = {
+                                showSyncMenu = false
+                                onTodaySync()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Notifications, contentDescription = null)
+                            }
+                        )
+                        DropdownMenuItem(
                             text = { Text(stringResource(R.string.home_sync_full)) },
                             onClick = {
                                 showSyncMenu = false
@@ -427,9 +547,25 @@ fun MonthlyOverviewSection(
 
 @Composable
 fun CategoryExpenseSection(
-    categoryExpenses: List<CategorySum>
+    categoryExpenses: List<CategorySum>,
+    selectedCategory: String? = null,
+    onCategorySelected: (String?) -> Unit = {}
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+
+    // 기타 + 미분류를 하나로 합치고, 금액 내림차순 정렬
+    val mergedExpenses = remember(categoryExpenses) {
+        val etcTotal = categoryExpenses
+            .filter { it.category == "기타" || it.category == "미분류" }
+            .sumOf { it.total }
+        val others = categoryExpenses
+            .filter { it.category != "기타" && it.category != "미분류" }
+        val result = others.toMutableList()
+        if (etcTotal > 0) {
+            result.add(CategorySum("기타", etcTotal))
+        }
+        result.sortedByDescending { it.total }
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -442,30 +578,52 @@ fun CategoryExpenseSection(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        if (categoryExpenses.isEmpty()) {
+        if (mergedExpenses.isEmpty()) {
             Text(
                 text = stringResource(R.string.home_no_expense),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
         } else {
-            categoryExpenses.forEach { item ->
+            mergedExpenses.forEach { item ->
                 val category = Category.fromDisplayName(item.category)
+                val isSelected = selectedCategory == item.category
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                        .clickable {
+                            if (isSelected) {
+                                onCategorySelected(null)
+                            } else {
+                                onCategorySelected(item.category)
+                            }
+                        }
+                        .then(
+                            if (isSelected) Modifier
+                                .padding(horizontal = 0.dp)
+                                .padding(vertical = 2.dp)
+                            else Modifier.padding(vertical = 4.dp)
+                        )
+                        .then(
+                            if (isSelected) {
+                                Modifier
+                                    .padding(vertical = 2.dp)
+                            } else Modifier
+                        ),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "${category.emoji} ${category.displayName}",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = stringResource(R.string.common_won, numberFormat.format(item.total)),
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                     )
                 }
             }

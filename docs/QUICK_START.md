@@ -1,87 +1,114 @@
-# 머니톡 - 빠른 시작 가이드
+# 머니톡 - 사용 가이드
 
-## Claude와 대화 이어가기
+> 앱 설치부터 실사용까지의 전체 과정
 
-새 대화에서 이렇게 시작하세요:
+---
+
+## 1. 초기 설정
+
+### Step 1: 앱 설치 & 실행
+1. Android Studio에서 빌드 후 실기기에 설치
+2. 앱 실행 → 스플래시 화면 (1.5초) → 홈 화면
+
+### Step 2: SMS 권한 허용
+1. 홈 화면에서 동기화 버튼 클릭
+2. SMS 읽기/수신 권한 요청 팝업 → **허용**
+3. 권한 거부 시: 설정 → 앱 → MoneyTalk → 권한에서 직접 허용
+
+### Step 3: Gemini API 키 설정
+1. [Google AI Studio](https://aistudio.google.com/) 접속
+2. API 키 발급 (Get API Key)
+3. 앱 **설정** 탭 → **Gemini API 키** → 키 입력 → 저장
+
+### Step 4: 월 수입 설정
+1. 설정 탭 → **월 수입** → 금액 입력 → 저장
+2. (선택) 월 시작일 설정 → 카드 결제일에 맞춰 설정
+
+---
+
+## 2. 기본 사용법
+
+### 문자 동기화
+
+| 동기화 방식 | 사용 시점 |
+|-----------|---------|
+| 신규 내역만 | 일상적 사용 (마지막 동기화 이후 새 문자만) |
+| 오늘 내역만 | 오늘 지출만 빠르게 확인할 때 |
+| 전체 다시 | 최초 설치 시, 또는 누락된 내역 재수집 시 |
+
+- 동기화 완료 후 미분류 항목이 있으면 AI 분류 다이얼로그 표시
+- "확인" 클릭 시 Gemini가 자동 분류 실행
+
+### 실시간 수신
+- 카드 결제 문자 수신 시 자동으로 지출 기록 (별도 동기화 불필요)
+
+### 지출 확인
+- **홈 화면**: 월간 총 지출, 카테고리별 비율, 최근 내역
+- **내역 화면**: 전체 내역 검색/필터/정렬, 달력 보기
+
+### 카테고리 수정
+1. 지출 항목 클릭 → 상세 다이얼로그
+2. 카테고리 옆 연필 아이콘 클릭
+3. 원하는 카테고리 선택
+4. 유사한 가게명의 카테고리도 자동 전파됨
+
+### AI 상담
+1. **상담** 탭 이동
+2. 가이드 질문 클릭 또는 직접 질문 입력
+3. 예시: "이번 달 식비 얼마야?", "쿠팡을 쇼핑으로 바꿔줘"
+
+---
+
+## 3. 데이터 백업
+
+### Google Drive 백업
+1. 설정 → Google Drive 백업 → Google 로그인
+2. 내보내기 → Google Drive 저장
+3. 복원: Google Drive 백업 → 파일 선택 → 복원
+
+### 로컬 백업
+1. 설정 → 데이터 내보내기 → JSON/CSV 선택 → 로컬 저장
+2. 복원: 설정 → 로컬 파일에서 복원 → 파일 선택
+
+---
+
+## 4. 문제 해결
+
+| 증상 | 해결 방법 |
+|------|---------|
+| 문자가 동기화되지 않음 | SMS 권한 확인, 전체 다시 동기화 시도 |
+| AI 분류가 안 됨 | 설정에서 Gemini API 키 확인 |
+| 카테고리가 "미분류"로 남음 | 설정 → AI 카테고리 자동 분류 실행 |
+| 상담 채팅이 안 됨 | API 키 설정 확인, 네트워크 연결 확인 |
+| 중복 지출이 있음 | 설정 → 중복 데이터 삭제 |
+| RCS 메시지가 읽히지 않음 | 삼성 기기에서만 지원, 전체 다시 동기화 시도 |
+
+---
+
+## 5. Claude Code로 개발 이어가기
 
 ```
 머니톡 프로젝트를 이어서 작업하려고 해.
 프로젝트 경로: C:\Users\hsh70\AndroidStudioProjects\MoneyTalk
 
-아래 파일들을 먼저 읽어줘:
-1. C:\Users\hsh70\AndroidStudioProjects\MoneyTalk\docs\PROJECT_CONTEXT.md
-2. C:\Users\hsh70\AndroidStudioProjects\MoneyTalk\docs\DEVELOPMENT_LOG.md
+아래 파일을 먼저 읽어줘:
+C:\Users\hsh70\AndroidStudioProjects\MoneyTalk\docs\PROJECT_CONTEXT.md
 
 그리고 [원하는 작업]을 해줘.
 ```
 
----
+### 주요 파일 위치
 
-## 자주 사용하는 요청 예시
-
-### 빌드 관련
-```
-프로젝트 빌드 오류 확인하고 수정해줘
-```
-
-### 기능 추가
-```
-API 키를 DataStore에 저장하는 기능 추가해줘
-```
-
-```
-월 수입 등록 기능 완성해줘
-```
-
-```
-홈 화면에 위젯 추가해줘
-```
-
-### 버그 수정
-```
-[오류 메시지 복사]
-이 오류 수정해줘
-```
-
-### 코드 확인
-```
-HomeViewModel.kt 파일 확인해줘
-```
-
----
-
-## 프로젝트 주요 파일 위치
-
-| 파일 | 경로 |
+| 파일 | 설명 |
 |------|------|
-| 메인 액티비티 | `app/.../MainActivity.kt` |
-| 홈 화면 | `app/.../presentation/home/HomeScreen.kt` |
-| Claude API | `app/.../data/remote/api/ClaudeApi.kt` |
-| SMS 파서 | `app/.../util/SmsParser.kt` |
-| 의존성 설정 | `gradle/libs.versions.toml` |
-| 앱 빌드 설정 | `app/build.gradle.kts` |
+| `feature/home/ui/HomeViewModel.kt` | 동기화, 데이터 로딩 핵심 로직 |
+| `core/util/HybridSmsClassifier.kt` | 3-tier SMS 분류기 |
+| `core/util/SmsReader.kt` | SMS/MMS/RCS 읽기 |
+| `core/util/SmsParser.kt` | 정규식 파싱 |
+| `feature/chat/data/GeminiRepository.kt` | Gemini API 통신 |
+| `feature/home/data/CategoryClassifierService.kt` | 4-tier 카테고리 분류 |
+| `docs/` | 기술 문서 전체 |
 
 ---
 
-## Claude API 키 발급
-
-1. https://console.anthropic.com 접속
-2. 회원가입/로그인
-3. API Keys → Create Key
-4. 키 복사 (sk-ant-...)
-5. 앱 설정에서 입력
-
----
-
-## 테스트 방법
-
-1. Android Studio에서 Gradle Sync
-2. 에뮬레이터 또는 실기기 연결
-3. Run 버튼 클릭
-4. SMS 권한 허용
-5. 설정에서 API 키 입력
-6. 홈에서 동기화 버튼 클릭
-
----
-
-*최종 업데이트: 2026-02-05*
+*최종 업데이트: 2026-02-08*

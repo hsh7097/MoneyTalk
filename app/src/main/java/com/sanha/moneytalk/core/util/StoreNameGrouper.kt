@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.util
 
 import android.util.Log
+import com.sanha.moneytalk.core.similarity.StoreNameSimilarityPolicy
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,7 +22,7 @@ import javax.inject.Singleton
  * 3. 각 그룹의 대표만 Gemini에 전송
  *
  * @see SmsBatchProcessor.groupBySimilarity 동일 알고리즘 참고
- * @see VectorSearchEngine.GROUPING_SIMILARITY_THRESHOLD 그룹핑 임계값 (0.88)
+ * @see StoreNameSimilarityPolicy 가게명 유사도 정책 (그룹핑 임계값 0.88)
  */
 @Singleton
 class StoreNameGrouper @Inject constructor(
@@ -30,8 +31,8 @@ class StoreNameGrouper @Inject constructor(
     companion object {
         private const val TAG = "StoreNameGrouper"
 
-        /** 배치 임베딩 한 번에 처리할 최대 개수 */
-        private const val EMBEDDING_BATCH_SIZE = 50
+        /** 배치 임베딩 한 번에 처리할 최대 개수 (batchEmbedContents 최대 100) */
+        private const val EMBEDDING_BATCH_SIZE = 100
     }
 
     /**
@@ -88,7 +89,7 @@ class StoreNameGrouper @Inject constructor(
         val results = mutableListOf<Pair<String, List<Float>>>()
         val batches = storeNames.chunked(EMBEDDING_BATCH_SIZE)
 
-        for (batch in batches) {
+        for ((batchIdx, batch) in batches.withIndex()) {
             val embeddings = embeddingService.generateEmbeddings(batch)
 
             for ((i, storeName) in batch.withIndex()) {
@@ -98,9 +99,9 @@ class StoreNameGrouper @Inject constructor(
                 }
             }
 
-            // 배치 간 딜레이
-            if (batches.size > 1) {
-                kotlinx.coroutines.delay(500)
+            // 배치 간 딜레이 (마지막 배치 제외, Rate Limit 방지)
+            if (batchIdx < batches.size - 1) {
+                kotlinx.coroutines.delay(1500)
             }
         }
 
@@ -135,7 +136,7 @@ class StoreNameGrouper @Inject constructor(
                 val (nameJ, embeddingJ) = embeddedStores[j]
                 val similarity = VectorSearchEngine.cosineSimilarity(embeddingI, embeddingJ)
 
-                if (similarity >= VectorSearchEngine.GROUPING_SIMILARITY_THRESHOLD) {
+                if (StoreNameSimilarityPolicy.shouldGroup(similarity)) {
                     members.add(nameJ)
                     assigned[j] = true
                 }

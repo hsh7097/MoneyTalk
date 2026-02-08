@@ -74,6 +74,10 @@ interface ExpenseDao {
     @Query("SELECT EXISTS(SELECT 1 FROM expenses WHERE smsId = :smsId)")
     suspend fun existsBySmsId(smsId: String): Boolean
 
+    /** 모든 smsId 목록 조회 (배치 중복 체크용 인메모리 Set 구성) */
+    @Query("SELECT smsId FROM expenses")
+    suspend fun getAllSmsIds(): List<String>
+
     // 카드사별 필터링
     @Query("SELECT * FROM expenses WHERE cardName = :cardName ORDER BY dateTime DESC")
     fun getExpensesByCardName(cardName: String): Flow<List<ExpenseEntity>>
@@ -89,6 +93,10 @@ interface ExpenseDao {
     // 모든 필터 적용 (카드사 + 카테고리 + 기간)
     @Query("SELECT * FROM expenses WHERE (:cardName IS NULL OR cardName = :cardName) AND (:category IS NULL OR category = :category) AND dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
     fun getExpensesFiltered(cardName: String?, category: String?, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>>
+
+    // 대 카테고리 필터 (소 카테고리 포함, 예: "식비" 선택 시 "배달"도 포함)
+    @Query("SELECT * FROM expenses WHERE (:cardName IS NULL OR cardName = :cardName) AND category IN (:categories) AND dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
+    fun getExpensesFilteredByCategories(cardName: String?, categories: List<String>, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>>
 
     // 모든 카드사 목록 가져오기
     @Query("SELECT DISTINCT cardName FROM expenses ORDER BY cardName")
@@ -130,8 +138,8 @@ interface ExpenseDao {
     @Query("SELECT SUM(amount) FROM expenses WHERE storeName = :storeName AND dateTime BETWEEN :startTime AND :endTime")
     suspend fun getTotalExpenseByStoreName(storeName: String, startTime: Long, endTime: Long): Int?
 
-    // 미분류(기타) 항목 조회
-    @Query("SELECT * FROM expenses WHERE category = '기타' ORDER BY dateTime DESC LIMIT :limit")
+    // 미분류 항목 조회
+    @Query("SELECT * FROM expenses WHERE category = '미분류' ORDER BY dateTime DESC LIMIT :limit")
     suspend fun getUncategorizedExpenses(limit: Int): List<ExpenseEntity>
 
     // 가게명으로 카테고리 일괄 변경
@@ -166,15 +174,20 @@ interface ExpenseDao {
     """)
     suspend fun deleteDuplicates(): Int
 
-    // 검색 (가게명, 카테고리, 카드명에서 검색)
+    // 검색 (가게명, 카테고리, 카드명, 메모에서 검색)
     @Query("""
         SELECT * FROM expenses
         WHERE storeName LIKE '%' || :query || '%'
            OR category LIKE '%' || :query || '%'
            OR cardName LIKE '%' || :query || '%'
+           OR memo LIKE '%' || :query || '%'
         ORDER BY dateTime DESC
     """)
     suspend fun searchExpenses(query: String): List<ExpenseEntity>
+
+    /** 메모 업데이트 */
+    @Query("UPDATE expenses SET memo = :memo WHERE id = :expenseId")
+    suspend fun updateMemo(expenseId: Long, memo: String?)
 }
 
 data class CategorySum(

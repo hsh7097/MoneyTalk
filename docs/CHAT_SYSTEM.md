@@ -43,7 +43,7 @@ MoneyTalk의 채팅 시스템은 사용자의 자연어 질문을 분석하여 �
 ### Phase 1: 쿼리/액션 분석
 
 **파일**: `feature/chat/data/GeminiRepository.kt` — `analyzeQueryNeeds()`
-**모델**: `gemini-2.5-flash` (temperature: 0.3)
+**모델**: `gemini-2.5-pro` (temperature: 0.3)
 
 사용자의 자연어 질문을 분석하여 필요한 DB 쿼리와 액션을 JSON으로 결정합니다.
 
@@ -78,7 +78,7 @@ MoneyTalk의 채팅 시스템은 사용자의 자연어 질문을 분석하여 �
 
 ### Phase 2: 답변 생성
 
-**모델**: `gemini-2.5-flash` (temperature: 0.7)
+**모델**: `gemini-2.5-pro` (temperature: 0.7)
 
 System Instruction에 재무 상담사 역할이 정의되어 있으며, 다음 데이터를 바탕으로 답변합니다:
 
@@ -112,24 +112,37 @@ System Instruction에 재무 상담사 역할이 정의되어 있으며, 다음 
 AI 모델은 컨텍스트 제한이 있어 긴 대화를 모두 전달할 수 없습니다.
 하지만 "아까 물어본 식비 말인데..." 같은 맥락 참조가 필요합니다.
 
-### 해결: Rolling Summary 전략
+### 해결: Rolling Summary + Windowed Context 전략
+
+**핵심 설정:**
+- `WINDOW_SIZE_TURNS = 3` (최근 3턴 유지)
+- `WINDOW_SIZE_MESSAGES = 6` (3턴 = 6개 메시지)
 
 ```
-대화 1~10번: 전체 텍스트로 전달
+대화 1~6번 (3턴): 전체 텍스트로 전달
                     │
-                    │ 11번째 메시지 추가 시
+                    │ 7번째 메시지 추가 시 (윈도우 초과)
                     ▼
         ┌──────────────────────────┐
-        │ 1~4번 메시지를 요약        │
-        │ (Gemini summaryModel)    │
+        │ 1~6번 중 윈도우 밖 메시지   │
+        │ 를 Gemini로 요약           │
         │ → currentSummary에 저장   │
         └──────────────────────────┘
                     │
                     ▼
 AI에 전달되는 내용:
-  [요약: 1~4번 대화 요약본]
-  + [전체: 5~11번 메시지]
+  [이전 대화 요약: 요약본]
+  + [최근 대화: 최근 6개 메시지]
+  + [현재 질문]
 ```
+
+**예시 타임라인:**
+```
+메시지 1~6 (3턴):  Summary 없음, 윈도우=[1~6]
+메시지 7 추가:     1~2번 요약 → Summary 생성, 윈도우=[3~7]
+메시지 9 추가:     기존 Summary + 3~4번 요약 통합, 윈도우=[5~9]
+```
+→ 대화가 아무리 길어져도 컨텍스트 크기가 일정하게 유지됩니다.
 
 ### 요약 모델 설정
 - **모델**: `gemini-2.5-flash` (temperature: 0.3)
@@ -150,13 +163,13 @@ AI에 전달되는 내용:
 
 ### 3개 모델 분리 운영
 
-| 모델 | 역할 | temperature | maxTokens |
-|------|------|-------------|-----------|
-| `queryAnalyzerModel` | 쿼리/액션 분석 | 0.3 | 512 |
-| `financialAdvisorModel` | 재무 상담 답변 | 0.7 | 1024 |
-| `summaryModel` | Rolling Summary 생성 | 0.3 | 512 |
+| 모델 | 역할 | Gemini 모델 | temperature | maxTokens |
+|------|------|-----------|-------------|-----------|
+| `queryAnalyzerModel` | 쿼리/액션 분석 | `gemini-2.5-pro` | 0.3 | 512 |
+| `financialAdvisorModel` | 재무 상담 답변 | `gemini-2.5-pro` | 0.7 | 1024 |
+| `summaryModel` | Rolling Summary 생성 | `gemini-2.5-flash` | 0.3 | 512 |
 
-모두 `gemini-2.5-flash` 사용, 각기 다른 System Instruction 적용
+각 모델에 별도 System Instruction 적용. 요약은 비교적 단순 작업이므로 경량 모델(flash) 사용
 
 ### API 키 관리
 - `SettingsDataStore`에 암호화 저장
@@ -267,4 +280,18 @@ chat_history 테이블
 
 ---
 
-*마지막 업데이트: 2026-02-07*
+## 9. 벡터 기반 기능 현황
+
+| 기능 | 사용 여부 | 설명 |
+|------|----------|------|
+| 대화 히스토리 벡터 검색 | ❌ 미사용 | 대화 기록은 벡터화하지 않음 |
+| RAG (Retrieval Augmented Generation) | ❌ 미사용 | 과거 대화에서 관련 내용 검색하는 기능 없음 |
+| Rolling Summary | ✅ 사용 | LLM 기반 요약으로 맥락 압축 (벡터 불필요) |
+| 지출 데이터 컨텍스트 | ✅ 사용 | Room DB 직접 쿼리 (SQL, 벡터 불필요) |
+
+현재 채팅 시스템은 **순차적 맥락 관리**(Rolling Summary)만 사용합니다.
+벡터 임베딩은 SMS 분류(`SmsPatternEntity`)와 카테고리 분류(`StoreEmbeddingEntity`)에만 활용됩니다.
+
+---
+
+*마지막 업데이트: 2026-02-08*

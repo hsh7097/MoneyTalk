@@ -78,6 +78,7 @@
     <string name="home_next_month">Next Month</string>
     <string name="home_sync">Sync</string>
     <string name="home_sync_new_only">Sync new messages only</string>
+    <string name="home_sync_today">Sync today\'s messages only</string>
     <string name="home_sync_full">Re-sync all messages</string>
     <string name="home_income">Income</string>
     <string name="home_expense">Expenses</string>
@@ -161,6 +162,31 @@
     <string name="settings_section_app">App Info</string>
     <string name="settings_version_title">Version</string>
     <string name="settings_privacy_title">Privacy Policy</string>
+
+    <!-- App Info Dialog -->
+    <string name="app_info_title">App Info</string>
+    <string name="app_info_version">Version %s</string>
+    <string name="app_info_description">A smart money manager that automatically tracks expenses from SMS messages with AI-powered category classification.</string>
+    <string name="app_info_developer">Developer</string>
+    <string name="app_info_developer_name">sanha</string>
+    <string name="app_info_contact">Contact</string>
+    <string name="app_info_contact_email">hsh7097@gmail.com</string>
+    <string name="app_info_license">License: MIT</string>
+
+    <!-- Privacy Policy Dialog -->
+    <string name="privacy_title">Privacy Policy</string>
+    <string name="privacy_intro">MoneyTalk values and protects your privacy.</string>
+    <string name="privacy_section_collect">1. Information Collected</string>
+    <string name="privacy_collect_detail">\u0020\u0020• SMS messages (for payment parsing)\n\u0020\u0020• Monthly income and budget settings\n\u0020\u0020• Google account email (when using Drive backup)</string>
+    <string name="privacy_section_usage">2. Purpose of Use</string>
+    <string name="privacy_usage_detail">\u0020\u0020• Automatic expense/income tracking\n\u0020\u0020• AI-based category classification (Gemini API)\n\u0020\u0020• Cloud backup and restore</string>
+    <string name="privacy_section_storage">3. Data Storage</string>
+    <string name="privacy_storage_detail">\u0020\u0020• All data is stored locally on your device\n\u0020\u0020• Google Drive backups are stored in your own Drive\n\u0020\u0020• No personal data is transmitted to our servers</string>
+    <string name="privacy_section_thirdparty">4. Third-Party Sharing</string>
+    <string name="privacy_thirdparty_detail">\u0020\u0020• Store names may be sent to Google Gemini API for category classification\n\u0020\u0020• No other personal data is shared with third parties</string>
+    <string name="privacy_section_rights">5. Your Rights</string>
+    <string name="privacy_rights_detail">\u0020\u0020• You can delete all data at any time from Settings\n\u0020\u0020• Uninstalling the app removes all local data</string>
+    <string name="privacy_last_updated">Last updated: February 2025</string>
 
     <!-- Delete All Dialog -->
     <string name="dialog_delete_all_title">Delete All Data</string>

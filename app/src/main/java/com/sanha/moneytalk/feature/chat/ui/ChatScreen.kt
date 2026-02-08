@@ -2,25 +2,28 @@ package com.sanha.moneytalk.feature.chat.ui
 
 import android.util.Log
 import androidx.annotation.StringRes
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.util.DateUtils
@@ -41,17 +45,15 @@ private data class GuideQuestion(
 )
 
 private val guideQuestions = listOf(
+    // 지출 분석
+    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_food),
+    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_category),
+    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_compare),
     // 지출 조회
     GuideQuestion(R.string.guide_category_expense_search, R.string.guide_q_expense_coupang),
-    GuideQuestion(R.string.guide_category_expense_search, R.string.guide_q_expense_starbucks),
     GuideQuestion(R.string.guide_category_expense_search, R.string.guide_q_expense_delivery),
-    // 분석
-    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_food),
-    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_compare),
-    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_category),
     // 카테고리 관리
     GuideQuestion(R.string.guide_category_manage, R.string.guide_q_manage_coupang),
-    GuideQuestion(R.string.guide_category_manage, R.string.guide_q_manage_baemin),
     GuideQuestion(R.string.guide_category_manage, R.string.guide_q_manage_uncategorized)
 )
 
@@ -60,176 +62,44 @@ fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var messageText by remember { mutableStateOf("") }
     var showApiKeyDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf<Long?>(null) }
-    val listState = rememberLazyListState()
 
-    // 새 메시지가 오면 스크롤
-    LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty()) {
-            listState.animateScrollToItem(uiState.messages.size - 1)
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // 헤더
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shadowElevation = 4.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // 세션 목록 토글 버튼
-                        IconButton(onClick = { viewModel.toggleSessionList() }) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = stringResource(R.string.chat_session_list)
-                            )
-                        }
-
-                        Column {
-                            Text(
-                                text = stringResource(R.string.chat_title),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = if (uiState.hasApiKey) {
-                                    stringResource(R.string.chat_subtitle_with_api)
-                                } else {
-                                    stringResource(R.string.chat_subtitle_no_api)
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        // 새 대화 버튼
-                        IconButton(onClick = { viewModel.createNewSession() }) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = stringResource(R.string.chat_new_session)
-                            )
-                        }
-
-                        if (!uiState.hasApiKey) {
-                            TextButton(onClick = { showApiKeyDialog = true }) {
-                                Text(stringResource(R.string.api_key_setting))
-                            }
-                        }
-                    }
-                }
+    // 채팅방 목록 ↔ 채팅방 내부 전환 (애니메이션)
+    AnimatedContent(
+        targetState = uiState.isInChatRoom,
+        transitionSpec = {
+            if (targetState) {
+                // 목록 → 채팅방: 오른쪽에서 슬라이드 인
+                slideInHorizontally { it } + fadeIn() togetherWith
+                        slideOutHorizontally { -it } + fadeOut()
+            } else {
+                // 채팅방 → 목록: 왼쪽에서 슬라이드 인
+                slideInHorizontally { -it } + fadeIn() togetherWith
+                        slideOutHorizontally { it } + fadeOut()
             }
-
-            // 채팅 메시지 목록
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    state = listState,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(vertical = 16.dp)
-                ) {
-                    items(uiState.messages) { message ->
-                        ChatBubble(message = message)
-                    }
-
-                    if (uiState.isLoading) {
-                        item {
-                            TypingIndicator()
-                        }
-                    }
-                }
-
-                // 메시지가 없을 때 가이드 질문 표시
-                if (uiState.messages.isEmpty() && !uiState.isLoading) {
-                    GuideQuestionsOverlay(
-                        questions = guideQuestions,
-                        hasApiKey = uiState.hasApiKey,
-                        onQuestionClick = { question ->
-                            if (uiState.hasApiKey) {
-                                viewModel.sendMessage(question)
-                            }
-                        }
-                    )
-                }
-            }
-
-            // 입력창
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shadowElevation = 8.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = messageText,
-                        onValueChange = { messageText = it },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text(stringResource(R.string.chat_input_placeholder)) },
-                        shape = RoundedCornerShape(24.dp),
-                        maxLines = 3,
-                        enabled = uiState.hasApiKey && !uiState.isLoading
-                    )
-
-                    FilledIconButton(
-                        onClick = {
-                            if (messageText.isNotBlank()) {
-                                viewModel.sendMessage(messageText)
-                                messageText = ""
-                            }
-                        },
-                        enabled = messageText.isNotBlank() && !uiState.isLoading && uiState.hasApiKey
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = stringResource(R.string.chat_send)
-                        )
-                    }
-                }
-            }
-        }
-
-        // 세션 목록 사이드 패널
-        AnimatedVisibility(
-            visible = uiState.showSessionList,
-            enter = slideInVertically() + fadeIn(),
-            exit = slideOutVertically() + fadeOut()
-        ) {
-            SessionListPanel(
+        },
+        label = "chat_screen_transition"
+    ) { isInChatRoom ->
+        if (isInChatRoom) {
+            // 채팅방 내부 화면
+            ChatRoomView(
+                uiState = uiState,
+                onBack = { viewModel.exitChatRoom() },
+                onSendMessage = { viewModel.sendMessage(it) },
+                onRetry = { viewModel.retryLastMessage() },
+                hasApiKey = uiState.hasApiKey,
+                onApiKeyClick = { showApiKeyDialog = true }
+            )
+        } else {
+            // 채팅방 목록 화면
+            ChatRoomListView(
                 sessions = uiState.sessions,
-                currentSessionId = uiState.currentSessionId,
-                onSessionSelect = { viewModel.selectSession(it) },
+                hasApiKey = uiState.hasApiKey,
+                onSessionSelect = { viewModel.enterChatRoom(it) },
                 onSessionDelete = { showDeleteConfirm = it },
                 onNewSession = { viewModel.createNewSession() },
-                onDismiss = { viewModel.hideSessionList() }
+                onApiKeyClick = { showApiKeyDialog = true }
             )
         }
     }
@@ -273,6 +143,338 @@ fun ChatScreen(
     }
 }
 
+// ==================== 채팅방 목록 화면 ====================
+
+@Composable
+fun ChatRoomListView(
+    sessions: List<ChatSession>,
+    hasApiKey: Boolean,
+    onSessionSelect: (Long) -> Unit,
+    onSessionDelete: (Long) -> Unit,
+    onNewSession: () -> Unit,
+    onApiKeyClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // 헤더
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shadowElevation = 4.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = stringResource(R.string.chat_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (hasApiKey) {
+                            stringResource(R.string.chat_subtitle_with_api)
+                        } else {
+                            stringResource(R.string.chat_subtitle_no_api)
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // 새 대화 버튼
+                    IconButton(onClick = onNewSession) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = stringResource(R.string.chat_new_session)
+                        )
+                    }
+
+                    if (!hasApiKey) {
+                        TextButton(onClick = onApiKeyClick) {
+                            Text(stringResource(R.string.api_key_setting))
+                        }
+                    }
+                }
+            }
+        }
+
+        // 세션 목록
+        if (sessions.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "\uD83D\uDCAC",
+                        style = MaterialTheme.typography.displayMedium
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = stringResource(R.string.chat_no_sessions),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FilledTonalButton(onClick = onNewSession) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.chat_start_new))
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(sessions) { session ->
+                    SessionItem(
+                        session = session,
+                        onSelect = { onSessionSelect(session.id) },
+                        onDelete = { onSessionDelete(session.id) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SessionItem(
+    session: ChatSession,
+    onSelect: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = session.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = DateUtils.formatDateTime(session.updatedAt),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+            }
+
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = stringResource(R.string.chat_delete),
+                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+// ==================== 채팅방 내부 화면 ====================
+
+@Composable
+fun ChatRoomView(
+    uiState: ChatUiState,
+    onBack: () -> Unit,
+    onSendMessage: (String) -> Unit,
+    onRetry: () -> Unit,
+    hasApiKey: Boolean,
+    onApiKeyClick: () -> Unit
+) {
+    var messageText by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    // 새 메시지가 오면 스크롤
+    LaunchedEffect(uiState.messages.size) {
+        if (uiState.messages.isNotEmpty()) {
+            listState.animateScrollToItem(uiState.messages.size - 1)
+        }
+    }
+
+    // 현재 세션 제목 찾기
+    val currentSessionTitle = uiState.sessions
+        .find { it.id == uiState.currentSessionId }
+        ?.title ?: "새 대화"
+
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // 헤더 (뒤로가기 버튼 포함)
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shadowElevation = 4.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.common_back)
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = currentSessionTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (hasApiKey) {
+                            stringResource(R.string.chat_subtitle_with_api)
+                        } else {
+                            stringResource(R.string.chat_subtitle_no_api)
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+
+                if (!hasApiKey) {
+                    TextButton(onClick = onApiKeyClick) {
+                        Text(stringResource(R.string.api_key_setting))
+                    }
+                }
+            }
+        }
+
+        // 채팅 메시지 목록
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(vertical = 16.dp)
+            ) {
+                items(uiState.messages) { message ->
+                    ChatBubble(message = message)
+                }
+
+                if (uiState.isLoading) {
+                    item {
+                        TypingIndicator()
+                    }
+                }
+
+                // 재시도 버튼
+                if (uiState.canRetry && !uiState.isLoading) {
+                    item {
+                        RetryButton(
+                            onClick = onRetry
+                        )
+                    }
+                }
+            }
+
+            // 메시지가 없을 때 가이드 질문 표시
+            if (uiState.messages.isEmpty() && !uiState.isLoading) {
+                GuideQuestionsOverlay(
+                    questions = guideQuestions,
+                    hasApiKey = hasApiKey,
+                    onQuestionClick = { question ->
+                        if (hasApiKey) {
+                            onSendMessage(question)
+                        }
+                    }
+                )
+            }
+        }
+
+        // 입력창
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shadowElevation = 8.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = messageText,
+                    onValueChange = { messageText = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text(stringResource(R.string.chat_input_placeholder)) },
+                    shape = RoundedCornerShape(24.dp),
+                    maxLines = 3,
+                    enabled = hasApiKey && !uiState.isLoading
+                )
+
+                FilledIconButton(
+                    onClick = {
+                        if (messageText.isNotBlank()) {
+                            onSendMessage(messageText)
+                            messageText = ""
+                        }
+                    },
+                    enabled = messageText.isNotBlank() && !uiState.isLoading && hasApiKey
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = stringResource(R.string.chat_send)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ==================== 공통 컴포넌트 ====================
+
 @Composable
 private fun GuideQuestionsOverlay(
     questions: List<GuideQuestion>,
@@ -284,8 +486,8 @@ private fun GuideQuestionsOverlay(
     val categoryManage = stringResource(R.string.guide_category_manage)
 
     val categoryEmojis = mapOf(
-        categoryExpenseSearch to "\uD83D\uDD0D",
         categoryAnalysis to "\uD83D\uDCCA",
+        categoryExpenseSearch to "\uD83D\uDD0D",
         categoryManage to "\uD83C\uDFF7\uFE0F"
     )
 
@@ -382,170 +584,6 @@ private fun GuideQuestionsOverlay(
 }
 
 @Composable
-fun SessionListPanel(
-    sessions: List<ChatSession>,
-    currentSessionId: Long?,
-    onSessionSelect: (Long) -> Unit,
-    onSessionDelete: (Long) -> Unit,
-    onNewSession: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background.copy(alpha = 0.95f)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // 헤더
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shadowElevation = 4.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.chat_session_list),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Row {
-                        IconButton(onClick = onNewSession) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = stringResource(R.string.chat_new_session)
-                            )
-                        }
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = stringResource(R.string.chat_close)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 세션 목록
-            if (sessions.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "\uD83D\uDCAC",
-                            style = MaterialTheme.typography.displayMedium
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = stringResource(R.string.chat_no_sessions),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FilledTonalButton(onClick = {
-                            onNewSession()
-                            onDismiss()
-                        }) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.chat_start_new))
-                        }
-                    }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(sessions) { session ->
-                        SessionItem(
-                            session = session,
-                            isSelected = session.id == currentSessionId,
-                            onSelect = {
-                                onSessionSelect(session.id)
-                            },
-                            onDelete = { onSessionDelete(session.id) }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SessionItem(
-    session: ChatSession,
-    isSelected: Boolean,
-    onSelect: () -> Unit,
-    onDelete: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onSelect() },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant
-            }
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = session.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = DateUtils.formatDateTime(session.updatedAt),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                )
-            }
-
-            IconButton(
-                onClick = onDelete,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = stringResource(R.string.chat_delete),
-                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
 fun ChatBubble(message: ChatMessage) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -565,18 +603,18 @@ fun ChatBubble(message: ChatMessage) {
             },
             modifier = Modifier.widthIn(max = 300.dp)
         ) {
-            if(message.isUser.not())
-                Log.e("sanhakb","message.content ${message.content}")
-            Text(
-                text = message.content,
-                modifier = Modifier.padding(12.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (message.isUser) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSecondaryContainer
-                }
-            )
+            SelectionContainer {
+                Text(
+                    text = message.content,
+                    modifier = Modifier.padding(12.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (message.isUser) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    }
+                )
+            }
         }
 
         Text(
@@ -590,28 +628,127 @@ fun ChatBubble(message: ChatMessage) {
 
 @Composable
 fun TypingIndicator() {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = Modifier.padding(8.dp)
+    val infiniteTransition = rememberInfiniteTransition(label = "typing")
+
+    // 3개 도트 각각의 오프셋 애니메이션 (시차를 두고 튀어오르기)
+    val dotOffsets = List(3) { index ->
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 0f,
+            animationSpec = infiniteRepeatable(
+                animation = keyframes {
+                    durationMillis = 1200
+                    0f at 0
+                    -8f at 200 + (index * 150) using FastOutSlowInEasing
+                    0f at 400 + (index * 150) using BounceInterpolator
+                    0f at 1200
+                },
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "dot$index"
+        )
+    }
+
+    val dotAlphas = List(3) { index ->
+        infiniteTransition.animateFloat(
+            initialValue = 0.4f,
+            targetValue = 0.4f,
+            animationSpec = infiniteRepeatable(
+                animation = keyframes {
+                    durationMillis = 1200
+                    0.4f at 0
+                    1f at 200 + (index * 150)
+                    0.4f at 400 + (index * 150)
+                    0.4f at 1200
+                },
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "alpha$index"
+        )
+    }
+
+    val dotScales = List(3) { index ->
+        infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = keyframes {
+                    durationMillis = 1200
+                    1f at 0
+                    1.3f at 200 + (index * 150)
+                    1f at 400 + (index * 150)
+                    1f at 1200
+                },
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "scale$index"
+        )
+    }
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier.padding(4.dp)
     ) {
-        repeat(3) { index ->
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(
-                        MaterialTheme.colorScheme.primary.copy(
-                            alpha = 0.3f + (index * 0.2f)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            repeat(3) { index ->
+                Box(
+                    modifier = Modifier
+                        .size((10 * dotScales[index].value).dp)
+                        .offset(y = dotOffsets[index].value.dp)
+                        .clip(CircleShape)
+                        .background(
+                            MaterialTheme.colorScheme.primary.copy(
+                                alpha = dotAlphas[index].value
+                            )
                         )
-                    )
+                )
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = stringResource(R.string.chat_thinking),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
             )
         }
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = stringResource(R.string.chat_thinking),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-        )
+    }
+}
+
+private val BounceInterpolator = CubicBezierEasing(0.34f, 1.56f, 0.64f, 1f)
+
+@Composable
+fun RetryButton(
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.Start
+    ) {
+        FilledTonalButton(
+            onClick = onClick,
+            shape = RoundedCornerShape(20.dp),
+            colors = ButtonDefaults.filledTonalButtonColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Default.Refresh,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = stringResource(R.string.chat_retry),
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
     }
 }
 
