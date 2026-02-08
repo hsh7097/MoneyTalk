@@ -108,7 +108,8 @@ object SmsParser {
     private val excludeKeywords = listOf(
         "광고", "[광고]", "(광고)",
         "홍보", "이벤트", "혜택안내", "포인트 적립",
-        "명세서", "청구서", "이용대금"
+        "명세서", "청구서", "이용대금",
+        "결제금액"  // 카드사 결제예정 금액 안내 (예: "01/25결제금액(01/26기준)")
     )
 
     /**
@@ -210,6 +211,10 @@ object SmsParser {
         // 배달 (식비의 소 카테고리)
         "배달" to listOf(
             "배달의민족", "요기요", "쿠팡이츠", "배민", "위메프오", "땡겨요", "배달"
+        ),
+        // 계좌이체
+        "계좌이체" to listOf(
+            "이체", "송금", "계좌이체"
         ),
         // 기타 (보험 등)
         "기타" to listOf(
@@ -571,6 +576,18 @@ object SmsParser {
             }
         }
 
+        // 패턴 0: 금액+일시불/할부+날짜시간 뒤에 가게명이 오는 경우
+        // 예: "신한카드(5146)승인 하*현 337,250원(일시불)01/31 18:11 (주)이마트 죽전점"
+        val amountThenTimePattern = Regex("""[\d,]+원\s*\((?:일시불|\d+개월)\)\s*\d{1,2}[/.-]\d{1,2}\s+\d{1,2}:\d{2}\s+(.+)$""")
+        val amountThenTimeMatch = amountThenTimePattern.find(message)
+        if (amountThenTimeMatch != null) {
+            val potentialStore = amountThenTimeMatch.groupValues[1].trim()
+            val cleanStore = cleanStoreName(potentialStore)
+            if (isValidStoreName(cleanStore)) {
+                return cleanStore
+            }
+        }
+
         // 패턴 1: 시간 뒤에 가게명이 오는 경우 (가장 흔함)
         // 예: "KB국민 12/25 14:30 스타벅스 15,000원 승인"
         val timePattern = Regex("""(\d{1,2}:\d{2})\s*(.+?)[\s]*[\d,]+원""")
@@ -627,6 +644,8 @@ object SmsParser {
      */
     private fun cleanStoreName(name: String): String {
         var cleaned = name.trim()
+        // 법인 표기 제거 (예: "(주)", "(유)", "(사)", "(재)")
+        cleaned = cleaned.replace(Regex("""\(주\)|\(유\)|\(사\)|\(재\)"""), "")
         // 앞뒤 특수문자 제거
         cleaned = cleaned.replace(Regex("""^[^\w가-힣]+|[^\w가-힣]+$"""), "")
         // 앞쪽의 "숫자원" 패턴 제거 (예: "60원캐쉬백" -> "캐쉬백")
@@ -652,6 +671,9 @@ object SmsParser {
         // 날짜/시간 패턴 제외
         if (name.matches(Regex("""\d{1,2}[/.-]\d{1,2}"""))) return false
         if (name.matches(Regex("""\d{1,2}:\d{2}"""))) return false
+
+        // 마스킹된 이름 패턴 제외 (예: 하*현, 김*수, 이**)
+        if (name.matches(Regex("""[가-힣]\*+[가-힣]?"""))) return false
 
         // 제외 패턴에 해당하는 경우 제외
         for (pattern in excludeStorePatterns) {
@@ -751,6 +773,11 @@ object SmsParser {
      * @return 매칭된 카테고리 (없으면 "미분류")
      */
     fun inferCategory(storeName: String, message: String): String {
+        // 계좌이체 우선 감지: 계좌번호 패턴(**포함) + "출금" 키워드
+        if (message.contains("출금") && message.contains(Regex("""\d+\*+\d+"""))) {
+            return "계좌이체"
+        }
+
         val combinedText = "$storeName $message".lowercase()
 
         for ((category, keywords) in categoryKeywords) {

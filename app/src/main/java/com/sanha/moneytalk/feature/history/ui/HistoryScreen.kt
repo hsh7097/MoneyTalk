@@ -77,6 +77,7 @@ private val categoryStyles = Category.entries.associate { category ->
             Category.HOUSING -> Color(0xFF607D8B)
             Category.LIVING -> Color(0xFF4CAF50)
             Category.INSURANCE -> Color(0xFF00796B)
+            Category.TRANSFER -> Color(0xFF546E7A)
             Category.EVENTS -> Color(0xFFFF5722)
             Category.DELIVERY -> Color(0xFFFF6D00)
             Category.ETC -> Color(0xFF9E9E9E)
