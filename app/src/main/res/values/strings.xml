@@ -36,6 +36,7 @@
     <string name="chat_delete">삭제</string>
     <string name="chat_no_sessions">대화 내역이 없습니다</string>
     <string name="chat_start_new">새 대화 시작</string>
+    <string name="chat_retry">다시 요청</string>
     <string name="chat_default_session_title">새 대화</string>
     <string name="chat_previous_session_title">이전 대화</string>
 
@@ -78,6 +79,7 @@
     <string name="home_next_month">다음 달</string>
     <string name="home_sync">동기화</string>
     <string name="home_sync_new_only">새 문자만 동기화</string>
+    <string name="home_sync_today">오늘 문자만 동기화</string>
     <string name="home_sync_full">전체 문자 다시 읽기</string>
     <string name="home_income">수입</string>
     <string name="home_expense">지출</string>
@@ -161,6 +163,31 @@
     <string name="settings_section_app">앱 정보</string>
     <string name="settings_version_title">버전</string>
     <string name="settings_privacy_title">개인정보 처리방침</string>
+
+    <!-- 앱 정보 다이얼로그 -->
+    <string name="app_info_title">앱 정보</string>
+    <string name="app_info_version">버전 %s</string>
+    <string name="app_info_description">SMS 문자를 분석해 지출을 자동으로 기록하고,\nAI가 카테고리를 분류해주는 스마트 가계부</string>
+    <string name="app_info_developer">개발자</string>
+    <string name="app_info_developer_name">sanha</string>
+    <string name="app_info_contact">문의</string>
+    <string name="app_info_contact_email">hsh7097@gmail.com</string>
+    <string name="app_info_license">라이선스: MIT</string>
+
+    <!-- 개인정보 처리방침 다이얼로그 -->
+    <string name="privacy_title">개인정보 처리방침</string>
+    <string name="privacy_intro">MoneyTalk은 사용자의 개인정보를 소중히 보호합니다.</string>
+    <string name="privacy_section_collect">1. 수집하는 정보</string>
+    <string name="privacy_collect_detail">\u0020\u0020• SMS 문자 메시지 (결제 내역 파싱 목적)\n\u0020\u0020• 설정한 월 수입 및 예산 정보\n\u0020\u0020• 구글 드라이브 연동 시 계정 이메일</string>
+    <string name="privacy_section_usage">2. 정보 이용 목적</string>
+    <string name="privacy_usage_detail">\u0020\u0020• 지출/수입 자동 기록 및 분류\n\u0020\u0020• AI 기반 카테고리 분류 (Gemini API)\n\u0020\u0020• 클라우드 백업 및 복원</string>
+    <string name="privacy_section_storage">3. 정보 저장</string>
+    <string name="privacy_storage_detail">\u0020\u0020• 모든 데이터는 기기 내부에만 저장됩니다\n\u0020\u0020• 구글 드라이브 백업은 본인의 드라이브에 저장됩니다\n\u0020\u0020• 서버에 개인정보를 전송하지 않습니다</string>
+    <string name="privacy_section_thirdparty">4. 제3자 제공</string>
+    <string name="privacy_thirdparty_detail">\u0020\u0020• AI 분류를 위해 가게명 등 비식별 정보가 Google Gemini API로 전송될 수 있습니다\n\u0020\u0020• 그 외 개인정보는 제3자에게 제공되지 않습니다</string>
+    <string name="privacy_section_rights">5. 사용자 권리</string>
+    <string name="privacy_rights_detail">\u0020\u0020• 설정에서 언제든 모든 데이터를 삭제할 수 있습니다\n\u0020\u0020• 앱 삭제 시 모든 로컬 데이터가 함께 삭제됩니다</string>
+    <string name="privacy_last_updated">최종 수정: 2025년 2월</string>
 
     <!-- 전체 삭제 다이얼로그 -->
     <string name="dialog_delete_all_title">전체 데이터 삭제</string>

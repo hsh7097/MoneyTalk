@@ -2,6 +2,7 @@ package com.sanha.moneytalk.core.util
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
@@ -17,6 +18,8 @@ import com.google.api.services.drive.model.File
 import com.google.api.services.drive.model.FileList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -63,11 +66,56 @@ class GoogleDriveHelper @Inject constructor() {
     }
 
     /**
-     * 로그인 상태 확인
+     * 로그인 상태 확인 (계정 존재 여부만 체크)
+     * hasPermissions가 false를 반환해도 실제로는 scope가 부여되어 있는 경우가 있으므로
+     * 계정이 있으면 true로 판단하고, Drive API 호출 시 에러가 나면 그때 재인증
      */
     fun isSignedIn(context: Context): Boolean {
         val account = getSignedInAccount(context)
-        return account != null && GoogleSignIn.hasPermissions(account, Scope(DriveScopes.DRIVE_FILE))
+        return account != null
+    }
+
+    /**
+     * Drive 서비스가 초기화되어 있는지 확인
+     */
+    fun isDriveServiceReady(): Boolean = driveService != null
+
+    /**
+     * Silent Sign-In 시도
+     * 이미 로그인된 계정이 있으면 UI 없이 자동 로그인 (Drive 서비스도 초기화)
+     * @return 성공한 계정, 실패 시 null
+     */
+    suspend fun trySilentSignIn(context: Context): GoogleSignInAccount? {
+        return try {
+            val task = getGoogleSignInClient(context).silentSignIn()
+
+            // 이미 완료된 경우 (캐시된 계정)
+            if (task.isSuccessful) {
+                val account = task.result
+                if (account != null) {
+                    initializeDriveService(context, account)
+                    Log.d("GoogleDriveHelper", "Silent sign-in 즉시 성공: ${account.email}")
+                }
+                return account
+            }
+
+            // 비동기 완료 대기
+            suspendCoroutine { cont ->
+                task.addOnSuccessListener { account ->
+                    if (account != null) {
+                        initializeDriveService(context, account)
+                        Log.d("GoogleDriveHelper", "Silent sign-in 성공: ${account.email}")
+                    }
+                    cont.resume(account)
+                }.addOnFailureListener { e ->
+                    Log.d("GoogleDriveHelper", "Silent sign-in 실패: ${e.message}")
+                    cont.resume(null)
+                }
+            }
+        } catch (e: Exception) {
+            Log.d("GoogleDriveHelper", "Silent sign-in 예외: ${e.message}")
+            null
+        }
     }
 
     /**

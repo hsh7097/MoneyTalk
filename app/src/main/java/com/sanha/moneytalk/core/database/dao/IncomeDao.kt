@@ -54,6 +54,10 @@ interface IncomeDao {
     @Query("SELECT * FROM incomes WHERE dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
     fun getIncomesByDateRange(startTime: Long, endTime: Long): Flow<List<IncomeEntity>>
 
+    /** 기간별 수입 일회성 조회 (채팅 쿼리용) */
+    @Query("SELECT * FROM incomes WHERE dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
+    suspend fun getIncomesByDateRangeOnce(startTime: Long, endTime: Long): List<IncomeEntity>
+
     // 백업용 - 모든 수입 한번에 가져오기
     @Query("SELECT * FROM incomes ORDER BY dateTime DESC")
     suspend fun getAllIncomesOnce(): List<IncomeEntity>

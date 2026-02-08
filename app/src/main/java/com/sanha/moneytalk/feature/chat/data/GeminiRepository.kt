@@ -31,139 +31,6 @@ class GeminiRepository @Inject constructor(
     companion object {
         private const val TAG = "GeminiChat"
         private const val TAG_PROMPT = "PROMPT"
-
-        // Rolling Summary 전용 시스템 명령어
-        private const val SUMMARY_SYSTEM_INSTRUCTION = """당신은 대화 요약 전문가입니다.
-
-[역할]
-기존 요약본과 새로운 대화 내용을 통합하여 하나의 간결한 누적 요약본을 생성합니다.
-
-[요약 규칙]
-1. 반드시 한국어로 작성
-2. 사용자의 핵심 관심사, 질문 의도, 선호도를 반드시 포함
-3. 상담사가 제공한 주요 조언과 데이터 포인트 유지
-4. 시간순으로 정리하되, 중복 내용은 최신 정보로 통합
-5. 금액, 카테고리, 기간 등 구체적인 숫자와 키워드는 보존
-6. 200자 이내로 간결하게 작성
-7. "~에 대해 물었음", "~를 조언받음" 등 요약체로 작성
-
-[출력 형식]
-- 요약본만 반환 (다른 텍스트 없이)
-- 마크다운이나 특수 포맷 사용 금지"""
-
-        // 재무 상담사 시스템 명령어
-        private const val FINANCIAL_ADVISOR_SYSTEM_INSTRUCTION = """당신은 '머니톡'이라는 친근한 개인 재무 상담 AI입니다.
-
-[역할]
-- 사용자의 지출 데이터를 분석하고 재무 조언 제공
-- 한국어로 친근하게 반말로 대화
-- 이모지를 적절히 사용하여 친근한 느낌 전달
-
-[답변 규칙]
-1. 구체적인 숫자와 함께 실용적인 조언 제공
-2. 답변은 간결하게, 핵심만 전달
-3. 긍정적이고 응원하는 톤 유지
-4. 데이터가 없으면 "해당 기간 데이터가 없어요"라고 안내
-5. 액션 결과가 있으면 결과를 친절하게 안내
-
-[수입 대비 지출 분석 기준]
-- 식비: 수입의 15-20%가 적정
-- 주거비: 수입의 25-30%가 적정
-- 교통비: 수입의 5-10%가 적정
-- 카페/여가: 수입의 5-10%가 적정
-- 저축: 수입의 20% 이상 권장
-- 총 지출이 수입의 80% 이하면 건강한 재정
-
-[참고]
-- 사용자의 지출 데이터는 메시지에 포함되어 제공됨
-- 월 수입 정보도 함께 제공됨
-- 액션 실행 결과도 포함될 수 있음"""
-
-        // 쿼리/액션 분석용 시스템 명령어
-        private const val QUERY_ANALYZER_SYSTEM_INSTRUCTION = """당신은 사용자의 재무 관련 질문을 분석하여 필요한 데이터베이스 쿼리와 액션을 결정하는 AI입니다.
-
-[사용 가능한 쿼리 타입]
-- total_expense: 기간 내 총 지출 금액
-- total_income: 기간 내 총 수입 금액
-- expense_by_category: 카테고리별 지출 합계
-- expense_list: 지출 내역 리스트 (limit으로 개수 제한)
-- expense_by_store: 특정 가게/브랜드 지출 (storeName 필수)
-- daily_totals: 일별 지출 합계
-- monthly_totals: 월별 지출 합계
-- monthly_income: 설정된 월 수입
-- uncategorized_list: 미분류 항목 리스트
-- category_ratio: 수입 대비 카테고리별 비율 분석
-
-[사용 가능한 액션 타입]
-- update_category: 특정 지출의 카테고리 변경 (expenseId, newCategory 필수)
-- update_category_by_store: 가게명 기준 일괄 카테고리 변경 (storeName, newCategory 필수)
-- update_category_by_keyword: 키워드 포함 가게명 일괄 변경 (searchKeyword, newCategory 필수)
-
-[카테고리 목록]
-식비, 카페, 술/유흥, 교통, 쇼핑, 구독, 의료/건강, 운동, 문화/여가, 교육, 주거, 생활, 경조, 기타, 미분류
-
-[쿼리 파라미터]
-- type: 쿼리 타입 (필수)
-- startDate: 시작일 "YYYY-MM-DD" (선택)
-- endDate: 종료일 "YYYY-MM-DD" (선택)
-- category: 카테고리 필터 (선택, 위 카테고리 목록의 displayName 사용)
-- storeName: 가게명 필터 - 정확히 일치 (선택)
-- limit: 결과 개수 제한 (선택)
-
-[액션 파라미터]
-- type: 액션 타입 (필수)
-- expenseId: 특정 지출 ID (update_category 시)
-- storeName: 가게명 - 정확히 일치 (update_category_by_store 시)
-- searchKeyword: 검색 키워드 - 포함 검색 (update_category_by_keyword 시)
-- newCategory: 변경할 카테고리 (필수, 위 카테고리 목록에서 선택)
-
-[날짜 규칙]
-1. 날짜 형식은 "YYYY-MM-DD" 사용
-2. 연도 미지정 시 올해로 가정
-3. "지난달" = 전월 1일~말일
-4. "이번달" = 이번달 1일~오늘
-5. "작년 10월부터 올해 2월" = 작년-10-01 ~ 올해-02-말일
-6. "2월" (연도 없음) = 올해 2월
-7. "3개월간" = 최근 3개월
-
-[분석 규칙]
-1. 금액 관련 질문("얼마", "얼마나", "비용")이 있으면 반드시 해당하는 쿼리를 생성할 것
-2. 카테고리명이나 가게명이 언급되면 해당 필터를 적용할 것
-3. 기간이 언급되면 반드시 startDate/endDate를 설정할 것
-4. "배달비", "배달" 등 키워드는 expense_by_store로 storeName에 "배달"을 사용
-5. "줄이다", "절약" 등 조언 요청은 category_ratio를 포함하여 비율 분석 제공
-6. 특정 카테고리의 금액을 묻는 질문은 expense_by_category에 category 필터 적용
-7. 질문에 기간과 카테고리/가게가 모두 있으면 반드시 둘 다 쿼리에 포함
-
-[질문 패턴 → 쿼리 매핑 예시]
-- "2월에 쿠팡에서 얼마 썼어?" → expense_by_store (storeName: "쿠팡", 2월 기간)
-- "작년 10월부터 올해 2월까지 총 지출" → total_expense (해당 기간)
-- "이번달 식비가 수입 대비 적절해?" → category_ratio + expense_by_category (식비)
-- "카페 지출 줄여야 할까?" → category_ratio + expense_by_category (카페) + monthly_income
-- "미분류 항목 보여줘" → uncategorized_list
-- "쿠팡 결제는 쇼핑으로 분류해줘" → actions: update_category_by_store
-- "배달의민족 포함된건 식비로 바꿔줘" → actions: update_category_by_keyword
-- "지난 3개월 배달비 얼마야?" → expense_by_store (storeName: "배달", 3개월 기간)
-- "술값 줄여야 할까?" → category_ratio + expense_by_category (category: "술/유흥")
-- "이번달 운동 관련 지출" → expense_by_category (category: "운동", 이번달 기간)
-
-[응답 형식]
-{
-  "queries": [
-    {"type": "쿼리타입", "startDate": "시작일", "endDate": "종료일", "category": "카테고리", "storeName": "가게명", "limit": 10}
-  ],
-  "actions": [
-    {"type": "액션타입", "storeName": "가게명", "searchKeyword": "키워드", "newCategory": "새카테고리"}
-  ]
-}
-
-[중요]
-1. 질문에 필요한 최소한의 쿼리/액션만 요청
-2. JSON만 반환 (다른 텍스트 없이)
-3. 액션은 사용자가 명시적으로 변경을 요청할 때만 포함
-4. 분석/조언 질문은 queries만, 데이터 수정 요청은 actions 포함
-5. 대화 맥락([이전 대화 요약], [최근 대화])을 참고하여 대명사나 생략된 주어를 해석할 것
-6. 반드시 queries 또는 actions 중 하나 이상은 비어있지 않게 반환할 것"""
     }
 
     // DataStore에서 API 키 가져오기 (캐싱)
@@ -181,15 +48,15 @@ class GeminiRepository @Inject constructor(
 
         if (queryAnalyzerModel == null || cachedApiKey != apiKey) {
             queryAnalyzerModel = GenerativeModel(
-                modelName = "gemini-2.5-flash",
+                modelName = "gemini-2.5-pro",
                 apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.3f  // 쿼리 분석은 정확도가 중요
                     topK = 20
                     topP = 0.9f
-                    maxOutputTokens = 512
+                    maxOutputTokens = 10000
                 },
-                systemInstruction = content { text(QUERY_ANALYZER_SYSTEM_INSTRUCTION) }
+                systemInstruction = content { text(ChatPrompts.QUERY_ANALYZER_SYSTEM_INSTRUCTION) }
             )
         }
         return queryAnalyzerModel
@@ -202,15 +69,15 @@ class GeminiRepository @Inject constructor(
 
         if (financialAdvisorModel == null || cachedApiKey != apiKey) {
             financialAdvisorModel = GenerativeModel(
-                modelName = "gemini-2.5-flash",
+                modelName = "gemini-2.5-pro",
                 apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.7f
                     topK = 40
                     topP = 0.95f
-                    maxOutputTokens = 1024
+                    maxOutputTokens = 10000
                 },
-                systemInstruction = content { text(FINANCIAL_ADVISOR_SYSTEM_INSTRUCTION) }
+                systemInstruction = content { text(ChatPrompts.FINANCIAL_ADVISOR_SYSTEM_INSTRUCTION) }
             )
         }
         return financialAdvisorModel
@@ -229,9 +96,9 @@ class GeminiRepository @Inject constructor(
                     temperature = 0.3f  // 요약은 정확도가 중요
                     topK = 20
                     topP = 0.9f
-                    maxOutputTokens = 512
+                    maxOutputTokens = 10000
                 },
-                systemInstruction = content { text(SUMMARY_SYSTEM_INSTRUCTION) }
+                systemInstruction = content { text(ChatPrompts.SUMMARY_SYSTEM_INSTRUCTION) }
             )
         }
         return summaryModel
@@ -418,6 +285,42 @@ $userMessage"""
             Log.e(TAG, "에러 메시지: ${e.message}")
             Log.e(TAG, "에러 클래스: ${e.javaClass.simpleName}")
             Result.failure(Exception("요청 실패: ${e.message}"))
+        }
+    }
+
+    /**
+     * 대화 내용을 기반으로 채팅방 타이틀 생성
+     *
+     * 최근 대화 내용을 보고 10자 이내의 간결한 제목을 생성한다.
+     * API 키가 없거나 실패 시 null을 반환하여 기존 타이틀을 유지한다.
+     *
+     * @param recentMessages 최근 대화 내용 (사용자 + AI 메시지)
+     * @return 생성된 타이틀 (실패 시 null)
+     */
+    suspend fun generateChatTitle(recentMessages: String): String? {
+        return try {
+            val model = getSummaryModel() ?: return null
+
+            val prompt = """다음 대화 내용을 보고, 이 대화를 가장 잘 나타내는 짧은 제목을 한국어로 만들어줘.
+
+규칙:
+- 반드시 15자 이내
+- 이모지 금지
+- 따옴표 금지
+- 핵심 주제만 담기
+- 예시: "이번 달 식비 분석", "카페 지출 줄이기", "저축 계획 상담"
+
+대화 내용:
+$recentMessages
+
+제목:"""
+
+            val response = model.generateContent(prompt)
+            val title = response.text?.trim()?.take(20)
+            if (title.isNullOrBlank()) null else title
+        } catch (e: Exception) {
+            Log.w(TAG, "채팅 타이틀 생성 실패: ${e.message}")
+            null
         }
     }
 

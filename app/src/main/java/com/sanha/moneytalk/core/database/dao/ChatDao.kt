@@ -39,6 +39,9 @@ interface ChatDao {
     @Query("SELECT * FROM chat_sessions ORDER BY updatedAt DESC")
     fun getAllSessions(): Flow<List<ChatSessionEntity>>
 
+    @Query("SELECT * FROM chat_sessions ORDER BY updatedAt DESC")
+    suspend fun getAllSessionsOnce(): List<ChatSessionEntity>
+
     @Query("SELECT * FROM chat_sessions WHERE id = :sessionId")
     suspend fun getSessionById(sessionId: Long): ChatSessionEntity?
 
@@ -89,4 +92,7 @@ interface ChatDao {
 
     @Query("DELETE FROM chat_history")
     suspend fun deleteAll()
+
+    @Query("DELETE FROM chat_sessions")
+    suspend fun deleteAllSessions()
 }

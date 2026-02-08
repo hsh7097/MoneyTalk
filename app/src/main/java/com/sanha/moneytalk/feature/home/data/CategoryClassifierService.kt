@@ -162,10 +162,14 @@ class CategoryClassifierService @Inject constructor(
      * 3. 대표의 분류 결과를 그룹 멤버에게 전파
      * 4. 결과를 Room + 벡터 DB에 모두 저장
      *
+     * @param onStepProgress 세부 진행 콜백 (단계명, 현재, 전체)
      * @return 분류된 항목 수
      */
-    suspend fun classifyUnclassifiedExpenses(): Int {
+    suspend fun classifyUnclassifiedExpenses(
+        onStepProgress: (suspend (step: String, current: Int, total: Int) -> Unit)? = null
+    ): Int {
         // 카테고리가 "미분류"인 지출 조회
+        onStepProgress?.invoke("미분류 항목 조회 중...", 0, 0)
         val unclassifiedExpenses = expenseRepository.getExpensesByCategoryOnce("미분류")
 
         if (unclassifiedExpenses.isEmpty()) {
@@ -178,6 +182,7 @@ class CategoryClassifierService @Inject constructor(
         Log.d(TAG, "분류할 가게명: ${storeNames.size}개")
 
         // ===== 시맨틱 그룹핑으로 Gemini 호출 최적화 =====
+        onStepProgress?.invoke("유사 가게 그룹핑 중...", 0, storeNames.size)
         val groups = try {
             storeNameGrouper.groupStoreNames(storeNames)
         } catch (e: Exception) {
@@ -192,6 +197,7 @@ class CategoryClassifierService @Inject constructor(
                 "(${storeNames.size - groups.size}개 Gemini 호출 절감)")
 
         // 대표 가게명만 Gemini로 분류
+        onStepProgress?.invoke("AI 분류 중...", 0, representatives.size)
         val classifications = geminiRepository.classifyStoreNames(representatives)
 
         if (classifications.isEmpty()) {
@@ -218,6 +224,7 @@ class CategoryClassifierService @Inject constructor(
         }
 
         // Room 매핑 저장
+        onStepProgress?.invoke("결과 저장 중...", classifications.size, representatives.size)
         val mappings = allClassifications.map { (store, category) -> store to category }
         categoryRepository.saveMappings(mappings, "gemini")
 
@@ -231,10 +238,14 @@ class CategoryClassifierService @Inject constructor(
 
         // 지출 항목 카테고리 업데이트
         var updatedCount = 0
-        for (expense in unclassifiedExpenses) {
+        val totalExpenses = unclassifiedExpenses.size
+        for ((idx, expense) in unclassifiedExpenses.withIndex()) {
             allClassifications[expense.storeName]?.let { newCategory ->
                 expenseRepository.updateCategoryById(expense.id, newCategory)
                 updatedCount++
+            }
+            if (idx % 10 == 0) {
+                onStepProgress?.invoke("지출 업데이트 중...", idx, totalExpenses)
             }
         }
 
@@ -330,11 +341,13 @@ class CategoryClassifierService @Inject constructor(
     /**
      * 미분류 항목이 없을 때까지 반복 분류
      * @param onProgress 진행 상황 콜백 (현재 라운드, 분류된 수, 남은 미분류 수)
+     * @param onStepProgress 세부 단계 진행 콜백 (단계명, 현재, 전체)
      * @param maxRounds 최대 반복 횟수 (무한 루프 방지)
      * @return 총 분류된 항목 수
      */
     suspend fun classifyAllUntilComplete(
         onProgress: suspend (round: Int, classifiedInRound: Int, remaining: Int) -> Unit,
+        onStepProgress: (suspend (step: String, current: Int, total: Int) -> Unit)? = null,
         maxRounds: Int = 10
     ): Int {
         var totalClassified = 0
@@ -351,7 +364,7 @@ class CategoryClassifierService @Inject constructor(
 
             Log.d(TAG, "라운드 $round 시작: ${remainingBefore}개 미분류")
 
-            val classifiedInRound = classifyUnclassifiedExpenses()
+            val classifiedInRound = classifyUnclassifiedExpenses(onStepProgress)
             totalClassified += classifiedInRound
 
             val remainingAfter = getUnclassifiedCount()

@@ -10,12 +10,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,24 +65,21 @@ fun HomeScreen(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val showScrollToTop by remember {
-        derivedStateOf { listState.firstVisibleItemIndex > 2 }
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 ||
+            (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 200)
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Pull-to-Refresh
-        PullToRefreshBox(
-            isRefreshing = uiState.isRefreshing,
-            onRefresh = { viewModel.refresh() },
-            modifier = Modifier.fillMaxSize()
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(0.dp)
-            ) {
                 // 월간 현황
                 item {
                     MonthlyOverviewSection(
@@ -98,6 +95,11 @@ fun HomeScreen(
                         onIncrementalSync = {
                             onRequestSmsPermission {
                                 viewModel.syncSmsMessages(contentResolver, forceFullSync = false)
+                            }
+                        },
+                        onTodaySync = {
+                            onRequestSmsPermission {
+                                viewModel.syncSmsMessages(contentResolver, todayOnly = true)
                             }
                         },
                         onFullSync = {
@@ -188,7 +190,6 @@ fun HomeScreen(
                     }
                 }
             }
-        }
 
         // Scroll to Top FAB
         AnimatedVisibility(
@@ -278,13 +279,83 @@ fun HomeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.padding(16.dp)
-                    )
+                    // 진행률 바 (총 진행률)
+                    if (uiState.classifyProgressTotal > 0) {
+                        val progress = uiState.classifyProgressCurrent.toFloat() / uiState.classifyProgressTotal.toFloat()
+                        LinearProgressIndicator(
+                            progress = { progress.coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .padding(horizontal = 8.dp),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "${uiState.classifyProgressCurrent} / ${uiState.classifyProgressTotal}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    } else {
+                        CircularProgressIndicator(
+                            modifier = Modifier.padding(8.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                     Text(
                         text = uiState.classifyProgress,
                         style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = { }
+        )
+    }
+
+    // SMS 동기화 진행 다이얼로그
+    if (uiState.showSyncDialog) {
+        AlertDialog(
+            onDismissRequest = { /* 진행 중에는 닫기 불가 */ },
+            title = { Text("문자 동기화 중") },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (uiState.syncProgressTotal > 0) {
+                        val progress = uiState.syncProgressCurrent.toFloat() / uiState.syncProgressTotal.toFloat()
+                        LinearProgressIndicator(
+                            progress = { progress.coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .padding(horizontal = 8.dp),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "${uiState.syncProgressCurrent} / ${uiState.syncProgressTotal}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    } else {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .padding(horizontal = 8.dp),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    Text(
+                        text = uiState.syncProgress,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             },
@@ -305,6 +376,7 @@ fun MonthlyOverviewSection(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onIncrementalSync: () -> Unit,
+    onTodaySync: () -> Unit,
     onFullSync: () -> Unit,
     isSyncing: Boolean
 ) {
@@ -386,6 +458,16 @@ fun MonthlyOverviewSection(
                             },
                             leadingIcon = {
                                 Icon(Icons.Default.Refresh, contentDescription = null)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.home_sync_today)) },
+                            onClick = {
+                                showSyncMenu = false
+                                onTodaySync()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Notifications, contentDescription = null)
                             }
                         )
                         DropdownMenuItem(

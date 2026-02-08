@@ -154,14 +154,11 @@ object DateUtils {
      * 특정 년월의 시작 timestamp
      */
     fun getMonthStartTimestamp(year: Int, month: Int): Long {
-        val calendar = Calendar.getInstance()
-        calendar.set(Calendar.YEAR, year)
-        calendar.set(Calendar.MONTH, month - 1) // Calendar.MONTH는 0부터 시작
-        calendar.set(Calendar.DAY_OF_MONTH, 1)
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
+        val calendar = Calendar.getInstance().apply {
+            clear()
+            set(year, month - 1, 1, 0, 0, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
         return calendar.timeInMillis
     }
 
@@ -169,14 +166,12 @@ object DateUtils {
      * 특정 년월의 끝 timestamp
      */
     fun getMonthEndTimestamp(year: Int, month: Int): Long {
-        val calendar = Calendar.getInstance()
-        calendar.set(Calendar.YEAR, year)
-        calendar.set(Calendar.MONTH, month - 1)
-        calendar.set(Calendar.DAY_OF_MONTH, calendar.getActualMaximum(Calendar.DAY_OF_MONTH))
-        calendar.set(Calendar.HOUR_OF_DAY, 23)
-        calendar.set(Calendar.MINUTE, 59)
-        calendar.set(Calendar.SECOND, 59)
-        calendar.set(Calendar.MILLISECOND, 999)
+        val calendar = Calendar.getInstance().apply {
+            clear()
+            set(year, month - 1, 1, 23, 59, 59) // DAY=1로 먼저 안전하게 설정
+            set(Calendar.MILLISECOND, 999)
+            set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+        }
         return calendar.timeInMillis
     }
 
@@ -225,52 +220,42 @@ object DateUtils {
      * @return Pair<시작 timestamp, 종료 timestamp>
      */
     fun getCustomMonthPeriod(year: Int, month: Int, monthStartDay: Int): Pair<Long, Long> {
-        val calendar = Calendar.getInstance()
-
         if (monthStartDay == 1) {
             // monthStartDay=1: 해당 월 1일 ~ 해당 월 말일
-            calendar.set(Calendar.YEAR, year)
-            calendar.set(Calendar.MONTH, month - 1)
-            calendar.set(Calendar.DAY_OF_MONTH, 1)
-            calendar.set(Calendar.HOUR_OF_DAY, 0)
-            calendar.set(Calendar.MINUTE, 0)
-            calendar.set(Calendar.SECOND, 0)
-            calendar.set(Calendar.MILLISECOND, 0)
-            val startTimestamp = calendar.timeInMillis
-
-            calendar.set(Calendar.DAY_OF_MONTH, calendar.getActualMaximum(Calendar.DAY_OF_MONTH))
-            calendar.set(Calendar.HOUR_OF_DAY, 23)
-            calendar.set(Calendar.MINUTE, 59)
-            calendar.set(Calendar.SECOND, 59)
-            calendar.set(Calendar.MILLISECOND, 999)
-            val endTimestamp = calendar.timeInMillis
-
-            return Pair(startTimestamp, endTimestamp)
+            val startCal = Calendar.getInstance().apply {
+                clear()
+                set(year, month - 1, 1, 0, 0, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val endCal = Calendar.getInstance().apply {
+                clear()
+                set(year, month - 1, 1, 23, 59, 59)
+                set(Calendar.MILLISECOND, 999)
+                set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+            }
+            return Pair(startCal.timeInMillis, endCal.timeInMillis)
         } else {
             // monthStartDay>1: 이전 달 monthStartDay ~ 이번 달 (monthStartDay-1)
             // 예: month=1, monthStartDay=21 → 12/21 ~ 1/20
-            calendar.set(Calendar.YEAR, year)
-            calendar.set(Calendar.MONTH, month - 1)
-            // 이전 달로 이동
-            calendar.add(Calendar.MONTH, -1)
-            calendar.set(Calendar.DAY_OF_MONTH, monthStartDay.coerceAtMost(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)))
-            calendar.set(Calendar.HOUR_OF_DAY, 0)
-            calendar.set(Calendar.MINUTE, 0)
-            calendar.set(Calendar.SECOND, 0)
-            calendar.set(Calendar.MILLISECOND, 0)
-            val startTimestamp = calendar.timeInMillis
 
-            // 종료일: 이번 달 (monthStartDay - 1)
-            calendar.set(Calendar.YEAR, year)
-            calendar.set(Calendar.MONTH, month - 1)
-            calendar.set(Calendar.DAY_OF_MONTH, (monthStartDay - 1).coerceAtMost(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)))
-            calendar.set(Calendar.HOUR_OF_DAY, 23)
-            calendar.set(Calendar.MINUTE, 59)
-            calendar.set(Calendar.SECOND, 59)
-            calendar.set(Calendar.MILLISECOND, 999)
-            val endTimestamp = calendar.timeInMillis
+            // 시작일: 이전 달의 monthStartDay
+            val startCal = Calendar.getInstance().apply {
+                clear()
+                set(year, month - 1, 1, 0, 0, 0) // 먼저 DAY=1로 안전하게 설정
+                set(Calendar.MILLISECOND, 0)
+                add(Calendar.MONTH, -1) // 이전 달로 이동
+                set(Calendar.DAY_OF_MONTH, monthStartDay.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH)))
+            }
 
-            return Pair(startTimestamp, endTimestamp)
+            // 종료일: 이번 달의 (monthStartDay - 1)
+            val endCal = Calendar.getInstance().apply {
+                clear()
+                set(year, month - 1, 1, 23, 59, 59) // 먼저 DAY=1로 안전하게 설정
+                set(Calendar.MILLISECOND, 999)
+                set(Calendar.DAY_OF_MONTH, (monthStartDay - 1).coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH)))
+            }
+
+            return Pair(startCal.timeInMillis, endCal.timeInMillis)
         }
     }
 
@@ -332,6 +317,48 @@ object DateUtils {
             "${year}년 ${month}월"
         } else {
             "${year}년 ${month}월 (${monthStartDay}일~)"
+        }
+    }
+
+    /**
+     * LLM/Gemini가 추출한 dateTime 문자열의 연도를 SMS 수신 시간 기준으로 검증/교정
+     *
+     * LLM이 SMS 본문에서 날짜를 추출할 때 연도를 잘못 추정할 수 있습니다.
+     * (예: 2026년 1월 SMS에서 "01/15"를 보고 "2025-01-15"로 반환)
+     *
+     * SMS 수신 시간과 추출된 날짜의 차이가 6개월 이상이면
+     * SMS 수신 시간의 연도로 교정합니다.
+     *
+     * @param extractedDateTime LLM이 추출한 "yyyy-MM-dd HH:mm" 형식 문자열
+     * @param smsTimestamp SMS 수신 시간 (밀리초)
+     * @return 교정된 dateTime 문자열
+     */
+    fun validateExtractedDateTime(extractedDateTime: String, smsTimestamp: Long): String {
+        if (extractedDateTime.isBlank()) return extractedDateTime
+
+        return try {
+            val parsedTime = dateTimeFormat.parse(extractedDateTime)?.time ?: return extractedDateTime
+            val diff = kotlin.math.abs(parsedTime - smsTimestamp)
+
+            // 6개월(~183일) 이상 차이나면 연도가 잘못된 것으로 판단
+            val sixMonthsMs = 183L * 24 * 60 * 60 * 1000
+            if (diff > sixMonthsMs) {
+                // SMS 수신 시간의 연도로 교정
+                val smsCal = Calendar.getInstance().apply { timeInMillis = smsTimestamp }
+                val smsYear = smsCal.get(Calendar.YEAR)
+
+                val extractedCal = Calendar.getInstance().apply { timeInMillis = parsedTime }
+                extractedCal.set(Calendar.YEAR, smsYear)
+
+                val corrected = dateTimeFormat.format(extractedCal.time)
+                Log.w("DateUtils", "LLM 날짜 연도 교정: '$extractedDateTime' → '$corrected' (SMS수신: ${dateTimeFormat.format(Date(smsTimestamp))})")
+                corrected
+            } else {
+                extractedDateTime
+            }
+        } catch (e: Exception) {
+            Log.w("DateUtils", "LLM 날짜 검증 실패: '$extractedDateTime' → 원본 유지")
+            extractedDateTime
         }
     }
 }

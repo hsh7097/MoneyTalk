@@ -10,7 +10,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -20,6 +22,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -27,7 +30,6 @@ import com.sanha.moneytalk.core.model.Category
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +45,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.ExpenseItemCard
 import com.sanha.moneytalk.core.util.DateUtils
@@ -73,6 +76,7 @@ private val categoryStyles = Category.entries.associate { category ->
             Category.HOUSING -> Color(0xFF607D8B)
             Category.LIVING -> Color(0xFF4CAF50)
             Category.EVENTS -> Color(0xFFFF5722)
+            Category.DELIVERY -> Color(0xFFFF6D00)
             Category.ETC -> Color(0xFF9E9E9E)
             Category.UNCLASSIFIED -> Color(0xFFBDBDBD)
         }
@@ -104,19 +108,12 @@ fun HistoryScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
-        // Pull-to-Refresh
-        PullToRefreshBox(
-            isRefreshing = uiState.isRefreshing,
-            onRefresh = { viewModel.refresh() },
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .background(MaterialTheme.colorScheme.background)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
-            ) {
                 // 검색 모드일 때 검색 바, 아니면 일반 헤더
                 if (uiState.isSearchMode) {
                     SearchBar(
@@ -162,7 +159,7 @@ fun HistoryScreen(
                         month = uiState.selectedMonth,
                         monthStartDay = uiState.monthStartDay,
                         totalExpense = uiState.monthlyTotal,
-                        totalIncome = 0,
+                        totalIncome = uiState.monthlyIncomeTotal,
                         onPreviousMonth = { viewModel.previousMonth() },
                         onNextMonth = { viewModel.nextMonth() }
                     )
@@ -170,26 +167,40 @@ fun HistoryScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // 탭 (목록/달력) + 필터
-                FilterTabRow(
-                    currentMode = viewMode,
-                    onModeChange = { viewMode = it },
-                    cardNames = uiState.cardNames,
-                    selectedCardName = uiState.selectedCardName,
-                    onCardNameSelected = { viewModel.filterByCardName(it) },
-                    selectedCategory = uiState.selectedCategory,
-                    onCategorySelected = { viewModel.filterByCategory(it) },
-                    sortOrder = uiState.sortOrder,
-                    onSortOrderChange = { viewModel.setSortOrder(it) }
-                )
+                // 검색 모드에서는 필터/탭 숨기기 (달력 의미 없음)
+                if (!uiState.isSearchMode) {
+                    // 탭 (목록/달력) + 필터
+                    FilterTabRow(
+                        currentMode = viewMode,
+                        onModeChange = { viewMode = it },
+                        cardNames = uiState.cardNames,
+                        selectedCardName = uiState.selectedCardName,
+                        onCardNameSelected = { viewModel.filterByCardName(it) },
+                        selectedCategory = uiState.selectedCategory,
+                        onCategorySelected = { viewModel.filterByCategory(it) },
+                        sortOrder = uiState.sortOrder,
+                        onSortOrderChange = { viewModel.setSortOrder(it) },
+                        showIncomeView = uiState.showIncomeView,
+                        onToggleIncomeView = { viewModel.toggleIncomeView() }
+                    )
+                }
 
                 // 콘텐츠
-                when (viewMode) {
+                if (uiState.showIncomeView) {
+                    IncomeListView(
+                        incomes = uiState.incomes,
+                        isLoading = uiState.isLoading,
+                        onDeleteIncome = { viewModel.deleteIncome(it) }
+                    )
+                } else when (viewMode) {
                     ViewMode.LIST -> {
                         ExpenseListView(
                             expenses = uiState.expenses,
+                            incomes = uiState.incomes,
+                            sortOrder = uiState.sortOrder,
                             isLoading = uiState.isLoading,
                             onDelete = { viewModel.deleteExpense(it) },
+                            onDeleteIncome = { viewModel.deleteIncome(it) },
                             onCategoryChange = { expense, newCategory ->
                                 viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
                             }
@@ -210,7 +221,6 @@ fun HistoryScreen(
                     }
                 }
             }
-        }
     }
 
     // 수동 지출 추가 다이얼로그
@@ -455,20 +465,22 @@ fun PeriodSummaryCard(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.home_income) + " ",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                    Text(
-                        text = stringResource(R.string.common_won, numberFormat.format(totalIncome)),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF4CAF50)
-                    )
+                if (totalIncome > 0) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.home_income) + " ",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Text(
+                            text = "+" + stringResource(R.string.common_won, numberFormat.format(totalIncome)),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF4CAF50)
+                        )
+                    }
                 }
             }
 
@@ -503,7 +515,9 @@ fun FilterTabRow(
     selectedCategory: String? = null,
     onCategorySelected: (String?) -> Unit = {},
     sortOrder: SortOrder = SortOrder.DATE_DESC,
-    onSortOrderChange: (SortOrder) -> Unit = {}
+    onSortOrderChange: (SortOrder) -> Unit = {},
+    showIncomeView: Boolean = false,
+    onToggleIncomeView: () -> Unit = {}
 ) {
     var showFilterPanel by remember { mutableStateOf(false) }
 
@@ -517,7 +531,7 @@ fun FilterTabRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 탭 (목록 / 달력)
+            // 탭 (목록 / 달력 / 수입)
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
@@ -528,17 +542,20 @@ fun FilterTabRow(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .background(
-                            if (currentMode == ViewMode.LIST) MaterialTheme.colorScheme.primary
+                            if (currentMode == ViewMode.LIST && !showIncomeView) MaterialTheme.colorScheme.primary
                             else Color.Transparent
                         )
-                        .clickable { onModeChange(ViewMode.LIST) }
+                        .clickable {
+                            onModeChange(ViewMode.LIST)
+                            if (showIncomeView) onToggleIncomeView()
+                        }
                         .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
                     Text(
                         text = stringResource(R.string.history_view_list),
                         style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (currentMode == ViewMode.LIST) FontWeight.Bold else FontWeight.Normal,
-                        color = if (currentMode == ViewMode.LIST)
+                        fontWeight = if (currentMode == ViewMode.LIST && !showIncomeView) FontWeight.Bold else FontWeight.Normal,
+                        color = if (currentMode == ViewMode.LIST && !showIncomeView)
                             MaterialTheme.colorScheme.onPrimary
                         else
                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -548,26 +565,49 @@ fun FilterTabRow(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .background(
-                            if (currentMode == ViewMode.CALENDAR) MaterialTheme.colorScheme.primary
+                            if (currentMode == ViewMode.CALENDAR && !showIncomeView) MaterialTheme.colorScheme.primary
                             else Color.Transparent
                         )
-                        .clickable { onModeChange(ViewMode.CALENDAR) }
+                        .clickable {
+                            onModeChange(ViewMode.CALENDAR)
+                            if (showIncomeView) onToggleIncomeView()
+                        }
                         .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
                     Text(
                         text = stringResource(R.string.history_view_calendar),
                         style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (currentMode == ViewMode.CALENDAR) FontWeight.Bold else FontWeight.Normal,
-                        color = if (currentMode == ViewMode.CALENDAR)
+                        fontWeight = if (currentMode == ViewMode.CALENDAR && !showIncomeView) FontWeight.Bold else FontWeight.Normal,
+                        color = if (currentMode == ViewMode.CALENDAR && !showIncomeView)
                             MaterialTheme.colorScheme.onPrimary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (showIncomeView) Color(0xFF4CAF50)
+                            else Color.Transparent
+                        )
+                        .clickable { onToggleIncomeView() }
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.home_income),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (showIncomeView) FontWeight.Bold else FontWeight.Normal,
+                        color = if (showIncomeView)
+                            Color.White
                         else
                             MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            // 필터 아이콘
-            if (currentMode == ViewMode.LIST) {
+            // 필터 아이콘 (수입 보기가 아닐 때, 목록 모드일 때만)
+            if (currentMode == ViewMode.LIST && !showIncomeView) {
                 IconButton(
                     onClick = { showFilterPanel = !showFilterPanel },
                     modifier = Modifier.size(36.dp)
@@ -586,7 +626,7 @@ fun FilterTabRow(
         }
 
         // 필터 패널 (병렬 드롭다운 3개)
-        AnimatedVisibility(visible = showFilterPanel && currentMode == ViewMode.LIST) {
+        AnimatedVisibility(visible = showFilterPanel && currentMode == ViewMode.LIST && !showIncomeView) {
             FilterPanel(
                 cardNames = cardNames,
                 selectedCardName = selectedCardName,
@@ -771,16 +811,23 @@ fun FilterChipButton(
 @Composable
 fun ExpenseListView(
     expenses: List<ExpenseEntity>,
+    incomes: List<IncomeEntity> = emptyList(),
+    sortOrder: SortOrder = SortOrder.DATE_DESC,
     isLoading: Boolean,
     onDelete: (ExpenseEntity) -> Unit,
+    onDeleteIncome: (IncomeEntity) -> Unit = {},
     onCategoryChange: (ExpenseEntity, String) -> Unit = { _, _ -> }
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
+    var selectedIncome by remember { mutableStateOf<IncomeEntity?>(null) }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val showScrollToTop by remember {
-        derivedStateOf { listState.firstVisibleItemIndex > 5 }
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 ||
+            (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 200)
+        }
     }
 
     if (isLoading) {
@@ -813,22 +860,6 @@ fun ExpenseListView(
         return
     }
 
-    // 날짜별 그룹핑
-    val groupedExpenses = expenses.groupBy { expense ->
-        try {
-            val calendar = Calendar.getInstance().apply {
-                timeInMillis = expense.dateTime
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            calendar.time
-        } catch (e: Exception) {
-            Date()
-        }
-    }.toSortedMap(compareByDescending { it })
-
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
@@ -837,58 +868,203 @@ fun ExpenseListView(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            groupedExpenses.forEach { (date, dayExpenses) ->
-                val dailyTotal = dayExpenses.sumOf { it.amount }
-                val calendar = Calendar.getInstance().apply { time = date }
-                val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
-                val dayOfWeekResId = when (calendar.get(Calendar.DAY_OF_WEEK)) {
-                    Calendar.SUNDAY -> R.string.day_sunday
-                    Calendar.MONDAY -> R.string.day_monday
-                    Calendar.TUESDAY -> R.string.day_tuesday
-                    Calendar.WEDNESDAY -> R.string.day_wednesday
-                    Calendar.THURSDAY -> R.string.day_thursday
-                    Calendar.FRIDAY -> R.string.day_friday
-                    Calendar.SATURDAY -> R.string.day_saturday
-                    else -> R.string.day_sunday
+            when (sortOrder) {
+                SortOrder.DATE_DESC -> {
+                    // 날짜별 그룹핑 (지출 + 수입 통합)
+                    val groupedExpenses = expenses.groupBy { expense ->
+                        try {
+                            val calendar = Calendar.getInstance().apply {
+                                timeInMillis = expense.dateTime
+                                set(Calendar.HOUR_OF_DAY, 0)
+                                set(Calendar.MINUTE, 0)
+                                set(Calendar.SECOND, 0)
+                                set(Calendar.MILLISECOND, 0)
+                            }
+                            calendar.time
+                        } catch (e: Exception) {
+                            Date()
+                        }
+                    }
+
+                    val groupedIncomes = incomes.groupBy { income ->
+                        try {
+                            val calendar = Calendar.getInstance().apply {
+                                timeInMillis = income.dateTime
+                                set(Calendar.HOUR_OF_DAY, 0)
+                                set(Calendar.MINUTE, 0)
+                                set(Calendar.SECOND, 0)
+                                set(Calendar.MILLISECOND, 0)
+                            }
+                            calendar.time
+                        } catch (e: Exception) {
+                            Date()
+                        }
+                    }
+
+                    // 모든 날짜 키를 합쳐서 정렬
+                    val allDates = (groupedExpenses.keys + groupedIncomes.keys)
+                        .toSortedSet(compareByDescending { it })
+
+                    allDates.forEach { date ->
+                        val dayExpenses = groupedExpenses[date] ?: emptyList()
+                        val dayIncomes = groupedIncomes[date] ?: emptyList()
+                        val dailyExpenseTotal = dayExpenses.sumOf { it.amount }
+                        val dailyIncomeTotal = dayIncomes.sumOf { it.amount }
+                        val calendar = Calendar.getInstance().apply { time = date }
+                        val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
+                        val dayOfWeekResId = when (calendar.get(Calendar.DAY_OF_WEEK)) {
+                            Calendar.SUNDAY -> R.string.day_sunday
+                            Calendar.MONDAY -> R.string.day_monday
+                            Calendar.TUESDAY -> R.string.day_tuesday
+                            Calendar.WEDNESDAY -> R.string.day_wednesday
+                            Calendar.THURSDAY -> R.string.day_thursday
+                            Calendar.FRIDAY -> R.string.day_friday
+                            Calendar.SATURDAY -> R.string.day_saturday
+                            else -> R.string.day_sunday
+                        }
+
+                        // 날짜 헤더
+                        item {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.history_day_header, dayOfMonth, stringResource(dayOfWeekResId)),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    if (dailyIncomeTotal > 0) {
+                                        Text(
+                                            text = "+" + stringResource(R.string.common_won, numberFormat.format(dailyIncomeTotal)),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF4CAF50)
+                                        )
+                                    }
+                                    if (dailyExpenseTotal > 0) {
+                                        Text(
+                                            text = "-" + stringResource(R.string.common_won, numberFormat.format(dailyExpenseTotal)),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
+                            }
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                                thickness = 0.5.dp
+                            )
+                        }
+
+                        // 수입 항목 (해당 날짜)
+                        items(
+                            items = dayIncomes,
+                            key = { "income_${it.id}" }
+                        ) { income ->
+                            IncomeItemCard(
+                                income = income,
+                                onClick = { selectedIncome = income }
+                            )
+                        }
+
+                        // 지출 항목 (해당 날짜)
+                        items(
+                            items = dayExpenses,
+                            key = { "expense_${it.id}" }
+                        ) { expense ->
+                            ExpenseItemCard(
+                                expense = expense,
+                                onClick = { selectedExpense = expense }
+                            )
+                        }
+                    }
                 }
 
-                // 날짜 헤더
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                SortOrder.AMOUNT_DESC -> {
+                    // 금액순: 전체 기간 플랫 리스트 (날짜 그룹 없이)
+                    item {
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = stringResource(R.string.history_day_header, dayOfMonth, stringResource(dayOfWeekResId)),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            text = "금액 높은순 (${expenses.size}건)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(vertical = 4.dp)
                         )
-                        Text(
-                            text = "-" + stringResource(R.string.common_won, numberFormat.format(dailyTotal)),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.error
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                            thickness = 0.5.dp
                         )
                     }
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                        thickness = 0.5.dp
-                    )
+
+                    items(
+                        items = expenses,
+                        key = { it.id }
+                    ) { expense ->
+                        ExpenseItemCard(
+                            expense = expense,
+                            onClick = { selectedExpense = expense }
+                        )
+                    }
                 }
 
-                // 지출 항목 (공통 컴포넌트 사용)
-                items(
-                    items = dayExpenses,
-                    key = { it.id }
-                ) { expense ->
-                    ExpenseItemCard(
-                        expense = expense,
-                        onClick = { selectedExpense = expense }
-                    )
+                SortOrder.STORE_FREQ -> {
+                    // 사용처별: 가게명으로 그룹핑
+                    val storeGroups = expenses.groupBy { it.storeName }
+                        .entries
+                        .sortedByDescending { it.value.size }
+
+                    storeGroups.forEach { (storeName, storeExpenses) ->
+                        val storeTotal = storeExpenses.sumOf { it.amount }
+
+                        // 사용처 헤더
+                        item {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "$storeName (${storeExpenses.size}회)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                                Text(
+                                    text = "-" + stringResource(R.string.common_won, numberFormat.format(storeTotal)),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                                thickness = 0.5.dp
+                            )
+                        }
+
+                        // 해당 사용처 지출 항목 (최신순)
+                        items(
+                            items = storeExpenses.sortedByDescending { it.dateTime },
+                            key = { it.id }
+                        ) { expense ->
+                            ExpenseItemCard(
+                                expense = expense,
+                                onClick = { selectedExpense = expense }
+                            )
+                        }
+                    }
                 }
             }
 
@@ -935,8 +1111,221 @@ fun ExpenseListView(
             }
         )
     }
+
+    // 수입 상세 다이얼로그
+    selectedIncome?.let { income ->
+        IncomeDetailDialog(
+            income = income,
+            onDismiss = { selectedIncome = null },
+            onDelete = { onDeleteIncome(income) }
+        )
+    }
 }
 
+
+/**
+ * 수입 목록 뷰
+ */
+@Composable
+fun IncomeListView(
+    incomes: List<IncomeEntity>,
+    isLoading: Boolean,
+    onDeleteIncome: (IncomeEntity) -> Unit = {}
+) {
+    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    var selectedIncome by remember { mutableStateOf<IncomeEntity?>(null) }
+
+    if (isLoading) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    if (incomes.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "\uD83D\uDCB0",
+                    style = MaterialTheme.typography.displayLarge
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "수입 내역이 없습니다",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+        return
+    }
+
+    // 날짜별 그룹핑
+    val groupedIncomes = incomes.groupBy { income ->
+        try {
+            val calendar = Calendar.getInstance().apply {
+                timeInMillis = income.dateTime
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            calendar.time
+        } catch (e: Exception) {
+            Date()
+        }
+    }.toSortedMap(compareByDescending { it })
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        groupedIncomes.forEach { (date, dayIncomes) ->
+            val dailyTotal = dayIncomes.sumOf { it.amount }
+            val calendar = Calendar.getInstance().apply { time = date }
+            val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
+            val dayOfWeekResId = when (calendar.get(Calendar.DAY_OF_WEEK)) {
+                Calendar.SUNDAY -> R.string.day_sunday
+                Calendar.MONDAY -> R.string.day_monday
+                Calendar.TUESDAY -> R.string.day_tuesday
+                Calendar.WEDNESDAY -> R.string.day_wednesday
+                Calendar.THURSDAY -> R.string.day_thursday
+                Calendar.FRIDAY -> R.string.day_friday
+                Calendar.SATURDAY -> R.string.day_saturday
+                else -> R.string.day_sunday
+            }
+
+            // 날짜 헤더
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.history_day_header, dayOfMonth, stringResource(dayOfWeekResId)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = "+" + stringResource(R.string.common_won, numberFormat.format(dailyTotal)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4CAF50)
+                    )
+                }
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    thickness = 0.5.dp
+                )
+            }
+
+            // 수입 항목
+            items(
+                items = dayIncomes,
+                key = { it.id }
+            ) { income ->
+                IncomeItemCard(
+                    income = income,
+                    onClick = { selectedIncome = income }
+                )
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+
+    // 수입 상세 다이얼로그
+    selectedIncome?.let { income ->
+        IncomeDetailDialog(
+            income = income,
+            onDismiss = { selectedIncome = null },
+            onDelete = { onDeleteIncome(income) }
+        )
+    }
+}
+
+/**
+ * 수입 아이템 카드
+ */
+@Composable
+fun IncomeItemCard(
+    income: IncomeEntity,
+    onClick: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val timeFormat = SimpleDateFormat("HH:mm", Locale.KOREA)
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
+            // 수입 아이콘
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF4CAF50).copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "\uD83D\uDCB0",
+                    fontSize = 18.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column {
+                // 설명 (예: "OOO에서 급여")
+                Text(
+                    text = income.description.ifBlank { income.type },
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                // 유형 | 시간
+                Text(
+                    text = "${income.type} | ${timeFormat.format(Date(income.dateTime))}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // 금액 (+ 표시, 녹색)
+        Text(
+            text = "+${numberFormat.format(income.amount)}원",
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF4CAF50)
+        )
+    }
+}
 
 // 날짜 정보를 담는 데이터 클래스
 data class CalendarDay(
@@ -1274,6 +1663,218 @@ fun CalendarDayCell(
                 )
             }
         }
+    }
+}
+
+/**
+ * 수입 상세 다이얼로그
+ * 수입 항목 클릭 시 원본 SMS와 상세 정보를 표시
+ */
+@Composable
+fun IncomeDetailDialog(
+    income: IncomeEntity,
+    onDismiss: () -> Unit,
+    onDelete: () -> Unit = {}
+) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val dateFormat = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Text(
+                text = "\uD83D\uDCB0",
+                style = MaterialTheme.typography.displaySmall
+            )
+        },
+        title = {
+            Text(
+                text = income.description.ifBlank { income.type },
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // 금액
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "금액",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        text = "+${numberFormat.format(income.amount)}원",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4CAF50)
+                    )
+                }
+
+                // 유형
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "유형",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        text = income.type,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                // 출처
+                if (income.source.isNotBlank()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "출처",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Text(
+                            text = income.source,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                // 입금 시간
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "입금 시간",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        text = dateFormat.format(Date(income.dateTime)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                // 고정 수입 여부
+                if (income.isRecurring) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "고정 수입",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Text(
+                            text = "매월 ${income.recurringDay ?: "-"}일",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // 원본 문자
+                Text(
+                    text = "원본 문자",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sms,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = income.originalSms ?: "원본 문자 정보가 없습니다",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_close))
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = { showDeleteConfirm = true },
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("삭제")
+            }
+        }
+    )
+
+    // 삭제 확인 다이얼로그
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("수입 삭제") },
+            text = { Text("이 수입 항목을 삭제하시겠습니까?\n${income.description.ifBlank { income.type }} (+${NumberFormat.getNumberInstance(Locale.KOREA).format(income.amount)}원)") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDelete()
+                        onDismiss()
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("삭제")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
     }
 }
 

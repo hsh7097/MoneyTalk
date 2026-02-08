@@ -10,6 +10,9 @@ import com.sanha.moneytalk.core.model.Category
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -38,8 +41,8 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 2. amount: 결제 금액 (숫자만, 콤마 없이)
 3. storeName: 가게명/상호명
 4. cardName: 카드사명
-5. dateTime: 결제 날짜와 시간 (추출 가능한 경우)
-6. category: 추정 카테고리 (식비, 카페, 술/유흥, 교통, 쇼핑, 구독, 의료/건강, 운동, 문화/여가, 교육, 주거, 생활, 경조, 기타 중 하나)
+5. dateTime: 결제 날짜와 시간 ("yyyy-MM-dd HH:mm" 형식). SMS 수신 날짜가 제공되면 해당 연도를 사용할 것.
+6. category: 추정 카테고리 (식비, 카페, 술/유흥, 교통, 쇼핑, 구독, 의료/건강, 운동, 문화/여가, 교육, 주거, 생활, 경조, 배달, 기타 중 하나. 배달의민족/요기요/쿠팡이츠 등 배달앱은 반드시 "배달"로 분류)
 
 [응답 규칙]
 1. 반드시 JSON만 반환 (다른 텍스트 없이)
@@ -47,6 +50,7 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 3. 가게명이 불분명하면 "결제"로 기입
 4. 카드사가 불분명하면 "기타"로 기입
 5. 결제 문자가 아니면 isPayment: false
+6. dateTime의 연도는 반드시 SMS 수신 날짜의 연도를 따를 것
 
 [응답 형식]
 {"isPayment": true, "amount": 15000, "storeName": "스타벅스", "cardName": "KB국민", "dateTime": "2025-01-15 14:30", "category": "카페"}"""
@@ -63,8 +67,8 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 3. amount: 결제 금액 (숫자만, 콤마 없이)
 4. storeName: 가게명/상호명
 5. cardName: 카드사명
-6. dateTime: 결제 날짜와 시간 (추출 가능한 경우)
-7. category: 추정 카테고리 (식비, 카페, 술/유흥, 교통, 쇼핑, 구독, 의료/건강, 운동, 문화/여가, 교육, 주거, 생활, 경조, 기타 중 하나)
+6. dateTime: 결제 날짜와 시간 ("yyyy-MM-dd HH:mm" 형식). 각 SMS에 수신 날짜가 제공되면 해당 연도를 사용할 것.
+7. category: 추정 카테고리 (식비, 카페, 술/유흥, 교통, 쇼핑, 구독, 의료/건강, 운동, 문화/여가, 교육, 주거, 생활, 경조, 배달, 기타 중 하나. 배달의민족/요기요/쿠팡이츠 등 배달앱은 반드시 "배달"로 분류)
 
 [응답 규칙]
 1. 반드시 JSON 배열만 반환 (다른 텍스트 없이)
@@ -73,6 +77,7 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 4. 카드사가 불분명하면 "기타"로 기입
 5. 결제 문자가 아니면 해당 항목은 {"no": N, "isPayment": false}만 반환
 6. 입력된 모든 SMS에 대해 반드시 결과를 반환
+7. dateTime의 연도는 반드시 각 SMS의 수신 날짜 연도를 따를 것
 
 [응답 형식 예시]
 [
@@ -121,7 +126,8 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
             "경조사" to "경조", "축의금" to "경조", "조의금" to "경조", "부조" to "경조",
             // 기타 변환
             "미분류" to "기타", "알수없음" to "기타", "불명" to "기타",
-            "음식" to "식비", "식사" to "식비", "배달" to "식비",
+            "음식" to "식비", "식사" to "식비",
+            "배달음식" to "배달", "배민" to "배달", "요기요" to "배달",
             "커피" to "카페", "디저트" to "카페"
         )
 
@@ -208,13 +214,16 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
         val category: String = "기타"
     )
 
+    private val smsDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
+
     /**
      * SMS에서 결제 정보 추출 (Gemini LLM 사용)
      *
      * @param smsBody SMS 원본 본문
+     * @param smsTimestamp SMS 수신 시간 (밀리초). 연도 정보를 LLM에 제공하기 위해 사용
      * @return 추출된 결제 정보, 실패 시 null
      */
-    suspend fun extractFromSms(smsBody: String): LlmExtractionResult? = withContext(Dispatchers.IO) {
+    suspend fun extractFromSms(smsBody: String, smsTimestamp: Long = 0L): LlmExtractionResult? = withContext(Dispatchers.IO) {
         try {
             val model = getModel()
             if (model == null) {
@@ -222,7 +231,11 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
                 return@withContext null
             }
 
-            val prompt = """다음 SMS에서 결제 정보를 추출해주세요:
+            val dateInfo = if (smsTimestamp > 0) {
+                "\n(SMS 수신 날짜: ${smsDateFormat.format(Date(smsTimestamp))})"
+            } else ""
+
+            val prompt = """다음 SMS에서 결제 정보를 추출해주세요:$dateInfo
 
 $smsBody"""
 
@@ -277,16 +290,19 @@ $smsBody"""
      * JSON 배열로 일괄 응답을 받아 파싱합니다.
      *
      * @param smsMessages SMS 본문 목록
+     * @param smsTimestamps 각 SMS의 수신 시간 목록 (밀리초). smsMessages와 같은 크기. 연도 정보 제공용.
      * @return 각 SMS의 추출 결과 (순서 보장, 실패 시 null)
      */
     suspend fun extractFromSmsBatch(
-        smsMessages: List<String>
+        smsMessages: List<String>,
+        smsTimestamps: List<Long> = emptyList()
     ): List<LlmExtractionResult?> = withContext(Dispatchers.IO) {
         if (smsMessages.isEmpty()) return@withContext emptyList()
 
         // 1건이면 단일 추출 사용
         if (smsMessages.size == 1) {
-            return@withContext listOf(extractFromSms(smsMessages[0]))
+            val ts = smsTimestamps.firstOrNull() ?: 0L
+            return@withContext listOf(extractFromSms(smsMessages[0], ts))
         }
 
         try {
@@ -296,9 +312,12 @@ $smsBody"""
                 return@withContext smsMessages.map { null }
             }
 
-            // 번호를 매겨서 프롬프트 구성
+            // 번호를 매겨서 프롬프트 구성 (수신 날짜 포함)
             val smsListText = smsMessages.mapIndexed { idx, body ->
-                "${idx + 1}번: $body"
+                val dateInfo = smsTimestamps.getOrNull(idx)?.let { ts ->
+                    if (ts > 0) " (수신: ${smsDateFormat.format(Date(ts))})" else ""
+                } ?: ""
+                "${idx + 1}번$dateInfo: $body"
             }.joinToString("\n\n")
 
             val prompt = """다음 ${smsMessages.size}개 SMS에서 각각 결제 정보를 추출해주세요:
@@ -338,9 +357,10 @@ $smsListText"""
 
             // 배치 실패 시 개별 추출로 폴백
             Log.w(TAG, "LLM 배치 실패, 개별 추출로 폴백 (${smsMessages.size}건)")
-            smsMessages.map { sms ->
+            smsMessages.mapIndexed { idx, sms ->
                 try {
-                    val result = extractFromSms(sms)
+                    val ts = smsTimestamps.getOrNull(idx) ?: 0L
+                    val result = extractFromSms(sms, ts)
                     delay(500) // 개별 호출 시 짧은 딜레이
                     result
                 } catch (e: Exception) {

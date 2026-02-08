@@ -67,6 +67,10 @@ class ExpenseRepository @Inject constructor(
     fun getExpensesFiltered(cardName: String?, category: String?, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>> =
         expenseDao.getExpensesFiltered(cardName, category, startTime, endTime)
 
+    /** 대 카테고리 포함 필터링 (소 카테고리도 포함) */
+    fun getExpensesFilteredByCategories(cardName: String?, categories: List<String>, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>> =
+        expenseDao.getExpensesFilteredByCategories(cardName, categories, startTime, endTime)
+
     /** 지출 항목 삽입 (신규) */
     suspend fun insert(expense: ExpenseEntity): Long = expenseDao.insert(expense)
 

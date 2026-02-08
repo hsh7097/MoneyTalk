@@ -94,6 +94,10 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE (:cardName IS NULL OR cardName = :cardName) AND (:category IS NULL OR category = :category) AND dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
     fun getExpensesFiltered(cardName: String?, category: String?, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>>
 
+    // 대 카테고리 필터 (소 카테고리 포함, 예: "식비" 선택 시 "배달"도 포함)
+    @Query("SELECT * FROM expenses WHERE (:cardName IS NULL OR cardName = :cardName) AND category IN (:categories) AND dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
+    fun getExpensesFilteredByCategories(cardName: String?, categories: List<String>, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>>
+
     // 모든 카드사 목록 가져오기
     @Query("SELECT DISTINCT cardName FROM expenses ORDER BY cardName")
     suspend fun getAllCardNames(): List<String>

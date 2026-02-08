@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -32,7 +33,8 @@ import com.sanha.moneytalk.core.util.DataBackupManager
 import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
-import com.sanha.moneytalk.core.util.GoogleDriveHelper
+import com.sanha.moneytalk.BuildConfig
+import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
 import com.sanha.moneytalk.R
 import java.text.NumberFormat
@@ -46,6 +48,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val coroutineScope = rememberCoroutineScope()
 
     var showIncomeDialog by remember { mutableStateOf(false) }
     var showApiKeyDialog by remember { mutableStateOf(false) }
@@ -54,22 +57,37 @@ fun SettingsScreen(
     var showRestoreConfirmDialog by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showGoogleDriveDialog by remember { mutableStateOf(false) }
+    var showAppInfoDialog by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // 로그인이 어디서 트리거됐는지 추적 (설정 항목 vs 내보내기 다이얼로그)
+    var googleSignInSource by remember { mutableStateOf("settings") }
 
     // 구글 로그인 런처
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            try {
-                val account = task.getResult(ApiException::class.java)
-                viewModel.handleGoogleSignInResult(context, account)
+        // RESULT_OK: 새로 로그인 성공
+        // RESULT_CANCELED: 이미 로그인된 상태에서 자동 완료될 수도 있음
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            viewModel.handleGoogleSignInResult(context, account)
+            viewModel.loadDriveBackupFiles()
+            if (googleSignInSource == "settings") {
+                showGoogleDriveDialog = true
+            }
+        } catch (e: ApiException) {
+            // Intent에서 계정을 가져올 수 없는 경우, 기존 캐시된 계정 확인
+            viewModel.checkGoogleSignIn(context)
+            if (viewModel.uiState.value.isGoogleSignedIn) {
                 viewModel.loadDriveBackupFiles()
-            } catch (e: ApiException) {
-                // 로그인 실패
+                if (googleSignInSource == "settings") {
+                    showGoogleDriveDialog = true
+                }
             }
         }
     }
@@ -214,12 +232,17 @@ fun SettingsScreen(
                                 stringResource(R.string.settings_google_drive_not_connected)
                             },
                             onClick = {
-                                if (uiState.isGoogleSignedIn) {
-                                    viewModel.loadDriveBackupFiles()
-                                    showGoogleDriveDialog = true
-                                } else {
-                                    val signInIntent = GoogleDriveHelper().getSignInIntent(context)
-                                    googleSignInLauncher.launch(signInIntent)
+                                googleSignInSource = "settings"
+                                coroutineScope.launch {
+                                    val signInIntent = viewModel.tryOpenGoogleDrive(context)
+                                    if (signInIntent == null) {
+                                        // silentSignIn 성공 또는 이미 준비됨 → 바로 다이얼로그 열기
+                                        viewModel.loadDriveBackupFiles()
+                                        showGoogleDriveDialog = true
+                                    } else {
+                                        // interactive 로그인 필요
+                                        googleSignInLauncher.launch(signInIntent)
+                                    }
                                 }
                             }
                         )
@@ -251,14 +274,14 @@ fun SettingsScreen(
                         SettingsItem(
                             icon = Icons.Default.Info,
                             title = stringResource(R.string.settings_version_title),
-                            subtitle = "1.0.0",
-                            onClick = { }
+                            subtitle = BuildConfig.VERSION_NAME,
+                            onClick = { showAppInfoDialog = true }
                         )
                         SettingsItem(
                             icon = Icons.Default.Description,
                             title = stringResource(R.string.settings_privacy_title),
                             subtitle = "",
-                            onClick = { /* TODO */ }
+                            onClick = { showPrivacyDialog = true }
                         )
                     }
                 }
@@ -277,12 +300,50 @@ fun SettingsScreen(
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(32.dp),
+                        modifier = Modifier
+                            .padding(32.dp)
+                            .widthIn(min = 200.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        CircularProgressIndicator()
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(stringResource(R.string.common_processing))
+                        if (uiState.isClassifying && uiState.classifyProgressTotal > 0) {
+                            // 분류 중: 진행률 바 + 상세 텍스트
+                            val progress = uiState.classifyProgressCurrent.toFloat() / uiState.classifyProgressTotal.toFloat()
+                            LinearProgressIndicator(
+                                progress = { progress.coerceIn(0f, 1f) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp),
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "${uiState.classifyProgressCurrent} / ${uiState.classifyProgressTotal}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = uiState.classifyProgress.ifBlank { stringResource(R.string.common_processing) },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        } else if (uiState.isClassifying) {
+                            // 분류 중이지만 총량 모를 때
+                            CircularProgressIndicator()
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = uiState.classifyProgress.ifBlank { stringResource(R.string.common_processing) },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        } else {
+                            // 일반 로딩
+                            CircularProgressIndicator()
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(stringResource(R.string.common_processing))
+                        }
                     }
                 }
             }
@@ -347,8 +408,16 @@ fun SettingsScreen(
                 viewModel.exportToGoogleDrive()
             },
             onSignInGoogle = {
-                val signInIntent = GoogleDriveHelper().getSignInIntent(context)
-                googleSignInLauncher.launch(signInIntent)
+                googleSignInSource = "export"
+                coroutineScope.launch {
+                    val signInIntent = viewModel.tryOpenGoogleDrive(context)
+                    if (signInIntent == null) {
+                        // 이미 로그인됨 → UI 상태만 업데이트 (ExportDialog가 구글드라이브 버튼 표시)
+                        viewModel.checkGoogleSignIn(context)
+                    } else {
+                        googleSignInLauncher.launch(signInIntent)
+                    }
+                }
             }
         )
     }
@@ -450,6 +519,16 @@ fun SettingsScreen(
                 }
             }
         )
+    }
+
+    // 앱 정보 다이얼로그
+    if (showAppInfoDialog) {
+        AppInfoDialog(onDismiss = { showAppInfoDialog = false })
+    }
+
+    // 개인정보 처리방침 다이얼로그
+    if (showPrivacyDialog) {
+        PrivacyPolicyDialog(onDismiss = { showPrivacyDialog = false })
     }
 }
 
@@ -593,7 +672,10 @@ fun ExportDialog(
             }
         },
         confirmButton = {
-            Column {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 // 로컬 저장
                 Button(
                     onClick = onExportLocal,
@@ -603,8 +685,6 @@ fun ExportDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(stringResource(R.string.export_save_local))
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
 
                 // 구글 드라이브
                 if (isGoogleSignedIn) {
@@ -626,11 +706,14 @@ fun ExportDialog(
                         Text(stringResource(R.string.export_google_login))
                     }
                 }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_cancel))
+
+                // 취소
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text(stringResource(R.string.common_cancel))
+                }
             }
         }
     )
@@ -1008,6 +1091,181 @@ fun MonthStartDayDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.common_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+fun AppInfoDialog(
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Text(
+                text = "\uD83D\uDCB0",
+                style = MaterialTheme.typography.headlineLarge
+            )
+        },
+        title = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.app_info_version, BuildConfig.VERSION_NAME),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.app_info_description),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                HorizontalDivider()
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = stringResource(R.string.app_info_developer),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        text = stringResource(R.string.app_info_developer_name),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = stringResource(R.string.app_info_contact),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        text = stringResource(R.string.app_info_contact_email),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
+                Text(
+                    text = stringResource(R.string.app_info_license),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_close))
+            }
+        }
+    )
+}
+
+@Composable
+fun PrivacyPolicyDialog(
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.privacy_title)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.privacy_intro),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+
+                HorizontalDivider()
+
+                // 1. 수집하는 정보
+                Text(
+                    text = stringResource(R.string.privacy_section_collect),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.privacy_collect_detail),
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                // 2. 정보 이용 목적
+                Text(
+                    text = stringResource(R.string.privacy_section_usage),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.privacy_usage_detail),
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                // 3. 정보 저장
+                Text(
+                    text = stringResource(R.string.privacy_section_storage),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.privacy_storage_detail),
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                // 4. 제3자 제공
+                Text(
+                    text = stringResource(R.string.privacy_section_thirdparty),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.privacy_thirdparty_detail),
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                // 5. 사용자 권리
+                Text(
+                    text = stringResource(R.string.privacy_section_rights),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.privacy_rights_detail),
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                HorizontalDivider()
+
+                Text(
+                    text = stringResource(R.string.privacy_last_updated),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_close))
             }
         }
     )
