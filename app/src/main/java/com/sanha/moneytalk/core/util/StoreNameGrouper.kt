@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.util
 
 import android.util.Log
+import com.sanha.moneytalk.core.similarity.StoreNameSimilarityPolicy
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,7 +22,7 @@ import javax.inject.Singleton
  * 3. 각 그룹의 대표만 Gemini에 전송
  *
  * @see SmsBatchProcessor.groupBySimilarity 동일 알고리즘 참고
- * @see VectorSearchEngine.GROUPING_SIMILARITY_THRESHOLD 그룹핑 임계값 (0.88)
+ * @see StoreNameSimilarityPolicy 가게명 유사도 정책 (그룹핑 임계값 0.88)
  */
 @Singleton
 class StoreNameGrouper @Inject constructor(
@@ -135,7 +136,7 @@ class StoreNameGrouper @Inject constructor(
                 val (nameJ, embeddingJ) = embeddedStores[j]
                 val similarity = VectorSearchEngine.cosineSimilarity(embeddingI, embeddingJ)
 
-                if (similarity >= VectorSearchEngine.GROUPING_SIMILARITY_THRESHOLD) {
+                if (StoreNameSimilarityPolicy.shouldGroup(similarity)) {
                     members.add(nameJ)
                     assigned[j] = true
                 }

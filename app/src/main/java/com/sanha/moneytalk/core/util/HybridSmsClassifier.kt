@@ -3,6 +3,7 @@ package com.sanha.moneytalk.core.util
 import android.util.Log
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
+import com.sanha.moneytalk.core.similarity.SmsPatternSimilarityPolicy
 import com.sanha.moneytalk.feature.chat.data.SmsAnalysisResult
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,9 +23,10 @@ import javax.inject.Singleton
  * 3단계 (LLM): Gemini로 구조화된 데이터 추출
  *   → 추출 성공하면 결과 반환 + 벡터 DB에 패턴 등록 (학습)
  *
- * 부트스트랩 모드:
- *   패턴 DB에 데이터가 적을 때(< 10개) LLM을 적극적으로 사용하여
- *   초기 패턴 데이터를 빠르게 축적합니다.
+ * LLM 호출 조건:
+ *   Tier 1~2 실패 시, 결제 가능성 사전 체크(hasPotentialPaymentIndicators)를
+ *   통과한 SMS에 한해 LLM을 호출합니다. 비용 통제를 위해 금액 패턴, 결제 키워드,
+ *   카드사 키워드 중 2개 이상 매칭되어야 LLM 호출이 허용됩니다.
  */
 @Singleton
 class HybridSmsClassifier @Inject constructor(
@@ -106,24 +108,24 @@ class HybridSmsClassifier @Inject constructor(
             return vectorResult
         }
 
-        // ===== 부트스트랩 모드 체크 =====
-        val patternCount = smsPatternDao.getPaymentPatternCount()
-        val isBootstrap = patternCount < BOOTSTRAP_THRESHOLD
+        // ===== 3단계: LLM (Tier 1~2 실패 시, 결제 가능성 있는 SMS만) =====
+        // 사전 필터링: 명백히 비결제인 SMS는 LLM 호출 생략
+        if (isObviouslyNonPayment(smsBody)) {
+            Log.d(TAG, "⏭️ LLM 스킵: 명백한 비결제 SMS")
+            return ClassificationResult(isPayment = false, tier = 0, confidence = 0f)
+        }
 
-        // ===== 3단계: LLM (부트스트랩 모드이거나 벡터 DB에 없을 때) =====
-        if (isBootstrap) {
-            // 사전 필터링: 명백히 비결제인 SMS는 LLM 호출 생략
-            if (isObviouslyNonPayment(smsBody)) {
-                Log.d(TAG, "⏭️ 부트스트랩 스킵: 명백한 비결제 SMS")
-                return ClassificationResult(isPayment = false, tier = 0, confidence = 0f)
-            }
+        // 비용 통제: 결제 가능성이 낮은 SMS는 LLM 호출 생략
+        if (!hasPotentialPaymentIndicators(smsBody)) {
+            Log.d(TAG, "⏭️ LLM 스킵: 결제 가능성 낮음 (금액/결제키워드/카드사 부족)")
+            return ClassificationResult(isPayment = false, tier = 0, confidence = 0f)
+        }
 
-            Log.d(TAG, "🔄 부트스트랩 모드 (패턴 $patternCount 개): LLM 추출 시도")
-            val llmResult = classifyWithLlm(smsBody, smsTimestamp, senderAddress)
-            if (llmResult != null) {
-                Log.d(TAG, "✅ Tier 3 (LLM-Bootstrap) 성공: isPayment=${llmResult.isPayment}")
-                return llmResult
-            }
+        Log.d(TAG, "🔄 Tier 3 (LLM): 결제 가능성 감지, LLM 추출 시도")
+        val llmResult = classifyWithLlm(smsBody, smsTimestamp, senderAddress)
+        if (llmResult != null) {
+            Log.d(TAG, "✅ Tier 3 (LLM) 성공: isPayment=${llmResult.isPayment}")
+            return llmResult
         }
 
         // 모든 단계 실패 → 비결제 문자로 판정
@@ -155,7 +157,7 @@ class HybridSmsClassifier @Inject constructor(
      * 1. 사전 필터링: 명백한 비결제 SMS 제외
      * 2. 배치 임베딩 생성 (50건씩 batchEmbedContents)
      * 3. 벡터 DB 매칭 (비결제 패턴 → 결제 패턴 순)
-     * 4. 매칭 안 된 SMS만 LLM에 전달 (부트스트랩 모드일 때만)
+     * 4. 매칭 안 된 SMS 중 결제 가능성 있는 것만 LLM에 전달
      *
      * @param smsList SMS 목록 (body, timestamp, address)
      * @return 각 SMS의 분류 결과 (index와 1:1 매핑)
@@ -222,9 +224,6 @@ class HybridSmsClassifier @Inject constructor(
         // ===== Step 4: 벡터 DB 매칭 =====
         val nonPaymentPatterns = smsPatternDao.getAllNonPaymentPatterns()
         val paymentPatterns = smsPatternDao.getAllPaymentPatterns()
-        val patternCount = smsPatternDao.getPaymentPatternCount()
-        val isBootstrap = patternCount < BOOTSTRAP_THRESHOLD
-
         val llmCandidates = mutableListOf<Int>() // 벡터 매칭 안 된 인덱스 (LLM 후보)
 
         for ((localIdx, originalIdx) in vectorCandidateIndices.withIndex()) {
@@ -236,12 +235,12 @@ class HybridSmsClassifier @Inject constructor(
 
             val (body, timestamp, _) = smsList[originalIdx]
 
-            // 비결제 패턴 우선 매칭
+            // 비결제 패턴 우선 매칭 (비결제는 더 높은 임계값 사용)
             if (nonPaymentPatterns.isNotEmpty()) {
                 val nonPaymentMatch = VectorSearchEngine.findBestMatch(
                     queryVector = embedding,
                     patterns = nonPaymentPatterns,
-                    minSimilarity = VectorSearchEngine.CACHE_REUSE_THRESHOLD
+                    minSimilarity = SmsPatternSimilarityPolicy.NON_PAYMENT_CACHE_THRESHOLD
                 )
                 if (nonPaymentMatch != null) {
                     results[originalIdx] = ClassificationResult(
@@ -257,13 +256,13 @@ class HybridSmsClassifier @Inject constructor(
                 val bestMatch = VectorSearchEngine.findBestMatch(
                     queryVector = embedding,
                     patterns = paymentPatterns,
-                    minSimilarity = VectorSearchEngine.PAYMENT_SIMILARITY_THRESHOLD
+                    minSimilarity = SmsPatternSimilarityPolicy.profile.confirm
                 )
 
                 if (bestMatch != null) {
                     smsPatternDao.incrementMatchCount(bestMatch.pattern.id)
 
-                    if (bestMatch.similarity >= VectorSearchEngine.CACHE_REUSE_THRESHOLD) {
+                    if (bestMatch.similarity >= SmsPatternSimilarityPolicy.profile.autoApply) {
                         // 높은 유사도 → 캐시 재사용
                         val cached = bestMatch.pattern
                         val currentAmount = SmsParser.extractAmount(body) ?: cached.parsedAmount
@@ -303,15 +302,15 @@ class HybridSmsClassifier @Inject constructor(
                 }
             }
 
-            // 벡터 매칭 안 됨 → 부트스트랩 모드면 LLM 후보
-            if (isBootstrap) {
+            // 벡터 매칭 안 됨 → 결제 가능성 있으면 LLM 후보
+            if (hasPotentialPaymentIndicators(body)) {
                 llmCandidates.add(originalIdx)
             }
         }
 
-        // ===== Step 5: 부트스트랩 모드에서만 LLM 호출 (개별 처리, 소량) =====
+        // ===== Step 5: 결제 가능성 있는 미매칭 SMS에 LLM 호출 =====
         if (llmCandidates.isNotEmpty()) {
-            Log.d(TAG, "배치 LLM 후보: ${llmCandidates.size}건 (부트스트랩 모드)")
+            Log.d(TAG, "배치 LLM 후보: ${llmCandidates.size}건")
             for (idx in llmCandidates) {
                 val (body, timestamp, address) = smsList[idx]
                 val llmResult = classifyWithLlm(body, timestamp, address)
@@ -481,7 +480,7 @@ class HybridSmsClassifier @Inject constructor(
                 val nonPaymentMatch = VectorSearchEngine.findBestMatch(
                     queryVector = queryVector,
                     patterns = nonPaymentPatterns,
-                    minSimilarity = VectorSearchEngine.CACHE_REUSE_THRESHOLD  // 높은 임계값: 0.97
+                    minSimilarity = SmsPatternSimilarityPolicy.NON_PAYMENT_CACHE_THRESHOLD  // 비결제 캐시: 0.97
                 )
                 if (nonPaymentMatch != null) {
                     Log.d(TAG, "Tier 2: 비결제 패턴 매칭! similarity=${nonPaymentMatch.similarity} → 비결제로 판정")
@@ -505,7 +504,7 @@ class HybridSmsClassifier @Inject constructor(
             val bestMatch = VectorSearchEngine.findBestMatch(
                 queryVector = queryVector,
                 patterns = patterns,
-                minSimilarity = VectorSearchEngine.PAYMENT_SIMILARITY_THRESHOLD
+                minSimilarity = SmsPatternSimilarityPolicy.profile.confirm
             )
 
             if (bestMatch == null) {
@@ -519,7 +518,7 @@ class HybridSmsClassifier @Inject constructor(
             smsPatternDao.incrementMatchCount(bestMatch.pattern.id)
 
             // 높은 유사도 → 캐시된 파싱 결과 재사용
-            if (bestMatch.similarity >= VectorSearchEngine.CACHE_REUSE_THRESHOLD) {
+            if (bestMatch.similarity >= SmsPatternSimilarityPolicy.profile.autoApply) {
                 Log.d(TAG, "Tier 2: 캐시 재사용 (similarity=${bestMatch.similarity})")
 
                 // 캐시된 결과에서 가게명/카드명 재사용, 금액/날짜는 현재 SMS에서 추출 시도
@@ -575,14 +574,13 @@ class HybridSmsClassifier @Inject constructor(
     /**
      * Tier 3: LLM 기반 추출
      */
-    @Suppress("UNUSED_PARAMETER")
     private suspend fun classifyWithLlm(
         smsBody: String,
         smsTimestamp: Long,
         senderAddress: String
     ): ClassificationResult? {
         try {
-            val extraction = smsExtractor.extractFromSms(smsBody) ?: return null
+            val extraction = smsExtractor.extractFromSms(smsBody, smsTimestamp) ?: return null
 
             if (!extraction.isPayment || extraction.amount <= 0) {
                 Log.d(TAG, "Tier 3: LLM이 비결제로 판정 또는 금액 0")
@@ -590,11 +588,13 @@ class HybridSmsClassifier @Inject constructor(
                 return ClassificationResult(isPayment = false, tier = 3, confidence = 0.8f)
             }
 
-            val dateTime = if (extraction.dateTime.isNotBlank()) {
+            val rawDateTime = if (extraction.dateTime.isNotBlank()) {
                 extraction.dateTime
             } else {
                 SmsParser.extractDateTime(smsBody, smsTimestamp)
             }
+            // LLM이 추출한 연도가 잘못될 수 있으므로 SMS 수신 시간 기준으로 검증
+            val dateTime = DateUtils.validateExtractedDateTime(rawDateTime, smsTimestamp)
 
             val analysis = SmsAnalysisResult(
                 amount = extraction.amount,
@@ -724,7 +724,7 @@ class HybridSmsClassifier @Inject constructor(
     }
 
     /**
-     * 명백한 비결제 SMS 판별 (부트스트랩 모드 사전 필터링)
+     * 명백한 비결제 SMS 판별
      *
      * NON_PAYMENT_KEYWORDS에 포함된 키워드가 SMS 본문에 있으면
      * LLM 호출 없이 즉시 비결제로 판정합니다.
@@ -739,6 +739,32 @@ class HybridSmsClassifier @Inject constructor(
         return NON_PAYMENT_KEYWORDS.any { keyword ->
             lowerBody.contains(keyword.lowercase())
         }
+    }
+
+    /**
+     * 결제 가능성 사전 체크 (LLM 호출 비용 통제)
+     *
+     * 금액 패턴, 결제 키워드, 카드사 키워드 중 2개 이상 매칭되면
+     * 결제 SMS일 가능성이 높다고 판단하여 LLM 호출을 허용합니다.
+     *
+     * @param smsBody SMS 본문
+     * @return true면 결제 가능성 있음 (LLM 호출 허용)
+     */
+    private fun hasPotentialPaymentIndicators(smsBody: String): Boolean {
+        var indicatorCount = 0
+
+        // 1. 금액 패턴 (숫자+원)
+        if (smsBody.contains(Regex("""[\d,]+원"""))) indicatorCount++
+
+        // 2. 결제 키워드 ("누적"은 카드사 누적 사용금액 표시로 결제 SMS 가능성 높음)
+        val paymentKeywords = listOf("승인", "결제", "출금", "사용", "이용", "체크카드", "신용카드", "누적")
+        if (paymentKeywords.any { smsBody.contains(it) }) indicatorCount++
+
+        // 3. 카드사 키워드
+        val cardName = SmsParser.extractCardName(smsBody)
+        if (cardName != "기타") indicatorCount++
+
+        return indicatorCount >= 2
     }
 
     data class PatternStats(

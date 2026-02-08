@@ -3,6 +3,8 @@ package com.sanha.moneytalk.core.util
 import android.util.Log
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
+import com.sanha.moneytalk.core.similarity.SmsPatternSimilarityPolicy
+import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.feature.chat.data.SmsAnalysisResult
 import kotlinx.coroutines.delay
 import javax.inject.Inject
@@ -40,8 +42,7 @@ class SmsBatchProcessor @Inject constructor(
     companion object {
         private const val TAG = "SmsBatchProcessor"
 
-        /** 벡터 그룹핑 시 같은 그룹으로 묶는 유사도 임계값 */
-        private const val GROUPING_SIMILARITY_THRESHOLD = 0.95f
+        /** 벡터 그룹핑 임계값 → SmsPatternSimilarityPolicy.profile.group 참조 */
 
         /** 배치 임베딩 한 번에 처리할 최대 개수 (batchEmbedContents 최대 100) */
         private const val EMBEDDING_BATCH_SIZE = 100
@@ -242,10 +243,11 @@ class SmsBatchProcessor @Inject constructor(
         for ((batchIdx, groupBatch) in llmBatches.withIndex()) {
             listener?.onProgress("AI 분석 중", totalGroupsProcessed, groups.size)
 
-            // 배치 내 대표 SMS 목록을 한번에 LLM에 전송
+            // 배치 내 대표 SMS 목록을 한번에 LLM에 전송 (수신 시간 포함)
             val smsTexts = groupBatch.map { it.representative.body }
+            val smsTimestamps = groupBatch.map { it.representative.date }
             val extractions = try {
-                smsExtractor.extractFromSmsBatch(smsTexts)
+                smsExtractor.extractFromSmsBatch(smsTexts, smsTimestamps)
             } catch (e: Exception) {
                 Log.e(TAG, "LLM 배치 추출 실패: ${e.message}")
                 List(smsTexts.size) { null }
@@ -258,11 +260,13 @@ class SmsBatchProcessor @Inject constructor(
                 val extraction = extractions.getOrNull(groupIdx)
 
                 if (extraction != null && extraction.isPayment && extraction.amount > 0) {
-                    val dateTime = if (extraction.dateTime.isNotBlank()) {
+                    val rawDateTime = if (extraction.dateTime.isNotBlank()) {
                         extraction.dateTime
                     } else {
                         SmsParser.extractDateTime(group.representative.body, group.representative.date)
                     }
+                    // LLM이 추출한 연도가 SMS 수신 시간과 크게 다르면 교정
+                    val dateTime = DateUtils.validateExtractedDateTime(rawDateTime, group.representative.date)
 
                     // 대표의 파싱 결과
                     val representativeAnalysis = SmsAnalysisResult(
@@ -360,7 +364,7 @@ class SmsBatchProcessor @Inject constructor(
                     val bestMatch = VectorSearchEngine.findBestMatch(
                         queryVector = embedding,
                         patterns = existingPatterns,
-                        minSimilarity = VectorSearchEngine.PAYMENT_SIMILARITY_THRESHOLD
+                        minSimilarity = SmsPatternSimilarityPolicy.profile.confirm
                     )
 
                     if (bestMatch != null) {
@@ -462,7 +466,7 @@ class SmsBatchProcessor @Inject constructor(
                 val (smsJ, _, embeddingJ) = embeddedSms[j]
                 val similarity = VectorSearchEngine.cosineSimilarity(embeddingI, embeddingJ)
 
-                if (similarity >= GROUPING_SIMILARITY_THRESHOLD) {
+                if (SmsPatternSimilarityPolicy.shouldGroup(similarity)) {
                     group.members.add(smsJ)
                     assigned[j] = true
                 }

@@ -1,0 +1,40 @@
+package com.sanha.moneytalk.core.similarity
+
+/**
+ * SMS 패턴 유사도 판정 정책
+ *
+ * HybridSmsClassifier의 벡터 캐시 매칭 및 SmsBatchProcessor의
+ * SMS 그룹핑에 사용되는 임계값을 관리합니다.
+ *
+ * 임계값 매핑 (기존 VectorSearchEngine 상수 → SimilarityProfile):
+ * - autoApply = 0.95 (CACHE_REUSE_THRESHOLD) → 캐시된 파싱 결과 재사용
+ * - confirm = 0.92 (PAYMENT_SIMILARITY_THRESHOLD) → 결제 문자 판정
+ * - group = 0.95 (SmsBatchProcessor.GROUPING_SIMILARITY_THRESHOLD) → SMS 패턴 그룹핑
+ *
+ * @see com.sanha.moneytalk.core.util.HybridSmsClassifier
+ * @see com.sanha.moneytalk.core.util.SmsBatchProcessor
+ */
+object SmsPatternSimilarityPolicy : SimilarityPolicy {
+
+    override val profile = SimilarityProfile(
+        autoApply = 0.95f,   // CACHE_REUSE_THRESHOLD: 캐시 파싱 결과 재사용
+        confirm = 0.92f,     // PAYMENT_SIMILARITY_THRESHOLD: 결제 문자 판정
+        propagate = 0f,      // SMS 패턴은 전파 개념 없음
+        group = 0.95f        // SmsBatchProcessor의 SMS 패턴 그룹핑
+    )
+
+    /**
+     * 비결제 패턴 캐시 히트 임계값
+     *
+     * 비결제 SMS는 결제 SMS보다 높은 임계값(0.97)을 사용하여
+     * 오판(결제 SMS를 비결제로 분류)을 방지합니다.
+     */
+    const val NON_PAYMENT_CACHE_THRESHOLD = 0.97f
+
+    /**
+     * 비결제 패턴으로 판정할지 여부
+     * 비결제 캐시는 더 높은 임계값을 사용
+     */
+    fun shouldMatchNonPayment(similarity: Float): Boolean =
+        similarity >= NON_PAYMENT_CACHE_THRESHOLD
+}
