@@ -17,7 +17,8 @@ import kotlin.math.min
  */
 @Singleton
 class GeminiCategoryRepository @Inject constructor(
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider
 ) {
     companion object {
         private const val TAG = "GeminiCategory"
@@ -104,6 +105,11 @@ class GeminiCategoryRepository @Inject constructor(
         // 사용 가능한 카테고리 목록
         val categories = Category.entries.map { it.displayName }
 
+        // 참조 리스트 미리 로드 (배치마다 중복 호출 방지)
+        val referenceText = try {
+            categoryReferenceProvider.getCategoryClassificationReference()
+        } catch (e: Exception) { "" }
+
         // 배치 처리 (한 번에 최대 50개)
         val results = mutableMapOf<String, String>()
         val batches = storeNames.chunked(BATCH_SIZE)
@@ -118,7 +124,7 @@ class GeminiCategoryRepository @Inject constructor(
                 delay(INITIAL_DELAY_MS)
             }
 
-            val batchResult = processBatchWithRetry(model, batch, categories, index, batches.size)
+            val batchResult = processBatchWithRetry(model, batch, categories, index, batches.size, referenceText)
             if (batchResult != null) {
                 batchResult.forEach { (store, category) ->
                     results[store] = category
@@ -146,14 +152,15 @@ class GeminiCategoryRepository @Inject constructor(
         batch: List<String>,
         categories: List<String>,
         batchIndex: Int,
-        totalBatches: Int
+        totalBatches: Int,
+        referenceText: String = ""
     ): Map<String, String>? {
         var lastException: Exception? = null
         var currentDelay = INITIAL_DELAY_MS
 
         for (attempt in 1..MAX_RETRIES) {
             try {
-                val prompt = buildClassificationPrompt(batch, categories)
+                val prompt = buildClassificationPrompt(batch, categories, referenceText)
 
                 Log.d(TAG, "=== REQUEST [배치 ${batchIndex + 1}/$totalBatches, 시도 $attempt] ===")
                 Log.d(TAG, "모델: gemini-2.5-flash-lite, 배치 크기: ${batch.size}개")
@@ -211,7 +218,11 @@ class GeminiCategoryRepository @Inject constructor(
         return null
     }
 
-    private fun buildClassificationPrompt(storeNames: List<String>, categories: List<String>): String {
+    private fun buildClassificationPrompt(
+        storeNames: List<String>,
+        categories: List<String>,
+        referenceText: String = ""
+    ): String {
         return """
 당신은 가계부 앱의 카테고리 분류 전문가입니다.
 아래 가게명들을 반드시 주어진 카테고리 목록 중 하나로만 분류해주세요.
@@ -234,9 +245,10 @@ ${categories.mapIndexed { idx, cat -> "${idx + 1}. $cat" }.joinToString("\n")}
 - 주거: 월세, 전세, 관리비, 부동산 관련 등
 - 생활: 공과금, 통신비, 미용실, 세탁소 등
 - 보험: 보험회사 결제(삼성화재, 현대해상, 메리츠 등) 보험료 납부
-- 계좌이체: 계좌이체, 송금, 출금 등 계좌 간 자금 이동
+- 계좌이체: 명시적 계좌이체/타행이체/당행이체만 해당 (체크카드출금은 일반 카드 결제이므로 가게명 기준 분류)
 - 경조: 축의금, 조의금, 선물, 경조사 관련 등
 - 기타: 위 카테고리에 해당하지 않거나 분류 불가능한 경우
+$referenceText
 
 ## 분류할 가게명:
 ${storeNames.mapIndexed { idx, name -> "${idx + 1}. $name" }.joinToString("\n")}

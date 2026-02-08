@@ -32,7 +32,8 @@ class CategoryClassifierService @Inject constructor(
     private val geminiRepository: GeminiCategoryRepository,
     private val expenseRepository: ExpenseRepository,
     private val storeEmbeddingRepository: StoreEmbeddingRepository,
-    private val storeNameGrouper: StoreNameGrouper
+    private val storeNameGrouper: StoreNameGrouper,
+    private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider
 ) {
     companion object {
         private const val TAG = "CategoryClassifier"
@@ -95,18 +96,30 @@ class CategoryClassifierService @Inject constructor(
             return it
         }
 
-        // Tier 1.5: 벡터 유사도 매칭 (임베딩 API 1회)
+        // Tier 1.5a: 벡터 유사도 매칭 - 개별 최고 매칭 (임베딩 API 1회)
         try {
             val vectorMatch = storeEmbeddingRepository.findCategoryByStoreName(storeName)
             if (vectorMatch != null) {
                 val matchedCategory = vectorMatch.storeEmbedding.category
-                Log.d(TAG, "[Tier 1.5] 벡터 매칭: $storeName → $matchedCategory " +
+                Log.d(TAG, "[Tier 1.5a] 벡터 매칭: $storeName → $matchedCategory " +
                         "(원본: ${vectorMatch.storeEmbedding.storeName}, 유사도: ${vectorMatch.similarity})")
 
                 // 캐시 프로모션: 벡터 매칭 결과를 Room에도 저장 → 다음 조회 시 Tier 1에서 즉시 반환
                 categoryRepository.saveMapping(storeName, matchedCategory, "vector")
 
                 return matchedCategory
+            }
+
+            // Tier 1.5b: 벡터 그룹 기반 매칭 (그룹핑 임계값 0.88 이상)
+            val groupResult = storeEmbeddingRepository.findCategoryByGroup(storeName)
+            if (groupResult != null) {
+                val (groupCategory, avgSimilarity) = groupResult
+                Log.d(TAG, "[Tier 1.5b] 그룹 매칭: $storeName → $groupCategory (평균 유사도: $avgSimilarity)")
+
+                // 캐시 프로모션: 그룹 매칭 결과도 Room에 저장
+                categoryRepository.saveMapping(storeName, groupCategory, "vector")
+
+                return groupCategory
             }
         } catch (e: Exception) {
             Log.w(TAG, "[Tier 1.5] 벡터 검색 실패 (무시): ${e.message}")
@@ -268,6 +281,9 @@ class CategoryClassifierService @Inject constructor(
         // 지출 항목 업데이트
         expenseRepository.updateCategoryById(expenseId, newCategory)
 
+        // 참조 리스트 캐시 무효화 (프롬프트에 반영)
+        categoryReferenceProvider.invalidateCache()
+
         // 벡터 DB에 저장 (source="user"로 최고 신뢰도)
         try {
             if (storeEmbeddingRepository.hasEmbedding(storeName)) {
@@ -297,6 +313,9 @@ class CategoryClassifierService @Inject constructor(
 
         // 해당 가게명의 모든 지출 업데이트
         expenseRepository.updateCategoryByStoreName(storeName, newCategory)
+
+        // 참조 리스트 캐시 무효화 (프롬프트에 반영)
+        categoryReferenceProvider.invalidateCache()
 
         // 벡터 DB에 저장 + 유사 가게 전파
         try {

@@ -109,6 +109,60 @@ class StoreEmbeddingRepository @Inject constructor(
     }
 
     /**
+     * 벡터 그룹 기반 카테고리 검색
+     *
+     * 단일 최고 매칭이 아닌, 유사도 ≥ 그룹핑 임계값(0.88) 이상인
+     * 모든 유사 가게를 찾아 그룹의 다수결 카테고리를 반환합니다.
+     *
+     * 그룹 내 가게들의 카테고리가 모두 같으면 → 해당 카테고리
+     * 그룹 내 가게들의 카테고리가 다르면 → 가장 많은 카테고리 (다수결)
+     *
+     * autoApply 임계값(0.92) 미만이지만 group 임계값(0.88) 이상인
+     * 경우에도 그룹 카테고리를 활용할 수 있어 분류 범위가 넓어집니다.
+     *
+     * @param storeName 검색할 가게명
+     * @return Pair<카테고리, 유사도> (없으면 null)
+     */
+    suspend fun findCategoryByGroup(storeName: String): Pair<String, Float>? {
+        try {
+            val embeddings = getEmbeddings()
+            if (embeddings.isEmpty()) return null
+
+            val queryVector = embeddingService.generateEmbedding(storeName) ?: return null
+
+            // 그룹핑 임계값 이상인 모든 유사 가게 검색
+            val similarStores = VectorSearchEngine.findSimilarStores(
+                queryVector = queryVector,
+                embeddings = embeddings,
+                minSimilarity = StoreNameSimilarityPolicy.profile.group
+            )
+
+            if (similarStores.isEmpty()) return null
+
+            // 그룹의 다수결 카테고리 결정
+            val categoryCounts = similarStores
+                .groupBy { it.storeEmbedding.category }
+                .mapValues { (_, results) -> results.size }
+
+            val dominantCategory = categoryCounts.maxByOrNull { it.value }?.key ?: return null
+            val avgSimilarity = similarStores.map { it.similarity }.average().toFloat()
+
+            Log.d(TAG, "그룹 매칭: '$storeName' → '$dominantCategory' " +
+                    "(그룹 ${similarStores.size}개, 평균 유사도 $avgSimilarity)")
+
+            // 매칭된 가게들의 카운트 증가
+            for (result in similarStores) {
+                storeEmbeddingDao.incrementMatchCount(result.storeEmbedding.id)
+            }
+
+            return dominantCategory to avgSimilarity
+        } catch (e: Exception) {
+            Log.e(TAG, "그룹 검색 실패: ${e.message}", e)
+            return null
+        }
+    }
+
+    /**
      * 가게명 임베딩 저장 (단일)
      *
      * Gemini 분류 결과나 사용자 수정 결과를 벡터 DB에 저장합니다.

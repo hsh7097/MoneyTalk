@@ -212,9 +212,9 @@ object SmsParser {
         "배달" to listOf(
             "배달의민족", "요기요", "쿠팡이츠", "배민", "위메프오", "땡겨요", "배달"
         ),
-        // 계좌이체
+        // 계좌이체 (체크카드출금은 일반 카드 결제이므로 제외, "이체"/"송금" 단독은 너무 광범위하므로 구체화)
         "계좌이체" to listOf(
-            "이체", "송금", "계좌이체"
+            "계좌이체", "타행이체", "당행이체", "인터넷이체", "모바일이체"
         ),
         // 기타 (보험 등)
         "기타" to listOf(
@@ -773,8 +773,18 @@ object SmsParser {
      * @return 매칭된 카테고리 (없으면 "미분류")
      */
     fun inferCategory(storeName: String, message: String): String {
-        // 계좌이체 우선 감지: 계좌번호 패턴(**포함) + "출금" 키워드
-        if (message.contains("출금") && message.contains(Regex("""\d+\*+\d+"""))) {
+        // 계좌이체 감지: "체크카드출금"은 일반 카드 결제이므로 제외
+        // 실제 계좌이체: "출금" + 계좌번호 패턴(**포함) + "체크카드출금"이 아닌 경우
+        if (message.contains("출금") && !message.contains("체크카드출금")) {
+            // "이체출금", "송금출금" 등 이체 관련 출금
+            if (message.contains("이체") || message.contains("송금")) {
+                return "계좌이체"
+            }
+        }
+        // 명시적 계좌이체 키워드
+        if (message.contains("계좌이체") || message.contains("타행이체") ||
+            message.contains("당행이체") || message.contains("인터넷이체") ||
+            message.contains("모바일이체")) {
             return "계좌이체"
         }
 

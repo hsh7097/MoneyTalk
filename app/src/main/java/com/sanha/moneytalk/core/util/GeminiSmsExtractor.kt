@@ -26,7 +26,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class GeminiSmsExtractor @Inject constructor(
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val categoryReferenceProvider: CategoryReferenceProvider
 ) {
     companion object {
         private const val TAG = "GeminiSmsExtractor"
@@ -42,7 +43,12 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 3. storeName: 가게명/상호명
 4. cardName: 카드사명
 5. dateTime: 결제 날짜와 시간 ("yyyy-MM-dd HH:mm" 형식). SMS 수신 날짜가 제공되면 해당 연도를 사용할 것.
-6. category: 추정 카테고리 (식비, 카페, 술/유흥, 교통, 쇼핑, 구독, 의료/건강, 운동, 문화/여가, 교육, 주거, 생활, 경조, 배달, 기타 중 하나. 배달의민족/요기요/쿠팡이츠 등 배달앱은 반드시 "배달"로 분류)
+6. category: 추정 카테고리 (식비, 카페, 술/유흥, 교통, 쇼핑, 구독, 의료/건강, 운동, 문화/여가, 교육, 주거, 생활, 보험, 계좌이체, 경조, 배달, 기타 중 하나. 배달의민족/요기요/쿠팡이츠 등 배달앱은 반드시 "배달"로 분류)
+
+[카테고리 분류 주의사항]
+- "체크카드출금"은 일반 카드 결제이므로 가게명 기준으로 카테고리를 분류할 것 (계좌이체 아님)
+- "계좌이체"는 명시적으로 "계좌이체", "타행이체", "당행이체" 등 이체 키워드가 있을 때만 사용
+- 보험회사(삼성화재, 현대해상, 메리츠 등) 결제는 "보험"으로 분류
 
 [응답 규칙]
 1. 반드시 JSON만 반환 (다른 텍스트 없이)
@@ -68,7 +74,12 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 4. storeName: 가게명/상호명
 5. cardName: 카드사명
 6. dateTime: 결제 날짜와 시간 ("yyyy-MM-dd HH:mm" 형식). 각 SMS에 수신 날짜가 제공되면 해당 연도를 사용할 것.
-7. category: 추정 카테고리 (식비, 카페, 술/유흥, 교통, 쇼핑, 구독, 의료/건강, 운동, 문화/여가, 교육, 주거, 생활, 경조, 배달, 기타 중 하나. 배달의민족/요기요/쿠팡이츠 등 배달앱은 반드시 "배달"로 분류)
+7. category: 추정 카테고리 (식비, 카페, 술/유흥, 교통, 쇼핑, 구독, 의료/건강, 운동, 문화/여가, 교육, 주거, 생활, 보험, 계좌이체, 경조, 배달, 기타 중 하나. 배달의민족/요기요/쿠팡이츠 등 배달앱은 반드시 "배달"로 분류)
+
+[카테고리 분류 주의사항]
+- "체크카드출금"은 일반 카드 결제이므로 가게명 기준으로 카테고리를 분류할 것 (계좌이체 아님)
+- "계좌이체"는 명시적으로 "계좌이체", "타행이체", "당행이체" 등 이체 키워드가 있을 때만 사용
+- 보험회사(삼성화재, 현대해상, 메리츠 등) 결제는 "보험"으로 분류
 
 [응답 규칙]
 1. 반드시 JSON 배열만 반환 (다른 텍스트 없이)
@@ -237,8 +248,13 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
                 "\n(SMS 수신 날짜: ${smsDateFormat.format(Date(smsTimestamp))})"
             } else ""
 
-            val prompt = """다음 SMS에서 결제 정보를 추출해주세요:$dateInfo
+            // 참조 리스트 추가
+            val referenceText = try {
+                categoryReferenceProvider.getSmsExtractionReference()
+            } catch (e: Exception) { "" }
 
+            val prompt = """다음 SMS에서 결제 정보를 추출해주세요:$dateInfo
+$referenceText
 $smsBody"""
 
             Log.d(TAG, "LLM 추출 요청: ${smsBody.take(80)}...")
@@ -322,7 +338,13 @@ $smsBody"""
                 "${idx + 1}번$dateInfo: $body"
             }.joinToString("\n\n")
 
+            // 참조 리스트 추가
+            val referenceText = try {
+                categoryReferenceProvider.getSmsExtractionReference()
+            } catch (e: Exception) { "" }
+
             val prompt = """다음 ${smsMessages.size}개 SMS에서 각각 결제 정보를 추출해주세요:
+$referenceText
 
 $smsListText"""
 
