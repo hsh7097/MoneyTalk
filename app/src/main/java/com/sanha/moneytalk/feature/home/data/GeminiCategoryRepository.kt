@@ -21,7 +21,7 @@ class GeminiCategoryRepository @Inject constructor(
     private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider
 ) {
     companion object {
-        private const val TAG = "GeminiCategory"
+        private const val TAG = "gemini"
         private const val BATCH_SIZE = 50
         private const val MAX_RETRIES = 3
         private const val INITIAL_DELAY_MS = 5000L  // 5초 기본 딜레이

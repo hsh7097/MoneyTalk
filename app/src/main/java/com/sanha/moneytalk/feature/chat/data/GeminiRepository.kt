@@ -30,8 +30,7 @@ class GeminiRepository @Inject constructor(
     private var summaryModel: GenerativeModel? = null
 
     companion object {
-        private const val TAG = "GeminiChat"
-        private const val TAG_PROMPT = "PROMPT"
+        private const val TAG = "gemini"
     }
 
     // DataStore에서 API 키 가져오기 (캐싱)
@@ -151,9 +150,9 @@ $contextualMessage
 
 위 질문에 필요한 데이터 쿼리를 JSON으로 반환해줘:"""
 
-            Log.d(TAG_PROMPT, "=== 쿼리 분석 프롬프트 ===")
-            Log.d(TAG_PROMPT, prompt)
-            Log.d(TAG_PROMPT, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
+            Log.d(TAG, "=== 쿼리 분석 프롬프트 ===")
+            Log.d(TAG, prompt)
+            Log.d(TAG, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
 
             val response = model.generateContent(prompt)
             val responseText = response.text ?: return Result.success(null)
@@ -217,9 +216,9 @@ $categoryRef
 [사용자 질문]
 $userMessage"""
 
-            Log.d(TAG_PROMPT, "=== 최종 답변 프롬프트 ===")
-            Log.d(TAG_PROMPT, prompt)
-            Log.d(TAG_PROMPT, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
+            Log.d(TAG, "=== 최종 답변 프롬프트 ===")
+            Log.d(TAG, prompt)
+            Log.d(TAG, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
             Log.d(TAG, "Gemini 호출 중...")
 
             val response = model.generateContent(prompt)
@@ -248,9 +247,9 @@ $userMessage"""
     suspend fun generateFinalAnswerWithContext(contextPrompt: String): Result<String> {
         return try {
             Log.d(TAG, "=== generateFinalAnswerWithContext 시작 ===")
-            Log.d(TAG_PROMPT, "=== 컨텍스트 기반 최종 답변 프롬프트 ===")
-            Log.d(TAG_PROMPT, contextPrompt)
-            Log.d(TAG_PROMPT, "=== 프롬프트 끝 (길이: ${contextPrompt.length}) ===")
+            Log.d(TAG, "=== 컨텍스트 기반 최종 답변 프롬프트 ===")
+            Log.d(TAG, contextPrompt)
+            Log.d(TAG, "=== 프롬프트 끝 (길이: ${contextPrompt.length}) ===")
 
             val model = getFinancialAdvisorModel()
             if (model == null) {
@@ -274,9 +273,9 @@ $userMessage"""
     suspend fun simpleChat(userMessage: String): Result<String> {
         return try {
             Log.d(TAG, "=== simpleChat 시작 ===")
-            Log.d(TAG_PROMPT, "=== 심플 채팅 프롬프트 ===")
-            Log.d(TAG_PROMPT, userMessage)
-            Log.d(TAG_PROMPT, "=== 프롬프트 끝 (길이: ${userMessage.length}) ===")
+            Log.d(TAG, "=== 심플 채팅 프롬프트 ===")
+            Log.d(TAG, userMessage)
+            Log.d(TAG, "=== 프롬프트 끝 (길이: ${userMessage.length}) ===")
 
             val model = getFinancialAdvisorModel()
             if (model == null) {
@@ -326,8 +325,11 @@ $recentMessages
 
 제목:"""
 
+            Log.d(TAG, "=== [타이틀 생성] 요청 ===")
+            Log.d(TAG, prompt)
             val response = model.generateContent(prompt)
             val title = response.text?.trim()?.take(20)
+            Log.d(TAG, "=== [타이틀 생성] 응답: $title ===")
             if (title.isNullOrBlank()) null else title
         } catch (e: Exception) {
             Log.w(TAG, "채팅 타이틀 생성 실패: ${e.message}")
@@ -372,9 +374,9 @@ $existingSummary
 $newMessages"""
             }
 
-            Log.d(TAG_PROMPT, "=== 요약 프롬프트 ===")
-            Log.d(TAG_PROMPT, prompt)
-            Log.d(TAG_PROMPT, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
+            Log.d(TAG, "=== 요약 프롬프트 ===")
+            Log.d(TAG, prompt)
+            Log.d(TAG, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
             val response = model.generateContent(prompt)
             val summaryText = response.text ?: return Result.failure(Exception("요약 응답 없음"))
 

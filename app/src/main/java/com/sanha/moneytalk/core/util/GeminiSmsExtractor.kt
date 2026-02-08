@@ -30,7 +30,7 @@ class GeminiSmsExtractor @Inject constructor(
     private val categoryReferenceProvider: CategoryReferenceProvider
 ) {
     companion object {
-        private const val TAG = "GeminiSmsExtractor"
+        private const val TAG = "gemini"
 
         private const val SYSTEM_INSTRUCTION = """당신은 한국 카드 결제 SMS에서 정보를 추출하는 전문가입니다.
 

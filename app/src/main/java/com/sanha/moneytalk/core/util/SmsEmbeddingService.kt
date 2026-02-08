@@ -28,7 +28,7 @@ class SmsEmbeddingService @Inject constructor(
     private val settingsDataStore: SettingsDataStore
 ) {
     companion object {
-        private const val TAG = "SmsEmbedding"
+        private const val TAG = "gemini"
         private const val EMBEDDING_MODEL = "gemini-embedding-001"
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
