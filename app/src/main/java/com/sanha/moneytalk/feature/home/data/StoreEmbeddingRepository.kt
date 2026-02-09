@@ -379,4 +379,12 @@ class StoreEmbeddingRepository @Inject constructor(
     suspend fun getEmbeddingCount(): Int {
         return storeEmbeddingDao.getEmbeddingCount()
     }
+
+    /**
+     * 저신뢰도 임베딩 조회 (재분류 대상)
+     */
+    suspend fun getLowConfidenceEmbeddings(threshold: Float = 0.95f): List<StoreEmbeddingEntity> {
+        return storeEmbeddingDao.getLowConfidenceEmbeddings(threshold)
+    }
+
 }

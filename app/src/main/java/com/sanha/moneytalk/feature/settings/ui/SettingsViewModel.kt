@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.feature.settings.ui
 
 import android.content.Context
+import android.util.Log
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -71,6 +72,10 @@ class SettingsViewModel @Inject constructor(
     private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
     private val snackbarBus: AppSnackbarBus
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "SettingsViewModel"
+    }
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -155,6 +160,7 @@ class SettingsViewModel @Inject constructor(
                         apiKey = maskApiKey(key)
                     )
                 }
+                launchBackgroundReclassification()
             } catch (e: Exception) {
                 snackbarBus.show("저장 실패: ${e.message}")
                 _uiState.update {
@@ -846,4 +852,26 @@ class SettingsViewModel @Inject constructor(
             }
         }
     }
+
+    private fun launchBackgroundReclassification() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                var totalReclassified = 0
+                val reclassifiedCount = categoryClassifierService.reclassifyLowConfidenceItems()
+                totalReclassified += reclassifiedCount
+                val classifiedCount = categoryClassifierService.classifyUnclassifiedExpenses()
+                totalReclassified += classifiedCount
+                if (totalReclassified > 0) {
+                    withContext(Dispatchers.Main) {
+                        loadUnclassifiedCount()
+                        snackbarBus.show("${totalReclassified}건의 카테고리가 정리되었습니다")
+                        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "백그라운드 재분류 실패: ${e.message}")
+            }
+        }
+    }
+
 }

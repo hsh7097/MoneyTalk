@@ -96,4 +96,12 @@ interface StoreEmbeddingDao {
     /** 모든 임베딩 실시간 관찰 (매칭 횟수 내림차순) - 디버깅/모니터링용 */
     @Query("SELECT * FROM store_embeddings ORDER BY matchCount DESC")
     fun observeAllEmbeddings(): Flow<List<StoreEmbeddingEntity>>
+
+    /**
+     * 저신뢰도 임베딩 조회 (재분류 대상)
+     * source가 'user'가 아니고 confidence가 임계값 미만인 항목
+     */
+    @Query("SELECT * FROM store_embeddings WHERE confidence < :threshold AND source != 'user'")
+    suspend fun getLowConfidenceEmbeddings(threshold: Float): List<StoreEmbeddingEntity>
+
 }

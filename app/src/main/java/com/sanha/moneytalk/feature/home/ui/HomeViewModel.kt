@@ -143,6 +143,9 @@ class HomeViewModel @Inject constructor(
                         }
                         loadSettings()
                     }
+                    DataRefreshEvent.RefreshType.CATEGORY_UPDATED -> {
+                        loadData()
+                    }
                 }
             }
         }

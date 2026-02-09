@@ -349,6 +349,35 @@ class CategoryClassifierService @Inject constructor(
     }
 
     /**
+     * 저신뢰도 임베딩 항목 Gemini 재분류
+     */
+    suspend fun reclassifyLowConfidenceItems(confidenceThreshold: Float = 0.95f): Int {
+        try {
+            val lowConfidenceItems = storeEmbeddingRepository.getLowConfidenceEmbeddings(confidenceThreshold)
+            if (lowConfidenceItems.isEmpty()) {
+                Log.d(TAG, "재분류 대상 없음 (threshold=$confidenceThreshold)")
+                return 0
+            }
+            Log.d(TAG, "재분류 시작: ${lowConfidenceItems.size}건 (threshold=$confidenceThreshold)")
+            val storeNames = lowConfidenceItems.map { it.storeName }
+            val classifications = geminiRepository.classifyStoreNames(storeNames)
+            var reclassifiedCount = 0
+            for ((storeName, newCategory) in classifications) {
+                if (newCategory == "미분류") continue
+                categoryRepository.saveMapping(storeName, newCategory, "gemini")
+                storeEmbeddingRepository.updateCategory(storeName, newCategory, "gemini")
+                expenseRepository.updateCategoryByStoreName(storeName, newCategory)
+                reclassifiedCount++
+            }
+            Log.d(TAG, "재분류 완료: ${reclassifiedCount}건")
+            return reclassifiedCount
+        } catch (e: Exception) {
+            Log.e(TAG, "재분류 실패: ${e.message}", e)
+            return 0
+        }
+    }
+
+    /**
      * 미분류 항목 수 조회
      */
     suspend fun getUnclassifiedCount(): Int {
