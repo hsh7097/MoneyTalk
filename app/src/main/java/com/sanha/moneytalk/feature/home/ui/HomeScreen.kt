@@ -30,6 +30,7 @@ import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.ExpenseItemCard
 import com.sanha.moneytalk.core.util.DateUtils
@@ -146,16 +147,26 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = if (uiState.selectedCategory != null) {
-                                val cat = Category.fromDisplayName(uiState.selectedCategory ?: "")
-                                "${cat.emoji} ${cat.displayName} 지출"
-                            } else {
-                                stringResource(R.string.home_recent_expense)
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                        if (uiState.selectedCategory != null) {
+                            val cat = Category.fromDisplayName(uiState.selectedCategory ?: "")
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CategoryIcon(category = cat, containerSize = 28.dp, iconSize = 20.dp)
+                                Text(
+                                    text = "${cat.displayName} 지출",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = stringResource(R.string.home_recent_expense),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                         if (uiState.selectedCategory != null) {
                             TextButton(onClick = { viewModel.selectCategory(null) }) {
                                 Text("전체 보기")
@@ -604,12 +615,18 @@ fun CategoryExpenseSection(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "${category.emoji} ${category.displayName}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CategoryIcon(category = category, containerSize = 24.dp, iconSize = 16.dp)
+                        Text(
+                            text = category.displayName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     Text(
                         text = stringResource(R.string.common_won, numberFormat.format(item.total)),
                         style = MaterialTheme.typography.bodyMedium,

@@ -57,6 +57,8 @@ data class ChatUiState(
     val sessions: List<ChatSession> = emptyList(),
     val currentSessionId: Long? = null,
     val isLoading: Boolean = false,
+    /** 로딩 중인 세션 ID (다른 채팅방에서는 로딩 표시 안 함) */
+    val loadingSessionId: Long? = null,
     val errorMessage: String? = null,
     val hasApiKey: Boolean = false,
     val showSessionList: Boolean = false,
@@ -118,7 +120,11 @@ class ChatViewModel @Inject constructor(
 
     /** 채팅방 내부로 진입 */
     fun enterChatRoom(sessionId: Long) {
-        _uiState.update { it.copy(currentSessionId = sessionId, isInChatRoom = true) }
+        _uiState.update {
+            // 다른 채팅방으로 진입하면 로딩 표시 해제 (로딩 중인 세션이 아닌 경우)
+            val showLoading = it.loadingSessionId == sessionId
+            it.copy(currentSessionId = sessionId, isInChatRoom = true, isLoading = showLoading, canRetry = false)
+        }
         loadMessagesForSession(sessionId)
     }
 
@@ -213,7 +219,10 @@ class ChatViewModel @Inject constructor(
 
     fun selectSession(sessionId: Long) {
         viewModelScope.launch {
-            _uiState.update { it.copy(currentSessionId = sessionId, showSessionList = false, isInChatRoom = true) }
+            _uiState.update {
+                val showLoading = it.loadingSessionId == sessionId
+                it.copy(currentSessionId = sessionId, showSessionList = false, isInChatRoom = true, isLoading = showLoading, canRetry = false)
+            }
             loadMessagesForSession(sessionId)
         }
     }
@@ -228,7 +237,7 @@ class ChatViewModel @Inject constructor(
                 )
                 chatDao.insertSession(newSession)
             }
-            _uiState.update { it.copy(currentSessionId = sessionId, showSessionList = false, isInChatRoom = true) }
+            _uiState.update { it.copy(currentSessionId = sessionId, showSessionList = false, isInChatRoom = true, isLoading = false, canRetry = false) }
             loadMessagesForSession(sessionId)
         }
     }
@@ -287,7 +296,7 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = true, loadingSessionId = sessionId) }
 
             try {
                 // ===== Rolling Summary + Windowed Context 전략 적용 =====
@@ -372,7 +381,7 @@ class ChatViewModel @Inject constructor(
                     }
                 }
 
-                _uiState.update { it.copy(isLoading = false) }
+                _uiState.update { it.copy(isLoading = false, loadingSessionId = null) }
             } catch (e: Exception) {
                 withContext(Dispatchers.IO) {
                     chatRepository.saveAiResponseAndUpdateSummary(
@@ -380,7 +389,7 @@ class ChatViewModel @Inject constructor(
                         "오류가 발생했어요 😢\n(${e.message})"
                     )
                 }
-                _uiState.update { it.copy(isLoading = false, canRetry = true) }
+                _uiState.update { it.copy(isLoading = false, loadingSessionId = null, canRetry = true) }
             }
             } // sendMutex.withLock
         }

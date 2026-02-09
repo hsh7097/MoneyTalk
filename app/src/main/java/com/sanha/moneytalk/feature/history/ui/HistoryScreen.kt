@@ -47,48 +47,13 @@ import kotlinx.coroutines.launch
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.ExpenseItemCard
 import com.sanha.moneytalk.core.util.DateUtils
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
-
-// 카테고리별 아이콘 및 색상
-data class CategoryStyle(
-    val icon: String,
-    val color: Color
-)
-
-private val categoryStyles = Category.entries.associate { category ->
-    category.displayName to CategoryStyle(
-        icon = category.emoji,
-        color = when (category) {
-            Category.FOOD -> Color(0xFFFF9800)
-            Category.CAFE -> Color(0xFF795548)
-            Category.DRINKING -> Color(0xFFE91E63)
-            Category.TRANSPORT -> Color(0xFF2196F3)
-            Category.SHOPPING -> Color(0xFF3F51B5)
-            Category.SUBSCRIPTION -> Color(0xFF673AB7)
-            Category.HEALTH -> Color(0xFFF44336)
-            Category.FITNESS -> Color(0xFF00BCD4)
-            Category.CULTURE -> Color(0xFF9C27B0)
-            Category.EDUCATION -> Color(0xFF2196F3)
-            Category.HOUSING -> Color(0xFF607D8B)
-            Category.LIVING -> Color(0xFF4CAF50)
-            Category.INSURANCE -> Color(0xFF00796B)
-            Category.TRANSFER -> Color(0xFF546E7A)
-            Category.EVENTS -> Color(0xFFFF5722)
-            Category.DELIVERY -> Color(0xFFFF6D00)
-            Category.ETC -> Color(0xFF9E9E9E)
-            Category.UNCLASSIFIED -> Color(0xFFBDBDBD)
-        }
-    )
-}
-
-private fun getCategoryStyle(category: String): CategoryStyle {
-    return categoryStyles[category] ?: CategoryStyle("📦", Color(0xFF9E9E9E))
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -722,11 +687,17 @@ fun FilterPanel(
                 Category.entries.forEach { category ->
                     DropdownMenuItem(
                         text = {
-                            Text(
-                                "${category.emoji} ${category.displayName}",
-                                fontWeight = if (selectedCategory == category.displayName) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selectedCategory == category.displayName) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CategoryIcon(category = category, containerSize = 32.dp, iconSize = 20.dp)
+                                Text(
+                                    category.displayName,
+                                    fontWeight = if (selectedCategory == category.displayName) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (selectedCategory == category.displayName) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         },
                         onClick = { onCategorySelected(category.displayName); showCategoryMenu = false }
                     )

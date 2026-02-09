@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -23,7 +22,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.model.Category
@@ -67,19 +65,8 @@ fun ExpenseItemCard(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.weight(1f)
         ) {
-            // 카테고리 이모지 아이콘
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = category.emoji,
-                    fontSize = 18.sp
-                )
-            }
+            // 카테고리 벡터 아이콘 (20dp 아이콘 / 32dp 컨테이너)
+            CategoryIcon(category = category, containerSize = 32.dp, iconSize = 20.dp)
 
             Spacer(modifier = Modifier.width(12.dp))
 
@@ -140,9 +127,11 @@ fun ExpenseDetailDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
-            Text(
-                text = category.emoji,
-                style = MaterialTheme.typography.displaySmall
+            CategoryIcon(
+                category = category,
+                containerSize = 48.dp,
+                iconSize = 28.dp,
+                tint = MaterialTheme.colorScheme.primary
             )
         },
         title = {
@@ -419,28 +408,19 @@ fun CategoryPickerDialog(
                             }
                         )
                     ) {
-                        Row(
+                        Text(
+                            text = category.displayName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = category.emoji,
-                                fontSize = 24.sp
-                            )
-                            Text(
-                                text = category.displayName,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                }
-                            )
-                        }
+                                .padding(16.dp)
+                        )
                     }
                 }
             }

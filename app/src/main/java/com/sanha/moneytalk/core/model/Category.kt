@@ -1,5 +1,8 @@
 package com.sanha.moneytalk.core.model
 
+import androidx.annotation.DrawableRes
+import com.sanha.moneytalk.R
+
 /**
  * 지출 카테고리 (대/소 카테고리 계층 구조)
  *
@@ -12,26 +15,27 @@ package com.sanha.moneytalk.core.model
 enum class Category(
     val emoji: String,
     val displayName: String,
+    @DrawableRes val iconRes: Int,
     val parentCategory: Category? = null
 ) {
-    FOOD("🍔", "식비"),
-    CAFE("☕", "카페"),
-    DRINKING("🍺", "술/유흥"),
-    TRANSPORT("🚗", "교통"),
-    SHOPPING("🛒", "쇼핑"),
-    SUBSCRIPTION("📱", "구독"),
-    HEALTH("💊", "의료/건강"),
-    FITNESS("💪", "운동"),
-    CULTURE("🎬", "문화/여가"),
-    EDUCATION("📚", "교육"),
-    HOUSING("🏢", "주거"),
-    LIVING("🏠", "생활"),
-    INSURANCE("🛡️", "보험"),
-    TRANSFER("🔄", "계좌이체"),
-    EVENTS("🎁", "경조"),
-    DELIVERY("🛵", "배달", FOOD),  // 식비의 소 카테고리
-    ETC("📦", "기타"),
-    UNCLASSIFIED("❓", "미분류");
+    FOOD("🍔", "식비", R.drawable.ic_category_food),
+    CAFE("☕", "카페", R.drawable.ic_category_cafe),
+    DRINKING("🍺", "술/유흥", R.drawable.ic_category_drinking),
+    TRANSPORT("🚗", "교통", R.drawable.ic_category_transport),
+    SHOPPING("🛒", "쇼핑", R.drawable.ic_category_shopping),
+    SUBSCRIPTION("📱", "구독", R.drawable.ic_category_subscription),
+    HEALTH("💊", "의료/건강", R.drawable.ic_category_health),
+    FITNESS("💪", "운동", R.drawable.ic_category_fitness),
+    CULTURE("🎬", "문화/여가", R.drawable.ic_category_culture),
+    EDUCATION("📚", "교육", R.drawable.ic_category_education),
+    HOUSING("🏢", "주거", R.drawable.ic_category_housing),
+    LIVING("🏠", "생활", R.drawable.ic_category_living),
+    INSURANCE("🛡️", "보험", R.drawable.ic_category_insurance),
+    TRANSFER("🔄", "계좌이체", R.drawable.ic_category_transfer),
+    EVENTS("🎁", "경조", R.drawable.ic_category_events),
+    DELIVERY("🛵", "배달", R.drawable.ic_category_delivery, FOOD),  // 식비의 소 카테고리
+    ETC("📦", "기타", R.drawable.ic_category_etc),
+    UNCLASSIFIED("❓", "미분류", R.drawable.ic_category_unclassified);
 
     /** 이 카테고리가 대 카테고리인지 (소 카테고리가 아닌지) */
     val isParent: Boolean get() = parentCategory == null
