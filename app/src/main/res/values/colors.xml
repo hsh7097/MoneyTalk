@@ -138,10 +138,6 @@
     <color name="pink_800">#9C00A3</color>
     <color name="pink_900">#64009A</color>
 
-    <!-- Category icon -->
-    <color name="category_icon_tint">#137FEC</color>
-    <color name="category_icon_bg">#F0F4FF</color>
-
     <!-- GDS component support -->
     <color name="cta">#0028AC</color>
     <color name="gds_thumbnail_black_04">#0a000000</color>

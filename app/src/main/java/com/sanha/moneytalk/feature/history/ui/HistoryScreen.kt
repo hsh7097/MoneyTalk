@@ -691,7 +691,7 @@ fun FilterPanel(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                CategoryIcon(category = category, containerSize = 32.dp, iconSize = 20.dp)
+                                CategoryIcon(category = category, containerSize = 32.dp, fontSize = 20.sp)
                                 Text(
                                     category.displayName,
                                     fontWeight = if (selectedCategory == category.displayName) FontWeight.Bold else FontWeight.Normal,

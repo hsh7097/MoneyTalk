@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import com.sanha.moneytalk.R
@@ -153,7 +154,7 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                CategoryIcon(category = cat, containerSize = 28.dp, iconSize = 20.dp)
+                                CategoryIcon(category = cat, containerSize = 28.dp, fontSize = 20.sp)
                                 Text(
                                     text = "${cat.displayName} 지출",
                                     style = MaterialTheme.typography.titleMedium,
@@ -619,7 +620,7 @@ fun CategoryExpenseSection(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        CategoryIcon(category = category, containerSize = 24.dp, iconSize = 16.dp)
+                        CategoryIcon(category = category, containerSize = 24.dp, fontSize = 16.sp)
                         Text(
                             text = category.displayName,
                             style = MaterialTheme.typography.bodyMedium,

@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.model.Category
@@ -65,8 +66,8 @@ fun ExpenseItemCard(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.weight(1f)
         ) {
-            // 카테고리 벡터 아이콘 (20dp 아이콘 / 32dp 컨테이너)
-            CategoryIcon(category = category, containerSize = 32.dp, iconSize = 20.dp)
+            // 카테고리 이모지 아이콘
+            CategoryIcon(category = category, containerSize = 32.dp, fontSize = 20.sp)
 
             Spacer(modifier = Modifier.width(12.dp))
 
@@ -130,8 +131,7 @@ fun ExpenseDetailDialog(
             CategoryIcon(
                 category = category,
                 containerSize = 48.dp,
-                iconSize = 28.dp,
-                tint = MaterialTheme.colorScheme.primary
+                fontSize = 28.sp
             )
         },
         title = {
