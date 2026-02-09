@@ -15,6 +15,7 @@ import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
 import com.sanha.moneytalk.core.util.GoogleDriveHelper
+import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.CategoryRepository
@@ -34,7 +35,6 @@ data class SettingsUiState(
     val monthlyIncome: Int = 0,
     val monthStartDay: Int = 1,
     val isLoading: Boolean = false,
-    val message: String? = null,
     val backupContent: String? = null,
     val exportFormat: ExportFormat = ExportFormat.JSON,
     val exportFilter: ExportFilter = ExportFilter(),
@@ -68,7 +68,8 @@ class SettingsViewModel @Inject constructor(
     private val chatDao: ChatDao,
     private val budgetDao: BudgetDao,
     private val dataRefreshEvent: DataRefreshEvent,
-    private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository
+    private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
+    private val snackbarBus: AppSnackbarBus
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -146,19 +147,19 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             try {
                 withContext(Dispatchers.IO) { geminiRepository.setApiKey(key) }
+                snackbarBus.show("Gemini API 키가 저장되었습니다")
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         hasApiKey = true,
-                        apiKey = maskApiKey(key),
-                        message = "Gemini API 키가 저장되었습니다"
+                        apiKey = maskApiKey(key)
                     )
                 }
             } catch (e: Exception) {
+                snackbarBus.show("저장 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "저장 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -170,18 +171,18 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             try {
                 withContext(Dispatchers.IO) { settingsDataStore.saveMonthlyIncome(income) }
+                snackbarBus.show("월 수입이 저장되었습니다")
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        monthlyIncome = income,
-                        message = "월 수입이 저장되었습니다"
+                        monthlyIncome = income
                     )
                 }
             } catch (e: Exception) {
+                snackbarBus.show("저장 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "저장 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -193,18 +194,18 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             try {
                 withContext(Dispatchers.IO) { settingsDataStore.saveMonthStartDay(day) }
+                snackbarBus.show("월 시작일이 ${day}일로 설정되었습니다")
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        monthStartDay = day,
-                        message = "월 시작일이 ${day}일로 설정되었습니다"
+                        monthStartDay = day
                     )
                 }
             } catch (e: Exception) {
+                snackbarBus.show("저장 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "저장 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -269,10 +270,10 @@ class SettingsViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
+                snackbarBus.show("백업 준비 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "백업 준비 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -293,26 +294,26 @@ class SettingsViewModel @Inject constructor(
                     DataBackupManager.exportToUri(context, uri, content)
                 }
                 result.onSuccess {
+                    snackbarBus.show("백업이 완료되었습니다")
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            backupContent = null,
-                            message = "백업이 완료되었습니다"
+                            backupContent = null
                         )
                     }
                 }.onFailure { e ->
+                    snackbarBus.show("백업 실패: ${e.message}")
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
-                            message = "백업 실패: ${e.message}"
+                            isLoading = false
                         )
                     }
                 }
             } catch (e: Exception) {
+                snackbarBus.show("백업 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "백업 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -332,18 +333,18 @@ class SettingsViewModel @Inject constructor(
                 result.onSuccess { backupData ->
                     restoreData(backupData)
                 }.onFailure { e ->
+                    snackbarBus.show("복원 실패: ${e.message}")
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
-                            message = "복원 실패: ${e.message}"
+                            isLoading = false
                         )
                     }
                 }
             } catch (e: Exception) {
+                snackbarBus.show("복원 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "복원 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -379,15 +380,15 @@ class SettingsViewModel @Inject constructor(
                 it.copy(
                     isLoading = false,
                     monthlyIncome = backupData.settings.monthlyIncome,
-                    monthStartDay = backupData.settings.monthStartDay,
-                    message = "복원 완료: 지출 ${expenseCount}건, 수입 ${incomeCount}건"
+                    monthStartDay = backupData.settings.monthStartDay
                 )
             }
+            snackbarBus.show("복원 완료: 지출 ${expenseCount}건, 수입 ${incomeCount}건")
         } catch (e: Exception) {
+            snackbarBus.show("복원 실패: ${e.message}")
             _uiState.update {
                 it.copy(
-                    isLoading = false,
-                    message = "복원 실패: ${e.message}"
+                    isLoading = false
                 )
             }
         }
@@ -435,17 +436,17 @@ class SettingsViewModel @Inject constructor(
                         monthlyIncome = 0,
                         monthStartDay = 1,
                         unclassifiedCount = 0,
-                        message = "모든 데이터가 삭제되었습니다 (학습 데이터는 보존됨)"
                     )
                 }
+                snackbarBus.show("모든 데이터가 삭제되었습니다 (학습 데이터는 보존됨)")
 
                 // 다른 ViewModel에게 데이터 삭제 이벤트 전달
                 dataRefreshEvent.emit(DataRefreshEvent.RefreshType.ALL_DATA_DELETED)
             } catch (e: Exception) {
+                snackbarBus.show("삭제 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "삭제 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -552,28 +553,28 @@ class SettingsViewModel @Inject constructor(
                     googleDriveHelper.uploadFile(fileName, content, format)
                 }
                 result.onSuccess { _ ->
+                    snackbarBus.show("구글 드라이브에 업로드되었습니다")
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            backupContent = null,
-                            message = "구글 드라이브에 업로드되었습니다"
+                            backupContent = null
                         )
                     }
                     // 목록 새로고침
                     loadDriveBackupFiles()
                 }.onFailure { e ->
+                    snackbarBus.show("업로드 실패: ${e.message}")
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
-                            message = "업로드 실패: ${e.message}"
+                            isLoading = false
                         )
                     }
                 }
             } catch (e: Exception) {
+                snackbarBus.show("업로드 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "업로드 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -597,10 +598,10 @@ class SettingsViewModel @Inject constructor(
                     )
                 }
             }.onFailure { e ->
+                snackbarBus.show("목록 로드 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "목록 로드 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -623,18 +624,18 @@ class SettingsViewModel @Inject constructor(
                     }
                     restoreData(backupData)
                 } catch (e: Exception) {
+                    snackbarBus.show("복원 실패: 잘못된 파일 형식")
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
-                            message = "복원 실패: 잘못된 파일 형식"
+                            isLoading = false
                         )
                     }
                 }
             }.onFailure { e ->
+                snackbarBus.show("다운로드 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "다운로드 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -651,18 +652,18 @@ class SettingsViewModel @Inject constructor(
                 googleDriveHelper.deleteFile(fileId)
             }
             result.onSuccess {
+                snackbarBus.show("삭제되었습니다")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "삭제되었습니다"
+                        isLoading = false
                     )
                 }
                 loadDriveBackupFiles()
             }.onFailure { e ->
+                snackbarBus.show("삭제 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "삭제 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -692,19 +693,13 @@ class SettingsViewModel @Inject constructor(
                     ownedCardRepository.updateOwnership(cardName, isOwned)
                 }
             } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(message = "카드 설정 실패: ${e.message}")
-                }
+                snackbarBus.show("카드 설정 실패: ${e.message}")
             }
         }
     }
 
     fun clearBackupContent() {
         _uiState.update { it.copy(backupContent = null) }
-    }
-
-    fun clearMessage() {
-        _uiState.update { it.copy(message = null) }
     }
 
     /**
@@ -750,17 +745,13 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             // API 키 확인
             if (!_uiState.value.hasApiKey) {
-                _uiState.update {
-                    it.copy(message = "API 키를 먼저 설정해주세요")
-                }
+                snackbarBus.show("API 키를 먼저 설정해주세요")
                 return@launch
             }
 
             // 미정리 항목 확인
             if (_uiState.value.unclassifiedCount == 0) {
-                _uiState.update {
-                    it.copy(message = "정리할 항목이 없습니다")
-                }
+                snackbarBus.show("정리할 항목이 없습니다")
                 return@launch
             }
 
@@ -787,27 +778,29 @@ class SettingsViewModel @Inject constructor(
                     }
                 }
                 loadUnclassifiedCount()
+                snackbarBus.show(
+                    if (count > 0) {
+                        "${count}건의 카테고리가 정리되었습니다"
+                    } else {
+                        "정리에 실패했습니다. API 키를 확인해주세요."
+                    }
+                )
                 _uiState.update {
                     it.copy(
                         isClassifying = false,
                         classifyProgress = "",
                         classifyProgressCurrent = 0,
-                        classifyProgressTotal = 0,
-                        message = if (count > 0) {
-                            "${count}건의 카테고리가 정리되었습니다"
-                        } else {
-                            "정리에 실패했습니다. API 키를 확인해주세요."
-                        }
+                        classifyProgressTotal = 0
                     )
                 }
             } catch (e: Exception) {
+                snackbarBus.show("카테고리 정리 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
                         isClassifying = false,
                         classifyProgress = "",
                         classifyProgressCurrent = 0,
-                        classifyProgressTotal = 0,
-                        message = "카테고리 정리 실패: ${e.message}"
+                        classifyProgressTotal = 0
                     )
                 }
             }
@@ -831,21 +824,23 @@ class SettingsViewModel @Inject constructor(
                 val deletedCount = withContext(Dispatchers.IO) {
                     expenseRepository.deleteDuplicates()
                 }
+                snackbarBus.show(
+                    if (deletedCount > 0) {
+                        "중복 데이터 ${deletedCount}건이 삭제되었습니다"
+                    } else {
+                        "중복 데이터가 없습니다"
+                    }
+                )
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = if (deletedCount > 0) {
-                            "중복 데이터 ${deletedCount}건이 삭제되었습니다"
-                        } else {
-                            "중복 데이터가 없습니다"
-                        }
+                        isLoading = false
                     )
                 }
             } catch (e: Exception) {
+                snackbarBus.show("중복 삭제 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "중복 삭제 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }

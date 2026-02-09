@@ -98,19 +98,8 @@ fun HistoryScreen(
     val uiState by viewModel.uiState.collectAsState()
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
     var showAddDialog by remember { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
 
-    // 메시지 표시
-    LaunchedEffect(uiState.message) {
-        uiState.message?.let { message ->
-            snackbarHostState.showSnackbar(message)
-            viewModel.clearMessage()
-        }
-    }
-
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { paddingValues ->
+    Scaffold { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

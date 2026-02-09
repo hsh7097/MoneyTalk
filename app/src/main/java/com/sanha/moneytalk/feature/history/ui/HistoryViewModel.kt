@@ -7,6 +7,7 @@ import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
@@ -46,7 +47,6 @@ enum class SortOrder {
  * @property errorMessage 에러 메시지 (null이면 에러 없음)
  * @property searchQuery 검색어
  * @property isSearchMode 검색 모드 여부
- * @property message 사용자 메시지 (토스트용)
  * @property sortOrder 정렬 순서
  */
 data class HistoryUiState(
@@ -64,7 +64,6 @@ data class HistoryUiState(
     val errorMessage: String? = null,
     val searchQuery: String = "",
     val isSearchMode: Boolean = false,
-    val message: String? = null,
     val sortOrder: SortOrder = SortOrder.DATE_DESC,
     val showIncomeView: Boolean = false,
     val incomes: List<IncomeEntity> = emptyList(),
@@ -89,7 +88,8 @@ class HistoryViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val settingsDataStore: SettingsDataStore,
-    private val categoryClassifierService: CategoryClassifierService
+    private val categoryClassifierService: CategoryClassifierService,
+    private val snackbarBus: AppSnackbarBus
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HistoryUiState())
@@ -286,7 +286,7 @@ class HistoryViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) { incomeRepository.delete(income) }
-                _uiState.update { it.copy(message = "수입이 삭제되었습니다") }
+                snackbarBus.show("수입이 삭제되었습니다")
                 loadExpenses() // 수입도 함께 다시 로드됨
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "수입 삭제 실패: ${e.message}") }
@@ -404,17 +404,12 @@ class HistoryViewModel @Inject constructor(
                     )
                     expenseRepository.insert(expense)
                 }
-                _uiState.update { it.copy(message = "지출이 추가되었습니다") }
+                snackbarBus.show("지출이 추가되었습니다")
                 loadExpenses()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "지출 추가 실패: ${e.message}") }
             }
         }
-    }
-
-    /** 메시지 초기화 */
-    fun clearMessage() {
-        _uiState.update { it.copy(message = null) }
     }
 
     /** 지출 메모 업데이트 */
@@ -424,7 +419,7 @@ class HistoryViewModel @Inject constructor(
                 withContext(Dispatchers.IO) {
                     expenseRepository.updateMemo(expenseId, memo?.ifBlank { null })
                 }
-                _uiState.update { it.copy(message = "메모가 저장되었습니다") }
+                snackbarBus.show("메모가 저장되었습니다")
                 loadExpenses()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "메모 저장 실패: ${e.message}") }
@@ -439,7 +434,7 @@ class HistoryViewModel @Inject constructor(
                 withContext(Dispatchers.IO) {
                     incomeRepository.updateMemo(incomeId, memo?.ifBlank { null })
                 }
-                _uiState.update { it.copy(message = "메모가 저장되었습니다") }
+                snackbarBus.show("메모가 저장되었습니다")
                 loadExpenses()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "메모 저장 실패: ${e.message}") }

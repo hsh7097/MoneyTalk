@@ -23,10 +23,14 @@ import com.sanha.moneytalk.navigation.NavGraph
 import com.sanha.moneytalk.navigation.Screen
 import com.sanha.moneytalk.navigation.bottomNavItems
 import com.sanha.moneytalk.core.theme.MoneyTalkTheme
+import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject lateinit var snackbarBus: AppSnackbarBus
 
     private var pendingSyncAction: (() -> Unit)? = null
     private var permissionChecked = mutableStateOf(false)
@@ -68,7 +72,8 @@ class MainActivity : ComponentActivity() {
                     onRequestSmsPermission = { onGranted ->
                         checkAndRequestSmsPermission(onGranted)
                     },
-                    onExitApp = { finish() }
+                    onExitApp = { finish() },
+                    snackbarBus = snackbarBus
                 )
             }
         }
@@ -121,7 +126,8 @@ fun MoneyTalkApp(
     shouldAutoSync: Boolean,
     onAutoSyncConsumed: () -> Unit,
     onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
-    onExitApp: () -> Unit
+    onExitApp: () -> Unit,
+    snackbarBus: AppSnackbarBus
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -129,6 +135,20 @@ fun MoneyTalkApp(
 
     // 스플래시 화면에서는 하단 네비게이션 숨김
     val showBottomBar = currentRoute != Screen.Splash.route
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // App-wide snackbar (toast-like): collect one-off events at the root
+    LaunchedEffect(snackbarBus) {
+        snackbarBus.events.collect { event ->
+            snackbarHostState.showSnackbar(
+                message = event.message,
+                actionLabel = event.actionLabel,
+                withDismissAction = event.withDismissAction,
+                duration = event.duration
+            )
+        }
+    }
 
     // 뒤로가기 처리
     BackPressHandler(
@@ -150,6 +170,7 @@ fun MoneyTalkApp(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar(

@@ -62,8 +62,6 @@ fun SettingsScreen(
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var isExportingToGoogleDrive by remember { mutableStateOf(false) }
 
-    val snackbarHostState = remember { SnackbarHostState() }
-
     // 로그인이 어디서 트리거됐는지 추적 (설정 항목 vs 내보내기 다이얼로그)
     var googleSignInSource by remember { mutableStateOf("settings") }
 
@@ -126,19 +124,15 @@ fun SettingsScreen(
         }
     }
 
-    // 메시지 표시
-    LaunchedEffect(uiState.message) {
-        uiState.message?.let { message ->
+    // Google Drive export is coordinated via local UI state; reset it once the VM finishes the work.
+    LaunchedEffect(uiState.isLoading) {
+        if (isExportingToGoogleDrive && !uiState.isLoading) {
             isExportingToGoogleDrive = false
-            snackbarHostState.showSnackbar(message)
-            viewModel.clearMessage()
         }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) }
-        ) { paddingValues ->
+        Scaffold { paddingValues ->
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
