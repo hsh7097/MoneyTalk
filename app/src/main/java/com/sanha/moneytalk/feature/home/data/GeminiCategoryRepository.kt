@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.min
+import kotlin.random.Random
 
 /**
  * Gemini API를 사용한 카테고리 분류 Repository
@@ -28,8 +29,8 @@ class GeminiCategoryRepository @Inject constructor(
         private const val TAG = "gemini"
         private const val BATCH_SIZE = 50
         private const val MAX_RETRIES = 3
-        private const val INITIAL_DELAY_MS = 5000L  // 5초 기본 딜레이
-        private const val MAX_DELAY_MS = 60000L     // 최대 60초 딜레이
+        private const val RETRY_BASE_DELAY_MS = 1000L  // 재시도 기본 딜레이 (1초)
+        private const val MAX_RETRY_DELAY_MS = 30000L  // 최대 30초 딜레이
         private const val MAX_LOG_LENGTH = 3000     // Logcat 한 줄 최대 길이
 
         /**
@@ -94,17 +95,25 @@ class GeminiCategoryRepository @Inject constructor(
      * @return Map<가게명, 카테고리>
      */
     suspend fun classifyStoreNames(storeNames: List<String>): Map<String, String> = withContext(Dispatchers.IO) {
+        Log.e("sanha", "GeminiCategoryRepository[classifyStoreNames] : === 호출됨 (${storeNames.size}건) ===")
         val apiKey = settingsDataStore.getGeminiApiKey()
+        Log.e("sanha", "GeminiCategoryRepository[classifyStoreNames] : API 키 상태: ${if (apiKey.isBlank()) "❌ 비어있음" else "✅ 설정됨 (길이=${apiKey.length}, prefix=${apiKey.take(10)}...)"}")
         if (apiKey.isBlank()) {
             Log.e(TAG, "API 키가 설정되지 않음")
             return@withContext emptyMap()
         }
 
         if (generativeModel == null) {
+            Log.e("sanha", "GeminiCategoryRepository[classifyStoreNames] : 모델 초기화 필요 → initModel() 호출")
             initModel(apiKey)
         }
 
-        val model = generativeModel ?: return@withContext emptyMap()
+        val model = generativeModel
+        if (model == null) {
+            Log.e("sanha", "GeminiCategoryRepository[classifyStoreNames] : ❌ 모델 초기화 실패 → 빈 결과 반환")
+            return@withContext emptyMap()
+        }
+        Log.e("sanha", "GeminiCategoryRepository[classifyStoreNames] : ✅ 모델 준비 완료")
 
         // 사용 가능한 카테고리 목록
         val categories = Category.entries.map { it.displayName }
@@ -121,14 +130,16 @@ class GeminiCategoryRepository @Inject constructor(
 
         Log.d(TAG, "총 ${storeNames.size}개를 ${batches.size}개 배치로 처리")
 
+        var interBatchDelay = 0L  // 적응형 배치 간 딜레이 (429 발생 시에만 활성화)
+
         for ((index, batch) in batches.withIndex()) {
-            // 첫 번째 배치 이후에는 기본 딜레이 적용 (Rate Limit 방지)
-            if (index > 0) {
-                Log.d(TAG, "배치 ${index + 1}/${batches.size} 처리 전 ${INITIAL_DELAY_MS}ms 대기 중...")
-                delay(INITIAL_DELAY_MS)
+            // 이전 배치에서 429가 발생했으면 다음 배치 전에 딜레이
+            if (interBatchDelay > 0) {
+                Log.d(TAG, "배치 ${index + 1}/${batches.size} 전 적응형 딜레이 ${interBatchDelay}ms")
+                delay(interBatchDelay)
             }
 
-            val batchResult = processBatchWithRetry(model, batch, categories, index, batches.size, referenceText)
+            val (batchResult, hitRateLimit) = processBatchWithRetry(model, batch, categories, index, batches.size, referenceText)
             if (batchResult != null) {
                 batchResult.forEach { (store, category) ->
                     results[store] = category
@@ -136,6 +147,15 @@ class GeminiCategoryRepository @Inject constructor(
             } else {
                 // 재시도 후에도 실패한 배치 기록
                 failedBatches.add(index to batch)
+            }
+
+            // 429 발생 → 다음 배치에 딜레이 추가, 정상 → 딜레이 해제
+            interBatchDelay = if (hitRateLimit) {
+                val newDelay = if (interBatchDelay == 0L) RETRY_BASE_DELAY_MS else min(interBatchDelay * 2, MAX_RETRY_DELAY_MS)
+                Log.d(TAG, "429 감지 → 배치 간 딜레이 ${newDelay}ms로 설정")
+                newDelay
+            } else {
+                0L
             }
         }
 
@@ -151,6 +171,9 @@ class GeminiCategoryRepository @Inject constructor(
     /**
      * 지수 백오프 재시도 로직이 적용된 배치 처리
      */
+    /**
+     * @return Pair(결과 맵 or null, 429 발생 여부)
+     */
     private suspend fun processBatchWithRetry(
         model: GenerativeModel,
         batch: List<String>,
@@ -158,9 +181,10 @@ class GeminiCategoryRepository @Inject constructor(
         batchIndex: Int,
         totalBatches: Int,
         referenceText: String = ""
-    ): Map<String, String>? {
+    ): Pair<Map<String, String>?, Boolean> {
         var lastException: Exception? = null
-        var currentDelay = INITIAL_DELAY_MS
+        var currentDelay = RETRY_BASE_DELAY_MS
+        var hitRateLimit = false
 
         for (attempt in 1..MAX_RETRIES) {
             try {
@@ -187,7 +211,7 @@ class GeminiCategoryRepository @Inject constructor(
                 if (text != null) {
                     val parsed = parseClassificationResponse(text, batch)
                     Log.d(TAG, "파싱 결과: ${parsed.size}/${batch.size}개 성공")
-                    return parsed
+                    return parsed to hitRateLimit
                 }
             } catch (e: Exception) {
                 lastException = e
@@ -202,24 +226,29 @@ class GeminiCategoryRepository @Inject constructor(
                         errorMessage.contains("RESOURCE_EXHAUSTED") ||
                         errorMessage.contains("rate limit", ignoreCase = true)
 
-                if (isRateLimitError && attempt < MAX_RETRIES) {
-                    // 지수 백오프로 딜레이 증가 (최대 60초)
-                    val actualDelay = min(currentDelay, MAX_DELAY_MS)
-                    Log.w(TAG, "⚠️ Rate Limit 발생! ${actualDelay}ms 후 재시도 ($attempt/$MAX_RETRIES)")
-                    delay(actualDelay)
-                    currentDelay *= 2  // 지수 백오프: 5초 -> 10초 -> 20초
-                } else if (!isRateLimitError) {
+                if (isRateLimitError) {
+                    hitRateLimit = true
+
+                    if (attempt < MAX_RETRIES) {
+                        // 지수 백오프 + jitter (1초 → 2초 → 4초, max 30초)
+                        val jitter = Random.nextLong(0, 500)
+                        val actualDelay = min(currentDelay + jitter, MAX_RETRY_DELAY_MS)
+                        Log.w(TAG, "⚠️ Rate Limit 발생! ${actualDelay}ms 후 재시도 ($attempt/$MAX_RETRIES)")
+                        delay(actualDelay)
+                        currentDelay *= 2
+                    } else {
+                        Log.e(TAG, "최대 재시도 횟수($MAX_RETRIES) 초과")
+                    }
+                } else {
                     // Rate Limit이 아닌 다른 에러는 바로 실패 처리
                     Log.e(TAG, "비 Rate Limit 에러로 즉시 실패 처리")
                     break
-                } else {
-                    Log.e(TAG, "최대 재시도 횟수($MAX_RETRIES) 초과")
                 }
             }
         }
 
         Log.e(TAG, "배치 ${batchIndex + 1} 최종 실패: ${lastException?.message}")
-        return null
+        return null to hitRateLimit
     }
 
     private fun buildClassificationPrompt(

@@ -123,7 +123,10 @@ enum class QueryType {
     INCOME_LIST,                // 수입 내역 리스트
 
     @SerializedName("duplicate_list")
-    DUPLICATE_LIST              // 중복 지출 항목 리스트
+    DUPLICATE_LIST,             // 중복 지출 항목 리스트
+
+    @SerializedName("sms_exclusion_list")
+    SMS_EXCLUSION_LIST          // SMS 제외 키워드 목록
 }
 
 enum class ActionType {
@@ -155,7 +158,13 @@ enum class ActionType {
     UPDATE_STORE_NAME,          // 가게명 수정 (expenseId, newStoreName 필수)
 
     @SerializedName("update_amount")
-    UPDATE_AMOUNT               // 금액 수정 (expenseId, newAmount 필수)
+    UPDATE_AMOUNT,              // 금액 수정 (expenseId, newAmount 필수)
+
+    @SerializedName("add_sms_exclusion")
+    ADD_SMS_EXCLUSION,          // SMS 제외 키워드 추가 (searchKeyword 필수)
+
+    @SerializedName("remove_sms_exclusion")
+    REMOVE_SMS_EXCLUSION        // SMS 제외 키워드 삭제 (searchKeyword 필수)
 }
 
 /**

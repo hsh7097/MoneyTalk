@@ -6,7 +6,6 @@ import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.similarity.SmsPatternSimilarityPolicy
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.yield
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -54,8 +53,7 @@ class SmsBatchProcessor @Inject constructor(
         /** LLM 배치 호출 시 한번에 처리할 그룹 수 */
         private const val LLM_BATCH_SIZE = 20
 
-        /** LLM 배치 호출 간 딜레이 (Rate Limit 방지) */
-        private const val LLM_BATCH_DELAY_MS = 2000L
+        // LLM/임베딩 배치 간 고정 딜레이 제거 → 429 발생 시에만 SmsEmbeddingService에서 백오프
 
         /**
          * 사전 필터링 키워드: 이 키워드가 포함된 SMS는 임베딩 생성 자체를 스킵
@@ -88,11 +86,17 @@ class SmsBatchProcessor @Inject constructor(
             "금리", "대출", "투자", "수익", "분양", "모델하우스"
         )
 
+        /** NON_PAYMENT_KEYWORDS를 미리 lowercase로 캐시 (매번 .lowercase() 호출 방지) */
+        private val NON_PAYMENT_KEYWORDS_LOWER = NON_PAYMENT_KEYWORDS.map { it.lowercase() }
+
         /** HTTP 링크 패턴 */
         private val HTTP_PATTERN = Regex("https?://", RegexOption.IGNORE_CASE)
 
         /** 결제 SMS 최소 금액 자릿수 (2자리 이상 연속 숫자 필요) */
         private val AMOUNT_PATTERN = Regex("\\d{2,}")
+
+        /** 금액+원 패턴 (사전 컴파일, lacksPaymentRequirements()용) */
+        private val AMOUNT_WITH_WON_PATTERN = Regex("[\\d,]+원")
 
         /** 결제 관련 핵심 키워드 (이 중 하나라도 있으면 결제 가능성 있음) */
         private val PAYMENT_HINT_KEYWORDS = listOf(
@@ -107,8 +111,8 @@ class SmsBatchProcessor @Inject constructor(
      */
     private fun isObviouslyNonPayment(smsBody: String): Boolean {
         val lowerBody = smsBody.lowercase()
-        return NON_PAYMENT_KEYWORDS.any { keyword ->
-            lowerBody.contains(keyword.lowercase())
+        return NON_PAYMENT_KEYWORDS_LOWER.any { keyword ->
+            lowerBody.contains(keyword)
         }
     }
 
@@ -144,28 +148,10 @@ class SmsBatchProcessor @Inject constructor(
         val hasPaymentHint = PAYMENT_HINT_KEYWORDS.any { keyword ->
             smsBody.contains(keyword, ignoreCase = true)
         }
-        val hasAmountWithUnit = smsBody.contains(Regex("[\\d,]+원"))
+        val hasAmountWithUnit = AMOUNT_WITH_WON_PATTERN.containsMatchIn(smsBody)
         if (!hasPaymentHint && !hasAmountWithUnit) return true
 
         return false
-    }
-
-    /**
-     * 배치 처리 결과
-     */
-    data class BatchResult(
-        val regexClassified: Int = 0,
-        val vectorGroupsFound: Int = 0,
-        val llmSamplesChecked: Int = 0,
-        val hybridClassified: Int = 0,
-        val totalProcessed: Int = 0
-    )
-
-    /**
-     * 배치 처리 진행 콜백
-     */
-    interface BatchProgressListener {
-        fun onProgress(phase: String, current: Int, total: Int)
     }
 
     /**
@@ -195,12 +181,10 @@ class SmsBatchProcessor @Inject constructor(
      * 방식으로 효율적으로 처리합니다.
      *
      * @param unclassifiedSms 정규식 미통과 SMS 목록
-     * @param listener 진행률 콜백 (UI 업데이트용)
      * @return 결제로 확인된 SMS 목록 (SmsData + SmsAnalysisResult 쌍)
      */
     suspend fun processBatch(
-        unclassifiedSms: List<SmsData>,
-        listener: BatchProgressListener? = null
+        unclassifiedSms: List<SmsData>
     ): List<Pair<SmsData, SmsAnalysisResult>> {
         val results = mutableListOf<Pair<SmsData, SmsAnalysisResult>>()
 
@@ -215,23 +199,20 @@ class SmsBatchProcessor @Inject constructor(
         if (targetSms.isEmpty()) return results
 
         // ===== Step 1: 기존 벡터 DB의 패턴과 먼저 매칭 시도 =====
-        listener?.onProgress("기존 패턴 매칭 중", 0, targetSms.size)
-        val (matchedByExisting, remainingAfterExisting) = matchAgainstExistingPatterns(targetSms, listener)
+        val (matchedByExisting, remainingAfterExisting) = matchAgainstExistingPatterns(targetSms)
         results.addAll(matchedByExisting)
         Log.d(TAG, "기존 패턴 매칭: ${matchedByExisting.size}건 성공, ${remainingAfterExisting.size}건 남음")
 
         if (remainingAfterExisting.isEmpty()) return results
 
         // ===== Step 2: 남은 SMS를 템플릿화 + 배치 임베딩 =====
-        listener?.onProgress("SMS 벡터화 중", 0, remainingAfterExisting.size)
-        val embeddedSms = generateBatchEmbeddings(remainingAfterExisting, listener)
+        val embeddedSms = generateBatchEmbeddings(remainingAfterExisting)
         Log.d(TAG, "벡터화 완료: ${embeddedSms.size}건")
 
         if (embeddedSms.isEmpty()) return results
 
         // ===== Step 3: 벡터 유사도 기반 그룹핑 =====
-        listener?.onProgress("패턴 그룹핑 중", 0, embeddedSms.size)
-        val groups = groupBySimilarity(embeddedSms, listener)
+        val groups = groupBySimilarity(embeddedSms)
         Log.d(TAG, "그룹핑 완료: ${groups.size}개 그룹 (${embeddedSms.size}건)")
 
         // ===== Step 4: 그룹 대표들을 배치 LLM으로 일괄 분석 =====
@@ -242,8 +223,6 @@ class SmsBatchProcessor @Inject constructor(
         Log.d(TAG, "LLM 배치 분석: ${groups.size}개 그룹 → ${llmBatches.size}개 배치 (배치 크기: $LLM_BATCH_SIZE)")
 
         for ((batchIdx, groupBatch) in llmBatches.withIndex()) {
-            listener?.onProgress("AI 분석 중", totalGroupsProcessed, groups.size)
-
             // 배치 내 대표 SMS 목록을 한번에 LLM에 전송 (수신 시간 포함)
             val smsTexts = groupBatch.map { it.representative.body }
             val smsTimestamps = groupBatch.map { it.representative.date }
@@ -316,12 +295,7 @@ class SmsBatchProcessor @Inject constructor(
                 totalGroupsProcessed++
             }
 
-            listener?.onProgress("AI 분석 중", totalGroupsProcessed, groups.size)
-
-            // 배치 간 Rate Limit 방지 딜레이
-            if (batchIdx < llmBatches.size - 1) {
-                delay(LLM_BATCH_DELAY_MS)
-            }
+            // 고정 딜레이 제거: 429 발생 시 GeminiSmsExtractor 내부에서 재시도 + 백오프
         }
 
         Log.d(TAG, "=== 배치 처리 완료: LLM ${llmBatchCount}회 배치 호출 (${groups.size}개 그룹), 결제 ${results.size}건 발견 ===")
@@ -336,8 +310,7 @@ class SmsBatchProcessor @Inject constructor(
      * API 호출 횟수를 대폭 줄입니다.
      */
     private suspend fun matchAgainstExistingPatterns(
-        smsList: List<SmsData>,
-        listener: BatchProgressListener?
+        smsList: List<SmsData>
     ): Pair<List<Pair<SmsData, SmsAnalysisResult>>, List<SmsData>> {
         val existingPatterns = smsPatternDao.getAllPaymentPatterns()
         if (existingPatterns.isEmpty()) {
@@ -354,8 +327,6 @@ class SmsBatchProcessor @Inject constructor(
         val batches = smsList.indices.chunked(EMBEDDING_BATCH_SIZE)
 
         for ((batchIdx, batchIndices) in batches.withIndex()) {
-            listener?.onProgress("기존 패턴 매칭 중", batchIdx * EMBEDDING_BATCH_SIZE, smsList.size)
-
             val batchTemplates = batchIndices.map { templates[it] }
             val embeddings = embeddingService.generateEmbeddings(batchTemplates)
 
@@ -390,10 +361,7 @@ class SmsBatchProcessor @Inject constructor(
                 unmatched.add(smsList[idx])
             }
 
-            // 배치 간 딜레이 (Rate Limit 방지)
-            if (batchIdx < batches.size - 1) {
-                delay(1500)
-            }
+            // 고정 딜레이 제거: 429 발생 시 SmsEmbeddingService 내부에서 백오프
         }
 
         return matched to unmatched
@@ -405,8 +373,7 @@ class SmsBatchProcessor @Inject constructor(
      * SMS를 템플릿화한 뒤 배치 API로 한번에 임베딩 생성
      */
     private suspend fun generateBatchEmbeddings(
-        smsList: List<SmsData>,
-        listener: BatchProgressListener?
+        smsList: List<SmsData>
     ): List<Triple<SmsData, String, List<Float>>> {
         val results = mutableListOf<Triple<SmsData, String, List<Float>>>()
         val templates = smsList.map { embeddingService.templateizeSms(it.body) }
@@ -415,8 +382,6 @@ class SmsBatchProcessor @Inject constructor(
         val batches = smsList.indices.chunked(EMBEDDING_BATCH_SIZE)
 
         for ((batchIdx, batch) in batches.withIndex()) {
-            listener?.onProgress("SMS 벡터화 중", batchIdx * EMBEDDING_BATCH_SIZE, smsList.size)
-
             val batchTemplates = batch.map { templates[it] }
             val embeddings = embeddingService.generateEmbeddings(batchTemplates)
 
@@ -427,10 +392,7 @@ class SmsBatchProcessor @Inject constructor(
                 }
             }
 
-            // API 호출 간 딜레이 (Rate Limit 방지)
-            if (batchIdx < batches.size - 1) {
-                delay(1500)
-            }
+            // 고정 딜레이 제거: 429 발생 시 SmsEmbeddingService 내부에서 백오프
         }
 
         return results
@@ -443,8 +405,7 @@ class SmsBatchProcessor @Inject constructor(
      * 그리디 클러스터링: 첫 SMS를 그룹 중심으로, 유사도 ≥ 0.95면 같은 그룹.
      */
     private suspend fun groupBySimilarity(
-        embeddedSms: List<Triple<SmsData, String, List<Float>>>,
-        listener: BatchProgressListener? = null
+        embeddedSms: List<Triple<SmsData, String, List<Float>>>
     ): List<VectorGroup> {
         val groups = mutableListOf<VectorGroup>()
         val assigned = BooleanArray(embeddedSms.size)
@@ -454,7 +415,6 @@ class SmsBatchProcessor @Inject constructor(
 
             // 50건마다 progress 업데이트 + yield로 다른 코루틴에 실행 기회 제공
             if (i % 50 == 0) {
-                listener?.onProgress("패턴 그룹핑 중", i, embeddedSms.size)
                 yield()
             }
 
@@ -483,8 +443,6 @@ class SmsBatchProcessor @Inject constructor(
             assigned[i] = true
             groups.add(group)
         }
-
-        listener?.onProgress("패턴 그룹핑 완료", embeddedSms.size, embeddedSms.size)
 
         // 그룹 크기가 큰 순으로 정렬 (중요한 패턴 우선 처리)
         return groups.sortedByDescending { it.members.size }

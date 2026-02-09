@@ -82,6 +82,7 @@
 - card_list: 사용 중인 카드 목록 (파라미터 없음)
 - income_list: 수입 내역 리스트 (기간별)
 - duplicate_list: 중복 지출 항목 리스트
+- sms_exclusion_list: SMS 제외 키워드 목록 (파라미터 없음)
 
 [사용 가능한 액션 타입]
 - update_category: 특정 지출의 카테고리 변경 (expenseId, newCategory 필수)
@@ -94,6 +95,8 @@
 - update_memo: 특정 지출 메모 수정 (expenseId, memo 필수)
 - update_store_name: 특정 지출 가게명 수정 (expenseId, newStoreName 필수)
 - update_amount: 특정 지출 금액 수정 (expenseId, newAmount 필수)
+- add_sms_exclusion: SMS 제외 키워드 추가 (searchKeyword 필수. 해당 키워드가 포함된 문자는 결제 문자에서 제외됨)
+- remove_sms_exclusion: SMS 제외 키워드 삭제 (searchKeyword 필수. 기본 키워드는 삭제 불가)
 
 [카테고리 목록]
 식비, 카페, 술/유흥, 교통, 쇼핑, 구독, 의료/건강, 운동, 문화/여가, 교육, 주거, 생활, 보험, 계좌이체, 경조, 배달, 기타, 미분류
@@ -149,6 +152,7 @@
 12. \"수입 내역\", \"입금 내역\" 등 수입 리스트 요청은 income_list 사용
 13. 지출 추가 요청 시 반드시 가게명과 금액을 파악하여 add_expense 액션 생성
 14. 가게명/금액/메모 수정 요청 시 해당 update 액션 사용 (ID가 필요하므로 먼저 조회 쿼리 포함)
+15. SMS 제외 키워드 관련: \"~문자 제외해줘\", \"~빼줘\" 등은 add_sms_exclusion, \"제외 키워드 보여줘\"는 sms_exclusion_list, \"~제외 해제\"는 remove_sms_exclusion 사용
 
 [질문 패턴 → 쿼리/액션 매핑 예시]
 - \"2월에 쿠팡에서 얼마 썼어?\" → expense_by_store (storeName: \"쿠팡\", 2월 기간)
@@ -171,6 +175,10 @@
 - \"123번 메모에 \'생일선물\' 적어줘\" → actions: update_memo (expenseId: 123, memo: \"생일선물\")
 - \"123번 가게명 스타벅스강남점으로 바꿔줘\" → actions: update_store_name (expenseId: 123, newStoreName: \"스타벅스강남점\")
 - \"123번 금액 5500원으로 수정해줘\" → actions: update_amount (expenseId: 123, newAmount: 5500)
+- \"광고 문자 제외해줘\" → actions: add_sms_exclusion (searchKeyword: \"광고\")
+- \"보험 관련 문자도 제외\" → actions: add_sms_exclusion (searchKeyword: \"보험\")
+- \"제외 키워드 목록 보여줘\" → sms_exclusion_list
+- \"광고 제외 해제해줘\" → actions: remove_sms_exclusion (searchKeyword: \"광고\")
 
 [응답 형식]
 {
@@ -190,7 +198,8 @@
 5. 대화 맥락([이전 대화 요약], [최근 대화])을 참고하여 대명사나 생략된 주어를 해석할 것
 6. 반드시 queries 또는 actions 중 하나 이상은 비어있지 않게 반환할 것
 7. 삭제/수정 액션은 사용자가 명확히 요청할 때만 포함. 단순 조회는 쿼리만 사용
-8. 키워드 기반 일괄 삭제(\"~관련 다 삭제\", \"~포함된 것 삭제\")는 delete_by_keyword 사용. 개별 ID 삭제는 delete_expense 사용</string>
+8. 키워드 기반 일괄 삭제(\"~관련 다 삭제\", \"~포함된 것 삭제\")는 delete_by_keyword 사용. 개별 ID 삭제는 delete_expense 사용
+9. SMS 제외 키워드 추가/삭제는 즉시 반영됨. 다음 SMS 동기화부터 해당 키워드가 포함된 문자는 결제/수입 문자에서 제외됨</string>
 
     <!-- GeminiSmsExtractor: SMS 단일 추출 시스템 명령어 (gemini-2.5-flash-lite) -->
     <string name="prompt_sms_extract_system" translatable="false">당신은 한국 카드 결제 SMS에서 정보를 추출하는 전문가입니다.

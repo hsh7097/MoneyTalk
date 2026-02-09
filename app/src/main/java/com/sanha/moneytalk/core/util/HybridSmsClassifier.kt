@@ -40,9 +40,9 @@ class HybridSmsClassifier @Inject constructor(
         /** 임베딩 배치 처리 크기 (Google batchEmbedContents 최대값) */
         private const val EMBEDDING_BATCH_SIZE = 100
         /** 배치 간 Rate Limit 방지 딜레이 (밀리초) */
-        private const val RATE_LIMIT_DELAY_MS = 1500L
+        private const val RATE_LIMIT_DELAY_MS = 100L
         /** LLM 호출 간 Rate Limit 방지 딜레이 (밀리초) */
-        private const val LLM_RATE_LIMIT_DELAY_MS = 1000L
+        private const val LLM_RATE_LIMIT_DELAY_MS = 100L
         /** 오래된 패턴 판단 기준 (30일, 밀리초) */
         private const val STALE_PATTERN_THRESHOLD_MS = 30L * 24 * 60 * 60 * 1000
 
@@ -89,66 +89,6 @@ class HybridSmsClassifier @Inject constructor(
         val tier: Int = 0,
         val confidence: Float = 0f
     )
-
-    /**
-     * SMS를 3-tier로 분류하고 파싱
-     *
-     * @param smsBody SMS 본문
-     * @param smsTimestamp SMS 수신 시간
-     * @param senderAddress 발신 번호
-     * @return 분류 결과
-     */
-    suspend fun classify(
-        smsBody: String,
-        smsTimestamp: Long,
-        senderAddress: String = ""
-    ): ClassificationResult {
-        Log.d(TAG, "=== 3-tier 분류 시작 ===")
-        Log.d(TAG, "SMS: ${smsBody.take(60)}...")
-
-        // ===== 1단계: Regex =====
-        val regexResult = classifyWithRegex(smsBody, smsTimestamp)
-        if (regexResult != null) {
-            Log.d(TAG, "✅ Tier 1 (Regex) 성공: amount=${regexResult.analysisResult?.amount}")
-            // 벡터 학습은 batchLearnFromRegexResults()에서 일괄 처리 (개별 API 호출 방지)
-            return regexResult
-        }
-
-        // ===== 2단계: Vector 유사도 =====
-        val vectorResult = classifyWithVector(smsBody, smsTimestamp, senderAddress)
-        if (vectorResult != null) {
-            Log.d(TAG, "✅ Tier 2 (Vector) 성공: tier=${vectorResult.tier}, confidence=${vectorResult.confidence}")
-            return vectorResult
-        }
-
-        // ===== 3단계: LLM (Tier 1~2 실패 시, 결제 가능성 있는 SMS만) =====
-        // 사전 필터링: 명백히 비결제인 SMS는 LLM 호출 생략
-        if (isObviouslyNonPayment(smsBody)) {
-            Log.d(TAG, "⏭️ LLM 스킵: 명백한 비결제 SMS")
-            return ClassificationResult(isPayment = false, tier = 0, confidence = 0f)
-        }
-
-        // 비용 통제: 결제 가능성이 낮은 SMS는 LLM 호출 생략
-        if (!hasPotentialPaymentIndicators(smsBody)) {
-            Log.d(TAG, "⏭️ LLM 스킵: 결제 가능성 낮음 (금액/결제키워드/카드사 부족)")
-            return ClassificationResult(isPayment = false, tier = 0, confidence = 0f)
-        }
-
-        Log.d(TAG, "🔄 Tier 3 (LLM): 결제 가능성 감지, LLM 추출 시도")
-        val llmResult = classifyWithLlm(smsBody, smsTimestamp, senderAddress)
-        if (llmResult != null) {
-            Log.d(TAG, "✅ Tier 3 (LLM) 성공: isPayment=${llmResult.isPayment}")
-            return llmResult
-        }
-
-        // 모든 단계 실패 → 비결제 문자로 판정
-        Log.d(TAG, "❌ 모든 tier 실패: 비결제 문자로 판정")
-        return ClassificationResult(
-            isPayment = false,
-            tier = 0,
-            confidence = 0f
-        )
-    }
 
     /**
      * 기존 정규식 기반으로만 분류 (Tier 1 전용)
@@ -224,9 +164,12 @@ class HybridSmsClassifier @Inject constructor(
         val batchSize = EMBEDDING_BATCH_SIZE
         val batches = templates.chunked(batchSize)
         for ((batchIdx, batch) in batches.withIndex()) {
+            Log.e(TAG, "HybridSmsClassifier[batchClassify] : $batchIdx 배치 시작")
             val embeddings = embeddingService.generateEmbeddings(batch)
+            Log.e(TAG, "HybridSmsClassifier[batchClassify] : $batchIdx 배치 종료")
             allEmbeddings.addAll(embeddings)
 
+            // Rate Limit 방지: batchEmbedContents 연속 호출 시 429 에러 방지용 딜레이
             if (batchIdx < batches.size - 1) {
                 kotlinx.coroutines.delay(RATE_LIMIT_DELAY_MS)
             }
@@ -330,6 +273,7 @@ class HybridSmsClassifier @Inject constructor(
                 if (llmResult != null) {
                     results[idx] = llmResult
                 }
+                // Rate Limit 방지: Gemini LLM 연속 호출 시 429 에러 방지용 딜레이
                 kotlinx.coroutines.delay(LLM_RATE_LIMIT_DELAY_MS)
             }
         }
@@ -338,20 +282,6 @@ class HybridSmsClassifier @Inject constructor(
         Log.d(TAG, "=== 배치 분류 완료: ${smsList.size}건 중 결제 ${paymentCount}건 ===")
 
         return results.toList()
-    }
-
-    /**
-     * Regex 성공 결과를 벡터 DB에 학습
-     *
-     * syncSmsMessages에서 regex로 처리한 SMS를 벡터 DB에 등록할 때 사용.
-     * 이를 통해 벡터 DB가 점진적으로 채워짐.
-     */
-    suspend fun learnFromRegexResult(
-        smsBody: String,
-        senderAddress: String,
-        analysis: SmsAnalysisResult
-    ) {
-        learnPattern(smsBody, senderAddress, analysis, "regex")
     }
 
     /**
@@ -720,17 +650,6 @@ class HybridSmsClassifier @Inject constructor(
     }
 
     /**
-     * 패턴 DB 통계 조회
-     */
-    suspend fun getPatternStats(): PatternStats {
-        return PatternStats(
-            totalPatterns = smsPatternDao.getPatternCount(),
-            paymentPatterns = smsPatternDao.getPaymentPatternCount(),
-            isBootstrapMode = smsPatternDao.getPaymentPatternCount() < BOOTSTRAP_THRESHOLD
-        )
-    }
-
-    /**
      * 오래된 패턴 정리 (30일 이상 미사용 + 1회만 매칭)
      */
     suspend fun cleanupStalePatterns() {
@@ -783,9 +702,4 @@ class HybridSmsClassifier @Inject constructor(
         return indicatorCount >= 2
     }
 
-    data class PatternStats(
-        val totalPatterns: Int,
-        val paymentPatterns: Int,
-        val isBootstrapMode: Boolean
-    )
 }

@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.database.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -16,7 +17,13 @@ import androidx.room.PrimaryKey
  *
  * @see com.sanha.moneytalk.core.database.dao.IncomeDao
  */
-@Entity(tableName = "incomes")
+@Entity(
+    tableName = "incomes",
+    indices = [
+        Index(value = ["smsId"]),
+        Index(value = ["dateTime"])
+    ]
+)
 data class IncomeEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,

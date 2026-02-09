@@ -242,7 +242,21 @@ fun SettingsScreen(
 
                 // 데이터 관리
                 item {
+                    var showExclusionKeywordDialog by remember { mutableStateOf(false) }
+                    val userKeywordCount = uiState.exclusionKeywords.count { it.source != "default" }
+                    val defaultKeywordCount = uiState.exclusionKeywords.count { it.source == "default" }
+
                     SettingsSection(title = stringResource(R.string.settings_section_data)) {
+                        SettingsItem(
+                            icon = Icons.Default.Block,
+                            title = "SMS 제외 키워드",
+                            subtitle = if (uiState.exclusionKeywords.isNotEmpty()) {
+                                "${userKeywordCount}개 사용자 키워드 / ${defaultKeywordCount}개 기본 키워드"
+                            } else {
+                                "제외할 키워드를 관리합니다"
+                            },
+                            onClick = { showExclusionKeywordDialog = true }
+                        )
                         SettingsItem(
                             icon = Icons.Default.Backup,
                             title = stringResource(R.string.settings_export_title),
@@ -290,6 +304,15 @@ fun SettingsScreen(
                             subtitle = stringResource(R.string.settings_delete_all_subtitle),
                             onClick = { showDeleteConfirmDialog = true },
                             isDestructive = true
+                        )
+                    }
+
+                    if (showExclusionKeywordDialog) {
+                        ExclusionKeywordDialog(
+                            keywords = uiState.exclusionKeywords,
+                            onDismiss = { showExclusionKeywordDialog = false },
+                            onAdd = { keyword -> viewModel.addExclusionKeyword(keyword) },
+                            onRemove = { keyword -> viewModel.removeExclusionKeyword(keyword) }
                         )
                     }
                 }
@@ -1296,6 +1319,201 @@ fun PrivacyPolicyDialog(
             }
         }
     )
+}
+
+@Composable
+fun ExclusionKeywordDialog(
+    keywords: List<com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity>,
+    onDismiss: () -> Unit,
+    onAdd: (String) -> Unit,
+    onRemove: (String) -> Unit
+) {
+    var newKeyword by remember { mutableStateOf("") }
+
+    // 기본 키워드와 사용자 키워드 분리
+    val defaultKeywords = keywords.filter { it.source == "default" }
+    val userKeywords = keywords.filter { it.source != "default" }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text("SMS 제외 키워드")
+                Text(
+                    text = "해당 키워드가 포함된 문자는 결제/수입 문자에서 제외됩니다",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+        },
+        text = {
+            Column {
+                // 키워드 추가 입력
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = newKeyword,
+                        onValueChange = { newKeyword = it },
+                        placeholder = { Text("키워드 입력") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = {
+                            if (newKeyword.isNotBlank()) {
+                                onAdd(newKeyword.trim())
+                                newKeyword = ""
+                            }
+                        },
+                        enabled = newKeyword.isNotBlank(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Text("추가")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 350.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    // 사용자 키워드 섹션
+                    if (userKeywords.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "사용자 키워드 (${userKeywords.size}개)",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        items(userKeywords, key = { it.keyword }) { entity ->
+                            ExclusionKeywordItem(
+                                keyword = entity.keyword,
+                                source = entity.source,
+                                canDelete = true,
+                                onDelete = { onRemove(entity.keyword) }
+                            )
+                        }
+                    }
+
+                    // 기본 키워드 섹션
+                    if (defaultKeywords.isNotEmpty()) {
+                        item {
+                            if (userKeywords.isNotEmpty()) {
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            }
+                            Text(
+                                text = "기본 키워드 (${defaultKeywords.size}개)",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        items(defaultKeywords, key = { it.keyword }) { entity ->
+                            ExclusionKeywordItem(
+                                keyword = entity.keyword,
+                                source = entity.source,
+                                canDelete = false,
+                                onDelete = { }
+                            )
+                        }
+                    }
+
+                    // 비어있을 때
+                    if (keywords.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(80.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "등록된 키워드가 없습니다",
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_close))
+            }
+        }
+    )
+}
+
+@Composable
+private fun ExclusionKeywordItem(
+    keyword: String,
+    source: String,
+    canDelete: Boolean,
+    onDelete: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = keyword,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (canDelete) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                }
+            )
+            if (!canDelete) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "(기본)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                )
+            } else if (source == "chat") {
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "(채팅)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                )
+            }
+        }
+        IconButton(
+            onClick = onDelete,
+            enabled = canDelete,
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(
+                Icons.Default.Close,
+                contentDescription = "삭제",
+                modifier = Modifier.size(18.dp),
+                tint = if (canDelete) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                }
+            )
+        }
+    }
 }
 
 @Composable

@@ -37,6 +37,46 @@ class CategoryClassifierService @Inject constructor(
 ) {
     companion object {
         private const val TAG = "CategoryClassifier"
+
+        /**
+         * Gemini 호출 전 로컬 룰로 사전 분류 가능한 패턴
+         * SmsParser.inferCategory가 놓치는 가게명 패턴을 보완
+         */
+        private val PRE_CLASSIFY_RULES: List<Pair<List<String>, String>> = listOf(
+            // 보험사 (SmsParser는 "보험"/"보험료" 키워드만 있어서 사명을 놓침)
+            listOf(
+                "삼성화재", "삼성생명", "메리츠화재", "메리츠생명",
+                "현대해상", "DB손해", "DB생명", "KB손해", "KB생명",
+                "한화손해", "한화생명", "라이나생명", "교보생명",
+                "흥국생명", "미래에셋생명", "동양생명", "신한생명",
+                "하나생명", "롯데손해", "NH생명", "농협생명",
+                "AIA", "처브", "화재보험", "생명보험", "손해보험"
+            ) to "보험",
+            // 구독 서비스 (영문 패턴)
+            listOf(
+                "GOOGLE*", "APPLE.COM", "SPOTIFY", "NETFLIX",
+                "YOUTUBE", "DISNEY+", "AMAZON", "CHATGPT",
+                "OPENAI", "NOTION", "GITHUB", "FIGMA",
+                "ADOBE", "CANVA", "DROPBOX", "ICLOUD"
+            ) to "구독",
+            // 결제대행/PG사 → 기타 (결제 주체가 아님)
+            listOf(
+                "KICC", "KCP", "NICE페이", "NICE정보", "이니시스",
+                "다날", "토스페이먼츠", "NHN페이코", "페이먼츠",
+                "PAYCO", "INICIS"
+            ) to "기타",
+            // 카드사/은행 알림 노이즈 → 기타
+            listOf(
+                "카드승인", "입출통지", "잔액통보", "이용내역",
+                "자동납부", "CMS출금"
+            ) to "기타"
+        )
+
+        /** 사전 컴파일된 lowercase 룰 */
+        private val PRE_CLASSIFY_RULES_LOWER: List<Pair<List<String>, String>> =
+            PRE_CLASSIFY_RULES.map { (keywords, category) ->
+                keywords.map { it.lowercase() } to category
+            }
     }
 
     // ===== 인메모리 캐시 (동기화 성능 최적화) =====
@@ -140,7 +180,42 @@ class CategoryClassifierService @Inject constructor(
         }
 
         // Tier 3 대기: 미분류로 반환 (Gemini 분류는 배치로 별도 처리)
+        Log.e("sanha", "CategoryClassifier[getCategory] : $storeName → 미분류 (모든 Tier 실패)")
         return "미분류"
+    }
+
+    /**
+     * 로컬 룰 기반 사전 분류 (Gemini 호출 없이 분류 가능한 가게명 분리)
+     *
+     * @param storeNames 분류 대상 가게명 목록
+     * @return Pair(룰로 분류된 맵, Gemini로 보낼 남은 가게명 목록)
+     */
+    private fun preClassifyByRules(storeNames: List<String>): Pair<Map<String, String>, List<String>> {
+        val classified = mutableMapOf<String, String>()
+        val remaining = mutableListOf<String>()
+
+        for (storeName in storeNames) {
+            val lowerName = storeName.lowercase()
+            var matched = false
+
+            for ((keywords, category) in PRE_CLASSIFY_RULES_LOWER) {
+                if (keywords.any { keyword -> lowerName.contains(keyword) }) {
+                    classified[storeName] = category
+                    matched = true
+                    break
+                }
+            }
+
+            if (!matched) {
+                remaining.add(storeName)
+            }
+        }
+
+        if (classified.isNotEmpty()) {
+            Log.d(TAG, "로컬 룰 사전 분류: ${classified.size}건 (${storeNames.size}건 중)")
+        }
+
+        return classified to remaining
     }
 
     /**
@@ -175,56 +250,99 @@ class CategoryClassifierService @Inject constructor(
     /**
      * 미분류("기타") 항목들을 Gemini로 일괄 분류 (시맨틱 그룹핑 최적화)
      *
-     * 1. 미분류 가게명을 벡터 유사도로 그룹핑 (유사도 ≥ 0.88)
-     * 2. 각 그룹의 대표 가게명만 Gemini에 전송 → API 호출 수 절감
-     * 3. 대표의 분류 결과를 그룹 멤버에게 전파
+     * 1. 가게명을 총 지출액 기준 내림차순 정렬 (중요도 우선)
+     * 2. maxStoreCount가 설정되면 상위 N개만 처리 (나머지는 다음 라운드)
+     * 3. 로컬 룰 사전 분류 → 시맨틱 그룹핑 → Gemini 배치
      * 4. 결과를 Room + 벡터 DB에 모두 저장
      *
      * @param onStepProgress 세부 진행 콜백 (단계명, 현재, 전체)
+     * @param maxStoreCount 이번 라운드에서 처리할 최대 가게명 수 (null이면 전체)
      * @return 분류된 항목 수
      */
     suspend fun classifyUnclassifiedExpenses(
-        onStepProgress: (suspend (step: String, current: Int, total: Int) -> Unit)? = null
+        onStepProgress: (suspend (step: String, current: Int, total: Int) -> Unit)? = null,
+        maxStoreCount: Int? = null
     ): Int {
+        Log.e("sanha", "CategoryClassifier[classifyUnclassifiedExpenses] : === 미분류 항목 분류 시작 (maxStoreCount=$maxStoreCount) ===")
         // 카테고리가 "미분류"인 지출 조회
         onStepProgress?.invoke("미분류 항목 조회 중...", 0, 0)
         val unclassifiedExpenses = expenseRepository.getExpensesByCategoryOnce("미분류")
 
         if (unclassifiedExpenses.isEmpty()) {
+            Log.e("sanha", "CategoryClassifier[classifyUnclassifiedExpenses] : 미분류 항목 없음 → 종료")
             Log.d(TAG, "분류할 항목 없음")
             return 0
         }
 
-        // 중복 제거된 가게명 목록
-        val storeNames = unclassifiedExpenses.map { it.storeName }.distinct()
+        // 가게명별 총 지출액 기준으로 정렬 (중요도 높은 것 우선 처리)
+        val storeAmountMap = unclassifiedExpenses
+            .groupBy { it.storeName }
+            .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
+
+        val allStoreNames = storeAmountMap.entries
+            .sortedByDescending { it.value }
+            .map { it.key }
+
+        // maxStoreCount 적용: 상위 N개만 처리
+        val storeNames = if (maxStoreCount != null) {
+            allStoreNames.take(maxStoreCount)
+        } else {
+            allStoreNames
+        }
+
+        Log.e("sanha", "CategoryClassifier[classifyUnclassifiedExpenses] : 미분류 지출 ${unclassifiedExpenses.size}건 / 고유 가게명 ${allStoreNames.size}개 (처리 대상: ${storeNames.size}개)")
+        for (name in storeNames.take(20)) {
+            val amount = storeAmountMap[name] ?: 0
+            Log.e("sanha", "  - $name (총 ${amount}원)")
+        }
+        if (storeNames.size > 20) {
+            Log.e("sanha", "  - ... 외 ${storeNames.size - 20}개")
+        }
         Log.d(TAG, "분류할 가게명: ${storeNames.size}개")
 
+        // ===== 로컬 룰 사전 분류 (Gemini 호출 절감) =====
+        onStepProgress?.invoke("로컬 룰 분류 중...", 0, storeNames.size)
+        val (ruleClassified, storeNamesForGemini) = preClassifyByRules(storeNames)
+        Log.d(TAG, "로컬 룰 사전 분류: ${ruleClassified.size}건, Gemini 대상: ${storeNamesForGemini.size}건")
+
         // ===== 시맨틱 그룹핑으로 Gemini 호출 최적화 =====
-        onStepProgress?.invoke("유사 가게 그룹핑 중...", 0, storeNames.size)
+        onStepProgress?.invoke("유사 가게 그룹핑 중...", 0, storeNamesForGemini.size)
         val groups = try {
-            storeNameGrouper.groupStoreNames(storeNames)
+            storeNameGrouper.groupStoreNames(storeNamesForGemini)
         } catch (e: Exception) {
             Log.w(TAG, "시맨틱 그룹핑 실패, 개별 처리로 폴백: ${e.message}")
             // 폴백: 각 가게명을 독립 그룹으로 취급
-            storeNames.map { StoreNameGrouper.StoreGroup(representative = it, members = listOf(it)) }
+            storeNamesForGemini.map { StoreNameGrouper.StoreGroup(representative = it, members = listOf(it)) }
         }
 
         val representatives = groups.map { it.representative }
 
-        Log.d(TAG, "시맨틱 그룹핑: ${storeNames.size}개 → ${groups.size}그룹 " +
-                "(${storeNames.size - groups.size}개 Gemini 호출 절감)")
+        Log.d(TAG, "시맨틱 그룹핑: ${storeNamesForGemini.size}개 → ${groups.size}그룹 " +
+                "(${storeNames.size - groups.size - ruleClassified.size}개 Gemini 호출 절감)")
 
-        // 대표 가게명만 Gemini로 분류
-        onStepProgress?.invoke("AI 분류 중...", 0, representatives.size)
-        val classifications = geminiRepository.classifyStoreNames(representatives)
+        // 대표 가게명만 Gemini로 분류 (룰로 이미 분류된 건은 제외)
+        val classifications = if (representatives.isNotEmpty()) {
+            onStepProgress?.invoke("AI 분류 중...", 0, representatives.size)
+            Log.e("sanha", "CategoryClassifier[classifyUnclassifiedExpenses] : Gemini API 호출 시작 (대표 ${representatives.size}건)")
+            val result = geminiRepository.classifyStoreNames(representatives)
+            Log.e("sanha", "CategoryClassifier[classifyUnclassifiedExpenses] : Gemini 응답 ${result.size}건")
+            result
+        } else {
+            Log.d(TAG, "Gemini 호출 불필요 (모두 로컬 룰로 분류됨)")
+            emptyMap()
+        }
 
-        if (classifications.isEmpty()) {
-            Log.e(TAG, "Gemini 분류 실패")
+        if (classifications.isEmpty() && ruleClassified.isEmpty()) {
+            Log.e("sanha", "CategoryClassifier[classifyUnclassifiedExpenses] : ❌ 분류 실패 (Gemini 빈 응답 + 룰 매칭 없음)")
+            Log.e(TAG, "분류 실패")
             return 0
         }
 
         // ===== 그룹 멤버들에게 분류 결과 전파 =====
         val allClassifications = mutableMapOf<String, String>()
+
+        // 로컬 룰 분류 결과 먼저 추가
+        allClassifications.putAll(ruleClassified)
 
         for (group in groups) {
             val category = classifications[group.representative] ?: continue
@@ -254,19 +372,20 @@ class CategoryClassifierService @Inject constructor(
             Log.w(TAG, "벡터 DB 캐싱 실패 (무시): ${e.message}")
         }
 
-        // 지출 항목 카테고리 업데이트
-        var updatedCount = 0
-        val totalExpenses = unclassifiedExpenses.size
-        for ((idx, expense) in unclassifiedExpenses.withIndex()) {
-            allClassifications[expense.storeName]?.let { newCategory ->
-                expenseRepository.updateCategoryById(expense.id, newCategory)
-                updatedCount++
+        // 지출 항목 카테고리 업데이트 (storeName 그룹 일괄 업데이트로 N+1 제거)
+        val storeNamesToUpdate = unclassifiedExpenses.map { it.storeName }.distinct()
+            .filter { allClassifications.containsKey(it) }
+        for ((idx, store) in storeNamesToUpdate.withIndex()) {
+            allClassifications[store]?.let { newCategory ->
+                expenseRepository.updateCategoryByStoreName(store, newCategory)
             }
             if (idx % 10 == 0) {
-                onStepProgress?.invoke("지출 업데이트 중...", idx, totalExpenses)
+                onStepProgress?.invoke("지출 업데이트 중...", idx, storeNamesToUpdate.size)
             }
         }
+        val updatedCount = unclassifiedExpenses.count { allClassifications.containsKey(it.storeName) }
 
+        Log.e("sanha", "CategoryClassifier[classifyUnclassifiedExpenses] : === 분류 완료: ${updatedCount}건 업데이트 (Gemini ${classifications.size}건, 전파 ${allClassifications.size - classifications.size}건) ===")
         Log.d(TAG, "분류 완료: ${updatedCount}건 (Gemini ${classifications.size}건, 전파 ${allClassifications.size - classifications.size}건)")
         return updatedCount
     }
@@ -289,13 +408,9 @@ class CategoryClassifierService @Inject constructor(
         // 참조 리스트 캐시 무효화 (프롬프트에 반영)
         categoryReferenceProvider.invalidateCache()
 
-        // 벡터 DB에 저장 (source="user"로 최고 신뢰도)
+        // 벡터 DB에 저장 (source="user"로 최고 신뢰도) - UPSERT 패턴으로 DB 접근 최소화
         try {
-            if (storeEmbeddingRepository.hasEmbedding(storeName)) {
-                storeEmbeddingRepository.updateCategory(storeName, newCategory, "user")
-            } else {
-                storeEmbeddingRepository.saveStoreEmbedding(storeName, newCategory, "user", 1.0f)
-            }
+            storeEmbeddingRepository.upsertCategory(storeName, newCategory, "user")
 
             // 유사 가게에 전파
             val propagated = storeEmbeddingRepository.propagateCategoryToSimilarStores(storeName, newCategory)
@@ -322,13 +437,9 @@ class CategoryClassifierService @Inject constructor(
         // 참조 리스트 캐시 무효화 (프롬프트에 반영)
         categoryReferenceProvider.invalidateCache()
 
-        // 벡터 DB에 저장 + 유사 가게 전파
+        // 벡터 DB에 저장 + 유사 가게 전파 - UPSERT 패턴으로 DB 접근 최소화
         try {
-            if (storeEmbeddingRepository.hasEmbedding(storeName)) {
-                storeEmbeddingRepository.updateCategory(storeName, newCategory, "user")
-            } else {
-                storeEmbeddingRepository.saveStoreEmbedding(storeName, newCategory, "user", 1.0f)
-            }
+            storeEmbeddingRepository.upsertCategory(storeName, newCategory, "user")
 
             val propagated = storeEmbeddingRepository.propagateCategoryToSimilarStores(storeName, newCategory)
             if (propagated > 0) {
@@ -353,25 +464,39 @@ class CategoryClassifierService @Inject constructor(
      */
     suspend fun reclassifyLowConfidenceItems(confidenceThreshold: Float = 0.95f): Int {
         try {
+            Log.e("sanha", "CategoryClassifier[reclassifyLowConfidenceItems] : === 저신뢰도 재분류 시작 === threshold=$confidenceThreshold")
             val lowConfidenceItems = storeEmbeddingRepository.getLowConfidenceEmbeddings(confidenceThreshold)
             if (lowConfidenceItems.isEmpty()) {
+                Log.e("sanha", "CategoryClassifier[reclassifyLowConfidenceItems] : 재분류 대상 없음")
                 Log.d(TAG, "재분류 대상 없음 (threshold=$confidenceThreshold)")
                 return 0
             }
+            Log.e("sanha", "CategoryClassifier[reclassifyLowConfidenceItems] : 재분류 대상 ${lowConfidenceItems.size}건 발견")
+            for (item in lowConfidenceItems) {
+                Log.e("sanha", "  - ${item.storeName} | category=${item.category} | source=${item.source} | confidence=${item.confidence}")
+            }
             Log.d(TAG, "재분류 시작: ${lowConfidenceItems.size}건 (threshold=$confidenceThreshold)")
             val storeNames = lowConfidenceItems.map { it.storeName }
+            Log.e("sanha", "CategoryClassifier[reclassifyLowConfidenceItems] : Gemini API 호출 시작 (${storeNames.size}건)")
             val classifications = geminiRepository.classifyStoreNames(storeNames)
+            Log.e("sanha", "CategoryClassifier[reclassifyLowConfidenceItems] : Gemini 응답 ${classifications.size}건")
             var reclassifiedCount = 0
             for ((storeName, newCategory) in classifications) {
-                if (newCategory == "미분류") continue
+                if (newCategory == "미분류") {
+                    Log.e("sanha", "  - SKIP: $storeName → 미분류 (변경 없음)")
+                    continue
+                }
+                Log.e("sanha", "  - UPDATE: $storeName → $newCategory")
                 categoryRepository.saveMapping(storeName, newCategory, "gemini")
                 storeEmbeddingRepository.updateCategory(storeName, newCategory, "gemini")
                 expenseRepository.updateCategoryByStoreName(storeName, newCategory)
                 reclassifiedCount++
             }
+            Log.e("sanha", "CategoryClassifier[reclassifyLowConfidenceItems] : === 재분류 완료: ${reclassifiedCount}건 ===")
             Log.d(TAG, "재분류 완료: ${reclassifiedCount}건")
             return reclassifiedCount
         } catch (e: Exception) {
+            Log.e("sanha", "CategoryClassifier[reclassifyLowConfidenceItems] : 재분류 실패: ${e.message}", e)
             Log.e(TAG, "재분류 실패: ${e.message}", e)
             return 0
         }
@@ -429,8 +554,7 @@ class CategoryClassifierService @Inject constructor(
                 break
             }
 
-            // Rate Limit 방지를 위한 딜레이
-            kotlinx.coroutines.delay(2000)
+            // 고정 딜레이 제거: 429 발생 시 GeminiCategoryRepository 내부에서 백오프
         }
 
         Log.d(TAG, "전체 분류 완료: 총 ${totalClassified}건 분류됨 (벡터 캐시 ${getVectorCacheCount()}건)")

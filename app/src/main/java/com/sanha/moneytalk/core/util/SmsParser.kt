@@ -26,63 +26,62 @@ import java.util.*
 object SmsParser {
 
     // ========================
-    // 키워드 정의
+    // 키워드 정의 (모두 lowercase, contains 비교이므로 최소 대표 키워드만 유지)
     // ========================
 
-    /** 카드사 식별 키워드 목록 */
+    /**
+     * 사용자 정의 제외 키워드 (DB에서 로드)
+     * HomeViewModel에서 SMS 동기화 시작 전에 setUserExcludeKeywords()로 설정
+     */
+    private var userExcludeKeywords: Set<String> = emptySet()
+
+    /**
+     * 사용자 정의 제외 키워드 설정 (DB 연동용)
+     * @param keywords lowercase로 변환된 키워드 Set
+     */
+    fun setUserExcludeKeywords(keywords: Set<String>) {
+        userExcludeKeywords = keywords
+    }
+
+    /** 카드사 식별 키워드 목록 (lowercase, contains 비교이므로 최소 대표만 유지) */
     private val cardKeywords = listOf(
-        // KB국민 (다양한 형식 지원)
-        "KB국민", "국민카드", "KB카드", "KB체크", "국민체크", "노리", "노리2",
-        "KB", "kb", "국민", "국민은행", "KOOKMIN",
-        // 신한 (다양한 형식 지원)
-        "신한", "신한카드", "신한체크", "SOL", "쏠", "SHINHAN", "신한은행",
-        // 삼성 (다양한 형식 지원)
-        "삼성", "삼성카드", "삼성체크", "SAMSUNG",
-        // 현대 (다양한 형식 지원)
-        "현대", "현대카드", "현대체크", "HYUNDAI", "현대M",
-        // 롯데 (다양한 형식 지원)
-        "롯데", "롯데카드", "롯데체크", "LOTTE",
-        // 하나 (다양한 형식 지원)
-        "하나", "하나카드", "하나체크", "하나은행", "HANA", "하나머니",
-        // 우리 (다양한 형식 지원)
-        "우리", "우리카드", "우리체크", "우리은행", "WOORI",
-        // NH농협 (다양한 형식 지원)
-        "NH", "농협", "NH카드", "농협카드", "NH체크", "농협은행", "NONGHYUP",
-        // BC (다양한 형식 지원)
-        "BC", "BC카드", "비씨", "비씨카드",
-        // 씨티 (다양한 형식 지원)
-        "씨티", "시티", "Citi", "CITI", "씨티은행",
-        // 카카오 (다양한 형식 지원)
-        "카카오뱅크", "카카오페이", "카카오", "카뱅", "KAKAO",
-        // 토스 (다양한 형식 지원)
-        "토스", "토스뱅크", "토스카드", "TOSS",
-        // 케이뱅크 (다양한 형식 지원)
-        "케이뱅크", "K뱅크", "Kbank",
-        // IBK기업은행
-        "IBK", "기업", "기업은행", "기업카드",
-        // SC제일은행
-        "SC", "제일", "제일은행", "SC제일",
+        // KB국민: "kb"가 "KB국민","KB카드","KB체크" 등 모두 매칭
+        "kb", "국민", "노리",
+        // 신한: "신한"이 "신한카드","신한체크","신한은행" 모두 매칭
+        "신한", "sol", "쏠",
+        // 삼성
+        "삼성",
+        // 현대
+        "현대",
+        // 롯데
+        "롯데",
+        // 하나
+        "하나",
+        // 우리
+        "우리",
+        // NH농협: "nh"가 "NH카드","NH체크" 모두 매칭
+        "nh", "농협",
+        // BC: "bc"가 "BC카드" 매칭, "비씨"가 "비씨카드" 매칭
+        "bc", "비씨",
+        // 씨티
+        "씨티", "시티", "citi",
+        // 카카오: "카카오"가 "카카오뱅크","카카오페이" 모두 매칭
+        "카카오", "카뱅",
+        // 토스: "토스"가 "토스뱅크","토스카드" 모두 매칭
+        "토스",
+        // 케이뱅크
+        "케이뱅크", "k뱅크",
+        // IBK기업은행: "ibk"가 "IBK" 매칭, "기업"이 "기업은행","기업카드" 매칭
+        "ibk", "기업",
+        // SC제일은행: "sc"/"제일"은 오탐 위험 → "sc제일","제일은행"으로 유지
+        "sc제일", "제일은행",
         // 수협
-        "수협", "수협은행", "SH수협",
-        // 광주은행
-        "광주", "광주은행", "KJB",
-        // 전북은행
-        "전북", "전북은행", "JB",
-        // 경남은행
-        "경남", "경남은행", "BNK경남",
-        // 부산은행
-        "부산", "부산은행", "BNK부산",
-        // 대구은행
-        "대구", "대구은행", "DGB",
-        // 새마을금고
-        "새마을", "MG", "새마을금고",
-        // 신협
-        "신협", "KFCC",
-        // 우체국
-        "우체국", "우정", "POST",
-        // 저축은행
-        "저축은행", "SB", "OSB", "OK저축",
-        // 기타
+        "수협",
+        // 지방은행
+        "광주은행", "kjb", "전북은행", "jb", "경남은행", "bnk", "부산은행", "대구은행", "dgb",
+        // 기타 금융기관
+        "새마을", "mg", "신협", "kfcc", "우체국", "우정", "post", "저축은행", "ok저축",
+        // 공통
         "체크카드", "신용카드", "선불", "후불"
     )
 
@@ -104,22 +103,58 @@ object SmsParser {
         "보험료", "카드대금", "통신료", "공과금"
     )
 
-    /** 제외할 키워드 (광고/안내 문자 필터링용) */
+    /**
+     * 기본 제외 키워드 (광고/안내 문자 필터링용)
+     * contains 비교이므로 "광고"만 있으면 "[광고]","(광고)" 모두 매칭
+     */
     private val excludeKeywords = listOf(
-        "광고", "[광고]", "(광고)",
+        "광고",       // "[광고]","(광고)" 등 모두 포함
         "홍보", "이벤트", "혜택안내", "포인트 적립",
         "명세서", "청구서", "이용대금",
-        "결제금액",  // 카드사 결제예정 금액 안내 (예: "01/25결제금액(01/26기준)")
-        "카드대금",  // 카드 대금 결제/이체 안내
-        "결제대금",  // 카드 결제대금 안내
-        "청구금액",  // 카드사 청구금액 안내
-        "출금 예정", // 자동이체 출금 예정 안내
-        "출금예정",  // 자동이체 출금예정 안내 (띄어쓰기 없는 버전)
-        "퇴직"  // 퇴직연금 안내 문자 제외
+        "결제금액",   // 카드사 결제예정 금액 안내
+        "카드대금",   // 카드 대금 결제/이체 안내
+        "결제대금",   // 카드 결제대금 안내
+        "청구금액",   // 카드사 청구금액 안내
+        "출금 예정",  // 자동이체 출금 예정 안내
+        "출금예정",   // 띄어쓰기 없는 버전
+        "퇴직"        // 퇴직연금 안내 문자 제외
     )
 
-    /** SMS 최대 글자수 (일반 결제 SMS는 40~100자, 안내/광고성은 200자 이상) */
-    private const val MAX_SMS_LENGTH = 200
+    /** SMS 최대 글자수 (일반 결제 SMS는 40~100자, 안내/광고성은 100자 이상) */
+    private const val MAX_SMS_LENGTH = 100
+
+    // ========================
+    // 사전 컴파일 Regex 상수 (매 호출마다 재컴파일 방지)
+    // ========================
+    private val AMOUNT_PATTERN_WITH_WON = Regex("""[\d,]+원""")
+    private val AMOUNT_PATTERN_NUMBER_ONLY = Regex("""\n[\d,]{3,}\n""")
+    private val AMOUNT_EXTRACT_WITH_WON = Regex("""([\d,]+)원(?![가-힣])""")
+    private val PURE_NUMBER_PATTERN = Regex("""[\d,]+""")
+    private val AMOUNT_WON_HANGUL_PATTERN = Regex(""".*\d+원[가-힣]+.*""")
+    private val FROM_PATTERN = Regex("""([가-힣a-zA-Z0-9]+)(님)?으?로부터""")
+    private val DEPOSIT_PATTERN = Regex("""입금\s*([가-힣a-zA-Z0-9]{2,10})|([가-힣a-zA-Z0-9]{2,10})\s*입금""")
+    private val DATE_PATTERN_SLASH = Regex("""(\d{1,2})[/.-](\d{1,2})""")
+    private val DATE_PATTERN_KOREAN = Regex("""(\d{1,2})월\s*(\d{1,2})일""")
+    private val TIME_PATTERN = Regex("""(\d{1,2}):(\d{2})""")
+    // 가게명 추출용 Regex
+    private val STORE_CARD_NUMBER_PATTERN = Regex("""[\d*]+""")
+    private val STORE_DATETIME_PATTERN = Regex("""\d{1,2}[/.-]\d{1,2}\s+\d{1,2}:\d{2}""")
+    private val STORE_BRACKET_PATTERN = Regex("""\[.+\]""")
+    private val STORE_AMOUNT_THEN_TIME_PATTERN = Regex("""[\d,]+원\s*\((?:일시불|\d+개월)\)\s*\d{1,2}[/.-]\d{1,2}\s+\d{1,2}:\d{2}\s+(.+)$""")
+    private val STORE_TIME_BEFORE_PATTERN = Regex("""(\d{1,2}:\d{2})\s*(.+?)[\s]*[\d,]+원""")
+    private val STORE_BEFORE_AMOUNT_PATTERN = Regex("""(.+?)\s*([\d,]+)원""")
+    private val STORE_AFTER_AMOUNT_PATTERN = Regex("""[\d,]+원\s*(.+?)(?:승인|결제|사용|일시불|할부|\s*$)""")
+    private val STORE_SPLIT_PATTERN = Regex("""[\s\[\]()\/,\n]+""")
+    private val STORE_WORD_SPLIT_PATTERN = Regex("""[\s\[\]()\/\n]+""")
+    // cleanStoreName용 Regex
+    private val CLEAN_CORP_PATTERN = Regex("""\(주\)|\(유\)|\(사\)|\(재\)""")
+    private val CLEAN_SPECIAL_CHAR_PATTERN = Regex("""^[^\w가-힣]+|[^\w가-힣]+$""")
+    private val CLEAN_NUMBER_WON_PATTERN = Regex("""^\d+원""")
+    // isValidStoreName용 Regex
+    private val VALID_NUMBER_ONLY_PATTERN = Regex("""[\d,.:]+""")
+    private val VALID_DATE_PATTERN = Regex("""\d{1,2}[/.-]\d{1,2}""")
+    private val VALID_TIME_PATTERN = Regex("""\d{1,2}:\d{2}""")
+    private val VALID_MASKED_NAME_PATTERN = Regex("""[가-힣]\*+[가-힣]?""")
 
     /**
      * 카테고리 매핑 (가게명 키워드 기반)
@@ -227,6 +262,14 @@ object SmsParser {
         )
     )
 
+    /**
+     * 카테고리 키워드 사전 lowercase 캐시
+     * inferCategory()에서 매번 keyword.lowercase() 호출 방지 (250+회 문자열 생성 제거)
+     */
+    private val categoryKeywordsLower: Map<String, List<String>> = categoryKeywords.mapValues { (_, keywords) ->
+        keywords.map { it.lowercase() }
+    }
+
     // ========================
     // 공개 파싱 메소드
     // ========================
@@ -249,40 +292,26 @@ object SmsParser {
 
         // 글자수 제한 (안내/광고성 SMS 필터링)
         if (message.length > MAX_SMS_LENGTH) {
-            Log.d("sanha", "글자수 초과 제외 [${message.length}자] ${message.take(30)}")
             return false
         }
 
-        // 제외 키워드가 있으면 false
-        if (excludeKeywords.any { message.contains(it) }) {
-            Log.d("sanha","제외 키워드 ${message.take(30)}")
+        val msgLower = message.lowercase()
+
+        // 기본 제외 키워드 + 사용자 제외 키워드 (리스트 합치기 대신 별도 체크)
+        if (excludeKeywords.any { msgLower.contains(it) } ||
+            userExcludeKeywords.any { msgLower.contains(it) }) {
+            Log.d("sanha","제외 키워드 ${message.take(50)}")
             return false
         }
 
-        // 카드사 키워드가 있고, 결제 관련 키워드가 있으면 true
-        val matchedCardKeyword = cardKeywords.find { message.contains(it) }
-        val hasCardKeyword = matchedCardKeyword != null
-        val matchedPaymentKeyword = paymentKeywords.find { message.contains(it) }
-        val hasPaymentKeyword = matchedPaymentKeyword != null
+        // 카드사 키워드가 있고, 결제 관련 키워드가 있으면 true (find→any 최적화)
+        val hasCardKeyword = cardKeywords.any { msgLower.contains(it) }
+        val hasPaymentKeyword = paymentKeywords.any { msgLower.contains(it) }
 
-        // 금액 패턴 확인 (숫자+원 또는 숫자만 있는 경우도 포함 - KB 등)
-        // 패턴1: 숫자+원 (예: 2,800원)
-        // 패턴2: 줄바꿈 후 숫자만 (예: 체크카드출금\n2,800)
-        val amountPatternWithWon = Regex("""[\d,]+원""")
-        val amountPatternNumberOnly = Regex("""\n[\d,]{3,}\n""") // 3자리 이상 숫자 (줄바꿈 사이)
-        val hasAmount = amountPatternWithWon.containsMatchIn(message) || amountPatternNumberOnly.containsMatchIn(message)
+        // 금액 패턴 확인 (사전 컴파일된 Regex 상수 사용)
+        val hasAmount = AMOUNT_PATTERN_WITH_WON.containsMatchIn(message) || AMOUNT_PATTERN_NUMBER_ONLY.containsMatchIn(message)
 
-        // KB 관련 디버그 로그
-        if (message.contains("KB") || message.contains("kb") || message.contains("국민")) {
-            Log.d("sanhakb", "KB 감지: ${message.take(60)} | card:$matchedCardKeyword pay:$matchedPaymentKeyword amt:$hasAmount")
-        }
-
-        val isCardPayment = hasCardKeyword && hasPaymentKeyword && hasAmount
-        if(isCardPayment){
-            Log.d("sanha","성공 키워드 [$matchedCardKeyword] [${message.length}자] ${message.take(80)}")
-        }
-
-        return isCardPayment
+        return hasCardKeyword && hasPaymentKeyword && hasAmount
     }
 
     /**
@@ -299,29 +328,30 @@ object SmsParser {
      * @return 수입 문자이면 true
      */
     fun isIncomeSms(message: String): Boolean {
-        // 광고 등 제외 키워드가 있으면 false
-        if (excludeKeywords.any { message.contains(it) }) {
+        val msgLower = message.lowercase()
+
+        // 기본 제외 키워드 + 사용자 제외 키워드 (리스트 합치기 대신 별도 체크)
+        if (excludeKeywords.any { msgLower.contains(it) } ||
+            userExcludeKeywords.any { msgLower.contains(it) }) {
             return false
         }
 
         // 수입 제외 키워드가 있으면 false (자동이체 출금 등)
-        if (incomeExcludeKeywords.any { message.contains(it) }) {
+        if (incomeExcludeKeywords.any { msgLower.contains(it) }) {
             return false
         }
 
         // 은행 키워드 확인
-        val hasBankKeyword = cardKeywords.any { message.contains(it) }
+        val hasBankKeyword = cardKeywords.any { msgLower.contains(it) }
 
         // 입금 관련 키워드 확인
-        val hasIncomeKeyword = incomeKeywords.any { message.contains(it) }
+        val hasIncomeKeyword = incomeKeywords.any { msgLower.contains(it) }
 
-        // 금액 패턴 확인
-        val amountPatternWithWon = Regex("""[\d,]+원""")
-        val amountPatternNumberOnly = Regex("""\n[\d,]{3,}\n""")
-        val hasAmount = amountPatternWithWon.containsMatchIn(message) || amountPatternNumberOnly.containsMatchIn(message)
+        // 금액 패턴 확인 (사전 컴파일된 Regex 상수 사용)
+        val hasAmount = AMOUNT_PATTERN_WITH_WON.containsMatchIn(message) || AMOUNT_PATTERN_NUMBER_ONLY.containsMatchIn(message)
 
         // 지출(결제) 관련 키워드가 있으면 수입으로 판단하지 않음
-        val hasPaymentKeyword = paymentKeywords.any { message.contains(it) }
+        val hasPaymentKeyword = paymentKeywords.any { msgLower.contains(it) }
 
         val isIncome = hasBankKeyword && hasIncomeKeyword && hasAmount && !hasPaymentKeyword
         if (isIncome) {
@@ -367,15 +397,13 @@ object SmsParser {
      * @return 송금인/출처 (추출 실패 시 빈 문자열)
      */
     fun extractIncomeSource(message: String): String {
-        // 패턴 1: "OOO님으로부터" 또는 "OOO으로부터"
-        val fromPattern = Regex("""([가-힣a-zA-Z0-9]+)(님)?으?로부터""")
-        fromPattern.find(message)?.let {
+        // 패턴 1: "OOO님으로부터" 또는 "OOO으로부터" (사전 컴파일 Regex)
+        FROM_PATTERN.find(message)?.let {
             return it.groupValues[1]
         }
 
-        // 패턴 2: "입금 OOO" 또는 "OOO 입금"
-        val depositPattern = Regex("""입금\s*([가-힣a-zA-Z0-9]{2,10})|([가-힣a-zA-Z0-9]{2,10})\s*입금""")
-        depositPattern.find(message)?.let {
+        // 패턴 2: "입금 OOO" 또는 "OOO 입금" (사전 컴파일 Regex)
+        DEPOSIT_PATTERN.find(message)?.let {
             val source = it.groupValues[1].ifEmpty { it.groupValues[2] }
             if (source.isNotBlank() && !incomeKeywords.any { keyword -> source == keyword }) {
                 return source
@@ -391,8 +419,9 @@ object SmsParser {
      * @return 카드사명 (매칭 안 되면 "기타")
      */
     fun extractCardName(message: String): String {
+        val msgLower = message.lowercase()
         for (keyword in cardKeywords) {
-            if (message.contains(keyword)) {
+            if (msgLower.contains(keyword)) {
                 return keyword
             }
         }
@@ -420,11 +449,10 @@ object SmsParser {
                 // 바로 다음 줄이 금액
                 if (i + 1 < lines.size) {
                     val nextLine = lines[i + 1]
-                    // 순수 숫자 (콤마 포함 가능)
-                    if (nextLine.matches(Regex("""[\d,]+"""))) {
+                    // 순수 숫자 (콤마 포함 가능) - 사전 컴파일 Regex
+                    if (nextLine.matches(PURE_NUMBER_PATTERN)) {
                         val amount = nextLine.replace(",", "").toIntOrNull()
                         if (amount != null && amount >= 100) {
-                            Log.d("SmsParser", "KB 스타일 금액 추출: $amount")
                             return amount
                         }
                     }
@@ -432,10 +460,8 @@ object SmsParser {
             }
         }
 
-        // 패턴1: 숫자+원 (예: 2,800원) - 하지만 가게명에 포함된 금액은 제외
-        // "*60원캐쉬백" 같은 경우를 피하기 위해 "원" 뒤에 한글이 바로 붙지 않은 경우만 추출
-        val amountPatternWithWon = Regex("""([\d,]+)원(?![가-힣])""")
-        val matchWithWon = amountPatternWithWon.find(message)
+        // 패턴1: 숫자+원 (예: 2,800원) - 사전 컴파일 Regex
+        val matchWithWon = AMOUNT_EXTRACT_WITH_WON.find(message)
         if (matchWithWon != null) {
             val amount = matchWithWon.groupValues[1].replace(",", "").toIntOrNull()
             if (amount != null && amount >= 100) {
@@ -443,18 +469,21 @@ object SmsParser {
             }
         }
 
-        // 패턴2: 줄바꿈 사이의 금액 (잔액 제외)
+        // 패턴2: 줄바꿈 사이의 금액 (잔액 제외) - 사전 컴파일 Regex
         for (i in lines.indices) {
             val line = lines[i]
             // 잔액 라인은 건너뛰기
             if (line.startsWith("잔액")) continue
             // 가게명 패턴 제외 (숫자+원+한글)
-            if (line.matches(Regex(""".*\d+원[가-힣]+.*"""))) continue
-            // 순수 숫자 또는 콤마 포함 숫자 (100 이상)
-            if (line.matches(Regex("""[\d,]+""")) && line.replace(",", "").length >= 3) {
-                val amount = line.replace(",", "").toIntOrNull()
-                if (amount != null && amount >= 100) {
-                    return amount
+            if (line.matches(AMOUNT_WON_HANGUL_PATTERN)) continue
+            // 순수 숫자 또는 콤마 포함 숫자 (100 이상) - 중복 replace 제거
+            if (line.matches(PURE_NUMBER_PATTERN)) {
+                val stripped = line.replace(",", "")
+                if (stripped.length >= 3) {
+                    val amount = stripped.toIntOrNull()
+                    if (amount != null && amount >= 100) {
+                        return amount
+                    }
                 }
             }
         }
@@ -557,18 +586,18 @@ object SmsParser {
                 for (j in (i - 1) downTo 0) {
                     val potentialStore = lines[j]
 
-                    // 카드번호 패턴 제외 (예: 801302**775)
-                    if (potentialStore.contains("**") || potentialStore.matches(Regex("""[\d*]+"""))) {
+                    // 카드번호 패턴 제외 (예: 801302**775) - 사전 컴파일 Regex
+                    if (potentialStore.contains("**") || potentialStore.matches(STORE_CARD_NUMBER_PATTERN)) {
                         continue
                     }
 
-                    // 날짜/시간 패턴 제외 (예: 02/05 22:47)
-                    if (potentialStore.matches(Regex("""\d{1,2}[/.-]\d{1,2}\s+\d{1,2}:\d{2}"""))) {
+                    // 날짜/시간 패턴 제외 (예: 02/05 22:47) - 사전 컴파일 Regex
+                    if (potentialStore.matches(STORE_DATETIME_PATTERN)) {
                         continue
                     }
 
-                    // [KB] 같은 카드사 표시 제외
-                    if (potentialStore.matches(Regex("""\[.+\]"""))) {
+                    // [KB] 같은 카드사 표시 제외 - 사전 컴파일 Regex
+                    if (potentialStore.matches(STORE_BRACKET_PATTERN)) {
                         continue
                     }
 
@@ -580,17 +609,14 @@ object SmsParser {
                     // 유효한 가게명인지 확인
                     val cleanStore = cleanStoreName(potentialStore)
                     if (cleanStore.length >= 2) {
-                        Log.d("SmsParser", "KB 스타일 가게명 추출: $cleanStore (원본: $potentialStore)")
                         return cleanStore
                     }
                 }
             }
         }
 
-        // 패턴 0: 금액+일시불/할부+날짜시간 뒤에 가게명이 오는 경우
-        // 예: "신한카드(5146)승인 하*현 337,250원(일시불)01/31 18:11 (주)이마트 죽전점"
-        val amountThenTimePattern = Regex("""[\d,]+원\s*\((?:일시불|\d+개월)\)\s*\d{1,2}[/.-]\d{1,2}\s+\d{1,2}:\d{2}\s+(.+)$""")
-        val amountThenTimeMatch = amountThenTimePattern.find(message)
+        // 패턴 0: 금액+일시불/할부+날짜시간 뒤에 가게명이 오는 경우 - 사전 컴파일 Regex
+        val amountThenTimeMatch = STORE_AMOUNT_THEN_TIME_PATTERN.find(message)
         if (amountThenTimeMatch != null) {
             val potentialStore = amountThenTimeMatch.groupValues[1].trim()
             val cleanStore = cleanStoreName(potentialStore)
@@ -599,10 +625,8 @@ object SmsParser {
             }
         }
 
-        // 패턴 1: 시간 뒤에 가게명이 오는 경우 (가장 흔함)
-        // 예: "KB국민 12/25 14:30 스타벅스 15,000원 승인"
-        val timePattern = Regex("""(\d{1,2}:\d{2})\s*(.+?)[\s]*[\d,]+원""")
-        val timeMatch = timePattern.find(message)
+        // 패턴 1: 시간 뒤에 가게명이 오는 경우 (가장 흔함) - 사전 컴파일 Regex
+        val timeMatch = STORE_TIME_BEFORE_PATTERN.find(message)
         if (timeMatch != null) {
             val potentialStore = timeMatch.groupValues[2].trim()
             val cleanStore = cleanStoreName(potentialStore)
@@ -611,26 +635,22 @@ object SmsParser {
             }
         }
 
-        // 패턴 2: 금액 바로 앞에 가게명이 오는 경우
-        // 예: "신한카드 스타벅스 15,000원 결제"
-        val beforeAmountPattern = Regex("""(.+?)\s*([\d,]+)원""")
-        val beforeMatch = beforeAmountPattern.find(message)
+        // 패턴 2: 금액 바로 앞에 가게명이 오는 경우 - 사전 컴파일 Regex
+        val beforeMatch = STORE_BEFORE_AMOUNT_PATTERN.find(message)
         if (beforeMatch != null) {
             val beforeText = beforeMatch.groupValues[1]
             // 마지막 공백 이후 단어 추출
-            val words = beforeText.split(Regex("""[\s\[\]()\/\n]+""")).filter { it.isNotBlank() }
+            val words = beforeText.split(STORE_WORD_SPLIT_PATTERN).filter { it.isNotBlank() }
             for (i in words.indices.reversed()) {
                 val word = cleanStoreName(words[i])
-                if (isValidStoreName(word) && !cardKeywords.any { word.contains(it) }) {
+                if (isValidStoreName(word) && !cardKeywords.any { word.lowercase().contains(it) }) {
                     return word
                 }
             }
         }
 
-        // 패턴 3: 금액 뒤에 가게명이 오는 경우
-        // 예: "15,000원 스타벅스 승인"
-        val afterAmountPattern = Regex("""[\d,]+원\s*(.+?)(?:승인|결제|사용|일시불|할부|\s*$)""")
-        val afterMatch = afterAmountPattern.find(message)
+        // 패턴 3: 금액 뒤에 가게명이 오는 경우 - 사전 컴파일 Regex
+        val afterMatch = STORE_AFTER_AMOUNT_PATTERN.find(message)
         if (afterMatch != null) {
             val potentialStore = afterMatch.groupValues[1].trim()
             val cleanStore = cleanStoreName(potentialStore)
@@ -639,10 +659,10 @@ object SmsParser {
             }
         }
 
-        // 패턴 4: 전체 메시지에서 유효한 가게명 추출
-        val words = message.split(Regex("""[\s\[\]()\/,\n]+"""))
+        // 패턴 4: 전체 메시지에서 유효한 가게명 추출 - 사전 컴파일 Regex
+        val words = message.split(STORE_SPLIT_PATTERN)
             .map { cleanStoreName(it) }
-            .filter { isValidStoreName(it) && !cardKeywords.any { keyword -> it.contains(keyword) } }
+            .filter { isValidStoreName(it) && !cardKeywords.any { keyword -> it.lowercase().contains(keyword) } }
 
         return words.firstOrNull() ?: "결제"
     }
@@ -655,12 +675,12 @@ object SmsParser {
      */
     private fun cleanStoreName(name: String): String {
         var cleaned = name.trim()
-        // 법인 표기 제거 (예: "(주)", "(유)", "(사)", "(재)")
-        cleaned = cleaned.replace(Regex("""\(주\)|\(유\)|\(사\)|\(재\)"""), "")
-        // 앞뒤 특수문자 제거
-        cleaned = cleaned.replace(Regex("""^[^\w가-힣]+|[^\w가-힣]+$"""), "")
-        // 앞쪽의 "숫자원" 패턴 제거 (예: "60원캐쉬백" -> "캐쉬백")
-        cleaned = cleaned.replace(Regex("""^\d+원"""), "")
+        // 법인 표기 제거 (예: "(주)", "(유)", "(사)", "(재)") - 사전 컴파일 Regex
+        cleaned = cleaned.replace(CLEAN_CORP_PATTERN, "")
+        // 앞뒤 특수문자 제거 - 사전 컴파일 Regex
+        cleaned = cleaned.replace(CLEAN_SPECIAL_CHAR_PATTERN, "")
+        // 앞쪽의 "숫자원" 패턴 제거 (예: "60원캐쉬백" -> "캐쉬백") - 사전 컴파일 Regex
+        cleaned = cleaned.replace(CLEAN_NUMBER_WON_PATTERN, "")
         // 최대 15자로 제한
         return cleaned.take(15)
     }
@@ -676,15 +696,15 @@ object SmsParser {
     private fun isValidStoreName(name: String): Boolean {
         if (name.isBlank() || name.length < 2) return false
 
-        // 숫자로만 구성된 경우 제외
-        if (name.matches(Regex("""[\d,.:]+"""))) return false
+        // 숫자로만 구성된 경우 제외 - 사전 컴파일 Regex
+        if (name.matches(VALID_NUMBER_ONLY_PATTERN)) return false
 
-        // 날짜/시간 패턴 제외
-        if (name.matches(Regex("""\d{1,2}[/.-]\d{1,2}"""))) return false
-        if (name.matches(Regex("""\d{1,2}:\d{2}"""))) return false
+        // 날짜/시간 패턴 제외 - 사전 컴파일 Regex
+        if (name.matches(VALID_DATE_PATTERN)) return false
+        if (name.matches(VALID_TIME_PATTERN)) return false
 
-        // 마스킹된 이름 패턴 제외 (예: 하*현, 김*수, 이**)
-        if (name.matches(Regex("""[가-힣]\*+[가-힣]?"""))) return false
+        // 마스킹된 이름 패턴 제외 (예: 하*현, 김*수, 이**) - 사전 컴파일 Regex
+        if (name.matches(VALID_MASKED_NAME_PATTERN)) return false
 
         // 제외 패턴에 해당하는 경우 제외
         for (pattern in excludeStorePatterns) {
@@ -708,7 +728,7 @@ object SmsParser {
     private fun extractStoreNameFromText(text: String, excludeKeywords: List<String>): String {
         if (text.isBlank()) return ""
 
-        val parts = text.split(Regex("""[\s\[\]()\/,\n]+"""))
+        val parts = text.split(STORE_SPLIT_PATTERN)
             .map { cleanStoreName(it) }
             .filter { isValidStoreName(it) && !excludeKeywords.any { keyword -> it.contains(keyword) } }
 
@@ -733,21 +753,14 @@ object SmsParser {
         calendar.timeInMillis = smsTimestamp
         val currentYear = calendar.get(Calendar.YEAR)
 
-        // 날짜 패턴 1: MM/DD 또는 MM-DD 또는 MM.DD
-        val datePattern1 = Regex("""(\d{1,2})[/.-](\d{1,2})""")
-        // 날짜 패턴 2: M월 D일 또는 M월D일
-        val datePattern2 = Regex("""(\d{1,2})월\s*(\d{1,2})일""")
-        // 시간 패턴: HH:mm
-        val timePattern = Regex("""(\d{1,2}):(\d{2})""")
-
         var month = calendar.get(Calendar.MONTH) + 1
         var day = calendar.get(Calendar.DAY_OF_MONTH)
         var hour = calendar.get(Calendar.HOUR_OF_DAY)
         var minute = calendar.get(Calendar.MINUTE)
 
-        // 날짜 추출 시도
-        val dateMatch1 = datePattern1.find(message)
-        val dateMatch2 = datePattern2.find(message)
+        // 날짜 추출 시도 (사전 컴파일 Regex)
+        val dateMatch1 = DATE_PATTERN_SLASH.find(message)
+        val dateMatch2 = DATE_PATTERN_KOREAN.find(message)
 
         if (dateMatch1 != null) {
             month = dateMatch1.groupValues[1].toIntOrNull() ?: month
@@ -757,8 +770,8 @@ object SmsParser {
             day = dateMatch2.groupValues[2].toIntOrNull() ?: day
         }
 
-        // 시간 추출 시도
-        val timeMatch = timePattern.find(message)
+        // 시간 추출 시도 (사전 컴파일 Regex)
+        val timeMatch = TIME_PATTERN.find(message)
         if (timeMatch != null) {
             hour = timeMatch.groupValues[1].toIntOrNull() ?: hour
             minute = timeMatch.groupValues[2].toIntOrNull() ?: minute
@@ -786,9 +799,10 @@ object SmsParser {
     fun inferCategory(storeName: String, message: String): String {
         val combinedText = "$storeName $message".lowercase()
 
-        for ((category, keywords) in categoryKeywords) {
+        // 사전 lowercase 캐시 사용 (매번 keyword.lowercase() 호출 방지)
+        for ((category, keywords) in categoryKeywordsLower) {
             for (keyword in keywords) {
-                if (combinedText.contains(keyword.lowercase())) {
+                if (combinedText.contains(keyword)) {
                     return category
                 }
             }

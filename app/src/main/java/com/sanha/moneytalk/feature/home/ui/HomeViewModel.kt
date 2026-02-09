@@ -95,7 +95,8 @@ class HomeViewModel @Inject constructor(
     private val hybridSmsClassifier: HybridSmsClassifier,
     private val smsBatchProcessor: SmsBatchProcessor,
     private val dataRefreshEvent: DataRefreshEvent,
-    private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository
+    private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
+    private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository
 ) : ViewModel() {
 
     companion object {
@@ -316,6 +317,10 @@ class HomeViewModel @Inject constructor(
                 )
 
                 val result = withContext(Dispatchers.IO) {
+                    // DB에서 사용자 제외 키워드 로드 → SmsParser에 설정
+                    val userExcludeKeywords = smsExclusionRepository.getUserKeywords()
+                    SmsParser.setUserExcludeKeywords(userExcludeKeywords)
+
                     // 마지막 동기화 시간 가져오기
                     val lastSyncTime = when {
                         forceFullSync -> 0L
@@ -344,83 +349,131 @@ class HomeViewModel @Inject constructor(
                     // ===== 성능 최적화: 인메모리 캐시 초기화 =====
                     _uiState.update { it.copy(syncProgress = "준비 중...") }
                     val existingSmsIds = expenseRepository.getAllSmsIds() // O(1) 조회용 HashSet
+                    val existingIncomeSmsIds = incomeRepository.getAllSmsIds().toHashSet()
                     categoryClassifierService.initCategoryCache() // DB 쿼리 제거
 
-                    // ===== 1단계: Regex로 빠르게 분류 =====
-                    _uiState.update { it.copy(syncProgress = "결제 내역 확인 중...") }
-                    // SMS + MMS 통합 읽기 (카드사가 MMS로 보내는 경우 포함)
-                    val regexSmsList = if (lastSyncTime > 0) {
-                        smsReader.readCardMessagesByDateRange(contentResolver, lastSyncTime, currentTime)
+                    // ===== 전체 SMS를 한 번만 읽고 지출/수입 동시 분류 =====
+                    // ContentResolver 쿼리 6회(지출3+수입3) → 3회(전체1세트)로 절반 감소
+                    // for-loop 2회(지출+수입) → 1회로 통합
+                    _uiState.update { it.copy(syncProgress = "문자 내역 확인 중...") }
+                    val allSmsList = if (lastSyncTime > 0) {
+                        smsReader.readAllMessagesByDateRange(contentResolver, lastSyncTime, currentTime)
                     } else {
-                        smsReader.readAllCardMessages(contentResolver)
+                        smsReader.readAllMessagesByDateRange(contentResolver, 0L, currentTime)
                     }
 
                     _uiState.update {
                         it.copy(
-                            syncProgress = "지출 내역 확인 중...",
+                            syncProgress = "내역 분류 중...",
                             syncProgressCurrent = 0,
-                            syncProgressTotal = regexSmsList.size
+                            syncProgressTotal = allSmsList.size
                         )
                     }
 
                     var regexCount = 0
+                    var incomeCount = 0
                     val processedSmsIds = mutableSetOf<String>()
                     val expenseBatch = mutableListOf<ExpenseEntity>()
+                    val incomeBatch = mutableListOf<com.sanha.moneytalk.core.database.entity.IncomeEntity>()
                     val regexLearningData = mutableListOf<Triple<String, String, SmsAnalysisResult>>()
+                    val hybridCandidates = mutableListOf<SmsMessage>()
+                    val hasGeminiKey = settingsDataStore.getGeminiApiKey().isNotBlank()
 
-                    for ((smsIdx, sms) in regexSmsList.withIndex()) {
+                    for ((smsIdx, sms) in allSmsList.withIndex()) {
                         try {
                             if (smsIdx % SYNC_PROGRESS_UPDATE_INTERVAL == 0) {
                                 _uiState.update {
                                     it.copy(
-                                        syncProgress = "지출 내역 확인 중... (${smsIdx}/${regexSmsList.size}건)",
+                                        syncProgress = "내역 분류 중... (${smsIdx}/${allSmsList.size}건)",
                                         syncProgressCurrent = smsIdx,
-                                        syncProgressTotal = regexSmsList.size
+                                        syncProgressTotal = allSmsList.size
                                     )
                                 }
                             }
 
-                            if (sms.id in existingSmsIds) {
-                                processedSmsIds.add(sms.id)
+                            // --- 지출 체크 ---
+                            if (SmsParser.isCardPaymentSms(sms.body)) {
+                                if (sms.id in existingSmsIds) {
+                                    processedSmsIds.add(sms.id)
+                                    continue
+                                }
+
+                                val result = hybridSmsClassifier.classifyRegexOnly(sms.body, sms.date)
+                                if (result != null && result.isPayment && result.analysisResult != null) {
+                                    val analysis = result.analysisResult
+                                    val category = if (analysis.category.isNotBlank() &&
+                                                       analysis.category != "미분류" &&
+                                                       analysis.category != "기타") {
+                                        analysis.category
+                                    } else {
+                                        categoryClassifierService.getCategory(
+                                            storeName = analysis.storeName,
+                                            originalSms = sms.body
+                                        )
+                                    }
+
+                                    val expense = ExpenseEntity(
+                                        amount = analysis.amount,
+                                        storeName = analysis.storeName,
+                                        category = category,
+                                        cardName = analysis.cardName,
+                                        dateTime = DateUtils.parseDateTime(analysis.dateTime),
+                                        originalSms = sms.body,
+                                        smsId = sms.id
+                                    )
+                                    expenseBatch.add(expense)
+                                    regexCount++
+                                    processedSmsIds.add(sms.id)
+                                    regexLearningData.add(Triple(sms.body, sms.address, analysis))
+
+                                    if (expenseBatch.size >= DB_BATCH_INSERT_SIZE) {
+                                        expenseRepository.insertAll(expenseBatch)
+                                        expenseBatch.clear()
+                                    }
+                                }
                                 continue
                             }
 
-                            val result = hybridSmsClassifier.classifyRegexOnly(sms.body, sms.date)
-                            if (result != null && result.isPayment && result.analysisResult != null) {
-                                val analysis = result.analysisResult
-                                // 벡터/LLM이 이미 분류한 카테고리 우선, 미분류/기타일 때만 재분류
-                                val category = if (analysis.category.isNotBlank() &&
-                                                   analysis.category != "미분류" &&
-                                                   analysis.category != "기타") {
-                                    analysis.category
-                                } else {
-                                    categoryClassifierService.getCategory(
-                                        storeName = analysis.storeName,
+                            // --- 수입 체크 (지출이 아닌 경우만) ---
+                            if (SmsParser.isIncomeSms(sms.body)) {
+                                processedSmsIds.add(sms.id)
+                                if (sms.id in existingIncomeSmsIds) continue
+
+                                val amount = SmsParser.extractIncomeAmount(sms.body)
+                                val incomeType = SmsParser.extractIncomeType(sms.body)
+                                val source = SmsParser.extractIncomeSource(sms.body)
+                                val dateTime = SmsParser.extractDateTime(sms.body, sms.date)
+
+                                if (amount > 0) {
+                                    val income = com.sanha.moneytalk.core.database.entity.IncomeEntity(
+                                        smsId = sms.id,
+                                        amount = amount,
+                                        type = incomeType,
+                                        source = source,
+                                        description = if (source.isNotBlank()) "${source}에서 $incomeType" else incomeType,
+                                        isRecurring = incomeType == "급여",
+                                        dateTime = DateUtils.parseDateTime(dateTime),
                                         originalSms = sms.body
                                     )
-                                }
+                                    incomeBatch.add(income)
+                                    incomeCount++
 
-                                val expense = ExpenseEntity(
-                                    amount = analysis.amount,
-                                    storeName = analysis.storeName,
-                                    category = category,
-                                    cardName = analysis.cardName,
-                                    dateTime = DateUtils.parseDateTime(analysis.dateTime),
-                                    originalSms = sms.body,
-                                    smsId = sms.id
-                                )
-                                expenseBatch.add(expense)
-                                regexCount++
-                                processedSmsIds.add(sms.id)
-                                regexLearningData.add(Triple(sms.body, sms.address, analysis))
-
-                                if (expenseBatch.size >= DB_BATCH_INSERT_SIZE) {
-                                    expenseRepository.insertAll(expenseBatch)
-                                    expenseBatch.clear()
+                                    if (incomeBatch.size >= DB_BATCH_INSERT_SIZE) {
+                                        incomeRepository.insertAll(incomeBatch)
+                                        incomeBatch.clear()
+                                    }
                                 }
+                                continue
+                            }
+
+                            // --- 미분류: Hybrid 후보 (지출도 수입도 아닌 SMS) ---
+                            if (hasGeminiKey &&
+                                sms.id !in existingSmsIds &&
+                                sms.body.length >= 10) {
+                                hybridCandidates.add(sms)
                             }
                         } catch (e: Exception) {
-                            android.util.Log.w("sanha", "Regex SMS 처리 실패 (무시): ${sms.id} - ${e.message}")
+                            android.util.Log.w("sanha", "SMS 처리 실패 (무시): ${sms.id} - ${e.message}")
                         }
                     }
 
@@ -428,108 +481,26 @@ class HomeViewModel @Inject constructor(
                         expenseRepository.insertAll(expenseBatch)
                         expenseBatch.clear()
                     }
-
-                    _uiState.update {
-                        it.copy(
-                            syncProgress = "지출 ${regexCount}건 확인 완료",
-                            syncProgressCurrent = regexSmsList.size,
-                            syncProgressTotal = regexSmsList.size
-                        )
-                    }
-                    android.util.Log.e("sanha", "Tier 1 (Regex): ${regexCount}건 처리")
-
-                    // ===== 2~3단계: 비동기 처리할 미분류 SMS 수집 =====
-                    val hasGeminiKey = settingsDataStore.getGeminiApiKey().isNotBlank()
-
-                    // 비동기 Hybrid 처리용 SMS 데이터 수집 (ContentResolver 접근은 여기서)
-                    val hybridSmsList: List<SmsMessage> = if (hasGeminiKey) {
-                        val allSms = if (lastSyncTime > 0) {
-                            smsReader.readAllMessagesByDateRange(contentResolver, lastSyncTime, currentTime)
-                        } else {
-                            val oneYearAgo = currentTime - ONE_YEAR_MILLIS
-                            smsReader.readAllMessagesByDateRange(contentResolver, oneYearAgo, currentTime)
-                        }
-
-                        allSms.filter { sms ->
-                            sms.id !in processedSmsIds &&
-                            sms.id !in existingSmsIds &&
-                            !SmsParser.isIncomeSms(sms.body) &&
-                            sms.body.length >= 10
-                        }
-                    } else emptyList()
-
-                    android.util.Log.e("sanha", "미분류 SMS: ${hybridSmsList.size}건 (비동기 처리 예정)")
-                    android.util.Log.e("sanha", "=== 동기화 결과 요약 ===")
-                    android.util.Log.e("sanha", "Regex: ${regexCount}건, 미분류 SMS: ${hybridSmsList.size}건 (비동기), 처리된 SMS ID: ${processedSmsIds.size}건")
-
-                    // ===== 수입 SMS 동기화 (배치 최적화) =====
-                    _uiState.update { it.copy(syncProgress = "수입 내역 확인 중...") }
-                    var incomeCount = 0
-                    val existingIncomeSmsIds = incomeRepository.getAllSmsIds().toHashSet()
-                    val incomeBatch = mutableListOf<com.sanha.moneytalk.core.database.entity.IncomeEntity>()
-
-                    // SMS + MMS 통합 수입 읽기
-                    val incomeSmsList = if (lastSyncTime > 0) {
-                        smsReader.readIncomeMessagesByDateRange(contentResolver, lastSyncTime, currentTime)
-                    } else {
-                        smsReader.readAllIncomeMessages(contentResolver)
-                    }
-
-                    _uiState.update {
-                        it.copy(
-                            syncProgress = "수입 내역 확인 중...",
-                            syncProgressCurrent = 0,
-                            syncProgressTotal = incomeSmsList.size
-                        )
-                    }
-
-                    for ((incIdx, sms) in incomeSmsList.withIndex()) {
-                        try {
-                            if (incIdx % SYNC_PROGRESS_UPDATE_INTERVAL == 0) {
-                                _uiState.update {
-                                    it.copy(
-                                        syncProgress = "수입 내역 확인 중... (${incIdx}/${incomeSmsList.size}건)",
-                                        syncProgressCurrent = incIdx,
-                                        syncProgressTotal = incomeSmsList.size
-                                    )
-                                }
-                            }
-
-                            if (sms.id in existingIncomeSmsIds) continue
-
-                            val amount = SmsParser.extractIncomeAmount(sms.body)
-                            val incomeType = SmsParser.extractIncomeType(sms.body)
-                            val source = SmsParser.extractIncomeSource(sms.body)
-                            val dateTime = SmsParser.extractDateTime(sms.body, sms.date)
-
-                            if (amount > 0) {
-                                val income = com.sanha.moneytalk.core.database.entity.IncomeEntity(
-                                    smsId = sms.id,
-                                    amount = amount,
-                                    type = incomeType,
-                                    source = source,
-                                    description = if (source.isNotBlank()) "${source}에서 $incomeType" else incomeType,
-                                    isRecurring = incomeType == "급여",
-                                    dateTime = DateUtils.parseDateTime(dateTime),
-                                    originalSms = sms.body
-                                )
-                                incomeBatch.add(income)
-                                incomeCount++
-
-                                if (incomeBatch.size >= DB_BATCH_INSERT_SIZE) {
-                                    incomeRepository.insertAll(incomeBatch)
-                                    incomeBatch.clear()
-                                }
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.w("sanha", "수입 SMS 처리 실패 (무시): ${sms.id} - ${e.message}")
-                        }
-                    }
-
                     if (incomeBatch.isNotEmpty()) {
                         incomeRepository.insertAll(incomeBatch)
                         incomeBatch.clear()
                     }
+
+                    _uiState.update {
+                        it.copy(
+                            syncProgress = "지출 ${regexCount}건, 수입 ${incomeCount}건 확인 완료",
+                            syncProgressCurrent = allSmsList.size,
+                            syncProgressTotal = allSmsList.size
+                        )
+                    }
+                    android.util.Log.e("sanha", "통합 분류: 지출 ${regexCount}건, 수입 ${incomeCount}건 처리")
+
+                    // ===== 2~3단계: 비동기 처리할 미분류 SMS =====
+                    val hybridSmsList: List<SmsMessage> = hybridCandidates
+
+                    android.util.Log.e("sanha", "미분류 SMS: ${hybridSmsList.size}건 (비동기 처리 예정)")
+                    android.util.Log.e("sanha", "=== 동기화 결과 요약 ===")
+                    android.util.Log.e("sanha", "Regex: ${regexCount}건, 수입: ${incomeCount}건, 미분류 SMS: ${hybridSmsList.size}건 (비동기), 처리된 SMS ID: ${processedSmsIds.size}건")
 
                     // ===== 성능 최적화: 캐시 정리 =====
                     _uiState.update { it.copy(syncProgress = "정리 중...") }
@@ -733,8 +704,7 @@ class HomeViewModel @Inject constructor(
                     }
 
                     val batchResults = smsBatchProcessor.processBatch(
-                        unclassifiedSms = batchData,
-                        listener = null  // 로딩에 표시하지 않음
+                        unclassifiedSms = batchData
                     )
 
                     for ((smsData, analysis) in batchResults) {
@@ -852,6 +822,10 @@ class HomeViewModel @Inject constructor(
 
     /**
      * 카테고리 자동 분류 내부 로직 (IO 디스패처에서 실행)
+     *
+     * 2-phase 전략:
+     * Phase 1: 상위 50개 가게(총액 기준)만 빠르게 분류 → 즉시 UI 반영
+     * Phase 2: 나머지를 백그라운드에서 전체 분류 (최대 3라운드)
      */
     private suspend fun launchBackgroundCategoryClassificationInternal() {
         try {
@@ -863,29 +837,46 @@ class HomeViewModel @Inject constructor(
 
             android.util.Log.d("HomeViewModel", "백그라운드 카테고리 자동 분류 시작: ${count}건")
 
-            val totalClassified = categoryClassifierService.classifyAllUntilComplete(
-                onProgress = { round, classifiedInRound, remaining ->
-                    android.util.Log.d("HomeViewModel", "자동 분류 라운드 $round: ${classifiedInRound}건 완료 (남은: ${remaining}건)")
-                },
-                onStepProgress = null,
-                maxRounds = MAX_CLASSIFICATION_ROUNDS
+            // ===== Phase 1: 상위 50개 가게 빠르게 분류 =====
+            val phase1Count = categoryClassifierService.classifyUnclassifiedExpenses(
+                maxStoreCount = 50
             )
 
-            if (totalClassified > 0) {
-                // DB 쿼리는 IO에서 실행 (Main에서 호출하면 ANR 위험)
-                val remaining = categoryClassifierService.getUnclassifiedCount()
-                val message = if (remaining > 0) {
-                    "${totalClassified}건의 카테고리가 정리되었습니다"
-                } else {
-                    "카테고리 정리가 완료되었습니다"
-                }
+            if (phase1Count > 0) {
                 withContext(Dispatchers.Main) {
                     loadData()
-                    _uiState.update { it.copy(errorMessage = message) }
+                    _uiState.update { it.copy(errorMessage = "${phase1Count}건의 카테고리가 정리되었습니다") }
                 }
             }
 
-            android.util.Log.d("HomeViewModel", "백그라운드 카테고리 자동 분류 완료: ${totalClassified}건")
+            // ===== Phase 2: 나머지 전체 분류 =====
+            val remainingCount = categoryClassifierService.getUnclassifiedCount()
+            if (remainingCount > 0) {
+                android.util.Log.d("HomeViewModel", "Phase 2: 남은 ${remainingCount}건 전체 분류 시작")
+
+                val phase2Classified = categoryClassifierService.classifyAllUntilComplete(
+                    onProgress = { round, classifiedInRound, remaining ->
+                        android.util.Log.d("HomeViewModel", "자동 분류 라운드 $round: ${classifiedInRound}건 완료 (남은: ${remaining}건)")
+                    },
+                    onStepProgress = null,
+                    maxRounds = MAX_CLASSIFICATION_ROUNDS
+                )
+
+                if (phase2Classified > 0) {
+                    val finalRemaining = categoryClassifierService.getUnclassifiedCount()
+                    val message = if (finalRemaining > 0) {
+                        "총 ${phase1Count + phase2Classified}건의 카테고리가 정리되었습니다"
+                    } else {
+                        "카테고리 정리가 완료되었습니다"
+                    }
+                    withContext(Dispatchers.Main) {
+                        loadData()
+                        _uiState.update { it.copy(errorMessage = message) }
+                    }
+                }
+            }
+
+            android.util.Log.d("HomeViewModel", "백그라운드 카테고리 자동 분류 완료")
         } catch (e: Exception) {
             android.util.Log.e("HomeViewModel", "백그라운드 카테고리 자동 분류 실패: ${e.message}", e)
         }

@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.database.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -17,7 +18,16 @@ import androidx.room.PrimaryKey
  *
  * @see com.sanha.moneytalk.core.database.dao.ExpenseDao
  */
-@Entity(tableName = "expenses")
+@Entity(
+    tableName = "expenses",
+    indices = [
+        Index(value = ["smsId"], unique = true),
+        Index(value = ["dateTime"]),
+        Index(value = ["category"]),
+        Index(value = ["cardName"]),
+        Index(value = ["storeName", "dateTime"])
+    ]
+)
 data class ExpenseEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,

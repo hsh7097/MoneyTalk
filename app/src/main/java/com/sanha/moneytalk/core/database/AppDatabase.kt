@@ -13,6 +13,7 @@ import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.dao.OwnedCardDao
+import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import com.sanha.moneytalk.core.database.entity.CategoryMappingEntity
@@ -21,6 +22,7 @@ import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.database.entity.OwnedCardEntity
+import com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
 
@@ -57,9 +59,10 @@ import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
         CategoryMappingEntity::class,
         SmsPatternEntity::class,
         StoreEmbeddingEntity::class,
-        OwnedCardEntity::class
+        OwnedCardEntity::class,
+        SmsExclusionKeywordEntity::class
     ],
-    version = 3,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(FloatListConverter::class)
@@ -89,6 +92,9 @@ abstract class AppDatabase : RoomDatabase() {
     /** 보유 카드 DAO (카드 화이트리스트 관리) */
     abstract fun ownedCardDao(): OwnedCardDao
 
+    /** SMS 제외 키워드 DAO (블랙리스트 관리) */
+    abstract fun smsExclusionKeywordDao(): SmsExclusionKeywordDao
+
     companion object {
         /** 데이터베이스 파일명 */
         const val DATABASE_NAME = "moneytalk_v4.db"
@@ -113,6 +119,34 @@ abstract class AppDatabase : RoomDatabase() {
                         source TEXT NOT NULL DEFAULT 'sms_sync'
                     )
                 """.trimIndent())
+            }
+        }
+
+        /** v3 → v4: sms_exclusion_keywords 테이블 추가 (SMS 제외 키워드 관리) */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS sms_exclusion_keywords (
+                        keyword TEXT NOT NULL PRIMARY KEY,
+                        source TEXT NOT NULL DEFAULT 'user',
+                        createdAt INTEGER NOT NULL DEFAULT 0
+                    )
+                """.trimIndent())
+            }
+        }
+
+        /** v4 → v5: expenses, incomes 테이블에 인덱스 추가 (쿼리 성능 향상) */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // expenses 인덱스
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_expenses_smsId ON expenses(smsId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_expenses_dateTime ON expenses(dateTime)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_expenses_category ON expenses(category)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_expenses_cardName ON expenses(cardName)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_expenses_storeName_dateTime ON expenses(storeName, dateTime)")
+                // incomes 인덱스
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_incomes_smsId ON incomes(smsId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_incomes_dateTime ON incomes(dateTime)")
             }
         }
     }

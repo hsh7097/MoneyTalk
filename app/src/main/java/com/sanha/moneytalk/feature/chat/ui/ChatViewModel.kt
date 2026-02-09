@@ -70,7 +70,8 @@ class ChatViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val chatDao: ChatDao,
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -630,6 +631,27 @@ class ChatViewModel @Inject constructor(
                     data = "중복 지출 항목 (${duplicates.size}건):\n$dupList"
                 )
             }
+
+            QueryType.SMS_EXCLUSION_LIST -> {
+                val allKeywords = smsExclusionRepository.getAllKeywords()
+                val keywordList = if (allKeywords.isEmpty()) {
+                    "등록된 제외 키워드가 없습니다."
+                } else {
+                    allKeywords.joinToString("\n") { entity ->
+                        val sourceLabel = when (entity.source) {
+                            "default" -> "(기본)"
+                            "chat" -> "(채팅)"
+                            else -> "(사용자)"
+                        }
+                        "- ${entity.keyword} $sourceLabel"
+                    }
+                }
+
+                QueryResult(
+                    queryType = QueryType.SMS_EXCLUSION_LIST,
+                    data = "SMS 제외 키워드 목록 (${allKeywords.size}건):\n$keywordList"
+                )
+            }
         }
     }
 
@@ -899,6 +921,46 @@ class ChatViewModel @Inject constructor(
                             message = "ID $expenseId 항목을 찾을 수 없습니다."
                         )
                     }
+                }
+            }
+
+            ActionType.ADD_SMS_EXCLUSION -> {
+                val keyword = action.searchKeyword
+                if (keyword.isNullOrBlank()) {
+                    ActionResult(
+                        actionType = ActionType.ADD_SMS_EXCLUSION,
+                        success = false,
+                        message = "추가할 제외 키워드가 필요합니다."
+                    )
+                } else {
+                    val added = smsExclusionRepository.addKeyword(keyword, source = "chat")
+                    ActionResult(
+                        actionType = ActionType.ADD_SMS_EXCLUSION,
+                        success = added,
+                        message = if (added) "\"$keyword\" 키워드를 SMS 제외 목록에 추가했습니다. 다음 동기화부터 적용됩니다."
+                        else "\"$keyword\" 키워드가 이미 존재합니다.",
+                        affectedCount = if (added) 1 else 0
+                    )
+                }
+            }
+
+            ActionType.REMOVE_SMS_EXCLUSION -> {
+                val keyword = action.searchKeyword
+                if (keyword.isNullOrBlank()) {
+                    ActionResult(
+                        actionType = ActionType.REMOVE_SMS_EXCLUSION,
+                        success = false,
+                        message = "삭제할 제외 키워드가 필요합니다."
+                    )
+                } else {
+                    val deleted = smsExclusionRepository.removeKeyword(keyword)
+                    ActionResult(
+                        actionType = ActionType.REMOVE_SMS_EXCLUSION,
+                        success = deleted > 0,
+                        message = if (deleted > 0) "\"$keyword\" 키워드를 SMS 제외 목록에서 삭제했습니다."
+                        else "\"$keyword\" 키워드를 찾을 수 없거나 기본 키워드라 삭제할 수 없습니다.",
+                        affectedCount = deleted
+                    )
                 }
             }
         }

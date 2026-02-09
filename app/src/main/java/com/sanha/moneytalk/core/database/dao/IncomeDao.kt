@@ -42,6 +42,10 @@ interface IncomeDao {
     @Query("SELECT * FROM incomes WHERE smsId = :smsId LIMIT 1")
     suspend fun getIncomeBySmsId(smsId: String): IncomeEntity?
 
+    /** SMS ID 존재 여부 확인 (전체 행 로드 대신 EXISTS로 효율적 확인) */
+    @Query("SELECT EXISTS(SELECT 1 FROM incomes WHERE smsId = :smsId)")
+    suspend fun existsBySmsId(smsId: String): Boolean
+
     @Query("SELECT smsId FROM incomes WHERE smsId IS NOT NULL")
     suspend fun getAllSmsIds(): List<String>
 

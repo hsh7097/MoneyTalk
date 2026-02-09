@@ -53,7 +53,9 @@ data class SettingsUiState(
     val classifyProgressCurrent: Int = 0,
     val classifyProgressTotal: Int = 0,
     // 내 카드 관리
-    val ownedCards: List<com.sanha.moneytalk.core.database.entity.OwnedCardEntity> = emptyList()
+    val ownedCards: List<com.sanha.moneytalk.core.database.entity.OwnedCardEntity> = emptyList(),
+    // SMS 제외 키워드 관리
+    val exclusionKeywords: List<com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity> = emptyList()
 )
 
 @HiltViewModel
@@ -70,6 +72,7 @@ class SettingsViewModel @Inject constructor(
     private val budgetDao: BudgetDao,
     private val dataRefreshEvent: DataRefreshEvent,
     private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
+    private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
     private val snackbarBus: AppSnackbarBus
 ) : ViewModel() {
 
@@ -85,6 +88,7 @@ class SettingsViewModel @Inject constructor(
         loadFilterOptions()
         loadUnclassifiedCount()
         loadOwnedCards()
+        loadExclusionKeywords()
     }
 
     private fun loadSettings() {
@@ -149,9 +153,11 @@ class SettingsViewModel @Inject constructor(
 
     fun saveApiKey(key: String) {
         viewModelScope.launch {
+            Log.e("sanha", "SettingsViewModel[saveApiKey] : API 키 저장 시작 (길이=${key.length})")
             _uiState.update { it.copy(isLoading = true) }
             try {
                 withContext(Dispatchers.IO) { geminiRepository.setApiKey(key) }
+                Log.e("sanha", "SettingsViewModel[saveApiKey] : API 키 저장 완료 → 백그라운드 재분류 트리거")
                 snackbarBus.show("Gemini API 키가 저장되었습니다")
                 _uiState.update {
                     it.copy(
@@ -749,14 +755,17 @@ class SettingsViewModel @Inject constructor(
      */
     fun classifyUnclassifiedExpenses() {
         viewModelScope.launch {
+            Log.e("sanha", "SettingsViewModel[classifyUnclassifiedExpenses] : 수동 분류 시작 (hasApiKey=${_uiState.value.hasApiKey}, unclassified=${_uiState.value.unclassifiedCount})")
             // API 키 확인
             if (!_uiState.value.hasApiKey) {
+                Log.e("sanha", "SettingsViewModel[classifyUnclassifiedExpenses] : API 키 없음 → 중단")
                 snackbarBus.show("API 키를 먼저 설정해주세요")
                 return@launch
             }
 
             // 미정리 항목 확인
             if (_uiState.value.unclassifiedCount == 0) {
+                Log.e("sanha", "SettingsViewModel[classifyUnclassifiedExpenses] : 미분류 0건 → 중단")
                 snackbarBus.show("정리할 항목이 없습니다")
                 return@launch
             }
@@ -772,7 +781,7 @@ class SettingsViewModel @Inject constructor(
             }
             try {
                 val count = withContext(Dispatchers.IO) {
-                    categoryClassifierService.classifyUnclassifiedExpenses { step, current, total ->
+                    categoryClassifierService.classifyUnclassifiedExpenses(onStepProgress = { step, current, total ->
                         _uiState.update {
                             val progressText = if (total > 0) "$step ($current/$total)" else step
                             it.copy(
@@ -781,7 +790,7 @@ class SettingsViewModel @Inject constructor(
                                 classifyProgressTotal = if (total > 0) total else it.classifyProgressTotal
                             )
                         }
-                    }
+                    })
                 }
                 loadUnclassifiedCount()
                 snackbarBus.show(
@@ -853,22 +862,96 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    // ========== SMS 제외 키워드 관리 ==========
+
+    /**
+     * 제외 키워드 목록 로드
+     */
+    private fun loadExclusionKeywords() {
+        viewModelScope.launch {
+            try {
+                val keywords = withContext(Dispatchers.IO) {
+                    smsExclusionRepository.getAllKeywords()
+                }
+                _uiState.update { it.copy(exclusionKeywords = keywords) }
+            } catch (e: Exception) {
+                // 무시
+            }
+        }
+    }
+
+    /**
+     * 제외 키워드 추가
+     */
+    fun addExclusionKeyword(keyword: String) {
+        viewModelScope.launch {
+            try {
+                val added = withContext(Dispatchers.IO) {
+                    smsExclusionRepository.addKeyword(keyword, "user")
+                }
+                if (added) {
+                    loadExclusionKeywords()
+                    snackbarBus.show("'${keyword}' 제외 키워드가 추가되었습니다")
+                } else {
+                    snackbarBus.show("키워드를 추가할 수 없습니다")
+                }
+            } catch (e: Exception) {
+                snackbarBus.show("추가 실패: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * 제외 키워드 삭제 (default 소스는 삭제 불가)
+     */
+    fun removeExclusionKeyword(keyword: String) {
+        viewModelScope.launch {
+            try {
+                val deleted = withContext(Dispatchers.IO) {
+                    smsExclusionRepository.removeKeyword(keyword)
+                }
+                if (deleted > 0) {
+                    loadExclusionKeywords()
+                    snackbarBus.show("'${keyword}' 제외 키워드가 삭제되었습니다")
+                } else {
+                    snackbarBus.show("기본 키워드는 삭제할 수 없습니다")
+                }
+            } catch (e: Exception) {
+                snackbarBus.show("삭제 실패: ${e.message}")
+            }
+        }
+    }
+
     private fun launchBackgroundReclassification() {
+        Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : === 백그라운드 재분류 시작 ===")
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 var totalReclassified = 0
+
+                // Step 1: 저신뢰도 임베딩 재분류
+                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : Step 1 - 저신뢰도 항목 재분류 시작")
                 val reclassifiedCount = categoryClassifierService.reclassifyLowConfidenceItems()
                 totalReclassified += reclassifiedCount
+                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : Step 1 완료 - ${reclassifiedCount}건 재분류")
+
+                // Step 2: 미분류 지출 분류
+                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : Step 2 - 미분류 지출 분류 시작")
                 val classifiedCount = categoryClassifierService.classifyUnclassifiedExpenses()
                 totalReclassified += classifiedCount
+                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : Step 2 완료 - ${classifiedCount}건 분류")
+
+                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : === 총 ${totalReclassified}건 처리 완료 ===")
                 if (totalReclassified > 0) {
                     withContext(Dispatchers.Main) {
                         loadUnclassifiedCount()
                         snackbarBus.show("${totalReclassified}건의 카테고리가 정리되었습니다")
                         dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
                     }
+                } else {
+                    Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : 재분류 대상 없음 (0건)")
                 }
             } catch (e: Exception) {
+                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : 실패: ${e.message}", e)
                 Log.e(TAG, "백그라운드 재분류 실패: ${e.message}")
             }
         }

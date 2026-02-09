@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(claude config set:*)",
+      "Bash(claude config:*)",
+      "Bash(ls:*)",
+      "Bash(./gradlew assembleDebug:*)",
+      "WebFetch(domain:github.com)"
+    ]
+  }
+}

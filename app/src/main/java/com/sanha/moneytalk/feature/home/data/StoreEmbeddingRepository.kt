@@ -7,6 +7,7 @@ import com.sanha.moneytalk.core.similarity.CategoryPropagationPolicy
 import com.sanha.moneytalk.core.similarity.StoreNameSimilarityPolicy
 import com.sanha.moneytalk.core.util.SmsEmbeddingService
 import com.sanha.moneytalk.core.util.VectorSearchEngine
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,6 +45,10 @@ class StoreEmbeddingRepository @Inject constructor(
 
     /** 인메모리 캐시 (전체 임베딩) */
     private var cachedEmbeddings: List<StoreEmbeddingEntity>? = null
+
+    /** 현재 임베딩 생성 중인 가게명 (동시 중복 요청 방지) */
+    private val inFlightStoreNames: MutableSet<String> =
+        ConcurrentHashMap.newKeySet()
 
     /**
      * 캐시된 전체 임베딩 목록 조회
@@ -204,6 +209,12 @@ class StoreEmbeddingRepository @Inject constructor(
         source: String = "gemini",
         confidence: Float = 0.8f
     ) {
+        // inFlight 중복 방지
+        if (!inFlightStoreNames.add(storeName)) {
+            Log.d(TAG, "임베딩 생성 중복 스킵 (inFlight): $storeName")
+            return
+        }
+
         try {
             val embedding = embeddingService.generateEmbedding(storeName)
             if (embedding == null) {
@@ -224,6 +235,8 @@ class StoreEmbeddingRepository @Inject constructor(
             Log.d(TAG, "임베딩 저장: $storeName → $category (source=$source)")
         } catch (e: Exception) {
             Log.e(TAG, "임베딩 저장 실패: ${e.message}", e)
+        } finally {
+            inFlightStoreNames.remove(storeName)
         }
     }
 
@@ -243,32 +256,47 @@ class StoreEmbeddingRepository @Inject constructor(
         if (storeCategories.isEmpty()) return
 
         try {
-            val storeNames = storeCategories.keys.toList()
-            val allEntities = mutableListOf<StoreEmbeddingEntity>()
-
-            // 100건씩 청킹 (batchEmbedContents 최대 100)
-            for (chunk in storeNames.chunked(100)) {
-                val embeddings = embeddingService.generateEmbeddings(chunk)
-
-                val entities = chunk.mapIndexedNotNull { index, storeName ->
-                    val embedding = embeddings.getOrNull(index) ?: return@mapIndexedNotNull null
-                    val category = storeCategories[storeName] ?: return@mapIndexedNotNull null
-
-                    StoreEmbeddingEntity(
-                        storeName = storeName,
-                        category = category,
-                        embedding = embedding,
-                        source = source,
-                        confidence = if (source == "user") 1.0f else 0.8f
-                    )
-                }
-                allEntities.addAll(entities)
+            // inFlight 중복 제거: 이미 임베딩 생성 중인 가게명 스킵
+            val storeNames = storeCategories.keys.filter { inFlightStoreNames.add(it) }
+            if (storeNames.isEmpty()) {
+                Log.d(TAG, "배치 임베딩: 모두 inFlight 중복 → 스킵")
+                return
+            }
+            val skipped = storeCategories.size - storeNames.size
+            if (skipped > 0) {
+                Log.d(TAG, "배치 임베딩: ${skipped}건 inFlight 중복 제거")
             }
 
-            if (allEntities.isNotEmpty()) {
-                storeEmbeddingDao.insertAll(allEntities)
-                invalidateCache()
-                Log.d(TAG, "배치 임베딩 저장: ${allEntities.size}건 (source=$source)")
+            try {
+                val allEntities = mutableListOf<StoreEmbeddingEntity>()
+
+                // 100건씩 청킹 (batchEmbedContents 최대 100)
+                for (chunk in storeNames.chunked(100)) {
+                    val embeddings = embeddingService.generateEmbeddings(chunk)
+
+                    val entities = chunk.mapIndexedNotNull { index, storeName ->
+                        val embedding = embeddings.getOrNull(index) ?: return@mapIndexedNotNull null
+                        val category = storeCategories[storeName] ?: return@mapIndexedNotNull null
+
+                        StoreEmbeddingEntity(
+                            storeName = storeName,
+                            category = category,
+                            embedding = embedding,
+                            source = source,
+                            confidence = if (source == "user") 1.0f else 0.8f
+                        )
+                    }
+                    allEntities.addAll(entities)
+                }
+
+                if (allEntities.isNotEmpty()) {
+                    storeEmbeddingDao.insertAll(allEntities)
+                    invalidateCache()
+                    Log.d(TAG, "배치 임베딩 저장: ${allEntities.size}건 (source=$source)")
+                }
+            } finally {
+                // 완료 후 inFlight에서 제거
+                storeNames.forEach { inFlightStoreNames.remove(it) }
             }
         } catch (e: Exception) {
             Log.e(TAG, "배치 임베딩 저장 실패: ${e.message}", e)
@@ -374,6 +402,27 @@ class StoreEmbeddingRepository @Inject constructor(
     }
 
     /**
+     * 카테고리 UPSERT (존재하면 카테고리만 업데이트, 없으면 임베딩 생성+저장)
+     * hasEmbedding() + updateCategory()/saveStoreEmbedding() 2~3회 DB 접근을
+     * 1회 DB 접근 + 필요시 임베딩 API 1회로 줄입니다.
+     */
+    suspend fun upsertCategory(storeName: String, newCategory: String, source: String = "user") {
+        try {
+            val existing = storeEmbeddingDao.getByStoreName(storeName)
+            if (existing != null) {
+                // 기존 임베딩 존재: 카테고리만 업데이트 (임베딩 API 호출 불필요)
+                storeEmbeddingDao.updateCategory(storeName, newCategory, source)
+                invalidateCache()
+            } else {
+                // 새 가게명: 임베딩 생성 + 저장
+                saveStoreEmbedding(storeName, newCategory, source, 1.0f)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "UPSERT 실패: ${e.message}", e)
+        }
+    }
+
+    /**
      * 전체 임베딩 수 조회
      */
     suspend fun getEmbeddingCount(): Int {
@@ -384,7 +433,10 @@ class StoreEmbeddingRepository @Inject constructor(
      * 저신뢰도 임베딩 조회 (재분류 대상)
      */
     suspend fun getLowConfidenceEmbeddings(threshold: Float = 0.95f): List<StoreEmbeddingEntity> {
-        return storeEmbeddingDao.getLowConfidenceEmbeddings(threshold)
+        Log.e("sanha", "StoreEmbeddingRepository[getLowConfidenceEmbeddings] : threshold=$threshold 조회 시작")
+        val result = storeEmbeddingDao.getLowConfidenceEmbeddings(threshold)
+        Log.e("sanha", "StoreEmbeddingRepository[getLowConfidenceEmbeddings] : ${result.size}건 발견")
+        return result
     }
 
 }
