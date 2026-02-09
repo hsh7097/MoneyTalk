@@ -8,6 +8,7 @@ import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
+import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
@@ -89,7 +90,9 @@ class HistoryViewModel @Inject constructor(
     private val incomeRepository: IncomeRepository,
     private val settingsDataStore: SettingsDataStore,
     private val categoryClassifierService: CategoryClassifierService,
-    private val snackbarBus: AppSnackbarBus
+    private val dataRefreshEvent: DataRefreshEvent,
+    private val snackbarBus: AppSnackbarBus,
+    private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HistoryUiState())
@@ -101,6 +104,33 @@ class HistoryViewModel @Inject constructor(
     init {
         loadSettings()
         loadCardNames()
+        observeDataRefreshEvents()
+    }
+
+    /** 내 카드 변경 등 전역 이벤트 감지 */
+    private fun observeDataRefreshEvents() {
+        viewModelScope.launch {
+            dataRefreshEvent.refreshEvent.collect { event ->
+                when (event) {
+                    DataRefreshEvent.RefreshType.OWNED_CARD_UPDATED,
+                    DataRefreshEvent.RefreshType.CATEGORY_UPDATED -> {
+                        loadExpenses()
+                    }
+                    DataRefreshEvent.RefreshType.ALL_DATA_DELETED -> {
+                        _uiState.update {
+                            it.copy(
+                                monthlyTotal = 0,
+                                expenses = emptyList(),
+                                dailyTotals = emptyMap(),
+                                incomes = emptyList(),
+                                monthlyIncomeTotal = 0
+                            )
+                        }
+                        loadExpenses()
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -147,6 +177,11 @@ class HistoryViewModel @Inject constructor(
                 state.monthStartDay
             )
 
+            // 제외 키워드 로드 (필터링용)
+            val exclusionKeywords = withContext(Dispatchers.IO) {
+                smsExclusionRepository.getAllKeywordStrings()
+            }
+
             // 월별 총액 및 일별 총액 로드
             try {
                 val (monthlyTotal, dailyTotalsMap, incomeTotal) = withContext(Dispatchers.IO) {
@@ -162,7 +197,7 @@ class HistoryViewModel @Inject constructor(
             }
 
             // 수입 항상 로드 (목록 모드에서도 수입 표시)
-            loadIncomes()
+            loadIncomes(exclusionKeywords)
 
             // 필터링된 지출 내역 로드 (Flow는 Room이 자동으로 IO에서 실행)
             // 대 카테고리 선택 시 소 카테고리도 포함 (예: "식비" → "식비" + "배달")
@@ -194,7 +229,16 @@ class HistoryViewModel @Inject constructor(
                         it.copy(isLoading = false, errorMessage = e.message)
                     }
                 }
-                .collect { expenses ->
+                .collect { allExpenses ->
+                    // 제외 키워드 필터 적용
+                    val expenses = if (exclusionKeywords.isEmpty()) {
+                        allExpenses
+                    } else {
+                        allExpenses.filter { expense ->
+                            val smsLower = expense.originalSms?.lowercase()
+                            smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                        }
+                    }
                     val sortedExpenses = sortExpenses(expenses, _uiState.value.sortOrder)
                     _uiState.update {
                         it.copy(isLoading = false, expenses = sortedExpenses)
@@ -457,7 +501,7 @@ class HistoryViewModel @Inject constructor(
     }
 
     /** 수입 내역 로드 */
-    private fun loadIncomes() {
+    private fun loadIncomes(exclusionKeywords: Set<String> = emptySet()) {
         viewModelScope.launch {
             val state = _uiState.value
             val (startTime, endTime) = DateUtils.getCustomMonthPeriod(
@@ -468,7 +512,16 @@ class HistoryViewModel @Inject constructor(
 
             try {
                 incomeRepository.getIncomesByDateRange(startTime, endTime)
-                    .collect { incomes ->
+                    .collect { allIncomes ->
+                        // 제외 키워드 필터 적용
+                        val incomes = if (exclusionKeywords.isEmpty()) {
+                            allIncomes
+                        } else {
+                            allIncomes.filter { income ->
+                                val smsLower = income.originalSms?.lowercase()
+                                smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                            }
+                        }
                         val total = incomes.sumOf { it.amount }
                         _uiState.update {
                             it.copy(
@@ -499,16 +552,22 @@ class HistoryViewModel @Inject constructor(
                 val total = expenseRepository.getTotalExpenseByDateRange(startTime, endTime)
                 val dailySums = expenseRepository.getDailyTotals(startTime, endTime)
                 val map = dailySums.associate { it.date to it.total }
+                // 제외 키워드 로드
+                val exclusionKeywords = smsExclusionRepository.getAllKeywordStrings()
                 // 대 카테고리 선택 시 소 카테고리도 포함
                 val syncCategoryFilter = state.selectedCategory?.let { catName ->
                     Category.fromDisplayName(catName).displayNamesIncludingSub
                 }
                 val expenses = expenseRepository.getExpensesByDateRangeOnce(startTime, endTime)
                     .let { list ->
-                        // 필터 적용
+                        // 카드/카테고리 필터 + 제외 키워드 필터 적용
                         list.filter { expense ->
                             (state.selectedCardName == null || expense.cardName == state.selectedCardName) &&
-                            (syncCategoryFilter == null || expense.category in syncCategoryFilter)
+                            (syncCategoryFilter == null || expense.category in syncCategoryFilter) &&
+                            (exclusionKeywords.isEmpty() || run {
+                                val smsLower = expense.originalSms?.lowercase()
+                                smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                            })
                         }
                     }
                 // 정렬 적용

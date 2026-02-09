@@ -89,7 +89,6 @@ fun HomeScreen(
                         periodLabel = uiState.periodLabel,
                         income = uiState.monthlyIncome,
                         expense = uiState.monthlyExpense,
-                        remaining = uiState.remainingBudget,
                         onPreviousMonth = { viewModel.previousMonth() },
                         onNextMonth = { viewModel.nextMonth() },
                         onIncrementalSync = {
@@ -389,7 +388,6 @@ fun MonthlyOverviewSection(
     periodLabel: String,
     income: Int,
     expense: Int,
-    remaining: Int,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onIncrementalSync: () -> Unit,
@@ -398,7 +396,6 @@ fun MonthlyOverviewSection(
     isSyncing: Boolean
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
-    val progress = if (income > 0) expense.toFloat() / income.toFloat() else 0f
     var showSyncMenu by remember { mutableStateOf(false) }
 
     Column(
@@ -535,23 +532,7 @@ fun MonthlyOverviewSection(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        LinearProgressIndicator(
-            progress = { progress.coerceIn(0f, 1f) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp),
-            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
-        )
-
         Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = stringResource(R.string.home_remaining_budget, numberFormat.format(remaining)),
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (remaining >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-        )
     }
 }
 

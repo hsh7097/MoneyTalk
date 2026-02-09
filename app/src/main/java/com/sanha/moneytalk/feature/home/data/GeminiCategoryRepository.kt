@@ -233,11 +233,11 @@ class GeminiCategoryRepository @Inject constructor(
                         // 지수 백오프 + jitter (1초 → 2초 → 4초, max 30초)
                         val jitter = Random.nextLong(0, 500)
                         val actualDelay = min(currentDelay + jitter, MAX_RETRY_DELAY_MS)
-                        Log.w(TAG, "⚠️ Rate Limit 발생! ${actualDelay}ms 후 재시도 ($attempt/$MAX_RETRIES)")
+                        Log.w(TAG, "⚠️ 429 Rate Limit 발생! (GeminiCategoryRepository.classifyStoreNames 배치 ${batchIndex + 1}/$totalBatches) ${actualDelay}ms 후 재시도 ($attempt/$MAX_RETRIES)")
                         delay(actualDelay)
                         currentDelay *= 2
                     } else {
-                        Log.e(TAG, "최대 재시도 횟수($MAX_RETRIES) 초과")
+                        Log.e(TAG, "❌ 최대 재시도 횟수($MAX_RETRIES) 초과 (GeminiCategoryRepository.classifyStoreNames)")
                     }
                 } else {
                     // Rate Limit이 아닌 다른 에러는 바로 실패 처리
@@ -272,6 +272,8 @@ class GeminiCategoryRepository @Inject constructor(
             "건강" to "의료/건강",
             "병원" to "의료/건강",
             "약국" to "의료/건강",
+            // 보험 (SmsParser의 "보험" 카테고리와 일치)
+            "보험료" to "보험",
             // 문화/여가 관련
             "문화" to "문화/여가",
             "여가" to "문화/여가",

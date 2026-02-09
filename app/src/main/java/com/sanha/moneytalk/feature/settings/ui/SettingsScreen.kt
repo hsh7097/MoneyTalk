@@ -24,7 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -50,7 +52,6 @@ fun SettingsScreen(
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     val coroutineScope = rememberCoroutineScope()
 
-    var showIncomeDialog by remember { mutableStateOf(false) }
     var showApiKeyDialog by remember { mutableStateOf(false) }
     var showMonthStartDayDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
@@ -148,19 +149,9 @@ fun SettingsScreen(
                     )
                 }
 
-                // 수입/예산 관리
+                // 기간 설정
                 item {
                     SettingsSection(title = stringResource(R.string.settings_section_budget)) {
-                        SettingsItem(
-                            icon = Icons.Default.AttachMoney,
-                            title = stringResource(R.string.settings_income_title),
-                            subtitle = if (uiState.monthlyIncome > 0) {
-                                stringResource(R.string.common_won, numberFormat.format(uiState.monthlyIncome))
-                            } else {
-                                stringResource(R.string.settings_income_subtitle_empty)
-                            },
-                            onClick = { showIncomeDialog = true }
-                        )
                         SettingsItem(
                             icon = Icons.Default.CalendarMonth,
                             title = stringResource(R.string.settings_month_start_title),
@@ -170,42 +161,6 @@ fun SettingsScreen(
                                 stringResource(R.string.settings_month_start_custom, uiState.monthStartDay)
                             },
                             onClick = { showMonthStartDayDialog = true }
-                        )
-                        SettingsItem(
-                            icon = Icons.Default.PieChart,
-                            title = stringResource(R.string.settings_category_budget_title),
-                            subtitle = stringResource(R.string.settings_category_budget_subtitle),
-                            onClick = { /* TODO */ }
-                        )
-                    }
-                }
-
-                // 내 카드 관리
-                item {
-                    var showOwnedCardDialog by remember { mutableStateOf(false) }
-                    val ownedCount = uiState.ownedCards.count { it.isOwned }
-                    val totalCount = uiState.ownedCards.size
-
-                    SettingsSection(title = "카드 관리") {
-                        SettingsItem(
-                            icon = Icons.Default.CreditCard,
-                            title = "내 카드 설정",
-                            subtitle = if (totalCount > 0) {
-                                "등록 ${totalCount}개 중 ${ownedCount}개 선택됨"
-                            } else {
-                                "SMS 동기화 후 자동 등록됩니다"
-                            },
-                            onClick = { showOwnedCardDialog = true }
-                        )
-                    }
-
-                    if (showOwnedCardDialog) {
-                        OwnedCardDialog(
-                            cards = uiState.ownedCards,
-                            onDismiss = { showOwnedCardDialog = false },
-                            onToggleOwnership = { cardName, isOwned ->
-                                viewModel.updateCardOwnership(cardName, isOwned)
-                            }
                         )
                     }
                 }
@@ -397,18 +352,6 @@ fun SettingsScreen(
                 }
             }
         }
-    }
-
-    // 수입 설정 다이얼로그
-    if (showIncomeDialog) {
-        IncomeSettingDialog(
-            initialValue = uiState.monthlyIncome,
-            onDismiss = { showIncomeDialog = false },
-            onConfirm = { amount ->
-                viewModel.saveMonthlyIncome(amount)
-                showIncomeDialog = false
-            }
-        )
     }
 
     // API 키 설정 다이얼로그
@@ -986,54 +929,6 @@ fun SettingsItem(
 }
 
 @Composable
-fun IncomeSettingDialog(
-    initialValue: Int = 0,
-    onDismiss: () -> Unit,
-    onConfirm: (Int) -> Unit
-) {
-    var incomeText by remember {
-        mutableStateOf(if (initialValue > 0) initialValue.toString() else "")
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.dialog_income_title)) },
-        text = {
-            Column {
-                Text(
-                    text = stringResource(R.string.dialog_income_message),
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = incomeText,
-                    onValueChange = { incomeText = it.filter { char -> char.isDigit() } },
-                    label = { Text(stringResource(R.string.dialog_income_label)) },
-                    suffix = { Text("원") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    incomeText.toIntOrNull()?.let { onConfirm(it) }
-                },
-                enabled = incomeText.isNotBlank()
-            ) {
-                Text(stringResource(R.string.common_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_cancel))
-            }
-        }
-    )
-}
-
-@Composable
 fun ApiKeySettingDialog(
     currentKeyHint: String = "",
     onDismiss: () -> Unit,
@@ -1117,6 +1012,7 @@ fun MonthStartDayDialog(
                     label = { Text(stringResource(R.string.dialog_month_start_label)) },
                     suffix = { Text("일") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1516,120 +1412,3 @@ private fun ExclusionKeywordItem(
     }
 }
 
-@Composable
-fun OwnedCardDialog(
-    cards: List<com.sanha.moneytalk.core.database.entity.OwnedCardEntity>,
-    onDismiss: () -> Unit,
-    onToggleOwnership: (String, Boolean) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Column {
-                Text("내 카드 설정")
-                Text(
-                    text = "선택된 카드의 지출만 홈 화면에 표시됩니다",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            }
-        },
-        text = {
-            if (cards.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "등록된 카드가 없습니다\nSMS 동기화를 먼저 진행해주세요",
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-            } else {
-                val allSelected = cards.all { it.isOwned }
-
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 400.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    // 전체선택 항목
-                    item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    val newState = !allSelected
-                                    cards.forEach { card ->
-                                        onToggleOwnership(card.cardName, newState)
-                                    }
-                                }
-                                .padding(vertical = 8.dp, horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "전체선택",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Checkbox(
-                                checked = allSelected,
-                                onCheckedChange = { checked ->
-                                    cards.forEach { card ->
-                                        onToggleOwnership(card.cardName, checked)
-                                    }
-                                }
-                            )
-                        }
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 4.dp),
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                        )
-                    }
-
-                    items(cards) { card ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onToggleOwnership(card.cardName, !card.isOwned)
-                                }
-                                .padding(vertical = 8.dp, horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = card.cardName,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = "${card.seenCount}건 사용",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                )
-                            }
-                            Checkbox(
-                                checked = card.isOwned,
-                                onCheckedChange = { checked ->
-                                    onToggleOwnership(card.cardName, checked)
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_close))
-            }
-        }
-    )
-}

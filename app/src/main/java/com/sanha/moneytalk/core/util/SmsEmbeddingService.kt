@@ -160,7 +160,8 @@ class SmsEmbeddingService @Inject constructor(
             val requestBody = mapOf("requests" to requests)
             val jsonBody = gson.toJson(requestBody)
 
-            Log.d(TAG, "배치 임베딩 요청: ${texts.size}개")
+            val overallStartTime = System.currentTimeMillis()
+            Log.d(TAG, "[batchEmbed] 배치 임베딩 요청: ${texts.size}건")
 
             // 429 Rate Limit 재시도 (지수 백오프)
             // Quota 초과("exceeded your current quota")는 재시도 불가 → 즉시 실패
@@ -168,7 +169,7 @@ class SmsEmbeddingService @Inject constructor(
             for (attempt in 0 until MAX_RETRIES) {
                 if (attempt > 0) {
                     val delayMs = INITIAL_RETRY_DELAY_MS * (1L shl (attempt - 1)) // 2s, 4s
-                    Log.w(TAG, "429 재시도 ${attempt}/${MAX_RETRIES - 1}, ${delayMs}ms 대기...")
+                    Log.w(TAG, "[batchEmbed] ⚠️ 429 재시도 ${attempt}/${MAX_RETRIES - 1}, ${delayMs}ms 대기... (SmsEmbeddingService.generateEmbeddings)")
                     kotlinx.coroutines.delay(delayMs)
                 }
 
@@ -185,10 +186,10 @@ class SmsEmbeddingService @Inject constructor(
                     // Quota 초과 vs Rate Limit 구분
                     val isQuotaExceeded = responseBody?.contains("exceeded your current quota") == true
                     if (isQuotaExceeded) {
-                        Log.e(TAG, "임베딩 일일 할당량(Quota) 초과 - 재시도 불가. 플랜/결제 확인 필요")
+                        Log.e(TAG, "[batchEmbed] ❌ 임베딩 일일 할당량(Quota) 초과 - 재시도 불가")
                         return@withContext texts.map { null }
                     }
-                    Log.w(TAG, "배치 임베딩 429 Rate Limit (시도 ${attempt + 1}/$MAX_RETRIES)")
+                    Log.w(TAG, "[batchEmbed] ⚠️ 429 Rate Limit 발생! (SmsEmbeddingService.generateEmbeddings, 시도 ${attempt + 1}/$MAX_RETRIES, ${texts.size}건)")
                     continue // Rate Limit은 재시도
                 }
 
@@ -211,7 +212,8 @@ class SmsEmbeddingService @Inject constructor(
                     values.map { it.asFloat }
                 }
 
-                Log.d(TAG, "배치 임베딩 성공: ${result.size}개")
+                val batchElapsed = System.currentTimeMillis() - overallStartTime
+                Log.d(TAG, "[batchEmbed] 배치 임베딩 성공: ${result.size}건 (${batchElapsed}ms)")
                 return@withContext result
             }
 

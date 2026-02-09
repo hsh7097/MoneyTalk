@@ -39,10 +39,10 @@ class HybridSmsClassifier @Inject constructor(
         private const val BOOTSTRAP_THRESHOLD = 10  // 부트스트랩 모드 임계값
         /** 임베딩 배치 처리 크기 (Google batchEmbedContents 최대값) */
         private const val EMBEDDING_BATCH_SIZE = 100
-        /** 배치 간 Rate Limit 방지 딜레이 (밀리초) */
-        private const val RATE_LIMIT_DELAY_MS = 100L
-        /** LLM 호출 간 Rate Limit 방지 딜레이 (밀리초) */
-        private const val LLM_RATE_LIMIT_DELAY_MS = 100L
+        /** 배치 임베딩 간 최소 딜레이 (밀리초) — 429 미발생 시 최소값 유지 */
+        private const val RATE_LIMIT_DELAY_MS = 50L
+        /** LLM 호출 간 최소 딜레이 (밀리초) — 429 미발생 시 최소값 유지 */
+        private const val LLM_RATE_LIMIT_DELAY_MS = 50L
         /** 오래된 패턴 판단 기준 (30일, 밀리초) */
         private const val STALE_PATTERN_THRESHOLD_MS = 30L * 24 * 60 * 60 * 1000
 
@@ -73,6 +73,12 @@ class HybridSmsClassifier @Inject constructor(
             // 기타 비결제
             "설문", "survey", "투표"
         )
+
+        /** NON_PAYMENT_KEYWORDS를 미리 lowercase로 캐시 (매번 .lowercase() 호출 방지) */
+        private val NON_PAYMENT_KEYWORDS_LOWER = NON_PAYMENT_KEYWORDS.map { it.lowercase() }
+
+        /** 금액+원 패턴 사전 컴파일 (hasPotentialPaymentIndicators에서 매 호출마다 재생성 방지) */
+        private val AMOUNT_WON_PATTERN = Regex("""[\d,]+원""")
     }
 
     /**
@@ -164,12 +170,14 @@ class HybridSmsClassifier @Inject constructor(
         val batchSize = EMBEDDING_BATCH_SIZE
         val batches = templates.chunked(batchSize)
         for ((batchIdx, batch) in batches.withIndex()) {
-            Log.e(TAG, "HybridSmsClassifier[batchClassify] : $batchIdx 배치 시작")
+            val startTime = System.currentTimeMillis()
+            Log.d(TAG, "[batchClassify] 임베딩 배치 ${batchIdx + 1}/${batches.size} 시작 (${batch.size}건)")
             val embeddings = embeddingService.generateEmbeddings(batch)
-            Log.e(TAG, "HybridSmsClassifier[batchClassify] : $batchIdx 배치 종료")
+            val elapsed = System.currentTimeMillis() - startTime
+            val successCount = embeddings.count { it != null }
+            Log.d(TAG, "[batchClassify] 임베딩 배치 ${batchIdx + 1}/${batches.size} 완료 (${elapsed}ms, 성공: ${successCount}/${batch.size})")
             allEmbeddings.addAll(embeddings)
 
-            // Rate Limit 방지: batchEmbedContents 연속 호출 시 429 에러 방지용 딜레이
             if (batchIdx < batches.size - 1) {
                 kotlinx.coroutines.delay(RATE_LIMIT_DELAY_MS)
             }
@@ -266,14 +274,17 @@ class HybridSmsClassifier @Inject constructor(
 
         // ===== Step 5: 결제 가능성 있는 미매칭 SMS에 LLM 호출 =====
         if (llmCandidates.isNotEmpty()) {
-            Log.d(TAG, "배치 LLM 후보: ${llmCandidates.size}건")
-            for (idx in llmCandidates) {
+            Log.d(TAG, "[batchClassify] LLM 후보: ${llmCandidates.size}건")
+            for ((llmIdx, idx) in llmCandidates.withIndex()) {
                 val (body, timestamp, address) = smsList[idx]
+                val startTime = System.currentTimeMillis()
+                Log.d(TAG, "[batchClassify] LLM 호출 ${llmIdx + 1}/${llmCandidates.size}: ${body.take(40)}...")
                 val llmResult = classifyWithLlm(body, timestamp, address)
+                val elapsed = System.currentTimeMillis() - startTime
+                Log.d(TAG, "[batchClassify] LLM 완료 ${llmIdx + 1}/${llmCandidates.size} (${elapsed}ms): isPayment=${llmResult?.isPayment}")
                 if (llmResult != null) {
                     results[idx] = llmResult
                 }
-                // Rate Limit 방지: Gemini LLM 연속 호출 시 429 에러 방지용 딜레이
                 kotlinx.coroutines.delay(LLM_RATE_LIMIT_DELAY_MS)
             }
         }
@@ -326,15 +337,19 @@ class HybridSmsClassifier @Inject constructor(
         val chunks = templatedItems.chunked(EMBEDDING_BATCH_SIZE)
         var learnedCount = 0
 
-        // 순차 처리 + 배치 간 딜레이 (429 Rate Limit 방지)
+        // 순차 처리 + 배치 간 최소 딜레이
         for ((chunkIdx, chunk) in chunks.withIndex()) {
+            val startTime = System.currentTimeMillis()
+            Log.d(TAG, "[batchLearn] 학습 임베딩 배치 ${chunkIdx + 1}/${chunks.size} 시작 (${chunk.size}건)")
             val patterns = processChunk(chunk)
+            val elapsed = System.currentTimeMillis() - startTime
+            Log.d(TAG, "[batchLearn] 학습 임베딩 배치 ${chunkIdx + 1}/${chunks.size} 완료 (${elapsed}ms, 패턴: ${patterns.size}건)")
             if (patterns.isNotEmpty()) {
                 smsPatternDao.insertAll(patterns)
                 learnedCount += patterns.size
             }
 
-            // 배치 간 딜레이 (마지막 chunk 제외)
+            // 배치 간 최소 딜레이 (마지막 chunk 제외)
             if (chunkIdx < chunks.size - 1) {
                 kotlinx.coroutines.delay(RATE_LIMIT_DELAY_MS)
             }
@@ -671,8 +686,8 @@ class HybridSmsClassifier @Inject constructor(
      */
     private fun isObviouslyNonPayment(smsBody: String): Boolean {
         val lowerBody = smsBody.lowercase()
-        return NON_PAYMENT_KEYWORDS.any { keyword ->
-            lowerBody.contains(keyword.lowercase())
+        return NON_PAYMENT_KEYWORDS_LOWER.any { keyword ->
+            lowerBody.contains(keyword)
         }
     }
 
@@ -688,8 +703,8 @@ class HybridSmsClassifier @Inject constructor(
     private fun hasPotentialPaymentIndicators(smsBody: String): Boolean {
         var indicatorCount = 0
 
-        // 1. 금액 패턴 (숫자+원)
-        if (smsBody.contains(Regex("""[\d,]+원"""))) indicatorCount++
+        // 1. 금액 패턴 (숫자+원) — 사전 컴파일된 Regex 사용
+        if (AMOUNT_WON_PATTERN.containsMatchIn(smsBody)) indicatorCount++
 
         // 2. 결제 키워드 ("누적"은 카드사 누적 사용금액 표시로 결제 SMS 가능성 높음)
         val paymentKeywords = listOf("승인", "결제", "출금", "사용", "이용", "체크카드", "신용카드", "누적")

@@ -33,7 +33,6 @@ import javax.inject.Inject
 data class SettingsUiState(
     val apiKey: String = "",
     val hasApiKey: Boolean = false,
-    val monthlyIncome: Int = 0,
     val monthStartDay: Int = 1,
     val isLoading: Boolean = false,
     val backupContent: String? = null,
@@ -105,13 +104,6 @@ class SettingsViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            // 월 수입 로드
-            settingsDataStore.monthlyIncomeFlow.collect { income ->
-                _uiState.update { it.copy(monthlyIncome = income) }
-            }
-        }
-
-        viewModelScope.launch {
             // 월 시작일 로드
             settingsDataStore.monthStartDayFlow.collect { day ->
                 _uiState.update { it.copy(monthStartDay = day) }
@@ -167,29 +159,6 @@ class SettingsViewModel @Inject constructor(
                     )
                 }
                 launchBackgroundReclassification()
-            } catch (e: Exception) {
-                snackbarBus.show("저장 실패: ${e.message}")
-                _uiState.update {
-                    it.copy(
-                        isLoading = false
-                    )
-                }
-            }
-        }
-    }
-
-    fun saveMonthlyIncome(income: Int) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            try {
-                withContext(Dispatchers.IO) { settingsDataStore.saveMonthlyIncome(income) }
-                snackbarBus.show("월 수입이 저장되었습니다")
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        monthlyIncome = income
-                    )
-                }
             } catch (e: Exception) {
                 snackbarBus.show("저장 실패: ${e.message}")
                 _uiState.update {
@@ -264,11 +233,12 @@ class SettingsViewModel @Inject constructor(
                         incomes = emptyList()
                     }
 
+                    val savedMonthlyIncome = settingsDataStore.getMonthlyIncome()
                     when (state.exportFormat) {
                         ExportFormat.JSON -> DataBackupManager.createBackupJson(
                             expenses = expenses,
                             incomes = incomes,
-                            monthlyIncome = state.monthlyIncome,
+                            monthlyIncome = savedMonthlyIncome,
                             monthStartDay = state.monthStartDay
                         )
                         ExportFormat.CSV -> DataBackupManager.createCombinedCsv(expenses, incomes)
@@ -391,7 +361,6 @@ class SettingsViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     isLoading = false,
-                    monthlyIncome = backupData.settings.monthlyIncome,
                     monthStartDay = backupData.settings.monthStartDay
                 )
             }
@@ -445,7 +414,6 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        monthlyIncome = 0,
                         monthStartDay = 1,
                         unclassifiedCount = 0,
                     )
@@ -704,6 +672,7 @@ class SettingsViewModel @Inject constructor(
                 withContext(Dispatchers.IO) {
                     ownedCardRepository.updateOwnership(cardName, isOwned)
                 }
+                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.OWNED_CARD_UPDATED)
             } catch (e: Exception) {
                 snackbarBus.show("카드 설정 실패: ${e.message}")
             }
@@ -892,6 +861,8 @@ class SettingsViewModel @Inject constructor(
                 if (added) {
                     loadExclusionKeywords()
                     snackbarBus.show("'${keyword}' 제외 키워드가 추가되었습니다")
+                    // Home/History에서 해당 키워드 포함 데이터를 필터링하도록 새로고침
+                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
                 } else {
                     snackbarBus.show("키워드를 추가할 수 없습니다")
                 }
@@ -913,6 +884,8 @@ class SettingsViewModel @Inject constructor(
                 if (deleted > 0) {
                     loadExclusionKeywords()
                     snackbarBus.show("'${keyword}' 제외 키워드가 삭제되었습니다")
+                    // 필터 해제로 이전에 숨겨졌던 데이터가 다시 표시되도록 새로고침
+                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
                 } else {
                     snackbarBus.show("기본 키워드는 삭제할 수 없습니다")
                 }

@@ -24,6 +24,9 @@ class SmsExclusionRepository @Inject constructor(
     /** 인메모리 캐시 (사용자/채팅 키워드만, lowercase) */
     private var cachedUserKeywords: Set<String>? = null
 
+    /** 인메모리 캐시 (전체 키워드, lowercase) — 조회 필터링용 */
+    private var cachedAllKeywords: Set<String>? = null
+
     /**
      * 사용자/채팅 키워드 조회 (캐시 사용)
      * SmsParser.setUserExcludeKeywords()에 전달할 키워드 Set
@@ -31,6 +34,16 @@ class SmsExclusionRepository @Inject constructor(
     suspend fun getUserKeywords(): Set<String> {
         return cachedUserKeywords ?: dao.getUserKeywords().toSet().also {
             cachedUserKeywords = it
+        }
+    }
+
+    /**
+     * 전체 키워드 문자열 조회 (캐시 사용)
+     * Home/History에서 기존 데이터 필터링 시 사용
+     */
+    suspend fun getAllKeywordStrings(): Set<String> {
+        return cachedAllKeywords ?: dao.getAllKeywords().toSet().also {
+            cachedAllKeywords = it
         }
     }
 
@@ -81,5 +94,6 @@ class SmsExclusionRepository @Inject constructor(
     /** 캐시 무효화 */
     private fun invalidateCache() {
         cachedUserKeywords = null
+        cachedAllKeywords = null
     }
 }

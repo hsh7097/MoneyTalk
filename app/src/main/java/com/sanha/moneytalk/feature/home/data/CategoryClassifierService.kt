@@ -220,19 +220,31 @@ class CategoryClassifierService @Inject constructor(
 
     /**
      * 인메모리 캐시 기반 카테고리 조회 (DB/API 호출 0회)
+     *
+     * 부분 매칭 최적화: 전체 캐시 순회(O(n)) 대신 짧은 쪽이 긴 쪽에 포함되는지만 확인.
+     * 부분 매칭 성공 시 캐시에 정확 매핑도 추가하여 다음 조회 시 O(1)에 반환.
      */
     private fun getCategoryFromCache(
         storeName: String,
         originalSms: String,
         cache: MutableMap<String, String>
     ): String {
-        // 1. 캐시에서 정확 매칭
+        // 1. 캐시에서 정확 매칭 (O(1) HashMap lookup)
         cache[storeName]?.let { return it }
 
-        // 2. 캐시에서 부분 매칭
+        // 2. 캐시에서 부분 매칭 (짧은 가게명이 긴 가게명에 포함되는 케이스)
         for ((cachedName, category) in cache) {
-            if (storeName.contains(cachedName) || cachedName.contains(storeName)) {
-                return category
+            if (storeName.length >= cachedName.length) {
+                if (storeName.contains(cachedName)) {
+                    // 부분 매칭 성공 → 캐시에 정확 매핑 추가 (다음 조회 O(1))
+                    cache[storeName] = category
+                    return category
+                }
+            } else {
+                if (cachedName.contains(storeName)) {
+                    cache[storeName] = category
+                    return category
+                }
             }
         }
 

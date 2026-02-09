@@ -38,7 +38,64 @@ data class DataQuery(
     val searchKeyword: String? = null,  // 검색 키워드
 
     @SerializedName("limit")
-    val limit: Int? = null          // 결과 개수 제한
+    val limit: Int? = null,         // 결과 개수 제한
+
+    // === ANALYTICS 전용 필드 ===
+
+    /** 필터 조건 배열 (모두 AND 결합) */
+    @SerializedName("filters")
+    val filters: List<AnalyticsFilter>? = null,
+
+    /** 그룹핑 기준: "category"|"storeName"|"cardName"|"date"|"month"|"dayOfWeek" */
+    @SerializedName("groupBy")
+    val groupBy: String? = null,
+
+    /** 집계 메트릭 배열 */
+    @SerializedName("metrics")
+    val metrics: List<AnalyticsMetric>? = null,
+
+    /** 그룹 결과 상위 N개 */
+    @SerializedName("topN")
+    val topN: Int? = null,
+
+    /** 정렬 방향: "desc"|"asc" */
+    @SerializedName("sort")
+    val sort: String? = null
+)
+
+/**
+ * ANALYTICS 쿼리의 필터 조건
+ * 모든 필터는 AND로 결합됨
+ */
+data class AnalyticsFilter(
+    /** 필터 대상 필드: "category"|"storeName"|"cardName"|"amount"|"memo"|"dayOfWeek" */
+    @SerializedName("field")
+    val field: String,
+
+    /** 비교 연산자: "=="|"!="|">"|">="|"<"|"<="|"contains"|"not_contains"|"in"|"not_in" */
+    @SerializedName("op")
+    val op: String,
+
+    /** 비교 값 (String, Number, 또는 List<String>) */
+    @SerializedName("value")
+    val value: Any? = null,
+
+    /** true이면 하위 카테고리 포함 (예: 식비 → 배달 포함) */
+    @SerializedName("includeSubcategories")
+    val includeSubcategories: Boolean = false
+)
+
+/**
+ * ANALYTICS 쿼리의 집계 메트릭
+ */
+data class AnalyticsMetric(
+    /** 집계 연산: "sum"|"avg"|"count"|"max"|"min" */
+    @SerializedName("op")
+    val op: String,
+
+    /** 집계 대상 필드 (기본: "amount") */
+    @SerializedName("field")
+    val field: String = "amount"
 )
 
 /**
@@ -126,7 +183,10 @@ enum class QueryType {
     DUPLICATE_LIST,             // 중복 지출 항목 리스트
 
     @SerializedName("sms_exclusion_list")
-    SMS_EXCLUSION_LIST          // SMS 제외 키워드 목록
+    SMS_EXCLUSION_LIST,         // SMS 제외 키워드 목록
+
+    @SerializedName("analytics")
+    ANALYTICS                   // 복합 조건 분석 (필터+그룹+집계를 앱에서 계산)
 }
 
 enum class ActionType {

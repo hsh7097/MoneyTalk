@@ -212,6 +212,7 @@ interface ExpenseDao {
     /** 내 카드 기준 카테고리별 합계 */
     @Query("SELECT category, SUM(amount) as total FROM expenses WHERE cardName IN (:ownedCardNames) AND dateTime BETWEEN :startTime AND :endTime GROUP BY category")
     suspend fun getExpenseSumByCategoryOwned(ownedCardNames: List<String>, startTime: Long, endTime: Long): List<CategorySum>
+
 }
 
 data class CategorySum(

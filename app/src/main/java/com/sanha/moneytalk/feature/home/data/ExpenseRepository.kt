@@ -235,4 +235,5 @@ class ExpenseRepository @Inject constructor(
     /** 내 카드 기준 카테고리별 합계 */
     suspend fun getExpenseSumByCategoryOwned(ownedCardNames: List<String>, startTime: Long, endTime: Long): List<CategorySum> =
         expenseDao.getExpenseSumByCategoryOwned(ownedCardNames, startTime, endTime)
+
 }

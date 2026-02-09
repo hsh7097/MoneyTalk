@@ -57,4 +57,5 @@ class IncomeRepository @Inject constructor(
     /** 수입 검색 (설명, 유형, 출처, 메모) */
     suspend fun searchIncomes(query: String): List<IncomeEntity> =
         incomeDao.searchIncomes(query)
+
 }

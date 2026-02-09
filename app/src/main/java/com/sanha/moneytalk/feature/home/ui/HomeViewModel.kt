@@ -34,7 +34,6 @@ import javax.inject.Inject
  * @property monthStartDay 월 시작일 (1~28, 사용자 설정)
  * @property monthlyIncome 해당 월 총 수입
  * @property monthlyExpense 해당 월 총 지출
- * @property remainingBudget 잔여 예산 (수입 - 지출)
  * @property categoryExpenses 카테고리별 지출 합계 목록
  * @property recentExpenses 최근 지출 내역 목록
  * @property periodLabel 표시용 기간 레이블 (예: "1/25 ~ 2/24")
@@ -49,7 +48,6 @@ data class HomeUiState(
     val monthStartDay: Int = 1,
     val monthlyIncome: Int = 0,
     val monthlyExpense: Int = 0,
-    val remainingBudget: Int = 0,
     val categoryExpenses: List<CategorySum> = emptyList(),
     val recentExpenses: List<ExpenseEntity> = emptyList(),
     val periodLabel: String = "",
@@ -100,8 +98,6 @@ class HomeViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        /** 동기화 진행률 UI 업데이트 간격 (N건마다 업데이트) */
-        private const val SYNC_PROGRESS_UPDATE_INTERVAL = 50
         /** DB 배치 삽입 크기 */
         private const val DB_BATCH_INSERT_SIZE = 100
         /** 기본 조회 기간 (1년, 밀리초) */
@@ -110,6 +106,23 @@ class HomeViewModel @Inject constructor(
         private const val BATCH_PROCESSING_THRESHOLD = 50
         /** 카테고리 분류 최대 반복 횟수 */
         private const val MAX_CLASSIFICATION_ROUNDS = 3
+
+        /**
+         * 동적 진행률 업데이트 간격 계산
+         *
+         * SMS 건수에 따라 UI 업데이트 빈도를 조절합니다.
+         * 2만 건 기준으로 50건마다 업데이트하면 400회 recomposition이 발생하지만,
+         * 200건마다 업데이트하면 100회로 줄어들어 UI 부하가 75% 감소합니다.
+         *
+         * @param totalCount 전체 SMS 건수
+         * @return 업데이트 간격 (건)
+         */
+        private fun calculateProgressInterval(totalCount: Int): Int = when {
+            totalCount >= 10000 -> 500    // 1만+ → 500건마다 (~20~40회 업데이트)
+            totalCount >= 5000 -> 200     // 5천+ → 200건마다 (~25~50회 업데이트)
+            totalCount >= 1000 -> 100     // 1천+ → 100건마다 (~10~50회 업데이트)
+            else -> 50                     // 1천 미만 → 50건마다 (기존과 동일)
+        }
     }
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -137,14 +150,14 @@ class HomeViewModel @Inject constructor(
                             it.copy(
                                 monthlyIncome = 0,
                                 monthlyExpense = 0,
-                                remainingBudget = 0,
                                 categoryExpenses = emptyList(),
                                 recentExpenses = emptyList()
                             )
                         }
                         loadSettings()
                     }
-                    DataRefreshEvent.RefreshType.CATEGORY_UPDATED -> {
+                    DataRefreshEvent.RefreshType.CATEGORY_UPDATED,
+                    DataRefreshEvent.RefreshType.OWNED_CARD_UPDATED -> {
                         loadData()
                     }
                 }
@@ -189,52 +202,55 @@ class HomeViewModel @Inject constructor(
                     state.selectedYear, state.selectedMonth, state.monthStartDay
                 )
 
-                // OwnedCard 필터 목록 로드
-                val ownedCardNames = withContext(Dispatchers.IO) {
-                    ownedCardRepository.getOwnedCardNames()
+                // 제외 키워드 로드 (필터링용)
+                val exclusionKeywords = withContext(Dispatchers.IO) {
+                    smsExclusionRepository.getAllKeywordStrings()
                 }
-                val useOwnedFilter = ownedCardNames.isNotEmpty()
 
-                // 수입/카테고리별 합계 로드 (1회성)
-                val (totalIncome, categoryExpenses) = withContext(Dispatchers.IO) {
-                    val income = incomeRepository.getTotalIncomeByDateRange(monthStart, monthEnd)
-                    val categories = if (useOwnedFilter) {
-                        expenseRepository.getExpenseSumByCategoryOwned(ownedCardNames, monthStart, monthEnd)
+                // 수입 로드 (1회성, 제외 키워드 필터 적용)
+                val totalIncome = withContext(Dispatchers.IO) {
+                    if (exclusionKeywords.isEmpty()) {
+                        incomeRepository.getTotalIncomeByDateRange(monthStart, monthEnd)
                     } else {
-                        expenseRepository.getExpenseSumByCategory(monthStart, monthEnd)
+                        val incomes = incomeRepository.getIncomesByDateRangeOnce(monthStart, monthEnd)
+                        incomes.filter { income ->
+                            val smsLower = income.originalSms?.lowercase()
+                            smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                        }.sumOf { it.amount }
                     }
-                    Pair(income, categories)
                 }
 
                 _uiState.update {
-                    it.copy(periodLabel = periodLabel, monthlyIncome = totalIncome, categoryExpenses = categoryExpenses)
+                    it.copy(periodLabel = periodLabel, monthlyIncome = totalIncome)
                 }
 
                 // 지출 내역은 Flow로 실시간 감지 (Room DB 변경 시 자동 업데이트)
-                val expenseFlow = if (useOwnedFilter) {
-                    expenseRepository.getExpensesByOwnedCards(ownedCardNames, monthStart, monthEnd)
-                } else {
-                    expenseRepository.getExpensesByDateRange(monthStart, monthEnd)
-                }
-
-                expenseFlow
+                expenseRepository.getExpensesByDateRange(monthStart, monthEnd)
                     .catch { e ->
                         _uiState.update { it.copy(isLoading = false, errorMessage = e.message) }
                     }
-                    .collect { expenses ->
-                        val totalExpense = expenses.sumOf { it.amount }
-                        val categories = withContext(Dispatchers.IO) {
-                            if (useOwnedFilter) {
-                                expenseRepository.getExpenseSumByCategoryOwned(ownedCardNames, monthStart, monthEnd)
-                            } else {
-                                expenseRepository.getExpenseSumByCategory(monthStart, monthEnd)
+                    .collect { allExpenses ->
+                        // 제외 키워드 필터 적용
+                        val expenses = if (exclusionKeywords.isEmpty()) {
+                            allExpenses
+                        } else {
+                            allExpenses.filter { expense ->
+                                val smsLower = expense.originalSms?.lowercase()
+                                smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
                             }
                         }
+                        val totalExpense = expenses.sumOf { it.amount }
+                        // 카테고리별 합계도 필터링된 데이터 기준으로 계산
+                        val categories = expenses
+                            .groupBy { it.category }
+                            .map { (category, items) ->
+                                CategorySum(category = category, total = items.sumOf { it.amount })
+                            }
+                            .sortedByDescending { it.total }
                         _uiState.update {
                             it.copy(
                                 isLoading = false,
                                 monthlyExpense = totalExpense,
-                                remainingBudget = it.monthlyIncome - totalExpense,
                                 categoryExpenses = categories,
                                 recentExpenses = expenses.sortedByDescending { e -> e.dateTime }
                             )
@@ -379,9 +395,13 @@ class HomeViewModel @Inject constructor(
                     val hybridCandidates = mutableListOf<SmsMessage>()
                     val hasGeminiKey = settingsDataStore.getGeminiApiKey().isNotBlank()
 
+                    // 동적 진행률 업데이트 간격 (SMS 건수에 따라 UI recomposition 횟수 조절)
+                    // 2만 건 기준: 50건마다 → 400회 recomposition → 500건마다 → 40회로 90% 감소
+                    val progressInterval = calculateProgressInterval(allSmsList.size)
+
                     for ((smsIdx, sms) in allSmsList.withIndex()) {
                         try {
-                            if (smsIdx % SYNC_PROGRESS_UPDATE_INTERVAL == 0) {
+                            if (smsIdx % progressInterval == 0) {
                                 _uiState.update {
                                     it.copy(
                                         syncProgress = "내역 분류 중... (${smsIdx}/${allSmsList.size}건)",
@@ -391,8 +411,13 @@ class HomeViewModel @Inject constructor(
                                 }
                             }
 
+                            // ===== 성능 최적화: classifySmsType()로 지출/수입 동시 판별 =====
+                            // 기존: isCardPaymentSms() + isIncomeSms() → lowercase() 2회 + 키워드 스캔 중복
+                            // 개선: classifySmsType() → lowercase() 1회 + 공통 키워드 스캔 1회
+                            val smsType = SmsParser.classifySmsType(sms.body)
+
                             // --- 지출 체크 ---
-                            if (SmsParser.isCardPaymentSms(sms.body)) {
+                            if (smsType.isPayment) {
                                 if (sms.id in existingSmsIds) {
                                     processedSmsIds.add(sms.id)
                                     continue
@@ -434,8 +459,8 @@ class HomeViewModel @Inject constructor(
                                 continue
                             }
 
-                            // --- 수입 체크 (지출이 아닌 경우만) ---
-                            if (SmsParser.isIncomeSms(sms.body)) {
+                            // --- 수입 체크 (classifySmsType이 수입으로 판별한 경우만) ---
+                            if (smsType.isIncome) {
                                 processedSmsIds.add(sms.id)
                                 if (sms.id in existingIncomeSmsIds) continue
 

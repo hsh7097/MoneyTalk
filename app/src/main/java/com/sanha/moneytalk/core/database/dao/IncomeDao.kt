@@ -88,4 +88,5 @@ interface IncomeDao {
         ORDER BY dateTime DESC
     """)
     suspend fun searchIncomes(query: String): List<IncomeEntity>
+
 }
