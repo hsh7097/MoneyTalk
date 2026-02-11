@@ -16,6 +16,8 @@ import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.ActionType
+import com.sanha.moneytalk.core.util.AnalyticsFilter
+import com.sanha.moneytalk.core.util.AnalyticsMetric
 import com.sanha.moneytalk.core.util.ChatContextBuilder
 import com.sanha.moneytalk.core.util.DataAction
 import com.sanha.moneytalk.core.util.DataQuery
@@ -55,6 +57,8 @@ data class ChatUiState(
     val sessions: List<ChatSession> = emptyList(),
     val currentSessionId: Long? = null,
     val isLoading: Boolean = false,
+    /** 로딩 중인 세션 ID (다른 채팅방에서는 로딩 표시 안 함) */
+    val loadingSessionId: Long? = null,
     val errorMessage: String? = null,
     val hasApiKey: Boolean = false,
     val showSessionList: Boolean = false,
@@ -70,7 +74,8 @@ class ChatViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val chatDao: ChatDao,
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -115,7 +120,11 @@ class ChatViewModel @Inject constructor(
 
     /** 채팅방 내부로 진입 */
     fun enterChatRoom(sessionId: Long) {
-        _uiState.update { it.copy(currentSessionId = sessionId, isInChatRoom = true) }
+        _uiState.update {
+            // 다른 채팅방으로 진입하면 로딩 표시 해제 (로딩 중인 세션이 아닌 경우)
+            val showLoading = it.loadingSessionId == sessionId
+            it.copy(currentSessionId = sessionId, isInChatRoom = true, isLoading = showLoading, canRetry = false)
+        }
         loadMessagesForSession(sessionId)
     }
 
@@ -210,7 +219,10 @@ class ChatViewModel @Inject constructor(
 
     fun selectSession(sessionId: Long) {
         viewModelScope.launch {
-            _uiState.update { it.copy(currentSessionId = sessionId, showSessionList = false, isInChatRoom = true) }
+            _uiState.update {
+                val showLoading = it.loadingSessionId == sessionId
+                it.copy(currentSessionId = sessionId, showSessionList = false, isInChatRoom = true, isLoading = showLoading, canRetry = false)
+            }
             loadMessagesForSession(sessionId)
         }
     }
@@ -225,7 +237,7 @@ class ChatViewModel @Inject constructor(
                 )
                 chatDao.insertSession(newSession)
             }
-            _uiState.update { it.copy(currentSessionId = sessionId, showSessionList = false, isInChatRoom = true) }
+            _uiState.update { it.copy(currentSessionId = sessionId, showSessionList = false, isInChatRoom = true, isLoading = false, canRetry = false) }
             loadMessagesForSession(sessionId)
         }
     }
@@ -284,7 +296,7 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = true, loadingSessionId = sessionId) }
 
             try {
                 // ===== Rolling Summary + Windowed Context 전략 적용 =====
@@ -305,11 +317,14 @@ class ChatViewModel @Inject constructor(
 
                     analyzeResult.onSuccess { queryRequest ->
                         if (queryRequest != null) {
+                            Log.d("gemini", "=== Step2: 쿼리 ${queryRequest.queries.size}개, 액션 ${queryRequest.actions.size}개 실행 시작 ===")
                             // 3단계: 요청된 쿼리 실행
                             if (queryRequest.queries.isNotEmpty()) {
                                 for (query in queryRequest.queries) {
+                                    Log.d("gemini", "쿼리 실행: type=${query.type}, startDate=${query.startDate}, endDate=${query.endDate}, category=${query.category}, filters=${query.filters?.size ?: 0}개, groupBy=${query.groupBy}, metrics=${query.metrics?.size ?: 0}개, topN=${query.topN}")
                                     val result = executeQuery(query)
                                     if (result != null) {
+                                        Log.d("gemini", "쿼리 결과 [${result.queryType}]: ${result.data.take(200)}${if (result.data.length > 200) "..." else ""}")
                                         queryResults.add(result)
                                     }
                                 }
@@ -366,7 +381,7 @@ class ChatViewModel @Inject constructor(
                     }
                 }
 
-                _uiState.update { it.copy(isLoading = false) }
+                _uiState.update { it.copy(isLoading = false, loadingSessionId = null) }
             } catch (e: Exception) {
                 withContext(Dispatchers.IO) {
                     chatRepository.saveAiResponseAndUpdateSummary(
@@ -374,7 +389,7 @@ class ChatViewModel @Inject constructor(
                         "오류가 발생했어요 😢\n(${e.message})"
                     )
                 }
-                _uiState.update { it.copy(isLoading = false, canRetry = true) }
+                _uiState.update { it.copy(isLoading = false, loadingSessionId = null, canRetry = true) }
             }
             } // sendMutex.withLock
         }
@@ -386,14 +401,20 @@ class ChatViewModel @Inject constructor(
     private suspend fun executeQuery(query: DataQuery): QueryResult? {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
 
-        // 날짜 파싱 (없으면 전체 기간 조회)
+        // 전체 기간이 필요한 쿼리 타입 (날짜 없으면 epoch 0부터)
+        val needsFullRange = query.type in listOf(
+            QueryType.MONTHLY_TOTALS, QueryType.CARD_LIST, QueryType.MONTHLY_INCOME,
+            QueryType.DUPLICATE_LIST, QueryType.SMS_EXCLUSION_LIST
+        )
+
+        // 날짜 파싱 (없으면 이번 달 기본값, 전체 기간 필요한 쿼리는 0L)
         val startTimestamp = query.startDate?.let {
             try {
                 dateFormat.parse(it)?.time ?: 0L
             } catch (e: Exception) {
                 0L
             }
-        } ?: 0L
+        } ?: if (needsFullRange) 0L else DateUtils.getMonthStartTimestamp()
 
         val endTimestamp = query.endDate?.let {
             try {
@@ -544,8 +565,19 @@ class ChatViewModel @Inject constructor(
 
             QueryType.CATEGORY_RATIO -> {
                 val monthlyIncome = settingsDataStore.getMonthlyIncome()
-                val categoryExpenses = expenseRepository.getExpenseSumByCategory(startTimestamp, endTimestamp)
-                val totalExpense = categoryExpenses.sumOf { it.total }
+                val allCategoryExpenses = expenseRepository.getExpenseSumByCategory(startTimestamp, endTimestamp)
+
+                // category 필터가 있으면 해당 카테고리(+하위)만 필터링
+                val categoryExpenses = if (query.category != null) {
+                    val cat = Category.fromDisplayName(query.category)
+                    val categoryNames = cat.displayNamesIncludingSub
+                    allCategoryExpenses.filter { it.category in categoryNames }
+                } else {
+                    allCategoryExpenses
+                }
+
+                val totalExpense = allCategoryExpenses.sumOf { it.total }  // 전체 지출 총액 (비율 계산용)
+                val filteredTotal = categoryExpenses.sumOf { it.total }    // 필터된 카테고리 합계
 
                 val ratioBreakdown = categoryExpenses.joinToString("\n") { item ->
                     val category = Category.fromDisplayName(item.category)
@@ -555,10 +587,11 @@ class ChatViewModel @Inject constructor(
                 }.ifEmpty { "해당 기간 지출 내역이 없습니다." }
 
                 val totalIncomeRatio = if (monthlyIncome > 0) (totalExpense * 100.0 / monthlyIncome) else 0.0
+                val categoryLabel = query.category?.let { " ($it)" } ?: ""
 
                 QueryResult(
                     queryType = QueryType.CATEGORY_RATIO,
-                    data = "수입 대비 카테고리별 비율 (${query.startDate ?: "이번 달"} ~ ${query.endDate ?: "현재"}):\n월 수입: ${numberFormat.format(monthlyIncome)}원\n총 지출: ${numberFormat.format(totalExpense)}원 (수입의 ${String.format("%.1f", totalIncomeRatio)}%)\n\n$ratioBreakdown"
+                    data = "수입 대비 카테고리별 비율$categoryLabel (${query.startDate ?: "이번 달"} ~ ${query.endDate ?: "현재"}):\n월 수입: ${numberFormat.format(monthlyIncome)}원\n총 지출: ${numberFormat.format(totalExpense)}원 (수입의 ${String.format("%.1f", totalIncomeRatio)}%)\n\n$ratioBreakdown"
                 )
             }
 
@@ -630,7 +663,429 @@ class ChatViewModel @Inject constructor(
                     data = "중복 지출 항목 (${duplicates.size}건):\n$dupList"
                 )
             }
+
+            QueryType.SMS_EXCLUSION_LIST -> {
+                val allKeywords = smsExclusionRepository.getAllKeywords()
+                val keywordList = if (allKeywords.isEmpty()) {
+                    "등록된 제외 키워드가 없습니다."
+                } else {
+                    allKeywords.joinToString("\n") { entity ->
+                        val sourceLabel = when (entity.source) {
+                            "default" -> "(기본)"
+                            "chat" -> "(채팅)"
+                            else -> "(사용자)"
+                        }
+                        "- ${entity.keyword} $sourceLabel"
+                    }
+                }
+
+                QueryResult(
+                    queryType = QueryType.SMS_EXCLUSION_LIST,
+                    data = "SMS 제외 키워드 목록 (${allKeywords.size}건):\n$keywordList"
+                )
+            }
+
+            QueryType.ANALYTICS -> {
+                executeAnalytics(query, startTimestamp, endTimestamp)
+            }
         }
+    }
+
+    /**
+     * ANALYTICS 쿼리 실행: 필터 → 그룹 → 집계 → 포맷
+     * 복합 조건 분석을 앱에서 결정론적으로 계산
+     */
+    private suspend fun executeAnalytics(
+        query: DataQuery,
+        startTimestamp: Long,
+        endTimestamp: Long
+    ): QueryResult {
+        try {
+            Log.d("gemini", "=== ANALYTICS 실행 시작 ===")
+            Log.d("gemini", "기간: $startTimestamp ~ $endTimestamp")
+            Log.d("gemini", "filters: ${query.filters}, groupBy: ${query.groupBy}, metrics: ${query.metrics}, topN: ${query.topN}, sort: ${query.sort}")
+
+            // 1. DB에서 기간 내 전체 지출 조회
+            var expenses = expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp)
+            Log.d("gemini", "1단계: DB 조회 결과 ${expenses.size}건")
+
+            // 2. filters 배열 순회하며 메모리 필터링
+            val filters = query.filters ?: emptyList()
+            val filterDescriptions = mutableListOf<String>()
+
+            for (filter in filters) {
+                val before = expenses.size
+                expenses = applyAnalyticsFilter(expenses, filter)
+                Log.d("gemini", "2단계 필터: ${filter.field} ${filter.op} ${filter.value} → ${before}건 → ${expenses.size}건")
+                if (expenses.size != before || filters.isNotEmpty()) {
+                    filterDescriptions.add(describeFilter(filter))
+                }
+            }
+
+            // 3. groupBy 처리
+            val groupBy = query.groupBy
+            val grouped: Map<String, List<ExpenseEntity>> = if (groupBy.isNullOrBlank() || groupBy == "none") {
+                mapOf("전체" to expenses)
+            } else {
+                expenses.groupBy { expense -> getGroupKey(expense, groupBy) }
+            }
+            Log.d("gemini", "3단계 그룹: groupBy=$groupBy → ${grouped.size}개 그룹 (${grouped.keys.take(10).joinToString(", ")}${if (grouped.size > 10) "..." else ""})")
+
+            // 4. metrics 계산
+            val metrics = if (query.metrics.isNullOrEmpty()) {
+                // 기본: sum + count
+                listOf(
+                    AnalyticsMetric(op = "sum", field = "amount"),
+                    AnalyticsMetric(op = "count", field = "amount")
+                )
+            } else {
+                query.metrics
+            }
+
+            // 5. 그룹별 집계 계산
+            data class GroupResult(
+                val key: String,
+                val metricValues: List<Pair<String, Number>>, // (label, value)
+                val sortValue: Number // 정렬 기준
+            )
+
+            val groupResults = grouped.map { (key, items) ->
+                val metricValues = metrics.map { metric ->
+                    val label = getMetricLabel(metric.op)
+                    val value: Number = computeMetric(items, metric.op, metric.field)
+                    label to value
+                }
+                val sortValue = metricValues.firstOrNull()?.second ?: 0
+                GroupResult(key, metricValues, sortValue)
+            }
+
+            // 6. sort + topN 적용
+            val sortDir = query.sort ?: "desc"
+            val sorted = if (sortDir == "asc") {
+                groupResults.sortedBy { it.sortValue.toDouble() }
+            } else {
+                groupResults.sortedByDescending { it.sortValue.toDouble() }
+            }
+            val limited = query.topN?.let { sorted.take(it) } ?: sorted
+
+            // 7. 결과 포맷팅
+            val sb = StringBuilder()
+            sb.appendLine("[ANALYTICS 계산 결과]")
+
+            if (groupBy.isNullOrBlank() || groupBy == "none") {
+                // 그룹 없음: 전체 집계
+                val result = limited.firstOrNull()
+                if (result != null) {
+                    for ((label, value) in result.metricValues) {
+                        sb.appendLine("$label: ${formatMetricValue(label, value)}")
+                    }
+                } else {
+                    sb.appendLine("해당 조건에 맞는 데이터가 없습니다.")
+                }
+            } else {
+                // 그룹 있음
+                val groupLabel = getGroupByLabel(groupBy)
+                val topNLabel = query.topN?.let { " (상위 ${it}개)" } ?: ""
+                sb.appendLine("${groupLabel}별 집계$topNLabel:")
+                if (limited.isEmpty()) {
+                    sb.appendLine("해당 조건에 맞는 데이터가 없습니다.")
+                } else {
+                    limited.forEachIndexed { idx, result ->
+                        val metricsStr = result.metricValues.joinToString(", ") { (label, value) ->
+                            "$label: ${formatMetricValue(label, value)}"
+                        }
+                        sb.appendLine("${idx + 1}. ${result.key}: $metricsStr")
+                    }
+                }
+            }
+
+            // 기간 정보
+            sb.appendLine("기간: ${query.startDate ?: "전체"} ~ ${query.endDate ?: "현재"}")
+            // 전체 건수
+            sb.appendLine("필터 후 총 건수: ${expenses.size}건")
+            // 필터 설명
+            if (filterDescriptions.isNotEmpty()) {
+                sb.appendLine("적용된 필터: ${filterDescriptions.joinToString(", ")}")
+            }
+
+            val resultData = sb.toString().trimEnd()
+            Log.d("gemini", "=== ANALYTICS 최종 결과 ===\n$resultData")
+            return QueryResult(
+                queryType = QueryType.ANALYTICS,
+                data = resultData
+            )
+        } catch (e: Exception) {
+            Log.e("gemini", "ANALYTICS 실행 오류: ${e.message}", e)
+            return QueryResult(
+                queryType = QueryType.ANALYTICS,
+                data = "[ANALYTICS 계산 결과]\n분석 실행 중 오류가 발생했습니다: ${e.message}"
+            )
+        }
+    }
+
+    /**
+     * 단일 필터 조건을 적용하여 필터링된 리스트 반환
+     */
+    private fun applyAnalyticsFilter(
+        expenses: List<ExpenseEntity>,
+        filter: AnalyticsFilter
+    ): List<ExpenseEntity> {
+        return expenses.filter { expense ->
+            when (filter.field) {
+                "category" -> {
+                    val expenseCategory = expense.category
+                    val targetValue = filter.value
+                    if (filter.includeSubcategories && targetValue is String) {
+                        // 하위 카테고리 포함: "식비" → ["식비", "배달"]
+                        val cat = Category.fromDisplayName(targetValue)
+                        val names = cat.displayNamesIncludingSub
+                        when (filter.op) {
+                            "==" -> expenseCategory in names
+                            "!=" -> expenseCategory !in names
+                            "in" -> {
+                                // value가 배열이면 각각에 대해 subcategory 포함
+                                val valueList = toStringList(targetValue)
+                                val allNames = valueList.flatMap {
+                                    Category.fromDisplayName(it).displayNamesIncludingSub
+                                }
+                                expenseCategory in allNames
+                            }
+                            "not_in" -> {
+                                val valueList = toStringList(targetValue)
+                                val allNames = valueList.flatMap {
+                                    Category.fromDisplayName(it).displayNamesIncludingSub
+                                }
+                                expenseCategory !in allNames
+                            }
+                            else -> matchStringOp(expenseCategory, filter.op, targetValue)
+                        }
+                    } else {
+                        when (filter.op) {
+                            "in" -> expenseCategory in toStringList(filter.value)
+                            "not_in" -> expenseCategory !in toStringList(filter.value)
+                            else -> matchStringOp(expenseCategory, filter.op, filter.value?.toString() ?: "")
+                        }
+                    }
+                }
+
+                "storeName" -> {
+                    val value = filter.value?.toString() ?: ""
+                    when (filter.op) {
+                        "==" -> expense.storeName.equals(value, ignoreCase = true)
+                        "!=" -> !expense.storeName.equals(value, ignoreCase = true)
+                        "contains" -> expense.storeName.contains(value, ignoreCase = true)
+                        "not_contains" -> !expense.storeName.contains(value, ignoreCase = true)
+                        "in" -> toStringList(filter.value).any { expense.storeName.equals(it, ignoreCase = true) }
+                        "not_in" -> toStringList(filter.value).none { expense.storeName.equals(it, ignoreCase = true) }
+                        else -> true
+                    }
+                }
+
+                "cardName" -> {
+                    val value = filter.value?.toString() ?: ""
+                    when (filter.op) {
+                        "==" -> expense.cardName.equals(value, ignoreCase = true)
+                        "!=" -> !expense.cardName.equals(value, ignoreCase = true)
+                        "contains" -> expense.cardName.contains(value, ignoreCase = true)
+                        "not_contains" -> !expense.cardName.contains(value, ignoreCase = true)
+                        "in" -> toStringList(filter.value).any { expense.cardName.equals(it, ignoreCase = true) }
+                        "not_in" -> toStringList(filter.value).none { expense.cardName.equals(it, ignoreCase = true) }
+                        else -> true
+                    }
+                }
+
+                "amount" -> {
+                    val targetAmount = toNumber(filter.value)
+                    when (filter.op) {
+                        "==" -> expense.amount.toDouble() == targetAmount
+                        "!=" -> expense.amount.toDouble() != targetAmount
+                        ">" -> expense.amount > targetAmount
+                        ">=" -> expense.amount >= targetAmount
+                        "<" -> expense.amount < targetAmount
+                        "<=" -> expense.amount <= targetAmount
+                        else -> true
+                    }
+                }
+
+                "memo" -> {
+                    val value = filter.value?.toString() ?: ""
+                    val memo = expense.memo ?: ""
+                    when (filter.op) {
+                        "==" -> memo.equals(value, ignoreCase = true)
+                        "!=" -> !memo.equals(value, ignoreCase = true)
+                        "contains" -> memo.contains(value, ignoreCase = true)
+                        "not_contains" -> !memo.contains(value, ignoreCase = true)
+                        else -> true
+                    }
+                }
+
+                "dayOfWeek" -> {
+                    val cal = Calendar.getInstance().apply { timeInMillis = expense.dateTime }
+                    val dayOfWeek = getDayOfWeekString(cal.get(Calendar.DAY_OF_WEEK))
+                    when (filter.op) {
+                        "==" -> dayOfWeek.equals(filter.value?.toString(), ignoreCase = true)
+                        "!=" -> !dayOfWeek.equals(filter.value?.toString(), ignoreCase = true)
+                        "in" -> dayOfWeek.uppercase() in toStringList(filter.value).map { it.uppercase() }
+                        "not_in" -> dayOfWeek.uppercase() !in toStringList(filter.value).map { it.uppercase() }
+                        else -> true
+                    }
+                }
+
+                else -> true // 미인식 필드는 무시 (필터 통과)
+            }
+        }
+    }
+
+    /** Calendar.DAY_OF_WEEK → "MON"~"SUN" 문자열 변환 */
+    private fun getDayOfWeekString(calendarDay: Int): String {
+        return when (calendarDay) {
+            Calendar.MONDAY -> "MON"
+            Calendar.TUESDAY -> "TUE"
+            Calendar.WEDNESDAY -> "WED"
+            Calendar.THURSDAY -> "THU"
+            Calendar.FRIDAY -> "FRI"
+            Calendar.SATURDAY -> "SAT"
+            Calendar.SUNDAY -> "SUN"
+            else -> "UNKNOWN"
+        }
+    }
+
+    /** 요일 코드를 한글로 변환 */
+    private fun dayOfWeekToKorean(code: String): String {
+        return when (code.uppercase()) {
+            "MON" -> "월"
+            "TUE" -> "화"
+            "WED" -> "수"
+            "THU" -> "목"
+            "FRI" -> "금"
+            "SAT" -> "토"
+            "SUN" -> "일"
+            else -> code
+        }
+    }
+
+    /** 문자열 비교 연산 헬퍼 */
+    private fun matchStringOp(actual: String, op: String, expected: String): Boolean {
+        return when (op) {
+            "==" -> actual.equals(expected, ignoreCase = true)
+            "!=" -> !actual.equals(expected, ignoreCase = true)
+            "contains" -> actual.contains(expected, ignoreCase = true)
+            "not_contains" -> !actual.contains(expected, ignoreCase = true)
+            else -> true
+        }
+    }
+
+    /** Any? → List<String> 변환 (Gson이 배열을 ArrayList로 파싱) */
+    private fun toStringList(value: Any?): List<String> {
+        return when (value) {
+            is List<*> -> value.mapNotNull { it?.toString() }
+            is String -> listOf(value)
+            else -> emptyList()
+        }
+    }
+
+    /** Any? → Number 변환 */
+    private fun toNumber(value: Any?): Double {
+        return when (value) {
+            is Number -> value.toDouble()
+            is String -> value.toDoubleOrNull() ?: 0.0
+            else -> 0.0
+        }
+    }
+
+    /** 그룹 키 추출 */
+    private fun getGroupKey(expense: ExpenseEntity, groupBy: String): String {
+        return when (groupBy) {
+            "category" -> expense.category
+            "storeName" -> expense.storeName
+            "cardName" -> expense.cardName
+            "date" -> DateUtils.formatDateTime(expense.dateTime).substring(0, 10) // "yyyy-MM-dd"
+            "month" -> DateUtils.formatDateTime(expense.dateTime).substring(0, 7) // "yyyy-MM"
+            "dayOfWeek" -> {
+                val cal = Calendar.getInstance().apply { timeInMillis = expense.dateTime }
+                getDayOfWeekString(cal.get(Calendar.DAY_OF_WEEK))
+            }
+            else -> "전체" // 미인식 groupBy → 전체 집계
+        }
+    }
+
+    /** 그룹 기준 한글 라벨 */
+    private fun getGroupByLabel(groupBy: String): String {
+        return when (groupBy) {
+            "category" -> "카테고리"
+            "storeName" -> "가게명"
+            "cardName" -> "카드"
+            "date" -> "날짜"
+            "month" -> "월"
+            "dayOfWeek" -> "요일"
+            else -> groupBy
+        }
+    }
+
+    /** 메트릭 연산 실행 */
+    private fun computeMetric(items: List<ExpenseEntity>, op: String, field: String): Number {
+        // 현재 amount만 지원
+        val values = items.map { it.amount }
+        return when (op) {
+            "sum" -> values.sum()
+            "avg" -> if (values.isEmpty()) 0 else (values.sum().toDouble() / values.size).toInt()
+            "count" -> values.size
+            "max" -> values.maxOrNull() ?: 0
+            "min" -> values.minOrNull() ?: 0
+            else -> 0
+        }
+    }
+
+    /** 메트릭 라벨 생성 */
+    private fun getMetricLabel(op: String): String {
+        return when (op) {
+            "sum" -> "합계"
+            "avg" -> "평균"
+            "count" -> "건수"
+            "max" -> "최대"
+            "min" -> "최소"
+            else -> op
+        }
+    }
+
+    /** 메트릭 값 포맷팅 */
+    private fun formatMetricValue(label: String, value: Number): String {
+        return when (label) {
+            "건수" -> "${numberFormat.format(value)}건"
+            else -> "${numberFormat.format(value)}원"
+        }
+    }
+
+    /** 필터 조건 설명 문자열 */
+    private fun describeFilter(filter: AnalyticsFilter): String {
+        val fieldLabel = when (filter.field) {
+            "category" -> "카테고리"
+            "storeName" -> "가게명"
+            "cardName" -> "카드"
+            "amount" -> "금액"
+            "memo" -> "메모"
+            "dayOfWeek" -> "요일"
+            else -> filter.field
+        }
+        val opLabel = when (filter.op) {
+            "==" -> "="
+            "!=" -> "≠"
+            ">" -> ">"
+            ">=" -> "≥"
+            "<" -> "<"
+            "<=" -> "≤"
+            "contains" -> "포함"
+            "not_contains" -> "미포함"
+            "in" -> "∈"
+            "not_in" -> "∉"
+            else -> filter.op
+        }
+        val valueStr = when (val v = filter.value) {
+            is List<*> -> v.joinToString(",")
+            else -> v?.toString() ?: ""
+        }
+        val subLabel = if (filter.includeSubcategories) "(하위포함)" else ""
+        return "$fieldLabel$opLabel$valueStr$subLabel"
     }
 
     /**
@@ -899,6 +1354,46 @@ class ChatViewModel @Inject constructor(
                             message = "ID $expenseId 항목을 찾을 수 없습니다."
                         )
                     }
+                }
+            }
+
+            ActionType.ADD_SMS_EXCLUSION -> {
+                val keyword = action.searchKeyword
+                if (keyword.isNullOrBlank()) {
+                    ActionResult(
+                        actionType = ActionType.ADD_SMS_EXCLUSION,
+                        success = false,
+                        message = "추가할 제외 키워드가 필요합니다."
+                    )
+                } else {
+                    val added = smsExclusionRepository.addKeyword(keyword, source = "chat")
+                    ActionResult(
+                        actionType = ActionType.ADD_SMS_EXCLUSION,
+                        success = added,
+                        message = if (added) "\"$keyword\" 키워드를 SMS 제외 목록에 추가했습니다. 다음 동기화부터 적용됩니다."
+                        else "\"$keyword\" 키워드가 이미 존재합니다.",
+                        affectedCount = if (added) 1 else 0
+                    )
+                }
+            }
+
+            ActionType.REMOVE_SMS_EXCLUSION -> {
+                val keyword = action.searchKeyword
+                if (keyword.isNullOrBlank()) {
+                    ActionResult(
+                        actionType = ActionType.REMOVE_SMS_EXCLUSION,
+                        success = false,
+                        message = "삭제할 제외 키워드가 필요합니다."
+                    )
+                } else {
+                    val deleted = smsExclusionRepository.removeKeyword(keyword)
+                    ActionResult(
+                        actionType = ActionType.REMOVE_SMS_EXCLUSION,
+                        success = deleted > 0,
+                        message = if (deleted > 0) "\"$keyword\" 키워드를 SMS 제외 목록에서 삭제했습니다."
+                        else "\"$keyword\" 키워드를 찾을 수 없거나 기본 키워드라 삭제할 수 없습니다.",
+                        affectedCount = deleted
+                    )
                 }
             }
         }

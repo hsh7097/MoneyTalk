@@ -20,18 +20,18 @@ enum class Category(
     TRANSPORT("🚗", "교통"),
     SHOPPING("🛒", "쇼핑"),
     SUBSCRIPTION("📱", "구독"),
-    HEALTH("💊", "의료/건강"),
+    HEALTH("🏥", "의료/건강"),
     FITNESS("💪", "운동"),
     CULTURE("🎬", "문화/여가"),
-    EDUCATION("📚", "교육"),
-    HOUSING("🏢", "주거"),
-    LIVING("🏠", "생활"),
-    INSURANCE("🛡️", "보험"),
-    TRANSFER("🔄", "계좌이체"),
-    EVENTS("🎁", "경조"),
-    DELIVERY("🛵", "배달", FOOD),  // 식비의 소 카테고리
+    EDUCATION("📖", "교육"),
+    HOUSING("🏠", "주거"),
+    LIVING("🧺", "생활"),
+    INSURANCE("📋", "보험"),
+    TRANSFER("💸", "계좌이체"),
+    EVENTS("💌", "경조"),
+    DELIVERY("🛵", "배달", FOOD),
     ETC("📦", "기타"),
-    UNCLASSIFIED("❓", "미분류");
+    UNCLASSIFIED("🔍", "미분류");
 
     /** 이 카테고리가 대 카테고리인지 (소 카테고리가 아닌지) */
     val isParent: Boolean get() = parentCategory == null

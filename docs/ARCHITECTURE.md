@@ -153,13 +153,15 @@ com.sanha.moneytalk/
 - Gemini AI 기반 재무 상담 (3-step pipeline)
 - 채팅방 관리 (생성, 삭제, 제목 편집)
 - DB 쿼리 자동 실행 (지출 조회, 분석)
-- 채팅 액션 지원 (삭제, 추가, 수정 등 9가지)
+- 채팅 액션 지원 (삭제, 추가, 수정, SMS 제외 등 12종)
 - 대화 요약 기능 (컨텍스트 유지)
 
 ### 4. 설정 (Settings)
 - 월 수입 / 월 시작일 설정
 - Gemini API 키 설정
 - SMS 동기화 / 카테고리 분류 (진행률 표시)
+- 소유 카드 관리 (화이트리스트)
+- SMS 제외 키워드 관리 (블랙리스트)
 - 데이터 내보내기 (JSON/CSV, 필터 지원)
 - Google Drive 백업/복원
 - 로컬 파일 복원
@@ -198,20 +200,22 @@ SMS 수신 → Tier 1 (Regex) → Tier 2 (Vector 캐시) → Tier 3 (Gemini LLM)
 
 | Step | 모델 | 프롬프트 위치 | 역할 |
 |------|------|-------------|------|
-| 1 | gemini-2.5-pro | ChatPrompts.kt (QUERY_ANALYZER) | 질문 → 쿼리/액션 JSON 변환 |
-| 2 | - | ChatViewModel.kt | DB 조회 및 액션 실행 |
-| 3 | gemini-2.5-pro | ChatPrompts.kt (FINANCIAL_ADVISOR) | 데이터 기반 최종 답변 생성 |
+| 1 | gemini-2.5-pro | string_prompt.xml (QUERY_ANALYZER) | 질문 → 쿼리/액션 JSON 변환 (17 쿼리 + 12 액션) |
+| 2 | - | ChatViewModel.kt | DB 조회, 액션 실행, ANALYTICS 분석 |
+| 3 | gemini-2.5-pro | string_prompt.xml (FINANCIAL_ADVISOR) | 데이터 기반 최종 답변 생성 |
 
 ## AI 프롬프트 위치
 
-| 프롬프트 | 파일 | 모델 | 목적 |
-|---------|------|------|------|
-| QUERY_ANALYZER | `feature/chat/data/ChatPrompts.kt` | gemini-2.5-pro | 사용자 질문 → 쿼리/액션 JSON |
-| FINANCIAL_ADVISOR | `feature/chat/data/ChatPrompts.kt` | gemini-2.5-pro | 재무 상담 답변 생성 |
-| SUMMARY | `feature/chat/data/ChatPrompts.kt` | gemini-2.5-flash | 대화 요약 |
-| SMS 추출 (단일) | `core/util/GeminiSmsExtractor.kt` | gemini-2.5-flash-lite | SMS → 결제 정보 추출 |
-| SMS 추출 (배치) | `core/util/GeminiSmsExtractor.kt` | gemini-2.5-flash-lite | 다건 SMS 배치 추출 |
-| 카테고리 분류 | `feature/home/data/GeminiCategoryRepository.kt` | gemini-2.5-flash-lite | 가게명 → 카테고리 분류 |
+> 모든 시스템 프롬프트는 `res/values/string_prompt.xml`에서 관리
+
+| 프롬프트 | XML key | 모델 | 목적 |
+|---------|---------|------|------|
+| 쿼리 분석기 | `prompt_query_analyzer_system` | gemini-2.5-pro | 사용자 질문 → 쿼리/액션 JSON |
+| 재무 상담사 | `prompt_financial_advisor_system` | gemini-2.5-pro | 재무 상담 답변 생성 |
+| 대화 요약 | `prompt_summary_system` | gemini-2.5-flash | 대화 요약 |
+| SMS 추출 (단일) | `prompt_sms_extract_system` | gemini-2.5-flash-lite | SMS → 결제 정보 추출 |
+| SMS 추출 (배치) | `prompt_sms_batch_extract_system` | gemini-2.5-flash-lite | 다건 SMS 배치 추출 |
+| 카테고리 분류 | `prompt_category_classification` | gemini-2.5-flash-lite | 가게명 → 카테고리 분류 |
 
 ## 유사도 정책 (core/similarity/)
 

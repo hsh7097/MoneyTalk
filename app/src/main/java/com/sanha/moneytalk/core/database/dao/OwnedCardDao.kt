@@ -50,8 +50,8 @@ interface OwnedCardDao {
     @Query("UPDATE owned_cards SET isOwned = :isOwned WHERE cardName = :cardName")
     suspend fun updateOwnership(cardName: String, isOwned: Boolean)
 
-    /** 발견 횟수 및 마지막 발견 시간 업데이트 */
-    @Query("UPDATE owned_cards SET seenCount = seenCount + :count, lastSeenAt = :lastSeenAt WHERE cardName = :cardName")
+    /** 발견 횟수 및 마지막 발견 시간 업데이트 (절대값 설정) */
+    @Query("UPDATE owned_cards SET seenCount = :count, lastSeenAt = :lastSeenAt WHERE cardName = :cardName")
     suspend fun updateSeenInfo(cardName: String, count: Int, lastSeenAt: Long)
 
     /** 카드 개수 조회 */

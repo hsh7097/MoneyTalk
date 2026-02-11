@@ -141,13 +141,86 @@ app/src/main/java/com/sanha/moneytalk/
 
 ---
 
+---
+
+## 2026-02-08 - Phase 1 리팩토링 + 대규모 기능 추가
+
+### 작업 내용
+
+#### 1. VectorSearchEngine 책임 분리 (Phase 1)
+- core/similarity/ 패키지 신설 (5개 파일)
+- 임계값 상수를 SimilarityPolicy SSOT로 구조화
+- Vector(연산) → Policy(판단) → Service(행동) 3계층 구조 확립
+
+#### 2. SMS 파싱 버그 수정 3건
+- 결제예정 금액 SMS가 지출로 잡히는 문제
+- 신한카드 승인 SMS에서 이름이 가게명으로 파싱되는 문제
+- 계좌이체 출금 내역 카테고리 미분류 문제
+
+#### 3. 채팅 시스템 확장
+- 채팅 액션 5개 추가 (delete_by_keyword, add_expense, update_memo, update_store_name, update_amount)
+- FINANCIAL_ADVISOR 할루시네이션 방지 규칙
+- 채팅방 나갈 때 대화 기반 자동 타이틀 설정
+
+#### 4. 기타
+- 메모 기능 (DB v1→v2), 보험 카테고리 복원
+- 수입 내역 통합 표시, 채팅 UI 리팩토링
+- Claude 레거시 코드 완전 제거 (Retrofit 포함)
+- SMS 동기화/카테고리 분류 진행률 표시 개선
+
+---
+
+## 2026-02-09 - 데이터 관리 + ANALYTICS
+
+### 작업 내용
+
+#### 1. OwnedCard 시스템 (DB v2→v3)
+- OwnedCardEntity/Dao/Repository 신설
+- CardNameNormalizer로 25+ 카드사 명칭 정규화
+- Settings에서 소유 카드 체크박스 관리
+
+#### 2. SMS 제외 키워드 시스템 (DB v3→v4)
+- SmsExclusionKeywordEntity/Dao/Repository 신설
+- 기본/사용자/채팅 3가지 소스 구분
+- 채팅 액션 2개 추가 (add_sms_exclusion, remove_sms_exclusion)
+
+#### 3. ANALYTICS 쿼리 타입
+- ChatViewModel에서 클라이언트 사이드 복합 분석
+- 필터(10종 연산자) + 그룹핑(6종) + 집계(5종 메트릭)
+
+#### 4. 기타
+- 전역 스낵바 버스 도입
+- API 키 설정 후 저신뢰도 항목 자동 재분류
+- 프롬프트 XML 이전 (ChatPrompts.kt → string_prompt.xml)
+- DB 성능 인덱스 추가 (v4→v5)
+
+---
+
+## 2026-02-11 - UI 공통화 + Intent 패턴
+
+### 작업 내용
+
+#### 1. UI 공통 컴포넌트
+- TransactionCardCompose/Info: 지출/수입 통합 카드
+- TransactionGroupHeaderCompose/Info: 날짜별/가게별/금액별 그룹 헤더
+- SegmentedTabRowCompose/Info: 라운드 버튼 스타일 탭
+- Preview 파일 debug/ 소스셋 배치
+
+#### 2. HistoryScreen Intent 패턴
+- HistoryIntent sealed interface 도입
+- UI-비즈니스 로직 분리 (SelectExpense, DeleteExpense, ChangeCategory 등)
+
+#### 3. 카테고리 아이콘
+- 이모지 → 벡터 아이콘 교체 시도 → revert (이모지 유지)
+
+---
+
 ## 변경 이력
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|-----------|
 | 2026-02-05 | 0.1.0 | 프로젝트 초기 설정 및 기본 구조 완성 |
 | 2026-02-05 | 0.1.1 | 색상 리소스 대폭 추가 (80+ 색상) |
-
----
-
-*다음 개발 세션에서 이 파일에 작업 내용을 추가하세요.*
+| 2026-02-08 | 0.2.0 | Phase 1 리팩토링, 채팅 액션 확장, Claude 레거시 제거 |
+| 2026-02-09 | 0.3.0 | OwnedCard, SMS 제외 키워드, ANALYTICS, DB v5 |
+| 2026-02-11 | 0.4.0 | UI 공통화 (TransactionCard, GroupHeader, SegmentedTab), Intent 패턴 |

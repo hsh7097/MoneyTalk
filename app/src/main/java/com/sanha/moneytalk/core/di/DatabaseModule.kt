@@ -9,6 +9,7 @@ import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
 import com.sanha.moneytalk.core.database.dao.OwnedCardDao
+import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import dagger.Module
@@ -48,7 +49,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -107,5 +108,12 @@ object DatabaseModule {
     @Singleton
     fun provideOwnedCardDao(database: AppDatabase): OwnedCardDao {
         return database.ownedCardDao()
+    }
+
+    /** SMS 제외 키워드 DAO 제공 - 블랙리스트 관리 */
+    @Provides
+    @Singleton
+    fun provideSmsExclusionKeywordDao(database: AppDatabase): SmsExclusionKeywordDao {
+        return database.smsExclusionKeywordDao()
     }
 }

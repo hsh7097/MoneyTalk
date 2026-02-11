@@ -133,33 +133,6 @@ class CategoryReferenceProvider @Inject constructor(
     }
 
     /**
-     * 채팅 프롬프트용 카테고리 참조 텍스트 생성
-     *
-     * 재무 상담 시 현재 사용 중인 카테고리 목록과
-     * 각 카테고리의 대표 가게명을 제공합니다.
-     *
-     * @return 프롬프트에 삽입할 참조 리스트 텍스트
-     */
-    suspend fun getChatReference(): String {
-        val refMap = getCategoryReferenceMap()
-
-        val sb = StringBuilder()
-        sb.appendLine("\n[카테고리별 분류된 가게 예시]")
-
-        // 모든 카테고리를 나열 (참조 맵에 없는 것도 포함)
-        for (category in Category.entries) {
-            if (category == Category.UNCLASSIFIED) continue
-            val stores = refMap[category.displayName]
-            if (stores != null && stores.isNotEmpty()) {
-                sb.appendLine("- ${category.emoji} ${category.displayName}: ${stores.joinToString(", ")}")
-            } else {
-                sb.appendLine("- ${category.emoji} ${category.displayName}")
-            }
-        }
-        return sb.toString()
-    }
-
-    /**
      * 참조 리스트에 사용자 설정 항목 추가
      *
      * 채팅에서 사용자가 카테고리 관련 조건을 추가할 때 호출합니다.

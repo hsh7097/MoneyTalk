@@ -18,8 +18,7 @@ import javax.inject.Singleton
 @Singleton
 class GeminiRepository @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val settingsDataStore: SettingsDataStore,
-    private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider
+    private val settingsDataStore: SettingsDataStore
 ) {
     private var cachedApiKey: String? = null
 
@@ -142,13 +141,8 @@ class GeminiRepository @Inject constructor(
             val calendar = Calendar.getInstance()
             val today = "${calendar.get(Calendar.YEAR)}년 ${calendar.get(Calendar.MONTH) + 1}월 ${calendar.get(Calendar.DAY_OF_MONTH)}일"
 
-            // 카테고리 참조 리스트 추가
-            val categoryRef = try {
-                categoryReferenceProvider.getChatReference()
-            } catch (e: Exception) { "" }
-
             val prompt = """오늘: $today
-$categoryRef
+
 $contextualMessage
 
 위 질문에 필요한 데이터 쿼리를 JSON으로 반환해줘:"""
@@ -209,16 +203,11 @@ $contextualMessage
                 }
             } else ""
 
-            // 카테고리 참조 리스트 추가
-            val categoryRef = try {
-                categoryReferenceProvider.getChatReference()
-            } catch (e: Exception) { "" }
-
             val prompt = """[월 수입] ${String.format("%,d", monthlyIncome)}원
 
 [조회된 데이터]
 $dataContext$actionContext
-$categoryRef
+
 [사용자 질문]
 $userMessage"""
 

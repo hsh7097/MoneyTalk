@@ -1,17 +1,25 @@
 package com.sanha.moneytalk.feature.history.ui
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.sanha.moneytalk.core.database.dao.DailySum
+import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.ui.AppSnackbarBus
+import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
+import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionCardInfo
+import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardInfo
+import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderInfo
+import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.core.util.DateUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
@@ -27,6 +35,52 @@ enum class SortOrder {
     DATE_DESC,      // 최신순 (기본값)
     AMOUNT_DESC,    // 금액 높은순
     STORE_FREQ      // 사용처별 (많이 사용한 곳 순)
+}
+
+/**
+ * History 화면의 모든 사용자 인터랙션을 표현하는 Intent
+ */
+sealed interface HistoryIntent {
+    // 아이템 클릭
+    data class SelectExpense(val expense: ExpenseEntity) : HistoryIntent
+    data class SelectIncome(val income: IncomeEntity) : HistoryIntent
+    data object DismissDialog : HistoryIntent
+
+    // 지출 액션
+    data class DeleteExpense(val expense: ExpenseEntity) : HistoryIntent
+    data class ChangeCategory(val expenseId: Long, val storeName: String, val newCategory: String) : HistoryIntent
+    data class UpdateExpenseMemo(val expenseId: Long, val memo: String?) : HistoryIntent
+
+    // 수입 액션
+    data class DeleteIncome(val income: IncomeEntity) : HistoryIntent
+    data class UpdateIncomeMemo(val incomeId: Long, val memo: String?) : HistoryIntent
+}
+
+/**
+ * LazyColumn에 바로 렌더링할 수 있는 플랫 리스트 아이템
+ *
+ * Composable은 Info.toComposeData() → UiModel로 변환 후 순수 렌더링만 수행.
+ * Entity 참조는 Intent 전달용으로만 보관.
+ */
+sealed interface TransactionListItem {
+    /** 그룹 헤더 - TransactionGroupHeaderInfo 구현 */
+    data class Header(
+        override val title: String,
+        override val expenseTotal: Int = 0,
+        override val incomeTotal: Int = 0
+    ) : TransactionListItem, TransactionGroupHeaderInfo
+
+    /** 지출 아이템 - TransactionCardInfo 포함 */
+    data class ExpenseItem(
+        val expense: ExpenseEntity,
+        val cardInfo: TransactionCardInfo = ExpenseTransactionCardInfo(expense)
+    ) : TransactionListItem
+
+    /** 수입 아이템 - TransactionCardInfo 포함 */
+    data class IncomeItem(
+        val income: IncomeEntity,
+        val cardInfo: TransactionCardInfo = IncomeTransactionCardInfo(income)
+    ) : TransactionListItem
 }
 
 /**
@@ -46,7 +100,6 @@ enum class SortOrder {
  * @property errorMessage 에러 메시지 (null이면 에러 없음)
  * @property searchQuery 검색어
  * @property isSearchMode 검색 모드 여부
- * @property message 사용자 메시지 (토스트용)
  * @property sortOrder 정렬 순서
  */
 data class HistoryUiState(
@@ -64,11 +117,15 @@ data class HistoryUiState(
     val errorMessage: String? = null,
     val searchQuery: String = "",
     val isSearchMode: Boolean = false,
-    val message: String? = null,
     val sortOrder: SortOrder = SortOrder.DATE_DESC,
     val showIncomeView: Boolean = false,
     val incomes: List<IncomeEntity> = emptyList(),
-    val monthlyIncomeTotal: Int = 0
+    val monthlyIncomeTotal: Int = 0,
+    // 가공된 리스트 데이터 (TransactionListView용)
+    val transactionListItems: List<TransactionListItem> = emptyList(),
+    // 다이얼로그 상태 (Composable에서 remember 대신 ViewModel에서 관리)
+    val selectedExpense: ExpenseEntity? = null,
+    val selectedIncome: IncomeEntity? = null
 )
 
 /**
@@ -89,7 +146,11 @@ class HistoryViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val settingsDataStore: SettingsDataStore,
-    private val categoryClassifierService: CategoryClassifierService
+    private val categoryClassifierService: CategoryClassifierService,
+    private val dataRefreshEvent: DataRefreshEvent,
+    private val snackbarBus: AppSnackbarBus,
+    private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HistoryUiState())
@@ -101,6 +162,33 @@ class HistoryViewModel @Inject constructor(
     init {
         loadSettings()
         loadCardNames()
+        observeDataRefreshEvents()
+    }
+
+    /** 내 카드 변경 등 전역 이벤트 감지 */
+    private fun observeDataRefreshEvents() {
+        viewModelScope.launch {
+            dataRefreshEvent.refreshEvent.collect { event ->
+                when (event) {
+                    DataRefreshEvent.RefreshType.OWNED_CARD_UPDATED,
+                    DataRefreshEvent.RefreshType.CATEGORY_UPDATED -> {
+                        loadExpenses()
+                    }
+                    DataRefreshEvent.RefreshType.ALL_DATA_DELETED -> {
+                        _uiState.update {
+                            it.copy(
+                                monthlyTotal = 0,
+                                expenses = emptyList(),
+                                dailyTotals = emptyMap(),
+                                incomes = emptyList(),
+                                monthlyIncomeTotal = 0
+                            )
+                        }
+                        loadExpenses()
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -147,22 +235,13 @@ class HistoryViewModel @Inject constructor(
                 state.monthStartDay
             )
 
-            // 월별 총액 및 일별 총액 로드
-            try {
-                val (monthlyTotal, dailyTotalsMap, incomeTotal) = withContext(Dispatchers.IO) {
-                    val total = expenseRepository.getTotalExpenseByDateRange(startTime, endTime)
-                    val dailySums = expenseRepository.getDailyTotals(startTime, endTime)
-                    val map = dailySums.associate { it.date to it.total }
-                    val income = incomeRepository.getTotalIncomeByDateRange(startTime, endTime)
-                    Triple(total, map, income)
-                }
-                _uiState.update { it.copy(monthlyTotal = monthlyTotal, dailyTotals = dailyTotalsMap, monthlyIncomeTotal = incomeTotal) }
-            } catch (e: Exception) {
-                // 총액 로딩 실패 시 무시
+            // 제외 키워드 로드 (필터링용)
+            val exclusionKeywords = withContext(Dispatchers.IO) {
+                smsExclusionRepository.getAllKeywordStrings()
             }
 
             // 수입 항상 로드 (목록 모드에서도 수입 표시)
-            loadIncomes()
+            loadIncomes(exclusionKeywords)
 
             // 필터링된 지출 내역 로드 (Flow는 Room이 자동으로 IO에서 실행)
             // 대 카테고리 선택 시 소 카테고리도 포함 (예: "식비" → "식비" + "배달")
@@ -188,16 +267,67 @@ class HistoryViewModel @Inject constructor(
                 )
             }
 
+            // 월별/일별 총액은 제외 키워드 필터 적용 후 계산 (필터링 안된 전체 데이터 기준으로 별도 로드)
+            // 카드/카테고리 필터 없이 전체 데이터 기준으로 총액 계산
+            try {
+                expenseRepository.getExpensesByDateRange(startTime, endTime)
+                    .first()
+                    .let { allExpensesForTotal ->
+                        val filteredForTotal = if (exclusionKeywords.isEmpty()) {
+                            allExpensesForTotal
+                        } else {
+                            allExpensesForTotal.filter { expense ->
+                                val smsLower = expense.originalSms?.lowercase()
+                                smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                            }
+                        }
+                        val monthlyTotal = filteredForTotal.sumOf { it.amount }
+                        // 일별 총액도 필터링된 데이터 기준으로 계산
+                        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
+                        val dailyTotalsMap = filteredForTotal
+                            .groupBy { dateFormat.format(java.util.Date(it.dateTime)) }
+                            .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
+                        val incomeTotal = incomeRepository.getTotalIncomeByDateRange(startTime, endTime)
+                        _uiState.update {
+                            it.copy(
+                                monthlyTotal = monthlyTotal,
+                                dailyTotals = dailyTotalsMap,
+                                monthlyIncomeTotal = incomeTotal
+                            )
+                        }
+                    }
+            } catch (e: Exception) {
+                // 총액 로딩 실패 시 무시
+            }
+
             expenseFlow
                 .catch { e ->
                     _uiState.update {
                         it.copy(isLoading = false, errorMessage = e.message)
                     }
                 }
-                .collect { expenses ->
-                    val sortedExpenses = sortExpenses(expenses, _uiState.value.sortOrder)
+                .collect { allExpenses ->
+                    // 제외 키워드 필터 적용
+                    val expenses = if (exclusionKeywords.isEmpty()) {
+                        allExpenses
+                    } else {
+                        allExpenses.filter { expense ->
+                            val smsLower = expense.originalSms?.lowercase()
+                            smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                        }
+                    }
+                    val currentState = _uiState.value
+                    val sortedExpenses = sortExpenses(expenses, currentState.sortOrder)
+                    // 카테고리 필터 활성화 시 수입 항목 제외 (수입은 카테고리가 없으므로)
+                    val filteredIncomes = if (currentState.selectedCategory != null) emptyList() else currentState.incomes
                     _uiState.update {
-                        it.copy(isLoading = false, expenses = sortedExpenses)
+                        it.copy(
+                            isLoading = false,
+                            expenses = sortedExpenses,
+                            transactionListItems = buildTransactionListItems(
+                                sortedExpenses, filteredIncomes, currentState.sortOrder, currentState.showIncomeView
+                            )
+                        )
                     }
                 }
         }
@@ -225,6 +355,7 @@ class HistoryViewModel @Inject constructor(
         val currentExpenses = _uiState.value.expenses
         val sortedExpenses = sortExpenses(currentExpenses, sortOrder)
         _uiState.update { it.copy(sortOrder = sortOrder, expenses = sortedExpenses) }
+        updateTransactionListItems()
     }
 
     /** 특정 년/월로 이동 */
@@ -286,7 +417,7 @@ class HistoryViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) { incomeRepository.delete(income) }
-                _uiState.update { it.copy(message = "수입이 삭제되었습니다") }
+                snackbarBus.show("수입이 삭제되었습니다")
                 loadExpenses() // 수입도 함께 다시 로드됨
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "수입 삭제 실패: ${e.message}") }
@@ -362,11 +493,17 @@ class HistoryViewModel @Inject constructor(
                 val results = withContext(Dispatchers.IO) {
                     expenseRepository.searchExpenses(query)
                 }
+                val currentState = _uiState.value
+                val sortedResults = sortExpenses(results, currentState.sortOrder)
+                val filteredIncomes = if (currentState.selectedCategory != null) emptyList() else currentState.incomes
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        expenses = results,
-                        monthlyTotal = results.sumOf { e -> e.amount }
+                        expenses = sortedResults,
+                        monthlyTotal = results.sumOf { e -> e.amount },
+                        transactionListItems = buildTransactionListItems(
+                            sortedResults, filteredIncomes, currentState.sortOrder, currentState.showIncomeView
+                        )
                     )
                 }
             } catch (e: Exception) {
@@ -404,17 +541,12 @@ class HistoryViewModel @Inject constructor(
                     )
                     expenseRepository.insert(expense)
                 }
-                _uiState.update { it.copy(message = "지출이 추가되었습니다") }
+                snackbarBus.show("지출이 추가되었습니다")
                 loadExpenses()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "지출 추가 실패: ${e.message}") }
             }
         }
-    }
-
-    /** 메시지 초기화 */
-    fun clearMessage() {
-        _uiState.update { it.copy(message = null) }
     }
 
     /** 지출 메모 업데이트 */
@@ -424,7 +556,7 @@ class HistoryViewModel @Inject constructor(
                 withContext(Dispatchers.IO) {
                     expenseRepository.updateMemo(expenseId, memo?.ifBlank { null })
                 }
-                _uiState.update { it.copy(message = "메모가 저장되었습니다") }
+                snackbarBus.show("메모가 저장되었습니다")
                 loadExpenses()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "메모 저장 실패: ${e.message}") }
@@ -439,7 +571,7 @@ class HistoryViewModel @Inject constructor(
                 withContext(Dispatchers.IO) {
                     incomeRepository.updateMemo(incomeId, memo?.ifBlank { null })
                 }
-                _uiState.update { it.copy(message = "메모가 저장되었습니다") }
+                snackbarBus.show("메모가 저장되었습니다")
                 loadExpenses()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "메모 저장 실패: ${e.message}") }
@@ -454,6 +586,7 @@ class HistoryViewModel @Inject constructor(
         if (newValue) {
             loadIncomes()
         }
+        updateTransactionListItems()
     }
 
     /** 수입 보기 끄기 */
@@ -462,7 +595,7 @@ class HistoryViewModel @Inject constructor(
     }
 
     /** 수입 내역 로드 */
-    private fun loadIncomes() {
+    private fun loadIncomes(exclusionKeywords: Set<String> = emptySet()) {
         viewModelScope.launch {
             val state = _uiState.value
             val (startTime, endTime) = DateUtils.getCustomMonthPeriod(
@@ -473,14 +606,26 @@ class HistoryViewModel @Inject constructor(
 
             try {
                 incomeRepository.getIncomesByDateRange(startTime, endTime)
-                    .collect { incomes ->
+                    .collect { allIncomes ->
+                        // 제외 키워드 필터 적용
+                        val incomes = if (exclusionKeywords.isEmpty()) {
+                            allIncomes
+                        } else {
+                            allIncomes.filter { income ->
+                                val smsLower = income.originalSms?.lowercase()
+                                smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                            }
+                        }
                         val total = incomes.sumOf { it.amount }
+                        val sortedIncomes = incomes.sortedByDescending { inc -> inc.dateTime }
                         _uiState.update {
                             it.copy(
-                                incomes = incomes.sortedByDescending { inc -> inc.dateTime },
+                                incomes = sortedIncomes,
                                 monthlyIncomeTotal = total
                             )
                         }
+                        // 수입 갱신 후 transactionListItems도 재빌드
+                        updateTransactionListItems()
                     }
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "수입 로드 실패: ${e.message}") }
@@ -500,37 +645,245 @@ class HistoryViewModel @Inject constructor(
         )
 
         try {
-            val (monthlyTotal, dailyTotalsMap, sortedExpenses) = withContext(Dispatchers.IO) {
-                val total = expenseRepository.getTotalExpenseByDateRange(startTime, endTime)
-                val dailySums = expenseRepository.getDailyTotals(startTime, endTime)
-                val map = dailySums.associate { it.date to it.total }
+            val result = withContext(Dispatchers.IO) {
+                // 제외 키워드 로드
+                val exclusionKeywords = smsExclusionRepository.getAllKeywordStrings()
+                // 전체 데이터 로드 후 제외 키워드 필터 적용하여 총액 계산
+                val allExpenses = expenseRepository.getExpensesByDateRangeOnce(startTime, endTime)
+                val filteredForTotal = if (exclusionKeywords.isEmpty()) {
+                    allExpenses
+                } else {
+                    allExpenses.filter { expense ->
+                        val smsLower = expense.originalSms?.lowercase()
+                        smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                    }
+                }
+                val total = filteredForTotal.sumOf { it.amount }
+                // 일별 총액도 필터링된 데이터 기준
+                val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
+                val map = filteredForTotal
+                    .groupBy { dateFormat.format(java.util.Date(it.dateTime)) }
+                    .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
                 // 대 카테고리 선택 시 소 카테고리도 포함
                 val syncCategoryFilter = state.selectedCategory?.let { catName ->
                     Category.fromDisplayName(catName).displayNamesIncludingSub
                 }
-                val expenses = expenseRepository.getExpensesByDateRangeOnce(startTime, endTime)
-                    .let { list ->
-                        // 필터 적용
-                        list.filter { expense ->
-                            (state.selectedCardName == null || expense.cardName == state.selectedCardName) &&
-                            (syncCategoryFilter == null || expense.category in syncCategoryFilter)
-                        }
+                val expenses = filteredForTotal
+                    .filter { expense ->
+                        (state.selectedCardName == null || expense.cardName == state.selectedCardName) &&
+                        (syncCategoryFilter == null || expense.category in syncCategoryFilter)
                     }
                 // 정렬 적용
                 val sorted = sortExpenses(expenses, state.sortOrder)
                 Triple(total, map, sorted)
             }
 
+            val state2 = _uiState.value
+            // 카테고리 필터 활성화 시 수입 항목 제외
+            val filteredIncomes = if (state2.selectedCategory != null) emptyList() else state2.incomes
             _uiState.update {
                 it.copy(
-                    monthlyTotal = monthlyTotal,
-                    dailyTotals = dailyTotalsMap,
-                    expenses = sortedExpenses,
-                    isLoading = false
+                    monthlyTotal = result.first,
+                    dailyTotals = result.second,
+                    expenses = result.third,
+                    isLoading = false,
+                    transactionListItems = buildTransactionListItems(
+                        result.third, filteredIncomes, state2.sortOrder, state2.showIncomeView
+                    )
                 )
             }
         } catch (e: Exception) {
             _uiState.update { it.copy(errorMessage = e.message, isLoading = false) }
+        }
+    }
+
+    // ========== Intent 처리 ==========
+
+    /** 모든 사용자 인터랙션을 Intent로 처리 */
+    fun onIntent(intent: HistoryIntent) {
+        when (intent) {
+            is HistoryIntent.SelectExpense -> {
+                _uiState.update { it.copy(selectedExpense = intent.expense) }
+            }
+            is HistoryIntent.SelectIncome -> {
+                _uiState.update { it.copy(selectedIncome = intent.income) }
+            }
+            is HistoryIntent.DismissDialog -> {
+                _uiState.update { it.copy(selectedExpense = null, selectedIncome = null) }
+            }
+            is HistoryIntent.DeleteExpense -> {
+                _uiState.update { it.copy(selectedExpense = null) }
+                deleteExpense(intent.expense)
+            }
+            is HistoryIntent.ChangeCategory -> {
+                _uiState.update { it.copy(selectedExpense = null) }
+                updateExpenseCategory(intent.expenseId, intent.storeName, intent.newCategory)
+            }
+            is HistoryIntent.UpdateExpenseMemo -> {
+                _uiState.update { it.copy(selectedExpense = null) }
+                updateExpenseMemo(intent.expenseId, intent.memo)
+            }
+            is HistoryIntent.DeleteIncome -> {
+                _uiState.update { it.copy(selectedIncome = null) }
+                deleteIncome(intent.income)
+            }
+            is HistoryIntent.UpdateIncomeMemo -> {
+                _uiState.update { it.copy(selectedIncome = null) }
+                updateIncomeMemo(intent.incomeId, intent.memo)
+            }
+        }
+    }
+
+    // ========== 리스트 데이터 가공 ==========
+
+    /** transactionListItems 갱신 */
+    private fun updateTransactionListItems() {
+        val state = _uiState.value
+        // 카테고리 필터 활성화 시 수입 항목 제외
+        val filteredIncomes = if (state.selectedCategory != null) emptyList() else state.incomes
+        val items = buildTransactionListItems(
+            state.expenses, filteredIncomes, state.sortOrder, state.showIncomeView
+        )
+        _uiState.update { it.copy(transactionListItems = items) }
+    }
+
+    /**
+     * 지출+수입 데이터를 LazyColumn에 바로 렌더링 가능한 플랫 리스트로 가공
+     */
+    private fun buildTransactionListItems(
+        expenses: List<ExpenseEntity>,
+        incomes: List<IncomeEntity>,
+        sortOrder: SortOrder,
+        showIncomeView: Boolean
+    ): List<TransactionListItem> {
+        if (showIncomeView) {
+            return buildIncomeDayGroups(incomes)
+        }
+
+        return when (sortOrder) {
+            SortOrder.DATE_DESC -> buildDateDescItems(expenses, incomes)
+            SortOrder.AMOUNT_DESC -> buildAmountDescItems(expenses)
+            SortOrder.STORE_FREQ -> buildStoreFreqItems(expenses)
+        }
+    }
+
+    /** DATE_DESC: 날짜별 그룹핑 (지출 + 수입 통합) */
+    private fun buildDateDescItems(
+        expenses: List<ExpenseEntity>,
+        incomes: List<IncomeEntity>
+    ): List<TransactionListItem> {
+        val items = mutableListOf<TransactionListItem>()
+
+        val groupedExpenses = expenses.groupBy { it.dateTime.toDateKey() }
+        val groupedIncomes = incomes.groupBy { it.dateTime.toDateKey() }
+        val allDates = (groupedExpenses.keys + groupedIncomes.keys)
+            .toSortedSet(compareByDescending { it })
+
+        allDates.forEach { date ->
+            val dayExpenses = groupedExpenses[date] ?: emptyList()
+            val dayIncomes = groupedIncomes[date] ?: emptyList()
+            val dailyExpenseTotal = dayExpenses.sumOf { it.amount }
+            val dailyIncomeTotal = dayIncomes.sumOf { it.amount }
+
+            val calendar = Calendar.getInstance().apply { time = date }
+            val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
+            val dayOfWeekStr = context.getString(getDayOfWeekResId(calendar.get(Calendar.DAY_OF_WEEK)))
+            val title = context.getString(R.string.history_day_header, dayOfMonth, dayOfWeekStr)
+
+            items.add(TransactionListItem.Header(
+                title = title,
+                expenseTotal = dailyExpenseTotal,
+                incomeTotal = dailyIncomeTotal
+            ))
+            dayIncomes.forEach { items.add(TransactionListItem.IncomeItem(it)) }
+            dayExpenses.forEach { items.add(TransactionListItem.ExpenseItem(it)) }
+        }
+
+        return items
+    }
+
+    /** AMOUNT_DESC: 금액 높은순 플랫 리스트 */
+    private fun buildAmountDescItems(expenses: List<ExpenseEntity>): List<TransactionListItem> {
+        val items = mutableListOf<TransactionListItem>()
+        items.add(TransactionListItem.Header(
+            title = "${context.getString(R.string.history_sort_amount)} (${expenses.size}${context.getString(R.string.history_count_suffix)})",
+            expenseTotal = expenses.sumOf { it.amount }
+        ))
+        expenses.forEach { items.add(TransactionListItem.ExpenseItem(it)) }
+        return items
+    }
+
+    /** STORE_FREQ: 사용처별 그룹핑 */
+    private fun buildStoreFreqItems(expenses: List<ExpenseEntity>): List<TransactionListItem> {
+        val items = mutableListOf<TransactionListItem>()
+        val storeGroups = expenses.groupBy { it.storeName }
+            .entries
+            .sortedByDescending { it.value.size }
+
+        storeGroups.forEach { (storeName, storeExpenses) ->
+            val storeTotal = storeExpenses.sumOf { it.amount }
+            items.add(TransactionListItem.Header(
+                title = "$storeName (${storeExpenses.size}${context.getString(R.string.history_visit_suffix)})",
+                expenseTotal = storeTotal
+            ))
+            storeExpenses.sortedByDescending { it.dateTime }
+                .forEach { items.add(TransactionListItem.ExpenseItem(it)) }
+        }
+
+        return items
+    }
+
+    /** 수입 전용: 날짜별 그룹핑 */
+    private fun buildIncomeDayGroups(incomes: List<IncomeEntity>): List<TransactionListItem> {
+        val items = mutableListOf<TransactionListItem>()
+
+        val groupedIncomes = incomes.groupBy { it.dateTime.toDateKey() }
+            .toSortedMap(compareByDescending { it })
+
+        groupedIncomes.forEach { (date, dayIncomes) ->
+            val dailyTotal = dayIncomes.sumOf { it.amount }
+            val calendar = Calendar.getInstance().apply { time = date }
+            val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
+            val dayOfWeekStr = context.getString(getDayOfWeekResId(calendar.get(Calendar.DAY_OF_WEEK)))
+            val title = context.getString(R.string.history_day_header, dayOfMonth, dayOfWeekStr)
+
+            items.add(TransactionListItem.Header(
+                title = title,
+                incomeTotal = dailyTotal
+            ))
+            dayIncomes.forEach { items.add(TransactionListItem.IncomeItem(it)) }
+        }
+
+        return items
+    }
+
+    /** timestamp → 날짜 키 (시분초 제거) */
+    private fun Long.toDateKey(): Date {
+        return try {
+            val calendar = Calendar.getInstance().apply {
+                timeInMillis = this@toDateKey
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            calendar.time
+        } catch (e: Exception) {
+            Date()
+        }
+    }
+
+    /** Calendar.DAY_OF_WEEK → R.string.day_* 리소스 ID */
+    private fun getDayOfWeekResId(dayOfWeek: Int): Int {
+        return when (dayOfWeek) {
+            Calendar.SUNDAY -> R.string.day_sunday
+            Calendar.MONDAY -> R.string.day_monday
+            Calendar.TUESDAY -> R.string.day_tuesday
+            Calendar.WEDNESDAY -> R.string.day_wednesday
+            Calendar.THURSDAY -> R.string.day_thursday
+            Calendar.FRIDAY -> R.string.day_friday
+            Calendar.SATURDAY -> R.string.day_saturday
+            else -> R.string.day_sunday
         }
     }
 }

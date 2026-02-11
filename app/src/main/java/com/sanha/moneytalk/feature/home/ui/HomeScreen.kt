@@ -1,8 +1,10 @@
 package com.sanha.moneytalk.feature.home.ui
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,14 +26,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
-import com.sanha.moneytalk.core.ui.component.ExpenseItemCard
+import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
+import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
 import com.sanha.moneytalk.core.util.DateUtils
 import java.text.NumberFormat
 import java.util.*
@@ -71,14 +76,18 @@ fun HomeScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
             contentPadding = PaddingValues(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
                 // 월간 현황
                 item {
@@ -89,7 +98,6 @@ fun HomeScreen(
                         periodLabel = uiState.periodLabel,
                         income = uiState.monthlyIncome,
                         expense = uiState.monthlyExpense,
-                        remaining = uiState.remainingBudget,
                         onPreviousMonth = { viewModel.previousMonth() },
                         onNextMonth = { viewModel.nextMonth() },
                         onIncrementalSync = {
@@ -147,16 +155,26 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = if (uiState.selectedCategory != null) {
-                                val cat = Category.fromDisplayName(uiState.selectedCategory ?: "")
-                                "${cat.emoji} ${cat.displayName} 지출"
-                            } else {
-                                stringResource(R.string.home_recent_expense)
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                        if (uiState.selectedCategory != null) {
+                            val cat = Category.fromDisplayName(uiState.selectedCategory ?: "")
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CategoryIcon(category = cat, containerSize = 28.dp, fontSize = 20.sp)
+                                Text(
+                                    text = "${cat.displayName} 지출",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = stringResource(R.string.home_recent_expense),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                         if (uiState.selectedCategory != null) {
                             TextButton(onClick = { viewModel.selectCategory(null) }) {
                                 Text("전체 보기")
@@ -183,8 +201,8 @@ fun HomeScreen(
                     }
                 } else {
                     items(displayExpenses) { expense ->
-                        ExpenseItemCard(
-                            expense = expense,
+                        TransactionCardCompose(
+                            info = ExpenseTransactionCardInfo(expense),
                             onClick = { selectedExpense = expense }
                         )
                     }
@@ -219,6 +237,7 @@ fun HomeScreen(
 
     // 지출 상세 다이얼로그 (공통 컴포넌트 사용)
     selectedExpense?.let { expense ->
+        Log.e("sanha", "HomeScreen[selectedExpense] : ${expense.storeName}, ${expense.amount}원")
         ExpenseDetailDialog(
             expense = expense,
             onDismiss = { selectedExpense = null },
@@ -389,7 +408,6 @@ fun MonthlyOverviewSection(
     periodLabel: String,
     income: Int,
     expense: Int,
-    remaining: Int,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onIncrementalSync: () -> Unit,
@@ -398,7 +416,6 @@ fun MonthlyOverviewSection(
     isSyncing: Boolean
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
-    val progress = if (income > 0) expense.toFloat() / income.toFloat() else 0f
     var showSyncMenu by remember { mutableStateOf(false) }
 
     Column(
@@ -535,23 +552,7 @@ fun MonthlyOverviewSection(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        LinearProgressIndicator(
-            progress = { progress.coerceIn(0f, 1f) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp),
-            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
-        )
-
         Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = stringResource(R.string.home_remaining_budget, numberFormat.format(remaining)),
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (remaining >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-        )
     }
 }
 
@@ -623,12 +624,18 @@ fun CategoryExpenseSection(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "${category.emoji} ${category.displayName}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CategoryIcon(category = category, containerSize = 24.dp, fontSize = 16.sp)
+                        Text(
+                            text = category.displayName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     Text(
                         text = stringResource(R.string.common_won, numberFormat.format(item.total)),
                         style = MaterialTheme.typography.bodyMedium,

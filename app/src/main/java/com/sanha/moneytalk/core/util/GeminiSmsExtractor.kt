@@ -57,7 +57,9 @@ class GeminiSmsExtractor @Inject constructor(
             "인터넷쇼핑" to "쇼핑", "온라인" to "쇼핑",
             // 의료/건강 관련
             "의료" to "의료/건강", "건강" to "의료/건강", "병원" to "의료/건강",
-            "약국" to "의료/건강", "보험" to "기타",
+            "약국" to "의료/건강",
+            // 보험 (SmsParser/CategoryClassifierService의 "보험" 카테고리와 일치)
+            "보험" to "보험", "보험료" to "보험",
             // 문화/여가 관련
             "문화" to "문화/여가", "여가" to "문화/여가", "여행" to "문화/여가",
             "엔터테인먼트" to "문화/여가", "오락" to "문화/여가", "레저" to "문화/여가",
@@ -196,11 +198,13 @@ class GeminiSmsExtractor @Inject constructor(
 $referenceText
 $smsBody"""
 
-            Log.d(TAG, "LLM 추출 요청: ${smsBody.take(80)}...")
+            val startTime = System.currentTimeMillis()
+            Log.d(TAG, "[extractSingle] Gemini 단일 LLM 호출 시작: ${smsBody.take(60)}...")
             val response = model.generateContent(prompt)
+            val elapsed = System.currentTimeMillis() - startTime
             val responseText = response.text ?: return@withContext null
 
-            Log.d(TAG, "LLM 응답: $responseText")
+            Log.d(TAG, "[extractSingle] Gemini 단일 LLM 완료 (${elapsed}ms): ${responseText.take(100)}")
 
             // JSON 파싱
             parseExtractionResponse(responseText)
@@ -287,46 +291,54 @@ $referenceText
 
 $smsListText"""
 
-            Log.d(TAG, "LLM 배치 추출 요청: ${smsMessages.size}건")
+            Log.d(TAG, "[extractBatch] LLM 배치 추출 요청: ${smsMessages.size}건")
 
             // 재시도 로직
             for (attempt in 0 until BATCH_MAX_RETRIES) {
                 try {
+                    val startTime = System.currentTimeMillis()
+                    Log.d(TAG, "[extractBatch] Gemini 배치 LLM 호출 시작 (시도 ${attempt + 1}/${BATCH_MAX_RETRIES}, ${smsMessages.size}건)")
                     val response = model.generateContent(prompt)
+                    val elapsed = System.currentTimeMillis() - startTime
                     val responseText = response.text
                     if (responseText == null) {
-                        Log.e(TAG, "LLM 배치 응답 없음 (시도 ${attempt + 1})")
+                        Log.e(TAG, "[extractBatch] LLM 배치 응답 없음 (${elapsed}ms, 시도 ${attempt + 1})")
                         continue
                     }
 
-                    Log.d(TAG, "LLM 배치 응답 (${responseText.length}자): ${responseText.take(200)}...")
+                    Log.d(TAG, "[extractBatch] LLM 배치 응답 수신 (${elapsed}ms, ${responseText.length}자)")
 
                     val parsed = parseBatchExtractionResponse(responseText, smsMessages.size)
                     if (parsed != null) {
-                        Log.d(TAG, "LLM 배치 추출 성공: ${parsed.count { it != null }}/${smsMessages.size}건 파싱 성공")
+                        Log.d(TAG, "[extractBatch] LLM 배치 추출 성공: ${parsed.count { it != null }}/${smsMessages.size}건 파싱")
                         return@withContext parsed
                     }
                 } catch (e: Exception) {
                     val isRateLimit = e.message?.contains("429") == true ||
                             e.message?.contains("RESOURCE_EXHAUSTED") == true
                     if (isRateLimit && attempt < BATCH_MAX_RETRIES - 1) {
-                        Log.w(TAG, "LLM 배치 429 Rate Limit, ${2000 * (attempt + 1)}ms 후 재시도")
+                        Log.w(TAG, "[extractBatch] ⚠️ 429 Rate Limit 발생! (GeminiSmsExtractor.extractFromSmsBatch) ${2000 * (attempt + 1)}ms 후 재시도")
                         delay(2000L * (attempt + 1))
                         continue
                     }
-                    Log.e(TAG, "LLM 배치 추출 실패 (시도 ${attempt + 1}): ${e.message}")
+                    Log.e(TAG, "[extractBatch] LLM 배치 추출 실패 (시도 ${attempt + 1}): ${e.message}")
                 }
             }
 
             // 배치 실패 시 개별 추출로 폴백
-            Log.w(TAG, "LLM 배치 실패, 개별 추출로 폴백 (${smsMessages.size}건)")
+            Log.w(TAG, "[extractBatch] LLM 배치 실패, 개별 추출로 폴백 (${smsMessages.size}건)")
             smsMessages.mapIndexed { idx, sms ->
                 try {
                     val ts = smsTimestamps.getOrNull(idx) ?: 0L
+                    val startTime = System.currentTimeMillis()
+                    Log.d(TAG, "[extractBatch→fallback] 개별 LLM ${idx + 1}/${smsMessages.size}: ${sms.take(40)}...")
                     val result = extractFromSms(sms, ts)
-                    delay(500) // 개별 호출 시 짧은 딜레이
+                    val elapsed = System.currentTimeMillis() - startTime
+                    Log.d(TAG, "[extractBatch→fallback] 개별 LLM ${idx + 1}/${smsMessages.size} 완료 (${elapsed}ms): isPayment=${result?.isPayment}")
+                    delay(200) // 개별 호출 시 최소 딜레이
                     result
                 } catch (e: Exception) {
+                    Log.e(TAG, "[extractBatch→fallback] 개별 LLM ${idx + 1} 실패: ${e.message}")
                     null
                 }
             }

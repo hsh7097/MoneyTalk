@@ -88,16 +88,16 @@
 | 🚗 | 교통 | TRANSPORT | |
 | 🛒 | 쇼핑 | SHOPPING | |
 | 📱 | 구독 | SUBSCRIPTION | |
-| 💊 | 의료/건강 | HEALTH | |
+| 🏥 | 의료/건강 | HEALTH | |
 | 💪 | 운동 | FITNESS | |
 | 🎬 | 문화/여가 | CULTURE | |
-| 📚 | 교육 | EDUCATION | |
-| 🏢 | 주거 | HOUSING | |
-| 🏠 | 생활 | LIVING | |
-| 🎁 | 경조 | EVENTS | |
-| 🛵 | 배달 | DELIVERY | |
-| 📦 | 기타 | ETC | |
-| ❓ | 미분류 | UNCLASSIFIED | AI 분류 전 기본값 |
+| 📖 | 교육 | EDUCATION | |
+| 🏠 | 주거 | HOUSING | |
+| 🧺 | 생활 | LIVING | |
+| 📋 | 경조 | EVENTS | |
+| 💸 | 배달 | DELIVERY | |
+| 💌 | 기타 | ETC | |
+| 🛵 | 미분류 | UNCLASSIFIED | AI 분류 전 기본값 |
 
 ---
 

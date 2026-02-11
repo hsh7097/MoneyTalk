@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.feature.settings.ui
 
 import android.content.Context
+import android.util.Log
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,12 +16,15 @@ import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
 import com.sanha.moneytalk.core.util.GoogleDriveHelper
+import com.sanha.moneytalk.core.ui.AppSnackbarBus
+import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.CategoryRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.core.util.DataRefreshEvent
+import com.sanha.moneytalk.core.theme.ThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -31,10 +35,9 @@ import javax.inject.Inject
 data class SettingsUiState(
     val apiKey: String = "",
     val hasApiKey: Boolean = false,
-    val monthlyIncome: Int = 0,
     val monthStartDay: Int = 1,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val isLoading: Boolean = false,
-    val message: String? = null,
     val backupContent: String? = null,
     val exportFormat: ExportFormat = ExportFormat.JSON,
     val exportFilter: ExportFilter = ExportFilter(),
@@ -52,7 +55,11 @@ data class SettingsUiState(
     val classifyProgressCurrent: Int = 0,
     val classifyProgressTotal: Int = 0,
     // 내 카드 관리
-    val ownedCards: List<com.sanha.moneytalk.core.database.entity.OwnedCardEntity> = emptyList()
+    val ownedCards: List<com.sanha.moneytalk.core.database.entity.OwnedCardEntity> = emptyList(),
+    // SMS 제외 키워드 관리
+    val exclusionKeywords: List<com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity> = emptyList(),
+    // 백그라운드 분류 진행 중 (HomeViewModel에서 진행 중인 경우)
+    val isBackgroundClassifying: Boolean = false
 )
 
 @HiltViewModel
@@ -68,8 +75,15 @@ class SettingsViewModel @Inject constructor(
     private val chatDao: ChatDao,
     private val budgetDao: BudgetDao,
     private val dataRefreshEvent: DataRefreshEvent,
-    private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository
+    private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
+    private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
+    private val snackbarBus: AppSnackbarBus,
+    private val classificationState: ClassificationState
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "SettingsViewModel"
+    }
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -79,6 +93,37 @@ class SettingsViewModel @Inject constructor(
         loadFilterOptions()
         loadUnclassifiedCount()
         loadOwnedCards()
+        loadExclusionKeywords()
+        observeClassificationState()
+        loadThemeMode()
+    }
+
+    private fun loadThemeMode() {
+        viewModelScope.launch {
+            settingsDataStore.themeModeFlow.collect { modeStr ->
+                val mode = try { ThemeMode.valueOf(modeStr) } catch (_: Exception) { ThemeMode.SYSTEM }
+                _uiState.update { it.copy(themeMode = mode) }
+            }
+        }
+    }
+
+    fun saveThemeMode(mode: ThemeMode) {
+        viewModelScope.launch {
+            settingsDataStore.saveThemeMode(mode.name)
+        }
+    }
+
+    /** 백그라운드 분류 상태 감지 (HomeViewModel에서 진행 중인 경우 버튼 비활성화) */
+    private fun observeClassificationState() {
+        viewModelScope.launch {
+            classificationState.isRunning.collect { running ->
+                _uiState.update { it.copy(isBackgroundClassifying = running) }
+                // 분류 완료 시 미분류 건수 새로고침
+                if (!running) {
+                    loadUnclassifiedCount()
+                }
+            }
+        }
     }
 
     private fun loadSettings() {
@@ -91,13 +136,6 @@ class SettingsViewModel @Inject constructor(
                         hasApiKey = key.isNotBlank()
                     )
                 }
-            }
-        }
-
-        viewModelScope.launch {
-            // 월 수입 로드
-            settingsDataStore.monthlyIncomeFlow.collect { income ->
-                _uiState.update { it.copy(monthlyIncome = income) }
             }
         }
 
@@ -143,45 +181,25 @@ class SettingsViewModel @Inject constructor(
 
     fun saveApiKey(key: String) {
         viewModelScope.launch {
+            Log.e("sanha", "SettingsViewModel[saveApiKey] : API 키 저장 시작 (길이=${key.length})")
             _uiState.update { it.copy(isLoading = true) }
             try {
                 withContext(Dispatchers.IO) { geminiRepository.setApiKey(key) }
+                Log.e("sanha", "SettingsViewModel[saveApiKey] : API 키 저장 완료 → 백그라운드 재분류 트리거")
+                snackbarBus.show("Gemini API 키가 저장되었습니다")
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         hasApiKey = true,
-                        apiKey = maskApiKey(key),
-                        message = "Gemini API 키가 저장되었습니다"
+                        apiKey = maskApiKey(key)
                     )
                 }
+                launchBackgroundReclassification()
             } catch (e: Exception) {
+                snackbarBus.show("저장 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "저장 실패: ${e.message}"
-                    )
-                }
-            }
-        }
-    }
-
-    fun saveMonthlyIncome(income: Int) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            try {
-                withContext(Dispatchers.IO) { settingsDataStore.saveMonthlyIncome(income) }
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        monthlyIncome = income,
-                        message = "월 수입이 저장되었습니다"
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        message = "저장 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -193,18 +211,18 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             try {
                 withContext(Dispatchers.IO) { settingsDataStore.saveMonthStartDay(day) }
+                snackbarBus.show("월 시작일이 ${day}일로 설정되었습니다")
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        monthStartDay = day,
-                        message = "월 시작일이 ${day}일로 설정되었습니다"
+                        monthStartDay = day
                     )
                 }
             } catch (e: Exception) {
+                snackbarBus.show("저장 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "저장 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -251,11 +269,12 @@ class SettingsViewModel @Inject constructor(
                         incomes = emptyList()
                     }
 
+                    val savedMonthlyIncome = settingsDataStore.getMonthlyIncome()
                     when (state.exportFormat) {
                         ExportFormat.JSON -> DataBackupManager.createBackupJson(
                             expenses = expenses,
                             incomes = incomes,
-                            monthlyIncome = state.monthlyIncome,
+                            monthlyIncome = savedMonthlyIncome,
                             monthStartDay = state.monthStartDay
                         )
                         ExportFormat.CSV -> DataBackupManager.createCombinedCsv(expenses, incomes)
@@ -269,10 +288,10 @@ class SettingsViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
+                snackbarBus.show("백업 준비 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "백업 준비 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -293,26 +312,26 @@ class SettingsViewModel @Inject constructor(
                     DataBackupManager.exportToUri(context, uri, content)
                 }
                 result.onSuccess {
+                    snackbarBus.show("백업이 완료되었습니다")
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            backupContent = null,
-                            message = "백업이 완료되었습니다"
+                            backupContent = null
                         )
                     }
                 }.onFailure { e ->
+                    snackbarBus.show("백업 실패: ${e.message}")
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
-                            message = "백업 실패: ${e.message}"
+                            isLoading = false
                         )
                     }
                 }
             } catch (e: Exception) {
+                snackbarBus.show("백업 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "백업 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -332,18 +351,18 @@ class SettingsViewModel @Inject constructor(
                 result.onSuccess { backupData ->
                     restoreData(backupData)
                 }.onFailure { e ->
+                    snackbarBus.show("복원 실패: ${e.message}")
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
-                            message = "복원 실패: ${e.message}"
+                            isLoading = false
                         )
                     }
                 }
             } catch (e: Exception) {
+                snackbarBus.show("복원 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "복원 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -378,16 +397,15 @@ class SettingsViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     isLoading = false,
-                    monthlyIncome = backupData.settings.monthlyIncome,
-                    monthStartDay = backupData.settings.monthStartDay,
-                    message = "복원 완료: 지출 ${expenseCount}건, 수입 ${incomeCount}건"
+                    monthStartDay = backupData.settings.monthStartDay
                 )
             }
+            snackbarBus.show("복원 완료: 지출 ${expenseCount}건, 수입 ${incomeCount}건")
         } catch (e: Exception) {
+            snackbarBus.show("복원 실패: ${e.message}")
             _uiState.update {
                 it.copy(
-                    isLoading = false,
-                    message = "복원 실패: ${e.message}"
+                    isLoading = false
                 )
             }
         }
@@ -432,20 +450,19 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        monthlyIncome = 0,
                         monthStartDay = 1,
                         unclassifiedCount = 0,
-                        message = "모든 데이터가 삭제되었습니다 (학습 데이터는 보존됨)"
                     )
                 }
+                snackbarBus.show("모든 데이터가 삭제되었습니다 (학습 데이터는 보존됨)")
 
                 // 다른 ViewModel에게 데이터 삭제 이벤트 전달
                 dataRefreshEvent.emit(DataRefreshEvent.RefreshType.ALL_DATA_DELETED)
             } catch (e: Exception) {
+                snackbarBus.show("삭제 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "삭제 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -552,28 +569,28 @@ class SettingsViewModel @Inject constructor(
                     googleDriveHelper.uploadFile(fileName, content, format)
                 }
                 result.onSuccess { _ ->
+                    snackbarBus.show("구글 드라이브에 업로드되었습니다")
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            backupContent = null,
-                            message = "구글 드라이브에 업로드되었습니다"
+                            backupContent = null
                         )
                     }
                     // 목록 새로고침
                     loadDriveBackupFiles()
                 }.onFailure { e ->
+                    snackbarBus.show("업로드 실패: ${e.message}")
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
-                            message = "업로드 실패: ${e.message}"
+                            isLoading = false
                         )
                     }
                 }
             } catch (e: Exception) {
+                snackbarBus.show("업로드 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "업로드 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -597,10 +614,10 @@ class SettingsViewModel @Inject constructor(
                     )
                 }
             }.onFailure { e ->
+                snackbarBus.show("목록 로드 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "목록 로드 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -623,18 +640,18 @@ class SettingsViewModel @Inject constructor(
                     }
                     restoreData(backupData)
                 } catch (e: Exception) {
+                    snackbarBus.show("복원 실패: 잘못된 파일 형식")
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
-                            message = "복원 실패: 잘못된 파일 형식"
+                            isLoading = false
                         )
                     }
                 }
             }.onFailure { e ->
+                snackbarBus.show("다운로드 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "다운로드 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -651,18 +668,18 @@ class SettingsViewModel @Inject constructor(
                 googleDriveHelper.deleteFile(fileId)
             }
             result.onSuccess {
+                snackbarBus.show("삭제되었습니다")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "삭제되었습니다"
+                        isLoading = false
                     )
                 }
                 loadDriveBackupFiles()
             }.onFailure { e ->
+                snackbarBus.show("삭제 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "삭제 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
@@ -691,20 +708,15 @@ class SettingsViewModel @Inject constructor(
                 withContext(Dispatchers.IO) {
                     ownedCardRepository.updateOwnership(cardName, isOwned)
                 }
+                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.OWNED_CARD_UPDATED)
             } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(message = "카드 설정 실패: ${e.message}")
-                }
+                snackbarBus.show("카드 설정 실패: ${e.message}")
             }
         }
     }
 
     fun clearBackupContent() {
         _uiState.update { it.copy(backupContent = null) }
-    }
-
-    fun clearMessage() {
-        _uiState.update { it.copy(message = null) }
     }
 
     /**
@@ -748,19 +760,18 @@ class SettingsViewModel @Inject constructor(
      */
     fun classifyUnclassifiedExpenses() {
         viewModelScope.launch {
+            Log.e("sanha", "SettingsViewModel[classifyUnclassifiedExpenses] : 수동 분류 시작 (hasApiKey=${_uiState.value.hasApiKey}, unclassified=${_uiState.value.unclassifiedCount})")
             // API 키 확인
             if (!_uiState.value.hasApiKey) {
-                _uiState.update {
-                    it.copy(message = "API 키를 먼저 설정해주세요")
-                }
+                Log.e("sanha", "SettingsViewModel[classifyUnclassifiedExpenses] : API 키 없음 → 중단")
+                snackbarBus.show("API 키를 먼저 설정해주세요")
                 return@launch
             }
 
             // 미정리 항목 확인
             if (_uiState.value.unclassifiedCount == 0) {
-                _uiState.update {
-                    it.copy(message = "정리할 항목이 없습니다")
-                }
+                Log.e("sanha", "SettingsViewModel[classifyUnclassifiedExpenses] : 미분류 0건 → 중단")
+                snackbarBus.show("정리할 항목이 없습니다")
                 return@launch
             }
 
@@ -775,7 +786,7 @@ class SettingsViewModel @Inject constructor(
             }
             try {
                 val count = withContext(Dispatchers.IO) {
-                    categoryClassifierService.classifyUnclassifiedExpenses { step, current, total ->
+                    categoryClassifierService.classifyUnclassifiedExpenses(onStepProgress = { step, current, total ->
                         _uiState.update {
                             val progressText = if (total > 0) "$step ($current/$total)" else step
                             it.copy(
@@ -784,30 +795,32 @@ class SettingsViewModel @Inject constructor(
                                 classifyProgressTotal = if (total > 0) total else it.classifyProgressTotal
                             )
                         }
-                    }
+                    })
                 }
                 loadUnclassifiedCount()
+                snackbarBus.show(
+                    if (count > 0) {
+                        "${count}건의 카테고리가 정리되었습니다"
+                    } else {
+                        "정리에 실패했습니다. API 키를 확인해주세요."
+                    }
+                )
                 _uiState.update {
                     it.copy(
                         isClassifying = false,
                         classifyProgress = "",
                         classifyProgressCurrent = 0,
-                        classifyProgressTotal = 0,
-                        message = if (count > 0) {
-                            "${count}건의 카테고리가 정리되었습니다"
-                        } else {
-                            "정리에 실패했습니다. API 키를 확인해주세요."
-                        }
+                        classifyProgressTotal = 0
                     )
                 }
             } catch (e: Exception) {
+                snackbarBus.show("카테고리 정리 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
                         isClassifying = false,
                         classifyProgress = "",
                         classifyProgressCurrent = 0,
-                        classifyProgressTotal = 0,
-                        message = "카테고리 정리 실패: ${e.message}"
+                        classifyProgressTotal = 0
                     )
                 }
             }
@@ -831,24 +844,126 @@ class SettingsViewModel @Inject constructor(
                 val deletedCount = withContext(Dispatchers.IO) {
                     expenseRepository.deleteDuplicates()
                 }
+                snackbarBus.show(
+                    if (deletedCount > 0) {
+                        "중복 데이터 ${deletedCount}건이 삭제되었습니다"
+                    } else {
+                        "중복 데이터가 없습니다"
+                    }
+                )
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = if (deletedCount > 0) {
-                            "중복 데이터 ${deletedCount}건이 삭제되었습니다"
-                        } else {
-                            "중복 데이터가 없습니다"
-                        }
+                        isLoading = false
                     )
                 }
             } catch (e: Exception) {
+                snackbarBus.show("중복 삭제 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        message = "중복 삭제 실패: ${e.message}"
+                        isLoading = false
                     )
                 }
             }
         }
     }
+
+    // ========== SMS 제외 키워드 관리 ==========
+
+    /**
+     * 제외 키워드 목록 로드
+     */
+    private fun loadExclusionKeywords() {
+        viewModelScope.launch {
+            try {
+                val keywords = withContext(Dispatchers.IO) {
+                    smsExclusionRepository.getAllKeywords()
+                }
+                _uiState.update { it.copy(exclusionKeywords = keywords) }
+            } catch (e: Exception) {
+                // 무시
+            }
+        }
+    }
+
+    /**
+     * 제외 키워드 추가
+     */
+    fun addExclusionKeyword(keyword: String) {
+        viewModelScope.launch {
+            try {
+                val added = withContext(Dispatchers.IO) {
+                    smsExclusionRepository.addKeyword(keyword, "user")
+                }
+                if (added) {
+                    loadExclusionKeywords()
+                    snackbarBus.show("'${keyword}' 제외 키워드가 추가되었습니다")
+                    // Home/History에서 해당 키워드 포함 데이터를 필터링하도록 새로고침
+                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
+                } else {
+                    snackbarBus.show("키워드를 추가할 수 없습니다")
+                }
+            } catch (e: Exception) {
+                snackbarBus.show("추가 실패: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * 제외 키워드 삭제 (default 소스는 삭제 불가)
+     */
+    fun removeExclusionKeyword(keyword: String) {
+        viewModelScope.launch {
+            try {
+                val deleted = withContext(Dispatchers.IO) {
+                    smsExclusionRepository.removeKeyword(keyword)
+                }
+                if (deleted > 0) {
+                    loadExclusionKeywords()
+                    snackbarBus.show("'${keyword}' 제외 키워드가 삭제되었습니다")
+                    // 필터 해제로 이전에 숨겨졌던 데이터가 다시 표시되도록 새로고침
+                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
+                } else {
+                    snackbarBus.show("기본 키워드는 삭제할 수 없습니다")
+                }
+            } catch (e: Exception) {
+                snackbarBus.show("삭제 실패: ${e.message}")
+            }
+        }
+    }
+
+    private fun launchBackgroundReclassification() {
+        Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : === 백그라운드 재분류 시작 ===")
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                var totalReclassified = 0
+
+                // Step 1: 저신뢰도 임베딩 재분류
+                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : Step 1 - 저신뢰도 항목 재분류 시작")
+                val reclassifiedCount = categoryClassifierService.reclassifyLowConfidenceItems()
+                totalReclassified += reclassifiedCount
+                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : Step 1 완료 - ${reclassifiedCount}건 재분류")
+
+                // Step 2: 미분류 지출 분류
+                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : Step 2 - 미분류 지출 분류 시작")
+                val classifiedCount = categoryClassifierService.classifyUnclassifiedExpenses()
+                totalReclassified += classifiedCount
+                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : Step 2 완료 - ${classifiedCount}건 분류")
+
+                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : === 총 ${totalReclassified}건 처리 완료 ===")
+                if (totalReclassified > 0) {
+                    withContext(Dispatchers.Main) {
+                        loadUnclassifiedCount()
+                        snackbarBus.show("${totalReclassified}건의 카테고리가 정리되었습니다")
+                        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
+                    }
+                } else {
+                    Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : 재분류 대상 없음 (0건)")
+                }
+            } catch (e: Exception) {
+                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : 실패: ${e.message}", e)
+                Log.e(TAG, "백그라운드 재분류 실패: ${e.message}")
+            }
+        }
+    }
+
 }

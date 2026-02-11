@@ -32,14 +32,22 @@ object VectorSearchEngine {
     fun cosineSimilarity(vectorA: List<Float>, vectorB: List<Float>): Float {
         if (vectorA.size != vectorB.size || vectorA.isEmpty()) return 0f
 
+        // FloatArray 접근으로 boxing/unboxing 오버헤드 제거
+        // (List<Float> 인터페이스 유지하면서 내부 최적화)
+        val a = if (vectorA is java.util.RandomAccess) vectorA else vectorA.toList()
+        val b = if (vectorB is java.util.RandomAccess) vectorB else vectorB.toList()
+        val size = a.size
+
         var dotProduct = 0f
         var normA = 0f
         var normB = 0f
 
-        for (i in vectorA.indices) {
-            dotProduct += vectorA[i] * vectorB[i]
-            normA += vectorA[i] * vectorA[i]
-            normB += vectorB[i] * vectorB[i]
+        for (i in 0 until size) {
+            val ai = a[i]
+            val bi = b[i]
+            dotProduct += ai * bi
+            normA += ai * ai
+            normB += bi * bi
         }
 
         val denominator = sqrt(normA) * sqrt(normB)

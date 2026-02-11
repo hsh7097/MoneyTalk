@@ -24,7 +24,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -34,6 +37,7 @@ import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
 import com.sanha.moneytalk.BuildConfig
+import com.sanha.moneytalk.core.theme.ThemeMode
 import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
 import com.sanha.moneytalk.R
@@ -50,7 +54,6 @@ fun SettingsScreen(
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     val coroutineScope = rememberCoroutineScope()
 
-    var showIncomeDialog by remember { mutableStateOf(false) }
     var showApiKeyDialog by remember { mutableStateOf(false) }
     var showMonthStartDayDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
@@ -61,8 +64,6 @@ fun SettingsScreen(
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var isExportingToGoogleDrive by remember { mutableStateOf(false) }
-
-    val snackbarHostState = remember { SnackbarHostState() }
 
     // 로그인이 어디서 트리거됐는지 추적 (설정 항목 vs 내보내기 다이얼로그)
     var googleSignInSource by remember { mutableStateOf("settings") }
@@ -126,26 +127,21 @@ fun SettingsScreen(
         }
     }
 
-    // 메시지 표시
-    LaunchedEffect(uiState.message) {
-        uiState.message?.let { message ->
+    // Google Drive export is coordinated via local UI state; reset it once the VM finishes the work.
+    LaunchedEffect(uiState.isLoading) {
+        if (isExportingToGoogleDrive && !uiState.isLoading) {
             isExportingToGoogleDrive = false
-            snackbarHostState.showSnackbar(message)
-            viewModel.clearMessage()
         }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) }
-        ) { paddingValues ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
                 item {
                     Text(
                         text = stringResource(R.string.settings_title),
@@ -154,19 +150,41 @@ fun SettingsScreen(
                     )
                 }
 
-                // 수입/예산 관리
+                // 화면 설정 (테마)
+                item {
+                    var showThemeDialog by remember { mutableStateOf(false) }
+                    val themeModeLabel = when (uiState.themeMode) {
+                        ThemeMode.SYSTEM -> "시스템 설정"
+                        ThemeMode.LIGHT -> "라이트 모드"
+                        ThemeMode.DARK -> "다크 모드"
+                    }
+                    SettingsSection(title = "화면 설정 (DISPLAY)") {
+                        SettingsItem(
+                            icon = when (uiState.themeMode) {
+                                ThemeMode.SYSTEM -> Icons.Default.Settings
+                                ThemeMode.LIGHT -> Icons.Default.LightMode
+                                ThemeMode.DARK -> Icons.Default.DarkMode
+                            },
+                            title = "테마",
+                            subtitle = themeModeLabel,
+                            onClick = { showThemeDialog = true }
+                        )
+                    }
+                    if (showThemeDialog) {
+                        ThemeModeDialog(
+                            currentMode = uiState.themeMode,
+                            onModeChange = {
+                                viewModel.saveThemeMode(it)
+                                showThemeDialog = false
+                            },
+                            onDismiss = { showThemeDialog = false }
+                        )
+                    }
+                }
+
+                // 기간 설정
                 item {
                     SettingsSection(title = stringResource(R.string.settings_section_budget)) {
-                        SettingsItem(
-                            icon = Icons.Default.AttachMoney,
-                            title = stringResource(R.string.settings_income_title),
-                            subtitle = if (uiState.monthlyIncome > 0) {
-                                stringResource(R.string.common_won, numberFormat.format(uiState.monthlyIncome))
-                            } else {
-                                stringResource(R.string.settings_income_subtitle_empty)
-                            },
-                            onClick = { showIncomeDialog = true }
-                        )
                         SettingsItem(
                             icon = Icons.Default.CalendarMonth,
                             title = stringResource(R.string.settings_month_start_title),
@@ -176,42 +194,6 @@ fun SettingsScreen(
                                 stringResource(R.string.settings_month_start_custom, uiState.monthStartDay)
                             },
                             onClick = { showMonthStartDayDialog = true }
-                        )
-                        SettingsItem(
-                            icon = Icons.Default.PieChart,
-                            title = stringResource(R.string.settings_category_budget_title),
-                            subtitle = stringResource(R.string.settings_category_budget_subtitle),
-                            onClick = { /* TODO */ }
-                        )
-                    }
-                }
-
-                // 내 카드 관리
-                item {
-                    var showOwnedCardDialog by remember { mutableStateOf(false) }
-                    val ownedCount = uiState.ownedCards.count { it.isOwned }
-                    val totalCount = uiState.ownedCards.size
-
-                    SettingsSection(title = "카드 관리") {
-                        SettingsItem(
-                            icon = Icons.Default.CreditCard,
-                            title = "내 카드 설정",
-                            subtitle = if (totalCount > 0) {
-                                "등록 ${totalCount}개 중 ${ownedCount}개 선택됨"
-                            } else {
-                                "SMS 동기화 후 자동 등록됩니다"
-                            },
-                            onClick = { showOwnedCardDialog = true }
-                        )
-                    }
-
-                    if (showOwnedCardDialog) {
-                        OwnedCardDialog(
-                            cards = uiState.ownedCards,
-                            onDismiss = { showOwnedCardDialog = false },
-                            onToggleOwnership = { cardName, isOwned ->
-                                viewModel.updateCardOwnership(cardName, isOwned)
-                            }
                         )
                     }
                 }
@@ -229,32 +211,101 @@ fun SettingsScreen(
                             },
                             onClick = { showApiKeyDialog = true }
                         )
-                        SettingsItem(
-                            icon = Icons.Default.AutoAwesome,
-                            title = "카테고리 정리",
-                            subtitle = if (!uiState.hasApiKey) {
-                                "API 키를 먼저 설정해주세요"
-                            } else if (uiState.unclassifiedCount > 0) {
-                                "미정리 ${uiState.unclassifiedCount}건"
-                            } else {
-                                "정리할 항목 없음"
-                            },
-                            onClick = {
-                                viewModel.classifyUnclassifiedExpenses()
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        // 카테고리 정리 버튼 (백그라운드 분류 중이면 비활성화 + 인디케이터)
+                        val isClassifyEnabled = uiState.hasApiKey &&
+                            uiState.unclassifiedCount > 0 &&
+                            !uiState.isBackgroundClassifying &&
+                            !uiState.isClassifying
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(
+                                    if (isClassifyEnabled) {
+                                        Modifier.clickable { viewModel.classifyUnclassifiedExpenses() }
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .alpha(if (uiState.isBackgroundClassifying || uiState.isClassifying) 0.6f else 1f)
+                                .padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "카테고리 정리",
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        if (uiState.isBackgroundClassifying) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(12.dp),
+                                                strokeWidth = 2.dp,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        Text(
+                                            text = when {
+                                                !uiState.hasApiKey -> "API 키를 먼저 설정해주세요"
+                                                uiState.isBackgroundClassifying -> "백그라운드에서 분류 진행 중..."
+                                                uiState.unclassifiedCount > 0 -> "미정리 ${uiState.unclassifiedCount}건"
+                                                else -> "정리할 항목 없음"
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
                             }
-                        )
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                            )
+                        }
                     }
                 }
 
                 // 데이터 관리
                 item {
+                    var showExclusionKeywordDialog by remember { mutableStateOf(false) }
+                    val userKeywordCount = uiState.exclusionKeywords.count { it.source != "default" }
+                    val defaultKeywordCount = uiState.exclusionKeywords.count { it.source == "default" }
+
                     SettingsSection(title = stringResource(R.string.settings_section_data)) {
+                        SettingsItem(
+                            icon = Icons.Default.Block,
+                            title = "SMS 제외 키워드",
+                            subtitle = if (uiState.exclusionKeywords.isNotEmpty()) {
+                                "${userKeywordCount}개 사용자 키워드 / ${defaultKeywordCount}개 기본 키워드"
+                            } else {
+                                "제외할 키워드를 관리합니다"
+                            },
+                            onClick = { showExclusionKeywordDialog = true }
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         SettingsItem(
                             icon = Icons.Default.Backup,
                             title = stringResource(R.string.settings_export_title),
                             subtitle = stringResource(R.string.settings_export_subtitle),
                             onClick = { showExportDialog = true }
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         SettingsItem(
                             icon = Icons.Default.Cloud,
                             title = stringResource(R.string.settings_google_drive_title),
@@ -268,34 +319,44 @@ fun SettingsScreen(
                                 coroutineScope.launch {
                                     val signInIntent = viewModel.tryOpenGoogleDrive(context)
                                     if (signInIntent == null) {
-                                        // silentSignIn 성공 또는 이미 준비됨 → 바로 다이얼로그 열기
                                         viewModel.loadDriveBackupFiles()
                                         showGoogleDriveDialog = true
                                     } else {
-                                        // interactive 로그인 필요
                                         googleSignInLauncher.launch(signInIntent)
                                     }
                                 }
                             }
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         SettingsItem(
                             icon = Icons.Default.Restore,
                             title = stringResource(R.string.settings_restore_local_title),
                             subtitle = stringResource(R.string.settings_restore_local_subtitle),
                             onClick = { restoreLauncher.launch(arrayOf("application/json")) }
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         SettingsItem(
                             icon = Icons.Default.ContentCopy,
                             title = "중복 데이터 삭제",
                             subtitle = "금액, 가게명, 시간이 같은 중복 항목 제거",
                             onClick = { viewModel.deleteDuplicates() }
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         SettingsItem(
                             icon = Icons.Default.DeleteForever,
                             title = stringResource(R.string.settings_delete_all_title),
                             subtitle = stringResource(R.string.settings_delete_all_subtitle),
                             onClick = { showDeleteConfirmDialog = true },
                             isDestructive = true
+                        )
+                    }
+
+                    if (showExclusionKeywordDialog) {
+                        ExclusionKeywordDialog(
+                            keywords = uiState.exclusionKeywords,
+                            onDismiss = { showExclusionKeywordDialog = false },
+                            onAdd = { keyword -> viewModel.addExclusionKeyword(keyword) },
+                            onRemove = { keyword -> viewModel.removeExclusionKeyword(keyword) }
                         )
                     }
                 }
@@ -309,6 +370,7 @@ fun SettingsScreen(
                             subtitle = BuildConfig.VERSION_NAME,
                             onClick = { showAppInfoDialog = true }
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         SettingsItem(
                             icon = Icons.Default.Description,
                             title = stringResource(R.string.settings_privacy_title),
@@ -318,7 +380,6 @@ fun SettingsScreen(
                     }
                 }
             }
-        }
 
         // 로딩 인디케이터
         if (uiState.isLoading || uiState.isClassifying) {
@@ -380,18 +441,6 @@ fun SettingsScreen(
                 }
             }
         }
-    }
-
-    // 수입 설정 다이얼로그
-    if (showIncomeDialog) {
-        IncomeSettingDialog(
-            initialValue = uiState.monthlyIncome,
-            onDismiss = { showIncomeDialog = false },
-            onConfirm = { amount ->
-                viewModel.saveMonthlyIncome(amount)
-                showIncomeDialog = false
-            }
-        )
     }
 
     // API 키 설정 다이얼로그
@@ -892,22 +941,103 @@ fun SettingsSection(
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp, MaterialTheme.colorScheme.outlineVariant
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            content()
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                content()
+            }
         }
     }
+}
+
+@Composable
+fun ThemeModeDialog(
+    currentMode: ThemeMode,
+    onModeChange: (ThemeMode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("테마 설정") },
+        text = {
+            Column {
+                ThemeMode.entries.forEach { mode ->
+                    val label = when (mode) {
+                        ThemeMode.SYSTEM -> "시스템 설정"
+                        ThemeMode.LIGHT -> "라이트 모드"
+                        ThemeMode.DARK -> "다크 모드"
+                    }
+                    val icon = when (mode) {
+                        ThemeMode.SYSTEM -> Icons.Default.Settings
+                        ThemeMode.LIGHT -> Icons.Default.LightMode
+                        ThemeMode.DARK -> Icons.Default.DarkMode
+                    }
+                    val isSelected = currentMode == mode
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onModeChange(mode) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = label,
+                            tint = if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (isSelected) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("닫기")
+            }
+        }
+    )
 }
 
 @Composable
@@ -921,8 +1051,7 @@ fun SettingsItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 12.dp),
+            .clickable { onClick() },
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -966,54 +1095,6 @@ fun SettingsItem(
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
         )
     }
-}
-
-@Composable
-fun IncomeSettingDialog(
-    initialValue: Int = 0,
-    onDismiss: () -> Unit,
-    onConfirm: (Int) -> Unit
-) {
-    var incomeText by remember {
-        mutableStateOf(if (initialValue > 0) initialValue.toString() else "")
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.dialog_income_title)) },
-        text = {
-            Column {
-                Text(
-                    text = stringResource(R.string.dialog_income_message),
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = incomeText,
-                    onValueChange = { incomeText = it.filter { char -> char.isDigit() } },
-                    label = { Text(stringResource(R.string.dialog_income_label)) },
-                    suffix = { Text("원") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    incomeText.toIntOrNull()?.let { onConfirm(it) }
-                },
-                enabled = incomeText.isNotBlank()
-            ) {
-                Text(stringResource(R.string.common_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_cancel))
-            }
-        }
-    )
 }
 
 @Composable
@@ -1100,6 +1181,7 @@ fun MonthStartDayDialog(
                     label = { Text(stringResource(R.string.dialog_month_start_label)) },
                     suffix = { Text("일") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1305,72 +1387,125 @@ fun PrivacyPolicyDialog(
 }
 
 @Composable
-fun OwnedCardDialog(
-    cards: List<com.sanha.moneytalk.core.database.entity.OwnedCardEntity>,
+fun ExclusionKeywordDialog(
+    keywords: List<com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity>,
     onDismiss: () -> Unit,
-    onToggleOwnership: (String, Boolean) -> Unit
+    onAdd: (String) -> Unit,
+    onRemove: (String) -> Unit
 ) {
+    var newKeyword by remember { mutableStateOf("") }
+
+    // 기본 키워드와 사용자 키워드 분리
+    val defaultKeywords = keywords.filter { it.source == "default" }
+    val userKeywords = keywords.filter { it.source != "default" }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Column {
-                Text("내 카드 설정")
+                Text("SMS 제외 키워드")
                 Text(
-                    text = "선택된 카드의 지출만 홈 화면에 표시됩니다",
+                    text = "해당 키워드가 포함된 문자는 결제/수입 문자에서 제외됩니다",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
         },
         text = {
-            if (cards.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp),
-                    contentAlignment = Alignment.Center
+            Column {
+                // 키워드 추가 입력
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "등록된 카드가 없습니다\nSMS 동기화를 먼저 진행해주세요",
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        style = MaterialTheme.typography.bodyMedium
+                    OutlinedTextField(
+                        value = newKeyword,
+                        onValueChange = { newKeyword = it },
+                        placeholder = { Text("키워드 입력") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
                     )
+                    Button(
+                        onClick = {
+                            if (newKeyword.isNotBlank()) {
+                                onAdd(newKeyword.trim())
+                                newKeyword = ""
+                            }
+                        },
+                        enabled = newKeyword.isNotBlank(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Text("추가")
+                    }
                 }
-            } else {
+
+                Spacer(modifier = Modifier.height(12.dp))
+
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = 400.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    modifier = Modifier.heightIn(max = 350.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    items(cards) { card ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onToggleOwnership(card.cardName, !card.isOwned)
-                                }
-                                .padding(vertical = 8.dp, horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
+                    // 사용자 키워드 섹션
+                    if (userKeywords.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "사용자 키워드 (${userKeywords.size}개)",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        items(userKeywords, key = { it.keyword }) { entity ->
+                            ExclusionKeywordItem(
+                                keyword = entity.keyword,
+                                source = entity.source,
+                                canDelete = true,
+                                onDelete = { onRemove(entity.keyword) }
+                            )
+                        }
+                    }
+
+                    // 기본 키워드 섹션
+                    if (defaultKeywords.isNotEmpty()) {
+                        item {
+                            if (userKeywords.isNotEmpty()) {
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            }
+                            Text(
+                                text = "기본 키워드 (${defaultKeywords.size}개)",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        items(defaultKeywords, key = { it.keyword }) { entity ->
+                            ExclusionKeywordItem(
+                                keyword = entity.keyword,
+                                source = entity.source,
+                                canDelete = false,
+                                onDelete = { }
+                            )
+                        }
+                    }
+
+                    // 비어있을 때
+                    if (keywords.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(80.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text(
-                                    text = card.cardName,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = "감지 ${card.seenCount}건",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    text = "등록된 키워드가 없습니다",
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    style = MaterialTheme.typography.bodyMedium
                                 )
                             }
-                            Checkbox(
-                                checked = card.isOwned,
-                                onCheckedChange = { checked ->
-                                    onToggleOwnership(card.cardName, checked)
-                                }
-                            )
                         }
                     }
                 }
@@ -1383,3 +1518,59 @@ fun OwnedCardDialog(
         }
     )
 }
+
+@Composable
+private fun ExclusionKeywordItem(
+    keyword: String,
+    source: String,
+    canDelete: Boolean,
+    onDelete: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = keyword,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (canDelete) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                }
+            )
+            if (source == "chat") {
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "(채팅)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                )
+            }
+        }
+        IconButton(
+            onClick = onDelete,
+            enabled = canDelete,
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(
+                Icons.Default.Close,
+                contentDescription = "삭제",
+                modifier = Modifier.size(18.dp),
+                tint = if (canDelete) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                }
+            )
+        }
+    }
+}
+

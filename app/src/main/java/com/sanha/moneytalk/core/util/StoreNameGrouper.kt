@@ -90,18 +90,24 @@ class StoreNameGrouper @Inject constructor(
         val batches = storeNames.chunked(EMBEDDING_BATCH_SIZE)
 
         for ((batchIdx, batch) in batches.withIndex()) {
+            val startTime = System.currentTimeMillis()
+            Log.d(TAG, "[grouping] 가게명 임베딩 배치 ${batchIdx + 1}/${batches.size} 시작 (${batch.size}건)")
             val embeddings = embeddingService.generateEmbeddings(batch)
+            val elapsed = System.currentTimeMillis() - startTime
 
+            var batchSuccess = 0
             for ((i, storeName) in batch.withIndex()) {
                 val embedding = embeddings.getOrNull(i)
                 if (embedding != null) {
                     results.add(storeName to embedding)
+                    batchSuccess++
                 }
             }
+            Log.d(TAG, "[grouping] 가게명 임베딩 배치 ${batchIdx + 1}/${batches.size} 완료 (${elapsed}ms, 성공: ${batchSuccess}/${batch.size})")
 
-            // 배치 간 딜레이 (마지막 배치 제외, Rate Limit 방지)
+            // 배치 간 최소 딜레이 (마지막 배치 제외)
             if (batchIdx < batches.size - 1) {
-                kotlinx.coroutines.delay(1500)
+                kotlinx.coroutines.delay(200)
             }
         }
 

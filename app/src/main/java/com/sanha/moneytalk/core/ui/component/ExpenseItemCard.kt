@@ -1,11 +1,12 @@
 package com.sanha.moneytalk.core.ui.component
 
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -32,88 +33,6 @@ import java.text.NumberFormat
 import java.util.*
 
 /**
- * 공통 지출 아이템 카드 컴포넌트
- * 홈 화면과 내역 화면에서 동일하게 사용
- */
-@Composable
-fun ExpenseItemCard(
-    expense: ExpenseEntity,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
-    val category = Category.fromDisplayName(expense.category)
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable {
-                Log.e("sanhakb", "=== 아이템 클릭 ===")
-                Log.e("sanhakb", "ID: ${expense.id}")
-                Log.e("sanhakb", "가게명(storeName): ${expense.storeName}")
-                Log.e("sanhakb", "금액: ${expense.amount}")
-                Log.e("sanhakb", "카테고리: ${expense.category}")
-                Log.e("sanhakb", "카드: ${expense.cardName}")
-                Log.e("sanhakb", "날짜: ${DateUtils.formatDisplayDateTime(expense.dateTime)}")
-                Log.e("sanhakb", "원본SMS: ${expense.originalSms}")
-                Log.e("sanhakb", "==================")
-                onClick()
-            }
-            .padding(vertical = 12.dp, horizontal = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
-        ) {
-            // 카테고리 이모지 아이콘
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = category.emoji,
-                    fontSize = 18.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column {
-                // 상호명 (가게명)
-                Text(
-                    text = expense.storeName,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                // 카테고리 | 카드(은행)
-                Text(
-                    text = "${expense.category} | ${expense.cardName}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-
-        // 금액
-        Text(
-            text = "-${numberFormat.format(expense.amount)}원",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.error
-        )
-    }
-}
-
-/**
  * 지출 상세 다이얼로그
  * 홈 화면과 내역 화면에서 공통 사용
  *
@@ -121,6 +40,7 @@ fun ExpenseItemCard(
  * @param onDismiss 다이얼로그 닫기
  * @param onDelete 삭제 콜백 (null이면 삭제 버튼 숨김)
  * @param onCategoryChange 카테고리 변경 콜백 (null이면 수정 불가)
+ * @param onMemoChange 메모 변경 콜백 (null이면 수정 불가)
  */
 @Composable
 fun ExpenseDetailDialog(
@@ -140,9 +60,10 @@ fun ExpenseDetailDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
-            Text(
-                text = category.emoji,
-                style = MaterialTheme.typography.displaySmall
+            CategoryIcon(
+                category = category,
+                containerSize = 48.dp,
+                fontSize = 28.sp
             )
         },
         title = {
@@ -157,10 +78,11 @@ fun ExpenseDetailDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // 금액
+                // 금액 (색상으로만 구분)
                 DetailRow(
                     label = stringResource(R.string.detail_amount),
-                    value = "-${numberFormat.format(expense.amount)}원"
+                    value = stringResource(R.string.common_won, numberFormat.format(expense.amount)),
+                    valueColor = MaterialTheme.colorScheme.error
                 )
 
                 // 카테고리 (수정 가능하면 클릭 가능)
@@ -388,60 +310,58 @@ fun ExpenseDetailDialog(
 }
 
 /**
- * 카테고리 선택 다이얼로그
+ * 카테고리 선택 다이얼로그 (3열 그리드)
+ * 아이콘 + 하단 텍스트 형태로 표시
+ *
+ * @param currentCategory 현재 선택된 카테고리 displayName
+ * @param showAllOption true면 "전체" 항목 표시 (필터용)
+ * @param onDismiss 다이얼로그 닫기
+ * @param onCategorySelected 카테고리 선택 콜백 (null이면 "전체" 선택)
  */
 @Composable
-fun CategoryPickerDialog(
-    currentCategory: String,
+fun CategorySelectDialog(
+    currentCategory: String?,
+    showAllOption: Boolean = false,
     onDismiss: () -> Unit,
-    onCategorySelected: (String) -> Unit
+    onCategorySelected: (String?) -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("카테고리 선택") },
+        title = {
+            Text(
+                text = "카테고리 선택",
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        },
         text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+            val categories = Category.entries.toList()
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Category.entries.forEach { category ->
-                    val isSelected = category.displayName == currentCategory
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onCategorySelected(category.displayName) },
-                        shape = RoundedCornerShape(8.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isSelected) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surface
-                            }
+                // "전체" 옵션 (필터용)
+                if (showAllOption) {
+                    item {
+                        CategoryGridItem(
+                            emoji = "📋",
+                            label = "전체",
+                            isSelected = currentCategory == null,
+                            onClick = { onCategorySelected(null) }
                         )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = category.emoji,
-                                fontSize = 24.sp
-                            )
-                            Text(
-                                text = category.displayName,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                }
-                            )
-                        }
                     }
+                }
+                items(categories) { category ->
+                    CategoryGridItem(
+                        emoji = category.emoji,
+                        label = category.displayName,
+                        isSelected = category.displayName == currentCategory,
+                        onClick = { onCategorySelected(category.displayName) }
+                    )
                 }
             }
         },
@@ -453,10 +373,71 @@ fun CategoryPickerDialog(
     )
 }
 
+/**
+ * 카테고리 그리드 아이템 (아이콘 + 하단 텍스트)
+ */
+@Composable
+private fun CategoryGridItem(
+    emoji: String,
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                else Color.Transparent
+            )
+            .clickable { onClick() }
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = emoji,
+            fontSize = 28.sp
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * 카테고리 선택 다이얼로그 (카테고리 변경용 - 하위 호환)
+ */
+@Composable
+fun CategoryPickerDialog(
+    currentCategory: String,
+    onDismiss: () -> Unit,
+    onCategorySelected: (String) -> Unit
+) {
+    CategorySelectDialog(
+        currentCategory = currentCategory,
+        showAllOption = false,
+        onDismiss = onDismiss,
+        onCategorySelected = { selected ->
+            if (selected != null) {
+                onCategorySelected(selected)
+            }
+        }
+    )
+}
+
 @Composable
 private fun DetailRow(
     label: String,
-    value: String
+    value: String,
+    valueColor: Color = Color.Unspecified
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -470,7 +451,8 @@ private fun DetailRow(
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
+            color = if (valueColor != Color.Unspecified) valueColor else Color.Unspecified
         )
     }
 }

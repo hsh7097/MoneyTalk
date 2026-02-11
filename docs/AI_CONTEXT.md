@@ -1,7 +1,7 @@
 # AI_CONTEXT.md - MoneyTalk 프로젝트 컨텍스트
 
 > AI 에이전트가 MoneyTalk 프로젝트를 이해하고 작업하기 위한 핵심 컨텍스트 문서
-> **최종 갱신**: 2026-02-08
+> **최종 갱신**: 2026-02-11
 
 ---
 
@@ -12,9 +12,10 @@
 - **언어**: Kotlin
 - **UI**: Jetpack Compose (Material 3)
 - **아키텍처**: MVVM + Hilt DI + Room DB
-- **AI**: Google Gemini (2.5-pro/2.5-flash)
+- **AI**: Google Gemini (2.5-pro/2.5-flash/2.5-flash-lite)
 - **Min SDK**: 26 (Android 8.0)
 - **Package**: `com.sanha.moneytalk`
+- **DB 버전**: 5 (moneytalk_v4.db)
 
 ---
 
@@ -24,33 +25,70 @@
 ```
 app/src/main/java/com/sanha/moneytalk/
 ├── core/
-│   ├── database/          # Room DB (entity, dao)
+│   ├── database/          # Room DB (entity, dao, repository 일부)
+│   │   ├── entity/        # 10개 Entity
+│   │   ├── dao/           # 10개 DAO
+│   │   ├── converter/     # FloatListConverter
+│   │   ├── OwnedCardRepository.kt      # 카드 화이트리스트
+│   │   └── SmsExclusionRepository.kt   # SMS 제외 키워드
 │   ├── datastore/         # DataStore (설정값)
 │   ├── di/                # Hilt DI 모듈
 │   ├── model/             # Category enum, SmsAnalysisResult 등
 │   ├── ui/component/      # 공통 UI 컴포넌트
+│   │   ├── transaction/card/    # TransactionCardCompose/Info
+│   │   ├── transaction/header/  # TransactionGroupHeaderCompose/Info
+│   │   └── tab/                 # SegmentedTabRowCompose/Info
 │   ├── similarity/        # 유사도 판정 정책 (SimilarityPolicy 구현체)
-│   └── util/              # 핵심 유틸 (SMS파싱, 벡터엔진, 분류기, CategoryReferenceProvider 등)
+│   └── util/              # 핵심 유틸 (SMS파싱, 벡터엔진, 분류기 등)
 ├── feature/
 │   ├── home/              # 홈 화면 (월간 현황, SMS 동기화)
-│   │   ├── data/          # Repository (Expense, Income, StoreEmbedding)
+│   │   ├── data/          # Repository (Expense, Income, StoreEmbedding, Category, GeminiCategory, CategoryClassifier)
 │   │   └── ui/            # HomeScreen, HomeViewModel
-│   ├── history/           # 내역 화면 (지출/수입 목록, 캘린더)
+│   ├── history/           # 내역 화면 (지출/수입 목록, 정렬, Intent 패턴)
 │   │   └── ui/            # HistoryScreen, HistoryViewModel
 │   ├── chat/              # AI 상담 (채팅방 리스트/내부)
-│   │   ├── data/          # GeminiRepository, ChatRepository
+│   │   ├── data/          # GeminiRepository, ChatRepository, ChatPrompts
 │   │   └── ui/            # ChatScreen, ChatViewModel
-│   └── settings/          # 설정
+│   ├── settings/          # 설정 (백업, 카드관리, SMS 제외 등)
+│   └── splash/            # 스플래시
+├── navigation/            # NavGraph, Screen, BottomNavItem
+├── receiver/              # SmsReceiver (BroadcastReceiver)
 └── MoneyTalkApplication.kt
 ```
 
-### 2-2. 핵심 시스템 3종
+### 2-2. 핵심 시스템
 
 | 시스템 | 설명 | 핵심 파일 |
 |--------|------|-----------|
 | SMS 파싱 (3-tier) | Regex → Vector → Gemini LLM | HybridSmsClassifier.kt, VectorSearchEngine.kt |
 | 카테고리 분류 (4-tier) | Room → Vector → Keyword → Gemini Batch | CategoryClassifierService.kt, StoreEmbeddingRepository.kt |
-| AI 채팅 (2-phase) | 쿼리분석 → DB조회 → 답변생성 | ChatViewModel.kt, GeminiRepository.kt |
+| AI 채팅 (3-step) | 쿼리분석 → DB조회/액션 → 답변생성 | ChatViewModel.kt, GeminiRepository.kt |
+| 카드 관리 | 소유 카드 화이트리스트 + 카드명 정규화 | OwnedCardRepository.kt, CardNameNormalizer.kt |
+| SMS 필터링 | 제외 키워드 블랙리스트 | SmsExclusionRepository.kt |
+
+### 2-3. DB 엔티티 (10개)
+
+| Entity | 테이블 | 용도 |
+|--------|--------|------|
+| ExpenseEntity | expenses | 지출 내역 |
+| IncomeEntity | incomes | 수입 내역 |
+| BudgetEntity | budgets | 예산 |
+| ChatEntity | chat_history | 채팅 메시지 |
+| ChatSessionEntity | chat_sessions | 채팅 세션(방) |
+| CategoryMappingEntity | category_mappings | 가게명→카테고리 매핑 캐시 |
+| SmsPatternEntity | sms_patterns | SMS 패턴 벡터 캐시 |
+| StoreEmbeddingEntity | store_embeddings | 가게명 벡터 임베딩 |
+| OwnedCardEntity | owned_cards | 소유 카드 화이트리스트 |
+| SmsExclusionKeywordEntity | sms_exclusion_keywords | SMS 제외 키워드 |
+
+### 2-4. DB 마이그레이션 히스토리
+
+| 버전 | 변경 내용 |
+|------|----------|
+| v1→v2 | incomes 테이블에 memo 컬럼 추가 |
+| v2→v3 | owned_cards 테이블 생성 (카드 화이트리스트) |
+| v3→v4 | sms_exclusion_keywords 테이블 생성 (SMS 제외 키워드) |
+| v4→v5 | expenses/incomes 성능 인덱스 추가 (smsId UNIQUE, dateTime, category, cardName, storeName+dateTime) |
 
 ---
 
@@ -126,27 +164,80 @@ SimilarityPolicy (판단 인터페이스)
 
 ---
 
-## 4. 리팩토링 컨텍스트: VectorSearchEngine 책임 분리
+## 4. AI 채팅 시스템 상세
 
-### 4-1. Phase 1 완료 요약
-`VectorSearchEngine`이 담당하던 **순수 벡터 연산**과 **도메인별 유사도 판정 정책**을 분리 완료.
+### 4-1. 쿼리 타입 (17종)
 
-→ Vector(연산) → Policy(판단) → Service(행동) 3계층 구조 확립
+| 타입 | 설명 | 필수 파라미터 |
+|------|------|-------------|
+| `total_expense` | 기간 내 총 지출 | startDate, endDate |
+| `total_income` | 기간 내 총 수입 | startDate, endDate |
+| `expense_by_category` | 카테고리별 지출 합계 | startDate, endDate |
+| `expense_list` | 지출 내역 리스트 | limit |
+| `expense_by_store` | 특정 가게 지출 | storeName |
+| `expense_by_card` | 특정 카드 지출 | cardName |
+| `daily_totals` | 일별 지출 합계 | startDate, endDate |
+| `monthly_totals` | 월별 지출 합계 | — |
+| `monthly_income` | 설정된 월 수입 | — |
+| `uncategorized_list` | 미분류 항목 | — |
+| `category_ratio` | 수입 대비 비율 분석 | — |
+| `search_expense` | 검색 (가게/카테고리/카드) | searchKeyword |
+| `card_list` | 사용 카드 목록 | — |
+| `income_list` | 수입 내역 | startDate, endDate |
+| `duplicate_list` | 중복 지출 항목 | — |
+| `sms_exclusion_list` | SMS 제외 키워드 목록 | — |
+| `analytics` | 복합 분석 (필터+그룹핑+집계) | filters, groupBy, metrics |
 
-### 4-2. 완료된 변경 사항
+### 4-2. 액션 타입 (12종)
 
-| 파일 | 변경 내용 |
-|------|----------|
-| `core/util/VectorSearchEngine.kt` | 임계값 상수 5개 제거, 순수 벡터 연산만 유지 |
-| `core/similarity/SimilarityPolicy.kt` | 유사도 판정 인터페이스 |
-| `core/similarity/SimilarityProfile.kt` | 임계값 구조화 데이터 클래스 |
-| `core/similarity/SmsPatternSimilarityPolicy.kt` | SMS 분류 정책 (0.92/0.95/0.97) |
-| `core/similarity/StoreNameSimilarityPolicy.kt` | 가게명 매칭 정책 (0.88/0.90/0.92) |
-| `core/similarity/CategoryPropagationPolicy.kt` | 카테고리 전파 정책 (confidence ≥ 0.6 차단) |
-| `core/util/HybridSmsClassifier.kt` | SmsPatternSimilarityPolicy 참조 |
-| `core/util/SmsBatchProcessor.kt` | SmsPatternSimilarityPolicy 참조 |
-| `core/util/StoreNameGrouper.kt` | StoreNameSimilarityPolicy 참조 |
-| `feature/home/data/StoreEmbeddingRepository.kt` | StoreNameSimilarityPolicy + CategoryPropagationPolicy 참조 |
+| 타입 | 설명 | 필수 파라미터 |
+|------|------|-------------|
+| `update_category` | 특정 지출 카테고리 변경 | expenseId, newCategory |
+| `update_category_by_store` | 가게명 기준 일괄 변경 | storeName, newCategory |
+| `update_category_by_keyword` | 키워드 포함 일괄 변경 | searchKeyword, newCategory |
+| `delete_expense` | 특정 지출 삭제 | expenseId |
+| `delete_by_keyword` | 키워드 기준 일괄 삭제 | searchKeyword |
+| `delete_duplicates` | 중복 항목 전체 삭제 | — |
+| `add_expense` | 수동 지출 추가 | storeName, amount |
+| `update_memo` | 메모 수정 | expenseId, memo |
+| `update_store_name` | 가게명 수정 | expenseId, newStoreName |
+| `update_amount` | 금액 수정 | expenseId, newAmount |
+| `add_sms_exclusion` | SMS 제외 키워드 추가 | searchKeyword |
+| `remove_sms_exclusion` | SMS 제외 키워드 삭제 | searchKeyword |
+
+### 4-3. ANALYTICS 쿼리 (클라이언트 사이드 실행)
+
+ANALYTICS 쿼리는 ChatViewModel에서 클라이언트 사이드로 실행되는 복합 분석 기능입니다.
+
+| 구성 요소 | 지원 값 |
+|----------|---------|
+| **필터 연산자** | ==, !=, >, >=, <, <=, contains, not_contains, in, not_in |
+| **필터 필드** | category, storeName, cardName, amount, memo, dayOfWeek |
+| **그룹핑** | category, storeName, cardName, date, month, dayOfWeek |
+| **집계 메트릭** | sum, avg, count, max, min |
+| **정렬** | asc, desc |
+| **topN** | 상위 N개 결과 |
+
+### 4-4. Gemini 모델 구성
+
+| 모델 | 역할 | Gemini 모델 | temperature | topK | topP | maxTokens |
+|------|------|-----------|-------------|------|------|-----------|
+| queryAnalyzerModel | 쿼리/액션 분석 | gemini-2.5-pro | 0.3 | 20 | 0.9 | 10000 |
+| financialAdvisorModel | 재무 상담 답변 | gemini-2.5-pro | 0.7 | 40 | 0.95 | 10000 |
+| summaryModel | Rolling Summary | gemini-2.5-flash | 0.3 | 20 | 0.9 | 10000 |
+
+### 4-5. 프롬프트 위치
+
+> 모든 시스템 프롬프트는 `res/values/string_prompt.xml`에서 관리
+
+| 프롬프트 | XML key | 모델 |
+|---------|---------|------|
+| 쿼리 분석기 | `prompt_query_analyzer_system` | gemini-2.5-pro |
+| 재무 상담사 | `prompt_financial_advisor_system` | gemini-2.5-pro |
+| 대화 요약 | `prompt_summary_system` | gemini-2.5-flash |
+| SMS 추출 (단일) | `prompt_sms_extract_system` | gemini-2.5-flash-lite |
+| SMS 추출 (배치) | `prompt_sms_batch_extract_system` | gemini-2.5-flash-lite |
+| 카테고리 분류 | `prompt_category_classification` | gemini-2.5-flash-lite |
 
 ---
 
@@ -160,9 +251,11 @@ SMS 수신 → SmsReceiver → classifyRegexOnly (Tier 1)
 
 SMS 동기화 (HomeViewModel.syncSmsMessages)
    → SmsReader.readAllSms()
+   → SMS 제외 키워드 필터링 (SmsExclusionRepository)
    → HybridSmsClassifier.batchClassify() [Tier 1→2→3]
       → 벡터 매칭 → SmsPatternSimilarityPolicy 판단 → Tier 승격/차단
    → ExpenseRepository.insert() / IncomeRepository.insert()
+   → OwnedCardRepository.registerCardsFromSync() (카드명 정규화 + 등록)
    → batchLearnFromRegexResults() (벡터 학습)
 ```
 
@@ -187,14 +280,51 @@ CategoryClassifierService.getCategory(storeName)
 ChatViewModel.sendMessage(message)
    → ChatRepository.sendMessageAndBuildContext() [Rolling Summary + 윈도우]
    → GeminiRepository.analyzeQueryNeeds() [쿼리/액션 JSON 파싱]
-   → executeQuery() / executeAction() [DB 조회/수정]
+   → executeQuery() / executeAction() / executeAnalytics() [DB 조회/수정/분석]
    → GeminiRepository.generateFinalAnswerWithContext() [최종 답변]
    → ChatRepository.saveAiResponseAndUpdateSummary() [요약 갱신]
 ```
 
 ---
 
-## 6. 동기화 규칙 (Document Sync Rules)
+## 6. UI 공통 컴포넌트 (core/ui/component/)
+
+### 6-1. TransactionCard (거래 카드)
+- **Interface**: `TransactionCardInfo` — title, subtitle, amount, isIncome, category, iconEmoji
+- **구현체**: `ExpenseTransactionCardInfo`, `IncomeTransactionCardInfo`
+- **Composable**: `TransactionCardCompose` — 지출/수입 통합 카드 렌더링
+- **사용처**: HomeScreen, HistoryScreen
+
+### 6-2. TransactionGroupHeader (그룹 헤더)
+- **Interface**: `TransactionGroupHeaderInfo` — title, expenseTotal, incomeTotal
+- **Composable**: `TransactionGroupHeaderCompose` — 날짜별/가게별/금액별 그룹 헤더
+- **사용처**: HistoryScreen
+
+### 6-3. SegmentedTabRow (탭 버튼)
+- **Interface**: `SegmentedTabInfo` — label, isSelected, selectedColor, selectedTextColor
+- **Composable**: `SegmentedTabRowCompose` — 라운드 버튼 스타일 탭
+- **사용처**: HistoryScreen (정렬 옵션)
+
+### 6-4. Preview 배치 규칙
+- Preview 파일은 `src/debug/` 소스셋에 동일 패키지 경로로 배치 (release 빌드 제외)
+
+---
+
+## 7. 리팩토링 컨텍스트
+
+### Phase 1 완료: VectorSearchEngine 책임 분리
+`VectorSearchEngine`이 담당하던 **순수 벡터 연산**과 **도메인별 유사도 판정 정책**을 분리 완료.
+→ Vector(연산) → Policy(판단) → Service(행동) 3계층 구조 확립
+
+### History Intent 패턴 도입 (2026-02-11)
+HistoryScreen에 `HistoryIntent` sealed interface 패턴을 적용하여 UI-비즈니스 로직 분리.
+- `SelectExpense`, `SelectIncome`, `DismissDialog`
+- `DeleteExpense`, `ChangeCategory`, `UpdateExpenseMemo`
+- `DeleteIncome`, `UpdateIncomeMemo`
+
+---
+
+## 8. 동기화 규칙 (Document Sync Rules)
 
 ### SSOT (Single Source of Truth) 원칙
 - 임계값 수치 → 이 문서의 "임계값 레지스트리" 섹션이 SSOT

@@ -39,10 +39,10 @@ class HybridSmsClassifier @Inject constructor(
         private const val BOOTSTRAP_THRESHOLD = 10  // 부트스트랩 모드 임계값
         /** 임베딩 배치 처리 크기 (Google batchEmbedContents 최대값) */
         private const val EMBEDDING_BATCH_SIZE = 100
-        /** 배치 간 Rate Limit 방지 딜레이 (밀리초) */
-        private const val RATE_LIMIT_DELAY_MS = 1500L
-        /** LLM 호출 간 Rate Limit 방지 딜레이 (밀리초) */
-        private const val LLM_RATE_LIMIT_DELAY_MS = 1000L
+        /** 배치 임베딩 간 최소 딜레이 (밀리초) — 429 미발생 시 최소값 유지 */
+        private const val RATE_LIMIT_DELAY_MS = 50L
+        /** LLM 호출 간 최소 딜레이 (밀리초) — 429 미발생 시 최소값 유지 */
+        private const val LLM_RATE_LIMIT_DELAY_MS = 50L
         /** 오래된 패턴 판단 기준 (30일, 밀리초) */
         private const val STALE_PATTERN_THRESHOLD_MS = 30L * 24 * 60 * 60 * 1000
 
@@ -73,6 +73,12 @@ class HybridSmsClassifier @Inject constructor(
             // 기타 비결제
             "설문", "survey", "투표"
         )
+
+        /** NON_PAYMENT_KEYWORDS를 미리 lowercase로 캐시 (매번 .lowercase() 호출 방지) */
+        private val NON_PAYMENT_KEYWORDS_LOWER = NON_PAYMENT_KEYWORDS.map { it.lowercase() }
+
+        /** 금액+원 패턴 사전 컴파일 (hasPotentialPaymentIndicators에서 매 호출마다 재생성 방지) */
+        private val AMOUNT_WON_PATTERN = Regex("""[\d,]+원""")
     }
 
     /**
@@ -89,66 +95,6 @@ class HybridSmsClassifier @Inject constructor(
         val tier: Int = 0,
         val confidence: Float = 0f
     )
-
-    /**
-     * SMS를 3-tier로 분류하고 파싱
-     *
-     * @param smsBody SMS 본문
-     * @param smsTimestamp SMS 수신 시간
-     * @param senderAddress 발신 번호
-     * @return 분류 결과
-     */
-    suspend fun classify(
-        smsBody: String,
-        smsTimestamp: Long,
-        senderAddress: String = ""
-    ): ClassificationResult {
-        Log.d(TAG, "=== 3-tier 분류 시작 ===")
-        Log.d(TAG, "SMS: ${smsBody.take(60)}...")
-
-        // ===== 1단계: Regex =====
-        val regexResult = classifyWithRegex(smsBody, smsTimestamp)
-        if (regexResult != null) {
-            Log.d(TAG, "✅ Tier 1 (Regex) 성공: amount=${regexResult.analysisResult?.amount}")
-            // 벡터 학습은 batchLearnFromRegexResults()에서 일괄 처리 (개별 API 호출 방지)
-            return regexResult
-        }
-
-        // ===== 2단계: Vector 유사도 =====
-        val vectorResult = classifyWithVector(smsBody, smsTimestamp, senderAddress)
-        if (vectorResult != null) {
-            Log.d(TAG, "✅ Tier 2 (Vector) 성공: tier=${vectorResult.tier}, confidence=${vectorResult.confidence}")
-            return vectorResult
-        }
-
-        // ===== 3단계: LLM (Tier 1~2 실패 시, 결제 가능성 있는 SMS만) =====
-        // 사전 필터링: 명백히 비결제인 SMS는 LLM 호출 생략
-        if (isObviouslyNonPayment(smsBody)) {
-            Log.d(TAG, "⏭️ LLM 스킵: 명백한 비결제 SMS")
-            return ClassificationResult(isPayment = false, tier = 0, confidence = 0f)
-        }
-
-        // 비용 통제: 결제 가능성이 낮은 SMS는 LLM 호출 생략
-        if (!hasPotentialPaymentIndicators(smsBody)) {
-            Log.d(TAG, "⏭️ LLM 스킵: 결제 가능성 낮음 (금액/결제키워드/카드사 부족)")
-            return ClassificationResult(isPayment = false, tier = 0, confidence = 0f)
-        }
-
-        Log.d(TAG, "🔄 Tier 3 (LLM): 결제 가능성 감지, LLM 추출 시도")
-        val llmResult = classifyWithLlm(smsBody, smsTimestamp, senderAddress)
-        if (llmResult != null) {
-            Log.d(TAG, "✅ Tier 3 (LLM) 성공: isPayment=${llmResult.isPayment}")
-            return llmResult
-        }
-
-        // 모든 단계 실패 → 비결제 문자로 판정
-        Log.d(TAG, "❌ 모든 tier 실패: 비결제 문자로 판정")
-        return ClassificationResult(
-            isPayment = false,
-            tier = 0,
-            confidence = 0f
-        )
-    }
 
     /**
      * 기존 정규식 기반으로만 분류 (Tier 1 전용)
@@ -224,7 +170,12 @@ class HybridSmsClassifier @Inject constructor(
         val batchSize = EMBEDDING_BATCH_SIZE
         val batches = templates.chunked(batchSize)
         for ((batchIdx, batch) in batches.withIndex()) {
+            val startTime = System.currentTimeMillis()
+            Log.d(TAG, "[batchClassify] 임베딩 배치 ${batchIdx + 1}/${batches.size} 시작 (${batch.size}건)")
             val embeddings = embeddingService.generateEmbeddings(batch)
+            val elapsed = System.currentTimeMillis() - startTime
+            val successCount = embeddings.count { it != null }
+            Log.d(TAG, "[batchClassify] 임베딩 배치 ${batchIdx + 1}/${batches.size} 완료 (${elapsed}ms, 성공: ${successCount}/${batch.size})")
             allEmbeddings.addAll(embeddings)
 
             if (batchIdx < batches.size - 1) {
@@ -323,10 +274,14 @@ class HybridSmsClassifier @Inject constructor(
 
         // ===== Step 5: 결제 가능성 있는 미매칭 SMS에 LLM 호출 =====
         if (llmCandidates.isNotEmpty()) {
-            Log.d(TAG, "배치 LLM 후보: ${llmCandidates.size}건")
-            for (idx in llmCandidates) {
+            Log.d(TAG, "[batchClassify] LLM 후보: ${llmCandidates.size}건")
+            for ((llmIdx, idx) in llmCandidates.withIndex()) {
                 val (body, timestamp, address) = smsList[idx]
+                val startTime = System.currentTimeMillis()
+                Log.d(TAG, "[batchClassify] LLM 호출 ${llmIdx + 1}/${llmCandidates.size}: ${body.take(40)}...")
                 val llmResult = classifyWithLlm(body, timestamp, address)
+                val elapsed = System.currentTimeMillis() - startTime
+                Log.d(TAG, "[batchClassify] LLM 완료 ${llmIdx + 1}/${llmCandidates.size} (${elapsed}ms): isPayment=${llmResult?.isPayment}")
                 if (llmResult != null) {
                     results[idx] = llmResult
                 }
@@ -338,20 +293,6 @@ class HybridSmsClassifier @Inject constructor(
         Log.d(TAG, "=== 배치 분류 완료: ${smsList.size}건 중 결제 ${paymentCount}건 ===")
 
         return results.toList()
-    }
-
-    /**
-     * Regex 성공 결과를 벡터 DB에 학습
-     *
-     * syncSmsMessages에서 regex로 처리한 SMS를 벡터 DB에 등록할 때 사용.
-     * 이를 통해 벡터 DB가 점진적으로 채워짐.
-     */
-    suspend fun learnFromRegexResult(
-        smsBody: String,
-        senderAddress: String,
-        analysis: SmsAnalysisResult
-    ) {
-        learnPattern(smsBody, senderAddress, analysis, "regex")
     }
 
     /**
@@ -396,15 +337,19 @@ class HybridSmsClassifier @Inject constructor(
         val chunks = templatedItems.chunked(EMBEDDING_BATCH_SIZE)
         var learnedCount = 0
 
-        // 순차 처리 + 배치 간 딜레이 (429 Rate Limit 방지)
+        // 순차 처리 + 배치 간 최소 딜레이
         for ((chunkIdx, chunk) in chunks.withIndex()) {
+            val startTime = System.currentTimeMillis()
+            Log.d(TAG, "[batchLearn] 학습 임베딩 배치 ${chunkIdx + 1}/${chunks.size} 시작 (${chunk.size}건)")
             val patterns = processChunk(chunk)
+            val elapsed = System.currentTimeMillis() - startTime
+            Log.d(TAG, "[batchLearn] 학습 임베딩 배치 ${chunkIdx + 1}/${chunks.size} 완료 (${elapsed}ms, 패턴: ${patterns.size}건)")
             if (patterns.isNotEmpty()) {
                 smsPatternDao.insertAll(patterns)
                 learnedCount += patterns.size
             }
 
-            // 배치 간 딜레이 (마지막 chunk 제외)
+            // 배치 간 최소 딜레이 (마지막 chunk 제외)
             if (chunkIdx < chunks.size - 1) {
                 kotlinx.coroutines.delay(RATE_LIMIT_DELAY_MS)
             }
@@ -720,17 +665,6 @@ class HybridSmsClassifier @Inject constructor(
     }
 
     /**
-     * 패턴 DB 통계 조회
-     */
-    suspend fun getPatternStats(): PatternStats {
-        return PatternStats(
-            totalPatterns = smsPatternDao.getPatternCount(),
-            paymentPatterns = smsPatternDao.getPaymentPatternCount(),
-            isBootstrapMode = smsPatternDao.getPaymentPatternCount() < BOOTSTRAP_THRESHOLD
-        )
-    }
-
-    /**
      * 오래된 패턴 정리 (30일 이상 미사용 + 1회만 매칭)
      */
     suspend fun cleanupStalePatterns() {
@@ -752,8 +686,8 @@ class HybridSmsClassifier @Inject constructor(
      */
     private fun isObviouslyNonPayment(smsBody: String): Boolean {
         val lowerBody = smsBody.lowercase()
-        return NON_PAYMENT_KEYWORDS.any { keyword ->
-            lowerBody.contains(keyword.lowercase())
+        return NON_PAYMENT_KEYWORDS_LOWER.any { keyword ->
+            lowerBody.contains(keyword)
         }
     }
 
@@ -769,8 +703,8 @@ class HybridSmsClassifier @Inject constructor(
     private fun hasPotentialPaymentIndicators(smsBody: String): Boolean {
         var indicatorCount = 0
 
-        // 1. 금액 패턴 (숫자+원)
-        if (smsBody.contains(Regex("""[\d,]+원"""))) indicatorCount++
+        // 1. 금액 패턴 (숫자+원) — 사전 컴파일된 Regex 사용
+        if (AMOUNT_WON_PATTERN.containsMatchIn(smsBody)) indicatorCount++
 
         // 2. 결제 키워드 ("누적"은 카드사 누적 사용금액 표시로 결제 SMS 가능성 높음)
         val paymentKeywords = listOf("승인", "결제", "출금", "사용", "이용", "체크카드", "신용카드", "누적")
@@ -783,9 +717,4 @@ class HybridSmsClassifier @Inject constructor(
         return indicatorCount >= 2
     }
 
-    data class PatternStats(
-        val totalPatterns: Int,
-        val paymentPatterns: Int,
-        val isBootstrapMode: Boolean
-    )
 }

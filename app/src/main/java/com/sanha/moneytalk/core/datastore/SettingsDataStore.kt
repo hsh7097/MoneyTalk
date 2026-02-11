@@ -28,6 +28,7 @@ class SettingsDataStore @Inject constructor(
         private val MONTHLY_INCOME = intPreferencesKey("monthly_income")
         private val LAST_SYNC_TIME = longPreferencesKey("last_sync_time")
         private val MONTH_START_DAY = intPreferencesKey("month_start_day")
+        private val THEME_MODE = stringPreferencesKey("theme_mode")
     }
 
     // API 키 저장
@@ -116,5 +117,17 @@ class SettingsDataStore @Inject constructor(
 
     suspend fun getMonthStartDay(): Int {
         return context.dataStore.data.first()[MONTH_START_DAY] ?: 1
+    }
+
+    // 테마 모드 저장 (SYSTEM, LIGHT, DARK)
+    suspend fun saveThemeMode(mode: String) {
+        context.dataStore.edit { preferences ->
+            preferences[THEME_MODE] = mode
+        }
+    }
+
+    // 테마 모드 가져오기 (기본값: SYSTEM)
+    val themeModeFlow: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[THEME_MODE] ?: "SYSTEM"
     }
 }

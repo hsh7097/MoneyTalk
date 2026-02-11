@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,7 +28,6 @@ import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import com.sanha.moneytalk.core.model.Category
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import com.sanha.moneytalk.core.theme.moneyTalkColors
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,48 +48,17 @@ import kotlinx.coroutines.launch
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.ui.component.CategorySelectDialog
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
-import com.sanha.moneytalk.core.ui.component.ExpenseItemCard
+import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabInfo
+import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabRowCompose
+import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
+import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
+import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
 import com.sanha.moneytalk.core.util.DateUtils
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
-
-// 카테고리별 아이콘 및 색상
-data class CategoryStyle(
-    val icon: String,
-    val color: Color
-)
-
-private val categoryStyles = Category.entries.associate { category ->
-    category.displayName to CategoryStyle(
-        icon = category.emoji,
-        color = when (category) {
-            Category.FOOD -> Color(0xFFFF9800)
-            Category.CAFE -> Color(0xFF795548)
-            Category.DRINKING -> Color(0xFFE91E63)
-            Category.TRANSPORT -> Color(0xFF2196F3)
-            Category.SHOPPING -> Color(0xFF3F51B5)
-            Category.SUBSCRIPTION -> Color(0xFF673AB7)
-            Category.HEALTH -> Color(0xFFF44336)
-            Category.FITNESS -> Color(0xFF00BCD4)
-            Category.CULTURE -> Color(0xFF9C27B0)
-            Category.EDUCATION -> Color(0xFF2196F3)
-            Category.HOUSING -> Color(0xFF607D8B)
-            Category.LIVING -> Color(0xFF4CAF50)
-            Category.INSURANCE -> Color(0xFF00796B)
-            Category.TRANSFER -> Color(0xFF546E7A)
-            Category.EVENTS -> Color(0xFFFF5722)
-            Category.DELIVERY -> Color(0xFFFF6D00)
-            Category.ETC -> Color(0xFF9E9E9E)
-            Category.UNCLASSIFIED -> Color(0xFFBDBDBD)
-        }
-    )
-}
-
-private fun getCategoryStyle(category: String): CategoryStyle {
-    return categoryStyles[category] ?: CategoryStyle("📦", Color(0xFF9E9E9E))
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,25 +68,12 @@ fun HistoryScreen(
     val uiState by viewModel.uiState.collectAsState()
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
     var showAddDialog by remember { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
 
-    // 메시지 표시
-    LaunchedEffect(uiState.message) {
-        uiState.message?.let { message ->
-            snackbarHostState.showSnackbar(message)
-            viewModel.clearMessage()
-        }
-    }
-
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.background)
-        ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
                 // 검색 모드일 때 검색 바, 아니면 일반 헤더
                 if (uiState.isSearchMode) {
                     SearchBar(
@@ -189,30 +146,16 @@ fun HistoryScreen(
                 }
 
                 // 콘텐츠
-                if (uiState.showIncomeView) {
-                    IncomeListView(
-                        incomes = uiState.incomes,
-                        isLoading = uiState.isLoading,
-                        onDeleteIncome = { viewModel.deleteIncome(it) },
-                        onIncomeMemoChange = { id, memo -> viewModel.updateIncomeMemo(id, memo) }
-                    )
-                } else when (viewMode) {
-                    ViewMode.LIST -> {
-                        ExpenseListView(
-                            expenses = uiState.expenses,
-                            incomes = uiState.incomes,
-                            sortOrder = uiState.sortOrder,
+                when {
+                    viewMode == ViewMode.LIST || uiState.showIncomeView -> {
+                        TransactionListView(
+                            items = uiState.transactionListItems,
                             isLoading = uiState.isLoading,
-                            onDelete = { viewModel.deleteExpense(it) },
-                            onDeleteIncome = { viewModel.deleteIncome(it) },
-                            onCategoryChange = { expense, newCategory ->
-                                viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
-                            },
-                            onExpenseMemoChange = { id, memo -> viewModel.updateExpenseMemo(id, memo) },
-                            onIncomeMemoChange = { id, memo -> viewModel.updateIncomeMemo(id, memo) }
+                            showIncomeView = uiState.showIncomeView,
+                            onIntent = viewModel::onIntent
                         )
                     }
-                    ViewMode.CALENDAR -> {
+                    viewMode == ViewMode.CALENDAR -> {
                         BillingCycleCalendarView(
                             year = uiState.selectedYear,
                             month = uiState.selectedMonth,
@@ -228,6 +171,31 @@ fun HistoryScreen(
                     }
                 }
             }
+
+    // 다이얼로그 상태는 ViewModel에서 관리
+    uiState.selectedExpense?.let { expense ->
+        ExpenseDetailDialog(
+            expense = expense,
+            onDismiss = { viewModel.onIntent(HistoryIntent.DismissDialog) },
+            onDelete = { viewModel.onIntent(HistoryIntent.DeleteExpense(expense)) },
+            onCategoryChange = { newCategory ->
+                viewModel.onIntent(HistoryIntent.ChangeCategory(expense.id, expense.storeName, newCategory))
+            },
+            onMemoChange = { memo ->
+                viewModel.onIntent(HistoryIntent.UpdateExpenseMemo(expense.id, memo))
+            }
+        )
+    }
+
+    uiState.selectedIncome?.let { income ->
+        IncomeDetailDialog(
+            income = income,
+            onDismiss = { viewModel.onIntent(HistoryIntent.DismissDialog) },
+            onDelete = { viewModel.onIntent(HistoryIntent.DeleteIncome(income)) },
+            onMemoChange = { memo ->
+                viewModel.onIntent(HistoryIntent.UpdateIncomeMemo(income.id, memo))
+            }
+        )
     }
 
     // 수동 지출 추가 다이얼로그
@@ -289,8 +257,6 @@ fun AddExpenseDialog(
     var cardName by remember { mutableStateOf("현금") }
     var showCategoryDropdown by remember { mutableStateOf(false) }
 
-    val categories = Category.entries.map { it.displayName }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.history_add_expense_title)) },
@@ -318,36 +284,33 @@ fun AddExpenseDialog(
                 )
 
                 // 카테고리 선택
-                Box {
-                    OutlinedTextField(
-                        value = selectedCategory,
-                        onValueChange = {},
-                        label = { Text(stringResource(R.string.history_category)) },
-                        readOnly = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showCategoryDropdown = true },
-                        trailingIcon = {
-                            IconButton(onClick = { showCategoryDropdown = true }) {
-                                @Suppress("DEPRECATION")
-                                Icon(Icons.Default.List, contentDescription = null)
-                            }
-                        }
-                    )
-                    DropdownMenu(
-                        expanded = showCategoryDropdown,
-                        onDismissRequest = { showCategoryDropdown = false }
-                    ) {
-                        categories.forEach { category ->
-                            DropdownMenuItem(
-                                text = { Text(category) },
-                                onClick = {
-                                    selectedCategory = category
-                                    showCategoryDropdown = false
-                                }
-                            )
+                OutlinedTextField(
+                    value = selectedCategory,
+                    onValueChange = {},
+                    label = { Text(stringResource(R.string.history_category)) },
+                    readOnly = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showCategoryDropdown = true },
+                    trailingIcon = {
+                        IconButton(onClick = { showCategoryDropdown = true }) {
+                            @Suppress("DEPRECATION")
+                            Icon(Icons.Default.List, contentDescription = null)
                         }
                     }
+                )
+                if (showCategoryDropdown) {
+                    CategorySelectDialog(
+                        currentCategory = selectedCategory,
+                        showAllOption = false,
+                        onDismiss = { showCategoryDropdown = false },
+                        onCategorySelected = { selected ->
+                            if (selected != null) {
+                                selectedCategory = selected
+                            }
+                            showCategoryDropdown = false
+                        }
+                    )
                 }
 
                 // 결제수단 입력
@@ -417,13 +380,21 @@ fun PeriodSummaryCard(
         start to end
     }
 
-    Column(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -435,7 +406,8 @@ fun PeriodSummaryCard(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                     contentDescription = stringResource(R.string.home_previous_month),
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(28.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -444,7 +416,7 @@ fun PeriodSummaryCard(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "$startDate",
+                    text = startDate,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -465,12 +437,13 @@ fun PeriodSummaryCard(
                     Text(
                         text = stringResource(R.string.home_expense) + " ",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = stringResource(R.string.common_won, numberFormat.format(totalExpense)),
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
                 if (totalIncome > 0) {
@@ -480,13 +453,13 @@ fun PeriodSummaryCard(
                         Text(
                             text = stringResource(R.string.home_income) + " ",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             text = "+" + stringResource(R.string.common_won, numberFormat.format(totalIncome)),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
-                            color = Color(0xFF4CAF50)
+                            color = MaterialTheme.moneyTalkColors.income
                         )
                     }
                 }
@@ -500,7 +473,8 @@ fun PeriodSummaryCard(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = stringResource(R.string.home_next_month),
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(28.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -531,6 +505,36 @@ fun FilterTabRow(
 
     val hasActiveFilter = selectedCardName != null || selectedCategory != null || sortOrder != SortOrder.DATE_DESC
 
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
+    val incomeColor = MaterialTheme.moneyTalkColors.income
+
+    val listLabel = stringResource(R.string.history_view_list)
+    val calendarLabel = stringResource(R.string.history_view_calendar)
+    val incomeLabel = stringResource(R.string.home_income)
+
+    val tabs = remember(currentMode, showIncomeView, primaryColor, onPrimaryColor) {
+        listOf(
+            object : SegmentedTabInfo {
+                override val label = listLabel
+                override val isSelected = currentMode == ViewMode.LIST && !showIncomeView
+                override val selectedColor = primaryColor
+                override val selectedTextColor = onPrimaryColor
+            },
+            object : SegmentedTabInfo {
+                override val label = calendarLabel
+                override val isSelected = currentMode == ViewMode.CALENDAR && !showIncomeView
+                override val selectedColor = primaryColor
+                override val selectedTextColor = onPrimaryColor
+            },
+            object : SegmentedTabInfo {
+                override val label = incomeLabel
+                override val isSelected = showIncomeView
+                override val selectedColor = incomeColor
+            }
+        )
+    }
+
     Column {
         Row(
             modifier = Modifier
@@ -540,95 +544,41 @@ fun FilterTabRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 탭 (목록 / 달력 / 수입)
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            if (currentMode == ViewMode.LIST && !showIncomeView) MaterialTheme.colorScheme.primary
-                            else Color.Transparent
-                        )
-                        .clickable {
+            SegmentedTabRowCompose(
+                tabs = tabs,
+                onTabClick = { index ->
+                    when (index) {
+                        0 -> {
                             onModeChange(ViewMode.LIST)
                             if (showIncomeView) onToggleIncomeView()
                         }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.history_view_list),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (currentMode == ViewMode.LIST && !showIncomeView) FontWeight.Bold else FontWeight.Normal,
-                        color = if (currentMode == ViewMode.LIST && !showIncomeView)
-                            MaterialTheme.colorScheme.onPrimary
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            if (currentMode == ViewMode.CALENDAR && !showIncomeView) MaterialTheme.colorScheme.primary
-                            else Color.Transparent
-                        )
-                        .clickable {
+                        1 -> {
                             onModeChange(ViewMode.CALENDAR)
                             if (showIncomeView) onToggleIncomeView()
                         }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.history_view_calendar),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (currentMode == ViewMode.CALENDAR && !showIncomeView) FontWeight.Bold else FontWeight.Normal,
-                        color = if (currentMode == ViewMode.CALENDAR && !showIncomeView)
-                            MaterialTheme.colorScheme.onPrimary
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                        2 -> onToggleIncomeView()
+                    }
                 }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            if (showIncomeView) Color(0xFF4CAF50)
-                            else Color.Transparent
-                        )
-                        .clickable { onToggleIncomeView() }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.home_income),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (showIncomeView) FontWeight.Bold else FontWeight.Normal,
-                        color = if (showIncomeView)
-                            Color.White
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+            )
 
             // 필터 아이콘 (수입 보기가 아닐 때, 목록 모드일 때만)
-            if (currentMode == ViewMode.LIST && !showIncomeView) {
-                IconButton(
-                    onClick = { showFilterPanel = !showFilterPanel },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.FilterList,
-                        contentDescription = stringResource(R.string.common_filter),
-                        modifier = Modifier.size(20.dp),
-                        tint = if (hasActiveFilter)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.onSurface
-                    )
+            // 높이 고정: 필터 아이콘 유무에 관계없이 동일 크기 영역 유지
+            Box(modifier = Modifier.size(36.dp)) {
+                if (currentMode == ViewMode.LIST && !showIncomeView) {
+                    IconButton(
+                        onClick = { showFilterPanel = !showFilterPanel },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.FilterList,
+                            contentDescription = stringResource(R.string.common_filter),
+                            modifier = Modifier.size(20.dp),
+                            tint = if (hasActiveFilter)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         }
@@ -716,33 +666,18 @@ fun FilterPanel(
                 onClick = { showCategoryMenu = true },
                 modifier = Modifier.fillMaxWidth()
             )
-            DropdownMenu(
-                expanded = showCategoryMenu,
-                onDismissRequest = { showCategoryMenu = false }
-            ) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            "전체",
-                            fontWeight = if (selectedCategory == null) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedCategory == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        )
-                    },
-                    onClick = { onCategorySelected(null); showCategoryMenu = false }
-                )
-                Category.entries.forEach { category ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                "${category.emoji} ${category.displayName}",
-                                fontWeight = if (selectedCategory == category.displayName) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selectedCategory == category.displayName) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
-                        },
-                        onClick = { onCategorySelected(category.displayName); showCategoryMenu = false }
-                    )
+        }
+        // 카테고리 선택 다이얼로그 (3열 그리드)
+        if (showCategoryMenu) {
+            CategorySelectDialog(
+                currentCategory = selectedCategory,
+                showAllOption = true,
+                onDismiss = { showCategoryMenu = false },
+                onCategorySelected = { selected ->
+                    onCategorySelected(selected)
+                    showCategoryMenu = false
                 }
-            }
+            )
         }
 
         // 정렬
@@ -816,23 +751,25 @@ fun FilterChipButton(
     }
 }
 
+/**
+ * 통합 거래 목록 뷰
+ * ViewModel에서 가공된 TransactionListItem 리스트를 순수 렌더링만 담당
+ */
 @Composable
-fun ExpenseListView(
-    expenses: List<ExpenseEntity>,
-    incomes: List<IncomeEntity> = emptyList(),
-    sortOrder: SortOrder = SortOrder.DATE_DESC,
+fun TransactionListView(
+    items: List<TransactionListItem>,
     isLoading: Boolean,
-    onDelete: (ExpenseEntity) -> Unit,
-    onDeleteIncome: (IncomeEntity) -> Unit = {},
-    onCategoryChange: (ExpenseEntity, String) -> Unit = { _, _ -> },
-    onExpenseMemoChange: (Long, String?) -> Unit = { _, _ -> },
-    onIncomeMemoChange: (Long, String?) -> Unit = { _, _ -> }
+    showIncomeView: Boolean = false,
+    onIntent: (HistoryIntent) -> Unit
 ) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
-    var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
-    var selectedIncome by remember { mutableStateOf<IncomeEntity?>(null) }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+
+    // 필터 변경 시 최상단 스크롤
+    LaunchedEffect(items) {
+        listState.scrollToItem(0)
+    }
+
     val showScrollToTop by remember {
         derivedStateOf {
             listState.firstVisibleItemIndex > 0 ||
@@ -850,19 +787,22 @@ fun ExpenseListView(
         return
     }
 
-    if (expenses.isEmpty()) {
+    if (items.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "\uD83D\uDCED",
+                    text = if (showIncomeView) "\uD83D\uDCB0" else "\uD83D\uDCED",
                     style = MaterialTheme.typography.displayLarge
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = stringResource(R.string.history_no_expense),
+                    text = stringResource(
+                        if (showIncomeView) R.string.history_no_income
+                        else R.string.history_no_expense
+                    ),
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -876,204 +816,33 @@ fun ExpenseListView(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            when (sortOrder) {
-                SortOrder.DATE_DESC -> {
-                    // 날짜별 그룹핑 (지출 + 수입 통합)
-                    val groupedExpenses = expenses.groupBy { expense ->
-                        try {
-                            val calendar = Calendar.getInstance().apply {
-                                timeInMillis = expense.dateTime
-                                set(Calendar.HOUR_OF_DAY, 0)
-                                set(Calendar.MINUTE, 0)
-                                set(Calendar.SECOND, 0)
-                                set(Calendar.MILLISECOND, 0)
-                            }
-                            calendar.time
-                        } catch (e: Exception) {
-                            Date()
-                        }
-                    }
-
-                    val groupedIncomes = incomes.groupBy { income ->
-                        try {
-                            val calendar = Calendar.getInstance().apply {
-                                timeInMillis = income.dateTime
-                                set(Calendar.HOUR_OF_DAY, 0)
-                                set(Calendar.MINUTE, 0)
-                                set(Calendar.SECOND, 0)
-                                set(Calendar.MILLISECOND, 0)
-                            }
-                            calendar.time
-                        } catch (e: Exception) {
-                            Date()
-                        }
-                    }
-
-                    // 모든 날짜 키를 합쳐서 정렬
-                    val allDates = (groupedExpenses.keys + groupedIncomes.keys)
-                        .toSortedSet(compareByDescending { it })
-
-                    allDates.forEach { date ->
-                        val dayExpenses = groupedExpenses[date] ?: emptyList()
-                        val dayIncomes = groupedIncomes[date] ?: emptyList()
-                        val dailyExpenseTotal = dayExpenses.sumOf { it.amount }
-                        val dailyIncomeTotal = dayIncomes.sumOf { it.amount }
-                        val calendar = Calendar.getInstance().apply { time = date }
-                        val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
-                        val dayOfWeekResId = when (calendar.get(Calendar.DAY_OF_WEEK)) {
-                            Calendar.SUNDAY -> R.string.day_sunday
-                            Calendar.MONDAY -> R.string.day_monday
-                            Calendar.TUESDAY -> R.string.day_tuesday
-                            Calendar.WEDNESDAY -> R.string.day_wednesday
-                            Calendar.THURSDAY -> R.string.day_thursday
-                            Calendar.FRIDAY -> R.string.day_friday
-                            Calendar.SATURDAY -> R.string.day_saturday
-                            else -> R.string.day_sunday
-                        }
-
-                        // 날짜 헤더
-                        item {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.history_day_header, dayOfMonth, stringResource(dayOfWeekResId)),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                )
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    if (dailyIncomeTotal > 0) {
-                                        Text(
-                                            text = "+" + stringResource(R.string.common_won, numberFormat.format(dailyIncomeTotal)),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF4CAF50)
-                                        )
-                                    }
-                                    if (dailyExpenseTotal > 0) {
-                                        Text(
-                                            text = "-" + stringResource(R.string.common_won, numberFormat.format(dailyExpenseTotal)),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.error
-                                        )
-                                    }
-                                }
-                            }
-                            HorizontalDivider(
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                                thickness = 0.5.dp
-                            )
-                        }
-
-                        // 수입 항목 (해당 날짜)
-                        items(
-                            items = dayIncomes,
-                            key = { "income_${it.id}" }
-                        ) { income ->
-                            IncomeItemCard(
-                                income = income,
-                                onClick = { selectedIncome = income }
-                            )
-                        }
-
-                        // 지출 항목 (해당 날짜)
-                        items(
-                            items = dayExpenses,
-                            key = { "expense_${it.id}" }
-                        ) { expense ->
-                            ExpenseItemCard(
-                                expense = expense,
-                                onClick = { selectedExpense = expense }
-                            )
-                        }
+            items(
+                count = items.size,
+                key = { index ->
+                    when (val item = items[index]) {
+                        is TransactionListItem.Header -> "header_$index"
+                        is TransactionListItem.ExpenseItem -> "expense_${item.expense.id}"
+                        is TransactionListItem.IncomeItem -> "income_${item.income.id}"
                     }
                 }
-
-                SortOrder.AMOUNT_DESC -> {
-                    // 금액순: 전체 기간 플랫 리스트 (날짜 그룹 없이)
-                    item {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "금액 높은순 (${expenses.size}건)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outlineVariant,
-                            thickness = 0.5.dp
+            ) { index ->
+                when (val item = items[index]) {
+                    is TransactionListItem.Header -> {
+                        TransactionGroupHeaderCompose(info = item)
+                    }
+                    is TransactionListItem.ExpenseItem -> {
+                        TransactionCardCompose(
+                            info = item.cardInfo,
+                            onClick = { onIntent(HistoryIntent.SelectExpense(item.expense)) }
                         )
                     }
-
-                    items(
-                        items = expenses,
-                        key = { it.id }
-                    ) { expense ->
-                        ExpenseItemCard(
-                            expense = expense,
-                            onClick = { selectedExpense = expense }
+                    is TransactionListItem.IncomeItem -> {
+                        TransactionCardCompose(
+                            info = item.cardInfo,
+                            onClick = { onIntent(HistoryIntent.SelectIncome(item.income)) }
                         )
-                    }
-                }
-
-                SortOrder.STORE_FREQ -> {
-                    // 사용처별: 가게명으로 그룹핑
-                    val storeGroups = expenses.groupBy { it.storeName }
-                        .entries
-                        .sortedByDescending { it.value.size }
-
-                    storeGroups.forEach { (storeName, storeExpenses) ->
-                        val storeTotal = storeExpenses.sumOf { it.amount }
-
-                        // 사용처 헤더
-                        item {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "$storeName (${storeExpenses.size}회)",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                )
-                                Text(
-                                    text = "-" + stringResource(R.string.common_won, numberFormat.format(storeTotal)),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            }
-                            HorizontalDivider(
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                                thickness = 0.5.dp
-                            )
-                        }
-
-                        // 해당 사용처 지출 항목 (최신순)
-                        items(
-                            items = storeExpenses.sortedByDescending { it.dateTime },
-                            key = { it.id }
-                        ) { expense ->
-                            ExpenseItemCard(
-                                expense = expense,
-                                onClick = { selectedExpense = expense }
-                            )
-                        }
                     }
                 }
             }
@@ -1083,7 +852,7 @@ fun ExpenseListView(
             }
         }
 
-        // Scroll to Top FAB
+        // Scroll to Top FAB — SVG 디자인 반영: 40dp 원형, #137FEC 배경, 흰색 화살표
         AnimatedVisibility(
             visible = showScrollToTop,
             enter = fadeIn(),
@@ -1092,261 +861,27 @@ fun ExpenseListView(
                 .align(Alignment.BottomEnd)
                 .padding(16.dp)
         ) {
-            FloatingActionButton(
+            SmallFloatingActionButton(
                 onClick = {
                     coroutineScope.launch {
                         listState.animateScrollToItem(0)
                     }
                 },
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                shape = CircleShape,
+                containerColor = MaterialTheme.moneyTalkColors.income,
+                contentColor = Color.White,
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = 4.dp,
+                    pressedElevation = 8.dp
+                )
             ) {
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowUp,
-                    contentDescription = stringResource(R.string.common_scroll_to_top)
+                    contentDescription = stringResource(R.string.common_scroll_to_top),
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }
-    }
-
-    // 지출 상세 다이얼로그 (삭제 및 카테고리 변경 기능 포함)
-    selectedExpense?.let { expense ->
-        ExpenseDetailDialog(
-            expense = expense,
-            onDismiss = { selectedExpense = null },
-            onDelete = { onDelete(expense) },
-            onCategoryChange = { newCategory ->
-                onCategoryChange(expense, newCategory)
-                selectedExpense = null
-            },
-            onMemoChange = { memo ->
-                onExpenseMemoChange(expense.id, memo)
-                selectedExpense = null
-            }
-        )
-    }
-
-    // 수입 상세 다이얼로그
-    selectedIncome?.let { income ->
-        IncomeDetailDialog(
-            income = income,
-            onDismiss = { selectedIncome = null },
-            onDelete = { onDeleteIncome(income) },
-            onMemoChange = { memo ->
-                onIncomeMemoChange(income.id, memo)
-                selectedIncome = null
-            }
-        )
-    }
-}
-
-
-/**
- * 수입 목록 뷰
- */
-@Composable
-fun IncomeListView(
-    incomes: List<IncomeEntity>,
-    isLoading: Boolean,
-    onDeleteIncome: (IncomeEntity) -> Unit = {},
-    onIncomeMemoChange: (Long, String?) -> Unit = { _, _ -> }
-) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
-    var selectedIncome by remember { mutableStateOf<IncomeEntity?>(null) }
-
-    if (isLoading) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator()
-        }
-        return
-    }
-
-    if (incomes.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "\uD83D\uDCB0",
-                    style = MaterialTheme.typography.displayLarge
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "수입 내역이 없습니다",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-        return
-    }
-
-    // 날짜별 그룹핑
-    val groupedIncomes = incomes.groupBy { income ->
-        try {
-            val calendar = Calendar.getInstance().apply {
-                timeInMillis = income.dateTime
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            calendar.time
-        } catch (e: Exception) {
-            Date()
-        }
-    }.toSortedMap(compareByDescending { it })
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        groupedIncomes.forEach { (date, dayIncomes) ->
-            val dailyTotal = dayIncomes.sumOf { it.amount }
-            val calendar = Calendar.getInstance().apply { time = date }
-            val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
-            val dayOfWeekResId = when (calendar.get(Calendar.DAY_OF_WEEK)) {
-                Calendar.SUNDAY -> R.string.day_sunday
-                Calendar.MONDAY -> R.string.day_monday
-                Calendar.TUESDAY -> R.string.day_tuesday
-                Calendar.WEDNESDAY -> R.string.day_wednesday
-                Calendar.THURSDAY -> R.string.day_thursday
-                Calendar.FRIDAY -> R.string.day_friday
-                Calendar.SATURDAY -> R.string.day_saturday
-                else -> R.string.day_sunday
-            }
-
-            // 날짜 헤더
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.history_day_header, dayOfMonth, stringResource(dayOfWeekResId)),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                    Text(
-                        text = "+" + stringResource(R.string.common_won, numberFormat.format(dailyTotal)),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF4CAF50)
-                    )
-                }
-                HorizontalDivider(
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                    thickness = 0.5.dp
-                )
-            }
-
-            // 수입 항목
-            items(
-                items = dayIncomes,
-                key = { it.id }
-            ) { income ->
-                IncomeItemCard(
-                    income = income,
-                    onClick = { selectedIncome = income }
-                )
-            }
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-    }
-
-    // 수입 상세 다이얼로그
-    selectedIncome?.let { income ->
-        IncomeDetailDialog(
-            income = income,
-            onDismiss = { selectedIncome = null },
-            onDelete = { onDeleteIncome(income) },
-            onMemoChange = { memo ->
-                onIncomeMemoChange(income.id, memo)
-                selectedIncome = null
-            }
-        )
-    }
-}
-
-/**
- * 수입 아이템 카드
- */
-@Composable
-fun IncomeItemCard(
-    income: IncomeEntity,
-    onClick: () -> Unit = {},
-    modifier: Modifier = Modifier
-) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
-    val timeFormat = SimpleDateFormat("HH:mm", Locale.KOREA)
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 12.dp, horizontal = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
-        ) {
-            // 수입 아이콘
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF4CAF50).copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "\uD83D\uDCB0",
-                    fontSize = 18.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column {
-                // 설명 (예: "OOO에서 급여")
-                Text(
-                    text = income.description.ifBlank { income.type },
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                // 유형 | 시간
-                Text(
-                    text = "${income.type} | ${timeFormat.format(Date(income.dateTime))}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-
-        // 금액 (+ 표시, 녹색)
-        Text(
-            text = "+${numberFormat.format(income.amount)}원",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF4CAF50)
-        )
     }
 }
 
@@ -1449,7 +984,7 @@ fun BillingCycleCalendarView(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFE91E63))
+                                .background(MaterialTheme.moneyTalkColors.calendarSunday)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
@@ -1483,8 +1018,8 @@ fun BillingCycleCalendarView(
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodySmall,
                     color = when (index) {
-                        0 -> Color(0xFFE91E63)
-                        6 -> Color(0xFF2196F3)
+                        0 -> MaterialTheme.moneyTalkColors.calendarSunday
+                        6 -> MaterialTheme.moneyTalkColors.calendarSaturday
                         else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     }
                 )
@@ -1575,8 +1110,8 @@ fun BillingCycleCalendarView(
                     items = selectedDayExpenses,
                     key = { it.id }
                 ) { expense ->
-                    ExpenseItemCard(
-                        expense = expense,
+                    TransactionCardCompose(
+                        info = ExpenseTransactionCardInfo(expense),
                         onClick = { selectedExpense = expense },
                         modifier = Modifier.padding(horizontal = 8.dp)
                     )
@@ -1661,7 +1196,7 @@ fun CalendarDayCell(
                     .clip(CircleShape)
                     .background(
                         when {
-                            calendarDay.isToday -> Color(0xFF4CAF50)
+                            calendarDay.isToday -> MaterialTheme.colorScheme.primary
                             else -> Color.Transparent
                         }
                     ),
@@ -1745,10 +1280,10 @@ fun IncomeDetailDialog(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                     Text(
-                        text = "+${numberFormat.format(income.amount)}원",
+                        text = stringResource(R.string.common_won, numberFormat.format(income.amount)),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF4CAF50)
+                        color = MaterialTheme.moneyTalkColors.income
                     )
                 }
 
@@ -1945,7 +1480,7 @@ fun IncomeDetailDialog(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("수입 삭제") },
-            text = { Text("이 수입 항목을 삭제하시겠습니까?\n${income.description.ifBlank { income.type }} (+${NumberFormat.getNumberInstance(Locale.KOREA).format(income.amount)}원)") },
+            text = { Text("이 수입 항목을 삭제하시겠습니까?\n${income.description.ifBlank { income.type }} (${NumberFormat.getNumberInstance(Locale.KOREA).format(income.amount)}원)") },
             confirmButton = {
                 TextButton(
                     onClick = {

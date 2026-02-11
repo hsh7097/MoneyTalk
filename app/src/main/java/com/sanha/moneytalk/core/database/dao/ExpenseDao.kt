@@ -98,6 +98,10 @@ interface ExpenseDao {
     @Query("SELECT DISTINCT cardName FROM expenses ORDER BY cardName")
     suspend fun getAllCardNames(): List<String>
 
+    // 카드별 지출 건수 (중복 포함, OwnedCard seenCount용)
+    @Query("SELECT cardName FROM expenses")
+    suspend fun getAllCardNamesWithDuplicates(): List<String>
+
     // 모든 카테고리 목록 가져오기
     @Query("SELECT DISTINCT category FROM expenses ORDER BY category")
     suspend fun getAllCategories(): List<String>
@@ -208,6 +212,7 @@ interface ExpenseDao {
     /** 내 카드 기준 카테고리별 합계 */
     @Query("SELECT category, SUM(amount) as total FROM expenses WHERE cardName IN (:ownedCardNames) AND dateTime BETWEEN :startTime AND :endTime GROUP BY category")
     suspend fun getExpenseSumByCategoryOwned(ownedCardNames: List<String>, startTime: Long, endTime: Long): List<CategorySum>
+
 }
 
 data class CategorySum(

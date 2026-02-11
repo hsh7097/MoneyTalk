@@ -122,6 +122,10 @@ class ExpenseRepository @Inject constructor(
     suspend fun getAllCardNames(): List<String> =
         expenseDao.getAllCardNames()
 
+    /** 카드별 지출 건수 포함 카드명 목록 (OwnedCard seenCount 계산용) */
+    suspend fun getAllCardNamesWithDuplicates(): List<String> =
+        expenseDao.getAllCardNamesWithDuplicates()
+
     /** 모든 카테고리 목록 조회 (필터 드롭다운용) */
     suspend fun getAllCategories(): List<String> =
         expenseDao.getAllCategories()
@@ -231,4 +235,5 @@ class ExpenseRepository @Inject constructor(
     /** 내 카드 기준 카테고리별 합계 */
     suspend fun getExpenseSumByCategoryOwned(ownedCardNames: List<String>, startTime: Long, endTime: Long): List<CategorySum> =
         expenseDao.getExpenseSumByCategoryOwned(ownedCardNames, startTime, endTime)
+
 }

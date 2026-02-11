@@ -29,7 +29,7 @@ class IncomeRepository @Inject constructor(
 
     suspend fun getIncomeBySmsId(smsId: String): IncomeEntity? = incomeDao.getIncomeBySmsId(smsId)
 
-    suspend fun existsBySmsId(smsId: String): Boolean = incomeDao.getIncomeBySmsId(smsId) != null
+    suspend fun existsBySmsId(smsId: String): Boolean = incomeDao.existsBySmsId(smsId)
 
     suspend fun getAllSmsIds(): List<String> = incomeDao.getAllSmsIds()
 
@@ -57,4 +57,5 @@ class IncomeRepository @Inject constructor(
     /** 수입 검색 (설명, 유형, 출처, 메모) */
     suspend fun searchIncomes(query: String): List<IncomeEntity> =
         incomeDao.searchIncomes(query)
+
 }
