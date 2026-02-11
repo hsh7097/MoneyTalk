@@ -24,6 +24,7 @@ import com.sanha.moneytalk.feature.home.data.CategoryRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.core.util.DataRefreshEvent
+import com.sanha.moneytalk.core.theme.ThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -35,6 +36,7 @@ data class SettingsUiState(
     val apiKey: String = "",
     val hasApiKey: Boolean = false,
     val monthStartDay: Int = 1,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val isLoading: Boolean = false,
     val backupContent: String? = null,
     val exportFormat: ExportFormat = ExportFormat.JSON,
@@ -93,6 +95,22 @@ class SettingsViewModel @Inject constructor(
         loadOwnedCards()
         loadExclusionKeywords()
         observeClassificationState()
+        loadThemeMode()
+    }
+
+    private fun loadThemeMode() {
+        viewModelScope.launch {
+            settingsDataStore.themeModeFlow.collect { modeStr ->
+                val mode = try { ThemeMode.valueOf(modeStr) } catch (_: Exception) { ThemeMode.SYSTEM }
+                _uiState.update { it.copy(themeMode = mode) }
+            }
+        }
+    }
+
+    fun saveThemeMode(mode: ThemeMode) {
+        viewModelScope.launch {
+            settingsDataStore.saveThemeMode(mode.name)
+        }
     }
 
     /** 백그라운드 분류 상태 감지 (HomeViewModel에서 진행 중인 경우 버튼 비활성화) */

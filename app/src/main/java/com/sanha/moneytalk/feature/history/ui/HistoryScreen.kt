@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,7 +28,6 @@ import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import com.sanha.moneytalk.core.model.Category
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import com.sanha.moneytalk.core.theme.moneyTalkColors
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,7 +48,7 @@ import kotlinx.coroutines.launch
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
-import com.sanha.moneytalk.core.ui.component.CategoryIcon
+import com.sanha.moneytalk.core.ui.component.CategorySelectDialog
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabInfo
 import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabRowCompose
@@ -68,13 +69,11 @@ fun HistoryScreen(
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
     var showAddDialog by remember { mutableStateOf(false) }
 
-    Scaffold { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.background)
-        ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
                 // 검색 모드일 때 검색 바, 아니면 일반 헤더
                 if (uiState.isSearchMode) {
                     SearchBar(
@@ -172,7 +171,6 @@ fun HistoryScreen(
                     }
                 }
             }
-    }
 
     // 다이얼로그 상태는 ViewModel에서 관리
     uiState.selectedExpense?.let { expense ->
@@ -259,8 +257,6 @@ fun AddExpenseDialog(
     var cardName by remember { mutableStateOf("현금") }
     var showCategoryDropdown by remember { mutableStateOf(false) }
 
-    val categories = Category.entries.map { it.displayName }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.history_add_expense_title)) },
@@ -288,36 +284,33 @@ fun AddExpenseDialog(
                 )
 
                 // 카테고리 선택
-                Box {
-                    OutlinedTextField(
-                        value = selectedCategory,
-                        onValueChange = {},
-                        label = { Text(stringResource(R.string.history_category)) },
-                        readOnly = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showCategoryDropdown = true },
-                        trailingIcon = {
-                            IconButton(onClick = { showCategoryDropdown = true }) {
-                                @Suppress("DEPRECATION")
-                                Icon(Icons.Default.List, contentDescription = null)
-                            }
-                        }
-                    )
-                    DropdownMenu(
-                        expanded = showCategoryDropdown,
-                        onDismissRequest = { showCategoryDropdown = false }
-                    ) {
-                        categories.forEach { category ->
-                            DropdownMenuItem(
-                                text = { Text(category) },
-                                onClick = {
-                                    selectedCategory = category
-                                    showCategoryDropdown = false
-                                }
-                            )
+                OutlinedTextField(
+                    value = selectedCategory,
+                    onValueChange = {},
+                    label = { Text(stringResource(R.string.history_category)) },
+                    readOnly = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showCategoryDropdown = true },
+                    trailingIcon = {
+                        IconButton(onClick = { showCategoryDropdown = true }) {
+                            @Suppress("DEPRECATION")
+                            Icon(Icons.Default.List, contentDescription = null)
                         }
                     }
+                )
+                if (showCategoryDropdown) {
+                    CategorySelectDialog(
+                        currentCategory = selectedCategory,
+                        showAllOption = false,
+                        onDismiss = { showCategoryDropdown = false },
+                        onCategorySelected = { selected ->
+                            if (selected != null) {
+                                selectedCategory = selected
+                            }
+                            showCategoryDropdown = false
+                        }
+                    )
                 }
 
                 // 결제수단 입력
@@ -387,13 +380,21 @@ fun PeriodSummaryCard(
         start to end
     }
 
-    Column(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -405,7 +406,8 @@ fun PeriodSummaryCard(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                     contentDescription = stringResource(R.string.home_previous_month),
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(28.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -414,7 +416,7 @@ fun PeriodSummaryCard(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "$startDate",
+                    text = startDate,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -435,12 +437,13 @@ fun PeriodSummaryCard(
                     Text(
                         text = stringResource(R.string.home_expense) + " ",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = stringResource(R.string.common_won, numberFormat.format(totalExpense)),
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
                 if (totalIncome > 0) {
@@ -450,13 +453,13 @@ fun PeriodSummaryCard(
                         Text(
                             text = stringResource(R.string.home_income) + " ",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             text = "+" + stringResource(R.string.common_won, numberFormat.format(totalIncome)),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
-                            color = Color(0xFF4CAF50)
+                            color = MaterialTheme.moneyTalkColors.income
                         )
                     }
                 }
@@ -470,7 +473,8 @@ fun PeriodSummaryCard(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = stringResource(R.string.home_next_month),
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(28.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -503,7 +507,7 @@ fun FilterTabRow(
 
     val primaryColor = MaterialTheme.colorScheme.primary
     val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
-    val incomeColor = Color(0xFF4CAF50)
+    val incomeColor = MaterialTheme.moneyTalkColors.income
 
     val listLabel = stringResource(R.string.history_view_list)
     val calendarLabel = stringResource(R.string.history_view_calendar)
@@ -558,20 +562,23 @@ fun FilterTabRow(
             )
 
             // 필터 아이콘 (수입 보기가 아닐 때, 목록 모드일 때만)
-            if (currentMode == ViewMode.LIST && !showIncomeView) {
-                IconButton(
-                    onClick = { showFilterPanel = !showFilterPanel },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.FilterList,
-                        contentDescription = stringResource(R.string.common_filter),
-                        modifier = Modifier.size(20.dp),
-                        tint = if (hasActiveFilter)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.onSurface
-                    )
+            // 높이 고정: 필터 아이콘 유무에 관계없이 동일 크기 영역 유지
+            Box(modifier = Modifier.size(36.dp)) {
+                if (currentMode == ViewMode.LIST && !showIncomeView) {
+                    IconButton(
+                        onClick = { showFilterPanel = !showFilterPanel },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.FilterList,
+                            contentDescription = stringResource(R.string.common_filter),
+                            modifier = Modifier.size(20.dp),
+                            tint = if (hasActiveFilter)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         }
@@ -659,39 +666,18 @@ fun FilterPanel(
                 onClick = { showCategoryMenu = true },
                 modifier = Modifier.fillMaxWidth()
             )
-            DropdownMenu(
-                expanded = showCategoryMenu,
-                onDismissRequest = { showCategoryMenu = false }
-            ) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            "전체",
-                            fontWeight = if (selectedCategory == null) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedCategory == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        )
-                    },
-                    onClick = { onCategorySelected(null); showCategoryMenu = false }
-                )
-                Category.entries.forEach { category ->
-                    DropdownMenuItem(
-                        text = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                CategoryIcon(category = category, containerSize = 32.dp, fontSize = 20.sp)
-                                Text(
-                                    category.displayName,
-                                    fontWeight = if (selectedCategory == category.displayName) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selectedCategory == category.displayName) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        },
-                        onClick = { onCategorySelected(category.displayName); showCategoryMenu = false }
-                    )
+        }
+        // 카테고리 선택 다이얼로그 (3열 그리드)
+        if (showCategoryMenu) {
+            CategorySelectDialog(
+                currentCategory = selectedCategory,
+                showAllOption = true,
+                onDismiss = { showCategoryMenu = false },
+                onCategorySelected = { selected ->
+                    onCategorySelected(selected)
+                    showCategoryMenu = false
                 }
-            }
+            )
         }
 
         // 정렬
@@ -778,6 +764,12 @@ fun TransactionListView(
 ) {
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+
+    // 필터 변경 시 최상단 스크롤
+    LaunchedEffect(items) {
+        listState.scrollToItem(0)
+    }
+
     val showScrollToTop by remember {
         derivedStateOf {
             listState.firstVisibleItemIndex > 0 ||
@@ -824,7 +816,7 @@ fun TransactionListView(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(
                 count = items.size,
@@ -860,7 +852,7 @@ fun TransactionListView(
             }
         }
 
-        // Scroll to Top FAB
+        // Scroll to Top FAB — SVG 디자인 반영: 40dp 원형, #137FEC 배경, 흰색 화살표
         AnimatedVisibility(
             visible = showScrollToTop,
             enter = fadeIn(),
@@ -869,18 +861,24 @@ fun TransactionListView(
                 .align(Alignment.BottomEnd)
                 .padding(16.dp)
         ) {
-            FloatingActionButton(
+            SmallFloatingActionButton(
                 onClick = {
                     coroutineScope.launch {
                         listState.animateScrollToItem(0)
                     }
                 },
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                shape = CircleShape,
+                containerColor = MaterialTheme.moneyTalkColors.income,
+                contentColor = Color.White,
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = 4.dp,
+                    pressedElevation = 8.dp
+                )
             ) {
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowUp,
-                    contentDescription = stringResource(R.string.common_scroll_to_top)
+                    contentDescription = stringResource(R.string.common_scroll_to_top),
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }
@@ -986,7 +984,7 @@ fun BillingCycleCalendarView(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFE91E63))
+                                .background(MaterialTheme.moneyTalkColors.calendarSunday)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
@@ -1020,8 +1018,8 @@ fun BillingCycleCalendarView(
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodySmall,
                     color = when (index) {
-                        0 -> Color(0xFFE91E63)
-                        6 -> Color(0xFF2196F3)
+                        0 -> MaterialTheme.moneyTalkColors.calendarSunday
+                        6 -> MaterialTheme.moneyTalkColors.calendarSaturday
                         else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     }
                 )
@@ -1198,7 +1196,7 @@ fun CalendarDayCell(
                     .clip(CircleShape)
                     .background(
                         when {
-                            calendarDay.isToday -> Color(0xFF4CAF50)
+                            calendarDay.isToday -> MaterialTheme.colorScheme.primary
                             else -> Color.Transparent
                         }
                     ),
@@ -1285,7 +1283,7 @@ fun IncomeDetailDialog(
                         text = stringResource(R.string.common_won, numberFormat.format(income.amount)),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF4CAF50)
+                        color = MaterialTheme.moneyTalkColors.income
                     )
                 }
 

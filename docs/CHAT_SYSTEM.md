@@ -1,6 +1,6 @@
 # AI 채팅 상담 시스템
 
-> Gemini 기반 재무 상담 AI: 2-Phase 쿼리 분석 + Rolling Summary 대화 맥락 관리
+> Gemini 기반 재무 상담 AI: 3-Step 쿼리 분석 + Rolling Summary 대화 맥락 관리
 
 ---
 
@@ -14,7 +14,7 @@ MoneyTalk의 채팅 시스템은 사용자의 자연어 질문을 분석하여 �
   │
   ▼
 ┌────────────────────────────────────────────┐
-│ Phase 1: 쿼리 분석 (queryAnalyzerModel)     │
+│ Step 1: 쿼리 분석 (queryAnalyzerModel)      │
 │  └ "식비 카테고리의 이번 달 합계가 필요하군"    │
 │  └ JSON: {type: "expense_by_category",     │
 │           category: "식비", ...}            │
@@ -22,14 +22,15 @@ MoneyTalk의 채팅 시스템은 사용자의 자연어 질문을 분석하여 �
              │
              ▼
 ┌────────────────────────────────────────────┐
-│ 데이터 조회 (Room DB)                       │
+│ Step 2: 데이터 조회/액션 실행 (Room DB)      │
 │  └ ExpenseDao.getExpenseSumByCategory()    │
+│  └ 또는 executeAnalytics() (클라이언트 집계) │
 │  └ 결과: 식비 350,000원                     │
 └────────────┬───────────────────────────────┘
              │
              ▼
 ┌────────────────────────────────────────────┐
-│ Phase 2: 답변 생성 (financialAdvisorModel)  │
+│ Step 3: 답변 생성 (financialAdvisorModel)   │
 │  └ [Rolling Summary + 최근 대화 + 데이터]    │
 │  └ "이번 달 식비는 35만원이야! 수입 대비      │
 │     15%로 적정 수준이네 👍"                  │
@@ -38,16 +39,17 @@ MoneyTalk의 채팅 시스템은 사용자의 자연어 질문을 분석하여 �
 
 ---
 
-## 2. 2-Phase 처리 아키텍처
+## 2. 3-Step 처리 아키텍처
 
-### Phase 1: 쿼리/액션 분석
+### Step 1: 쿼리/액션 분석
 
 **파일**: `feature/chat/data/GeminiRepository.kt` — `analyzeQueryNeeds()`
 **모델**: `gemini-2.5-pro` (temperature: 0.3)
+**프롬프트**: `res/values/string_prompt.xml` — `prompt_query_analyzer_system`
 
 사용자의 자연어 질문을 분석하여 필요한 DB 쿼리와 액션을 JSON으로 결정합니다.
 
-#### 사용 가능한 쿼리 타입
+#### 쿼리 타입 (17종)
 
 | 타입 | 설명 | 필수 파라미터 |
 |------|------|-------------|
@@ -56,19 +58,49 @@ MoneyTalk의 채팅 시스템은 사용자의 자연어 질문을 분석하여 �
 | `expense_by_category` | 카테고리별 지출 합계 | startDate, endDate |
 | `expense_list` | 지출 내역 리스트 | limit |
 | `expense_by_store` | 특정 가게 지출 | storeName |
+| `expense_by_card` | 특정 카드 지출 | cardName |
 | `daily_totals` | 일별 지출 합계 | startDate, endDate |
 | `monthly_totals` | 월별 지출 합계 | — |
 | `monthly_income` | 설정된 월 수입 | — |
 | `uncategorized_list` | 미분류 항목 | — |
 | `category_ratio` | 수입 대비 비율 분석 | — |
+| `search_expense` | 검색 (가게/카테고리/카드) | searchKeyword |
+| `card_list` | 사용 카드 목록 | — |
+| `income_list` | 수입 내역 | startDate, endDate |
+| `duplicate_list` | 중복 지출 항목 | — |
+| `sms_exclusion_list` | SMS 제외 키워드 목록 | — |
+| `analytics` | 복합 분석 (필터+그룹핑+집계) | filters, groupBy, metrics |
 
-#### 사용 가능한 액션 타입
+#### 액션 타입 (12종)
 
 | 타입 | 설명 | 필수 파라미터 |
 |------|------|-------------|
 | `update_category` | 특정 지출 카테고리 변경 | expenseId, newCategory |
 | `update_category_by_store` | 가게명 기준 일괄 변경 | storeName, newCategory |
 | `update_category_by_keyword` | 키워드 포함 일괄 변경 | searchKeyword, newCategory |
+| `delete_expense` | 특정 지출 삭제 | expenseId |
+| `delete_by_keyword` | 키워드 기준 일괄 삭제 | searchKeyword |
+| `delete_duplicates` | 중복 항목 전체 삭제 | — |
+| `add_expense` | 수동 지출 추가 | storeName, amount |
+| `update_memo` | 메모 수정 | expenseId, memo |
+| `update_store_name` | 가게명 수정 | expenseId, newStoreName |
+| `update_amount` | 금액 수정 | expenseId, newAmount |
+| `add_sms_exclusion` | SMS 제외 키워드 추가 | searchKeyword |
+| `remove_sms_exclusion` | SMS 제외 키워드 삭제 | searchKeyword |
+
+#### ANALYTICS 쿼리 (클라이언트 사이드 실행)
+
+ChatViewModel에서 인메모리로 실행되는 복합 분석 기능:
+
+| 구성 요소 | 지원 값 |
+|----------|---------|
+| **필터 연산자** | ==, !=, >, >=, <, <=, contains, not_contains, in, not_in |
+| **필터 필드** | category, storeName, cardName, amount, memo, dayOfWeek |
+| **그룹핑** | category, storeName, cardName, date, month, dayOfWeek |
+| **집계 메트릭** | sum, avg, count, max, min |
+| **정렬** | asc, desc |
+| **topN** | 상위 N개 결과 |
+| **includeSubcategories** | 하위 카테고리 포함 여부 |
 
 #### 날짜 해석 규칙
 - "이번달" → 이번달 1일 ~ 오늘
@@ -76,17 +108,34 @@ MoneyTalk의 채팅 시스템은 사용자의 자연어 질문을 분석하여 �
 - "3개월간" → 최근 3개월
 - 연도 미지정 → 올해로 가정
 
-### Phase 2: 답변 생성
+### Step 2: 데이터 조회 / 액션 실행
+
+**파일**: `feature/chat/ui/ChatViewModel.kt`
+
+- `executeQuery()`: DB 쿼리 실행 (Room DAO 호출)
+- `executeAction()`: DB 수정 액션 실행
+- `executeAnalytics()`: 클라이언트 사이드 복합 분석 (필터 → 그룹핑 → 집계)
+
+쿼리 분석 실패 시 기본 폴백:
+- `TOTAL_EXPENSE` + `EXPENSE_BY_CATEGORY` + `EXPENSE_LIST` (최근 10건)
+
+### Step 3: 답변 생성
 
 **모델**: `gemini-2.5-pro` (temperature: 0.7)
+**프롬프트**: `res/values/string_prompt.xml` — `prompt_financial_advisor_system`
 
 System Instruction에 재무 상담사 역할이 정의되어 있으며, 다음 데이터를 바탕으로 답변합니다:
 
 - 월 수입 정보
-- Phase 1에서 조회한 데이터
+- Step 2에서 조회한 데이터 / ANALYTICS 계산 결과
 - 액션 실행 결과
 - Rolling Summary (과거 대화 맥락)
 - 최근 대화 메시지
+
+#### 답변 규칙 (할루시네이션 방지)
+- 조회된 데이터와 ANALYTICS 계산 결과만 사용 (직접 계산 금지)
+- 실행한 액션에 대해서만 결과 보고 (실행 안 한 액션 언급 금지)
+- 삭제/수정 작업의 되돌리기는 불가능하다는 안내
 
 #### 답변 스타일
 - 한국어 반말
@@ -136,23 +185,10 @@ AI에 전달되는 내용:
   + [현재 질문]
 ```
 
-**예시 타임라인:**
-```
-메시지 1~6 (3턴):  Summary 없음, 윈도우=[1~6]
-메시지 7 추가:     1~2번 요약 → Summary 생성, 윈도우=[3~7]
-메시지 9 추가:     기존 Summary + 3~4번 요약 통합, 윈도우=[5~9]
-```
-→ 대화가 아무리 길어져도 컨텍스트 크기가 일정하게 유지됩니다.
-
 ### 요약 모델 설정
 - **모델**: `gemini-2.5-flash` (temperature: 0.3)
-- **최대 출력**: 512 토큰
+- **프롬프트**: `res/values/string_prompt.xml` — `prompt_summary_system`
 - **규칙**: 200자 이내, 한국어, 요약체
-
-### 누적 요약 업데이트
-```
-기존 요약 + 새로 밀려난 메시지 → Gemini → 통합 요약본
-```
 
 ### 저장 위치
 `ChatSessionEntity.currentSummary` — 세션별로 독립적으로 관리
@@ -163,16 +199,27 @@ AI에 전달되는 내용:
 
 ### 3개 모델 분리 운영
 
-| 모델 | 역할 | Gemini 모델 | temperature | maxTokens |
-|------|------|-----------|-------------|-----------|
-| `queryAnalyzerModel` | 쿼리/액션 분석 | `gemini-2.5-pro` | 0.3 | 512 |
-| `financialAdvisorModel` | 재무 상담 답변 | `gemini-2.5-pro` | 0.7 | 1024 |
-| `summaryModel` | Rolling Summary 생성 | `gemini-2.5-flash` | 0.3 | 512 |
+| 모델 | 역할 | Gemini 모델 | temperature | topK | topP | maxTokens |
+|------|------|-----------|-------------|------|------|-----------|
+| queryAnalyzerModel | 쿼리/액션 분석 | gemini-2.5-pro | 0.3 | 20 | 0.9 | 10000 |
+| financialAdvisorModel | 재무 상담 답변 | gemini-2.5-pro | 0.7 | 40 | 0.95 | 10000 |
+| summaryModel | Rolling Summary | gemini-2.5-flash | 0.3 | 20 | 0.9 | 10000 |
 
-각 모델에 별도 System Instruction 적용. 요약은 비교적 단순 작업이므로 경량 모델(flash) 사용
+### 프롬프트 위치 (XML 리소스)
+
+> 모든 시스템 프롬프트는 `res/values/string_prompt.xml`에서 관리
+
+| 프롬프트 | XML key | 사용처 |
+|---------|---------|-------|
+| 쿼리 분석기 | `prompt_query_analyzer_system` | GeminiRepository (queryAnalyzerModel) |
+| 재무 상담사 | `prompt_financial_advisor_system` | GeminiRepository (financialAdvisorModel) |
+| 대화 요약 | `prompt_summary_system` | GeminiRepository (summaryModel) |
+| SMS 추출 (단일) | `prompt_sms_extract_system` | GeminiSmsExtractor |
+| SMS 추출 (배치) | `prompt_sms_batch_extract_system` | GeminiSmsExtractor |
+| 카테고리 분류 | `prompt_category_classification` | GeminiCategoryRepository |
 
 ### API 키 관리
-- `SettingsDataStore`에 암호화 저장
+- `SettingsDataStore`에 저장
 - 모든 모델이 같은 API 키 공유
 - 키 변경 시 모든 모델 인스턴스 재생성
 
@@ -218,16 +265,18 @@ chat_history 테이블
 │   ├── 최근 N개 메시지 조회 (ASC)
 │   └── 통합 프롬프트 생성
 │
-├── 3. Phase 1: analyzeQueryNeeds()
-│   └── JSON 파싱 → DataQueryRequest
+├── 3. Step 1: analyzeQueryNeeds()
+│   └── JSON 파싱 → DataQueryRequest (쿼리 + 액션)
 │
 ├── 4. 데이터 조회 (DataQueryParser → ExpenseDao 등)
 │   └── QueryResult 목록 생성
+│   └── ANALYTICS 쿼리 시 executeAnalytics() (클라이언트 사이드)
 │
 ├── 5. 액션 실행 (있는 경우)
 │   └── ActionResult 목록 생성
+│   └── StoreAliasManager로 가게 별칭 포함 일괄 처리
 │
-├── 6. Phase 2: generateFinalAnswerWithContext()
+├── 6. Step 3: generateFinalAnswerWithContext()
 │   └── [요약 + 최근 대화 + 데이터 + 질문] → Gemini
 │
 ├── 7. AI 응답 ChatEntity 저장 (isUser = false)
@@ -235,6 +284,11 @@ chat_history 테이블
 └── 8. Rolling Summary 업데이트 (필요 시)
     └── 윈도우 밖 메시지가 있으면 요약 갱신
 ```
+
+### 추가 기능
+- **자동 타이틀 생성**: 채팅방 나갈 때 대화 내용 기반 LLM 타이틀 생성 (15자 제한)
+- **재시도**: AI 응답 실패 시 canRetry 플래그로 재시도 허용
+- **Mutex**: sendMutex로 동시 메시지 전송 방지
 
 ---
 
@@ -248,12 +302,15 @@ chat_history 테이블
 | "쿠팡에서 얼마 썼어?" | `expense_by_store` |
 | "최근 10건 지출 내역" | `expense_list (limit: 10)` |
 | "식비가 수입 대비 적절해?" | `category_ratio` + `expense_by_category` |
+| "주말에 가장 많이 쓴 카테고리는?" | `analytics` (dayOfWeek 필터 + category 그룹핑) |
 
 ### 액션 요청
 | 질문 | 액션 타입 |
 |------|----------|
 | "쿠팡은 쇼핑으로 분류해줘" | `update_category_by_store` |
 | "배달 포함된건 식비로 바꿔" | `update_category_by_keyword` |
+| "광고 문자 제외해줘" | `add_sms_exclusion` |
+| "점심 12000원 추가해줘" | `add_expense` |
 
 ### 일반 상담
 | 질문 | 처리 |
@@ -270,13 +327,15 @@ chat_history 테이블
 | `feature/chat/data/GeminiRepository.kt` | Gemini API 통신 (3개 모델) |
 | `feature/chat/data/ChatRepository.kt` | 채팅 데이터 관리 인터페이스 |
 | `feature/chat/data/ChatRepositoryImpl.kt` | 채팅 데이터 관리 구현 |
-| `feature/chat/data/ChatContextBuilder.kt` | Rolling Summary + 컨텍스트 구성 |
-| `feature/chat/ui/ChatViewModel.kt` | 채팅 UI 상태 관리 |
+| `feature/chat/data/ChatPrompts.kt` | 프롬프트 키 참조 (실제 내용은 string_prompt.xml) |
+| `feature/chat/ui/ChatViewModel.kt` | 채팅 UI 상태 + 쿼리/액션/분석 실행 |
 | `feature/chat/ui/ChatScreen.kt` | 채팅 UI (Compose) |
-| `core/util/DataQueryParser.kt` | JSON → 쿼리 요청 파싱 |
+| `core/util/DataQueryParser.kt` | JSON → 쿼리/액션 요청 파싱 + QueryType/ActionType enum |
+| `core/util/StoreAliasManager.kt` | 가게명 별칭 관리 (일괄 처리 지원) |
 | `core/database/dao/ChatDao.kt` | 세션/메시지 DAO |
 | `core/database/entity/ChatEntity.kt` | 메시지 엔티티 |
 | `core/database/entity/ChatSessionEntity.kt` | 세션 엔티티 |
+| `res/values/string_prompt.xml` | 모든 AI 시스템 프롬프트 (6종) |
 
 ---
 
@@ -288,10 +347,11 @@ chat_history 테이블
 | RAG (Retrieval Augmented Generation) | ❌ 미사용 | 과거 대화에서 관련 내용 검색하는 기능 없음 |
 | Rolling Summary | ✅ 사용 | LLM 기반 요약으로 맥락 압축 (벡터 불필요) |
 | 지출 데이터 컨텍스트 | ✅ 사용 | Room DB 직접 쿼리 (SQL, 벡터 불필요) |
+| ANALYTICS 인메모리 분석 | ✅ 사용 | 클라이언트 사이드 필터/그룹핑/집계 |
 
 현재 채팅 시스템은 **순차적 맥락 관리**(Rolling Summary)만 사용합니다.
 벡터 임베딩은 SMS 분류(`SmsPatternEntity`)와 카테고리 분류(`StoreEmbeddingEntity`)에만 활용됩니다.
 
 ---
 
-*마지막 업데이트: 2026-02-08*
+*마지막 업데이트: 2026-02-11*

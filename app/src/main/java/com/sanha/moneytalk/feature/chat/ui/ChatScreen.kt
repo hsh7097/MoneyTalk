@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -155,52 +156,50 @@ fun ChatRoomListView(
     onApiKeyClick: () -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // 헤더
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shadowElevation = 4.dp
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Column {
+                Text(
+                    text = stringResource(R.string.chat_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = if (hasApiKey) {
+                        stringResource(R.string.chat_subtitle_with_api)
+                    } else {
+                        stringResource(R.string.chat_subtitle_no_api)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Column {
-                    Text(
-                        text = stringResource(R.string.chat_title),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = if (hasApiKey) {
-                            stringResource(R.string.chat_subtitle_with_api)
-                        } else {
-                            stringResource(R.string.chat_subtitle_no_api)
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                // 새 대화 버튼
+                IconButton(onClick = onNewSession) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = stringResource(R.string.chat_new_session)
                     )
                 }
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    // 새 대화 버튼
-                    IconButton(onClick = onNewSession) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = stringResource(R.string.chat_new_session)
-                        )
-                    }
-
-                    if (!hasApiKey) {
-                        TextButton(onClick = onApiKeyClick) {
-                            Text(stringResource(R.string.api_key_setting))
-                        }
+                if (!hasApiKey) {
+                    TextButton(onClick = onApiKeyClick) {
+                        Text(stringResource(R.string.api_key_setting))
                     }
                 }
             }
@@ -225,7 +224,7 @@ fun ChatRoomListView(
                     Text(
                         text = stringResource(R.string.chat_no_sessions),
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     FilledTonalButton(onClick = onNewSession) {
@@ -265,8 +264,10 @@ fun SessionItem(
             .clickable { onSelect() },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier
@@ -289,7 +290,7 @@ fun SessionItem(
                 Text(
                     text = DateUtils.formatDateTime(session.updatedAt),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -335,16 +336,16 @@ fun ChatRoomView(
         ?.title ?: "새 대화"
 
     Column(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // 헤더 (뒤로가기 버튼 포함)
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shadowElevation = 4.dp
-        ) {
+        Column {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
                     .padding(horizontal = 4.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -372,7 +373,7 @@ fun ChatRoomView(
                             stringResource(R.string.chat_subtitle_no_api)
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -382,6 +383,10 @@ fun ChatRoomView(
                     }
                 }
             }
+            HorizontalDivider(
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
         }
 
         // 채팅 메시지 목록
@@ -433,13 +438,15 @@ fun ChatRoomView(
         }
 
         // 입력창
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shadowElevation = 8.dp
-        ) {
+        Column {
+            HorizontalDivider(
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -620,7 +627,7 @@ fun ChatBubble(message: ChatMessage) {
         Text(
             text = DateUtils.formatTime(message.timestamp),
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp)
         )
     }

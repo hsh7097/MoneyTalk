@@ -1,79 +1,56 @@
 # AI_TASKS.md - 작업 목록 및 완료 기준
 
-> VectorSearchEngine 책임 분리 리팩토링의 세부 태스크 목록
-> **최종 갱신**: 2026-02-08 (Phase 1 완료)
+> 작업 진행 상황 추적 문서
+> **최종 갱신**: 2026-02-11
 
 ---
 
 ## Phase 0: 컨텍스트 패키징 ✅ 완료
 
-- [x] **0-0** 기존 문서 5종 읽기
-- [x] **0-1** `docs/AI_CONTEXT.md` 생성
-- [x] **0-2** `docs/AI_HANDOFF.md` 생성
-- [x] **0-3** `docs/AI_TASKS.md` 생성 (이 문서)
-- [x] **0-4** `CLAUDE.md` 생성
+- [x] 기존 문서 5종 읽기
+- [x] docs/AI_CONTEXT.md, AI_HANDOFF.md, AI_TASKS.md, CLAUDE.md 생성
 
 ---
 
-## Phase 1: VectorSearchEngine 책임 분리 ✅ 완료
+## Phase 1: VectorSearchEngine 책임 분리 ✅ 완료 (2026-02-08)
 
-### 1-1. VectorSearchEngine 책임 축소 ✅
-- [x] 임계값 상수 5개 제거 (PAYMENT, CACHE_REUSE, STORE, PROPAGATION, GROUPING)
-- [x] findBestMatch, findTopK 등의 minSimilarity 기본값 제거 → 호출자가 명시
-- [x] 순수 벡터 연산만 남기기: cosineSimilarity, findTopK, findBestMatch, findBestStoreMatch, findSimilarStores
-- [x] SearchResult, StoreSearchResult 데이터 클래스 유지
-
-### 1-2. core/similarity/ 패키지 신설 ✅
-- [x] `SimilarityPolicy.kt` 인터페이스 생성
-- [x] `SimilarityProfile.kt` 데이터 클래스 생성
-- [x] `SmsPatternSimilarityPolicy.kt` 구현 (autoApply=0.95, confirm=0.92, group=0.95, NON_PAYMENT_CACHE=0.97)
-- [x] `StoreNameSimilarityPolicy.kt` 구현 (autoApply=0.92, propagate=0.90, group=0.88)
-- [x] `CategoryPropagationPolicy.kt` 구현 (propagate=0.90, MIN_PROPAGATION_CONFIDENCE=0.6)
-
-### 1-3. SimilarityProfile 도입 + 하드코딩 임계값 치환 ✅
-- [x] `HybridSmsClassifier.kt`: VectorSearchEngine 상수 → SmsPatternSimilarityPolicy 참조
-- [x] `SmsBatchProcessor.kt`: 로컬 GROUPING_SIMILARITY_THRESHOLD → SmsPatternSimilarityPolicy.shouldGroup()
-- [x] `StoreNameGrouper.kt`: VectorSearchEngine.GROUPING_SIMILARITY_THRESHOLD → StoreNameSimilarityPolicy.shouldGroup()
-- [x] `StoreEmbeddingRepository.kt`: STORE/PROPAGATION 상수 → StoreNameSimilarityPolicy.profile 참조
-- [x] 비결제 패턴 캐시 히트 임계값 → SmsPatternSimilarityPolicy.NON_PAYMENT_CACHE_THRESHOLD
-
-### 1-4. confidence 정책 로직 반영 ✅
-- [x] `CategoryPropagationPolicy`에 shouldPropagateWithConfidence() 구현
-- [x] `StoreEmbeddingRepository.propagateCategoryToSimilarStores()`에 confidence 파라미터 + 체크 추가
-- [x] 기존 동작 영향 없음 확인 (기본값 confidence=1.0f)
-
-### 1-5. 영향 범위 점검 + 빌드 확인 ✅
-- [x] `gradlew assembleDebug` 빌드 성공
-- [x] VectorSearchEngine에 도메인 상수 0개 확인
-- [x] SmsBatchProcessor에 로컬 임계값 상수 0개 확인
-- [x] 모든 임계값이 SimilarityPolicy 계층을 통해 접근 확인
-- [x] AI_CONTEXT.md 갱신
-- [x] AI_HANDOFF.md 갱신
-- [x] AI_TASKS.md 갱신 (이 문서)
+- [x] VectorSearchEngine 임계값 상수 5개 제거 → 순수 벡터 엔진
+- [x] core/similarity/ 패키지 신설 (5개 파일)
+- [x] 모든 호출자에서 SimilarityPolicy 참조로 치환
+- [x] confidence < 0.6 전파 차단 정책 추가
+- [x] 빌드 성공 확인
 
 ---
 
-## 리팩토링 결과 요약
+## 채팅 시스템 확장 ✅ 완료 (2026-02-08~09)
 
-### 변경된 파일 (7개)
+- [x] 채팅 액션 5개 추가 (delete_by_keyword, add_expense, update_memo, update_store_name, update_amount)
+- [x] SMS 제외 채팅 액션 2개 추가 (add_sms_exclusion, remove_sms_exclusion)
+- [x] ANALYTICS 쿼리 타입 추가 (클라이언트 사이드 필터/그룹핑/집계)
+- [x] FINANCIAL_ADVISOR 할루시네이션 방지 규칙 추가
+- [x] 프롬프트 XML 이전 (ChatPrompts.kt → string_prompt.xml)
 
-| 파일 | 변경 내용 |
-|------|----------|
-| `core/util/VectorSearchEngine.kt` | 임계값 상수 5개 제거, KDoc 업데이트 |
-| `core/util/HybridSmsClassifier.kt` | SmsPatternSimilarityPolicy 참조로 변경 |
-| `core/util/SmsBatchProcessor.kt` | 로컬 GROUPING 상수 제거, SmsPatternSimilarityPolicy 참조 |
-| `core/util/StoreNameGrouper.kt` | StoreNameSimilarityPolicy 참조로 변경 |
-| `feature/home/data/StoreEmbeddingRepository.kt` | StoreNameSimilarityPolicy + CategoryPropagationPolicy 참조, confidence 파라미터 추가 |
+---
 
-### 새로 생성된 파일 (5개)
+## 데이터 관리 기능 ✅ 완료 (2026-02-09)
 
-| 파일 | 역할 |
-|------|------|
-| `core/similarity/SimilarityProfile.kt` | 임계값 구조화 데이터 클래스 |
-| `core/similarity/SimilarityPolicy.kt` | 유사도 판정 정책 인터페이스 |
-| `core/similarity/SmsPatternSimilarityPolicy.kt` | SMS 패턴 분류 정책 (0.92/0.95/0.97) |
-| `core/similarity/StoreNameSimilarityPolicy.kt` | 가게명 매칭 정책 (0.88/0.90/0.92) |
-| `core/similarity/CategoryPropagationPolicy.kt` | 카테고리 전파 정책 (confidence ≥ 0.6 차단) |
+- [x] OwnedCard 시스템 (카드 화이트리스트 + CardNameNormalizer + DB v2→v3)
+- [x] SMS 제외 키워드 시스템 (블랙리스트 + DB v3→v4)
+- [x] DB 성능 인덱스 추가 (expenses/incomes + DB v4→v5)
+- [x] 전역 스낵바 버스 도입
+- [x] API 키 설정 후 저신뢰도 항목 자동 재분류
+- [x] SMS 동기화/카테고리 분류 다이얼로그 진행률 표시 개선
+
+---
+
+## UI 공통화 ✅ 완료 (2026-02-11)
+
+- [x] TransactionCardCompose/Info (지출/수입 통합 카드)
+- [x] TransactionGroupHeaderCompose/Info (날짜별/가게별/금액별 그룹 헤더)
+- [x] SegmentedTabRowCompose/Info (라운드 버튼 탭)
+- [x] HistoryScreen Intent 패턴 적용 (HistoryIntent sealed interface)
+- [x] Preview 파일 debug/ 소스셋 배치
+- [x] 카테고리 아이콘: 벡터 아이콘 교체 시도 → revert, 이모지 유지
 
 ---
 
@@ -97,3 +74,7 @@
 - [ ] `HomeViewModel.syncSmsMessages()`에서 학습 실패 시 `_uiState.errorMessage` 갱신
 - [ ] 실패 시 로그 레벨 `Log.w` → `Log.e` 격상
 - [ ] UI에서 부분 실패 메시지 표시
+
+### 2-D. 채팅에서 카테고리 설정 시 자동 추가
+- [ ] 채팅 액션에서 카테고리 변경 시 CategoryReferenceProvider 캐시 자동 무효화
+- [ ] 새 매핑 추가 시 벡터 DB에도 반영

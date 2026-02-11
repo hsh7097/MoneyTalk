@@ -1,7 +1,11 @@
 package com.sanha.moneytalk.core.ui.component
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -306,7 +310,110 @@ fun ExpenseDetailDialog(
 }
 
 /**
- * 카테고리 선택 다이얼로그
+ * 카테고리 선택 다이얼로그 (3열 그리드)
+ * 아이콘 + 하단 텍스트 형태로 표시
+ *
+ * @param currentCategory 현재 선택된 카테고리 displayName
+ * @param showAllOption true면 "전체" 항목 표시 (필터용)
+ * @param onDismiss 다이얼로그 닫기
+ * @param onCategorySelected 카테고리 선택 콜백 (null이면 "전체" 선택)
+ */
+@Composable
+fun CategorySelectDialog(
+    currentCategory: String?,
+    showAllOption: Boolean = false,
+    onDismiss: () -> Unit,
+    onCategorySelected: (String?) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "카테고리 선택",
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        },
+        text = {
+            val categories = Category.entries.toList()
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // "전체" 옵션 (필터용)
+                if (showAllOption) {
+                    item {
+                        CategoryGridItem(
+                            emoji = "📋",
+                            label = "전체",
+                            isSelected = currentCategory == null,
+                            onClick = { onCategorySelected(null) }
+                        )
+                    }
+                }
+                items(categories) { category ->
+                    CategoryGridItem(
+                        emoji = category.emoji,
+                        label = category.displayName,
+                        isSelected = category.displayName == currentCategory,
+                        onClick = { onCategorySelected(category.displayName) }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        }
+    )
+}
+
+/**
+ * 카테고리 그리드 아이템 (아이콘 + 하단 텍스트)
+ */
+@Composable
+private fun CategoryGridItem(
+    emoji: String,
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                else Color.Transparent
+            )
+            .clickable { onClick() }
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = emoji,
+            fontSize = 28.sp
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * 카테고리 선택 다이얼로그 (카테고리 변경용 - 하위 호환)
  */
 @Composable
 fun CategoryPickerDialog(
@@ -314,49 +421,13 @@ fun CategoryPickerDialog(
     onDismiss: () -> Unit,
     onCategorySelected: (String) -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("카테고리 선택") },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Category.entries.forEach { category ->
-                    val isSelected = category.displayName == currentCategory
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onCategorySelected(category.displayName) },
-                        shape = RoundedCornerShape(8.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isSelected) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surface
-                            }
-                        )
-                    ) {
-                        Text(
-                            text = category.displayName,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp)
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_cancel))
+    CategorySelectDialog(
+        currentCategory = currentCategory,
+        showAllOption = false,
+        onDismiss = onDismiss,
+        onCategorySelected = { selected ->
+            if (selected != null) {
+                onCategorySelected(selected)
             }
         }
     )

@@ -1,33 +1,34 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-08 (Phase 0 + Phase 1 완료)
+> **최종 갱신**: 2026-02-11
 
 ---
 
 ## 1. 현재 작업 상태
 
-### 완료: VectorSearchEngine 책임 분리 리팩토링
+### 완료된 주요 작업
 
-**Phase 0 (컨텍스트 패키징)**: ✅ 완료
-- [x] 기존 문서 5종 읽기
-- [x] docs/AI_CONTEXT.md, AI_HANDOFF.md, AI_TASKS.md, CLAUDE.md 생성
+**Phase 1 리팩토링**: ✅ 완료 (2026-02-08)
+- VectorSearchEngine 임계값 상수 제거 → 순수 벡터 엔진
+- core/similarity/ 패키지 신설, SimilarityPolicy SSOT 확립
 
-**Phase 1 (리팩토링)**: ✅ 완료
-- [x] VectorSearchEngine 임계값 상수 5개 제거 → 순수 벡터 엔진
-- [x] core/similarity/ 패키지 신설 (5개 파일)
-- [x] 모든 호출자에서 SimilarityPolicy 참조로 치환
-- [x] confidence < 0.6 전파 차단 정책 추가
-- [x] 빌드 성공 확인
+**채팅 시스템 확장**: ✅ 완료 (2026-02-08~09)
+- 채팅 액션 확장 (12종), ANALYTICS 쿼리 타입 추가
+- FINANCIAL_ADVISOR 할루시네이션 방지 규칙
+- 프롬프트 XML 이전 (ChatPrompts.kt → string_prompt.xml)
 
-**벡터 그룹핑 + 참조 리스트 + 계좌이체 수정**: ✅ 완료
-- [x] 계좌이체/출금 분류 버그 수정 (체크카드출금은 일반 카드 결제로 처리)
-- [x] Tier 1.5b 그룹 기반 매칭 추가 (다수결, 유사도 ≥ 0.88)
-- [x] 임베딩 1회 생성으로 Tier 1.5a/b 최적화 (이전: 2회 API 호출)
-- [x] CategoryReferenceProvider 신설 (동적 참조 리스트 → 모든 LLM 프롬프트 주입)
-- [x] 모든 프롬프트에 보험/계좌이체 카테고리 추가
-- [x] SmsParser categoryKeywords 보험 매핑 수정 (기타→보험)
-- [x] 문서 업데이트 (SMS_PARSING, CATEGORY_CLASSIFICATION, AI_CONTEXT, AI_HANDOFF)
+**데이터 관리 기능**: ✅ 완료 (2026-02-09)
+- OwnedCard 시스템 (카드 화이트리스트 + CardNameNormalizer)
+- SMS 제외 키워드 시스템 (블랙리스트)
+- DB 인덱스 추가 (v4→v5)
+- 전역 스낵바 버스 도입
+- API 키 설정 후 저신뢰도 항목 자동 재분류
+
+**UI 공통화**: ✅ 완료 (2026-02-11)
+- TransactionCard/GroupHeader/SegmentedTabRow 공통 컴포넌트
+- HistoryScreen Intent 패턴 적용
+- 카테고리 이모지 → 벡터 아이콘 교체 → 원복 (이모지 유지)
 
 ### 대기 중인 작업: Phase 2 후보 (우선순위 미정)
 
@@ -60,7 +61,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 ## 4. 필수 읽기 순서 (새 에이전트용)
 
 1. **CLAUDE.md** (프로젝트 루트) → 허브, 전체 구조 파악
-2. **docs/AI_CONTEXT.md** → 아키텍처, 임계값 레지스트리, 리팩토링 범위
+2. **docs/AI_CONTEXT.md** → 아키텍처, 임계값 레지스트리, 쿼리/액션 전체 목록
 3. **docs/AI_TASKS.md** → 현재 태스크 목록 + 완료 기준
 4. **docs/AI_HANDOFF.md** (이 문서) → 현재 진행 상황 + 주의사항
 
@@ -69,14 +70,13 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 ## 5. 주의사항
 
 ### 절대 금지
-- Phase 0 완료 전 리팩토링 코드 건드리지 않기
-- DB 스키마 변경 없음
-- 임계값 수치 자체를 변경하지 않음 (구조화만)
-- 기존 SMS 파싱/분류 로직의 동작 변경 없음
+- DB 스키마 변경 시 마이그레이션 필수 (현재 v5)
+- 임계값 수치 변경 시 AI_CONTEXT.md SSOT 먼저 업데이트
+- `!!` non-null assertion 사용 금지
 
 ### 알려진 이슈
-- `SmsBatchProcessor.kt`의 `GROUPING_SIMILARITY_THRESHOLD = 0.95f`는 `VectorSearchEngine.GROUPING_SIMILARITY_THRESHOLD = 0.88f`과 다름 (의도적: SMS 패턴 그룹핑 vs 가게명 그룹핑)
-- 리팩토링 시 두 값을 혼동하지 않도록 별도 SimilarityProfile로 관리 필요
+- `SmsBatchProcessor.kt`의 그룹핑 임계값(0.95)과 `StoreNameGrouper.kt`(0.88)은 의도적으로 다름 (SMS 패턴 vs 가게명)
+- ChatViewModel.kt가 대형 파일(~1500줄) — 향후 query/action 로직 분리 후보
 
 ### Git 규칙
 - 브랜치 전략: `develop`에서 분기
@@ -89,40 +89,71 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
-| 2026-02-08 | SMS 파싱 버그 3건 수정 (결제예정 제외, 가게명 파싱, 계좌이체 카테고리) | 완료, 빌드 성공 |
-| 2026-02-08 | 메모 기능 추가 (지출/수입 편집, 검색/채팅 참조, DB 마이그레이션 v1→v2) | 완료, 빌드 성공 |
-| 2026-02-08 | 보험 카테고리 복원 + 홈 화면 삭제 기능 추가 | 완료, 빌드 성공 |
-| 2026-02-08 | 수입 상세 다이얼로그 삭제 기능 추가 | 완료, 빌드 성공 |
-| 2026-02-08 | 채팅방 나갈 때 대화 기반 자동 타이틀 설정 | 완료, 빌드 성공 |
+| 2026-02-11 | HistoryScreen UI 공통화 + Intent 패턴 적용 | 완료 |
+| 2026-02-11 | 카테고리 이모지 → 벡터 아이콘 교체 → revert (이모지 원복) | 완료 |
+| 2026-02-09 | ANALYTICS 쿼리 + 채팅 할루시네이션 개선 | 완료 |
+| 2026-02-09 | API 키 설정 후 저신뢰도 항목 자동 재분류 | 완료 |
+| 2026-02-09 | 전역 스낵바 버스 도입 | 완료 |
+| 2026-02-08 | SMS 파싱 버그 3건 수정 | 완료 |
+| 2026-02-08 | 메모 기능 추가 (DB v1→v2) | 완료 |
+| 2026-02-08 | 보험 카테고리 복원 + 홈 화면 삭제 기능 | 완료 |
 | 2026-02-08 | 채팅 UI 리팩토링 (방 리스트/내부 분리) | 완료 |
 | 2026-02-08 | 수입 내역 통합 표시 (목록 모드) | 완료 |
-| 2026-02-08 | 벡터 그룹핑 (Tier 1.5b) + CategoryReferenceProvider + 계좌이체/보험 수정 | 완료 |
-| 2026-02-08 | 채팅 액션 5개 추가 (delete_by_keyword, add_expense, update_memo, update_store_name, update_amount) | 완료, 빌드 성공 |
-| 2026-02-08 | FINANCIAL_ADVISOR 할루시네이션 방지 규칙 추가 | 완료 |
-| 2026-02-08 | SMS 동기화/카테고리 분류 다이얼로그 진행률 표시 개선 | 완료, 빌드 성공 |
-| 2026-02-08 | Claude 레거시 코드 완전 제거 (4개 파일 삭제 + Retrofit 의존성 제거) | 완료, 빌드 성공 |
-| 2026-02-08 | SmsAnalysisResult core/model/ 분리 + ExpenseRepo/Dao 미사용 메서드 제거 | 완료, 빌드 성공 |
+| 2026-02-08 | 벡터 그룹핑 (Tier 1.5b) + CategoryReferenceProvider | 완료 |
+| 2026-02-08 | 채팅 액션 5개 추가 + SMS 제외 액션 2개 | 완료 |
+| 2026-02-08 | FINANCIAL_ADVISOR 할루시네이션 방지 규칙 | 완료 |
+| 2026-02-08 | SMS 동기화/카테고리 분류 진행률 표시 개선 | 완료 |
+| 2026-02-08 | Claude 레거시 코드 완전 제거 + Retrofit 의존성 제거 | 완료 |
+| 2026-02-08 | SmsAnalysisResult core/model/ 분리 | 완료 |
 
 ---
 
 ## 7. 핵심 파일 위치 (빠른 참조)
 
-### 리팩토링 대상
+### 데이터 레이어
 ```
-core/util/VectorSearchEngine.kt       ← 임계값 상수 + 벡터 연산 (분리 대상)
-core/util/HybridSmsClassifier.kt      ← 3-tier SMS 분류
-core/util/SmsBatchProcessor.kt        ← SMS 배치 처리 (로컬 GROUPING 0.95)
-core/util/StoreNameGrouper.kt         ← 가게명 시맨틱 그룹핑 (GROUPING 0.88)
-feature/home/data/StoreEmbeddingRepository.kt  ← 가게명 벡터 캐시 + 전파
-feature/home/data/CategoryClassifierService.kt ← 4-tier 카테고리 분류
+core/database/AppDatabase.kt                    ← Room DB 정의 (v5, 10 entities)
+core/database/entity/OwnedCardEntity.kt          ← 카드 화이트리스트 Entity
+core/database/entity/SmsExclusionKeywordEntity.kt ← SMS 제외 키워드 Entity
+core/database/OwnedCardRepository.kt             ← 카드 관리 + CardNameNormalizer 연동
+core/database/SmsExclusionRepository.kt          ← SMS 제외 키워드 관리
 ```
 
-### 생성된 파일
+### SMS/분류 핵심
+```
+core/util/HybridSmsClassifier.kt      ← 3-tier SMS 분류
+core/util/SmsBatchProcessor.kt        ← SMS 배치 처리
+core/util/VectorSearchEngine.kt       ← 순수 벡터 연산
+core/util/CardNameNormalizer.kt       ← 카드명 정규화
+core/util/StoreAliasManager.kt        ← 가게명 별칭 관리
+core/util/CategoryReferenceProvider.kt ← 동적 참조 리스트
+feature/home/data/CategoryClassifierService.kt ← 4-tier 카테고리 분류
+feature/home/data/StoreEmbeddingRepository.kt  ← 가게명 벡터 캐시 + 전파
+```
+
+### 유사도 정책
 ```
 core/similarity/SimilarityPolicy.kt           ← 인터페이스
 core/similarity/SimilarityProfile.kt          ← 임계값 데이터 클래스
 core/similarity/SmsPatternSimilarityPolicy.kt ← SMS 분류 정책
 core/similarity/StoreNameSimilarityPolicy.kt  ← 가게명 매칭 정책
 core/similarity/CategoryPropagationPolicy.kt  ← 카테고리 전파 정책
-core/util/CategoryReferenceProvider.kt        ← 동적 참조 리스트 (프롬프트 주입)
+```
+
+### AI 채팅
+```
+feature/chat/data/GeminiRepository.kt   ← Gemini API (3개 모델)
+feature/chat/data/ChatRepositoryImpl.kt ← 채팅 데이터 + Rolling Summary
+feature/chat/ui/ChatViewModel.kt        ← 채팅 UI + 쿼리/액션/분석 실행
+res/values/string_prompt.xml            ← 모든 AI 프롬프트 (6종)
+```
+
+### UI 공통 컴포넌트
+```
+core/ui/component/transaction/card/TransactionCardCompose.kt    ← 거래 카드
+core/ui/component/transaction/card/TransactionCardInfo.kt       ← 거래 카드 Contract
+core/ui/component/transaction/header/TransactionGroupHeaderCompose.kt ← 그룹 헤더
+core/ui/component/transaction/header/TransactionGroupHeaderInfo.kt    ← 그룹 헤더 Contract
+core/ui/component/tab/SegmentedTabRowCompose.kt                 ← 탭 버튼
+core/ui/component/tab/SegmentedTabInfo.kt                       ← 탭 Contract
 ```

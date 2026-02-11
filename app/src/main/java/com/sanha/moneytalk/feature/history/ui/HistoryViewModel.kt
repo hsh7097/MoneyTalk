@@ -318,12 +318,14 @@ class HistoryViewModel @Inject constructor(
                     }
                     val currentState = _uiState.value
                     val sortedExpenses = sortExpenses(expenses, currentState.sortOrder)
+                    // 카테고리 필터 활성화 시 수입 항목 제외 (수입은 카테고리가 없으므로)
+                    val filteredIncomes = if (currentState.selectedCategory != null) emptyList() else currentState.incomes
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             expenses = sortedExpenses,
                             transactionListItems = buildTransactionListItems(
-                                sortedExpenses, currentState.incomes, currentState.sortOrder, currentState.showIncomeView
+                                sortedExpenses, filteredIncomes, currentState.sortOrder, currentState.showIncomeView
                             )
                         )
                     }
@@ -668,6 +670,8 @@ class HistoryViewModel @Inject constructor(
             }
 
             val state2 = _uiState.value
+            // 카테고리 필터 활성화 시 수입 항목 제외
+            val filteredIncomes = if (state2.selectedCategory != null) emptyList() else state2.incomes
             _uiState.update {
                 it.copy(
                     monthlyTotal = result.first,
@@ -675,7 +679,7 @@ class HistoryViewModel @Inject constructor(
                     expenses = result.third,
                     isLoading = false,
                     transactionListItems = buildTransactionListItems(
-                        result.third, state2.incomes, state2.sortOrder, state2.showIncomeView
+                        result.third, filteredIncomes, state2.sortOrder, state2.showIncomeView
                     )
                 )
             }
@@ -726,8 +730,10 @@ class HistoryViewModel @Inject constructor(
     /** transactionListItems 갱신 */
     private fun updateTransactionListItems() {
         val state = _uiState.value
+        // 카테고리 필터 활성화 시 수입 항목 제외
+        val filteredIncomes = if (state.selectedCategory != null) emptyList() else state.incomes
         val items = buildTransactionListItems(
-            state.expenses, state.incomes, state.sortOrder, state.showIncomeView
+            state.expenses, filteredIncomes, state.sortOrder, state.showIncomeView
         )
         _uiState.update { it.copy(transactionListItems = items) }
     }

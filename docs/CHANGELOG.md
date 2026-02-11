@@ -4,7 +4,27 @@
 
 ## [Unreleased]
 
-### Added
+### Added (2026-02-09~11)
+- **OwnedCard 시스템** (카드 화이트리스트)
+  - OwnedCardEntity/Dao/Repository (DB v2→v3)
+  - CardNameNormalizer: 25+ 카드사 명칭 정규화
+  - SMS 동기화 시 자동 카드 등록 + Settings에서 소유 카드 관리
+- **SMS 제외 키워드 시스템** (블랙리스트)
+  - SmsExclusionKeywordEntity/Dao/Repository (DB v3→v4)
+  - 기본(default) / 사용자(user) / 채팅(chat) 3가지 소스
+- **DB 성능 인덱스** (v4→v5): expenses/incomes 테이블 인덱스
+- **ANALYTICS 쿼리 타입**: 클라이언트 사이드 복합 분석
+- **SMS 제외 채팅 액션**: add_sms_exclusion, remove_sms_exclusion
+- **전역 스낵바 버스** (DataRefreshEvent 기반)
+- **API 키 설정 후 저신뢰도 항목 자동 재분류**
+- **UI 공통 컴포넌트**: TransactionCard, TransactionGroupHeader, SegmentedTabRow
+
+### Refactored (2026-02-09~11)
+- **프롬프트 XML 이전**: ChatPrompts.kt → string_prompt.xml (6종)
+- **HistoryScreen Intent 패턴**: HistoryIntent sealed interface
+- **FINANCIAL_ADVISOR 할루시네이션 개선**
+
+### Added (2026-02-08)
 - **계좌이체 카테고리 추가** (TRANSFER 🔄)
   - 계좌번호(**패턴) + "출금" 키워드 자동 감지
   - Gemini 분류 프롬프트 및 매핑 테이블 연동

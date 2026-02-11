@@ -170,21 +170,22 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * 설정 로드 및 초기 데이터 로드
-     * 월 시작일 설정을 가져와서 현재 커스텀 월 기간을 계산합니다.
+     * 설정 로드 및 월 시작일 변경 감지
+     * 월 시작일이 변경되면 자동으로 홈 데이터를 다시 로드합니다.
      */
     private fun loadSettings() {
         viewModelScope.launch {
-            val (monthStartDay, year, month) = withContext(Dispatchers.IO) {
-                val msd = settingsDataStore.getMonthStartDay()
-                val (_, endTs) = DateUtils.getCurrentCustomMonthPeriod(msd)
-                val calendar = java.util.Calendar.getInstance().apply { timeInMillis = endTs }
-                Triple(msd, calendar.get(java.util.Calendar.YEAR), calendar.get(java.util.Calendar.MONTH) + 1)
+            settingsDataStore.monthStartDayFlow.collect { monthStartDay ->
+                val (year, month) = withContext(Dispatchers.IO) {
+                    val (_, endTs) = DateUtils.getCurrentCustomMonthPeriod(monthStartDay)
+                    val calendar = java.util.Calendar.getInstance().apply { timeInMillis = endTs }
+                    Pair(calendar.get(java.util.Calendar.YEAR), calendar.get(java.util.Calendar.MONTH) + 1)
+                }
+                _uiState.update {
+                    it.copy(monthStartDay = monthStartDay, selectedYear = year, selectedMonth = month)
+                }
+                loadData()
             }
-            _uiState.update {
-                it.copy(monthStartDay = monthStartDay, selectedYear = year, selectedMonth = month)
-            }
-            loadData()
         }
     }
 

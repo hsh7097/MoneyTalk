@@ -8,10 +8,11 @@
 
 **MoneyTalk** = SMS 파싱 기반 자동 지출 추적 + Gemini AI 재무 상담 Android 앱
 
-- Kotlin / Jetpack Compose / MVVM / Hilt DI / Room DB
+- Kotlin / Jetpack Compose / MVVM / Hilt DI / Room DB (v5, 10 entities)
 - 3-tier SMS 분류 (Regex → Vector → Gemini LLM)
 - 4-tier 카테고리 분류 (Room → Vector → Keyword → Gemini Batch)
-- 2-phase AI 채팅 (쿼리분석 → DB조회 → 답변생성)
+- 3-step AI 채팅 (쿼리분석 → DB조회/액션/분석 → 답변생성) — 17 쿼리 + 12 액션
+- 카드 화이트리스트 (OwnedCard) + SMS 제외 키워드 (블랙리스트)
 
 ---
 
@@ -63,6 +64,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 ## 핵심 구조
 
 > 이 프로젝트의 AI 핵심 로직은 **Vector(연산) → Policy(판단) → Service(행동)** 구조다.
+> 모든 AI 시스템 프롬프트는 `res/values/string_prompt.xml`에서 관리한다.
 
 ## 핵심 규칙
 

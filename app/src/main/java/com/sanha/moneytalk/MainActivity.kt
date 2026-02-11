@@ -9,9 +9,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -22,7 +24,9 @@ import androidx.navigation.compose.rememberNavController
 import com.sanha.moneytalk.navigation.NavGraph
 import com.sanha.moneytalk.navigation.Screen
 import com.sanha.moneytalk.navigation.bottomNavItems
+import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.theme.MoneyTalkTheme
+import com.sanha.moneytalk.core.theme.ThemeMode
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -31,6 +35,7 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var snackbarBus: AppSnackbarBus
+    @Inject lateinit var settingsDataStore: SettingsDataStore
 
     private var pendingSyncAction: (() -> Unit)? = null
     private var permissionChecked = mutableStateOf(false)
@@ -63,7 +68,10 @@ class MainActivity : ComponentActivity() {
         checkInitialPermissions()
 
         setContent {
-            MoneyTalkTheme {
+            val themeModeStr by settingsDataStore.themeModeFlow.collectAsState(initial = "SYSTEM")
+            val themeMode = try { ThemeMode.valueOf(themeModeStr) } catch (_: Exception) { ThemeMode.SYSTEM }
+
+            MoneyTalkTheme(themeMode = themeMode) {
                 MoneyTalkApp(
                     permissionChecked = permissionChecked.value,
                     permissionGranted = permissionGranted.value,
@@ -173,9 +181,15 @@ fun MoneyTalkApp(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (showBottomBar) {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ) {
+                Column {
+                    HorizontalDivider(
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 0.dp
+                    ) {
                     bottomNavItems.forEach { item ->
                         val isSelected = currentRoute == item.route
                         NavigationBarItem(
@@ -210,6 +224,7 @@ fun MoneyTalkApp(
                                 indicatorColor = MaterialTheme.colorScheme.surface
                             )
                         )
+                    }
                     }
                 }
             }

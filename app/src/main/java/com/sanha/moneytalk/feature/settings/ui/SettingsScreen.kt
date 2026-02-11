@@ -37,6 +37,7 @@ import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
 import com.sanha.moneytalk.BuildConfig
+import com.sanha.moneytalk.core.theme.ThemeMode
 import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
 import com.sanha.moneytalk.R
@@ -134,20 +135,51 @@ fun SettingsScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold { paddingValues ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
                 item {
                     Text(
                         text = stringResource(R.string.settings_title),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
+                }
+
+                // 화면 설정 (테마)
+                item {
+                    var showThemeDialog by remember { mutableStateOf(false) }
+                    val themeModeLabel = when (uiState.themeMode) {
+                        ThemeMode.SYSTEM -> "시스템 설정"
+                        ThemeMode.LIGHT -> "라이트 모드"
+                        ThemeMode.DARK -> "다크 모드"
+                    }
+                    SettingsSection(title = "화면 설정 (DISPLAY)") {
+                        SettingsItem(
+                            icon = when (uiState.themeMode) {
+                                ThemeMode.SYSTEM -> Icons.Default.Settings
+                                ThemeMode.LIGHT -> Icons.Default.LightMode
+                                ThemeMode.DARK -> Icons.Default.DarkMode
+                            },
+                            title = "테마",
+                            subtitle = themeModeLabel,
+                            onClick = { showThemeDialog = true }
+                        )
+                    }
+                    if (showThemeDialog) {
+                        ThemeModeDialog(
+                            currentMode = uiState.themeMode,
+                            onModeChange = {
+                                viewModel.saveThemeMode(it)
+                                showThemeDialog = false
+                            },
+                            onDismiss = { showThemeDialog = false }
+                        )
+                    }
                 }
 
                 // 기간 설정
@@ -179,6 +211,7 @@ fun SettingsScreen(
                             },
                             onClick = { showApiKeyDialog = true }
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         // 카테고리 정리 버튼 (백그라운드 분류 중이면 비활성화 + 인디케이터)
                         val isClassifyEnabled = uiState.hasApiKey &&
                             uiState.unclassifiedCount > 0 &&
@@ -265,12 +298,14 @@ fun SettingsScreen(
                             },
                             onClick = { showExclusionKeywordDialog = true }
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         SettingsItem(
                             icon = Icons.Default.Backup,
                             title = stringResource(R.string.settings_export_title),
                             subtitle = stringResource(R.string.settings_export_subtitle),
                             onClick = { showExportDialog = true }
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         SettingsItem(
                             icon = Icons.Default.Cloud,
                             title = stringResource(R.string.settings_google_drive_title),
@@ -284,28 +319,29 @@ fun SettingsScreen(
                                 coroutineScope.launch {
                                     val signInIntent = viewModel.tryOpenGoogleDrive(context)
                                     if (signInIntent == null) {
-                                        // silentSignIn 성공 또는 이미 준비됨 → 바로 다이얼로그 열기
                                         viewModel.loadDriveBackupFiles()
                                         showGoogleDriveDialog = true
                                     } else {
-                                        // interactive 로그인 필요
                                         googleSignInLauncher.launch(signInIntent)
                                     }
                                 }
                             }
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         SettingsItem(
                             icon = Icons.Default.Restore,
                             title = stringResource(R.string.settings_restore_local_title),
                             subtitle = stringResource(R.string.settings_restore_local_subtitle),
                             onClick = { restoreLauncher.launch(arrayOf("application/json")) }
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         SettingsItem(
                             icon = Icons.Default.ContentCopy,
                             title = "중복 데이터 삭제",
                             subtitle = "금액, 가게명, 시간이 같은 중복 항목 제거",
                             onClick = { viewModel.deleteDuplicates() }
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         SettingsItem(
                             icon = Icons.Default.DeleteForever,
                             title = stringResource(R.string.settings_delete_all_title),
@@ -334,6 +370,7 @@ fun SettingsScreen(
                             subtitle = BuildConfig.VERSION_NAME,
                             onClick = { showAppInfoDialog = true }
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         SettingsItem(
                             icon = Icons.Default.Description,
                             title = stringResource(R.string.settings_privacy_title),
@@ -343,7 +380,6 @@ fun SettingsScreen(
                     }
                 }
             }
-        }
 
         // 로딩 인디케이터
         if (uiState.isLoading || uiState.isClassifying) {
@@ -905,22 +941,103 @@ fun SettingsSection(
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp, MaterialTheme.colorScheme.outlineVariant
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            content()
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                content()
+            }
         }
     }
+}
+
+@Composable
+fun ThemeModeDialog(
+    currentMode: ThemeMode,
+    onModeChange: (ThemeMode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("테마 설정") },
+        text = {
+            Column {
+                ThemeMode.entries.forEach { mode ->
+                    val label = when (mode) {
+                        ThemeMode.SYSTEM -> "시스템 설정"
+                        ThemeMode.LIGHT -> "라이트 모드"
+                        ThemeMode.DARK -> "다크 모드"
+                    }
+                    val icon = when (mode) {
+                        ThemeMode.SYSTEM -> Icons.Default.Settings
+                        ThemeMode.LIGHT -> Icons.Default.LightMode
+                        ThemeMode.DARK -> Icons.Default.DarkMode
+                    }
+                    val isSelected = currentMode == mode
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onModeChange(mode) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = label,
+                            tint = if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (isSelected) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("닫기")
+            }
+        }
+    )
 }
 
 @Composable
@@ -934,8 +1051,7 @@ fun SettingsItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 12.dp),
+            .clickable { onClick() },
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
