@@ -17,6 +17,7 @@ import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
 import com.sanha.moneytalk.core.util.GoogleDriveHelper
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
+import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.CategoryRepository
@@ -54,7 +55,9 @@ data class SettingsUiState(
     // 내 카드 관리
     val ownedCards: List<com.sanha.moneytalk.core.database.entity.OwnedCardEntity> = emptyList(),
     // SMS 제외 키워드 관리
-    val exclusionKeywords: List<com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity> = emptyList()
+    val exclusionKeywords: List<com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity> = emptyList(),
+    // 백그라운드 분류 진행 중 (HomeViewModel에서 진행 중인 경우)
+    val isBackgroundClassifying: Boolean = false
 )
 
 @HiltViewModel
@@ -72,7 +75,8 @@ class SettingsViewModel @Inject constructor(
     private val dataRefreshEvent: DataRefreshEvent,
     private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
-    private val snackbarBus: AppSnackbarBus
+    private val snackbarBus: AppSnackbarBus,
+    private val classificationState: ClassificationState
 ) : ViewModel() {
 
     companion object {
@@ -88,6 +92,20 @@ class SettingsViewModel @Inject constructor(
         loadUnclassifiedCount()
         loadOwnedCards()
         loadExclusionKeywords()
+        observeClassificationState()
+    }
+
+    /** 백그라운드 분류 상태 감지 (HomeViewModel에서 진행 중인 경우 버튼 비활성화) */
+    private fun observeClassificationState() {
+        viewModelScope.launch {
+            classificationState.isRunning.collect { running ->
+                _uiState.update { it.copy(isBackgroundClassifying = running) }
+                // 분류 완료 시 미분류 건수 새로고침
+                if (!running) {
+                    loadUnclassifiedCount()
+                }
+            }
+        }
     }
 
     private fun loadSettings() {

@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -178,20 +179,72 @@ fun SettingsScreen(
                             },
                             onClick = { showApiKeyDialog = true }
                         )
-                        SettingsItem(
-                            icon = Icons.Default.AutoAwesome,
-                            title = "카테고리 정리",
-                            subtitle = if (!uiState.hasApiKey) {
-                                "API 키를 먼저 설정해주세요"
-                            } else if (uiState.unclassifiedCount > 0) {
-                                "미정리 ${uiState.unclassifiedCount}건"
-                            } else {
-                                "정리할 항목 없음"
-                            },
-                            onClick = {
-                                viewModel.classifyUnclassifiedExpenses()
+                        // 카테고리 정리 버튼 (백그라운드 분류 중이면 비활성화 + 인디케이터)
+                        val isClassifyEnabled = uiState.hasApiKey &&
+                            uiState.unclassifiedCount > 0 &&
+                            !uiState.isBackgroundClassifying &&
+                            !uiState.isClassifying
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(
+                                    if (isClassifyEnabled) {
+                                        Modifier.clickable { viewModel.classifyUnclassifiedExpenses() }
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .alpha(if (uiState.isBackgroundClassifying || uiState.isClassifying) 0.6f else 1f)
+                                .padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "카테고리 정리",
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        if (uiState.isBackgroundClassifying) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(12.dp),
+                                                strokeWidth = 2.dp,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        Text(
+                                            text = when {
+                                                !uiState.hasApiKey -> "API 키를 먼저 설정해주세요"
+                                                uiState.isBackgroundClassifying -> "백그라운드에서 분류 진행 중..."
+                                                uiState.unclassifiedCount > 0 -> "미정리 ${uiState.unclassifiedCount}건"
+                                                else -> "정리할 항목 없음"
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
                             }
-                        )
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                            )
+                        }
                     }
                 }
 
@@ -1377,14 +1430,7 @@ private fun ExclusionKeywordItem(
                     MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 }
             )
-            if (!canDelete) {
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "(기본)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                )
-            } else if (source == "chat") {
+            if (source == "chat") {
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = "(채팅)",

@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.feature.home.ui
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -33,7 +34,8 @@ import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
-import com.sanha.moneytalk.core.ui.component.ExpenseItemCard
+import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
+import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
 import com.sanha.moneytalk.core.util.DateUtils
 import java.text.NumberFormat
 import java.util.*
@@ -194,8 +196,8 @@ fun HomeScreen(
                     }
                 } else {
                     items(displayExpenses) { expense ->
-                        ExpenseItemCard(
-                            expense = expense,
+                        TransactionCardCompose(
+                            info = ExpenseTransactionCardInfo(expense),
                             onClick = { selectedExpense = expense }
                         )
                     }
@@ -230,6 +232,7 @@ fun HomeScreen(
 
     // 지출 상세 다이얼로그 (공통 컴포넌트 사용)
     selectedExpense?.let { expense ->
+        Log.e("sanha", "HomeScreen[selectedExpense] : ${expense.storeName}, ${expense.amount}원")
         ExpenseDetailDialog(
             expense = expense,
             onDismiss = { selectedExpense = null },

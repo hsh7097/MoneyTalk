@@ -132,6 +132,10 @@
     <string name="day_friday">금요일</string>
     <string name="day_saturday">토요일</string>
     <string name="history_day_header">%d일 %s</string>
+    <string name="history_sort_amount">금액 높은순</string>
+    <string name="history_count_suffix">건</string>
+    <string name="history_visit_suffix">회</string>
+    <string name="history_no_income">수입 내역이 없습니다</string>
 
     <!-- 설정 화면 -->
     <string name="settings_title">설정</string>

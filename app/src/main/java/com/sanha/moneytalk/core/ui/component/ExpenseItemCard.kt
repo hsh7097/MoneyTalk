@@ -1,7 +1,5 @@
 package com.sanha.moneytalk.core.ui.component
 
-import android.util.Log
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -31,77 +29,6 @@ import java.text.NumberFormat
 import java.util.*
 
 /**
- * 공통 지출 아이템 카드 컴포넌트
- * 홈 화면과 내역 화면에서 동일하게 사용
- */
-@Composable
-fun ExpenseItemCard(
-    expense: ExpenseEntity,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
-    val category = Category.fromDisplayName(expense.category)
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable {
-                Log.e("sanhakb", "=== 아이템 클릭 ===")
-                Log.e("sanhakb", "ID: ${expense.id}")
-                Log.e("sanhakb", "가게명(storeName): ${expense.storeName}")
-                Log.e("sanhakb", "금액: ${expense.amount}")
-                Log.e("sanhakb", "카테고리: ${expense.category}")
-                Log.e("sanhakb", "카드: ${expense.cardName}")
-                Log.e("sanhakb", "날짜: ${DateUtils.formatDisplayDateTime(expense.dateTime)}")
-                Log.e("sanhakb", "원본SMS: ${expense.originalSms}")
-                Log.e("sanhakb", "==================")
-                onClick()
-            }
-            .padding(vertical = 12.dp, horizontal = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
-        ) {
-            // 카테고리 이모지 아이콘
-            CategoryIcon(category = category, containerSize = 32.dp, fontSize = 20.sp)
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column {
-                // 상호명 (가게명)
-                Text(
-                    text = expense.storeName,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                // 카테고리 | 카드(은행)
-                Text(
-                    text = "${expense.category} | ${expense.cardName}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-
-        // 금액
-        Text(
-            text = "-${numberFormat.format(expense.amount)}원",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.error
-        )
-    }
-}
-
-/**
  * 지출 상세 다이얼로그
  * 홈 화면과 내역 화면에서 공통 사용
  *
@@ -109,6 +36,7 @@ fun ExpenseItemCard(
  * @param onDismiss 다이얼로그 닫기
  * @param onDelete 삭제 콜백 (null이면 삭제 버튼 숨김)
  * @param onCategoryChange 카테고리 변경 콜백 (null이면 수정 불가)
+ * @param onMemoChange 메모 변경 콜백 (null이면 수정 불가)
  */
 @Composable
 fun ExpenseDetailDialog(
@@ -146,10 +74,11 @@ fun ExpenseDetailDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // 금액
+                // 금액 (색상으로만 구분)
                 DetailRow(
                     label = stringResource(R.string.detail_amount),
-                    value = "-${numberFormat.format(expense.amount)}원"
+                    value = stringResource(R.string.common_won, numberFormat.format(expense.amount)),
+                    valueColor = MaterialTheme.colorScheme.error
                 )
 
                 // 카테고리 (수정 가능하면 클릭 가능)
@@ -436,7 +365,8 @@ fun CategoryPickerDialog(
 @Composable
 private fun DetailRow(
     label: String,
-    value: String
+    value: String,
+    valueColor: Color = Color.Unspecified
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -450,7 +380,8 @@ private fun DetailRow(
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
+            color = if (valueColor != Color.Unspecified) valueColor else Color.Unspecified
         )
     }
 }

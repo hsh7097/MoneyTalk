@@ -17,6 +17,8 @@ import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.core.util.DataRefreshEvent
+import com.sanha.moneytalk.core.ui.AppSnackbarBus
+import com.sanha.moneytalk.core.ui.ClassificationState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -94,7 +96,9 @@ class HomeViewModel @Inject constructor(
     private val smsBatchProcessor: SmsBatchProcessor,
     private val dataRefreshEvent: DataRefreshEvent,
     private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
-    private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository
+    private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
+    private val snackbarBus: AppSnackbarBus,
+    private val classificationState: ClassificationState
 ) : ViewModel() {
 
     companion object {
@@ -605,8 +609,10 @@ class HomeViewModel @Inject constructor(
                 // Hybrid가 있으면 Hybrid 완료 후 순차로 Category 실행 (내부에서 호출)
                 // Hybrid가 없으면 Category만 단독 실행
                 if (result.hybridSmsList.isNotEmpty() && result.hasGeminiKey) {
+                    snackbarBus.show("백그라운드에서 카테고리를 분류하고 있습니다")
                     launchBackgroundHybridClassification(result.hybridSmsList, forceFullSync)
                 } else if (result.hasGeminiKey) {
+                    snackbarBus.show("백그라운드에서 카테고리를 분류하고 있습니다")
                     launchBackgroundCategoryClassification()
                 }
             } catch (e: Exception) {
@@ -711,6 +717,7 @@ class HomeViewModel @Inject constructor(
         forceFullSync: Boolean
     ) {
         viewModelScope.launch(Dispatchers.IO) {
+            classificationState.setRunning(true)
             try {
                 android.util.Log.d("HomeViewModel", "백그라운드 Hybrid 분류 시작: ${hybridSmsList.size}건")
                 var hybridCount = 0
@@ -827,9 +834,13 @@ class HomeViewModel @Inject constructor(
                     }
 
                     // 추가된 결제건에 대해 카테고리 분류도 비동기 실행
+                    // (launchBackgroundCategoryClassificationInternal의 finally에서 setRunning(false) 처리)
                     launchBackgroundCategoryClassificationInternal()
+                } else {
+                    classificationState.setRunning(false)
                 }
             } catch (e: Exception) {
+                classificationState.setRunning(false)
                 android.util.Log.e("HomeViewModel", "백그라운드 Hybrid 분류 실패: ${e.message}", e)
             }
         }
@@ -860,6 +871,7 @@ class HomeViewModel @Inject constructor(
                 return
             }
 
+            classificationState.setRunning(true)
             android.util.Log.d("HomeViewModel", "백그라운드 카테고리 자동 분류 시작: ${count}건")
 
             // ===== Phase 1: 상위 50개 가게 빠르게 분류 =====
@@ -904,6 +916,8 @@ class HomeViewModel @Inject constructor(
             android.util.Log.d("HomeViewModel", "백그라운드 카테고리 자동 분류 완료")
         } catch (e: Exception) {
             android.util.Log.e("HomeViewModel", "백그라운드 카테고리 자동 분류 실패: ${e.message}", e)
+        } finally {
+            classificationState.setRunning(false)
         }
     }
 
