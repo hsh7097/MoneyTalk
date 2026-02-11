@@ -493,11 +493,17 @@ class HistoryViewModel @Inject constructor(
                 val results = withContext(Dispatchers.IO) {
                     expenseRepository.searchExpenses(query)
                 }
+                val currentState = _uiState.value
+                val sortedResults = sortExpenses(results, currentState.sortOrder)
+                val filteredIncomes = if (currentState.selectedCategory != null) emptyList() else currentState.incomes
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        expenses = results,
-                        monthlyTotal = results.sumOf { e -> e.amount }
+                        expenses = sortedResults,
+                        monthlyTotal = results.sumOf { e -> e.amount },
+                        transactionListItems = buildTransactionListItems(
+                            sortedResults, filteredIncomes, currentState.sortOrder, currentState.showIncomeView
+                        )
                     )
                 }
             } catch (e: Exception) {
@@ -611,12 +617,15 @@ class HistoryViewModel @Inject constructor(
                             }
                         }
                         val total = incomes.sumOf { it.amount }
+                        val sortedIncomes = incomes.sortedByDescending { inc -> inc.dateTime }
                         _uiState.update {
                             it.copy(
-                                incomes = incomes.sortedByDescending { inc -> inc.dateTime },
+                                incomes = sortedIncomes,
                                 monthlyIncomeTotal = total
                             )
                         }
+                        // 수입 갱신 후 transactionListItems도 재빌드
+                        updateTransactionListItems()
                     }
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "수입 로드 실패: ${e.message}") }
