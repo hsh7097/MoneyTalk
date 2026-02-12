@@ -84,8 +84,12 @@
     <string name="home_sync_full">전체 문자 다시 읽기</string>
     <string name="home_income">수입</string>
     <string name="home_expense">지출</string>
+    <string name="home_this_month_expense">이번 달 지출</string>
+    <string name="home_income_badge">수입 %s원</string>
     <string name="home_remaining_budget">남은 예산: %s원</string>
     <string name="home_category_expense">카테고리별 지출</string>
+    <string name="home_expense_top3">지출 TOP 3</string>
+    <string name="home_view_all">전체보기</string>
     <string name="home_no_expense">아직 지출 내역이 없어요</string>
     <string name="home_recent_expense">최근 지출</string>
     <string name="home_empty_expense_title">아직 지출 내역이 없어요</string>
