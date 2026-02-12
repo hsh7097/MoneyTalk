@@ -382,8 +382,8 @@ fun PeriodSummaryCard(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                     contentDescription = stringResource(R.string.home_previous_month),
-                    modifier = Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    modifier = Modifier.size(28.dp),
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -396,14 +396,15 @@ fun PeriodSummaryCard(
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Text(
-                    text = "-",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Medium,
+                HorizontalDivider(
+                    modifier = Modifier
+                        .width(6.dp)
+                        .padding(vertical = 4.dp),
+                    thickness = 1.dp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "$endDate",
+                    text = endDate,
                     style = MaterialTheme.typography.labelMedium.copy(fontSize = 18.sp),
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface
@@ -417,8 +418,8 @@ fun PeriodSummaryCard(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = stringResource(R.string.home_next_month),
-                    modifier = Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    modifier = Modifier.size(28.dp),
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
         }

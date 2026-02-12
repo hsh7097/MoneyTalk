@@ -797,8 +797,11 @@ class HistoryViewModel @Inject constructor(
                 expenseTotal = dailyExpenseTotal,
                 incomeTotal = dailyIncomeTotal
             ))
-            dayIncomes.forEach { items.add(TransactionListItem.IncomeItem(it)) }
-            dayExpenses.forEach { items.add(TransactionListItem.ExpenseItem(it)) }
+            // 수입+지출을 시간 최신순으로 통합 정렬
+            val merged = dayExpenses.map { it.dateTime to TransactionListItem.ExpenseItem(it) } +
+                dayIncomes.map { it.dateTime to TransactionListItem.IncomeItem(it) }
+            merged.sortedByDescending { it.first }
+                .forEach { items.add(it.second) }
         }
 
         return items
