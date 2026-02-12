@@ -32,6 +32,50 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+/** Settings 화면의 모든 사용자 인터랙션을 Intent로 정의 */
+sealed interface SettingsIntent {
+    // 다이얼로그 열기
+    data object ShowApiKeyDialog : SettingsIntent
+    data object ShowMonthStartDayDialog : SettingsIntent
+    data object ShowDeleteConfirmDialog : SettingsIntent
+    data object ShowExportDialog : SettingsIntent
+    data object ShowGoogleDriveDialog : SettingsIntent
+    data object ShowAppInfoDialog : SettingsIntent
+    data object ShowPrivacyDialog : SettingsIntent
+    data object ShowExclusionKeywordDialog : SettingsIntent
+    data object ShowThemeDialog : SettingsIntent
+
+    // 다이얼로그 닫기
+    data object DismissDialog : SettingsIntent
+
+    // 액션
+    data class SaveApiKey(val key: String) : SettingsIntent
+    data class SaveMonthStartDay(val day: Int) : SettingsIntent
+    data class SaveThemeMode(val mode: ThemeMode) : SettingsIntent
+    data object ClassifyUnclassified : SettingsIntent
+    data object DeleteAllData : SettingsIntent
+    data object DeleteDuplicates : SettingsIntent
+    data class AddExclusionKeyword(val keyword: String) : SettingsIntent
+    data class RemoveExclusionKeyword(val keyword: String) : SettingsIntent
+    data object OpenRestoreFilePicker : SettingsIntent
+    data class SetPendingRestoreUri(val uri: Uri) : SettingsIntent
+    data object ConfirmRestore : SettingsIntent
+}
+
+/** 다이얼로그 종류 (하나의 필드로 관리) */
+enum class SettingsDialog {
+    API_KEY,
+    MONTH_START_DAY,
+    DELETE_CONFIRM,
+    RESTORE_CONFIRM,
+    EXPORT,
+    GOOGLE_DRIVE,
+    APP_INFO,
+    PRIVACY,
+    EXCLUSION_KEYWORD,
+    THEME
+}
+
 data class SettingsUiState(
     val apiKey: String = "",
     val hasApiKey: Boolean = false,
@@ -59,7 +103,13 @@ data class SettingsUiState(
     // SMS 제외 키워드 관리
     val exclusionKeywords: List<com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity> = emptyList(),
     // 백그라운드 분류 진행 중 (HomeViewModel에서 진행 중인 경우)
-    val isBackgroundClassifying: Boolean = false
+    val isBackgroundClassifying: Boolean = false,
+    // 다이얼로그 상태 (null이면 닫힘)
+    val activeDialog: SettingsDialog? = null,
+    // 복원 대기 URI
+    val pendingRestoreUri: Uri? = null,
+    // 복원 파일 선택 트리거
+    val triggerRestoreFilePicker: Boolean = false
 )
 
 @HiltViewModel
@@ -97,6 +147,74 @@ class SettingsViewModel @Inject constructor(
         observeClassificationState()
         loadThemeMode()
     }
+
+    // ========== Intent 처리 ==========
+
+    /** 모든 사용자 인터랙션을 Intent로 처리 */
+    fun onIntent(intent: SettingsIntent) {
+        when (intent) {
+            is SettingsIntent.ShowApiKeyDialog -> showDialog(SettingsDialog.API_KEY)
+            is SettingsIntent.ShowMonthStartDayDialog -> showDialog(SettingsDialog.MONTH_START_DAY)
+            is SettingsIntent.ShowDeleteConfirmDialog -> showDialog(SettingsDialog.DELETE_CONFIRM)
+            is SettingsIntent.ShowExportDialog -> showDialog(SettingsDialog.EXPORT)
+            is SettingsIntent.ShowGoogleDriveDialog -> showDialog(SettingsDialog.GOOGLE_DRIVE)
+            is SettingsIntent.ShowAppInfoDialog -> showDialog(SettingsDialog.APP_INFO)
+            is SettingsIntent.ShowPrivacyDialog -> showDialog(SettingsDialog.PRIVACY)
+            is SettingsIntent.ShowExclusionKeywordDialog -> showDialog(SettingsDialog.EXCLUSION_KEYWORD)
+            is SettingsIntent.ShowThemeDialog -> showDialog(SettingsDialog.THEME)
+            is SettingsIntent.DismissDialog -> dismissDialog()
+
+            is SettingsIntent.SaveApiKey -> {
+                dismissDialog()
+                saveApiKey(intent.key)
+            }
+            is SettingsIntent.SaveMonthStartDay -> {
+                dismissDialog()
+                saveMonthStartDay(intent.day)
+            }
+            is SettingsIntent.SaveThemeMode -> {
+                dismissDialog()
+                saveThemeMode(intent.mode)
+            }
+            is SettingsIntent.ClassifyUnclassified -> classifyUnclassifiedExpenses()
+            is SettingsIntent.DeleteAllData -> {
+                dismissDialog()
+                deleteAllData()
+            }
+            is SettingsIntent.DeleteDuplicates -> deleteDuplicates()
+            is SettingsIntent.AddExclusionKeyword -> addExclusionKeyword(intent.keyword)
+            is SettingsIntent.RemoveExclusionKeyword -> removeExclusionKeyword(intent.keyword)
+            is SettingsIntent.OpenRestoreFilePicker -> {
+                _uiState.update { it.copy(triggerRestoreFilePicker = true) }
+            }
+            is SettingsIntent.SetPendingRestoreUri -> {
+                _uiState.update {
+                    it.copy(
+                        pendingRestoreUri = intent.uri,
+                        activeDialog = SettingsDialog.RESTORE_CONFIRM
+                    )
+                }
+            }
+            is SettingsIntent.ConfirmRestore -> {
+                // Context가 필요한 복원은 Composable에서 직접 호출
+                dismissDialog()
+            }
+        }
+    }
+
+    private fun showDialog(dialog: SettingsDialog) {
+        _uiState.update { it.copy(activeDialog = dialog) }
+    }
+
+    private fun dismissDialog() {
+        _uiState.update { it.copy(activeDialog = null, pendingRestoreUri = null) }
+    }
+
+    /** 파일 선택 트리거 소비 (Composable에서 호출) */
+    fun consumeRestoreFilePickerTrigger() {
+        _uiState.update { it.copy(triggerRestoreFilePicker = false) }
+    }
+
 
     private fun loadThemeMode() {
         viewModelScope.launch {

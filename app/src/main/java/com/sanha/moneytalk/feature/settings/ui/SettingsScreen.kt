@@ -1,11 +1,9 @@
 package com.sanha.moneytalk.feature.settings.ui
 
-import android.app.Activity
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
@@ -38,10 +36,12 @@ import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
 import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.core.theme.ThemeMode
+import com.sanha.moneytalk.core.ui.component.settings.SettingsItemCompose
+import com.sanha.moneytalk.core.ui.component.settings.SettingsItemInfo
+import com.sanha.moneytalk.core.ui.component.settings.SettingsSectionCompose
 import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
 import com.sanha.moneytalk.R
-import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -51,44 +51,30 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     val coroutineScope = rememberCoroutineScope()
 
-    var showApiKeyDialog by remember { mutableStateOf(false) }
-    var showMonthStartDayDialog by remember { mutableStateOf(false) }
-    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
-    var showRestoreConfirmDialog by remember { mutableStateOf(false) }
-    var showExportDialog by remember { mutableStateOf(false) }
-    var showGoogleDriveDialog by remember { mutableStateOf(false) }
-    var showAppInfoDialog by remember { mutableStateOf(false) }
-    var showPrivacyDialog by remember { mutableStateOf(false) }
-    var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
+    // 플랫폼 연동 상태 (ActivityResult 런처와 직접 연결되어 Compose-local 유지)
     var isExportingToGoogleDrive by remember { mutableStateOf(false) }
-
-    // 로그인이 어디서 트리거됐는지 추적 (설정 항목 vs 내보내기 다이얼로그)
     var googleSignInSource by remember { mutableStateOf("settings") }
 
     // 구글 로그인 런처
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        // RESULT_OK: 새로 로그인 성공
-        // RESULT_CANCELED: 이미 로그인된 상태에서 자동 완료될 수도 있음
         val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
             val account = task.getResult(ApiException::class.java)
             viewModel.handleGoogleSignInResult(context, account)
             viewModel.loadDriveBackupFiles()
             if (googleSignInSource == "settings") {
-                showGoogleDriveDialog = true
+                viewModel.onIntent(SettingsIntent.ShowGoogleDriveDialog)
             }
         } catch (e: ApiException) {
-            // Intent에서 계정을 가져올 수 없는 경우, 기존 캐시된 계정 확인
             viewModel.checkGoogleSignIn(context)
             if (viewModel.uiState.value.isGoogleSignedIn) {
                 viewModel.loadDriveBackupFiles()
                 if (googleSignInSource == "settings") {
-                    showGoogleDriveDialog = true
+                    viewModel.onIntent(SettingsIntent.ShowGoogleDriveDialog)
                 }
             }
         }
@@ -106,31 +92,41 @@ fun SettingsScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let {
-            pendingRestoreUri = it
-            showRestoreConfirmDialog = true
+            viewModel.onIntent(SettingsIntent.SetPendingRestoreUri(it))
         }
     }
 
     // 구글 로그인 상태 체크 및 데이터 새로고침
     LaunchedEffect(Unit) {
         viewModel.checkGoogleSignIn(context)
-        viewModel.refresh()  // 다른 탭에서 변경된 데이터 반영 (미분류 항목 수 등)
+        viewModel.refresh()
     }
 
     // 백업 콘텐츠가 준비되면 파일 저장 다이얼로그 열기 (로컬 내보내기일 때만)
     LaunchedEffect(uiState.backupContent) {
         uiState.backupContent?.let {
-            if (!showExportDialog && !showGoogleDriveDialog && !isExportingToGoogleDrive) {
+            if (uiState.activeDialog != SettingsDialog.EXPORT &&
+                uiState.activeDialog != SettingsDialog.GOOGLE_DRIVE &&
+                !isExportingToGoogleDrive
+            ) {
                 val fileName = DataBackupManager.generateBackupFileName(uiState.exportFormat)
                 backupLauncher.launch(fileName)
             }
         }
     }
 
-    // Google Drive export is coordinated via local UI state; reset it once the VM finishes the work.
+    // Google Drive export 완료 감지
     LaunchedEffect(uiState.isLoading) {
         if (isExportingToGoogleDrive && !uiState.isLoading) {
             isExportingToGoogleDrive = false
+        }
+    }
+
+    // 복원 파일 선택 트리거
+    LaunchedEffect(uiState.triggerRestoreFilePicker) {
+        if (uiState.triggerRestoreFilePicker) {
+            restoreLauncher.launch(arrayOf("application/json"))
+            viewModel.consumeRestoreFilePickerTrigger()
         }
     }
 
@@ -142,244 +138,244 @@ fun SettingsScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-                item {
-                    Text(
-                        text = stringResource(R.string.settings_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+            item {
+                Text(
+                    text = stringResource(R.string.settings_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
 
-                // 화면 설정 (테마)
-                item {
-                    var showThemeDialog by remember { mutableStateOf(false) }
-                    val themeModeLabel = when (uiState.themeMode) {
-                        ThemeMode.SYSTEM -> "시스템 설정"
-                        ThemeMode.LIGHT -> "라이트 모드"
-                        ThemeMode.DARK -> "다크 모드"
-                    }
-                    SettingsSection(title = "화면 설정 (DISPLAY)") {
-                        SettingsItem(
-                            icon = when (uiState.themeMode) {
+            // 화면 설정 (테마)
+            item {
+                val themeModeLabel = when (uiState.themeMode) {
+                    ThemeMode.SYSTEM -> "시스템 설정"
+                    ThemeMode.LIGHT -> "라이트 모드"
+                    ThemeMode.DARK -> "다크 모드"
+                }
+                SettingsSectionCompose(title = "화면 설정 (DISPLAY)") {
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = when (uiState.themeMode) {
                                 ThemeMode.SYSTEM -> Icons.Default.Settings
                                 ThemeMode.LIGHT -> Icons.Default.LightMode
                                 ThemeMode.DARK -> Icons.Default.DarkMode
-                            },
-                            title = "테마",
-                            subtitle = themeModeLabel,
-                            onClick = { showThemeDialog = true }
-                        )
-                    }
-                    if (showThemeDialog) {
-                        ThemeModeDialog(
-                            currentMode = uiState.themeMode,
-                            onModeChange = {
-                                viewModel.saveThemeMode(it)
-                                showThemeDialog = false
-                            },
-                            onDismiss = { showThemeDialog = false }
-                        )
-                    }
+                            }
+                            override val title = "테마"
+                            override val subtitle = themeModeLabel
+                        },
+                        onClick = { viewModel.onIntent(SettingsIntent.ShowThemeDialog) }
+                    )
                 }
+            }
 
-                // 기간 설정
-                item {
-                    SettingsSection(title = stringResource(R.string.settings_section_budget)) {
-                        SettingsItem(
-                            icon = Icons.Default.CalendarMonth,
-                            title = stringResource(R.string.settings_month_start_title),
-                            subtitle = if (uiState.monthStartDay == 1) {
+            // 기간 설정
+            item {
+                SettingsSectionCompose(title = stringResource(R.string.settings_section_budget)) {
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = Icons.Default.CalendarMonth
+                            override val title = stringResource(R.string.settings_month_start_title)
+                            override val subtitle = if (uiState.monthStartDay == 1) {
                                 stringResource(R.string.settings_month_start_default)
                             } else {
                                 stringResource(R.string.settings_month_start_custom, uiState.monthStartDay)
-                            },
-                            onClick = { showMonthStartDayDialog = true }
-                        )
-                    }
+                            }
+                        },
+                        onClick = { viewModel.onIntent(SettingsIntent.ShowMonthStartDayDialog) }
+                    )
                 }
+            }
 
-                // API 설정
-                item {
-                    SettingsSection(title = stringResource(R.string.settings_section_ai)) {
-                        SettingsItem(
-                            icon = Icons.Default.Key,
-                            title = stringResource(R.string.settings_api_key_title),
-                            subtitle = if (uiState.hasApiKey) {
+            // API 설정
+            item {
+                SettingsSectionCompose(title = stringResource(R.string.settings_section_ai)) {
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = Icons.Default.Key
+                            override val title = stringResource(R.string.settings_api_key_title)
+                            override val subtitle = if (uiState.hasApiKey) {
                                 stringResource(R.string.settings_api_key_set, uiState.apiKey)
                             } else {
                                 stringResource(R.string.settings_api_key_not_set)
-                            },
-                            onClick = { showApiKeyDialog = true }
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        // 카테고리 정리 버튼 (백그라운드 분류 중이면 비활성화 + 인디케이터)
-                        val isClassifyEnabled = uiState.hasApiKey &&
-                            uiState.unclassifiedCount > 0 &&
-                            !uiState.isBackgroundClassifying &&
-                            !uiState.isClassifying
+                            }
+                        },
+                        onClick = { viewModel.onIntent(SettingsIntent.ShowApiKeyDialog) }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    // 카테고리 정리 버튼 (커스텀 레이아웃 - 공통 컴포넌트 미적용)
+                    val isClassifyEnabled = uiState.hasApiKey &&
+                        uiState.unclassifiedCount > 0 &&
+                        !uiState.isBackgroundClassifying &&
+                        !uiState.isClassifying
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (isClassifyEnabled) {
+                                    Modifier.clickable { viewModel.onIntent(SettingsIntent.ClassifyUnclassified) }
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .alpha(if (uiState.isBackgroundClassifying || uiState.isClassifying) 0.6f else 1f)
+                            .padding(vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(
-                                    if (isClassifyEnabled) {
-                                        Modifier.clickable { viewModel.classifyUnclassifiedExpenses() }
-                                    } else {
-                                        Modifier
-                                    }
-                                )
-                                .alpha(if (uiState.isBackgroundClassifying || uiState.isClassifying) 0.6f else 1f)
-                                .padding(vertical = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "카테고리 정리",
+                                    style = MaterialTheme.typography.bodyLarge
                                 )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "카테고리 정리",
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        if (uiState.isBackgroundClassifying) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(12.dp),
-                                                strokeWidth = 2.dp,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                        Text(
-                                            text = when {
-                                                !uiState.hasApiKey -> "API 키를 먼저 설정해주세요"
-                                                uiState.isBackgroundClassifying -> "백그라운드에서 분류 진행 중..."
-                                                uiState.unclassifiedCount > 0 -> "미정리 ${uiState.unclassifiedCount}건"
-                                                else -> "정리할 항목 없음"
-                                            },
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                            maxLines = 1
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (uiState.isBackgroundClassifying) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(12.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary
                                         )
                                     }
+                                    Text(
+                                        text = when {
+                                            !uiState.hasApiKey -> "API 키를 먼저 설정해주세요"
+                                            uiState.isBackgroundClassifying -> "백그라운드에서 분류 진행 중..."
+                                            uiState.unclassifiedCount > 0 -> "미정리 ${uiState.unclassifiedCount}건"
+                                            else -> "정리할 항목 없음"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                        maxLines = 1
+                                    )
                                 }
                             }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                            )
                         }
-                    }
-                }
-
-                // 데이터 관리
-                item {
-                    var showExclusionKeywordDialog by remember { mutableStateOf(false) }
-                    val userKeywordCount = uiState.exclusionKeywords.count { it.source != "default" }
-                    val defaultKeywordCount = uiState.exclusionKeywords.count { it.source == "default" }
-
-                    SettingsSection(title = stringResource(R.string.settings_section_data)) {
-                        SettingsItem(
-                            icon = Icons.Default.Block,
-                            title = "SMS 제외 키워드",
-                            subtitle = if (uiState.exclusionKeywords.isNotEmpty()) {
-                                "${userKeywordCount}개 사용자 키워드 / ${defaultKeywordCount}개 기본 키워드"
-                            } else {
-                                "제외할 키워드를 관리합니다"
-                            },
-                            onClick = { showExclusionKeywordDialog = true }
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        SettingsItem(
-                            icon = Icons.Default.Backup,
-                            title = stringResource(R.string.settings_export_title),
-                            subtitle = stringResource(R.string.settings_export_subtitle),
-                            onClick = { showExportDialog = true }
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        SettingsItem(
-                            icon = Icons.Default.Cloud,
-                            title = stringResource(R.string.settings_google_drive_title),
-                            subtitle = if (uiState.isGoogleSignedIn) {
-                                stringResource(R.string.settings_google_drive_connected, uiState.googleAccountName ?: "")
-                            } else {
-                                stringResource(R.string.settings_google_drive_not_connected)
-                            },
-                            onClick = {
-                                googleSignInSource = "settings"
-                                coroutineScope.launch {
-                                    val signInIntent = viewModel.tryOpenGoogleDrive(context)
-                                    if (signInIntent == null) {
-                                        viewModel.loadDriveBackupFiles()
-                                        showGoogleDriveDialog = true
-                                    } else {
-                                        googleSignInLauncher.launch(signInIntent)
-                                    }
-                                }
-                            }
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        SettingsItem(
-                            icon = Icons.Default.Restore,
-                            title = stringResource(R.string.settings_restore_local_title),
-                            subtitle = stringResource(R.string.settings_restore_local_subtitle),
-                            onClick = { restoreLauncher.launch(arrayOf("application/json")) }
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        SettingsItem(
-                            icon = Icons.Default.ContentCopy,
-                            title = "중복 데이터 삭제",
-                            subtitle = "금액, 가게명, 시간이 같은 중복 항목 제거",
-                            onClick = { viewModel.deleteDuplicates() }
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        SettingsItem(
-                            icon = Icons.Default.DeleteForever,
-                            title = stringResource(R.string.settings_delete_all_title),
-                            subtitle = stringResource(R.string.settings_delete_all_subtitle),
-                            onClick = { showDeleteConfirmDialog = true },
-                            isDestructive = true
-                        )
-                    }
-
-                    if (showExclusionKeywordDialog) {
-                        ExclusionKeywordDialog(
-                            keywords = uiState.exclusionKeywords,
-                            onDismiss = { showExclusionKeywordDialog = false },
-                            onAdd = { keyword -> viewModel.addExclusionKeyword(keyword) },
-                            onRemove = { keyword -> viewModel.removeExclusionKeyword(keyword) }
-                        )
-                    }
-                }
-
-                // 앱 정보
-                item {
-                    SettingsSection(title = stringResource(R.string.settings_section_app)) {
-                        SettingsItem(
-                            icon = Icons.Default.Info,
-                            title = stringResource(R.string.settings_version_title),
-                            subtitle = BuildConfig.VERSION_NAME,
-                            onClick = { showAppInfoDialog = true }
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        SettingsItem(
-                            icon = Icons.Default.Description,
-                            title = stringResource(R.string.settings_privacy_title),
-                            subtitle = "",
-                            onClick = { showPrivacyDialog = true }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                         )
                     }
                 }
             }
+
+            // 데이터 관리
+            item {
+                val userKeywordCount = uiState.exclusionKeywords.count { it.source != "default" }
+                val defaultKeywordCount = uiState.exclusionKeywords.count { it.source == "default" }
+
+                SettingsSectionCompose(title = stringResource(R.string.settings_section_data)) {
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = Icons.Default.Block
+                            override val title = "SMS 제외 키워드"
+                            override val subtitle = if (uiState.exclusionKeywords.isNotEmpty()) {
+                                "${userKeywordCount}개 사용자 키워드 / ${defaultKeywordCount}개 기본 키워드"
+                            } else {
+                                "제외할 키워드를 관리합니다"
+                            }
+                        },
+                        onClick = { viewModel.onIntent(SettingsIntent.ShowExclusionKeywordDialog) }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = Icons.Default.Backup
+                            override val title = stringResource(R.string.settings_export_title)
+                            override val subtitle = stringResource(R.string.settings_export_subtitle)
+                        },
+                        onClick = { viewModel.onIntent(SettingsIntent.ShowExportDialog) }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = Icons.Default.Cloud
+                            override val title = stringResource(R.string.settings_google_drive_title)
+                            override val subtitle = if (uiState.isGoogleSignedIn) {
+                                stringResource(R.string.settings_google_drive_connected, uiState.googleAccountName ?: "")
+                            } else {
+                                stringResource(R.string.settings_google_drive_not_connected)
+                            }
+                        },
+                        onClick = {
+                            googleSignInSource = "settings"
+                            coroutineScope.launch {
+                                val signInIntent = viewModel.tryOpenGoogleDrive(context)
+                                if (signInIntent == null) {
+                                    viewModel.loadDriveBackupFiles()
+                                    viewModel.onIntent(SettingsIntent.ShowGoogleDriveDialog)
+                                } else {
+                                    googleSignInLauncher.launch(signInIntent)
+                                }
+                            }
+                        }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = Icons.Default.Restore
+                            override val title = stringResource(R.string.settings_restore_local_title)
+                            override val subtitle = stringResource(R.string.settings_restore_local_subtitle)
+                        },
+                        onClick = { viewModel.onIntent(SettingsIntent.OpenRestoreFilePicker) }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = Icons.Default.ContentCopy
+                            override val title = "중복 데이터 삭제"
+                            override val subtitle = "금액, 가게명, 시간이 같은 중복 항목 제거"
+                        },
+                        onClick = { viewModel.onIntent(SettingsIntent.DeleteDuplicates) }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = Icons.Default.DeleteForever
+                            override val title = stringResource(R.string.settings_delete_all_title)
+                            override val subtitle = stringResource(R.string.settings_delete_all_subtitle)
+                            override val isDestructive = true
+                        },
+                        onClick = { viewModel.onIntent(SettingsIntent.ShowDeleteConfirmDialog) }
+                    )
+                }
+            }
+
+            // 앱 정보
+            item {
+                SettingsSectionCompose(title = stringResource(R.string.settings_section_app)) {
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = Icons.Default.Info
+                            override val title = stringResource(R.string.settings_version_title)
+                            override val subtitle = BuildConfig.VERSION_NAME
+                        },
+                        onClick = { viewModel.onIntent(SettingsIntent.ShowAppInfoDialog) }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = Icons.Default.Description
+                            override val title = stringResource(R.string.settings_privacy_title)
+                        },
+                        onClick = { viewModel.onIntent(SettingsIntent.ShowPrivacyDialog) }
+                    )
+                }
+            }
+        }
 
         // 로딩 인디케이터
         if (uiState.isLoading || uiState.isClassifying) {
@@ -399,7 +395,6 @@ fun SettingsScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         if (uiState.isClassifying) {
-                            // 스피너 (항상 표시)
                             CircularProgressIndicator(
                                 modifier = Modifier.size(48.dp),
                                 strokeWidth = 4.dp
@@ -407,7 +402,6 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.height(16.dp))
 
                             if (uiState.classifyProgressTotal > 0) {
-                                // 진행률 바 + 상세 텍스트
                                 val progress = uiState.classifyProgressCurrent.toFloat() / uiState.classifyProgressTotal.toFloat()
                                 LinearProgressIndicator(
                                     progress = { progress.coerceIn(0f, 1f) },
@@ -432,7 +426,6 @@ fun SettingsScreen(
                                 textAlign = TextAlign.Center
                             )
                         } else {
-                            // 일반 로딩
                             CircularProgressIndicator()
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(stringResource(R.string.common_processing))
@@ -443,174 +436,159 @@ fun SettingsScreen(
         }
     }
 
-    // API 키 설정 다이얼로그
-    if (showApiKeyDialog) {
-        ApiKeySettingDialog(
-            currentKeyHint = if (uiState.hasApiKey) "현재 설정됨" else "",
-            onDismiss = { showApiKeyDialog = false },
-            onConfirm = { key ->
-                viewModel.saveApiKey(key)
-                showApiKeyDialog = false
-            }
-        )
-    }
+    // ========== 다이얼로그 (activeDialog 기반) ==========
 
-    // 월 시작일 설정 다이얼로그
-    if (showMonthStartDayDialog) {
-        MonthStartDayDialog(
-            initialValue = uiState.monthStartDay,
-            onDismiss = { showMonthStartDayDialog = false },
-            onConfirm = { day ->
-                viewModel.saveMonthStartDay(day)
-                showMonthStartDayDialog = false
-            }
-        )
-    }
-
-    // 내보내기 다이얼로그
-    if (showExportDialog) {
-        ExportDialog(
-            availableCards = uiState.availableCards,
-            availableCategories = uiState.availableCategories,
-            currentFilter = uiState.exportFilter,
-            currentFormat = uiState.exportFormat,
-            isGoogleSignedIn = uiState.isGoogleSignedIn,
-            onDismiss = { showExportDialog = false },
-            onFilterChange = { viewModel.setExportFilter(it) },
-            onFormatChange = { viewModel.setExportFormat(it) },
-            onExportLocal = {
-                viewModel.prepareBackup()
-                showExportDialog = false
-            },
-            onExportGoogleDrive = {
-                isExportingToGoogleDrive = true
-                viewModel.prepareBackup()
-                showExportDialog = false
-                // prepareBackup 완료 후 드라이브에 업로드
-                viewModel.exportToGoogleDrive()
-            },
-            onSignInGoogle = {
-                googleSignInSource = "export"
-                coroutineScope.launch {
-                    val signInIntent = viewModel.tryOpenGoogleDrive(context)
-                    if (signInIntent == null) {
-                        // 이미 로그인됨 → UI 상태만 업데이트 (ExportDialog가 구글드라이브 버튼 표시)
-                        viewModel.checkGoogleSignIn(context)
-                    } else {
-                        googleSignInLauncher.launch(signInIntent)
+    when (uiState.activeDialog) {
+        SettingsDialog.API_KEY -> {
+            ApiKeySettingDialog(
+                currentKeyHint = if (uiState.hasApiKey) "현재 설정됨" else "",
+                onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) },
+                onConfirm = { key -> viewModel.onIntent(SettingsIntent.SaveApiKey(key)) }
+            )
+        }
+        SettingsDialog.MONTH_START_DAY -> {
+            MonthStartDayDialog(
+                initialValue = uiState.monthStartDay,
+                onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) },
+                onConfirm = { day -> viewModel.onIntent(SettingsIntent.SaveMonthStartDay(day)) }
+            )
+        }
+        SettingsDialog.THEME -> {
+            ThemeModeDialog(
+                currentMode = uiState.themeMode,
+                onModeChange = { viewModel.onIntent(SettingsIntent.SaveThemeMode(it)) },
+                onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) }
+            )
+        }
+        SettingsDialog.EXPORT -> {
+            ExportDialog(
+                availableCards = uiState.availableCards,
+                availableCategories = uiState.availableCategories,
+                currentFilter = uiState.exportFilter,
+                currentFormat = uiState.exportFormat,
+                isGoogleSignedIn = uiState.isGoogleSignedIn,
+                onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) },
+                onFilterChange = { viewModel.setExportFilter(it) },
+                onFormatChange = { viewModel.setExportFormat(it) },
+                onExportLocal = {
+                    viewModel.prepareBackup()
+                    viewModel.onIntent(SettingsIntent.DismissDialog)
+                },
+                onExportGoogleDrive = {
+                    isExportingToGoogleDrive = true
+                    viewModel.prepareBackup()
+                    viewModel.onIntent(SettingsIntent.DismissDialog)
+                    viewModel.exportToGoogleDrive()
+                },
+                onSignInGoogle = {
+                    googleSignInSource = "export"
+                    coroutineScope.launch {
+                        val signInIntent = viewModel.tryOpenGoogleDrive(context)
+                        if (signInIntent == null) {
+                            viewModel.checkGoogleSignIn(context)
+                        } else {
+                            googleSignInLauncher.launch(signInIntent)
+                        }
                     }
                 }
-            }
-        )
-    }
-
-    // 구글 드라이브 다이얼로그
-    if (showGoogleDriveDialog) {
-        GoogleDriveDialog(
-            backupFiles = uiState.driveBackupFiles,
-            accountName = uiState.googleAccountName,
-            onDismiss = { showGoogleDriveDialog = false },
-            onRefresh = { viewModel.loadDriveBackupFiles() },
-            onRestore = { fileId ->
-                viewModel.restoreFromGoogleDrive(fileId)
-                showGoogleDriveDialog = false
-            },
-            onDelete = { fileId ->
-                viewModel.deleteDriveBackupFile(fileId)
-            },
-            onSignOut = {
-                viewModel.signOutGoogle(context)
-                showGoogleDriveDialog = false
-            }
-        )
-    }
-
-    // 전체 삭제 확인 다이얼로그
-    if (showDeleteConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirmDialog = false },
-            icon = {
-                Icon(
-                    Icons.Default.Warning,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error
-                )
-            },
-            title = { Text(stringResource(R.string.dialog_delete_all_title)) },
-            text = {
-                Text(stringResource(R.string.dialog_delete_all_message))
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteAllData()
-                        showDeleteConfirmDialog = false
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
+            )
+        }
+        SettingsDialog.GOOGLE_DRIVE -> {
+            GoogleDriveDialog(
+                backupFiles = uiState.driveBackupFiles,
+                accountName = uiState.googleAccountName,
+                onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) },
+                onRefresh = { viewModel.loadDriveBackupFiles() },
+                onRestore = { fileId ->
+                    viewModel.restoreFromGoogleDrive(fileId)
+                    viewModel.onIntent(SettingsIntent.DismissDialog)
+                },
+                onDelete = { fileId ->
+                    viewModel.deleteDriveBackupFile(fileId)
+                },
+                onSignOut = {
+                    viewModel.signOutGoogle(context)
+                    viewModel.onIntent(SettingsIntent.DismissDialog)
+                }
+            )
+        }
+        SettingsDialog.DELETE_CONFIRM -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.onIntent(SettingsIntent.DismissDialog) },
+                icon = {
+                    Icon(
+                        Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
                     )
-                ) {
-                    Text(stringResource(R.string.common_delete))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirmDialog = false }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            }
-        )
-    }
-
-    // 복원 확인 다이얼로그
-    if (showRestoreConfirmDialog && pendingRestoreUri != null) {
-        AlertDialog(
-            onDismissRequest = {
-                showRestoreConfirmDialog = false
-                pendingRestoreUri = null
-            },
-            icon = {
-                Icon(
-                    Icons.Default.Restore,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            },
-            title = { Text(stringResource(R.string.dialog_restore_title)) },
-            text = {
-                Text(stringResource(R.string.dialog_restore_message))
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        pendingRestoreUri?.let { viewModel.importBackup(context, it) }
-                        showRestoreConfirmDialog = false
-                        pendingRestoreUri = null
+                },
+                title = { Text(stringResource(R.string.dialog_delete_all_title)) },
+                text = {
+                    Text(stringResource(R.string.dialog_delete_all_message))
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = { viewModel.onIntent(SettingsIntent.DeleteAllData) },
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text(stringResource(R.string.common_delete))
                     }
-                ) {
-                    Text(stringResource(R.string.common_restore))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showRestoreConfirmDialog = false
-                        pendingRestoreUri = null
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.onIntent(SettingsIntent.DismissDialog) }) {
+                        Text(stringResource(R.string.common_cancel))
                     }
-                ) {
-                    Text(stringResource(R.string.common_cancel))
                 }
-            }
-        )
-    }
-
-    // 앱 정보 다이얼로그
-    if (showAppInfoDialog) {
-        AppInfoDialog(onDismiss = { showAppInfoDialog = false })
-    }
-
-    // 개인정보 처리방침 다이얼로그
-    if (showPrivacyDialog) {
-        PrivacyPolicyDialog(onDismiss = { showPrivacyDialog = false })
+            )
+        }
+        SettingsDialog.RESTORE_CONFIRM -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.onIntent(SettingsIntent.DismissDialog) },
+                icon = {
+                    Icon(
+                        Icons.Default.Restore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                title = { Text(stringResource(R.string.dialog_restore_title)) },
+                text = {
+                    Text(stringResource(R.string.dialog_restore_message))
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            uiState.pendingRestoreUri?.let { viewModel.importBackup(context, it) }
+                            viewModel.onIntent(SettingsIntent.DismissDialog)
+                        }
+                    ) {
+                        Text(stringResource(R.string.common_restore))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.onIntent(SettingsIntent.DismissDialog) }) {
+                        Text(stringResource(R.string.common_cancel))
+                    }
+                }
+            )
+        }
+        SettingsDialog.APP_INFO -> {
+            AppInfoDialog(onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) })
+        }
+        SettingsDialog.PRIVACY -> {
+            PrivacyPolicyDialog(onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) })
+        }
+        SettingsDialog.EXCLUSION_KEYWORD -> {
+            ExclusionKeywordDialog(
+                keywords = uiState.exclusionKeywords,
+                onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) },
+                onAdd = { keyword -> viewModel.onIntent(SettingsIntent.AddExclusionKeyword(keyword)) },
+                onRemove = { keyword -> viewModel.onIntent(SettingsIntent.RemoveExclusionKeyword(keyword)) }
+            )
+        }
+        null -> { /* 다이얼로그 미표시 */ }
     }
 }
 
@@ -937,39 +915,6 @@ fun DriveBackupFileItem(
 }
 
 @Composable
-fun SettingsSection(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
-        )
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            border = androidx.compose.foundation.BorderStroke(
-                1.dp, MaterialTheme.colorScheme.outlineVariant
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp)
-            ) {
-                content()
-            }
-        }
-    }
-}
-
-@Composable
 fun ThemeModeDialog(
     currentMode: ThemeMode,
     onModeChange: (ThemeMode) -> Unit,
@@ -1038,65 +983,6 @@ fun ThemeModeDialog(
             }
         }
     )
-}
-
-@Composable
-fun SettingsItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit,
-    isDestructive: Boolean = false
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .defaultMinSize(minHeight = 56.dp)
-            .clickable { onClick() }
-            .padding(vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (isDestructive) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.primary
-                }
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (isDestructive) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    }
-                )
-                if (subtitle.isNotEmpty()) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        maxLines = 1
-                    )
-                }
-            }
-        }
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-        )
-    }
 }
 
 @Composable
@@ -1575,4 +1461,3 @@ private fun ExclusionKeywordItem(
         }
     }
 }
-
