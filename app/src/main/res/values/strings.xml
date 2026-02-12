@@ -91,6 +91,13 @@
     <string name="home_expense_top3">지출 TOP 3</string>
     <string name="home_view_all">전체보기</string>
     <string name="home_no_expense">아직 지출 내역이 없어요</string>
+    <string name="home_today_expense">오늘의 지출</string>
+    <string name="home_today_count">%d건</string>
+    <string name="home_vs_last_month">전월 동기간</string>
+    <string name="home_vs_last_month_more">같은 기간 %s원 더 썼어요</string>
+    <string name="home_vs_last_month_less">같은 기간 %s원 절약했어요</string>
+    <string name="home_vs_last_month_same">지난달과 비슷해요</string>
+    <string name="home_vs_last_month_no_data">지난달 데이터 없음</string>
     <string name="home_recent_expense">최근 지출</string>
     <string name="home_empty_expense_title">아직 지출 내역이 없어요</string>
     <string name="home_empty_expense_subtitle">문자를 동기화해서 지출을 추가해보세요</string>

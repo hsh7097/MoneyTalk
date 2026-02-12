@@ -12,6 +12,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,6 +34,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -158,14 +162,6 @@ fun HomeScreen(
                 )
             }
 
-            // 디바이더
-            item {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 5.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-            }
-
             // 카테고리별 지출
             item {
                 CategoryExpenseSection(
@@ -177,11 +173,15 @@ fun HomeScreen(
                 )
             }
 
-            // 디바이더
+            // 오늘의 지출 + 전월 대비
             item {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 3.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
+                TodayAndComparisonSection(
+                    todayExpense = uiState.todayExpense,
+                    todayExpenseCount = uiState.todayExpenseCount,
+                    monthlyExpense = uiState.monthlyExpense,
+                    lastMonthExpense = uiState.lastMonthExpense,
+                    comparisonPeriodLabel = uiState.comparisonPeriodLabel,
+                    aiInsight = uiState.aiInsight
                 )
             }
 
@@ -190,7 +190,7 @@ fun HomeScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 12.dp),
+                        .padding(bottom = 6.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -232,7 +232,7 @@ fun HomeScreen(
                 }
             } else {
                 uiState.recentExpenses
-            }
+            }.take(3) // 홈에서는 최근 3건만 미리보기
 
             if (displayExpenses.isEmpty()) {
                 item {
@@ -666,7 +666,7 @@ fun CategoryExpenseSection(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         if (top3.isEmpty()) {
             Text(
@@ -762,6 +762,122 @@ fun CategoryExpenseSection(
     }
 }
 
+
+@Composable
+fun TodayAndComparisonSection(
+    todayExpense: Int,
+    todayExpenseCount: Int,
+    monthlyExpense: Int,
+    lastMonthExpense: Int,
+    comparisonPeriodLabel: String,
+    aiInsight: String
+) {
+    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+
+    Column(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        // 오늘의 지출 + 전월 대비 (가로 2분할, 동일 스펙)
+        val cardColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        val cardShape = RoundedCornerShape(12.dp)
+        val labelStyle = MaterialTheme.typography.bodySmall
+        val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        val valueStyle = MaterialTheme.typography.titleMedium
+        val subStyle = MaterialTheme.typography.bodySmall
+        val subColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+
+        // 전월 대비 계산
+        val diff = monthlyExpense - lastMonthExpense
+        val comparisonValue = when {
+            lastMonthExpense == 0 -> "-"
+            diff > 0 -> "+₩${numberFormat.format(diff)}"
+            diff < 0 -> "-₩${numberFormat.format(-diff)}"
+            else -> "₩0"
+        }
+        val comparisonSub = when {
+            lastMonthExpense == 0 -> stringResource(R.string.home_vs_last_month_no_data)
+            diff > 0 -> stringResource(R.string.home_vs_last_month_more, numberFormat.format(diff))
+            diff < 0 -> stringResource(R.string.home_vs_last_month_less, numberFormat.format(-diff))
+            else -> stringResource(R.string.home_vs_last_month_same)
+        }
+        val comparisonValueColor = when {
+            lastMonthExpense == 0 -> MaterialTheme.colorScheme.onSurface
+            diff > 0 -> MaterialTheme.colorScheme.error
+            diff < 0 -> MaterialTheme.moneyTalkColors.income
+            else -> MaterialTheme.colorScheme.onSurface
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // 오늘의 지출 카드
+            Card(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                colors = CardDefaults.cardColors(containerColor = cardColor),
+                shape = cardShape
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(text = stringResource(R.string.home_today_expense), style = labelStyle, color = labelColor)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "₩${numberFormat.format(todayExpense)}", style = valueStyle, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = if (todayExpenseCount > 0) stringResource(R.string.home_today_count, todayExpenseCount) else " ",
+                        style = subStyle,
+                        color = subColor
+                    )
+                }
+            }
+
+            // 전월 대비 카드
+            Card(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                colors = CardDefaults.cardColors(containerColor = cardColor),
+                shape = cardShape
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(text = stringResource(R.string.home_vs_last_month), style = labelStyle, color = labelColor)
+                        if (comparisonPeriodLabel.isNotBlank()) {
+                            Text(
+                                text = "($comparisonPeriodLabel)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = labelColor.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = comparisonValue, style = valueStyle, fontWeight = FontWeight.Bold, color = comparisonValueColor)
+                    Text(text = comparisonSub, style = subStyle, color = subColor)
+                }
+            }
+        }
+
+        // AI 인사이트 (API 키 있고 데이터 있을 때만 표시)
+        if (aiInsight.isNotBlank()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = aiInsight,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(12.dp),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
 
 @Composable
 fun EmptyExpenseSection() {
