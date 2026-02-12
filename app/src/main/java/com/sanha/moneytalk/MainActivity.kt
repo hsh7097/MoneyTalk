@@ -9,9 +9,12 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
@@ -26,6 +29,7 @@ import com.sanha.moneytalk.navigation.Screen
 import com.sanha.moneytalk.navigation.bottomNavItems
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.theme.MoneyTalkTheme
+import com.sanha.moneytalk.core.util.toDpTextUnit
 import com.sanha.moneytalk.core.theme.ThemeMode
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import dagger.hilt.android.AndroidEntryPoint
@@ -187,6 +191,7 @@ fun MoneyTalkApp(
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
                     NavigationBar(
+                        modifier = Modifier.height(64.dp),
                         containerColor = MaterialTheme.colorScheme.surface,
                         tonalElevation = 0.dp
                     ) {
@@ -206,16 +211,30 @@ fun MoneyTalkApp(
                                 }
                             },
                             icon = {
-                                Icon(
-                                    imageVector = if (isSelected) {
-                                        item.selectedIcon
-                                    } else {
-                                        item.unselectedIcon
-                                    },
-                                    contentDescription = item.title
-                                )
+                                Box(
+                                    modifier = Modifier.fillMaxSize().padding(top = 4.dp),
+                                    contentAlignment = androidx.compose.ui.Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isSelected) {
+                                                item.selectedIcon
+                                            } else {
+                                                item.unselectedIcon
+                                            },
+                                            contentDescription = item.title,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            text = item.title,
+                                            fontSize = 12.dp.toDpTextUnit
+                                        )
+                                    }
+                                }
                             },
-                            label = { Text(item.title) },
+                            label = null,
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.onSurface,
                                 selectedTextColor = MaterialTheme.colorScheme.onSurface,

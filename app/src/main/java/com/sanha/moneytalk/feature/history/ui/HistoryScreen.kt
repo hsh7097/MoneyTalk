@@ -61,6 +61,7 @@ import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCom
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
 import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.core.util.toDpTextUnit
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
@@ -381,21 +382,29 @@ fun PeriodSummaryCard(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                     contentDescription = stringResource(R.string.home_previous_month),
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(24.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            Column {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
                     text = startDate,
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 18.sp),
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "-",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "- $endDate",
-                    style = MaterialTheme.typography.labelMedium,
+                    text = "$endDate",
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 18.sp),
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -408,7 +417,7 @@ fun PeriodSummaryCard(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = stringResource(R.string.home_next_month),
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(24.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -431,10 +440,12 @@ fun PeriodSummaryCard(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
+                    modifier = Modifier.width(120.dp),
                     text = stringResource(R.string.common_won, numberFormat.format(totalExpense)),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.sp),
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.End
                 )
             }
             // 수입
@@ -451,10 +462,12 @@ fun PeriodSummaryCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
+                        modifier = Modifier.width(120.dp),
                         text = stringResource(R.string.common_won, numberFormat.format(totalIncome)),
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.sp),
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.moneyTalkColors.income
+                        color = MaterialTheme.moneyTalkColors.income,
+                        textAlign = TextAlign.End
                     )
                 }
             }
@@ -555,7 +568,7 @@ fun FilterTabRow(
                     Icon(
                         imageVector = Icons.Outlined.FilterList,
                         contentDescription = null,
-                        modifier = Modifier.size(12.dp),
+                        modifier = Modifier.size(14.dp),
                         tint = if (hasActiveFilter)
                             MaterialTheme.colorScheme.onPrimaryContainer
                         else
@@ -564,7 +577,7 @@ fun FilterTabRow(
                     Spacer(modifier = Modifier.width(2.dp))
                     Text(
                         text = stringResource(R.string.common_filter),
-                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 14.toDpTextUnit,
                         fontWeight = if (hasActiveFilter) FontWeight.Bold else FontWeight.Normal,
                         color = if (hasActiveFilter)
                             MaterialTheme.colorScheme.onPrimaryContainer
@@ -586,7 +599,7 @@ fun FilterTabRow(
                 Icon(
                     imageVector = Icons.Default.Search,
                     contentDescription = stringResource(R.string.common_search),
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(24.dp)
                 )
             }
             IconButton(
@@ -596,7 +609,7 @@ fun FilterTabRow(
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = stringResource(R.string.common_add),
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }
