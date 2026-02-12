@@ -90,35 +90,34 @@ sealed interface TransactionListItem {
  * @property isRefreshing Pull-to-Refresh 진행 중 여부
  * @property expenses 필터링된 지출 내역 목록
  * @property selectedCategory 선택된 카테고리 필터 (null이면 전체)
- * @property selectedCardName 선택된 카드 필터 (null이면 전체)
  * @property selectedYear 선택된 연도
  * @property selectedMonth 선택된 월
  * @property monthStartDay 월 시작일 (1~28, 사용자 설정)
- * @property cardNames 필터 드롭다운용 카드명 목록
  * @property monthlyTotal 해당 월 총 지출
  * @property dailyTotals 일별 지출 합계 (캘린더 표시용, "yyyy-MM-dd" -> 금액)
  * @property errorMessage 에러 메시지 (null이면 에러 없음)
  * @property searchQuery 검색어
  * @property isSearchMode 검색 모드 여부
  * @property sortOrder 정렬 순서
+ * @property showExpenses 지출 표시 여부 (BottomSheet 필터)
+ * @property showIncomes 수입 표시 여부 (BottomSheet 필터)
  */
 data class HistoryUiState(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val expenses: List<ExpenseEntity> = emptyList(),
     val selectedCategory: String? = null,
-    val selectedCardName: String? = null,
     val selectedYear: Int = DateUtils.getCurrentYear(),
     val selectedMonth: Int = DateUtils.getCurrentMonth(),
     val monthStartDay: Int = 1,
-    val cardNames: List<String> = emptyList(),
     val monthlyTotal: Int = 0,
     val dailyTotals: Map<String, Int> = emptyMap(),
     val errorMessage: String? = null,
     val searchQuery: String = "",
     val isSearchMode: Boolean = false,
     val sortOrder: SortOrder = SortOrder.DATE_DESC,
-    val showIncomeView: Boolean = false,
+    val showExpenses: Boolean = true,
+    val showIncomes: Boolean = true,
     val incomes: List<IncomeEntity> = emptyList(),
     val monthlyIncomeTotal: Int = 0,
     // 가공된 리스트 데이터 (TransactionListView용)
@@ -126,7 +125,17 @@ data class HistoryUiState(
     // 다이얼로그 상태 (Composable에서 remember 대신 ViewModel에서 관리)
     val selectedExpense: ExpenseEntity? = null,
     val selectedIncome: IncomeEntity? = null
-)
+) {
+    /** 필터 적용된 지출 총합 (필터 활성 시 expenses 합계, 비활성 시 월 전체) */
+    val filteredExpenseTotal: Int
+        get() = if (showExpenses) expenses.sumOf { it.amount } else 0
+
+    /** 필터 적용된 수입 총합 (필터 활성 시 incomes 합계, 비활성 시 0) */
+    val filteredIncomeTotal: Int
+        get() = if (showIncomes) {
+            if (selectedCategory != null) 0 else incomes.sumOf { it.amount }
+        } else 0
+}
 
 /**
  * 내역 화면 ViewModel
@@ -161,7 +170,6 @@ class HistoryViewModel @Inject constructor(
 
     init {
         loadSettings()
-        loadCardNames()
         observeDataRefreshEvents()
     }
 
@@ -204,20 +212,6 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
-    /** 필터 드롭다운용 카드명 목록 로드 */
-    private fun loadCardNames() {
-        viewModelScope.launch {
-            try {
-                val cardNames = withContext(Dispatchers.IO) {
-                    expenseRepository.getAllCardNames()
-                }
-                _uiState.update { it.copy(cardNames = cardNames) }
-            } catch (e: Exception) {
-                // 카드 목록 로딩 실패 시 무시
-            }
-        }
-    }
-
     /**
      * 지출 내역 로드
      * 선택된 월과 필터 조건에 맞는 지출 내역을 조회합니다.
@@ -253,14 +247,14 @@ class HistoryViewModel @Inject constructor(
 
             val expenseFlow = if (categoriesForFilter != null) {
                 expenseRepository.getExpensesFilteredByCategories(
-                    cardName = state.selectedCardName,
+                    cardName = null,
                     categories = categoriesForFilter,
                     startTime = startTime,
                     endTime = endTime
                 )
             } else {
                 expenseRepository.getExpensesFiltered(
-                    cardName = state.selectedCardName,
+                    cardName = null,
                     category = null,
                     startTime = startTime,
                     endTime = endTime
@@ -325,7 +319,8 @@ class HistoryViewModel @Inject constructor(
                             isLoading = false,
                             expenses = sortedExpenses,
                             transactionListItems = buildTransactionListItems(
-                                sortedExpenses, filteredIncomes, currentState.sortOrder, currentState.showIncomeView
+                                sortedExpenses, filteredIncomes, currentState.sortOrder,
+                                currentState.showExpenses, currentState.showIncomes
                             )
                         )
                     }
@@ -394,12 +389,6 @@ class HistoryViewModel @Inject constructor(
         loadExpenses()
     }
 
-    /** 카드 필터 적용 (null이면 전체) */
-    fun filterByCardName(cardName: String?) {
-        _uiState.update { it.copy(selectedCardName = cardName) }
-        loadExpenses()
-    }
-
     /** 지출 항목 삭제 */
     fun deleteExpense(expense: ExpenseEntity) {
         viewModelScope.launch {
@@ -454,7 +443,6 @@ class HistoryViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true) }
-            loadCardNames()
             loadExpensesSync()
             _uiState.update { it.copy(isRefreshing = false) }
         }
@@ -502,7 +490,8 @@ class HistoryViewModel @Inject constructor(
                         expenses = sortedResults,
                         monthlyTotal = results.sumOf { e -> e.amount },
                         transactionListItems = buildTransactionListItems(
-                            sortedResults, filteredIncomes, currentState.sortOrder, currentState.showIncomeView
+                            sortedResults, filteredIncomes, currentState.sortOrder,
+                            currentState.showExpenses, currentState.showIncomes
                         )
                     )
                 }
@@ -579,19 +568,25 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
-    /** 수입 보기 토글 */
-    fun toggleIncomeView() {
-        val newValue = !_uiState.value.showIncomeView
-        _uiState.update { it.copy(showIncomeView = newValue) }
-        if (newValue) {
-            loadIncomes()
+    /**
+     * BottomSheet에서 필터 적용
+     * 정렬/거래유형/카테고리를 한 번에 반영
+     */
+    fun applyFilter(
+        sortOrder: SortOrder,
+        showExpenses: Boolean,
+        showIncomes: Boolean,
+        category: String?
+    ) {
+        _uiState.update {
+            it.copy(
+                sortOrder = sortOrder,
+                showExpenses = showExpenses,
+                showIncomes = showIncomes,
+                selectedCategory = category
+            )
         }
-        updateTransactionListItems()
-    }
-
-    /** 수입 보기 끄기 */
-    fun hideIncomeView() {
-        _uiState.update { it.copy(showIncomeView = false) }
+        loadExpenses()
     }
 
     /** 수입 내역 로드 */
@@ -670,8 +665,7 @@ class HistoryViewModel @Inject constructor(
                 }
                 val expenses = filteredForTotal
                     .filter { expense ->
-                        (state.selectedCardName == null || expense.cardName == state.selectedCardName) &&
-                        (syncCategoryFilter == null || expense.category in syncCategoryFilter)
+                        syncCategoryFilter == null || expense.category in syncCategoryFilter
                     }
                 // 정렬 적용
                 val sorted = sortExpenses(expenses, state.sortOrder)
@@ -688,7 +682,8 @@ class HistoryViewModel @Inject constructor(
                     expenses = result.third,
                     isLoading = false,
                     transactionListItems = buildTransactionListItems(
-                        result.third, filteredIncomes, state2.sortOrder, state2.showIncomeView
+                        result.third, filteredIncomes, state2.sortOrder,
+                        state2.showExpenses, state2.showIncomes
                     )
                 )
             }
@@ -742,28 +737,35 @@ class HistoryViewModel @Inject constructor(
         // 카테고리 필터 활성화 시 수입 항목 제외
         val filteredIncomes = if (state.selectedCategory != null) emptyList() else state.incomes
         val items = buildTransactionListItems(
-            state.expenses, filteredIncomes, state.sortOrder, state.showIncomeView
+            state.expenses, filteredIncomes, state.sortOrder,
+            state.showExpenses, state.showIncomes
         )
         _uiState.update { it.copy(transactionListItems = items) }
     }
 
     /**
      * 지출+수입 데이터를 LazyColumn에 바로 렌더링 가능한 플랫 리스트로 가공
+     * showExpenses/showIncomes 필터에 따라 표시할 항목을 결정
      */
     private fun buildTransactionListItems(
         expenses: List<ExpenseEntity>,
         incomes: List<IncomeEntity>,
         sortOrder: SortOrder,
-        showIncomeView: Boolean
+        showExpenses: Boolean,
+        showIncomes: Boolean
     ): List<TransactionListItem> {
-        if (showIncomeView) {
-            return buildIncomeDayGroups(incomes)
+        val filteredExpenses = if (showExpenses) expenses else emptyList()
+        val filteredIncomes = if (showIncomes) incomes else emptyList()
+
+        // 수입만 보기 모드: 날짜별 그룹핑
+        if (!showExpenses && showIncomes) {
+            return buildIncomeDayGroups(filteredIncomes)
         }
 
         return when (sortOrder) {
-            SortOrder.DATE_DESC -> buildDateDescItems(expenses, incomes)
-            SortOrder.AMOUNT_DESC -> buildAmountDescItems(expenses)
-            SortOrder.STORE_FREQ -> buildStoreFreqItems(expenses)
+            SortOrder.DATE_DESC -> buildDateDescItems(filteredExpenses, filteredIncomes)
+            SortOrder.AMOUNT_DESC -> buildAmountDescItems(filteredExpenses)
+            SortOrder.STORE_FREQ -> buildStoreFreqItems(filteredExpenses)
         }
     }
 

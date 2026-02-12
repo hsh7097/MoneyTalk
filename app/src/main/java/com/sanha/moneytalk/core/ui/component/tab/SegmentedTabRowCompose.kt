@@ -2,12 +2,16 @@ package com.sanha.moneytalk.core.ui.component.tab
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,7 +36,7 @@ fun SegmentedTabRowCompose(
     Row(
         modifier = modifier
             .width(IntrinsicSize.Max)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -53,24 +57,40 @@ private fun SegmentedTab(
     info: SegmentedTabInfo,
     onClick: () -> Unit
 ) {
+    val textColor = if (info.isSelected) info.selectedTextColor
+        else MaterialTheme.colorScheme.onSurfaceVariant
+
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(
                 if (info.isSelected) info.selectedColor
                 else Color.Transparent
             )
             .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = info.label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = if (info.isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (info.isSelected) info.selectedTextColor
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            info.icon?.let { icon ->
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(12.dp),
+                    tint = textColor
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+            }
+            Text(
+                text = info.label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (info.isSelected) FontWeight.Bold else FontWeight.Normal,
+                color = textColor,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }

@@ -15,6 +15,7 @@
     <string name="common_add">추가</string>
     <string name="common_scroll_to_top">맨 위로</string>
     <string name="common_processing">처리 중…</string>
+    <string name="common_apply">적용</string>
     <string name="common_won">%s원</string>
     <string name="error_response">죄송해요, 응답을 받는 중 오류가 발생했어요: %s</string>
     <string name="error_general">오류가 발생했어요: %s</string>
@@ -133,6 +134,13 @@
     <string name="day_saturday">토요일</string>
     <string name="history_day_header">%d일 %s</string>
     <string name="history_sort_amount">금액 높은순</string>
+    <string name="history_sort_date">최신순</string>
+    <string name="history_sort_amount_short">금액순</string>
+    <string name="history_sort_store">사용처별</string>
+    <string name="history_filter_title">내역 필터</string>
+    <string name="history_filter_sort">정렬</string>
+    <string name="history_filter_type">거래 유형</string>
+    <string name="history_filter_category">카테고리</string>
     <string name="history_count_suffix">건</string>
     <string name="history_visit_suffix">회</string>
     <string name="history_no_income">수입 내역이 없습니다</string>

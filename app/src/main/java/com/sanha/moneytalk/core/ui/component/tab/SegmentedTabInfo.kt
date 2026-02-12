@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.ui.component.tab
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
  * 세그먼트 탭 한 칸의 렌더링 정보.
@@ -15,4 +16,7 @@ interface SegmentedTabInfo {
     /** 선택 시 텍스트색 */
     val selectedTextColor: Color
         get() = Color.White
+    /** 탭 아이콘 (선택적) */
+    val icon: ImageVector?
+        get() = null
 }
