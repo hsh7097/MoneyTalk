@@ -6,40 +6,70 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import kotlinx.coroutines.launch
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
-import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
+import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.util.DateUtils
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
-import java.util.*
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,7 +102,7 @@ fun HomeScreen(
     val showScrollToTop by remember {
         derivedStateOf {
             listState.firstVisibleItemIndex > 0 ||
-            (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 200)
+                    (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 200)
         }
     }
 
@@ -89,125 +119,125 @@ fun HomeScreen(
             contentPadding = PaddingValues(vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-                // 월간 현황
-                item {
-                    MonthlyOverviewSection(
-                        year = uiState.selectedYear,
-                        month = uiState.selectedMonth,
-                        monthStartDay = uiState.monthStartDay,
-                        periodLabel = uiState.periodLabel,
-                        income = uiState.monthlyIncome,
-                        expense = uiState.monthlyExpense,
-                        onPreviousMonth = { viewModel.previousMonth() },
-                        onNextMonth = { viewModel.nextMonth() },
-                        onIncrementalSync = {
-                            onRequestSmsPermission {
-                                viewModel.syncSmsMessages(contentResolver, forceFullSync = false)
-                            }
-                        },
-                        onTodaySync = {
-                            onRequestSmsPermission {
-                                viewModel.syncSmsMessages(contentResolver, todayOnly = true)
-                            }
-                        },
-                        onFullSync = {
-                            onRequestSmsPermission {
-                                viewModel.syncSmsMessages(contentResolver, forceFullSync = true)
-                            }
-                        },
-                        isSyncing = uiState.isSyncing
-                    )
-                }
-
-                // 디바이더
-                item {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 16.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
-                }
-
-                // 카테고리별 지출
-                item {
-                    CategoryExpenseSection(
-                        categoryExpenses = uiState.categoryExpenses,
-                        selectedCategory = uiState.selectedCategory,
-                        onCategorySelected = { category ->
-                            viewModel.selectCategory(category)
+            // 월간 현황
+            item {
+                MonthlyOverviewSection(
+                    year = uiState.selectedYear,
+                    month = uiState.selectedMonth,
+                    monthStartDay = uiState.monthStartDay,
+                    periodLabel = uiState.periodLabel,
+                    income = uiState.monthlyIncome,
+                    expense = uiState.monthlyExpense,
+                    onPreviousMonth = { viewModel.previousMonth() },
+                    onNextMonth = { viewModel.nextMonth() },
+                    onIncrementalSync = {
+                        onRequestSmsPermission {
+                            viewModel.syncSmsMessages(contentResolver, forceFullSync = false)
                         }
-                    )
-                }
+                    },
+                    onTodaySync = {
+                        onRequestSmsPermission {
+                            viewModel.syncSmsMessages(contentResolver, todayOnly = true)
+                        }
+                    },
+                    onFullSync = {
+                        onRequestSmsPermission {
+                            viewModel.syncSmsMessages(contentResolver, forceFullSync = true)
+                        }
+                    },
+                    isSyncing = uiState.isSyncing
+                )
+            }
 
-                // 디바이더
-                item {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 16.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
-                }
+            // 디바이더
+            item {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+            }
 
-                // 최근 지출 내역 (카테고리 필터 적용)
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (uiState.selectedCategory != null) {
-                            val cat = Category.fromDisplayName(uiState.selectedCategory ?: "")
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                CategoryIcon(category = cat, containerSize = 28.dp, fontSize = 20.sp)
-                                Text(
-                                    text = "${cat.displayName} 지출",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        } else {
+            // 카테고리별 지출
+            item {
+                CategoryExpenseSection(
+                    categoryExpenses = uiState.categoryExpenses,
+                    selectedCategory = uiState.selectedCategory,
+                    onCategorySelected = { category ->
+                        viewModel.selectCategory(category)
+                    }
+                )
+            }
+
+            // 디바이더
+            item {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+            }
+
+            // 최근 지출 내역 (카테고리 필터 적용)
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (uiState.selectedCategory != null) {
+                        val cat = Category.fromDisplayName(uiState.selectedCategory ?: "")
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CategoryIcon(category = cat, containerSize = 28.dp, fontSize = 20.sp)
                             Text(
-                                text = stringResource(R.string.home_recent_expense),
+                                text = "${cat.displayName} 지출",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        if (uiState.selectedCategory != null) {
-                            TextButton(onClick = { viewModel.selectCategory(null) }) {
-                                Text("전체 보기")
-                            }
-                        }
-                    }
-                }
-
-                val displayExpenses = if (uiState.selectedCategory != null) {
-                    uiState.recentExpenses.filter { expense ->
-                        if (uiState.selectedCategory == "기타") {
-                            expense.category == "기타" || expense.category == "미분류"
-                        } else {
-                            expense.category == uiState.selectedCategory
-                        }
-                    }
-                } else {
-                    uiState.recentExpenses
-                }
-
-                if (displayExpenses.isEmpty()) {
-                    item {
-                        EmptyExpenseSection()
-                    }
-                } else {
-                    items(displayExpenses) { expense ->
-                        TransactionCardCompose(
-                            info = ExpenseTransactionCardInfo(expense),
-                            onClick = { selectedExpense = expense }
+                    } else {
+                        Text(
+                            text = stringResource(R.string.home_recent_expense),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
                         )
+                    }
+                    if (uiState.selectedCategory != null) {
+                        TextButton(onClick = { viewModel.selectCategory(null) }) {
+                            Text("전체 보기")
+                        }
                     }
                 }
             }
+
+            val displayExpenses = if (uiState.selectedCategory != null) {
+                uiState.recentExpenses.filter { expense ->
+                    if (uiState.selectedCategory == "기타") {
+                        expense.category == "기타" || expense.category == "미분류"
+                    } else {
+                        expense.category == uiState.selectedCategory
+                    }
+                }
+            } else {
+                uiState.recentExpenses
+            }
+
+            if (displayExpenses.isEmpty()) {
+                item {
+                    EmptyExpenseSection()
+                }
+            } else {
+                items(displayExpenses) { expense ->
+                    TransactionCardCompose(
+                        info = ExpenseTransactionCardInfo(expense),
+                        onClick = { selectedExpense = expense }
+                    )
+                }
+            }
+        }
 
         // Scroll to Top FAB
         AnimatedVisibility(
@@ -307,7 +337,8 @@ fun HomeScreen(
                 ) {
                     // 진행률 바 (총 진행률)
                     if (uiState.classifyProgressTotal > 0) {
-                        val progress = uiState.classifyProgressCurrent.toFloat() / uiState.classifyProgressTotal.toFloat()
+                        val progress =
+                            uiState.classifyProgressCurrent.toFloat() / uiState.classifyProgressTotal.toFloat()
                         LinearProgressIndicator(
                             progress = { progress.coerceIn(0f, 1f) },
                             modifier = Modifier
@@ -360,7 +391,8 @@ fun HomeScreen(
 
                     // 진행률 바 (total > 0일 때만 determinate)
                     if (uiState.syncProgressTotal > 0) {
-                        val progress = uiState.syncProgressCurrent.toFloat() / uiState.syncProgressTotal.toFloat()
+                        val progress =
+                            uiState.syncProgressCurrent.toFloat() / uiState.syncProgressTotal.toFloat()
                         LinearProgressIndicator(
                             progress = { progress.coerceIn(0f, 1f) },
                             modifier = Modifier
@@ -647,8 +679,6 @@ fun CategoryExpenseSection(
         }
     }
 }
-
-
 
 
 @Composable

@@ -2,7 +2,6 @@ package com.sanha.moneytalk.core.util
 
 import android.util.Log
 import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
-import com.sanha.moneytalk.core.model.Category
 import javax.inject.Inject
 import javax.inject.Singleton
 

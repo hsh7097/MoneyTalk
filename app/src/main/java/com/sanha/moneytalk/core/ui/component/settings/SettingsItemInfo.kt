@@ -9,11 +9,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 interface SettingsItemInfo {
     /** 좌측 아이콘 */
     val icon: ImageVector
+
     /** 제목 */
     val title: String
+
     /** 부제목 (빈 문자열이면 미표시) */
     val subtitle: String
         get() = ""
+
     /** 위험 액션 여부 (삭제 등) - 빨간색 강조 */
     val isDestructive: Boolean
         get() = false

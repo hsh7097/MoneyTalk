@@ -1,6 +1,11 @@
 package com.sanha.moneytalk.core.database.dao
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
 import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -76,14 +81,24 @@ interface StoreEmbeddingDao {
      * 사용자 수동 분류 변경 시 벡터 DB도 같이 업데이트
      */
     @Query("UPDATE store_embeddings SET category = :newCategory, source = :source, updatedAt = :timestamp WHERE storeName = :storeName")
-    suspend fun updateCategory(storeName: String, newCategory: String, source: String = "user", timestamp: Long = System.currentTimeMillis())
+    suspend fun updateCategory(
+        storeName: String,
+        newCategory: String,
+        source: String = "user",
+        timestamp: Long = System.currentTimeMillis()
+    )
 
     /**
      * ID로 카테고리 업데이트 (전파용)
      * 유사 가게 카테고리 일괄 전파 시 사용
      */
     @Query("UPDATE store_embeddings SET category = :newCategory, source = :source, updatedAt = :timestamp WHERE id = :id AND source != 'user'")
-    suspend fun updateCategoryByIdIfNotUser(id: Long, newCategory: String, source: String = "propagated", timestamp: Long = System.currentTimeMillis())
+    suspend fun updateCategoryByIdIfNotUser(
+        id: Long,
+        newCategory: String,
+        source: String = "propagated",
+        timestamp: Long = System.currentTimeMillis()
+    )
 
     /** 전체 임베딩 수 조회 */
     @Query("SELECT COUNT(*) FROM store_embeddings")

@@ -1,6 +1,11 @@
 package com.sanha.moneytalk.core.database.dao
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -80,19 +85,37 @@ interface ExpenseDao {
 
     // 모든 필터 적용 (카드사 + 카테고리 + 기간)
     @Query("SELECT * FROM expenses WHERE (:cardName IS NULL OR cardName = :cardName) AND (:category IS NULL OR category = :category) AND dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
-    fun getExpensesFiltered(cardName: String?, category: String?, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>>
+    fun getExpensesFiltered(
+        cardName: String?,
+        category: String?,
+        startTime: Long,
+        endTime: Long
+    ): Flow<List<ExpenseEntity>>
 
     // 대 카테고리 필터 (소 카테고리 포함, 예: "식비" 선택 시 "배달"도 포함)
     @Query("SELECT * FROM expenses WHERE (:cardName IS NULL OR cardName = :cardName) AND category IN (:categories) AND dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
-    fun getExpensesFilteredByCategories(cardName: String?, categories: List<String>, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>>
+    fun getExpensesFilteredByCategories(
+        cardName: String?,
+        categories: List<String>,
+        startTime: Long,
+        endTime: Long
+    ): Flow<List<ExpenseEntity>>
 
     /** 기간 + 카테고리 목록 필터링 조회 (일회성, 채팅 쿼리용) */
     @Query("SELECT * FROM expenses WHERE category IN (:categories) AND dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
-    suspend fun getExpensesByCategoriesAndDateRangeOnce(categories: List<String>, startTime: Long, endTime: Long): List<ExpenseEntity>
+    suspend fun getExpensesByCategoriesAndDateRangeOnce(
+        categories: List<String>,
+        startTime: Long,
+        endTime: Long
+    ): List<ExpenseEntity>
 
     /** 기간 + 카테고리 목록으로 총 지출 합산 (채팅 쿼리용) */
     @Query("SELECT SUM(amount) FROM expenses WHERE category IN (:categories) AND dateTime BETWEEN :startTime AND :endTime")
-    suspend fun getTotalExpenseByCategoriesAndDateRange(categories: List<String>, startTime: Long, endTime: Long): Int?
+    suspend fun getTotalExpenseByCategoriesAndDateRange(
+        categories: List<String>,
+        startTime: Long,
+        endTime: Long
+    ): Int?
 
     // 모든 카드사 목록 가져오기
     @Query("SELECT DISTINCT cardName FROM expenses ORDER BY cardName")
@@ -147,44 +170,52 @@ interface ExpenseDao {
     suspend fun updateCategoryById(expenseId: Long, newCategory: String): Int
 
     // 중복 데이터 조회 (금액, 가게명, 날짜시간이 동일한 항목)
-    @Query("""
+    @Query(
+        """
         SELECT * FROM expenses
         WHERE id NOT IN (
             SELECT MIN(id) FROM expenses
             GROUP BY amount, storeName, dateTime
         )
-    """)
+    """
+    )
     suspend fun getDuplicateExpenses(): List<ExpenseEntity>
 
     // 중복 데이터 삭제 (금액, 가게명, 날짜시간이 동일한 항목 중 가장 오래된 것만 남김)
-    @Query("""
+    @Query(
+        """
         DELETE FROM expenses
         WHERE id NOT IN (
             SELECT MIN(id) FROM expenses
             GROUP BY amount, storeName, dateTime
         )
-    """)
+    """
+    )
     suspend fun deleteDuplicates(): Int
 
     // 검색 (가게명, 카테고리, 카드명, 메모에서 검색)
-    @Query("""
+    @Query(
+        """
         SELECT * FROM expenses
         WHERE storeName LIKE '%' || :query || '%'
            OR category LIKE '%' || :query || '%'
            OR cardName LIKE '%' || :query || '%'
            OR memo LIKE '%' || :query || '%'
         ORDER BY dateTime DESC
-    """)
+    """
+    )
     suspend fun searchExpenses(query: String): List<ExpenseEntity>
 
     /** 키워드 기반 일괄 삭제 (가게명, 카테고리, 카드명, 메모에서 검색하여 삭제) */
-    @Query("""
+    @Query(
+        """
         DELETE FROM expenses
         WHERE storeName LIKE '%' || :keyword || '%'
            OR category LIKE '%' || :keyword || '%'
            OR cardName LIKE '%' || :keyword || '%'
            OR memo LIKE '%' || :keyword || '%'
-    """)
+    """
+    )
     suspend fun deleteByKeyword(keyword: String): Int
 
     /** 메모 업데이트 */
@@ -203,15 +234,27 @@ interface ExpenseDao {
 
     /** 내 카드 기준 기간별 지출 조회 (Flow) */
     @Query("SELECT * FROM expenses WHERE cardName IN (:ownedCardNames) AND dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
-    fun getExpensesByOwnedCards(ownedCardNames: List<String>, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>>
+    fun getExpensesByOwnedCards(
+        ownedCardNames: List<String>,
+        startTime: Long,
+        endTime: Long
+    ): Flow<List<ExpenseEntity>>
 
     /** 내 카드 기준 총 지출 합계 */
     @Query("SELECT SUM(amount) FROM expenses WHERE cardName IN (:ownedCardNames) AND dateTime BETWEEN :startTime AND :endTime")
-    suspend fun getTotalExpenseByOwnedCards(ownedCardNames: List<String>, startTime: Long, endTime: Long): Int?
+    suspend fun getTotalExpenseByOwnedCards(
+        ownedCardNames: List<String>,
+        startTime: Long,
+        endTime: Long
+    ): Int?
 
     /** 내 카드 기준 카테고리별 합계 */
     @Query("SELECT category, SUM(amount) as total FROM expenses WHERE cardName IN (:ownedCardNames) AND dateTime BETWEEN :startTime AND :endTime GROUP BY category")
-    suspend fun getExpenseSumByCategoryOwned(ownedCardNames: List<String>, startTime: Long, endTime: Long): List<CategorySum>
+    suspend fun getExpenseSumByCategoryOwned(
+        ownedCardNames: List<String>,
+        startTime: Long,
+        endTime: Long
+    ): List<CategorySum>
 
 }
 

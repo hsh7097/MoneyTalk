@@ -30,8 +30,10 @@ class DataRefreshEvent @Inject constructor() {
     enum class RefreshType {
         /** 전체 데이터 삭제 (설정 초기화) */
         ALL_DATA_DELETED,
+
         /** 카테고리 재분류 완료 (API 키 설정 후 백그라운드 재분류) */
         CATEGORY_UPDATED,
+
         /** 내 카드 설정 변경 (홈/내역 필터 갱신용) */
         OWNED_CARD_UPDATED
     }

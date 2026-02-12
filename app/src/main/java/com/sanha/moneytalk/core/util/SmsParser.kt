@@ -2,8 +2,7 @@ package com.sanha.moneytalk.core.util
 
 import android.util.Log
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
-import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
 
 /**
  * SMS 파싱 유틸리티
@@ -138,24 +137,29 @@ object SmsParser {
     private val PURE_NUMBER_PATTERN = Regex("""[\d,]+""")
     private val AMOUNT_WON_HANGUL_PATTERN = Regex(""".*\d+원[가-힣]+.*""")
     private val FROM_PATTERN = Regex("""([가-힣a-zA-Z0-9]+)(님)?으?로부터""")
-    private val DEPOSIT_PATTERN = Regex("""입금\s*([가-힣a-zA-Z0-9]{2,10})|([가-힣a-zA-Z0-9]{2,10})\s*입금""")
+    private val DEPOSIT_PATTERN =
+        Regex("""입금\s*([가-힣a-zA-Z0-9]{2,10})|([가-힣a-zA-Z0-9]{2,10})\s*입금""")
     private val DATE_PATTERN_SLASH = Regex("""(\d{1,2})[/.-](\d{1,2})""")
     private val DATE_PATTERN_KOREAN = Regex("""(\d{1,2})월\s*(\d{1,2})일""")
     private val TIME_PATTERN = Regex("""(\d{1,2}):(\d{2})""")
+
     // 가게명 추출용 Regex
     private val STORE_CARD_NUMBER_PATTERN = Regex("""[\d*]+""")
     private val STORE_DATETIME_PATTERN = Regex("""\d{1,2}[/.-]\d{1,2}\s+\d{1,2}:\d{2}""")
     private val STORE_BRACKET_PATTERN = Regex("""\[.+\]""")
-    private val STORE_AMOUNT_THEN_TIME_PATTERN = Regex("""[\d,]+원\s*\((?:일시불|\d+개월)\)\s*\d{1,2}[/.-]\d{1,2}\s+\d{1,2}:\d{2}\s+(.+)$""")
+    private val STORE_AMOUNT_THEN_TIME_PATTERN =
+        Regex("""[\d,]+원\s*\((?:일시불|\d+개월)\)\s*\d{1,2}[/.-]\d{1,2}\s+\d{1,2}:\d{2}\s+(.+)$""")
     private val STORE_TIME_BEFORE_PATTERN = Regex("""(\d{1,2}:\d{2})\s*(.+?)[\s]*[\d,]+원""")
     private val STORE_BEFORE_AMOUNT_PATTERN = Regex("""(.+?)\s*([\d,]+)원""")
     private val STORE_AFTER_AMOUNT_PATTERN = Regex("""[\d,]+원\s*(.+?)(?:승인|결제|사용|일시불|할부|\s*$)""")
     private val STORE_SPLIT_PATTERN = Regex("""[\s\[\]()\/,\n]+""")
     private val STORE_WORD_SPLIT_PATTERN = Regex("""[\s\[\]()\/\n]+""")
+
     // cleanStoreName용 Regex
     private val CLEAN_CORP_PATTERN = Regex("""\(주\)|\(유\)|\(사\)|\(재\)""")
     private val CLEAN_SPECIAL_CHAR_PATTERN = Regex("""^[^\w가-힣]+|[^\w가-힣]+$""")
     private val CLEAN_NUMBER_WON_PATTERN = Regex("""^\d+원""")
+
     // isValidStoreName용 Regex
     private val VALID_NUMBER_ONLY_PATTERN = Regex("""[\d,.:]+""")
     private val VALID_DATE_PATTERN = Regex("""\d{1,2}[/.-]\d{1,2}""")
@@ -272,9 +276,10 @@ object SmsParser {
      * 카테고리 키워드 사전 lowercase 캐시
      * inferCategory()에서 매번 keyword.lowercase() 호출 방지 (250+회 문자열 생성 제거)
      */
-    private val categoryKeywordsLower: Map<String, List<String>> = categoryKeywords.mapValues { (_, keywords) ->
-        keywords.map { it.lowercase() }
-    }
+    private val categoryKeywordsLower: Map<String, List<String>> =
+        categoryKeywords.mapValues { (_, keywords) ->
+            keywords.map { it.lowercase() }
+        }
 
     // ========================
     // 공개 파싱 메소드
@@ -321,7 +326,10 @@ object SmsParser {
         if (!hasCardKeyword) return SmsTypeResult()
 
         // 공통: 금액 패턴 (사전 컴파일된 Regex)
-        val hasAmount = AMOUNT_PATTERN_WITH_WON.containsMatchIn(message) || AMOUNT_PATTERN_NUMBER_ONLY.containsMatchIn(message)
+        val hasAmount =
+            AMOUNT_PATTERN_WITH_WON.containsMatchIn(message) || AMOUNT_PATTERN_NUMBER_ONLY.containsMatchIn(
+                message
+            )
         if (!hasAmount) return SmsTypeResult()
 
         // ===== 지출 판별 =====
@@ -377,7 +385,7 @@ object SmsParser {
         // 기본 제외 키워드 + 사용자 제외 키워드 (리스트 합치기 대신 별도 체크)
         if (excludeKeywords.any { msgLower.contains(it) } ||
             userExcludeKeywords.any { msgLower.contains(it) }) {
-            Log.d("sanha","제외 키워드 ${message.take(50)}")
+            Log.d("sanha", "제외 키워드 ${message.take(50)}")
             return false
         }
 
@@ -386,7 +394,10 @@ object SmsParser {
         val hasPaymentKeyword = paymentKeywords.any { msgLower.contains(it) }
 
         // 금액 패턴 확인 (사전 컴파일된 Regex 상수 사용)
-        val hasAmount = AMOUNT_PATTERN_WITH_WON.containsMatchIn(message) || AMOUNT_PATTERN_NUMBER_ONLY.containsMatchIn(message)
+        val hasAmount =
+            AMOUNT_PATTERN_WITH_WON.containsMatchIn(message) || AMOUNT_PATTERN_NUMBER_ONLY.containsMatchIn(
+                message
+            )
 
         return hasCardKeyword && hasPaymentKeyword && hasAmount
     }
@@ -428,7 +439,10 @@ object SmsParser {
         val hasIncomeKeyword = incomeKeywords.any { msgLower.contains(it) }
 
         // 금액 패턴 확인 (사전 컴파일된 Regex 상수 사용)
-        val hasAmount = AMOUNT_PATTERN_WITH_WON.containsMatchIn(message) || AMOUNT_PATTERN_NUMBER_ONLY.containsMatchIn(message)
+        val hasAmount =
+            AMOUNT_PATTERN_WITH_WON.containsMatchIn(message) || AMOUNT_PATTERN_NUMBER_ONLY.containsMatchIn(
+                message
+            )
 
         // 지출(결제) 관련 키워드가 있으면 수입으로 판단하지 않음
         val hasPaymentKeyword = paymentKeywords.any { msgLower.contains(it) }
@@ -667,7 +681,10 @@ object SmsParser {
                     val potentialStore = lines[j]
 
                     // 카드번호 패턴 제외 (예: 801302**775) - 사전 컴파일 Regex
-                    if (potentialStore.contains("**") || potentialStore.matches(STORE_CARD_NUMBER_PATTERN)) {
+                    if (potentialStore.contains("**") || potentialStore.matches(
+                            STORE_CARD_NUMBER_PATTERN
+                        )
+                    ) {
                         continue
                     }
 
@@ -742,7 +759,11 @@ object SmsParser {
         // 패턴 4: 전체 메시지에서 유효한 가게명 추출 - 사전 컴파일 Regex
         val words = message.split(STORE_SPLIT_PATTERN)
             .map { cleanStoreName(it) }
-            .filter { isValidStoreName(it) && !cardKeywords.any { keyword -> it.lowercase().contains(keyword) } }
+            .filter {
+                isValidStoreName(it) && !cardKeywords.any { keyword ->
+                    it.lowercase().contains(keyword)
+                }
+            }
 
         return words.firstOrNull() ?: "결제"
     }
@@ -788,7 +809,11 @@ object SmsParser {
 
         // 제외 패턴에 해당하는 경우 제외
         for (pattern in excludeStorePatterns) {
-            if (name.equals(pattern, ignoreCase = true) || name.contains(pattern, ignoreCase = true)) {
+            if (name.equals(pattern, ignoreCase = true) || name.contains(
+                    pattern,
+                    ignoreCase = true
+                )
+            ) {
                 return false
             }
         }

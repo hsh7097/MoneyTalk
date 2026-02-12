@@ -31,8 +31,16 @@ android {
         }
 
         // BuildConfig에 API 키 추가 (local.properties에서 읽음)
-        buildConfigField("String", "CLAUDE_API_KEY", "\"${localProperties.getProperty("CLAUDE_API_KEY", "")}\"")
-        buildConfigField("String", "GEMINI_API_KEY", "\"${localProperties.getProperty("GEMINI_API_KEY", "")}\"")
+        buildConfigField(
+            "String",
+            "CLAUDE_API_KEY",
+            "\"${localProperties.getProperty("CLAUDE_API_KEY", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "GEMINI_API_KEY",
+            "\"${localProperties.getProperty("GEMINI_API_KEY", "")}\""
+        )
     }
 
     buildTypes {

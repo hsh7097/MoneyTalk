@@ -58,7 +58,7 @@ private fun SegmentedTab(
     onClick: () -> Unit
 ) {
     val textColor = if (info.isSelected) info.selectedTextColor
-        else MaterialTheme.colorScheme.onSurfaceVariant
+    else MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
         modifier = Modifier

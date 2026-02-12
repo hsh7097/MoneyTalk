@@ -7,9 +7,11 @@ package com.sanha.moneytalk.core.ui.component.transaction.header
 interface TransactionGroupHeaderInfo {
     /** 그룹 제목 (예: "15일 (월)", "스타벅스 (5회)", "금액 높은순 (25건)") */
     val title: String
+
     /** 해당 그룹의 지출 총액 (원 단위). 0이면 미표시 */
     val expenseTotal: Int
         get() = 0
+
     /** 해당 그룹의 수입 총액 (원 단위). 0이면 미표시 */
     val incomeTotal: Int
         get() = 0

@@ -1,49 +1,101 @@
 package com.sanha.moneytalk.feature.settings.ui
 
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
-import com.sanha.moneytalk.core.util.DataBackupManager
-import com.sanha.moneytalk.core.util.DriveBackupFile
-import com.sanha.moneytalk.core.util.ExportFilter
-import com.sanha.moneytalk.core.util.ExportFormat
 import com.sanha.moneytalk.BuildConfig
+import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.ThemeMode
 import com.sanha.moneytalk.core.ui.component.settings.SettingsItemCompose
 import com.sanha.moneytalk.core.ui.component.settings.SettingsItemInfo
 import com.sanha.moneytalk.core.ui.component.settings.SettingsSectionCompose
+import com.sanha.moneytalk.core.util.DataBackupManager
+import com.sanha.moneytalk.core.util.DriveBackupFile
+import com.sanha.moneytalk.core.util.ExportFilter
+import com.sanha.moneytalk.core.util.ExportFormat
 import kotlinx.coroutines.launch
-import androidx.compose.ui.res.stringResource
-import com.sanha.moneytalk.R
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun SettingsScreen(
@@ -179,7 +231,10 @@ fun SettingsScreen(
                             override val subtitle = if (uiState.monthStartDay == 1) {
                                 stringResource(R.string.settings_month_start_default)
                             } else {
-                                stringResource(R.string.settings_month_start_custom, uiState.monthStartDay)
+                                stringResource(
+                                    R.string.settings_month_start_custom,
+                                    uiState.monthStartDay
+                                )
                             }
                         },
                         onClick = { viewModel.onIntent(SettingsIntent.ShowMonthStartDayDialog) }
@@ -205,9 +260,9 @@ fun SettingsScreen(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // 카테고리 정리 버튼 (커스텀 레이아웃 - 공통 컴포넌트 미적용)
                     val isClassifyEnabled = uiState.hasApiKey &&
-                        uiState.unclassifiedCount > 0 &&
-                        !uiState.isBackgroundClassifying &&
-                        !uiState.isClassifying
+                            uiState.unclassifiedCount > 0 &&
+                            !uiState.isBackgroundClassifying &&
+                            !uiState.isClassifying
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -295,7 +350,8 @@ fun SettingsScreen(
                         info = object : SettingsItemInfo {
                             override val icon = Icons.Default.Backup
                             override val title = stringResource(R.string.settings_export_title)
-                            override val subtitle = stringResource(R.string.settings_export_subtitle)
+                            override val subtitle =
+                                stringResource(R.string.settings_export_subtitle)
                         },
                         onClick = { viewModel.onIntent(SettingsIntent.ShowExportDialog) }
                     )
@@ -303,9 +359,13 @@ fun SettingsScreen(
                     SettingsItemCompose(
                         info = object : SettingsItemInfo {
                             override val icon = Icons.Default.Cloud
-                            override val title = stringResource(R.string.settings_google_drive_title)
+                            override val title =
+                                stringResource(R.string.settings_google_drive_title)
                             override val subtitle = if (uiState.isGoogleSignedIn) {
-                                stringResource(R.string.settings_google_drive_connected, uiState.googleAccountName ?: "")
+                                stringResource(
+                                    R.string.settings_google_drive_connected,
+                                    uiState.googleAccountName ?: ""
+                                )
                             } else {
                                 stringResource(R.string.settings_google_drive_not_connected)
                             }
@@ -327,8 +387,10 @@ fun SettingsScreen(
                     SettingsItemCompose(
                         info = object : SettingsItemInfo {
                             override val icon = Icons.Default.Restore
-                            override val title = stringResource(R.string.settings_restore_local_title)
-                            override val subtitle = stringResource(R.string.settings_restore_local_subtitle)
+                            override val title =
+                                stringResource(R.string.settings_restore_local_title)
+                            override val subtitle =
+                                stringResource(R.string.settings_restore_local_subtitle)
                         },
                         onClick = { viewModel.onIntent(SettingsIntent.OpenRestoreFilePicker) }
                     )
@@ -346,7 +408,8 @@ fun SettingsScreen(
                         info = object : SettingsItemInfo {
                             override val icon = Icons.Default.DeleteForever
                             override val title = stringResource(R.string.settings_delete_all_title)
-                            override val subtitle = stringResource(R.string.settings_delete_all_subtitle)
+                            override val subtitle =
+                                stringResource(R.string.settings_delete_all_subtitle)
                             override val isDestructive = true
                         },
                         onClick = { viewModel.onIntent(SettingsIntent.ShowDeleteConfirmDialog) }
@@ -402,7 +465,8 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.height(16.dp))
 
                             if (uiState.classifyProgressTotal > 0) {
-                                val progress = uiState.classifyProgressCurrent.toFloat() / uiState.classifyProgressTotal.toFloat()
+                                val progress =
+                                    uiState.classifyProgressCurrent.toFloat() / uiState.classifyProgressTotal.toFloat()
                                 LinearProgressIndicator(
                                     progress = { progress.coerceIn(0f, 1f) },
                                     modifier = Modifier
@@ -446,6 +510,7 @@ fun SettingsScreen(
                 onConfirm = { key -> viewModel.onIntent(SettingsIntent.SaveApiKey(key)) }
             )
         }
+
         SettingsDialog.MONTH_START_DAY -> {
             MonthStartDayDialog(
                 initialValue = uiState.monthStartDay,
@@ -453,6 +518,7 @@ fun SettingsScreen(
                 onConfirm = { day -> viewModel.onIntent(SettingsIntent.SaveMonthStartDay(day)) }
             )
         }
+
         SettingsDialog.THEME -> {
             ThemeModeDialog(
                 currentMode = uiState.themeMode,
@@ -460,6 +526,7 @@ fun SettingsScreen(
                 onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) }
             )
         }
+
         SettingsDialog.EXPORT -> {
             ExportDialog(
                 availableCards = uiState.availableCards,
@@ -493,6 +560,7 @@ fun SettingsScreen(
                 }
             )
         }
+
         SettingsDialog.GOOGLE_DRIVE -> {
             GoogleDriveDialog(
                 backupFiles = uiState.driveBackupFiles,
@@ -512,6 +580,7 @@ fun SettingsScreen(
                 }
             )
         }
+
         SettingsDialog.DELETE_CONFIRM -> {
             AlertDialog(
                 onDismissRequest = { viewModel.onIntent(SettingsIntent.DismissDialog) },
@@ -543,6 +612,7 @@ fun SettingsScreen(
                 }
             )
         }
+
         SettingsDialog.RESTORE_CONFIRM -> {
             AlertDialog(
                 onDismissRequest = { viewModel.onIntent(SettingsIntent.DismissDialog) },
@@ -574,21 +644,32 @@ fun SettingsScreen(
                 }
             )
         }
+
         SettingsDialog.APP_INFO -> {
             AppInfoDialog(onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) })
         }
+
         SettingsDialog.PRIVACY -> {
             PrivacyPolicyDialog(onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) })
         }
+
         SettingsDialog.EXCLUSION_KEYWORD -> {
             ExclusionKeywordDialog(
                 keywords = uiState.exclusionKeywords,
                 onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) },
                 onAdd = { keyword -> viewModel.onIntent(SettingsIntent.AddExclusionKeyword(keyword)) },
-                onRemove = { keyword -> viewModel.onIntent(SettingsIntent.RemoveExclusionKeyword(keyword)) }
+                onRemove = { keyword ->
+                    viewModel.onIntent(
+                        SettingsIntent.RemoveExclusionKeyword(
+                            keyword
+                        )
+                    )
+                }
             )
         }
-        null -> { /* 다이얼로그 미표시 */ }
+
+        null -> { /* 다이얼로그 미표시 */
+        }
     }
 }
 
@@ -621,7 +702,10 @@ fun ExportDialog(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // 형식 선택
-                Text(stringResource(R.string.export_format), style = MaterialTheme.typography.labelLarge)
+                Text(
+                    stringResource(R.string.export_format),
+                    style = MaterialTheme.typography.labelLarge
+                )
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -633,7 +717,13 @@ fun ExportDialog(
                         },
                         label = { Text(stringResource(R.string.export_format_json)) },
                         leadingIcon = if (selectedFormat == ExportFormat.JSON) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                            {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         } else null
                     )
                     FilterChip(
@@ -644,7 +734,13 @@ fun ExportDialog(
                         },
                         label = { Text(stringResource(R.string.export_format_csv)) },
                         leadingIcon = if (selectedFormat == ExportFormat.CSV) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                            {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         } else null
                     )
                 }
@@ -652,7 +748,10 @@ fun ExportDialog(
                 HorizontalDivider()
 
                 // 데이터 유형
-                Text(stringResource(R.string.export_data_type), style = MaterialTheme.typography.labelLarge)
+                Text(
+                    stringResource(R.string.export_data_type),
+                    style = MaterialTheme.typography.labelLarge
+                )
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -664,7 +763,13 @@ fun ExportDialog(
                         },
                         label = { Text(stringResource(R.string.export_expense)) },
                         leadingIcon = if (includeExpenses) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                            {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         } else null
                     )
                     FilterChip(
@@ -675,7 +780,13 @@ fun ExportDialog(
                         },
                         label = { Text(stringResource(R.string.export_income)) },
                         leadingIcon = if (includeIncomes) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                            {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         } else null
                     )
                 }
@@ -683,7 +794,10 @@ fun ExportDialog(
                 // 카드 필터
                 if (availableCards.isNotEmpty()) {
                     HorizontalDivider()
-                    Text(stringResource(R.string.export_card_filter), style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        stringResource(R.string.export_card_filter),
+                        style = MaterialTheme.typography.labelLarge
+                    )
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -708,7 +822,10 @@ fun ExportDialog(
                 // 카테고리 필터
                 if (availableCategories.isNotEmpty()) {
                     HorizontalDivider()
-                    Text(stringResource(R.string.export_category_filter), style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        stringResource(R.string.export_category_filter),
+                        style = MaterialTheme.typography.labelLarge
+                    )
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -801,7 +918,10 @@ fun GoogleDriveDialog(
             ) {
                 Text(stringResource(R.string.google_drive_title))
                 IconButton(onClick = onRefresh) {
-                    Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.common_refresh))
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = stringResource(R.string.common_refresh)
+                    )
                 }
             }
         },

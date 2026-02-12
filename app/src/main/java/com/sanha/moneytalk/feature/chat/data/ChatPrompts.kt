@@ -2,6 +2,9 @@ package com.sanha.moneytalk.feature.chat.data
 
 import android.content.Context
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.feature.chat.data.ChatPrompts.getFinancialAdvisorSystemInstruction
+import com.sanha.moneytalk.feature.chat.data.ChatPrompts.getQueryAnalyzerSystemInstruction
+import com.sanha.moneytalk.feature.chat.data.ChatPrompts.getSummarySystemInstruction
 
 /**
  * AI 채팅에서 사용하는 모든 시스템 프롬프트를 관리하는 유틸리티

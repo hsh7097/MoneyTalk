@@ -94,79 +94,111 @@ class GeminiCategoryRepository @Inject constructor(
      * @param storeNames 분류할 가게명 목록
      * @return Map<가게명, 카테고리>
      */
-    suspend fun classifyStoreNames(storeNames: List<String>): Map<String, String> = withContext(Dispatchers.IO) {
-        Log.e("sanha", "GeminiCategoryRepository[classifyStoreNames] : === 호출됨 (${storeNames.size}건) ===")
-        val apiKey = settingsDataStore.getGeminiApiKey()
-        Log.e("sanha", "GeminiCategoryRepository[classifyStoreNames] : API 키 상태: ${if (apiKey.isBlank()) "❌ 비어있음" else "✅ 설정됨 (길이=${apiKey.length}, prefix=${apiKey.take(10)}...)"}")
-        if (apiKey.isBlank()) {
-            Log.e(TAG, "API 키가 설정되지 않음")
-            return@withContext emptyMap()
-        }
-
-        if (generativeModel == null) {
-            Log.e("sanha", "GeminiCategoryRepository[classifyStoreNames] : 모델 초기화 필요 → initModel() 호출")
-            initModel(apiKey)
-        }
-
-        val model = generativeModel
-        if (model == null) {
-            Log.e("sanha", "GeminiCategoryRepository[classifyStoreNames] : ❌ 모델 초기화 실패 → 빈 결과 반환")
-            return@withContext emptyMap()
-        }
-        Log.e("sanha", "GeminiCategoryRepository[classifyStoreNames] : ✅ 모델 준비 완료")
-
-        // 사용 가능한 카테고리 목록
-        val categories = Category.entries.map { it.displayName }
-
-        // 참조 리스트 미리 로드 (배치마다 중복 호출 방지)
-        val referenceText = try {
-            categoryReferenceProvider.getCategoryClassificationReference()
-        } catch (e: Exception) { "" }
-
-        // 배치 처리 (한 번에 최대 50개)
-        val results = mutableMapOf<String, String>()
-        val batches = storeNames.chunked(BATCH_SIZE)
-        val failedBatches = mutableListOf<Pair<Int, List<String>>>()
-
-        Log.d(TAG, "총 ${storeNames.size}개를 ${batches.size}개 배치로 처리")
-
-        var interBatchDelay = 0L  // 적응형 배치 간 딜레이 (429 발생 시에만 활성화)
-
-        for ((index, batch) in batches.withIndex()) {
-            // 이전 배치에서 429가 발생했으면 다음 배치 전에 딜레이
-            if (interBatchDelay > 0) {
-                Log.d(TAG, "배치 ${index + 1}/${batches.size} 전 적응형 딜레이 ${interBatchDelay}ms")
-                delay(interBatchDelay)
+    suspend fun classifyStoreNames(storeNames: List<String>): Map<String, String> =
+        withContext(Dispatchers.IO) {
+            Log.e(
+                "sanha",
+                "GeminiCategoryRepository[classifyStoreNames] : === 호출됨 (${storeNames.size}건) ==="
+            )
+            val apiKey = settingsDataStore.getGeminiApiKey()
+            Log.e(
+                "sanha",
+                "GeminiCategoryRepository[classifyStoreNames] : API 키 상태: ${
+                    if (apiKey.isBlank()) "❌ 비어있음" else "✅ 설정됨 (길이=${apiKey.length}, prefix=${
+                        apiKey.take(10)
+                    }...)"
+                }"
+            )
+            if (apiKey.isBlank()) {
+                Log.e(TAG, "API 키가 설정되지 않음")
+                return@withContext emptyMap()
             }
 
-            val (batchResult, hitRateLimit) = processBatchWithRetry(model, batch, categories, index, batches.size, referenceText)
-            if (batchResult != null) {
-                batchResult.forEach { (store, category) ->
-                    results[store] = category
+            if (generativeModel == null) {
+                Log.e(
+                    "sanha",
+                    "GeminiCategoryRepository[classifyStoreNames] : 모델 초기화 필요 → initModel() 호출"
+                )
+                initModel(apiKey)
+            }
+
+            val model = generativeModel
+            if (model == null) {
+                Log.e(
+                    "sanha",
+                    "GeminiCategoryRepository[classifyStoreNames] : ❌ 모델 초기화 실패 → 빈 결과 반환"
+                )
+                return@withContext emptyMap()
+            }
+            Log.e("sanha", "GeminiCategoryRepository[classifyStoreNames] : ✅ 모델 준비 완료")
+
+            // 사용 가능한 카테고리 목록
+            val categories = Category.entries.map { it.displayName }
+
+            // 참조 리스트 미리 로드 (배치마다 중복 호출 방지)
+            val referenceText = try {
+                categoryReferenceProvider.getCategoryClassificationReference()
+            } catch (e: Exception) {
+                ""
+            }
+
+            // 배치 처리 (한 번에 최대 50개)
+            val results = mutableMapOf<String, String>()
+            val batches = storeNames.chunked(BATCH_SIZE)
+            val failedBatches = mutableListOf<Pair<Int, List<String>>>()
+
+            Log.d(TAG, "총 ${storeNames.size}개를 ${batches.size}개 배치로 처리")
+
+            var interBatchDelay = 0L  // 적응형 배치 간 딜레이 (429 발생 시에만 활성화)
+
+            for ((index, batch) in batches.withIndex()) {
+                // 이전 배치에서 429가 발생했으면 다음 배치 전에 딜레이
+                if (interBatchDelay > 0) {
+                    Log.d(TAG, "배치 ${index + 1}/${batches.size} 전 적응형 딜레이 ${interBatchDelay}ms")
+                    delay(interBatchDelay)
                 }
-            } else {
-                // 재시도 후에도 실패한 배치 기록
-                failedBatches.add(index to batch)
+
+                val (batchResult, hitRateLimit) = processBatchWithRetry(
+                    model,
+                    batch,
+                    categories,
+                    index,
+                    batches.size,
+                    referenceText
+                )
+                if (batchResult != null) {
+                    batchResult.forEach { (store, category) ->
+                        results[store] = category
+                    }
+                } else {
+                    // 재시도 후에도 실패한 배치 기록
+                    failedBatches.add(index to batch)
+                }
+
+                // 429 발생 → 다음 배치에 딜레이 추가, 정상 → 딜레이 해제
+                interBatchDelay = if (hitRateLimit) {
+                    val newDelay = if (interBatchDelay == 0L) RETRY_BASE_DELAY_MS else min(
+                        interBatchDelay * 2,
+                        MAX_RETRY_DELAY_MS
+                    )
+                    Log.d(TAG, "429 감지 → 배치 간 딜레이 ${newDelay}ms로 설정")
+                    newDelay
+                } else {
+                    0L
+                }
             }
 
-            // 429 발생 → 다음 배치에 딜레이 추가, 정상 → 딜레이 해제
-            interBatchDelay = if (hitRateLimit) {
-                val newDelay = if (interBatchDelay == 0L) RETRY_BASE_DELAY_MS else min(interBatchDelay * 2, MAX_RETRY_DELAY_MS)
-                Log.d(TAG, "429 감지 → 배치 간 딜레이 ${newDelay}ms로 설정")
-                newDelay
-            } else {
-                0L
+            // 실패한 배치 요약 로그
+            if (failedBatches.isNotEmpty()) {
+                Log.w(
+                    TAG,
+                    "총 ${failedBatches.size}개 배치 처리 실패: ${failedBatches.map { it.first + 1 }}"
+                )
             }
-        }
 
-        // 실패한 배치 요약 로그
-        if (failedBatches.isNotEmpty()) {
-            Log.w(TAG, "총 ${failedBatches.size}개 배치 처리 실패: ${failedBatches.map { it.first + 1 }}")
+            Log.d(TAG, "분류 완료: ${storeNames.size}개 중 ${results.size}개 성공")
+            results
         }
-
-        Log.d(TAG, "분류 완료: ${storeNames.size}개 중 ${results.size}개 성공")
-        results
-    }
 
     /**
      * 지수 백오프 재시도 로직이 적용된 배치 처리
@@ -233,11 +265,17 @@ class GeminiCategoryRepository @Inject constructor(
                         // 지수 백오프 + jitter (1초 → 2초 → 4초, max 30초)
                         val jitter = Random.nextLong(0, 500)
                         val actualDelay = min(currentDelay + jitter, MAX_RETRY_DELAY_MS)
-                        Log.w(TAG, "⚠️ 429 Rate Limit 발생! (GeminiCategoryRepository.classifyStoreNames 배치 ${batchIndex + 1}/$totalBatches) ${actualDelay}ms 후 재시도 ($attempt/$MAX_RETRIES)")
+                        Log.w(
+                            TAG,
+                            "⚠️ 429 Rate Limit 발생! (GeminiCategoryRepository.classifyStoreNames 배치 ${batchIndex + 1}/$totalBatches) ${actualDelay}ms 후 재시도 ($attempt/$MAX_RETRIES)"
+                        )
                         delay(actualDelay)
                         currentDelay *= 2
                     } else {
-                        Log.e(TAG, "❌ 최대 재시도 횟수($MAX_RETRIES) 초과 (GeminiCategoryRepository.classifyStoreNames)")
+                        Log.e(
+                            TAG,
+                            "❌ 최대 재시도 횟수($MAX_RETRIES) 초과 (GeminiCategoryRepository.classifyStoreNames)"
+                        )
                     }
                 } else {
                     // Rate Limit이 아닌 다른 에러는 바로 실패 처리
@@ -256,12 +294,22 @@ class GeminiCategoryRepository @Inject constructor(
         categories: List<String>,
         referenceText: String = ""
     ): String {
-        val categoriesText = categories.mapIndexed { idx, cat -> "${idx + 1}. $cat" }.joinToString("\n")
-        val storeNamesText = storeNames.mapIndexed { idx, name -> "${idx + 1}. $name" }.joinToString("\n")
-        return context.getString(R.string.prompt_category_classification, categoriesText, referenceText, storeNamesText)
+        val categoriesText =
+            categories.mapIndexed { idx, cat -> "${idx + 1}. $cat" }.joinToString("\n")
+        val storeNamesText =
+            storeNames.mapIndexed { idx, name -> "${idx + 1}. $name" }.joinToString("\n")
+        return context.getString(
+            R.string.prompt_category_classification,
+            categoriesText,
+            referenceText,
+            storeNamesText
+        )
     }
 
-    private fun parseClassificationResponse(response: String, storeNames: List<String>): Map<String, String> {
+    private fun parseClassificationResponse(
+        response: String,
+        storeNames: List<String>
+    ): Map<String, String> {
         val results = mutableMapOf<String, String>()
         val validCategories = Category.entries.map { it.displayName }.toSet()
 

@@ -1,5 +1,8 @@
 package com.sanha.moneytalk.core.similarity
 
+import com.sanha.moneytalk.core.similarity.CategoryPropagationPolicy.MIN_PROPAGATION_CONFIDENCE
+
+
 /**
  * 카테고리 전파 정책
  *

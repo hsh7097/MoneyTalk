@@ -14,18 +14,24 @@ import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionC
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderInfo
 import com.sanha.moneytalk.core.util.DataRefreshEvent
+import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
-import com.sanha.moneytalk.core.util.DateUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.*
+import java.util.Calendar
+import java.util.Date
 import javax.inject.Inject
 
 /**
@@ -48,7 +54,9 @@ sealed interface HistoryIntent {
 
     // 지출 액션
     data class DeleteExpense(val expense: ExpenseEntity) : HistoryIntent
-    data class ChangeCategory(val expenseId: Long, val storeName: String, val newCategory: String) : HistoryIntent
+    data class ChangeCategory(val expenseId: Long, val storeName: String, val newCategory: String) :
+        HistoryIntent
+
     data class UpdateExpenseMemo(val expenseId: Long, val memo: String?) : HistoryIntent
 
     // 수입 액션
@@ -182,6 +190,7 @@ class HistoryViewModel @Inject constructor(
                     DataRefreshEvent.RefreshType.CATEGORY_UPDATED -> {
                         loadExpenses()
                     }
+
                     DataRefreshEvent.RefreshType.ALL_DATA_DELETED -> {
                         _uiState.update {
                             it.copy(
@@ -272,16 +281,22 @@ class HistoryViewModel @Inject constructor(
                         } else {
                             allExpensesForTotal.filter { expense ->
                                 val smsLower = expense.originalSms?.lowercase()
-                                smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                                smsLower == null || exclusionKeywords.none { kw ->
+                                    smsLower.contains(
+                                        kw
+                                    )
+                                }
                             }
                         }
                         val monthlyTotal = filteredForTotal.sumOf { it.amount }
                         // 일별 총액도 필터링된 데이터 기준으로 계산
-                        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
+                        val dateFormat =
+                            java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
                         val dailyTotalsMap = filteredForTotal
                             .groupBy { dateFormat.format(java.util.Date(it.dateTime)) }
                             .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
-                        val incomeTotal = incomeRepository.getTotalIncomeByDateRange(startTime, endTime)
+                        val incomeTotal =
+                            incomeRepository.getTotalIncomeByDateRange(startTime, endTime)
                         _uiState.update {
                             it.copy(
                                 monthlyTotal = monthlyTotal,
@@ -313,7 +328,8 @@ class HistoryViewModel @Inject constructor(
                     val currentState = _uiState.value
                     val sortedExpenses = sortExpenses(expenses, currentState.sortOrder)
                     // 카테고리 필터 활성화 시 수입 항목 제외 (수입은 카테고리가 없으므로)
-                    val filteredIncomes = if (currentState.selectedCategory != null) emptyList() else currentState.incomes
+                    val filteredIncomes =
+                        if (currentState.selectedCategory != null) emptyList() else currentState.incomes
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -329,7 +345,10 @@ class HistoryViewModel @Inject constructor(
     }
 
     /** 정렬 방식에 따라 지출 내역 정렬 */
-    private fun sortExpenses(expenses: List<ExpenseEntity>, sortOrder: SortOrder): List<ExpenseEntity> {
+    private fun sortExpenses(
+        expenses: List<ExpenseEntity>,
+        sortOrder: SortOrder
+    ): List<ExpenseEntity> {
         return when (sortOrder) {
             SortOrder.DATE_DESC -> expenses.sortedByDescending { it.dateTime }
             SortOrder.AMOUNT_DESC -> expenses.sortedByDescending { it.amount }
@@ -427,7 +446,11 @@ class HistoryViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    categoryClassifierService.updateExpenseCategory(expenseId, storeName, newCategory)
+                    categoryClassifierService.updateExpenseCategory(
+                        expenseId,
+                        storeName,
+                        newCategory
+                    )
                 }
                 loadExpenses() // 화면 새로고침
             } catch (e: Exception) {
@@ -483,7 +506,8 @@ class HistoryViewModel @Inject constructor(
                 }
                 val currentState = _uiState.value
                 val sortedResults = sortExpenses(results, currentState.sortOrder)
-                val filteredIncomes = if (currentState.selectedCategory != null) emptyList() else currentState.incomes
+                val filteredIncomes =
+                    if (currentState.selectedCategory != null) emptyList() else currentState.incomes
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -608,7 +632,11 @@ class HistoryViewModel @Inject constructor(
                         } else {
                             allIncomes.filter { income ->
                                 val smsLower = income.originalSms?.lowercase()
-                                smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                                smsLower == null || exclusionKeywords.none { kw ->
+                                    smsLower.contains(
+                                        kw
+                                    )
+                                }
                             }
                         }
                         val total = incomes.sumOf { it.amount }
@@ -674,7 +702,8 @@ class HistoryViewModel @Inject constructor(
 
             val state2 = _uiState.value
             // 카테고리 필터 활성화 시 수입 항목 제외
-            val filteredIncomes = if (state2.selectedCategory != null) emptyList() else state2.incomes
+            val filteredIncomes =
+                if (state2.selectedCategory != null) emptyList() else state2.incomes
             _uiState.update {
                 it.copy(
                     monthlyTotal = result.first,
@@ -700,28 +729,35 @@ class HistoryViewModel @Inject constructor(
             is HistoryIntent.SelectExpense -> {
                 _uiState.update { it.copy(selectedExpense = intent.expense) }
             }
+
             is HistoryIntent.SelectIncome -> {
                 _uiState.update { it.copy(selectedIncome = intent.income) }
             }
+
             is HistoryIntent.DismissDialog -> {
                 _uiState.update { it.copy(selectedExpense = null, selectedIncome = null) }
             }
+
             is HistoryIntent.DeleteExpense -> {
                 _uiState.update { it.copy(selectedExpense = null) }
                 deleteExpense(intent.expense)
             }
+
             is HistoryIntent.ChangeCategory -> {
                 _uiState.update { it.copy(selectedExpense = null) }
                 updateExpenseCategory(intent.expenseId, intent.storeName, intent.newCategory)
             }
+
             is HistoryIntent.UpdateExpenseMemo -> {
                 _uiState.update { it.copy(selectedExpense = null) }
                 updateExpenseMemo(intent.expenseId, intent.memo)
             }
+
             is HistoryIntent.DeleteIncome -> {
                 _uiState.update { it.copy(selectedIncome = null) }
                 deleteIncome(intent.income)
             }
+
             is HistoryIntent.UpdateIncomeMemo -> {
                 _uiState.update { it.copy(selectedIncome = null) }
                 updateIncomeMemo(intent.incomeId, intent.memo)
@@ -789,17 +825,20 @@ class HistoryViewModel @Inject constructor(
 
             val calendar = Calendar.getInstance().apply { time = date }
             val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
-            val dayOfWeekStr = context.getString(getDayOfWeekResId(calendar.get(Calendar.DAY_OF_WEEK)))
+            val dayOfWeekStr =
+                context.getString(getDayOfWeekResId(calendar.get(Calendar.DAY_OF_WEEK)))
             val title = context.getString(R.string.history_day_header, dayOfMonth, dayOfWeekStr)
 
-            items.add(TransactionListItem.Header(
-                title = title,
-                expenseTotal = dailyExpenseTotal,
-                incomeTotal = dailyIncomeTotal
-            ))
+            items.add(
+                TransactionListItem.Header(
+                    title = title,
+                    expenseTotal = dailyExpenseTotal,
+                    incomeTotal = dailyIncomeTotal
+                )
+            )
             // 수입+지출을 시간 최신순으로 통합 정렬
             val merged = dayExpenses.map { it.dateTime to TransactionListItem.ExpenseItem(it) } +
-                dayIncomes.map { it.dateTime to TransactionListItem.IncomeItem(it) }
+                    dayIncomes.map { it.dateTime to TransactionListItem.IncomeItem(it) }
             merged.sortedByDescending { it.first }
                 .forEach { items.add(it.second) }
         }
@@ -810,8 +849,13 @@ class HistoryViewModel @Inject constructor(
     /** AMOUNT_DESC: 금액 높은순 플랫 리스트 */
     private fun buildAmountDescItems(expenses: List<ExpenseEntity>): List<TransactionListItem> {
         val items = mutableListOf<TransactionListItem>()
-        items.add(TransactionListItem.Header(
-            title = "${context.getString(R.string.history_sort_amount)} (${expenses.size}${context.getString(R.string.history_count_suffix)})",
+        items.add(
+            TransactionListItem.Header(
+            title = "${context.getString(R.string.history_sort_amount)} (${expenses.size}${
+                context.getString(
+                    R.string.history_count_suffix
+                )
+            })",
             expenseTotal = expenses.sumOf { it.amount }
         ))
         expenses.forEach { items.add(TransactionListItem.ExpenseItem(it)) }
@@ -827,10 +871,12 @@ class HistoryViewModel @Inject constructor(
 
         storeGroups.forEach { (storeName, storeExpenses) ->
             val storeTotal = storeExpenses.sumOf { it.amount }
-            items.add(TransactionListItem.Header(
-                title = "$storeName (${storeExpenses.size}${context.getString(R.string.history_visit_suffix)})",
-                expenseTotal = storeTotal
-            ))
+            items.add(
+                TransactionListItem.Header(
+                    title = "$storeName (${storeExpenses.size}${context.getString(R.string.history_visit_suffix)})",
+                    expenseTotal = storeTotal
+                )
+            )
             storeExpenses.sortedByDescending { it.dateTime }
                 .forEach { items.add(TransactionListItem.ExpenseItem(it)) }
         }
@@ -849,13 +895,16 @@ class HistoryViewModel @Inject constructor(
             val dailyTotal = dayIncomes.sumOf { it.amount }
             val calendar = Calendar.getInstance().apply { time = date }
             val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
-            val dayOfWeekStr = context.getString(getDayOfWeekResId(calendar.get(Calendar.DAY_OF_WEEK)))
+            val dayOfWeekStr =
+                context.getString(getDayOfWeekResId(calendar.get(Calendar.DAY_OF_WEEK)))
             val title = context.getString(R.string.history_day_header, dayOfMonth, dayOfWeekStr)
 
-            items.add(TransactionListItem.Header(
-                title = title,
-                incomeTotal = dailyTotal
-            ))
+            items.add(
+                TransactionListItem.Header(
+                    title = title,
+                    incomeTotal = dailyTotal
+                )
+            )
             dayIncomes.forEach { items.add(TransactionListItem.IncomeItem(it)) }
         }
 

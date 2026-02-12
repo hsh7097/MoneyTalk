@@ -58,7 +58,13 @@ class GeminiRepository @Inject constructor(
                     topP = 0.9f
                     maxOutputTokens = 10000
                 },
-                systemInstruction = content { text(ChatPrompts.getQueryAnalyzerSystemInstruction(context)) }
+                systemInstruction = content {
+                    text(
+                        ChatPrompts.getQueryAnalyzerSystemInstruction(
+                            context
+                        )
+                    )
+                }
             )
         }
         return queryAnalyzerModel
@@ -79,7 +85,13 @@ class GeminiRepository @Inject constructor(
                     topP = 0.95f
                     maxOutputTokens = 10000
                 },
-                systemInstruction = content { text(ChatPrompts.getFinancialAdvisorSystemInstruction(context)) }
+                systemInstruction = content {
+                    text(
+                        ChatPrompts.getFinancialAdvisorSystemInstruction(
+                            context
+                        )
+                    )
+                }
             )
         }
         return financialAdvisorModel
@@ -139,7 +151,9 @@ class GeminiRepository @Inject constructor(
 
             // 오늘 날짜 정보 추가 (스키마는 System Instruction에 있음)
             val calendar = Calendar.getInstance()
-            val today = "${calendar.get(Calendar.YEAR)}년 ${calendar.get(Calendar.MONTH) + 1}월 ${calendar.get(Calendar.DAY_OF_MONTH)}일"
+            val today = "${calendar.get(Calendar.YEAR)}년 ${calendar.get(Calendar.MONTH) + 1}월 ${
+                calendar.get(Calendar.DAY_OF_MONTH)
+            }일"
 
             val prompt = """오늘: $today
 
@@ -149,7 +163,10 @@ $contextualMessage
 
             Log.d(TAG, "=== 쿼리 분석 시스템 인스트럭션 ===")
             Log.d(TAG, ChatPrompts.getQueryAnalyzerSystemInstruction(context))
-            Log.d(TAG, "=== 시스템 인스트럭션 끝 (길이: ${ChatPrompts.getQueryAnalyzerSystemInstruction(context).length}) ===")
+            Log.d(
+                TAG,
+                "=== 시스템 인스트럭션 끝 (길이: ${ChatPrompts.getQueryAnalyzerSystemInstruction(context).length}) ==="
+            )
             Log.d(TAG, "=== 쿼리 분석 프롬프트 ===")
             Log.d(TAG, prompt)
             Log.d(TAG, "=== 프롬프트 끝 (길이: ${prompt.length}) ===")
@@ -244,7 +261,10 @@ $userMessage"""
             Log.d(TAG, "=== generateFinalAnswerWithContext 시작 ===")
             Log.d(TAG, "=== 최종 답변 시스템 인스트럭션 ===")
             Log.d(TAG, ChatPrompts.getFinancialAdvisorSystemInstruction(context))
-            Log.d(TAG, "=== 시스템 인스트럭션 끝 (길이: ${ChatPrompts.getFinancialAdvisorSystemInstruction(context).length}) ===")
+            Log.d(
+                TAG,
+                "=== 시스템 인스트럭션 끝 (길이: ${ChatPrompts.getFinancialAdvisorSystemInstruction(context).length}) ==="
+            )
             Log.d(TAG, "=== 컨텍스트 기반 최종 답변 프롬프트 ===")
             Log.d(TAG, contextPrompt)
             Log.d(TAG, "=== 프롬프트 끝 (길이: ${contextPrompt.length}) ===")
@@ -273,7 +293,10 @@ $userMessage"""
             Log.d(TAG, "=== simpleChat 시작 ===")
             Log.d(TAG, "=== 심플 채팅 시스템 인스트럭션 ===")
             Log.d(TAG, ChatPrompts.getFinancialAdvisorSystemInstruction(context))
-            Log.d(TAG, "=== 시스템 인스트럭션 끝 (길이: ${ChatPrompts.getFinancialAdvisorSystemInstruction(context).length}) ===")
+            Log.d(
+                TAG,
+                "=== 시스템 인스트럭션 끝 (길이: ${ChatPrompts.getFinancialAdvisorSystemInstruction(context).length}) ==="
+            )
             Log.d(TAG, "=== 심플 채팅 프롬프트 ===")
             Log.d(TAG, userMessage)
             Log.d(TAG, "=== 프롬프트 끝 (길이: ${userMessage.length}) ===")

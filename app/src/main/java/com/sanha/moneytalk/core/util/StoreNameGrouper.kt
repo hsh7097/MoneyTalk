@@ -103,7 +103,10 @@ class StoreNameGrouper @Inject constructor(
                     batchSuccess++
                 }
             }
-            Log.d(TAG, "[grouping] 가게명 임베딩 배치 ${batchIdx + 1}/${batches.size} 완료 (${elapsed}ms, 성공: ${batchSuccess}/${batch.size})")
+            Log.d(
+                TAG,
+                "[grouping] 가게명 임베딩 배치 ${batchIdx + 1}/${batches.size} 완료 (${elapsed}ms, 성공: ${batchSuccess}/${batch.size})"
+            )
 
             // 배치 간 최소 딜레이 (마지막 배치 제외)
             if (batchIdx < batches.size - 1) {

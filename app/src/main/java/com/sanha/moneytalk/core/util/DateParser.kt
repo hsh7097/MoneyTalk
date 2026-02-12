@@ -63,7 +63,10 @@ object DateParser {
         }
 
         // 5. "지난달", "저번달" 패턴
-        if (message.contains("지난달") || message.contains("저번달") || message.contains("전달") || message.contains("이전달")) {
+        if (message.contains("지난달") || message.contains("저번달") || message.contains("전달") || message.contains(
+                "이전달"
+            )
+        ) {
             val calendar = Calendar.getInstance()
             calendar.add(Calendar.MONTH, -1)
             return createMonthRange(

@@ -64,10 +64,12 @@ class SmsExclusionRepository @Inject constructor(
         val normalized = keyword.trim().lowercase()
         if (normalized.isBlank()) return false
 
-        dao.insert(SmsExclusionKeywordEntity(
-            keyword = normalized,
-            source = source
-        ))
+        dao.insert(
+            SmsExclusionKeywordEntity(
+                keyword = normalized,
+                source = source
+            )
+        )
         invalidateCache()
         Log.d(TAG, "키워드 추가: $normalized (source=$source)")
         return true

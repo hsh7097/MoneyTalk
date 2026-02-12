@@ -1,70 +1,110 @@
 package com.sanha.moneytalk.feature.history.ui
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Sms
-import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sms
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import com.sanha.moneytalk.core.theme.moneyTalkColors
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import kotlinx.coroutines.launch
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.component.CategorySelectDialog
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabInfo
 import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabRowCompose
-import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
+import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.util.toDpTextUnit
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,81 +120,82 @@ fun HistoryScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-                // 검색 모드일 때 검색 바, 아니면 일반 헤더
-                if (uiState.isSearchMode) {
-                    SearchBar(
-                        query = uiState.searchQuery,
-                        onQueryChange = { viewModel.search(it) },
-                        onClose = { viewModel.exitSearchMode() }
-                    )
-                } else {
-                    // 헤더: 타이틀만 (아이콘은 탭 행으로 이동)
-                    Text(
-                        text = stringResource(R.string.history_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
-                    )
+        // 검색 모드일 때 검색 바, 아니면 일반 헤더
+        if (uiState.isSearchMode) {
+            SearchBar(
+                query = uiState.searchQuery,
+                onQueryChange = { viewModel.search(it) },
+                onClose = { viewModel.exitSearchMode() }
+            )
+        } else {
+            // 헤더: 타이틀만 (아이콘은 탭 행으로 이동)
+            Text(
+                text = stringResource(R.string.history_title),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+            )
 
-                    // 기간 선택 및 지출/수입 요약
-                    PeriodSummaryCard(
-                        year = uiState.selectedYear,
-                        month = uiState.selectedMonth,
-                        monthStartDay = uiState.monthStartDay,
-                        totalExpense = uiState.filteredExpenseTotal,
-                        totalIncome = uiState.filteredIncomeTotal,
-                        onPreviousMonth = { viewModel.previousMonth() },
-                        onNextMonth = { viewModel.nextMonth() }
-                    )
-                }
+            // 기간 선택 및 지출/수입 요약
+            PeriodSummaryCard(
+                year = uiState.selectedYear,
+                month = uiState.selectedMonth,
+                monthStartDay = uiState.monthStartDay,
+                totalExpense = uiState.filteredExpenseTotal,
+                totalIncome = uiState.filteredIncomeTotal,
+                onPreviousMonth = { viewModel.previousMonth() },
+                onNextMonth = { viewModel.nextMonth() }
+            )
+        }
 
-                Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-                // 검색 모드에서는 필터/탭 숨기기 (달력 의미 없음)
-                if (!uiState.isSearchMode) {
-                    // 탭 (목록/달력) + 검색/추가/필터 아이콘
-                    FilterTabRow(
-                        currentMode = viewMode,
-                        onModeChange = { viewMode = it },
-                        sortOrder = uiState.sortOrder,
-                        selectedCategory = uiState.selectedCategory,
-                        showExpenses = uiState.showExpenses,
-                        showIncomes = uiState.showIncomes,
-                        onApplyFilter = { sortOrder, showExp, showInc, category ->
-                            viewModel.applyFilter(sortOrder, showExp, showInc, category)
-                        },
-                        onSearchClick = { viewModel.enterSearchMode() },
-                        onAddClick = { showAddDialog = true }
-                    )
-                }
+        // 검색 모드에서는 필터/탭 숨기기 (달력 의미 없음)
+        if (!uiState.isSearchMode) {
+            // 탭 (목록/달력) + 검색/추가/필터 아이콘
+            FilterTabRow(
+                currentMode = viewMode,
+                onModeChange = { viewMode = it },
+                sortOrder = uiState.sortOrder,
+                selectedCategory = uiState.selectedCategory,
+                showExpenses = uiState.showExpenses,
+                showIncomes = uiState.showIncomes,
+                onApplyFilter = { sortOrder, showExp, showInc, category ->
+                    viewModel.applyFilter(sortOrder, showExp, showInc, category)
+                },
+                onSearchClick = { viewModel.enterSearchMode() },
+                onAddClick = { showAddDialog = true }
+            )
+        }
 
-                // 콘텐츠
-                when {
-                    viewMode == ViewMode.LIST -> {
-                        TransactionListView(
-                            items = uiState.transactionListItems,
-                            isLoading = uiState.isLoading,
-                            showExpenses = uiState.showExpenses,
-                            showIncomes = uiState.showIncomes,
-                            onIntent = viewModel::onIntent
-                        )
-                    }
-                    viewMode == ViewMode.CALENDAR -> {
-                        BillingCycleCalendarView(
-                            year = uiState.selectedYear,
-                            month = uiState.selectedMonth,
-                            monthStartDay = uiState.monthStartDay,
-                            dailyTotals = uiState.dailyTotals,
-                            expenses = uiState.expenses,
-                            onDelete = { viewModel.deleteExpense(it) },
-                            onCategoryChange = { expense, newCategory ->
-                                viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
-                            },
-                            onExpenseMemoChange = { id, memo -> viewModel.updateExpenseMemo(id, memo) }
-                        )
-                    }
-                }
+        // 콘텐츠
+        when {
+            viewMode == ViewMode.LIST -> {
+                TransactionListView(
+                    items = uiState.transactionListItems,
+                    isLoading = uiState.isLoading,
+                    showExpenses = uiState.showExpenses,
+                    showIncomes = uiState.showIncomes,
+                    onIntent = viewModel::onIntent
+                )
             }
+
+            viewMode == ViewMode.CALENDAR -> {
+                BillingCycleCalendarView(
+                    year = uiState.selectedYear,
+                    month = uiState.selectedMonth,
+                    monthStartDay = uiState.monthStartDay,
+                    dailyTotals = uiState.dailyTotals,
+                    expenses = uiState.expenses,
+                    onDelete = { viewModel.deleteExpense(it) },
+                    onCategoryChange = { expense, newCategory ->
+                        viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
+                    },
+                    onExpenseMemoChange = { id, memo -> viewModel.updateExpenseMemo(id, memo) }
+                )
+            }
+        }
+    }
 
     // 다이얼로그 상태는 ViewModel에서 관리
     uiState.selectedExpense?.let { expense ->
@@ -163,7 +204,13 @@ fun HistoryScreen(
             onDismiss = { viewModel.onIntent(HistoryIntent.DismissDialog) },
             onDelete = { viewModel.onIntent(HistoryIntent.DeleteExpense(expense)) },
             onCategoryChange = { newCategory ->
-                viewModel.onIntent(HistoryIntent.ChangeCategory(expense.id, expense.storeName, newCategory))
+                viewModel.onIntent(
+                    HistoryIntent.ChangeCategory(
+                        expense.id,
+                        expense.storeName,
+                        newCategory
+                    )
+                )
             },
             onMemoChange = { memo ->
                 viewModel.onIntent(HistoryIntent.UpdateExpenseMemo(expense.id, memo))
@@ -222,7 +269,10 @@ fun SearchBar(
             trailingIcon = {
                 if (query.isNotEmpty()) {
                     IconButton(onClick = { onQueryChange("") }) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear))
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = stringResource(R.string.common_clear)
+                        )
                     }
                 }
             }
@@ -464,7 +514,10 @@ fun PeriodSummaryCard(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         modifier = Modifier.width(120.dp),
-                        text = stringResource(R.string.common_won, numberFormat.format(totalIncome)),
+                        text = stringResource(
+                            R.string.common_won,
+                            numberFormat.format(totalIncome)
+                        ),
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.sp),
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.moneyTalkColors.income,
@@ -819,7 +872,14 @@ fun FilterBottomSheet(
 
             // 적용 버튼
             Button(
-                onClick = { onApply(tempSortOrder, tempShowExpenses, tempShowIncomes, tempCategory) },
+                onClick = {
+                    onApply(
+                        tempSortOrder,
+                        tempShowExpenses,
+                        tempShowIncomes,
+                        tempCategory
+                    )
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp),
@@ -897,7 +957,7 @@ fun TransactionListView(
     val showScrollToTop by remember {
         derivedStateOf {
             listState.firstVisibleItemIndex > 0 ||
-            (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 200)
+                    (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 200)
         }
     }
 
@@ -957,12 +1017,14 @@ fun TransactionListView(
                     is TransactionListItem.Header -> {
                         TransactionGroupHeaderCompose(info = item)
                     }
+
                     is TransactionListItem.ExpenseItem -> {
                         TransactionCardCompose(
                             info = item.cardInfo,
                             onClick = { onIntent(HistoryIntent.SelectExpense(item.expense)) }
                         )
                     }
+
                     is TransactionListItem.IncomeItem -> {
                         TransactionCardCompose(
                             info = item.cardInfo,
@@ -1192,11 +1254,12 @@ fun BillingCycleCalendarView(
                                     isSelected = selectedDateString == calendarDay.dateString,
                                     onClick = {
                                         if (calendarDay.isCurrentPeriod && !calendarDay.isFuture) {
-                                            selectedDateString = if (selectedDateString == calendarDay.dateString) {
-                                                null // 토글: 같은 날짜 다시 클릭 시 닫기
-                                            } else {
-                                                calendarDay.dateString
-                                            }
+                                            selectedDateString =
+                                                if (selectedDateString == calendarDay.dateString) {
+                                                    null // 토글: 같은 날짜 다시 클릭 시 닫기
+                                                } else {
+                                                    calendarDay.dateString
+                                                }
                                         }
                                     },
                                     modifier = Modifier.weight(1f)
@@ -1268,6 +1331,10 @@ fun BillingCycleCalendarView(
 
     // 지출 상세 다이얼로그 (삭제 및 카테고리 변경 기능 포함)
     selectedExpense?.let { expense ->
+        Log.e(
+            "sanha",
+            "HistoryScreen[BillingCycleCalendarView] : ${expense.storeName}, ${expense.amount}원"
+        )
         ExpenseDetailDialog(
             expense = expense,
             onDismiss = { selectedExpense = null },
@@ -1334,7 +1401,10 @@ fun CalendarDayCell(
                     color = when {
                         calendarDay.isToday -> Color.White
                         calendarDay.isFuture -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                        !calendarDay.isCurrentPeriod -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        !calendarDay.isCurrentPeriod -> MaterialTheme.colorScheme.onSurface.copy(
+                            alpha = 0.3f
+                        )
+
                         isSelected -> MaterialTheme.colorScheme.primary
                         else -> MaterialTheme.colorScheme.onSurface
                     }
@@ -1405,7 +1475,10 @@ fun IncomeDetailDialog(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                     Text(
-                        text = stringResource(R.string.common_won, numberFormat.format(income.amount)),
+                        text = stringResource(
+                            R.string.common_won,
+                            numberFormat.format(income.amount)
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.moneyTalkColors.income
@@ -1508,7 +1581,9 @@ fun IncomeDetailDialog(
                                 text = if (memoText.isBlank()) "메모 추가" else memoText,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
-                                color = if (memoText.isBlank()) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else MaterialTheme.colorScheme.primary,
+                                color = if (memoText.isBlank()) MaterialTheme.colorScheme.onSurface.copy(
+                                    alpha = 0.4f
+                                ) else MaterialTheme.colorScheme.primary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.widthIn(max = 180.dp)
@@ -1605,7 +1680,15 @@ fun IncomeDetailDialog(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("수입 삭제") },
-            text = { Text("이 수입 항목을 삭제하시겠습니까?\n${income.description.ifBlank { income.type }} (${NumberFormat.getNumberInstance(Locale.KOREA).format(income.amount)}원)") },
+            text = {
+                Text(
+                    "이 수입 항목을 삭제하시겠습니까?\n${income.description.ifBlank { income.type }} (${
+                        NumberFormat.getNumberInstance(
+                            Locale.KOREA
+                        ).format(income.amount)
+                    }원)"
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -1683,7 +1766,10 @@ private fun generateBillingCycleDays(
         if (monthStartDay > 1) {
             add(Calendar.MONTH, -1)
         }
-        set(Calendar.DAY_OF_MONTH, monthStartDay.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH)))
+        set(
+            Calendar.DAY_OF_MONTH,
+            monthStartDay.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH))
+        )
     }
 
     // 종료 날짜 계산 (시작일 - 1 또는 월말)
@@ -1691,7 +1777,10 @@ private fun generateBillingCycleDays(
         set(Calendar.YEAR, year)
         set(Calendar.MONTH, month - 1)
         if (monthStartDay > 1) {
-            set(Calendar.DAY_OF_MONTH, (monthStartDay - 1).coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH)))
+            set(
+                Calendar.DAY_OF_MONTH,
+                (monthStartDay - 1).coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH))
+            )
         } else {
             set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
         }

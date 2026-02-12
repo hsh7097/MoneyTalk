@@ -119,8 +119,10 @@ class StoreEmbeddingRepository @Inject constructor(
             )
 
             if (bestMatch != null) {
-                Log.d(TAG, "벡터 매칭: '$storeName' → '${bestMatch.storeEmbedding.storeName}' " +
-                        "(${bestMatch.storeEmbedding.category}, 유사도 ${bestMatch.similarity})")
+                Log.d(
+                    TAG, "벡터 매칭: '$storeName' → '${bestMatch.storeEmbedding.storeName}' " +
+                            "(${bestMatch.storeEmbedding.category}, 유사도 ${bestMatch.similarity})"
+                )
                 storeEmbeddingDao.incrementMatchCount(bestMatch.storeEmbedding.id)
             } else {
                 Log.d(TAG, "벡터 매칭 실패: '$storeName' (유사도 미달)")
@@ -177,8 +179,10 @@ class StoreEmbeddingRepository @Inject constructor(
             val dominantCategory = categoryCounts.maxByOrNull { it.value }?.key ?: return null
             val avgSimilarity = similarStores.map { it.similarity }.average().toFloat()
 
-            Log.d(TAG, "그룹 매칭: '$storeName' → '$dominantCategory' " +
-                    "(그룹 ${similarStores.size}개, 평균 유사도 $avgSimilarity)")
+            Log.d(
+                TAG, "그룹 매칭: '$storeName' → '$dominantCategory' " +
+                        "(그룹 ${similarStores.size}개, 평균 유사도 $avgSimilarity)"
+            )
 
             // 매칭된 가게들의 카운트 증가
             for (result in similarStores) {
@@ -326,8 +330,12 @@ class StoreEmbeddingRepository @Inject constructor(
         if (!CategoryPropagationPolicy.shouldPropagateWithConfidence(
                 similarity = CategoryPropagationPolicy.profile.propagate,
                 confidence = confidence
-            )) {
-            Log.d(TAG, "전파 차단: $storeName → $newCategory (confidence=$confidence < ${CategoryPropagationPolicy.MIN_PROPAGATION_CONFIDENCE})")
+            )
+        ) {
+            Log.d(
+                TAG,
+                "전파 차단: $storeName → $newCategory (confidence=$confidence < ${CategoryPropagationPolicy.MIN_PROPAGATION_CONFIDENCE})"
+            )
             return 0
         }
 
@@ -352,7 +360,11 @@ class StoreEmbeddingRepository @Inject constructor(
                 // 이미 같은 카테고리면 건너뜀
                 if (result.storeEmbedding.category == newCategory) continue
                 // confidence+유사도 통합 체크
-                if (!CategoryPropagationPolicy.shouldPropagateWithConfidence(result.similarity, confidence)) continue
+                if (!CategoryPropagationPolicy.shouldPropagateWithConfidence(
+                        result.similarity,
+                        confidence
+                    )
+                ) continue
 
                 storeEmbeddingDao.updateCategoryByIdIfNotUser(
                     id = result.storeEmbedding.id,
@@ -361,8 +373,10 @@ class StoreEmbeddingRepository @Inject constructor(
                 )
                 propagatedCount++
 
-                Log.d(TAG, "카테고리 전파: '${result.storeEmbedding.storeName}' → $newCategory " +
-                        "(유사도 ${result.similarity}, confidence=$confidence)")
+                Log.d(
+                    TAG, "카테고리 전파: '${result.storeEmbedding.storeName}' → $newCategory " +
+                            "(유사도 ${result.similarity}, confidence=$confidence)"
+                )
             }
 
             if (propagatedCount > 0) {
@@ -433,7 +447,10 @@ class StoreEmbeddingRepository @Inject constructor(
      * 저신뢰도 임베딩 조회 (재분류 대상)
      */
     suspend fun getLowConfidenceEmbeddings(threshold: Float = 0.95f): List<StoreEmbeddingEntity> {
-        Log.e("sanha", "StoreEmbeddingRepository[getLowConfidenceEmbeddings] : threshold=$threshold 조회 시작")
+        Log.e(
+            "sanha",
+            "StoreEmbeddingRepository[getLowConfidenceEmbeddings] : threshold=$threshold 조회 시작"
+        )
         val result = storeEmbeddingDao.getLowConfidenceEmbeddings(threshold)
         Log.e("sanha", "StoreEmbeddingRepository[getLowConfidenceEmbeddings] : ${result.size}건 발견")
         return result

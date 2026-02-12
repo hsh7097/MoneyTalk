@@ -1,6 +1,11 @@
 package com.sanha.moneytalk.core.ui.component.transaction.header
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -12,7 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import java.text.NumberFormat
-import java.util.*
+import java.util.Locale
 
 /**
  * 그룹 헤더 Composable.
@@ -47,7 +52,12 @@ fun TransactionGroupHeaderCompose(
         ) {
             if (info.incomeTotal > 0) {
                 Text(
-                    text = "+${stringResource(R.string.common_won, numberFormat.format(info.incomeTotal))}",
+                    text = "+${
+                        stringResource(
+                            R.string.common_won,
+                            numberFormat.format(info.incomeTotal)
+                        )
+                    }",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.moneyTalkColors.income
@@ -55,7 +65,12 @@ fun TransactionGroupHeaderCompose(
             }
             if (info.expenseTotal > 0) {
                 Text(
-                    text = "-${stringResource(R.string.common_won, numberFormat.format(info.expenseTotal))}",
+                    text = "-${
+                        stringResource(
+                            R.string.common_won,
+                            numberFormat.format(info.expenseTotal)
+                        )
+                    }",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.error
