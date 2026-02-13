@@ -1272,14 +1272,13 @@ class HomeViewModel @Inject constructor(
 
     /**
      * 특정 지출의 카테고리 변경
-     * Room 매핑도 함께 업데이트하여 동일 가게명에 대해 학습
+     * 동일 가게명의 모든 지출을 일괄 변경 + 벡터 학습 + 유사 가게 전파
      */
     fun updateExpenseCategory(expenseId: Long, storeName: String, newCategory: String) {
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    categoryClassifierService.updateExpenseCategory(
-                        expenseId,
+                    categoryClassifierService.updateCategoryForAllSameStore(
                         storeName,
                         newCategory
                     )
