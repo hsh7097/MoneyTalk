@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
@@ -42,7 +43,9 @@ import javax.inject.Inject
  * @property monthlyIncome 해당 월 총 수입
  * @property monthlyExpense 해당 월 총 지출
  * @property categoryExpenses 카테고리별 지출 합계 목록
- * @property recentExpenses 최근 지출 내역 목록
+ * @property recentExpenses 최근 지출 내역 목록 (카테고리 필터용)
+ * @property todayExpenses 오늘 지출 내역 (오늘 내역 섹션용)
+ * @property todayIncomes 오늘 수입 내역 (오늘 내역 섹션용)
  * @property periodLabel 표시용 기간 레이블 (예: "1/25 ~ 2/24")
  * @property errorMessage 에러 메시지 (null이면 에러 없음)
  * @property isSyncing SMS 동기화 진행 중 여부
@@ -57,6 +60,8 @@ data class HomeUiState(
     val monthlyExpense: Int = 0,
     val categoryExpenses: List<CategorySum> = emptyList(),
     val recentExpenses: List<ExpenseEntity> = emptyList(),
+    val todayExpenses: List<ExpenseEntity> = emptyList(),
+    val todayIncomes: List<IncomeEntity> = emptyList(),
     val periodLabel: String = "",
     val errorMessage: String? = null,
     val isSyncing: Boolean = false,
@@ -266,6 +271,19 @@ class HomeViewModel @Inject constructor(
                     }
                 }
 
+                // 오늘의 수입 조회
+                val todayIncomesList = withContext(Dispatchers.IO) {
+                    incomeRepository.getIncomesByDateRangeOnce(todayStart, todayEnd)
+                }
+                val filteredTodayIncomes = if (exclusionKeywords.isEmpty()) {
+                    todayIncomesList
+                } else {
+                    todayIncomesList.filter { income ->
+                        val smsLower = income.originalSms?.lowercase()
+                        smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                    }
+                }
+
                 // 전월 동일 기간 지출 조회
                 // 선택 월 기준: 현재 시점이 선택 월 내라면 현재 시각, 아니면 monthEnd를 기준점으로 사용
                 val now = System.currentTimeMillis()
@@ -301,6 +319,8 @@ class HomeViewModel @Inject constructor(
                         monthlyIncome = totalIncome,
                         todayExpense = filteredTodayExpenses.sumOf { e -> e.amount },
                         todayExpenseCount = filteredTodayExpenses.size,
+                        todayExpenses = filteredTodayExpenses.sortedByDescending { e -> e.dateTime },
+                        todayIncomes = filteredTodayIncomes.sortedByDescending { e -> e.dateTime },
                         lastMonthExpense = filteredLastMonthExpense,
                         comparisonPeriodLabel = comparisonLabel
                     )

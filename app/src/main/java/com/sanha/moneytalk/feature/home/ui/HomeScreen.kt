@@ -73,10 +73,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
+import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.util.DateUtils
@@ -116,6 +118,22 @@ fun HomeScreen(
         derivedStateOf {
             listState.firstVisibleItemIndex > 0 ||
                     (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 200)
+        }
+    }
+
+    // 오늘 지출 + 수입을 시간순 통합
+    val todayTransactions = remember(
+        uiState.todayExpenses,
+        uiState.todayIncomes
+    ) {
+        val items = mutableListOf<TodayItem>()
+        uiState.todayExpenses.forEach { items.add(TodayItem.Expense(it)) }
+        uiState.todayIncomes.forEach { items.add(TodayItem.Income(it)) }
+        items.sortedByDescending { item ->
+            when (item) {
+                is TodayItem.Expense -> item.expense.dateTime
+                is TodayItem.Income -> item.income.dateTime
+            }
         }
     }
 
@@ -185,65 +203,45 @@ fun HomeScreen(
                 )
             }
 
-            // 최근 지출 내역 (카테고리 필터 적용)
+            // 오늘 내역 (지출 + 수입 시간순 통합)
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (uiState.selectedCategory != null) {
-                        val cat = Category.fromDisplayName(uiState.selectedCategory ?: "")
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            CategoryIcon(category = cat, containerSize = 28.dp, fontSize = 20.sp)
-                            Text(
-                                text = "${cat.displayName} 지출",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    } else {
-                        Text(
-                            text = stringResource(R.string.home_recent_expense),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    if (uiState.selectedCategory != null) {
-                        TextButton(onClick = { viewModel.selectCategory(null) }) {
-                            Text("전체 보기")
-                        }
-                    }
-                }
+                Text(
+                    text = stringResource(R.string.home_today_transactions),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
             }
 
-            val displayExpenses = if (uiState.selectedCategory != null) {
-                uiState.recentExpenses.filter { expense ->
-                    if (uiState.selectedCategory == "기타") {
-                        expense.category == "기타" || expense.category == "미분류"
-                    } else {
-                        expense.category == uiState.selectedCategory
-                    }
-                }
-            } else {
-                uiState.recentExpenses
-            }.take(3) // 홈에서는 최근 3건만 미리보기
-
-            if (displayExpenses.isEmpty()) {
+            if (todayTransactions.isEmpty()) {
                 item {
-                    EmptyExpenseSection()
+                    Text(
+                        text = stringResource(R.string.home_no_today_transactions),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
                 }
             } else {
-                items(displayExpenses) { expense ->
-                    TransactionCardCompose(
-                        info = ExpenseTransactionCardInfo(expense),
-                        onClick = { selectedExpense = expense }
-                    )
+                items(
+                    count = todayTransactions.size,
+                    key = { index ->
+                        when (val item = todayTransactions[index]) {
+                            is TodayItem.Expense -> "expense_${item.expense.id}"
+                            is TodayItem.Income -> "income_${item.income.id}"
+                        }
+                    }
+                ) { index ->
+                    when (val item = todayTransactions[index]) {
+                        is TodayItem.Expense -> TransactionCardCompose(
+                            info = ExpenseTransactionCardInfo(item.expense),
+                            onClick = { selectedExpense = item.expense }
+                        )
+                        is TodayItem.Income -> TransactionCardCompose(
+                            info = IncomeTransactionCardInfo(item.income),
+                            onClick = { }
+                        )
+                    }
                 }
             }
         }
@@ -905,4 +903,10 @@ fun EmptyExpenseSection() {
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
     }
+}
+
+/** 오늘 내역 리스트에서 지출/수입을 통합 표현하기 위한 sealed interface */
+sealed interface TodayItem {
+    data class Expense(val expense: ExpenseEntity) : TodayItem
+    data class Income(val income: IncomeEntity) : TodayItem
 }
