@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
+import androidx.compose.runtime.Stable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,6 +52,7 @@ import javax.inject.Inject
  * @property errorMessage 에러 메시지 (null이면 에러 없음)
  * @property isSyncing SMS 동기화 진행 중 여부
  */
+@Stable
 data class HomeUiState(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,

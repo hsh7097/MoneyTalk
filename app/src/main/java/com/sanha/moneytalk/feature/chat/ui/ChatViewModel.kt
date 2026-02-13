@@ -24,6 +24,7 @@ import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import androidx.compose.runtime.Stable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,12 +34,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import javax.inject.Inject
 
+@Stable
 data class ChatMessage(
     val id: Long = 0,
     val content: String,
@@ -46,6 +49,7 @@ data class ChatMessage(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+@Stable
 data class ChatSession(
     val id: Long = 0,
     val title: String,
@@ -54,6 +58,7 @@ data class ChatSession(
     val messageCount: Int = 0
 )
 
+@Stable
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val sessions: List<ChatSession> = emptyList(),

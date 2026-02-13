@@ -28,7 +28,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -90,7 +90,7 @@ class MainActivity : ComponentActivity() {
         checkInitialPermissions()
 
         setContent {
-            val themeModeStr by settingsDataStore.themeModeFlow.collectAsState(initial = "SYSTEM")
+            val themeModeStr by settingsDataStore.themeModeFlow.collectAsStateWithLifecycle(initialValue = "SYSTEM")
             val themeMode = try {
                 ThemeMode.valueOf(themeModeStr)
             } catch (_: Exception) {

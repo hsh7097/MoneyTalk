@@ -12,6 +12,7 @@ import com.sanha.moneytalk.core.database.dao.OwnedCardDao
 import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
+import com.sanha.moneytalk.BuildConfig
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -26,9 +27,8 @@ import javax.inject.Singleton
  * 앱 전체에서 하나의 DB 인스턴스를 공유하여 일관성을 보장합니다.
  *
  * 마이그레이션 전략:
- * - fallbackToDestructiveMigration() 사용
- * - DB 스키마 변경 시 기존 데이터를 삭제하고 재생성
- * - 주의: 프로덕션 배포 전에 Migration 전략으로 전환 필요
+ * - 릴리스: 명시적 Migration만 사용 (데이터 보존)
+ * - 디버그: fallbackToDestructiveMigration() 허용 (개발 편의)
  *
  * @see AppDatabase
  */
@@ -55,7 +55,11 @@ object DatabaseModule {
                 AppDatabase.MIGRATION_3_4,
                 AppDatabase.MIGRATION_4_5
             )
-            .fallbackToDestructiveMigration()
+            .apply {
+                if (BuildConfig.DEBUG) {
+                    fallbackToDestructiveMigration()
+                }
+            }
             .build()
     }
 

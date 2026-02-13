@@ -35,7 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,7 +53,7 @@ import com.sanha.moneytalk.R
 fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showApiKeyDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf<Long?>(null) }
 
@@ -226,7 +226,10 @@ fun ChatRoomView(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
-                items(uiState.messages) { message ->
+                items(
+                    items = uiState.messages,
+                    key = { it.id }
+                ) { message ->
                     ChatBubble(message = message)
                 }
 

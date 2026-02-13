@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.feature.history.ui
 
 import android.content.Context
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.R
@@ -110,6 +111,7 @@ sealed interface TransactionListItem {
  * @property showExpenses 지출 표시 여부 (BottomSheet 필터)
  * @property showIncomes 수입 표시 여부 (BottomSheet 필터)
  */
+@Stable
 data class HistoryUiState(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,

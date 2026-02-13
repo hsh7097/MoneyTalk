@@ -71,7 +71,7 @@ fun ExpenseDetailDialog(
     onCategoryChange: ((String) -> Unit)? = null,
     onMemoChange: ((String?) -> Unit)? = null
 ) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
     val category = Category.fromDisplayName(expense.category)
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCategoryPicker by remember { mutableStateOf(false) }

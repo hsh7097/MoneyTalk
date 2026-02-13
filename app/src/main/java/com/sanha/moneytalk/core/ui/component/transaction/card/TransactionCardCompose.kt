@@ -19,6 +19,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,7 +49,7 @@ fun TransactionCardCompose(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
     val amountPrefix = if (info.isIncome) "+" else "-"
     val formattedAmount =
         "${amountPrefix}${stringResource(R.string.common_won, numberFormat.format(info.amount))}"

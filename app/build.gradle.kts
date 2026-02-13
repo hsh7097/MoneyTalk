@@ -91,6 +91,7 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.material.icons.extended)
     implementation(libs.lifecycle.viewmodel.compose)
+    implementation(libs.lifecycle.runtime.compose)
 
     // Navigation
     implementation(libs.navigation.compose)

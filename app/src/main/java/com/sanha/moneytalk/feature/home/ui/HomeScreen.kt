@@ -53,7 +53,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -100,7 +100,7 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val contentResolver = context.contentResolver
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // 선택된 지출 항목 (상세보기용)
     var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
@@ -478,7 +478,7 @@ fun MonthlyOverviewSection(
     onFullSync: () -> Unit,
     isSyncing: Boolean
 ) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
     var showSyncMenu by remember { mutableStateOf(false) }
 
     Column(
@@ -634,7 +634,7 @@ fun CategoryExpenseSection(
     selectedCategory: String? = null,
     onCategorySelected: (String?) -> Unit = {}
 ) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
     var showAll by remember { mutableStateOf(false) }
 
     // 기타 + 미분류를 하나로 합치고, 금액 내림차순 정렬
@@ -791,7 +791,7 @@ fun TodayAndComparisonSection(
     comparisonPeriodLabel: String,
     aiInsight: String
 ) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
 
     Column(
         modifier = Modifier.fillMaxWidth()
