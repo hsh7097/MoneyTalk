@@ -138,11 +138,9 @@ data class HistoryUiState(
     val filteredExpenseTotal: Int
         get() = if (showExpenses) expenses.sumOf { it.amount } else 0
 
-    /** 필터 적용된 수입 총합 (필터 활성 시 incomes 합계, 비활성 시 0) */
+    /** 필터 적용된 수입 총합 (카테고리 필터는 지출에만 적용, 수입은 항상 표시) */
     val filteredIncomeTotal: Int
-        get() = if (showIncomes) {
-            if (selectedCategory != null) 0 else incomes.sumOf { it.amount }
-        } else 0
+        get() = if (showIncomes) incomes.sumOf { it.amount } else 0
 }
 
 /**
@@ -327,15 +325,13 @@ class HistoryViewModel @Inject constructor(
                     }
                     val currentState = _uiState.value
                     val sortedExpenses = sortExpenses(expenses, currentState.sortOrder)
-                    // 카테고리 필터 활성화 시 수입 항목 제외 (수입은 카테고리가 없으므로)
-                    val filteredIncomes =
-                        if (currentState.selectedCategory != null) emptyList() else currentState.incomes
+                    // 카테고리 필터는 지출에만 적용, 수입은 항상 표시
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             expenses = sortedExpenses,
                             transactionListItems = buildTransactionListItems(
-                                sortedExpenses, filteredIncomes, currentState.sortOrder,
+                                sortedExpenses, currentState.incomes, currentState.sortOrder,
                                 currentState.showExpenses, currentState.showIncomes
                             )
                         )
@@ -770,10 +766,9 @@ class HistoryViewModel @Inject constructor(
     /** transactionListItems 갱신 */
     private fun updateTransactionListItems() {
         val state = _uiState.value
-        // 카테고리 필터 활성화 시 수입 항목 제외
-        val filteredIncomes = if (state.selectedCategory != null) emptyList() else state.incomes
+        // 카테고리 필터는 지출에만 적용, 수입은 항상 표시
         val items = buildTransactionListItems(
-            state.expenses, filteredIncomes, state.sortOrder,
+            state.expenses, state.incomes, state.sortOrder,
             state.showExpenses, state.showIncomes
         )
         _uiState.update { it.copy(transactionListItems = items) }
@@ -793,6 +788,11 @@ class HistoryViewModel @Inject constructor(
         val filteredExpenses = if (showExpenses) expenses else emptyList()
         val filteredIncomes = if (showIncomes) incomes else emptyList()
 
+        // 둘 다 해제된 경우 빈 리스트
+        if (!showExpenses && !showIncomes) {
+            return emptyList()
+        }
+
         // 수입만 보기 모드: 날짜별 그룹핑
         if (!showExpenses && showIncomes) {
             return buildIncomeDayGroups(filteredIncomes)
@@ -800,8 +800,8 @@ class HistoryViewModel @Inject constructor(
 
         return when (sortOrder) {
             SortOrder.DATE_DESC -> buildDateDescItems(filteredExpenses, filteredIncomes)
-            SortOrder.AMOUNT_DESC -> buildAmountDescItems(filteredExpenses)
-            SortOrder.STORE_FREQ -> buildStoreFreqItems(filteredExpenses)
+            SortOrder.AMOUNT_DESC -> buildAmountDescItems(filteredExpenses, filteredIncomes)
+            SortOrder.STORE_FREQ -> buildStoreFreqItems(filteredExpenses, filteredIncomes)
         }
     }
 
@@ -846,25 +846,38 @@ class HistoryViewModel @Inject constructor(
         return items
     }
 
-    /** AMOUNT_DESC: 금액 높은순 플랫 리스트 */
-    private fun buildAmountDescItems(expenses: List<ExpenseEntity>): List<TransactionListItem> {
+    /** AMOUNT_DESC: 금액 높은순 플랫 리스트 (지출 + 수입 통합) */
+    private fun buildAmountDescItems(
+        expenses: List<ExpenseEntity>,
+        incomes: List<IncomeEntity>
+    ): List<TransactionListItem> {
         val items = mutableListOf<TransactionListItem>()
+        val totalCount = expenses.size + incomes.size
         items.add(
             TransactionListItem.Header(
-            title = "${context.getString(R.string.history_sort_amount)} (${expenses.size}${
-                context.getString(
-                    R.string.history_count_suffix
-                )
-            })",
-            expenseTotal = expenses.sumOf { it.amount }
-        ))
-        expenses.forEach { items.add(TransactionListItem.ExpenseItem(it)) }
+                title = "${context.getString(R.string.history_sort_amount)} ($totalCount${
+                    context.getString(R.string.history_count_suffix)
+                })",
+                expenseTotal = expenses.sumOf { it.amount },
+                incomeTotal = incomes.sumOf { it.amount }
+            )
+        )
+        // 지출+수입 금액 높은순 통합 정렬
+        val merged = expenses.map { it.amount to TransactionListItem.ExpenseItem(it) } +
+                incomes.map { it.amount to TransactionListItem.IncomeItem(it) }
+        merged.sortedByDescending { it.first }
+            .forEach { items.add(it.second) }
         return items
     }
 
-    /** STORE_FREQ: 사용처별 그룹핑 */
-    private fun buildStoreFreqItems(expenses: List<ExpenseEntity>): List<TransactionListItem> {
+    /** STORE_FREQ: 사용처별 그룹핑 (지출 + 수입 출처별 통합) */
+    private fun buildStoreFreqItems(
+        expenses: List<ExpenseEntity>,
+        incomes: List<IncomeEntity>
+    ): List<TransactionListItem> {
         val items = mutableListOf<TransactionListItem>()
+
+        // 지출: 사용처별 그룹핑
         val storeGroups = expenses.groupBy { it.storeName }
             .entries
             .sortedByDescending { it.value.size }
@@ -879,6 +892,25 @@ class HistoryViewModel @Inject constructor(
             )
             storeExpenses.sortedByDescending { it.dateTime }
                 .forEach { items.add(TransactionListItem.ExpenseItem(it)) }
+        }
+
+        // 수입: 출처별 그룹핑 (지출 그룹 뒤에 추가)
+        if (incomes.isNotEmpty()) {
+            val sourceGroups = incomes.groupBy { it.source.ifBlank { it.type } }
+                .entries
+                .sortedByDescending { it.value.size }
+
+            sourceGroups.forEach { (source, sourceIncomes) ->
+                val sourceTotal = sourceIncomes.sumOf { it.amount }
+                items.add(
+                    TransactionListItem.Header(
+                        title = "$source (${sourceIncomes.size}${context.getString(R.string.history_count_suffix)})",
+                        incomeTotal = sourceTotal
+                    )
+                )
+                sourceIncomes.sortedByDescending { it.dateTime }
+                    .forEach { items.add(TransactionListItem.IncomeItem(it)) }
+            }
         }
 
         return items
