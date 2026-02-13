@@ -26,7 +26,7 @@ val bottomNavItems = listOf(
         unselectedIcon = Icons.Outlined.Home
     ),
     BottomNavItem(
-        route = Screen.History.route,
+        route = Screen.History.createRoute(),
         title = "내역",
         selectedIcon = Icons.Filled.History,
         unselectedIcon = Icons.Outlined.History

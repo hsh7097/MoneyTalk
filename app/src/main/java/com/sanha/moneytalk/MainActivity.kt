@@ -218,11 +218,11 @@ fun MoneyTalkApp(
                         tonalElevation = 0.dp
                     ) {
                         bottomNavItems.forEach { item ->
-                            val isSelected = currentRoute == item.route
+                            val isSelected = currentRoute?.startsWith(item.route.substringBefore("?")) == true
                             NavigationBarItem(
                                 selected = isSelected,
                                 onClick = {
-                                    if (currentRoute != item.route) {
+                                    if (!isSelected) {
                                         navController.navigate(item.route) {
                                             popUpTo(Screen.Home.route) {
                                                 saveState = true

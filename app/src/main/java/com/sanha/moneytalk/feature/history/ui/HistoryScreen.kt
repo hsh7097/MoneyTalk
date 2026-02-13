@@ -55,8 +55,21 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
-    viewModel: HistoryViewModel = hiltViewModel()
+    viewModel: HistoryViewModel = hiltViewModel(),
+    filterCategory: String? = null
 ) {
+    // 외부에서 전달된 카테고리 필터 적용 (홈 → 내역 이동 시)
+    LaunchedEffect(filterCategory) {
+        if (filterCategory != null) {
+            viewModel.applyFilter(
+                sortOrder = SortOrder.DATE_DESC,
+                showExpenses = true,
+                showIncomes = true,
+                category = filterCategory
+            )
+        }
+    }
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
     var showAddDialog by remember { mutableStateOf(false) }
