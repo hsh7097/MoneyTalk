@@ -58,9 +58,11 @@ fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel(),
     filterCategory: String? = null
 ) {
-    // 외부에서 전달된 카테고리 필터 적용 (홈 → 내역 이동 시)
+    // 외부에서 전달된 카테고리 필터 적용 (홈 → 내역 이동 시, 일회성)
+    var filterConsumed by remember { mutableStateOf(false) }
     LaunchedEffect(filterCategory) {
-        if (filterCategory != null) {
+        if (filterCategory != null && !filterConsumed) {
+            filterConsumed = true
             viewModel.applyFilter(
                 sortOrder = SortOrder.DATE_DESC,
                 showExpenses = true,
@@ -136,6 +138,11 @@ fun HistoryScreen(
                     showExpenses = uiState.showExpenses,
                     showIncomes = uiState.showIncomes,
                     hasActiveFilter = uiState.selectedCategory != null,
+                    scrollResetKey = Triple(
+                        uiState.selectedCategory,
+                        uiState.sortOrder,
+                        uiState.selectedYear to uiState.selectedMonth
+                    ),
                     onIntent = viewModel::onIntent
                 )
             }
@@ -225,13 +232,14 @@ fun TransactionListView(
     showExpenses: Boolean = true,
     showIncomes: Boolean = true,
     hasActiveFilter: Boolean = false,
+    scrollResetKey: Any? = null,
     onIntent: (HistoryIntent) -> Unit
 ) {
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    // 필터 변경 시 최상단 스크롤
-    LaunchedEffect(items) {
+    // 필터/월 변경 시에만 최상단 스크롤 (DB emit에는 반응하지 않음)
+    LaunchedEffect(scrollResetKey) {
         listState.scrollToItem(0)
     }
 

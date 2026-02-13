@@ -140,9 +140,9 @@ data class HistoryUiState(
     val filteredExpenseTotal: Int
         get() = if (showExpenses) expenses.sumOf { it.amount } else 0
 
-    /** 필터 적용된 수입 총합 (카테고리 필터는 지출에만 적용, 수입은 항상 표시) */
+    /** 필터 적용된 수입 총합 (카테고리 필터 시 수입 숨김) */
     val filteredIncomeTotal: Int
-        get() = if (showIncomes) incomes.sumOf { it.amount } else 0
+        get() = if (showIncomes && selectedCategory == null) incomes.sumOf { it.amount } else 0
 }
 
 /**
@@ -327,14 +327,12 @@ class HistoryViewModel @Inject constructor(
                     }
                     val currentState = _uiState.value
                     val sortedExpenses = sortExpenses(expenses, currentState.sortOrder)
-                    val filteredIncomes =
-                        if (currentState.selectedCategory != null) emptyList() else currentState.incomes
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             expenses = sortedExpenses,
                             transactionListItems = buildTransactionListItems(
-                                sortedExpenses, filteredIncomes, currentState.sortOrder,
+                                sortedExpenses, getFilteredIncomes(currentState), currentState.sortOrder,
                                 currentState.showExpenses, currentState.showIncomes
                             )
                         )
@@ -505,15 +503,13 @@ class HistoryViewModel @Inject constructor(
                 }
                 val currentState = _uiState.value
                 val sortedResults = sortExpenses(results, currentState.sortOrder)
-                val filteredIncomes =
-                    if (currentState.selectedCategory != null) emptyList() else currentState.incomes
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         expenses = sortedResults,
                         monthlyTotal = results.sumOf { e -> e.amount },
                         transactionListItems = buildTransactionListItems(
-                            sortedResults, filteredIncomes, currentState.sortOrder,
+                            sortedResults, getFilteredIncomes(currentState), currentState.sortOrder,
                             currentState.showExpenses, currentState.showIncomes
                         )
                     )
@@ -700,9 +696,6 @@ class HistoryViewModel @Inject constructor(
             }
 
             val state2 = _uiState.value
-            // 카테고리 필터 활성화 시 수입 항목 제외
-            val filteredIncomes =
-                if (state2.selectedCategory != null) emptyList() else state2.incomes
             _uiState.update {
                 it.copy(
                     monthlyTotal = result.first,
@@ -710,7 +703,7 @@ class HistoryViewModel @Inject constructor(
                     expenses = result.third,
                     isLoading = false,
                     transactionListItems = buildTransactionListItems(
-                        result.third, filteredIncomes, state2.sortOrder,
+                        result.third, getFilteredIncomes(state2), state2.sortOrder,
                         state2.showExpenses, state2.showIncomes
                     )
                 )
@@ -766,14 +759,15 @@ class HistoryViewModel @Inject constructor(
 
     // ========== 리스트 데이터 가공 ==========
 
+    /** 카테고리 필터 활성화 시 수입 제외 (전체 카테고리일 때만 수입 표시) */
+    private fun getFilteredIncomes(state: HistoryUiState): List<IncomeEntity> =
+        if (state.selectedCategory != null) emptyList() else state.incomes
+
     /** transactionListItems 갱신 */
     private fun updateTransactionListItems() {
         val state = _uiState.value
-        // 카테고리 필터 활성화 시 수입 항목 제외
-        val filteredIncomes =
-            if (state.selectedCategory != null) emptyList() else state.incomes
         val items = buildTransactionListItems(
-            state.expenses, filteredIncomes, state.sortOrder,
+            state.expenses, getFilteredIncomes(state), state.sortOrder,
             state.showExpenses, state.showIncomes
         )
         _uiState.update { it.copy(transactionListItems = items) }

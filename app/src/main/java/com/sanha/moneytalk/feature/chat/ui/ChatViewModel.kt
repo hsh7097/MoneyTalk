@@ -301,7 +301,7 @@ class ChatViewModel @Inject constructor(
         _uiState.update { it.copy(canRetry = false) }
 
         viewModelScope.launch {
-            val acquired = withTimeoutOrNull(30_000L) {
+            val acquired = withTimeoutOrNull(90_000L) {
                 sendMutex.withLock {
                     processSendMessage(message)
                 }

@@ -416,7 +416,7 @@ fun HomeScreen(
     if (uiState.showSyncDialog) {
         AlertDialog(
             onDismissRequest = { /* 진행 중에는 닫기 불가 */ },
-            title = { Text("지출 내역 읽는 중") },
+            title = { Text(stringResource(R.string.home_sync_dialog_title)) },
             text = {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
