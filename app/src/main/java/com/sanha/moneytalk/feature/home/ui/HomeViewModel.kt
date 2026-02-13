@@ -327,6 +327,7 @@ class HomeViewModel @Inject constructor(
                 }
 
                 // 지출 내역은 Flow로 실시간 감지 (Room DB 변경 시 자동 업데이트)
+                var insightLoaded = false
                 expenseRepository.getExpensesByDateRange(monthStart, monthEnd)
                     .catch { e ->
                         _uiState.update { it.copy(isLoading = false, errorMessage = e.message) }
@@ -362,8 +363,9 @@ class HomeViewModel @Inject constructor(
                             )
                         }
 
-                        // AI 인사이트 생성 (최초 1회만, 월 전환 시 빈 문자열로 초기화됨)
-                        if (totalExpense > 0 && _uiState.value.aiInsight.isEmpty()) {
+                        // AI 인사이트 생성 (loadData 호출 시 첫 emit에서만 생성, DB 변경 emit은 스킵)
+                        if (!insightLoaded) {
+                            insightLoaded = true
                             loadAiInsight(
                                 totalExpense,
                                 filteredLastMonthExpense,

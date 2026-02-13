@@ -340,8 +340,22 @@ class ChatViewModel @Inject constructor(
                         val queryResults = mutableListOf<QueryResult>()
                         val actionResults = mutableListOf<ActionResult>()
 
+                        // clarification 응답 처리 플래그
+                        var isClarification = false
+
                         analyzeResult.onSuccess { queryRequest ->
-                            if (queryRequest != null) {
+                            if (queryRequest != null && queryRequest.isClarification) {
+                                // Clarification 응답: 추가 확인 질문을 AI 응답으로 표시
+                                Log.d(
+                                    "gemini",
+                                    "=== Clarification 응답: ${queryRequest.clarification} ==="
+                                )
+                                isClarification = true
+                                chatRepository.saveAiResponseAndUpdateSummary(
+                                    sessionId,
+                                    queryRequest.clarification ?: ""
+                                )
+                            } else if (queryRequest != null) {
                                 Log.d(
                                     "gemini",
                                     "=== Step2: 쿼리 ${queryRequest.queries.size}개, 액션 ${queryRequest.actions.size}개 실행 시작 ==="
@@ -386,33 +400,40 @@ class ChatViewModel @Inject constructor(
                             queryResults.addAll(fallbackResults)
                         }
 
-                        // 5단계: 대화 맥락 + 쿼리 결과로 최종 답변 생성
-                        val monthlyIncome = settingsDataStore.getMonthlyIncome()
+                        // Clarification이면 쿼리/답변 생성을 건너뜀 (사용자의 추가 입력을 기다림)
+                        if (!isClarification) {
+                            // 5단계: 대화 맥락 + 쿼리 결과로 최종 답변 생성
+                            val monthlyIncome = settingsDataStore.getMonthlyIncome()
 
-                        val dataContext = queryResults.joinToString("\n\n") { result ->
-                            "[${result.queryType.name}]\n${result.data}"
-                        }
-                        val actionContext = actionResults.joinToString("\n") { "- ${it.message}" }
+                            val dataContext = queryResults.joinToString("\n\n") { result ->
+                                "[${result.queryType.name}]\n${result.data}"
+                            }
+                            val actionContext =
+                                actionResults.joinToString("\n") { "- ${it.message}" }
 
-                        val finalPrompt = ChatContextBuilder.buildFinalAnswerPrompt(
-                            context = chatContext,
-                            queryResults = dataContext,
-                            monthlyIncome = monthlyIncome,
-                            actionResults = actionContext
-                        )
-
-                        val finalResult =
-                            geminiRepository.generateFinalAnswerWithContext(finalPrompt)
-
-                        finalResult.onSuccess { response ->
-                            // AI 응답 저장 + 요약 갱신
-                            chatRepository.saveAiResponseAndUpdateSummary(sessionId, response)
-                        }.onFailure { e ->
-                            chatRepository.saveAiResponseAndUpdateSummary(
-                                sessionId,
-                                "죄송해요, 응답을 받는 중 오류가 발생했어요 😢\n(${e.message})"
+                            val finalPrompt = ChatContextBuilder.buildFinalAnswerPrompt(
+                                context = chatContext,
+                                queryResults = dataContext,
+                                monthlyIncome = monthlyIncome,
+                                actionResults = actionContext
                             )
-                            _uiState.update { it.copy(canRetry = true) }
+
+                            val finalResult =
+                                geminiRepository.generateFinalAnswerWithContext(finalPrompt)
+
+                            finalResult.onSuccess { response ->
+                                // AI 응답 저장 + 요약 갱신
+                                chatRepository.saveAiResponseAndUpdateSummary(
+                                    sessionId,
+                                    response
+                                )
+                            }.onFailure { e ->
+                                chatRepository.saveAiResponseAndUpdateSummary(
+                                    sessionId,
+                                    "죄송해요, 응답을 받는 중 오류가 발생했어요 😢\n(${e.message})"
+                                )
+                                _uiState.update { it.copy(canRetry = true) }
+                            }
                         }
                     }
 

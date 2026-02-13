@@ -12,8 +12,16 @@ data class DataQueryRequest(
     val queries: List<DataQuery> = emptyList(),
 
     @SerializedName("actions")
-    val actions: List<DataAction> = emptyList()
-)
+    val actions: List<DataAction> = emptyList(),
+
+    /** Gemini가 질문이 모호할 때 반환하는 추가 확인 질문 */
+    @SerializedName("clarification")
+    val clarification: String? = null
+) {
+    /** clarification 응답인지 여부 */
+    val isClarification: Boolean
+        get() = !clarification.isNullOrBlank()
+}
 
 data class DataQuery(
     @SerializedName("type")

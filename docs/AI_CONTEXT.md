@@ -1,7 +1,7 @@
 # AI_CONTEXT.md - MoneyTalk 프로젝트 컨텍스트
 
 > AI 에이전트가 MoneyTalk 프로젝트를 이해하고 작업하기 위한 핵심 컨텍스트 문서
-> **최종 갱신**: 2026-02-11
+> **최종 갱신**: 2026-02-13
 
 ---
 
@@ -279,9 +279,11 @@ CategoryClassifierService.getCategory(storeName)
 ```
 ChatViewModel.sendMessage(message)
    → ChatRepository.sendMessageAndBuildContext() [Rolling Summary + 윈도우]
-   → GeminiRepository.analyzeQueryNeeds() [쿼리/액션 JSON 파싱]
-   → executeQuery() / executeAction() / executeAnalytics() [DB 조회/수정/분석]
-   → GeminiRepository.generateFinalAnswerWithContext() [최종 답변]
+   → GeminiRepository.analyzeQueryNeeds() [쿼리/액션/clarification JSON 파싱]
+   → [분기] isClarification?
+      → Yes: 확인 질문을 AI 응답으로 저장 → 사용자 추가 입력 대기
+      → No:  executeQuery() / executeAction() / executeAnalytics() [DB 조회/수정/분석]
+             → GeminiRepository.generateFinalAnswerWithContext() [최종 답변]
    → ChatRepository.saveAiResponseAndUpdateSummary() [요약 갱신]
 ```
 
