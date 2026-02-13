@@ -199,6 +199,11 @@ fun HistoryScreen(
 
     // 다이얼로그 상태는 ViewModel에서 관리
     uiState.selectedExpense?.let { expense ->
+        Log.e(
+            "sanha",
+            "HistoryScreen[selectedExpense] : \nstoreName : ${expense.storeName}\noriginalSms : ${expense.originalSms}\namount : ${expense.amount}원"
+        )
+
         ExpenseDetailDialog(
             expense = expense,
             onDismiss = { viewModel.onIntent(HistoryIntent.DismissDialog) },
@@ -219,6 +224,10 @@ fun HistoryScreen(
     }
 
     uiState.selectedIncome?.let { income ->
+        Log.e(
+            "sanha",
+            "HistoryScreen[selectedIncome] : ${income.originalSms}, ${income.amount}원"
+        )
         IncomeDetailDialog(
             income = income,
             onDismiss = { viewModel.onIntent(HistoryIntent.DismissDialog) },
