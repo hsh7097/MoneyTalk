@@ -104,6 +104,7 @@
     <string name="history_view_list">목록</string>
     <string name="history_view_calendar">달력</string>
     <string name="history_no_expense">지출 내역이 없어요</string>
+    <string name="history_no_filtered">필터 조건에 맞는 내역이 없어요</string>
     <string name="history_delete_title">삭제 확인</string>
     <string name="history_delete_message">%s 지출 내역을 삭제할까요?</string>
     <string name="history_no_spend_month">%d월 무지출</string>

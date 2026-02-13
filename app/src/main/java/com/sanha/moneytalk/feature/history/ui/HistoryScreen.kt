@@ -176,6 +176,7 @@ fun HistoryScreen(
                     isLoading = uiState.isLoading,
                     showExpenses = uiState.showExpenses,
                     showIncomes = uiState.showIncomes,
+                    hasActiveFilter = uiState.selectedCategory != null,
                     onIntent = viewModel::onIntent
                 )
             }
@@ -804,34 +805,46 @@ fun FilterBottomSheet(
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // 지출 체크박스
+                // 지출 체크박스 (수입이 꺼져 있으면 해제 불가)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable { tempShowExpenses = !tempShowExpenses }
+                        .clickable {
+                            if (tempShowExpenses && !tempShowIncomes) return@clickable
+                            tempShowExpenses = !tempShowExpenses
+                        }
                         .padding(vertical = 4.dp, horizontal = 4.dp)
                 ) {
                     Checkbox(
                         checked = tempShowExpenses,
-                        onCheckedChange = { tempShowExpenses = it }
+                        onCheckedChange = {
+                            if (!it && !tempShowIncomes) return@Checkbox
+                            tempShowExpenses = it
+                        }
                     )
                     Text(
                         text = stringResource(R.string.home_expense),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
-                // 수입 체크박스
+                // 수입 체크박스 (지출이 꺼져 있으면 해제 불가)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable { tempShowIncomes = !tempShowIncomes }
+                        .clickable {
+                            if (tempShowIncomes && !tempShowExpenses) return@clickable
+                            tempShowIncomes = !tempShowIncomes
+                        }
                         .padding(vertical = 4.dp, horizontal = 4.dp)
                 ) {
                     Checkbox(
                         checked = tempShowIncomes,
-                        onCheckedChange = { tempShowIncomes = it }
+                        onCheckedChange = {
+                            if (!it && !tempShowExpenses) return@Checkbox
+                            tempShowIncomes = it
+                        }
                     )
                     Text(
                         text = stringResource(R.string.home_income),
@@ -953,6 +966,7 @@ fun TransactionListView(
     isLoading: Boolean,
     showExpenses: Boolean = true,
     showIncomes: Boolean = true,
+    hasActiveFilter: Boolean = false,
     onIntent: (HistoryIntent) -> Unit
 ) {
     val listState = rememberLazyListState()
@@ -987,16 +1001,18 @@ fun TransactionListView(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 val isIncomeOnly = !showExpenses && showIncomes
+                val emptyMessageRes = when {
+                    hasActiveFilter -> R.string.history_no_filtered
+                    isIncomeOnly -> R.string.history_no_income
+                    else -> R.string.history_no_expense
+                }
                 Text(
-                    text = if (isIncomeOnly) "\uD83D\uDCB0" else "\uD83D\uDCED",
+                    text = if (hasActiveFilter) "🔍" else if (isIncomeOnly) "💰" else "📭",
                     style = MaterialTheme.typography.displayLarge
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = stringResource(
-                        if (isIncomeOnly) R.string.history_no_income
-                        else R.string.history_no_expense
-                    ),
+                    text = stringResource(emptyMessageRes),
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
