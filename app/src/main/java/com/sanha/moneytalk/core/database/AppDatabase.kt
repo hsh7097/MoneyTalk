@@ -11,9 +11,9 @@ import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
-import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.dao.OwnedCardDao
 import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
+import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import com.sanha.moneytalk.core.database.entity.CategoryMappingEntity
@@ -109,7 +109,8 @@ abstract class AppDatabase : RoomDatabase() {
         /** v2 → v3: owned_cards 테이블 추가 (카드 화이트리스트) */
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("""
+                db.execSQL(
+                    """
                     CREATE TABLE IF NOT EXISTS owned_cards (
                         cardName TEXT NOT NULL PRIMARY KEY,
                         isOwned INTEGER NOT NULL DEFAULT 1,
@@ -118,20 +119,23 @@ abstract class AppDatabase : RoomDatabase() {
                         seenCount INTEGER NOT NULL DEFAULT 1,
                         source TEXT NOT NULL DEFAULT 'sms_sync'
                     )
-                """.trimIndent())
+                """.trimIndent()
+                )
             }
         }
 
         /** v3 → v4: sms_exclusion_keywords 테이블 추가 (SMS 제외 키워드 관리) */
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("""
+                db.execSQL(
+                    """
                     CREATE TABLE IF NOT EXISTS sms_exclusion_keywords (
                         keyword TEXT NOT NULL PRIMARY KEY,
                         source TEXT NOT NULL DEFAULT 'user',
                         createdAt INTEGER NOT NULL DEFAULT 0
                     )
-                """.trimIndent())
+                """.trimIndent()
+                )
             }
         }
 

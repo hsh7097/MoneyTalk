@@ -47,10 +47,12 @@ class SmsReader @Inject constructor() {
 
     companion object {
         private const val TAG = "SmsReader"
+
         // MMS URI
         private val MMS_URI = Uri.parse("content://mms")
         private val MMS_INBOX_URI = Uri.parse("content://mms/inbox")
         private val MMS_PART_URI = Uri.parse("content://mms/part")
+
         // RCS (채팅+) URI — 삼성 메시지 앱에서 사용
         private val RCS_URI = Uri.parse("content://im/chat")
     }
@@ -129,7 +131,15 @@ class SmsReader @Inject constructor() {
         val dateFormat = SimpleDateFormat("MM/dd HH:mm", Locale.KOREA)
 
         Log.e("sanha", "=== readCardSmsByDateRange 시작 ===")
-        Log.e("sanha", "조회 범위: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(startDate))} ~ ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(endDate))}")
+        Log.e(
+            "sanha",
+            "조회 범위: ${
+                SimpleDateFormat(
+                    "yyyy-MM-dd HH:mm:ss",
+                    Locale.KOREA
+                ).format(Date(startDate))
+            } ~ ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(endDate))}"
+        )
         Log.e("sanha", "startDate(ms): $startDate, endDate(ms): $endDate")
 
         val cursor = contentResolver.query(
@@ -148,7 +158,8 @@ class SmsReader @Inject constructor() {
         var totalCount = 0
         var cardCount = 0
         // 은행/발신자별로 그룹화
-        val smsByAddress = mutableMapOf<String, MutableList<Pair<String, String>>>() // address -> [(날짜, 내용미리보기)]
+        val smsByAddress =
+            mutableMapOf<String, MutableList<Pair<String, String>>>() // address -> [(날짜, 내용미리보기)]
 
         cursor?.use {
             val idIndex = it.getColumnIndex(Telephony.Sms._ID)
@@ -165,7 +176,8 @@ class SmsReader @Inject constructor() {
 
                 // 발신자별로 그룹화 (날짜, 본문 앞 30자)
                 val dateStr = dateFormat.format(Date(date))
-                val preview = if (body.length > 30) body.take(30).replace("\n", " ") + "..." else body.replace("\n", " ")
+                val preview = if (body.length > 30) body.take(30)
+                    .replace("\n", " ") + "..." else body.replace("\n", " ")
                 smsByAddress.getOrPut(address) { mutableListOf() }.add(dateStr to preview)
 
                 if (SmsParser.isCardPaymentSms(body)) {
@@ -214,8 +226,17 @@ class SmsReader @Inject constructor() {
                     val d = dc.getLong(dDateIdx)
                     val addr = dc.getString(dAddrIdx) ?: "?"
                     val body = dc.getString(dBodyIdx) ?: ""
-                    val preview = if (body.length > 40) body.take(40).replace("\n", " ") + "..." else body.replace("\n", " ")
-                    Log.e("sanha", "  최근SMS[${idx}]: date=$d (${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(d))}) addr=$addr body=$preview")
+                    val preview = if (body.length > 40) body.take(40)
+                        .replace("\n", " ") + "..." else body.replace("\n", " ")
+                    Log.e(
+                        "sanha",
+                        "  최근SMS[${idx}]: date=$d (${
+                            SimpleDateFormat(
+                                "yyyy-MM-dd HH:mm:ss",
+                                Locale.KOREA
+                            ).format(Date(d))
+                        }) addr=$addr body=$preview"
+                    )
                     idx++
                 }
                 if (idx == 0) Log.e("sanha", "  SMS 수신함이 완전히 비어있음")
@@ -433,7 +454,8 @@ class SmsReader @Inject constructor() {
                             try {
                                 val partUri = Uri.parse("content://mms/part/$partId")
                                 contentResolver.openInputStream(partUri)?.use { inputStream ->
-                                    val reader = BufferedReader(InputStreamReader(inputStream, "UTF-8"))
+                                    val reader =
+                                        BufferedReader(InputStreamReader(inputStream, "UTF-8"))
                                     sb.append(reader.readText())
                                 }
                             } catch (e: Exception) {
@@ -565,7 +587,14 @@ class SmsReader @Inject constructor() {
         val endSec = endDate / 1000
 
         Log.e(TAG, "=== readCardMmsByDateRange 시작 ===")
-        Log.e(TAG, "MMS 조회 범위: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(startDate))} ~ ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(endDate))}")
+        Log.e(
+            TAG,
+            "MMS 조회 범위: ${
+                SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(
+                    Date(startDate)
+                )
+            } ~ ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(endDate))}"
+        )
 
         try {
             val cursor = contentResolver.query(
@@ -592,7 +621,8 @@ class SmsReader @Inject constructor() {
                     val body = getMmsTextBody(contentResolver, mmsId) ?: continue
                     val address = getMmsAddress(contentResolver, mmsId)
 
-                    val preview = if (body.length > 30) body.take(30).replace("\n", " ") + "..." else body.replace("\n", " ")
+                    val preview = if (body.length > 30) body.take(30)
+                        .replace("\n", " ") + "..." else body.replace("\n", " ")
                     Log.d(TAG, "  MMS[$mmsId]: addr=$address, body=$preview")
 
                     if (SmsParser.isCardPaymentSms(body)) {
@@ -630,8 +660,17 @@ class SmsReader @Inject constructor() {
                         val d = dc.getLong(dDateIdx)
                         val dMs = d * 1000
                         val body = getMmsTextBody(contentResolver, id) ?: "(본문없음)"
-                        val preview = if (body.length > 40) body.take(40).replace("\n", " ") + "..." else body.replace("\n", " ")
-                        Log.e(TAG, "  최근MMS[$idx]: id=$id date=$d (${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(dMs))}) body=$preview")
+                        val preview = if (body.length > 40) body.take(40)
+                            .replace("\n", " ") + "..." else body.replace("\n", " ")
+                        Log.e(
+                            TAG,
+                            "  최근MMS[$idx]: id=$id date=$d (${
+                                SimpleDateFormat(
+                                    "yyyy-MM-dd HH:mm:ss",
+                                    Locale.KOREA
+                                ).format(Date(dMs))
+                            }) body=$preview"
+                        )
                         idx++
                     }
                     if (idx == 0) Log.e(TAG, "  MMS 수신함이 비어있음")
@@ -804,8 +843,12 @@ class SmsReader @Inject constructor() {
         val smsList = readAllCardSms(contentResolver)
         val mmsList = readAllCardMms(contentResolver)
         val rcsList = readAllCardRcs(contentResolver)
-        val combined = (smsList + mmsList + rcsList).distinctBy { it.id }.sortedByDescending { it.date }
-        Log.d(TAG, "통합 카드결제 읽기: SMS ${smsList.size}건 + MMS ${mmsList.size}건 + RCS ${rcsList.size}건 = 총 ${combined.size}건")
+        val combined =
+            (smsList + mmsList + rcsList).distinctBy { it.id }.sortedByDescending { it.date }
+        Log.d(
+            TAG,
+            "통합 카드결제 읽기: SMS ${smsList.size}건 + MMS ${mmsList.size}건 + RCS ${rcsList.size}건 = 총 ${combined.size}건"
+        )
         return combined
     }
 
@@ -820,8 +863,12 @@ class SmsReader @Inject constructor() {
         val smsList = readCardSmsByDateRange(contentResolver, startDate, endDate)
         val mmsList = readCardMmsByDateRange(contentResolver, startDate, endDate)
         val rcsList = readCardRcsByDateRange(contentResolver, startDate, endDate)
-        val combined = (smsList + mmsList + rcsList).distinctBy { it.id }.sortedByDescending { it.date }
-        Log.d(TAG, "통합 기간별 카드결제 읽기: SMS ${smsList.size}건 + MMS ${mmsList.size}건 + RCS ${rcsList.size}건 = 총 ${combined.size}건")
+        val combined =
+            (smsList + mmsList + rcsList).distinctBy { it.id }.sortedByDescending { it.date }
+        Log.d(
+            TAG,
+            "통합 기간별 카드결제 읽기: SMS ${smsList.size}건 + MMS ${mmsList.size}건 + RCS ${rcsList.size}건 = 총 ${combined.size}건"
+        )
         return combined
     }
 
@@ -836,8 +883,12 @@ class SmsReader @Inject constructor() {
         val smsList = readAllSmsByDateRange(contentResolver, startDate, endDate)
         val mmsList = readAllMmsByDateRange(contentResolver, startDate, endDate)
         val rcsList = readAllRcsByDateRange(contentResolver, startDate, endDate)
-        val combined = (smsList + mmsList + rcsList).distinctBy { it.id }.sortedByDescending { it.date }
-        Log.d(TAG, "통합 전체 메시지 읽기: SMS ${smsList.size}건 + MMS ${mmsList.size}건 + RCS ${rcsList.size}건 = 총 ${combined.size}건")
+        val combined =
+            (smsList + mmsList + rcsList).distinctBy { it.id }.sortedByDescending { it.date }
+        Log.d(
+            TAG,
+            "통합 전체 메시지 읽기: SMS ${smsList.size}건 + MMS ${mmsList.size}건 + RCS ${rcsList.size}건 = 총 ${combined.size}건"
+        )
         return combined
     }
 
@@ -848,8 +899,12 @@ class SmsReader @Inject constructor() {
         val smsList = readAllIncomeSms(contentResolver)
         val mmsList = readAllIncomeMms(contentResolver)
         val rcsList = readAllIncomeRcs(contentResolver)
-        val combined = (smsList + mmsList + rcsList).distinctBy { it.id }.sortedByDescending { it.date }
-        Log.d(TAG, "통합 수입 읽기: SMS ${smsList.size}건 + MMS ${mmsList.size}건 + RCS ${rcsList.size}건 = 총 ${combined.size}건")
+        val combined =
+            (smsList + mmsList + rcsList).distinctBy { it.id }.sortedByDescending { it.date }
+        Log.d(
+            TAG,
+            "통합 수입 읽기: SMS ${smsList.size}건 + MMS ${mmsList.size}건 + RCS ${rcsList.size}건 = 총 ${combined.size}건"
+        )
         return combined
     }
 
@@ -864,8 +919,12 @@ class SmsReader @Inject constructor() {
         val smsList = readIncomeSmsByDateRange(contentResolver, startDate, endDate)
         val mmsList = readIncomeMmsByDateRange(contentResolver, startDate, endDate)
         val rcsList = readIncomeRcsByDateRange(contentResolver, startDate, endDate)
-        val combined = (smsList + mmsList + rcsList).distinctBy { it.id }.sortedByDescending { it.date }
-        Log.d(TAG, "통합 기간별 수입 읽기: SMS ${smsList.size}건 + MMS ${mmsList.size}건 + RCS ${rcsList.size}건 = 총 ${combined.size}건")
+        val combined =
+            (smsList + mmsList + rcsList).distinctBy { it.id }.sortedByDescending { it.date }
+        Log.d(
+            TAG,
+            "통합 기간별 수입 읽기: SMS ${smsList.size}건 + MMS ${mmsList.size}건 + RCS ${rcsList.size}건 = 총 ${combined.size}건"
+        )
         return combined
     }
 
@@ -1039,7 +1098,14 @@ class SmsReader @Inject constructor() {
         if (!isRcsAvailable(contentResolver)) return rcsList
 
         Log.e(TAG, "=== readCardRcsByDateRange 시작 ===")
-        Log.e(TAG, "RCS 조회 범위: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(startDate))} ~ ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(endDate))}")
+        Log.e(
+            TAG,
+            "RCS 조회 범위: ${
+                SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(
+                    Date(startDate)
+                )
+            } ~ ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(endDate))}"
+        )
 
         try {
             val cursor = contentResolver.query(
@@ -1069,7 +1135,8 @@ class SmsReader @Inject constructor() {
 
                     if (body.isBlank()) continue
 
-                    val preview = if (body.length > 30) body.take(30).replace("\n", " ") + "..." else body.replace("\n", " ")
+                    val preview = if (body.length > 30) body.take(30)
+                        .replace("\n", " ") + "..." else body.replace("\n", " ")
                     Log.d(TAG, "  RCS[$id]: addr=$address, body=$preview")
 
                     if (SmsParser.isCardPaymentSms(body)) {
@@ -1286,17 +1353,24 @@ class SmsReader @Inject constructor() {
                     val ctTypeIdx = it.getColumnIndex("ct_t")
 
                     val date = if (dateColIdx >= 0) it.getLong(dateColIdx) else -1
-                    val body = if (bodyColIdx >= 0) (it.getString(bodyColIdx) ?: "(null)") else "(no body col)"
-                    val addr = if (addrColIdx >= 0) (it.getString(addrColIdx) ?: "(null)") else "(no addr col)"
+                    val body = if (bodyColIdx >= 0) (it.getString(bodyColIdx)
+                        ?: "(null)") else "(no body col)"
+                    val addr = if (addrColIdx >= 0) (it.getString(addrColIdx)
+                        ?: "(null)") else "(no addr col)"
                     val transType = if (typeColIdx >= 0) (it.getString(typeColIdx) ?: "?") else "?"
                     val ctType = if (ctTypeIdx >= 0) (it.getString(ctTypeIdx) ?: "?") else "?"
 
                     // date를 밀리초/초 양쪽으로 표시
                     val dateMs = if (date < 10000000000L) date * 1000 else date
-                    val dateStr = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(dateMs))
-                    val preview = if (body.length > 50) body.take(50).replace("\n", " ") + "..." else body.replace("\n", " ")
+                    val dateStr =
+                        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(dateMs))
+                    val preview = if (body.length > 50) body.take(50)
+                        .replace("\n", " ") + "..." else body.replace("\n", " ")
 
-                    Log.e(TAG, "  [$idx] date=$date ($dateStr) addr=$addr type=$transType ct=$ctType body=$preview")
+                    Log.e(
+                        TAG,
+                        "  [$idx] date=$date ($dateStr) addr=$addr type=$transType ct=$ctType body=$preview"
+                    )
                     idx++
                 }
                 if (idx == 0) Log.e(TAG, "  (비어있음)")
@@ -1323,8 +1397,17 @@ class SmsReader @Inject constructor() {
                     val addr = it.getString(it.getColumnIndex("address")) ?: "?"
                     val body = it.getString(it.getColumnIndex("body")) ?: ""
                     val type = it.getInt(it.getColumnIndex("type"))
-                    val preview = if (body.length > 40) body.take(40).replace("\n", " ") + "..." else body.replace("\n", " ")
-                    Log.e(TAG, "  [$idx] type=$type date=${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(d))} addr=$addr body=$preview")
+                    val preview = if (body.length > 40) body.take(40)
+                        .replace("\n", " ") + "..." else body.replace("\n", " ")
+                    Log.e(
+                        TAG,
+                        "  [$idx] type=$type date=${
+                            SimpleDateFormat(
+                                "yyyy-MM-dd HH:mm:ss",
+                                Locale.KOREA
+                            ).format(Date(d))
+                        } addr=$addr body=$preview"
+                    )
                     idx++
                 }
             } ?: Log.e(TAG, "  cursor가 null")
@@ -1352,8 +1435,17 @@ class SmsReader @Inject constructor() {
                     val sub = it.getString(it.getColumnIndex("sub")) ?: "(null)"
                     val dMs = d * 1000
                     val body = getMmsTextBody(contentResolver, id) ?: "(본문없음)"
-                    val preview = if (body.length > 40) body.take(40).replace("\n", " ") + "..." else body.replace("\n", " ")
-                    Log.e(TAG, "  [$idx] id=$id msgBox=$msgBox date=${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(dMs))} sub=$sub body=$preview")
+                    val preview = if (body.length > 40) body.take(40)
+                        .replace("\n", " ") + "..." else body.replace("\n", " ")
+                    Log.e(
+                        TAG,
+                        "  [$idx] id=$id msgBox=$msgBox date=${
+                            SimpleDateFormat(
+                                "yyyy-MM-dd HH:mm:ss",
+                                Locale.KOREA
+                            ).format(Date(dMs))
+                        } sub=$sub body=$preview"
+                    )
                     idx++
                 }
             } ?: Log.e(TAG, "  cursor가 null")
@@ -1388,8 +1480,13 @@ class SmsReader @Inject constructor() {
                         val sb = StringBuilder("  [$idx] ")
                         for (c in 0 until minOf(it.columnCount, 6)) {
                             try {
-                                sb.append("${it.getColumnName(c)}=${it.getString(c)?.take(30) ?: "null"} | ")
-                            } catch (_: Exception) {}
+                                sb.append(
+                                    "${it.getColumnName(c)}=${
+                                        it.getString(c)?.take(30) ?: "null"
+                                    } | "
+                                )
+                            } catch (_: Exception) {
+                            }
                         }
                         Log.e(TAG, sb.toString())
                         idx++

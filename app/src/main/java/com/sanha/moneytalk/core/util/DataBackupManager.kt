@@ -11,7 +11,8 @@ import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 /**
  * 내보내기 필터 옵션
@@ -204,10 +205,10 @@ object DataBackupManager {
         expenses.forEach { expense ->
             sb.appendLine(
                 "${escapeCsv(dateTimeFormat.format(Date(expense.dateTime)))}," +
-                "${escapeCsv(expense.storeName)}," +
-                "${escapeCsv(expense.category)}," +
-                "${escapeCsv(expense.cardName)}," +
-                "${expense.amount}"
+                        "${escapeCsv(expense.storeName)}," +
+                        "${escapeCsv(expense.category)}," +
+                        "${escapeCsv(expense.cardName)}," +
+                        "${expense.amount}"
             )
         }
 
@@ -230,11 +231,11 @@ object DataBackupManager {
         incomes.forEach { income ->
             sb.appendLine(
                 "${escapeCsv(dateTimeFormat.format(Date(income.dateTime)))}," +
-                "${escapeCsv(income.type)}," +
-                "${escapeCsv(income.description)}," +
-                "${income.isRecurring}," +
-                "${income.recurringDay ?: ""}," +
-                "${income.amount}"
+                        "${escapeCsv(income.type)}," +
+                        "${escapeCsv(income.description)}," +
+                        "${income.isRecurring}," +
+                        "${income.recurringDay ?: ""}," +
+                        "${income.amount}"
             )
         }
 
@@ -257,12 +258,12 @@ object DataBackupManager {
         expenses.forEach { expense ->
             sb.appendLine(
                 "지출," +
-                "${escapeCsv(dateTimeFormat.format(Date(expense.dateTime)))}," +
-                "${escapeCsv(expense.storeName)}," +
-                "${escapeCsv(expense.category)}," +
-                "${escapeCsv(expense.cardName)}," +
-                "${escapeCsv(expense.memo ?: "")}," +
-                "-${expense.amount}"
+                        "${escapeCsv(dateTimeFormat.format(Date(expense.dateTime)))}," +
+                        "${escapeCsv(expense.storeName)}," +
+                        "${escapeCsv(expense.category)}," +
+                        "${escapeCsv(expense.cardName)}," +
+                        "${escapeCsv(expense.memo ?: "")}," +
+                        "-${expense.amount}"
             )
         }
 
@@ -270,12 +271,12 @@ object DataBackupManager {
         incomes.forEach { income ->
             sb.appendLine(
                 "수입," +
-                "${escapeCsv(dateTimeFormat.format(Date(income.dateTime)))}," +
-                "${escapeCsv(income.type)}," +
-                "," +
-                "," +
-                "${escapeCsv(income.description)}," +
-                "+${income.amount}"
+                        "${escapeCsv(dateTimeFormat.format(Date(income.dateTime)))}," +
+                        "${escapeCsv(income.type)}," +
+                        "," +
+                        "," +
+                        "${escapeCsv(income.description)}," +
+                        "+${income.amount}"
             )
         }
 

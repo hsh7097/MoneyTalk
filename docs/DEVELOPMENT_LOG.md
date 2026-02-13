@@ -4,6 +4,51 @@
 
 ---
 
+## 2026-02-12 - History UI 개편 및 하단 네비게이션 개선
+
+### 작업 내용
+
+#### 1. History 필터 BottomSheet 전환
+- 기존 FilterPanel(가로 3칩 탭) → ModalBottomSheet로 전면 교체
+- 카드 필터 제거 (ViewModel에서 `selectedCardName`, `cardNames`, `loadCardNames()` 등 삭제)
+- 수입 탭을 BottomSheet 내 거래유형 체크박스(지출/수입)로 통합
+- BottomSheet 내부: 정렬(날짜순/금액순/사용처순) + 거래유형(지출/수입) + 카테고리 그리드
+
+#### 2. PeriodSummaryCard 레이아웃 변경
+- Card 래퍼 제거 → 단순 Row 구조
+- 왼쪽: 날짜 네비게이션 (줄넘김 형태, HorizontalDivider 구분선)
+- 오른쪽: 지출/수입 금액 오른쪽 정렬 (라벨 고정 너비 28dp, 금액 120dp)
+- 필터 적용 시 상단 총 수입/지출도 필터 기준으로 반영 (filteredExpenseTotal/filteredIncomeTotal)
+
+#### 3. FilterTabRow 개편
+- SegmentedTabRow에 아이콘 지원 추가 (목록: List, 달력: DateRange)
+- 필터 버튼: 아이콘+텍스트 형태로 탭 바로 옆에 배치 (마진 8dp)
+- 검색/추가 아이콘은 오른쪽에 배치
+
+#### 4. 하단 NavigationBar 컴팩트화
+- 높이 80dp → 64dp로 축소
+- 아이콘+라벨을 Column으로 직접 배치 (label=null), Box로 세로 중앙정렬
+- 라벨: DpTextUnit(12dp) 적용으로 fontScale 무관 고정 크기
+
+#### 5. DpTextUnit 유틸 추가
+- `core/util/DpTextUnit.kt`: fontScale을 제거한 고정 텍스트 크기
+- `Dp.toDpTextUnit`, `Int.toDpTextUnit` 확장 프로퍼티
+
+#### 6. 거래 목록 시간순 정렬
+- 같은 날짜 내 수입/지출 통합 최신순(dateTime desc) 정렬
+- 기존: 수입이 항상 최상위 → 변경: 시간순 혼합 정렬
+
+### 변경 파일
+- `HistoryScreen.kt` - PeriodSummaryCard, FilterTabRow, FilterBottomSheet
+- `HistoryViewModel.kt` - 필터 로직, buildDateDescItems 시간순 정렬
+- `SegmentedTabInfo.kt` - icon 프로퍼티 추가
+- `SegmentedTabRowCompose.kt` - 아이콘 렌더링, 컴팩트 사이즈
+- `MainActivity.kt` - NavigationBar 컴팩트화
+- `DpTextUnit.kt` - 신규 유틸
+- `strings.xml` - 필터 관련 문자열 추가
+
+---
+
 ## 2026-02-05 - 프로젝트 초기 설정
 
 ### 작업 내용

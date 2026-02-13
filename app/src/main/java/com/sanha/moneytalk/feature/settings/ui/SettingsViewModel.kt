@@ -1,36 +1,83 @@
 package com.sanha.moneytalk.feature.settings.ui
 
 import android.content.Context
-import android.util.Log
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.database.AppDatabase
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
+import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.theme.ThemeMode
+import com.sanha.moneytalk.core.ui.AppSnackbarBus
+import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.util.BackupData
 import com.sanha.moneytalk.core.util.DataBackupManager
+import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
 import com.sanha.moneytalk.core.util.GoogleDriveHelper
-import com.sanha.moneytalk.core.ui.AppSnackbarBus
-import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.CategoryRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
-import com.sanha.moneytalk.core.util.DataRefreshEvent
-import com.sanha.moneytalk.core.theme.ThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+
+/** Settings 화면의 모든 사용자 인터랙션을 Intent로 정의 */
+sealed interface SettingsIntent {
+    // 다이얼로그 열기
+    data object ShowApiKeyDialog : SettingsIntent
+    data object ShowMonthStartDayDialog : SettingsIntent
+    data object ShowDeleteConfirmDialog : SettingsIntent
+    data object ShowExportDialog : SettingsIntent
+    data object ShowGoogleDriveDialog : SettingsIntent
+    data object ShowAppInfoDialog : SettingsIntent
+    data object ShowPrivacyDialog : SettingsIntent
+    data object ShowExclusionKeywordDialog : SettingsIntent
+    data object ShowThemeDialog : SettingsIntent
+
+    // 다이얼로그 닫기
+    data object DismissDialog : SettingsIntent
+
+    // 액션
+    data class SaveApiKey(val key: String) : SettingsIntent
+    data class SaveMonthStartDay(val day: Int) : SettingsIntent
+    data class SaveThemeMode(val mode: ThemeMode) : SettingsIntent
+    data object ClassifyUnclassified : SettingsIntent
+    data object DeleteAllData : SettingsIntent
+    data object DeleteDuplicates : SettingsIntent
+    data class AddExclusionKeyword(val keyword: String) : SettingsIntent
+    data class RemoveExclusionKeyword(val keyword: String) : SettingsIntent
+    data object OpenRestoreFilePicker : SettingsIntent
+    data class SetPendingRestoreUri(val uri: Uri) : SettingsIntent
+    data object ConfirmRestore : SettingsIntent
+}
+
+/** 다이얼로그 종류 (하나의 필드로 관리) */
+enum class SettingsDialog {
+    API_KEY,
+    MONTH_START_DAY,
+    DELETE_CONFIRM,
+    RESTORE_CONFIRM,
+    EXPORT,
+    GOOGLE_DRIVE,
+    APP_INFO,
+    PRIVACY,
+    EXCLUSION_KEYWORD,
+    THEME
+}
 
 data class SettingsUiState(
     val apiKey: String = "",
@@ -59,7 +106,13 @@ data class SettingsUiState(
     // SMS 제외 키워드 관리
     val exclusionKeywords: List<com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity> = emptyList(),
     // 백그라운드 분류 진행 중 (HomeViewModel에서 진행 중인 경우)
-    val isBackgroundClassifying: Boolean = false
+    val isBackgroundClassifying: Boolean = false,
+    // 다이얼로그 상태 (null이면 닫힘)
+    val activeDialog: SettingsDialog? = null,
+    // 복원 대기 URI
+    val pendingRestoreUri: Uri? = null,
+    // 복원 파일 선택 트리거
+    val triggerRestoreFilePicker: Boolean = false
 )
 
 @HiltViewModel
@@ -98,10 +151,88 @@ class SettingsViewModel @Inject constructor(
         loadThemeMode()
     }
 
+    // ========== Intent 처리 ==========
+
+    /** 모든 사용자 인터랙션을 Intent로 처리 */
+    fun onIntent(intent: SettingsIntent) {
+        when (intent) {
+            is SettingsIntent.ShowApiKeyDialog -> showDialog(SettingsDialog.API_KEY)
+            is SettingsIntent.ShowMonthStartDayDialog -> showDialog(SettingsDialog.MONTH_START_DAY)
+            is SettingsIntent.ShowDeleteConfirmDialog -> showDialog(SettingsDialog.DELETE_CONFIRM)
+            is SettingsIntent.ShowExportDialog -> showDialog(SettingsDialog.EXPORT)
+            is SettingsIntent.ShowGoogleDriveDialog -> showDialog(SettingsDialog.GOOGLE_DRIVE)
+            is SettingsIntent.ShowAppInfoDialog -> showDialog(SettingsDialog.APP_INFO)
+            is SettingsIntent.ShowPrivacyDialog -> showDialog(SettingsDialog.PRIVACY)
+            is SettingsIntent.ShowExclusionKeywordDialog -> showDialog(SettingsDialog.EXCLUSION_KEYWORD)
+            is SettingsIntent.ShowThemeDialog -> showDialog(SettingsDialog.THEME)
+            is SettingsIntent.DismissDialog -> dismissDialog()
+
+            is SettingsIntent.SaveApiKey -> {
+                dismissDialog()
+                saveApiKey(intent.key)
+            }
+
+            is SettingsIntent.SaveMonthStartDay -> {
+                dismissDialog()
+                saveMonthStartDay(intent.day)
+            }
+
+            is SettingsIntent.SaveThemeMode -> {
+                dismissDialog()
+                saveThemeMode(intent.mode)
+            }
+
+            is SettingsIntent.ClassifyUnclassified -> classifyUnclassifiedExpenses()
+            is SettingsIntent.DeleteAllData -> {
+                dismissDialog()
+                deleteAllData()
+            }
+
+            is SettingsIntent.DeleteDuplicates -> deleteDuplicates()
+            is SettingsIntent.AddExclusionKeyword -> addExclusionKeyword(intent.keyword)
+            is SettingsIntent.RemoveExclusionKeyword -> removeExclusionKeyword(intent.keyword)
+            is SettingsIntent.OpenRestoreFilePicker -> {
+                _uiState.update { it.copy(triggerRestoreFilePicker = true) }
+            }
+
+            is SettingsIntent.SetPendingRestoreUri -> {
+                _uiState.update {
+                    it.copy(
+                        pendingRestoreUri = intent.uri,
+                        activeDialog = SettingsDialog.RESTORE_CONFIRM
+                    )
+                }
+            }
+
+            is SettingsIntent.ConfirmRestore -> {
+                // Context가 필요한 복원은 Composable에서 직접 호출
+                dismissDialog()
+            }
+        }
+    }
+
+    private fun showDialog(dialog: SettingsDialog) {
+        _uiState.update { it.copy(activeDialog = dialog) }
+    }
+
+    private fun dismissDialog() {
+        _uiState.update { it.copy(activeDialog = null, pendingRestoreUri = null) }
+    }
+
+    /** 파일 선택 트리거 소비 (Composable에서 호출) */
+    fun consumeRestoreFilePickerTrigger() {
+        _uiState.update { it.copy(triggerRestoreFilePicker = false) }
+    }
+
+
     private fun loadThemeMode() {
         viewModelScope.launch {
             settingsDataStore.themeModeFlow.collect { modeStr ->
-                val mode = try { ThemeMode.valueOf(modeStr) } catch (_: Exception) { ThemeMode.SYSTEM }
+                val mode = try {
+                    ThemeMode.valueOf(modeStr)
+                } catch (_: Exception) {
+                    ThemeMode.SYSTEM
+                }
                 _uiState.update { it.copy(themeMode = mode) }
             }
         }
@@ -277,6 +408,7 @@ class SettingsViewModel @Inject constructor(
                             monthlyIncome = savedMonthlyIncome,
                             monthStartDay = state.monthStartDay
                         )
+
                         ExportFormat.CSV -> DataBackupManager.createCombinedCsv(expenses, incomes)
                     }
                 }
@@ -760,7 +892,10 @@ class SettingsViewModel @Inject constructor(
      */
     fun classifyUnclassifiedExpenses() {
         viewModelScope.launch {
-            Log.e("sanha", "SettingsViewModel[classifyUnclassifiedExpenses] : 수동 분류 시작 (hasApiKey=${_uiState.value.hasApiKey}, unclassified=${_uiState.value.unclassifiedCount})")
+            Log.e(
+                "sanha",
+                "SettingsViewModel[classifyUnclassifiedExpenses] : 수동 분류 시작 (hasApiKey=${_uiState.value.hasApiKey}, unclassified=${_uiState.value.unclassifiedCount})"
+            )
             // API 키 확인
             if (!_uiState.value.hasApiKey) {
                 Log.e("sanha", "SettingsViewModel[classifyUnclassifiedExpenses] : API 키 없음 → 중단")
@@ -938,18 +1073,33 @@ class SettingsViewModel @Inject constructor(
                 var totalReclassified = 0
 
                 // Step 1: 저신뢰도 임베딩 재분류
-                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : Step 1 - 저신뢰도 항목 재분류 시작")
+                Log.e(
+                    "sanha",
+                    "SettingsViewModel[launchBackgroundReclassification] : Step 1 - 저신뢰도 항목 재분류 시작"
+                )
                 val reclassifiedCount = categoryClassifierService.reclassifyLowConfidenceItems()
                 totalReclassified += reclassifiedCount
-                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : Step 1 완료 - ${reclassifiedCount}건 재분류")
+                Log.e(
+                    "sanha",
+                    "SettingsViewModel[launchBackgroundReclassification] : Step 1 완료 - ${reclassifiedCount}건 재분류"
+                )
 
                 // Step 2: 미분류 지출 분류
-                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : Step 2 - 미분류 지출 분류 시작")
+                Log.e(
+                    "sanha",
+                    "SettingsViewModel[launchBackgroundReclassification] : Step 2 - 미분류 지출 분류 시작"
+                )
                 val classifiedCount = categoryClassifierService.classifyUnclassifiedExpenses()
                 totalReclassified += classifiedCount
-                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : Step 2 완료 - ${classifiedCount}건 분류")
+                Log.e(
+                    "sanha",
+                    "SettingsViewModel[launchBackgroundReclassification] : Step 2 완료 - ${classifiedCount}건 분류"
+                )
 
-                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : === 총 ${totalReclassified}건 처리 완료 ===")
+                Log.e(
+                    "sanha",
+                    "SettingsViewModel[launchBackgroundReclassification] : === 총 ${totalReclassified}건 처리 완료 ==="
+                )
                 if (totalReclassified > 0) {
                     withContext(Dispatchers.Main) {
                         loadUnclassifiedCount()
@@ -957,10 +1107,17 @@ class SettingsViewModel @Inject constructor(
                         dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
                     }
                 } else {
-                    Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : 재분류 대상 없음 (0건)")
+                    Log.e(
+                        "sanha",
+                        "SettingsViewModel[launchBackgroundReclassification] : 재분류 대상 없음 (0건)"
+                    )
                 }
             } catch (e: Exception) {
-                Log.e("sanha", "SettingsViewModel[launchBackgroundReclassification] : 실패: ${e.message}", e)
+                Log.e(
+                    "sanha",
+                    "SettingsViewModel[launchBackgroundReclassification] : 실패: ${e.message}",
+                    e
+                )
                 Log.e(TAG, "백그라운드 재분류 실패: ${e.message}")
             }
         }

@@ -1,6 +1,11 @@
 package com.sanha.moneytalk.core.database.dao
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -79,14 +84,16 @@ interface IncomeDao {
     suspend fun updateMemo(incomeId: Long, memo: String?)
 
     /** 검색 (설명, 유형, 출처, 메모에서 검색) */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM incomes
         WHERE description LIKE '%' || :query || '%'
            OR type LIKE '%' || :query || '%'
            OR source LIKE '%' || :query || '%'
            OR memo LIKE '%' || :query || '%'
         ORDER BY dateTime DESC
-    """)
+    """
+    )
     suspend fun searchIncomes(query: String): List<IncomeEntity>
 
 }

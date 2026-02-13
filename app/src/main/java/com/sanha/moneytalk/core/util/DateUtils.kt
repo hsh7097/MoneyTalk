@@ -2,7 +2,9 @@ package com.sanha.moneytalk.core.util
 
 import android.util.Log
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 /**
  * 날짜/시간 유틸리티
@@ -244,7 +246,10 @@ object DateUtils {
                 set(year, month - 1, 1, 0, 0, 0) // 먼저 DAY=1로 안전하게 설정
                 set(Calendar.MILLISECOND, 0)
                 add(Calendar.MONTH, -1) // 이전 달로 이동
-                set(Calendar.DAY_OF_MONTH, monthStartDay.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH)))
+                set(
+                    Calendar.DAY_OF_MONTH,
+                    monthStartDay.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH))
+                )
             }
 
             // 종료일: 이번 달의 (monthStartDay - 1)
@@ -252,7 +257,10 @@ object DateUtils {
                 clear()
                 set(year, month - 1, 1, 23, 59, 59) // 먼저 DAY=1로 안전하게 설정
                 set(Calendar.MILLISECOND, 999)
-                set(Calendar.DAY_OF_MONTH, (monthStartDay - 1).coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH)))
+                set(
+                    Calendar.DAY_OF_MONTH,
+                    (monthStartDay - 1).coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH))
+                )
             }
 
             return Pair(startCal.timeInMillis, endCal.timeInMillis)
@@ -337,7 +345,8 @@ object DateUtils {
         if (extractedDateTime.isBlank()) return extractedDateTime
 
         return try {
-            val parsedTime = dateTimeFormat.parse(extractedDateTime)?.time ?: return extractedDateTime
+            val parsedTime =
+                dateTimeFormat.parse(extractedDateTime)?.time ?: return extractedDateTime
             val diff = kotlin.math.abs(parsedTime - smsTimestamp)
 
             // 6개월(~183일) 이상 차이나면 연도가 잘못된 것으로 판단
@@ -351,7 +360,12 @@ object DateUtils {
                 extractedCal.set(Calendar.YEAR, smsYear)
 
                 val corrected = dateTimeFormat.format(extractedCal.time)
-                Log.w("DateUtils", "LLM 날짜 연도 교정: '$extractedDateTime' → '$corrected' (SMS수신: ${dateTimeFormat.format(Date(smsTimestamp))})")
+                Log.w(
+                    "DateUtils",
+                    "LLM 날짜 연도 교정: '$extractedDateTime' → '$corrected' (SMS수신: ${
+                        dateTimeFormat.format(Date(smsTimestamp))
+                    })"
+                )
                 corrected
             } else {
                 extractedDateTime

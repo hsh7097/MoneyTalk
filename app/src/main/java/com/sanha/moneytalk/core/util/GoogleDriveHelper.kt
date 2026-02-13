@@ -18,11 +18,11 @@ import com.google.api.services.drive.model.File
 import com.google.api.services.drive.model.FileList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 /**
  * 구글 드라이브 연동 헬퍼
@@ -152,7 +152,8 @@ class GoogleDriveHelper @Inject constructor() {
         val drive = driveService ?: throw IllegalStateException("Drive service not initialized")
 
         // 기존 폴더 찾기
-        val query = "name = '$APP_FOLDER_NAME' and mimeType = '$MIME_TYPE_FOLDER' and trashed = false"
+        val query =
+            "name = '$APP_FOLDER_NAME' and mimeType = '$MIME_TYPE_FOLDER' and trashed = false"
         val result: FileList = drive.files().list()
             .setQ(query)
             .setSpaces("drive")

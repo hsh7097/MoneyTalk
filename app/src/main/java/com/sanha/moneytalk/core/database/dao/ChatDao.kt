@@ -1,6 +1,11 @@
 package com.sanha.moneytalk.core.database.dao
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
 import com.sanha.moneytalk.core.database.entity.ChatEntity
 import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
 import kotlinx.coroutines.flow.Flow
@@ -49,10 +54,17 @@ interface ChatDao {
     suspend fun deleteSessionById(sessionId: Long)
 
     @Query("UPDATE chat_sessions SET title = :title, updatedAt = :updatedAt WHERE id = :sessionId")
-    suspend fun updateSessionTitle(sessionId: Long, title: String, updatedAt: Long = System.currentTimeMillis())
+    suspend fun updateSessionTitle(
+        sessionId: Long,
+        title: String,
+        updatedAt: Long = System.currentTimeMillis()
+    )
 
     @Query("UPDATE chat_sessions SET updatedAt = :updatedAt WHERE id = :sessionId")
-    suspend fun updateSessionTimestamp(sessionId: Long, updatedAt: Long = System.currentTimeMillis())
+    suspend fun updateSessionTimestamp(
+        sessionId: Long,
+        updatedAt: Long = System.currentTimeMillis()
+    )
 
     // ===== 채팅 메시지 관련 쿼리 =====
 
@@ -75,7 +87,11 @@ interface ChatDao {
     suspend fun deleteChatsBySession(sessionId: Long)
 
     @Query("UPDATE chat_sessions SET currentSummary = :summary, updatedAt = :updatedAt WHERE id = :sessionId")
-    suspend fun updateSessionSummary(sessionId: Long, summary: String, updatedAt: Long = System.currentTimeMillis())
+    suspend fun updateSessionSummary(
+        sessionId: Long,
+        summary: String,
+        updatedAt: Long = System.currentTimeMillis()
+    )
 
     @Query("SELECT currentSummary FROM chat_sessions WHERE id = :sessionId")
     suspend fun getSessionSummary(sessionId: Long): String?

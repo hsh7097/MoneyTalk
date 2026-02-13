@@ -1,64 +1,110 @@
 package com.sanha.moneytalk.feature.history.ui
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Sms
-import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sms
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import com.sanha.moneytalk.core.theme.moneyTalkColors
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import kotlinx.coroutines.launch
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.component.CategorySelectDialog
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabInfo
 import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabRowCompose
-import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
+import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
 import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.core.util.toDpTextUnit
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,112 +120,103 @@ fun HistoryScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-                // 검색 모드일 때 검색 바, 아니면 일반 헤더
-                if (uiState.isSearchMode) {
-                    SearchBar(
-                        query = uiState.searchQuery,
-                        onQueryChange = { viewModel.search(it) },
-                        onClose = { viewModel.exitSearchMode() }
-                    )
-                } else {
-                    // 헤더: 타이틀 + 검색/추가 아이콘
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp, end = 4.dp, top = 16.dp, bottom = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.history_title),
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Row {
-                            IconButton(onClick = { viewModel.enterSearchMode() }) {
-                                Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = stringResource(R.string.common_search),
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                            IconButton(onClick = { showAddDialog = true }) {
-                                Icon(
-                                    Icons.Default.Add,
-                                    contentDescription = stringResource(R.string.common_add),
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-                    }
+        // 검색 모드일 때 검색 바, 아니면 일반 헤더
+        if (uiState.isSearchMode) {
+            SearchBar(
+                query = uiState.searchQuery,
+                onQueryChange = { viewModel.search(it) },
+                onClose = { viewModel.exitSearchMode() }
+            )
+        } else {
+            // 헤더: 타이틀만 (아이콘은 탭 행으로 이동)
+            Text(
+                text = stringResource(R.string.history_title),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+            )
 
-                    // 기간 선택 및 지출/수입 요약
-                    PeriodSummaryCard(
-                        year = uiState.selectedYear,
-                        month = uiState.selectedMonth,
-                        monthStartDay = uiState.monthStartDay,
-                        totalExpense = uiState.monthlyTotal,
-                        totalIncome = uiState.monthlyIncomeTotal,
-                        onPreviousMonth = { viewModel.previousMonth() },
-                        onNextMonth = { viewModel.nextMonth() }
-                    )
-                }
+            // 기간 선택 및 지출/수입 요약
+            PeriodSummaryCard(
+                year = uiState.selectedYear,
+                month = uiState.selectedMonth,
+                monthStartDay = uiState.monthStartDay,
+                totalExpense = uiState.filteredExpenseTotal,
+                totalIncome = uiState.filteredIncomeTotal,
+                onPreviousMonth = { viewModel.previousMonth() },
+                onNextMonth = { viewModel.nextMonth() }
+            )
+        }
 
-                Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-                // 검색 모드에서는 필터/탭 숨기기 (달력 의미 없음)
-                if (!uiState.isSearchMode) {
-                    // 탭 (목록/달력) + 필터
-                    FilterTabRow(
-                        currentMode = viewMode,
-                        onModeChange = { viewMode = it },
-                        cardNames = uiState.cardNames,
-                        selectedCardName = uiState.selectedCardName,
-                        onCardNameSelected = { viewModel.filterByCardName(it) },
-                        selectedCategory = uiState.selectedCategory,
-                        onCategorySelected = { viewModel.filterByCategory(it) },
-                        sortOrder = uiState.sortOrder,
-                        onSortOrderChange = { viewModel.setSortOrder(it) },
-                        showIncomeView = uiState.showIncomeView,
-                        onToggleIncomeView = { viewModel.toggleIncomeView() }
-                    )
-                }
+        // 검색 모드에서는 필터/탭 숨기기 (달력 의미 없음)
+        if (!uiState.isSearchMode) {
+            // 탭 (목록/달력) + 검색/추가/필터 아이콘
+            FilterTabRow(
+                currentMode = viewMode,
+                onModeChange = { viewMode = it },
+                sortOrder = uiState.sortOrder,
+                selectedCategory = uiState.selectedCategory,
+                showExpenses = uiState.showExpenses,
+                showIncomes = uiState.showIncomes,
+                onApplyFilter = { sortOrder, showExp, showInc, category ->
+                    viewModel.applyFilter(sortOrder, showExp, showInc, category)
+                },
+                onSearchClick = { viewModel.enterSearchMode() },
+                onAddClick = { showAddDialog = true }
+            )
+        }
 
-                // 콘텐츠
-                when {
-                    viewMode == ViewMode.LIST || uiState.showIncomeView -> {
-                        TransactionListView(
-                            items = uiState.transactionListItems,
-                            isLoading = uiState.isLoading,
-                            showIncomeView = uiState.showIncomeView,
-                            onIntent = viewModel::onIntent
-                        )
-                    }
-                    viewMode == ViewMode.CALENDAR -> {
-                        BillingCycleCalendarView(
-                            year = uiState.selectedYear,
-                            month = uiState.selectedMonth,
-                            monthStartDay = uiState.monthStartDay,
-                            dailyTotals = uiState.dailyTotals,
-                            expenses = uiState.expenses,
-                            onDelete = { viewModel.deleteExpense(it) },
-                            onCategoryChange = { expense, newCategory ->
-                                viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
-                            },
-                            onExpenseMemoChange = { id, memo -> viewModel.updateExpenseMemo(id, memo) }
-                        )
-                    }
-                }
+        // 콘텐츠
+        when {
+            viewMode == ViewMode.LIST -> {
+                TransactionListView(
+                    items = uiState.transactionListItems,
+                    isLoading = uiState.isLoading,
+                    showExpenses = uiState.showExpenses,
+                    showIncomes = uiState.showIncomes,
+                    hasActiveFilter = uiState.selectedCategory != null,
+                    onIntent = viewModel::onIntent
+                )
             }
+
+            viewMode == ViewMode.CALENDAR -> {
+                BillingCycleCalendarView(
+                    year = uiState.selectedYear,
+                    month = uiState.selectedMonth,
+                    monthStartDay = uiState.monthStartDay,
+                    dailyTotals = uiState.dailyTotals,
+                    expenses = uiState.expenses,
+                    onDelete = { viewModel.deleteExpense(it) },
+                    onCategoryChange = { expense, newCategory ->
+                        viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
+                    },
+                    onExpenseMemoChange = { id, memo -> viewModel.updateExpenseMemo(id, memo) }
+                )
+            }
+        }
+    }
 
     // 다이얼로그 상태는 ViewModel에서 관리
     uiState.selectedExpense?.let { expense ->
+        Log.e(
+            "sanha",
+            "HistoryScreen[selectedExpense] : \nstoreName : ${expense.storeName}\noriginalSms : ${expense.originalSms}\namount : ${expense.amount}원"
+        )
+
         ExpenseDetailDialog(
             expense = expense,
             onDismiss = { viewModel.onIntent(HistoryIntent.DismissDialog) },
             onDelete = { viewModel.onIntent(HistoryIntent.DeleteExpense(expense)) },
             onCategoryChange = { newCategory ->
-                viewModel.onIntent(HistoryIntent.ChangeCategory(expense.id, expense.storeName, newCategory))
+                viewModel.onIntent(
+                    HistoryIntent.ChangeCategory(
+                        expense.id,
+                        expense.storeName,
+                        newCategory
+                    )
+                )
             },
             onMemoChange = { memo ->
                 viewModel.onIntent(HistoryIntent.UpdateExpenseMemo(expense.id, memo))
@@ -188,6 +225,10 @@ fun HistoryScreen(
     }
 
     uiState.selectedIncome?.let { income ->
+        Log.e(
+            "sanha",
+            "HistoryScreen[selectedIncome] : ${income.originalSms}, ${income.amount}원"
+        )
         IncomeDetailDialog(
             income = income,
             onDismiss = { viewModel.onIntent(HistoryIntent.DismissDialog) },
@@ -238,7 +279,10 @@ fun SearchBar(
             trailingIcon = {
                 if (query.isNotEmpty()) {
                     IconButton(onClick = { onQueryChange("") }) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear))
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = stringResource(R.string.common_clear)
+                        )
                     }
                 }
             }
@@ -380,102 +424,116 @@ fun PeriodSummaryCard(
         start to end
     }
 
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        // 왼쪽: 날짜 네비게이션 (줄넘김 형태)
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 이전 월 버튼
             IconButton(
                 onClick = onPreviousMonth,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(28.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                     contentDescription = stringResource(R.string.home_previous_month),
                     modifier = Modifier.size(28.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
 
-            // 기간 표시
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = startDate,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 18.sp),
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                HorizontalDivider(
+                    modifier = Modifier
+                        .width(6.dp)
+                        .padding(vertical = 4.dp),
+                    thickness = 1.dp,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "- $endDate",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    text = endDate,
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 18.sp),
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
-            // 지출/수입 요약
-            Column(
-                horizontalAlignment = Alignment.End
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.home_expense) + " ",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = stringResource(R.string.common_won, numberFormat.format(totalExpense)),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                if (totalIncome > 0) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.home_income) + " ",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "+" + stringResource(R.string.common_won, numberFormat.format(totalIncome)),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.moneyTalkColors.income
-                        )
-                    }
-                }
-            }
-
-            // 다음 월 버튼
             IconButton(
                 onClick = onNextMonth,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(28.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = stringResource(R.string.home_next_month),
                     modifier = Modifier.size(28.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
+            }
+        }
+
+        // 오른쪽: 지출/수입 요약 (오른쪽 정렬, 라벨 고정 너비)
+        Column(
+            horizontalAlignment = Alignment.End
+        ) {
+            // 지출
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.home_expense),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(28.dp),
+                    textAlign = TextAlign.End
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    modifier = Modifier.width(120.dp),
+                    text = stringResource(R.string.common_won, numberFormat.format(totalExpense)),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.sp),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.End
+                )
+            }
+            // 수입
+            if (totalIncome > 0) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.home_income),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.width(28.dp),
+                        textAlign = TextAlign.End
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        modifier = Modifier.width(120.dp),
+                        text = stringResource(
+                            R.string.common_won,
+                            numberFormat.format(totalIncome)
+                        ),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.moneyTalkColors.income,
+                        textAlign = TextAlign.End
+                    )
+                }
             }
         }
     }
@@ -484,237 +542,156 @@ fun PeriodSummaryCard(
 /**
  * 탭(목록/달력) + 필터 아이콘 통합 Row
  *
- * - 좌측: TabRow (목록 | 달력)
- * - 우측: 필터 아이콘 → 클릭 시 카드/카테고리/정렬 가로 병렬 드롭다운
+ * - 좌측: TabRow (목록 | 달력) — 2탭
+ * - 우측: 필터 아이콘 → 클릭 시 FilterBottomSheet 표시
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilterTabRow(
     currentMode: ViewMode,
     onModeChange: (ViewMode) -> Unit,
-    cardNames: List<String>,
-    selectedCardName: String?,
-    onCardNameSelected: (String?) -> Unit,
-    selectedCategory: String? = null,
-    onCategorySelected: (String?) -> Unit = {},
     sortOrder: SortOrder = SortOrder.DATE_DESC,
-    onSortOrderChange: (SortOrder) -> Unit = {},
-    showIncomeView: Boolean = false,
-    onToggleIncomeView: () -> Unit = {}
+    selectedCategory: String? = null,
+    showExpenses: Boolean = true,
+    showIncomes: Boolean = true,
+    onApplyFilter: (SortOrder, Boolean, Boolean, String?) -> Unit = { _, _, _, _ -> },
+    onSearchClick: () -> Unit = {},
+    onAddClick: () -> Unit = {}
 ) {
-    var showFilterPanel by remember { mutableStateOf(false) }
+    var showBottomSheet by remember { mutableStateOf(false) }
 
-    val hasActiveFilter = selectedCardName != null || selectedCategory != null || sortOrder != SortOrder.DATE_DESC
+    val hasActiveFilter = selectedCategory != null
+            || sortOrder != SortOrder.DATE_DESC
+            || !showExpenses
+            || !showIncomes
 
     val primaryColor = MaterialTheme.colorScheme.primary
     val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
-    val incomeColor = MaterialTheme.moneyTalkColors.income
 
     val listLabel = stringResource(R.string.history_view_list)
     val calendarLabel = stringResource(R.string.history_view_calendar)
-    val incomeLabel = stringResource(R.string.home_income)
+    val listIcon = Icons.AutoMirrored.Filled.List
+    val calendarIcon = Icons.Default.DateRange
 
-    val tabs = remember(currentMode, showIncomeView, primaryColor, onPrimaryColor) {
+    val tabs = remember(currentMode, primaryColor, onPrimaryColor) {
         listOf(
             object : SegmentedTabInfo {
                 override val label = listLabel
-                override val isSelected = currentMode == ViewMode.LIST && !showIncomeView
+                override val isSelected = currentMode == ViewMode.LIST
                 override val selectedColor = primaryColor
                 override val selectedTextColor = onPrimaryColor
+                override val icon = listIcon
             },
             object : SegmentedTabInfo {
                 override val label = calendarLabel
-                override val isSelected = currentMode == ViewMode.CALENDAR && !showIncomeView
+                override val isSelected = currentMode == ViewMode.CALENDAR
                 override val selectedColor = primaryColor
                 override val selectedTextColor = onPrimaryColor
-            },
-            object : SegmentedTabInfo {
-                override val label = incomeLabel
-                override val isSelected = showIncomeView
-                override val selectedColor = incomeColor
+                override val icon = calendarIcon
             }
         )
     }
 
-    Column {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 왼쪽: 탭 (목록 / 달력) + 필터 버튼 (마진 8dp)
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 탭 (목록 / 달력 / 수입)
             SegmentedTabRowCompose(
                 tabs = tabs,
                 onTabClick = { index ->
                     when (index) {
-                        0 -> {
-                            onModeChange(ViewMode.LIST)
-                            if (showIncomeView) onToggleIncomeView()
-                        }
-                        1 -> {
-                            onModeChange(ViewMode.CALENDAR)
-                            if (showIncomeView) onToggleIncomeView()
-                        }
-                        2 -> onToggleIncomeView()
+                        0 -> onModeChange(ViewMode.LIST)
+                        1 -> onModeChange(ViewMode.CALENDAR)
                     }
                 }
             )
-
-            // 필터 아이콘 (수입 보기가 아닐 때, 목록 모드일 때만)
-            // 높이 고정: 필터 아이콘 유무에 관계없이 동일 크기 영역 유지
-            Box(modifier = Modifier.size(36.dp)) {
-                if (currentMode == ViewMode.LIST && !showIncomeView) {
-                    IconButton(
-                        onClick = { showFilterPanel = !showFilterPanel },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.FilterList,
-                            contentDescription = stringResource(R.string.common_filter),
-                            modifier = Modifier.size(20.dp),
-                            tint = if (hasActiveFilter)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+            Spacer(modifier = Modifier.width(8.dp))
+            // 필터 버튼 (아이콘 + 텍스트)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(
+                        if (hasActiveFilter) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceVariant
+                    )
+                    .clickable { showBottomSheet = true }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.FilterList,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = if (hasActiveFilter)
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(
+                        text = stringResource(R.string.common_filter),
+                        fontSize = 14.toDpTextUnit,
+                        fontWeight = if (hasActiveFilter) FontWeight.Bold else FontWeight.Normal,
+                        color = if (hasActiveFilter)
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
 
-        // 필터 패널 (병렬 드롭다운 3개)
-        AnimatedVisibility(visible = showFilterPanel && currentMode == ViewMode.LIST && !showIncomeView) {
-            FilterPanel(
-                cardNames = cardNames,
-                selectedCardName = selectedCardName,
-                onCardNameSelected = onCardNameSelected,
-                selectedCategory = selectedCategory,
-                onCategorySelected = onCategorySelected,
-                sortOrder = sortOrder,
-                onSortOrderChange = onSortOrderChange
-            )
+        // 오른쪽: 검색 + 추가
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = onSearchClick,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = stringResource(R.string.common_search),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            IconButton(
+                onClick = onAddClick,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = stringResource(R.string.common_add),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
     }
-}
 
-/**
- * 필터 패널: 카드사/카테고리/정렬을 가로로 병렬 배치
- */
-@Composable
-fun FilterPanel(
-    cardNames: List<String>,
-    selectedCardName: String?,
-    onCardNameSelected: (String?) -> Unit,
-    selectedCategory: String?,
-    onCategorySelected: (String?) -> Unit,
-    sortOrder: SortOrder,
-    onSortOrderChange: (SortOrder) -> Unit
-) {
-    var showCardMenu by remember { mutableStateOf(false) }
-    var showCategoryMenu by remember { mutableStateOf(false) }
-    var showSortMenu by remember { mutableStateOf(false) }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        // 카드 필터
-        Box(modifier = Modifier.weight(1f)) {
-            FilterChipButton(
-                label = selectedCardName ?: "카드 전체",
-                isActive = selectedCardName != null,
-                onClick = { showCardMenu = true },
-                modifier = Modifier.fillMaxWidth()
-            )
-            DropdownMenu(
-                expanded = showCardMenu,
-                onDismissRequest = { showCardMenu = false }
-            ) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            "전체",
-                            fontWeight = if (selectedCardName == null) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedCardName == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        )
-                    },
-                    onClick = { onCardNameSelected(null); showCardMenu = false }
-                )
-                cardNames.forEach { cardName ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                cardName,
-                                fontWeight = if (selectedCardName == cardName) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selectedCardName == cardName) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
-                        },
-                        onClick = { onCardNameSelected(cardName); showCardMenu = false }
-                    )
-                }
+    // 필터 BottomSheet
+    if (showBottomSheet) {
+        FilterBottomSheet(
+            currentSortOrder = sortOrder,
+            currentShowExpenses = showExpenses,
+            currentShowIncomes = showIncomes,
+            currentCategory = selectedCategory,
+            onDismiss = { showBottomSheet = false },
+            onApply = { newSort, newShowExp, newShowInc, newCategory ->
+                onApplyFilter(newSort, newShowExp, newShowInc, newCategory)
+                showBottomSheet = false
             }
-        }
-
-        // 카테고리 필터
-        Box(modifier = Modifier.weight(1f)) {
-            FilterChipButton(
-                label = selectedCategory ?: "카테고리 전체",
-                isActive = selectedCategory != null,
-                onClick = { showCategoryMenu = true },
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-        // 카테고리 선택 다이얼로그 (3열 그리드)
-        if (showCategoryMenu) {
-            CategorySelectDialog(
-                currentCategory = selectedCategory,
-                showAllOption = true,
-                onDismiss = { showCategoryMenu = false },
-                onCategorySelected = { selected ->
-                    onCategorySelected(selected)
-                    showCategoryMenu = false
-                }
-            )
-        }
-
-        // 정렬
-        Box(modifier = Modifier.weight(1f)) {
-            val sortLabel = when (sortOrder) {
-                SortOrder.DATE_DESC -> "최신순"
-                SortOrder.AMOUNT_DESC -> "금액순"
-                SortOrder.STORE_FREQ -> "사용처별"
-            }
-            FilterChipButton(
-                label = sortLabel,
-                isActive = sortOrder != SortOrder.DATE_DESC,
-                onClick = { showSortMenu = true },
-                modifier = Modifier.fillMaxWidth()
-            )
-            DropdownMenu(
-                expanded = showSortMenu,
-                onDismissRequest = { showSortMenu = false }
-            ) {
-                listOf(
-                    SortOrder.DATE_DESC to "최신순",
-                    SortOrder.AMOUNT_DESC to "금액 높은순",
-                    SortOrder.STORE_FREQ to "사용처별"
-                ).forEach { (order, label) ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                label,
-                                fontWeight = if (sortOrder == order) FontWeight.Bold else FontWeight.Normal,
-                                color = if (sortOrder == order) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
-                        },
-                        onClick = { onSortOrderChange(order); showSortMenu = false }
-                    )
-                }
-            }
-        }
+        )
     }
 }
 
@@ -752,6 +729,234 @@ fun FilterChipButton(
 }
 
 /**
+ * 필터 BottomSheet
+ * 정렬 / 거래 유형 / 카테고리 선택 후 적용
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FilterBottomSheet(
+    currentSortOrder: SortOrder,
+    currentShowExpenses: Boolean,
+    currentShowIncomes: Boolean,
+    currentCategory: String?,
+    onDismiss: () -> Unit,
+    onApply: (SortOrder, Boolean, Boolean, String?) -> Unit
+) {
+    // BottomSheet 내부 임시 상태 (적용 누르기 전까지 외부에 반영하지 않음)
+    var tempSortOrder by remember { mutableStateOf(currentSortOrder) }
+    var tempShowExpenses by remember { mutableStateOf(currentShowExpenses) }
+    var tempShowIncomes by remember { mutableStateOf(currentShowIncomes) }
+    var tempCategory by remember { mutableStateOf(currentCategory) }
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
+        ) {
+            // 제목
+            Text(
+                text = stringResource(R.string.history_filter_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 20.dp)
+            )
+
+            // ── 정렬 ──
+            Text(
+                text = stringResource(R.string.history_filter_sort),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val sortOptions = listOf(
+                    SortOrder.DATE_DESC to stringResource(R.string.history_sort_date),
+                    SortOrder.AMOUNT_DESC to stringResource(R.string.history_sort_amount_short),
+                    SortOrder.STORE_FREQ to stringResource(R.string.history_sort_store)
+                )
+                sortOptions.forEach { (order, label) ->
+                    FilterChipButton(
+                        label = label,
+                        isActive = tempSortOrder == order,
+                        onClick = { tempSortOrder = order }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ── 거래 유형 ──
+            Text(
+                text = stringResource(R.string.history_filter_type),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // 지출 체크박스 (수입이 꺼져 있으면 해제 불가)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            if (tempShowExpenses && !tempShowIncomes) return@clickable
+                            tempShowExpenses = !tempShowExpenses
+                        }
+                        .padding(vertical = 4.dp, horizontal = 4.dp)
+                ) {
+                    Checkbox(
+                        checked = tempShowExpenses,
+                        onCheckedChange = {
+                            if (!it && !tempShowIncomes) return@Checkbox
+                            tempShowExpenses = it
+                        }
+                    )
+                    Text(
+                        text = stringResource(R.string.home_expense),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                // 수입 체크박스 (지출이 꺼져 있으면 해제 불가)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            if (tempShowIncomes && !tempShowExpenses) return@clickable
+                            tempShowIncomes = !tempShowIncomes
+                        }
+                        .padding(vertical = 4.dp, horizontal = 4.dp)
+                ) {
+                    Checkbox(
+                        checked = tempShowIncomes,
+                        onCheckedChange = {
+                            if (!it && !tempShowExpenses) return@Checkbox
+                            tempShowIncomes = it
+                        }
+                    )
+                    Text(
+                        text = stringResource(R.string.home_income),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ── 카테고리 ──
+            Text(
+                text = stringResource(R.string.history_filter_category),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            val categories = Category.parentEntries
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 300.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // "전체" 옵션
+                item {
+                    FilterCategoryGridItem(
+                        emoji = "\uD83D\uDCCB",
+                        label = stringResource(R.string.common_all),
+                        isSelected = tempCategory == null,
+                        onClick = { tempCategory = null }
+                    )
+                }
+                items(categories) { category ->
+                    FilterCategoryGridItem(
+                        emoji = category.emoji,
+                        label = category.displayName,
+                        isSelected = category.displayName == tempCategory,
+                        onClick = { tempCategory = category.displayName }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 적용 버튼
+            Button(
+                onClick = {
+                    onApply(
+                        tempSortOrder,
+                        tempShowExpenses,
+                        tempShowIncomes,
+                        tempCategory
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.common_apply),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+/**
+ * BottomSheet 내 카테고리 그리드 아이템
+ */
+@Composable
+private fun FilterCategoryGridItem(
+    emoji: String,
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                else Color.Transparent
+            )
+            .clickable { onClick() }
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = emoji,
+            fontSize = 28.sp
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
  * 통합 거래 목록 뷰
  * ViewModel에서 가공된 TransactionListItem 리스트를 순수 렌더링만 담당
  */
@@ -759,7 +964,9 @@ fun FilterChipButton(
 fun TransactionListView(
     items: List<TransactionListItem>,
     isLoading: Boolean,
-    showIncomeView: Boolean = false,
+    showExpenses: Boolean = true,
+    showIncomes: Boolean = true,
+    hasActiveFilter: Boolean = false,
     onIntent: (HistoryIntent) -> Unit
 ) {
     val listState = rememberLazyListState()
@@ -773,7 +980,7 @@ fun TransactionListView(
     val showScrollToTop by remember {
         derivedStateOf {
             listState.firstVisibleItemIndex > 0 ||
-            (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 200)
+                    (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 200)
         }
     }
 
@@ -793,16 +1000,19 @@ fun TransactionListView(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                val isIncomeOnly = !showExpenses && showIncomes
+                val emptyMessageRes = when {
+                    hasActiveFilter -> R.string.history_no_filtered
+                    isIncomeOnly -> R.string.history_no_income
+                    else -> R.string.history_no_expense
+                }
                 Text(
-                    text = if (showIncomeView) "\uD83D\uDCB0" else "\uD83D\uDCED",
+                    text = if (hasActiveFilter) "🔍" else if (isIncomeOnly) "💰" else "📭",
                     style = MaterialTheme.typography.displayLarge
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = stringResource(
-                        if (showIncomeView) R.string.history_no_income
-                        else R.string.history_no_expense
-                    ),
+                    text = stringResource(emptyMessageRes),
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -832,12 +1042,14 @@ fun TransactionListView(
                     is TransactionListItem.Header -> {
                         TransactionGroupHeaderCompose(info = item)
                     }
+
                     is TransactionListItem.ExpenseItem -> {
                         TransactionCardCompose(
                             info = item.cardInfo,
                             onClick = { onIntent(HistoryIntent.SelectExpense(item.expense)) }
                         )
                     }
+
                     is TransactionListItem.IncomeItem -> {
                         TransactionCardCompose(
                             info = item.cardInfo,
@@ -1067,11 +1279,12 @@ fun BillingCycleCalendarView(
                                     isSelected = selectedDateString == calendarDay.dateString,
                                     onClick = {
                                         if (calendarDay.isCurrentPeriod && !calendarDay.isFuture) {
-                                            selectedDateString = if (selectedDateString == calendarDay.dateString) {
-                                                null // 토글: 같은 날짜 다시 클릭 시 닫기
-                                            } else {
-                                                calendarDay.dateString
-                                            }
+                                            selectedDateString =
+                                                if (selectedDateString == calendarDay.dateString) {
+                                                    null // 토글: 같은 날짜 다시 클릭 시 닫기
+                                                } else {
+                                                    calendarDay.dateString
+                                                }
                                         }
                                     },
                                     modifier = Modifier.weight(1f)
@@ -1143,6 +1356,10 @@ fun BillingCycleCalendarView(
 
     // 지출 상세 다이얼로그 (삭제 및 카테고리 변경 기능 포함)
     selectedExpense?.let { expense ->
+        Log.e(
+            "sanha",
+            "HistoryScreen[BillingCycleCalendarView] : ${expense.storeName}, ${expense.amount}원"
+        )
         ExpenseDetailDialog(
             expense = expense,
             onDismiss = { selectedExpense = null },
@@ -1209,7 +1426,10 @@ fun CalendarDayCell(
                     color = when {
                         calendarDay.isToday -> Color.White
                         calendarDay.isFuture -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                        !calendarDay.isCurrentPeriod -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        !calendarDay.isCurrentPeriod -> MaterialTheme.colorScheme.onSurface.copy(
+                            alpha = 0.3f
+                        )
+
                         isSelected -> MaterialTheme.colorScheme.primary
                         else -> MaterialTheme.colorScheme.onSurface
                     }
@@ -1280,7 +1500,10 @@ fun IncomeDetailDialog(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                     Text(
-                        text = stringResource(R.string.common_won, numberFormat.format(income.amount)),
+                        text = stringResource(
+                            R.string.common_won,
+                            numberFormat.format(income.amount)
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.moneyTalkColors.income
@@ -1383,7 +1606,9 @@ fun IncomeDetailDialog(
                                 text = if (memoText.isBlank()) "메모 추가" else memoText,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
-                                color = if (memoText.isBlank()) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else MaterialTheme.colorScheme.primary,
+                                color = if (memoText.isBlank()) MaterialTheme.colorScheme.onSurface.copy(
+                                    alpha = 0.4f
+                                ) else MaterialTheme.colorScheme.primary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.widthIn(max = 180.dp)
@@ -1480,7 +1705,15 @@ fun IncomeDetailDialog(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("수입 삭제") },
-            text = { Text("이 수입 항목을 삭제하시겠습니까?\n${income.description.ifBlank { income.type }} (${NumberFormat.getNumberInstance(Locale.KOREA).format(income.amount)}원)") },
+            text = {
+                Text(
+                    "이 수입 항목을 삭제하시겠습니까?\n${income.description.ifBlank { income.type }} (${
+                        NumberFormat.getNumberInstance(
+                            Locale.KOREA
+                        ).format(income.amount)
+                    }원)"
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -1558,7 +1791,10 @@ private fun generateBillingCycleDays(
         if (monthStartDay > 1) {
             add(Calendar.MONTH, -1)
         }
-        set(Calendar.DAY_OF_MONTH, monthStartDay.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH)))
+        set(
+            Calendar.DAY_OF_MONTH,
+            monthStartDay.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH))
+        )
     }
 
     // 종료 날짜 계산 (시작일 - 1 또는 월말)
@@ -1566,7 +1802,10 @@ private fun generateBillingCycleDays(
         set(Calendar.YEAR, year)
         set(Calendar.MONTH, month - 1)
         if (monthStartDay > 1) {
-            set(Calendar.DAY_OF_MONTH, (monthStartDay - 1).coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH)))
+            set(
+                Calendar.DAY_OF_MONTH,
+                (monthStartDay - 1).coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH))
+            )
         } else {
             set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
         }

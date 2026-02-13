@@ -69,7 +69,12 @@ interface CategoryMappingDao {
      * 가게명으로 카테고리 업데이트
      */
     @Query("UPDATE category_mappings SET category = :category, source = :source, updatedAt = :updatedAt WHERE storeName = :storeName")
-    suspend fun updateCategoryByStoreName(storeName: String, category: String, source: String, updatedAt: Long = System.currentTimeMillis())
+    suspend fun updateCategoryByStoreName(
+        storeName: String,
+        category: String,
+        source: String,
+        updatedAt: Long = System.currentTimeMillis()
+    )
 
     /**
      * 매핑 삭제

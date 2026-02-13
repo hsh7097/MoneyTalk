@@ -18,7 +18,19 @@ object CardNameNormalizer {
      * key: 정규화된 대표명, value: alias 목록 (소문자)
      */
     private val CANONICAL_NAMES: Map<String, List<String>> = mapOf(
-        "KB국민" to listOf("kb", "kb국민", "국민카드", "kb카드", "kb체크", "국민체크", "노리", "노리2", "국민", "국민은행", "kookmin"),
+        "KB국민" to listOf(
+            "kb",
+            "kb국민",
+            "국민카드",
+            "kb카드",
+            "kb체크",
+            "국민체크",
+            "노리",
+            "노리2",
+            "국민",
+            "국민은행",
+            "kookmin"
+        ),
         "신한" to listOf("신한", "신한카드", "신한체크", "sol", "쏠", "shinhan", "신한은행"),
         "삼성" to listOf("삼성", "삼성카드", "삼성체크", "samsung"),
         "현대" to listOf("현대", "현대카드", "현대체크", "hyundai", "현대m"),

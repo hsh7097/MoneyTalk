@@ -51,11 +51,21 @@ class ExpenseRepository @Inject constructor(
      * 다중 조건 필터 조회 (Flow)
      * 카드명, 카테고리가 null이면 해당 조건 무시
      */
-    fun getExpensesFiltered(cardName: String?, category: String?, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>> =
+    fun getExpensesFiltered(
+        cardName: String?,
+        category: String?,
+        startTime: Long,
+        endTime: Long
+    ): Flow<List<ExpenseEntity>> =
         expenseDao.getExpensesFiltered(cardName, category, startTime, endTime)
 
     /** 대 카테고리 포함 필터링 (소 카테고리도 포함) */
-    fun getExpensesFilteredByCategories(cardName: String?, categories: List<String>, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>> =
+    fun getExpensesFilteredByCategories(
+        cardName: String?,
+        categories: List<String>,
+        startTime: Long,
+        endTime: Long
+    ): Flow<List<ExpenseEntity>> =
         expenseDao.getExpensesFilteredByCategories(cardName, categories, startTime, endTime)
 
     /** 지출 항목 삽입 (신규) */
@@ -77,16 +87,20 @@ class ExpenseRepository @Inject constructor(
     suspend fun getExpenseById(id: Long): ExpenseEntity? = expenseDao.getExpenseById(id)
 
     /** 메모 수정 */
-    suspend fun updateMemo(expenseId: Long, memo: String?): Int = expenseDao.updateMemo(expenseId, memo)
+    suspend fun updateMemo(expenseId: Long, memo: String?): Int =
+        expenseDao.updateMemo(expenseId, memo)
 
     /** 가게명 수정 */
-    suspend fun updateStoreName(expenseId: Long, newStoreName: String): Int = expenseDao.updateStoreName(expenseId, newStoreName)
+    suspend fun updateStoreName(expenseId: Long, newStoreName: String): Int =
+        expenseDao.updateStoreName(expenseId, newStoreName)
 
     /** 금액 수정 */
-    suspend fun updateAmount(expenseId: Long, newAmount: Int): Int = expenseDao.updateAmount(expenseId, newAmount)
+    suspend fun updateAmount(expenseId: Long, newAmount: Int): Int =
+        expenseDao.updateAmount(expenseId, newAmount)
 
     /** SMS ID로 지출 항목 조회 (중복 체크용) */
-    suspend fun getExpenseBySmsId(smsId: String): ExpenseEntity? = expenseDao.getExpenseBySmsId(smsId)
+    suspend fun getExpenseBySmsId(smsId: String): ExpenseEntity? =
+        expenseDao.getExpenseBySmsId(smsId)
 
     /** SMS ID 존재 여부 확인 (중복 방지) */
     suspend fun existsBySmsId(smsId: String): Boolean = expenseDao.existsBySmsId(smsId)
@@ -99,11 +113,19 @@ class ExpenseRepository @Inject constructor(
     // ========================
 
     /** 기간 + 카테고리 목록으로 지출 조회 (일회성, 채팅 쿼리용) */
-    suspend fun getExpensesByCategoriesAndDateRangeOnce(categories: List<String>, startTime: Long, endTime: Long): List<ExpenseEntity> =
+    suspend fun getExpensesByCategoriesAndDateRangeOnce(
+        categories: List<String>,
+        startTime: Long,
+        endTime: Long
+    ): List<ExpenseEntity> =
         expenseDao.getExpensesByCategoriesAndDateRangeOnce(categories, startTime, endTime)
 
     /** 기간 + 카테고리 목록으로 총 지출 합산 (채팅 쿼리용) */
-    suspend fun getTotalExpenseByCategoriesAndDateRange(categories: List<String>, startTime: Long, endTime: Long): Int =
+    suspend fun getTotalExpenseByCategoriesAndDateRange(
+        categories: List<String>,
+        startTime: Long,
+        endTime: Long
+    ): Int =
         expenseDao.getTotalExpenseByCategoriesAndDateRange(categories, startTime, endTime) ?: 0
 
     /** 특정 기간의 총 지출 금액 합계 */
@@ -225,15 +247,27 @@ class ExpenseRepository @Inject constructor(
     // ========================
 
     /** 내 카드 기준 기간별 지출 조회 (Flow) */
-    fun getExpensesByOwnedCards(ownedCardNames: List<String>, startTime: Long, endTime: Long): Flow<List<ExpenseEntity>> =
+    fun getExpensesByOwnedCards(
+        ownedCardNames: List<String>,
+        startTime: Long,
+        endTime: Long
+    ): Flow<List<ExpenseEntity>> =
         expenseDao.getExpensesByOwnedCards(ownedCardNames, startTime, endTime)
 
     /** 내 카드 기준 총 지출 합계 */
-    suspend fun getTotalExpenseByOwnedCards(ownedCardNames: List<String>, startTime: Long, endTime: Long): Int =
+    suspend fun getTotalExpenseByOwnedCards(
+        ownedCardNames: List<String>,
+        startTime: Long,
+        endTime: Long
+    ): Int =
         expenseDao.getTotalExpenseByOwnedCards(ownedCardNames, startTime, endTime) ?: 0
 
     /** 내 카드 기준 카테고리별 합계 */
-    suspend fun getExpenseSumByCategoryOwned(ownedCardNames: List<String>, startTime: Long, endTime: Long): List<CategorySum> =
+    suspend fun getExpenseSumByCategoryOwned(
+        ownedCardNames: List<String>,
+        startTime: Long,
+        endTime: Long
+    ): List<CategorySum> =
         expenseDao.getExpenseSumByCategoryOwned(ownedCardNames, startTime, endTime)
 
 }

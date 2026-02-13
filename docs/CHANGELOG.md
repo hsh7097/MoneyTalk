@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+### Changed (2026-02-12)
+- **History 필터 UI 전면 개편**
+  - FilterPanel(가로 3칩) → ModalBottomSheet로 전환 (정렬/거래유형/카테고리)
+  - 카드 필터 제거, 수입 탭을 BottomSheet 내 거래유형 토글로 통합
+- **PeriodSummaryCard 레이아웃 변경**
+  - Card 래퍼 제거, 날짜 왼쪽 + 금액 오른쪽 정렬
+  - 날짜 줄넘김 표시 (HorizontalDivider 구분선)
+  - 필터 적용 시 상단 총 수입/지출도 필터 기준으로 반영
+- **하단 NavigationBar 컴팩트화** (64dp, 아이콘+라벨 세로 중앙정렬)
+- **SegmentedTabRow 컴팩트화** (아이콘 지원, 사이즈 축소)
+- **필터 버튼**: 아이콘+텍스트 형태로 탭 바로 옆에 배치
+- **거래 목록 시간순 정렬**: 같은 날짜 내 수입/지출 통합 최신순 정렬
+
+### Added (2026-02-12)
+- **DpTextUnit 유틸**: fontScale 무관 고정 텍스트 크기 (Dp.toDpTextUnit, Int.toDpTextUnit)
+
 ### Added (2026-02-09~11)
 - **OwnedCard 시스템** (카드 화이트리스트)
   - OwnedCardEntity/Dao/Repository (DB v2→v3)
