@@ -118,6 +118,48 @@ class GeminiRepository @Inject constructor(
         return summaryModel
     }
 
+    /**
+     * 홈 화면 AI 인사이트 생성 (경량 flash-lite 모델)
+     * 이번 달 지출 데이터를 기반으로 한줄 코멘트 생성
+     */
+    suspend fun generateHomeInsight(
+        monthlyExpense: Int,
+        lastMonthExpense: Int,
+        todayExpense: Int,
+        topCategories: List<Pair<String, Int>>
+    ): String? {
+        val apiKey = getApiKey()
+        if (apiKey.isBlank()) return null
+
+        return try {
+            val model = GenerativeModel(
+                modelName = "gemini-2.5-flash-lite",
+                apiKey = apiKey,
+                generationConfig = generationConfig {
+                    temperature = 0.7f
+                    maxOutputTokens = 100
+                }
+            )
+            val topCatText = topCategories.joinToString(", ") { "${it.first} ${it.second}원" }
+            val prompt = """
+                재무 어드바이저로서 한국어로 한줄 인사이트를 작성해.
+                이번 달 지출: ${monthlyExpense}원
+                지난 달 지출: ${lastMonthExpense}원
+                오늘 지출: ${todayExpense}원
+                주요 카테고리: $topCatText
+
+                규칙: 이모지 1개 + 한줄(30자 이내). 격려/경고/팁 중 적절한 톤 선택.
+                예시: "💪 지난달보다 15% 절약 중이에요!" 또는 "☕ 카페 지출이 늘고 있어요"
+            """.trimIndent()
+
+            val response = model.generateContent(prompt)
+            response.text?.trim()
+        } catch (e: Exception) {
+            Log.w(TAG, "인사이트 생성 실패: ${e.message}")
+            null
+        }
+    }
+
     // 수동으로 API 키 설정 (설정 화면에서 사용)
     suspend fun setApiKey(key: String) {
         cachedApiKey = key

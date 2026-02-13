@@ -6,9 +6,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,11 +34,15 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,6 +62,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -66,6 +78,7 @@ import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
+import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.util.DateUtils
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
@@ -149,14 +162,6 @@ fun HomeScreen(
                 )
             }
 
-            // 디바이더
-            item {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-            }
-
             // 카테고리별 지출
             item {
                 CategoryExpenseSection(
@@ -168,11 +173,15 @@ fun HomeScreen(
                 )
             }
 
-            // 디바이더
+            // 오늘의 지출 + 전월 대비
             item {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
+                TodayAndComparisonSection(
+                    todayExpense = uiState.todayExpense,
+                    todayExpenseCount = uiState.todayExpenseCount,
+                    monthlyExpense = uiState.monthlyExpense,
+                    lastMonthExpense = uiState.lastMonthExpense,
+                    comparisonPeriodLabel = uiState.comparisonPeriodLabel,
+                    aiInsight = uiState.aiInsight
                 )
             }
 
@@ -181,7 +190,7 @@ fun HomeScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 12.dp),
+                        .padding(bottom = 6.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -223,7 +232,7 @@ fun HomeScreen(
                 }
             } else {
                 uiState.recentExpenses
-            }
+            }.take(3) // 홈에서는 최근 3건만 미리보기
 
             if (displayExpenses.isEmpty()) {
                 item {
@@ -248,18 +257,24 @@ fun HomeScreen(
                 .align(Alignment.BottomEnd)
                 .padding(16.dp)
         ) {
-            FloatingActionButton(
+            SmallFloatingActionButton(
                 onClick = {
                     coroutineScope.launch {
                         listState.animateScrollToItem(0)
                     }
                 },
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                shape = CircleShape,
+                containerColor = MaterialTheme.moneyTalkColors.income,
+                contentColor = Color.White,
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = 4.dp,
+                    pressedElevation = 8.dp
+                )
             ) {
                 Icon(
-                    imageVector = Icons.Default.KeyboardArrowUp,
-                    contentDescription = stringResource(R.string.common_scroll_to_top)
+                    painter = painterResource(id = R.drawable.ic_arrow_up),
+                    contentDescription = stringResource(R.string.common_scroll_to_top),
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }
@@ -551,40 +566,49 @@ fun MonthlyOverviewSection(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        Row(
+        // 이번 달 지출 (중앙 대형 표시)
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column {
+            Text(
+                text = stringResource(R.string.home_this_month_expense),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "₩${numberFormat.format(expense)}",
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            // 수입 뱃지
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(
+                            color = MaterialTheme.moneyTalkColors.income,
+                            shape = CircleShape
+                        )
+                )
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = stringResource(R.string.home_income),
+                    text = stringResource(R.string.home_income_badge, numberFormat.format(income)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-                Text(
-                    text = stringResource(R.string.common_won, numberFormat.format(income)),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = stringResource(R.string.home_expense),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-                Text(
-                    text = stringResource(R.string.common_won, numberFormat.format(expense)),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
     }
 }
 
@@ -595,6 +619,7 @@ fun CategoryExpenseSection(
     onCategorySelected: (String?) -> Unit = {}
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    var showAll by remember { mutableStateOf(false) }
 
     // 기타 + 미분류를 하나로 합치고, 금액 내림차순 정렬
     val mergedExpenses = remember(categoryExpenses) {
@@ -610,69 +635,129 @@ fun CategoryExpenseSection(
         result.sortedByDescending { it.total }
     }
 
+    val totalExpense = remember(mergedExpenses) {
+        mergedExpenses.sumOf { it.total }
+    }
+
+    // TOP 3 또는 전체 표시
+    val displayList = remember(mergedExpenses, showAll) {
+        if (showAll) mergedExpenses else mergedExpenses.take(3)
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        Text(
-            text = stringResource(R.string.home_category_expense),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
+        // 헤더: "카테고리별 지출" + "전체보기/접기"
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.home_expense_top3),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            if (mergedExpenses.size > 3) {
+                Text(
+                    text = if (showAll) stringResource(R.string.home_view_collapse)
+                    else stringResource(R.string.home_view_all),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { showAll = !showAll }
+                )
+            }
+        }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        if (mergedExpenses.isEmpty()) {
+        if (displayList.isEmpty()) {
             Text(
                 text = stringResource(R.string.home_no_expense),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
         } else {
-            mergedExpenses.forEach { item ->
+            val barColor = MaterialTheme.moneyTalkColors.income
+            val rankAlphas = listOf(1.0f, 0.65f, 0.4f)
+
+            displayList.forEachIndexed { index, item ->
                 val category = Category.fromDisplayName(item.category)
+                val percentage = if (totalExpense > 0) {
+                    (item.total.toFloat() / totalExpense * 100).toInt()
+                } else 0
+                val progress = if (totalExpense > 0) {
+                    item.total.toFloat() / totalExpense
+                } else 0f
                 val isSelected = selectedCategory == item.category
-                Row(
+                val alpha = rankAlphas.getOrElse(index) { 0.3f }
+
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
-                            if (isSelected) {
-                                onCategorySelected(null)
-                            } else {
-                                onCategorySelected(item.category)
-                            }
+                            if (isSelected) onCategorySelected(null)
+                            else onCategorySelected(item.category)
                         }
-                        .then(
-                            if (isSelected) Modifier
-                                .padding(horizontal = 0.dp)
-                                .padding(vertical = 2.dp)
-                            else Modifier.padding(vertical = 4.dp)
-                        )
-                        .then(
-                            if (isSelected) {
-                                Modifier
-                                    .padding(vertical = 2.dp)
-                            } else Modifier
-                        ),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(vertical = 4.dp)
                 ) {
+                    // 카테고리명 + 퍼센트
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        CategoryIcon(category = category, containerSize = 24.dp, fontSize = 16.sp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CategoryIcon(
+                                category = category,
+                                containerSize = 28.dp,
+                                fontSize = 18.sp
+                            )
+                            Text(
+                                text = category.displayName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
                         Text(
-                            text = category.displayName,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            text = "${percentage}%",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // 프로그레스 바 (순위별 알파)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progress)
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(barColor.copy(alpha = alpha))
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    // 금액 (우측 정렬)
                     Text(
-                        text = stringResource(R.string.common_won, numberFormat.format(item.total)),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        text = "₩${numberFormat.format(item.total)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.End
                     )
                 }
             }
@@ -680,6 +765,122 @@ fun CategoryExpenseSection(
     }
 }
 
+
+@Composable
+fun TodayAndComparisonSection(
+    todayExpense: Int,
+    todayExpenseCount: Int,
+    monthlyExpense: Int,
+    lastMonthExpense: Int,
+    comparisonPeriodLabel: String,
+    aiInsight: String
+) {
+    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+
+    Column(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        // 오늘의 지출 + 전월 대비 (가로 2분할, 동일 스펙)
+        val cardColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        val cardShape = RoundedCornerShape(12.dp)
+        val labelStyle = MaterialTheme.typography.bodySmall
+        val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        val valueStyle = MaterialTheme.typography.titleMedium
+        val subStyle = MaterialTheme.typography.bodySmall
+        val subColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+
+        // 전월 대비 계산
+        val diff = monthlyExpense - lastMonthExpense
+        val comparisonValue = when {
+            lastMonthExpense == 0 -> "-"
+            diff > 0 -> "+₩${numberFormat.format(diff)}"
+            diff < 0 -> "-₩${numberFormat.format(-diff)}"
+            else -> "₩0"
+        }
+        val comparisonSub = when {
+            lastMonthExpense == 0 -> stringResource(R.string.home_vs_last_month_no_data)
+            diff > 0 -> stringResource(R.string.home_vs_last_month_more, numberFormat.format(diff))
+            diff < 0 -> stringResource(R.string.home_vs_last_month_less, numberFormat.format(-diff))
+            else -> stringResource(R.string.home_vs_last_month_same)
+        }
+        val comparisonValueColor = when {
+            lastMonthExpense == 0 -> MaterialTheme.colorScheme.onSurface
+            diff > 0 -> MaterialTheme.colorScheme.error
+            diff < 0 -> MaterialTheme.moneyTalkColors.income
+            else -> MaterialTheme.colorScheme.onSurface
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // 오늘의 지출 카드
+            Card(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                colors = CardDefaults.cardColors(containerColor = cardColor),
+                shape = cardShape
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(text = stringResource(R.string.home_today_expense), style = labelStyle, color = labelColor)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "₩${numberFormat.format(todayExpense)}", style = valueStyle, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = if (todayExpenseCount > 0) stringResource(R.string.home_today_count, todayExpenseCount) else " ",
+                        style = subStyle,
+                        color = subColor
+                    )
+                }
+            }
+
+            // 전월 대비 카드
+            Card(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                colors = CardDefaults.cardColors(containerColor = cardColor),
+                shape = cardShape
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(text = stringResource(R.string.home_vs_last_month), style = labelStyle, color = labelColor)
+                        if (comparisonPeriodLabel.isNotBlank()) {
+                            Text(
+                                text = "($comparisonPeriodLabel)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = labelColor.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = comparisonValue, style = valueStyle, fontWeight = FontWeight.Bold, color = comparisonValueColor)
+                    Text(text = comparisonSub, style = subStyle, color = subColor)
+                }
+            }
+        }
+
+        // AI 인사이트 (API 키 있고 데이터 있을 때만 표시)
+        if (aiInsight.isNotBlank()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = aiInsight,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(12.dp),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
 
 @Composable
 fun EmptyExpenseSection() {
