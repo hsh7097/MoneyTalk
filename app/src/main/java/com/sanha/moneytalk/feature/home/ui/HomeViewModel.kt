@@ -308,14 +308,15 @@ class HomeViewModel @Inject constructor(
                     expenseRepository.getExpensesByDateRangeOnce(lastMonthStart, lastMonthSamePoint)
                 }
                 // 전월 지출에도 제외 키워드 필터 적용
-                val filteredLastMonthExpense = if (exclusionKeywords.isEmpty()) {
-                    lastMonthExpenses.sumOf { it.amount }
+                val filteredLastMonthExpenses = if (exclusionKeywords.isEmpty()) {
+                    lastMonthExpenses
                 } else {
                     lastMonthExpenses.filter { expense ->
                         val smsLower = expense.originalSms?.lowercase()
                         smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
-                    }.sumOf { it.amount }
+                    }
                 }
+                val filteredLastMonthExpense = filteredLastMonthExpenses.sumOf { it.amount }
 
                 // 비교 기간 레이블 생성 - 전월 기간 표시 (예: "1/21 ~ 1/28")
                 val dateFormat = java.text.SimpleDateFormat("M/d", java.util.Locale.KOREA)
@@ -378,11 +379,23 @@ class HomeViewModel @Inject constructor(
                         // AI 인사이트 생성 (loadData 호출 시 첫 emit에서만 생성, DB 변경 emit은 스킵)
                         if (!insightLoaded) {
                             insightLoaded = true
+                            // 이번 달 TOP 3 카테고리 기준으로 전월 동일 카테고리 금액 매칭
+                            val top3 = categories.take(3)
+                            val lastMonthByCategory = filteredLastMonthExpenses
+                                .groupBy { expense ->
+                                    val cat = Category.fromDisplayName(expense.category)
+                                    cat.parentCategory?.displayName ?: cat.displayName
+                                }
+                                .mapValues { (_, items) -> items.sumOf { it.amount } }
+                            val lastMonthTop3ForComparison = top3.map { c ->
+                                Pair(c.category, lastMonthByCategory[c.category] ?: 0)
+                            }
                             loadAiInsight(
                                 totalExpense,
                                 filteredLastMonthExpense,
                                 filteredTodayExpenses.sumOf { e -> e.amount },
-                                categories.take(3).map { c -> Pair(c.category, c.total) }
+                                top3.map { c -> Pair(c.category, c.total) },
+                                lastMonthTop3ForComparison
                             )
                         }
                     }
@@ -401,10 +414,11 @@ class HomeViewModel @Inject constructor(
         monthlyExpense: Int,
         lastMonthExpense: Int,
         todayExpense: Int,
-        topCategories: List<Pair<String, Int>>
+        topCategories: List<Pair<String, Int>>,
+        lastMonthTopCategories: List<Pair<String, Int>>
     ) {
         // 입력 데이터 해시 비교 — 동일하면 재생성 스킵 (탭 전환/resume 시 불필요한 Gemini 호출 방지)
-        val inputHash = listOf(monthlyExpense, lastMonthExpense, todayExpense, topCategories).hashCode()
+        val inputHash = listOf(monthlyExpense, lastMonthExpense, todayExpense, topCategories, lastMonthTopCategories).hashCode()
         if (inputHash == lastInsightInputHash.get() && _uiState.value.aiInsight.isNotEmpty()) return
         lastInsightInputHash.set(inputHash)
 
@@ -417,7 +431,8 @@ class HomeViewModel @Inject constructor(
                     monthlyExpense = monthlyExpense,
                     lastMonthExpense = lastMonthExpense,
                     todayExpense = todayExpense,
-                    topCategories = topCategories
+                    topCategories = topCategories,
+                    lastMonthTopCategories = lastMonthTopCategories
                 )
                 if (insight != null) {
                     val currentState = _uiState.value

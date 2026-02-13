@@ -132,7 +132,8 @@ class GeminiRepositoryImpl @Inject constructor(
         monthlyExpense: Int,
         lastMonthExpense: Int,
         todayExpense: Int,
-        topCategories: List<Pair<String, Int>>
+        topCategories: List<Pair<String, Int>>,
+        lastMonthTopCategories: List<Pair<String, Int>>
     ): String? {
         val apiKey = getApiKey()
         if (apiKey.isBlank()) return null
@@ -147,15 +148,19 @@ class GeminiRepositoryImpl @Inject constructor(
                 }
             )
             val topCatText = topCategories.joinToString(", ") { "${it.first} ${it.second}원" }
+            val lastMonthCatText = if (lastMonthTopCategories.isNotEmpty()) {
+                "\n전월 동일 카테고리: " + lastMonthTopCategories.joinToString(", ") { "${it.first} ${it.second}원" }
+            } else ""
             val noExpenseHint = if (monthlyExpense == 0) "\n※ 이번 달 지출이 아직 없습니다. 격려/기대감 톤으로 작성." else ""
             val prompt = """
                 재무 어드바이저로서 한국어로 한줄 인사이트를 작성해.
                 이번 달 지출: ${monthlyExpense}원
                 지난 달 지출: ${lastMonthExpense}원
                 오늘 지출: ${todayExpense}원
-                주요 카테고리: $topCatText$noExpenseHint
+                이번 달 주요 카테고리: $topCatText$lastMonthCatText$noExpenseHint
 
                 규칙: 이모지 1개 + 한줄(30자 이내). 격려/경고/팁 중 적절한 톤 선택.
+                카테고리별 전월 대비 증감을 참고하여 인사이트 생성.
                 예시: "💪 지난달보다 15% 절약 중이에요!" 또는 "☕ 카페 지출이 늘고 있어요"
             """.trimIndent()
 

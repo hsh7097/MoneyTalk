@@ -86,11 +86,13 @@ interface GeminiRepository {
      * @param lastMonthExpense 지난 달 총 지출
      * @param todayExpense 오늘 지출
      * @param topCategories 주요 카테고리별 지출 (이름, 금액)
+     * @param lastMonthTopCategories 전월 동일 카테고리 지출 (이번 달 TOP 3 기준)
      */
     suspend fun generateHomeInsight(
         monthlyExpense: Int,
         lastMonthExpense: Int,
         todayExpense: Int,
-        topCategories: List<Pair<String, Int>>
+        topCategories: List<Pair<String, Int>>,
+        lastMonthTopCategories: List<Pair<String, Int>> = emptyList()
     ): String?
 }
