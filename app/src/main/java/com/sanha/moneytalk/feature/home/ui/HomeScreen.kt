@@ -616,10 +616,10 @@ fun MonthlyOverviewSection(
 fun CategoryExpenseSection(
     categoryExpenses: List<CategorySum>,
     selectedCategory: String? = null,
-    onCategorySelected: (String?) -> Unit = {},
-    onViewAll: () -> Unit = {}
+    onCategorySelected: (String?) -> Unit = {}
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    var showAll by remember { mutableStateOf(false) }
 
     // 기타 + 미분류를 하나로 합치고, 금액 내림차순 정렬
     val mergedExpenses = remember(categoryExpenses) {
@@ -639,15 +639,15 @@ fun CategoryExpenseSection(
         mergedExpenses.sumOf { it.total }
     }
 
-    // TOP 3만 표시
-    val top3 = remember(mergedExpenses) {
-        mergedExpenses.take(3)
+    // TOP 3 또는 전체 표시
+    val displayList = remember(mergedExpenses, showAll) {
+        if (showAll) mergedExpenses else mergedExpenses.take(3)
     }
 
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        // 헤더: "지출 TOP 3" + "전체보기"
+        // 헤더: "카테고리별 지출" + "전체보기/접기"
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -658,17 +658,20 @@ fun CategoryExpenseSection(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
-            Text(
-                text = stringResource(R.string.home_view_all),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { onViewAll() }
-            )
+            if (mergedExpenses.size > 3) {
+                Text(
+                    text = if (showAll) stringResource(R.string.home_view_collapse)
+                    else stringResource(R.string.home_view_all),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { showAll = !showAll }
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (top3.isEmpty()) {
+        if (displayList.isEmpty()) {
             Text(
                 text = stringResource(R.string.home_no_expense),
                 style = MaterialTheme.typography.bodyMedium,
@@ -678,7 +681,7 @@ fun CategoryExpenseSection(
             val barColor = MaterialTheme.moneyTalkColors.income
             val rankAlphas = listOf(1.0f, 0.65f, 0.4f)
 
-            top3.forEachIndexed { index, item ->
+            displayList.forEachIndexed { index, item ->
                 val category = Category.fromDisplayName(item.category)
                 val percentage = if (totalExpense > 0) {
                     (item.total.toFloat() / totalExpense * 100).toInt()
@@ -687,7 +690,7 @@ fun CategoryExpenseSection(
                     item.total.toFloat() / totalExpense
                 } else 0f
                 val isSelected = selectedCategory == item.category
-                val alpha = rankAlphas.getOrElse(index) { 0.4f }
+                val alpha = rankAlphas.getOrElse(index) { 0.3f }
 
                 Column(
                     modifier = Modifier

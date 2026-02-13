@@ -267,9 +267,10 @@ class HomeViewModel @Inject constructor(
                 }
 
                 // 전월 동일 기간 지출 조회
-                // 예: 월 시작일 21일, 오늘 2/28 → 이번 달: 2/21~2/28, 전월: 1/21~1/28
+                // 선택 월 기준: 현재 시점이 선택 월 내라면 현재 시각, 아니면 monthEnd를 기준점으로 사용
                 val now = System.currentTimeMillis()
-                val elapsedDays = ((now - monthStart) / (24L * 60 * 60 * 1000)).toInt()
+                val referencePoint = if (now in monthStart..monthEnd) now else monthEnd
+                val elapsedDays = ((referencePoint - monthStart) / (24L * 60 * 60 * 1000)).toInt()
                 val prevYear = if (state.selectedMonth == 1) state.selectedYear - 1 else state.selectedYear
                 val prevMonth = if (state.selectedMonth == 1) 12 else state.selectedMonth - 1
                 val (lastMonthStart, _) = DateUtils.getCustomMonthPeriod(
@@ -277,8 +278,17 @@ class HomeViewModel @Inject constructor(
                 )
                 // 전월 시작일 + 동일 경과일수 = 전월 동일 시점
                 val lastMonthSamePoint = lastMonthStart + (elapsedDays.toLong() * 24 * 60 * 60 * 1000)
-                val lastMonthExpense = withContext(Dispatchers.IO) {
-                    expenseRepository.getTotalExpenseByDateRange(lastMonthStart, lastMonthSamePoint)
+                val lastMonthExpenses = withContext(Dispatchers.IO) {
+                    expenseRepository.getExpensesByDateRangeOnce(lastMonthStart, lastMonthSamePoint)
+                }
+                // 전월 지출에도 제외 키워드 필터 적용
+                val filteredLastMonthExpense = if (exclusionKeywords.isEmpty()) {
+                    lastMonthExpenses.sumOf { it.amount }
+                } else {
+                    lastMonthExpenses.filter { expense ->
+                        val smsLower = expense.originalSms?.lowercase()
+                        smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                    }.sumOf { it.amount }
                 }
 
                 // 비교 기간 레이블 생성 - 전월 기간 표시 (예: "1/21 ~ 1/28")
@@ -291,7 +301,7 @@ class HomeViewModel @Inject constructor(
                         monthlyIncome = totalIncome,
                         todayExpense = filteredTodayExpenses.sumOf { e -> e.amount },
                         todayExpenseCount = filteredTodayExpenses.size,
-                        lastMonthExpense = lastMonthExpense,
+                        lastMonthExpense = filteredLastMonthExpense,
                         comparisonPeriodLabel = comparisonLabel
                     )
                 }
@@ -332,11 +342,11 @@ class HomeViewModel @Inject constructor(
                             )
                         }
 
-                        // AI 인사이트 생성 (비동기, 데이터 갱신 시마다)
-                        if (totalExpense > 0) {
+                        // AI 인사이트 생성 (최초 1회만, 월 전환 시 빈 문자열로 초기화됨)
+                        if (totalExpense > 0 && _uiState.value.aiInsight.isEmpty()) {
                             loadAiInsight(
                                 totalExpense,
-                                lastMonthExpense,
+                                filteredLastMonthExpense,
                                 filteredTodayExpenses.sumOf { e -> e.amount },
                                 categories.take(3).map { c -> Pair(c.category, c.total) }
                             )
@@ -350,13 +360,16 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /** AI 인사이트 비동기 생성 */
+    /** AI 인사이트 비동기 생성 (월 전환 시 이전 응답 무시) */
     private fun loadAiInsight(
         monthlyExpense: Int,
         lastMonthExpense: Int,
         todayExpense: Int,
         topCategories: List<Pair<String, Int>>
     ) {
+        // 요청 시점의 월 정보 캡처 — 응답 도착 시 월이 바뀌었으면 무시
+        val requestMonth = _uiState.value.selectedMonth
+        val requestYear = _uiState.value.selectedYear
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val insight = geminiRepository.generateHomeInsight(
@@ -366,7 +379,13 @@ class HomeViewModel @Inject constructor(
                     topCategories = topCategories
                 )
                 if (insight != null) {
-                    _uiState.update { it.copy(aiInsight = insight) }
+                    val currentState = _uiState.value
+                    // 응답 도착 시 월이 바뀌었으면 무시
+                    if (currentState.selectedMonth == requestMonth &&
+                        currentState.selectedYear == requestYear
+                    ) {
+                        _uiState.update { it.copy(aiInsight = insight) }
+                    }
                 }
             } catch (e: Exception) {
                 android.util.Log.w("HomeViewModel", "AI 인사이트 생성 실패 (무시): ${e.message}")
