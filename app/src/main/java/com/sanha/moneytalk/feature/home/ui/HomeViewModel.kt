@@ -7,6 +7,7 @@ import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.ClassificationState
@@ -32,6 +33,7 @@ import androidx.compose.runtime.Stable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
 /**
@@ -161,7 +163,7 @@ class HomeViewModel @Inject constructor(
     private var loadJob: kotlinx.coroutines.Job? = null
 
     /** 마지막 AI 인사이트 생성 시 사용된 입력 데이터 해시 (동일 데이터 재생성 방지) */
-    private var lastInsightInputHash: Int = 0
+    private val lastInsightInputHash = AtomicInteger(0)
 
     init {
         loadSettings()
@@ -354,8 +356,12 @@ class HomeViewModel @Inject constructor(
                         }
                         val totalExpense = expenses.sumOf { it.amount }
                         // 카테고리별 합계도 필터링된 데이터 기준으로 계산
+                        // 소 카테고리(예: 배달)는 대 카테고리(예: 식비)에 합산
                         val categories = expenses
-                            .groupBy { it.category }
+                            .groupBy { expense ->
+                                val cat = Category.fromDisplayName(expense.category)
+                                cat.parentCategory?.displayName ?: cat.displayName
+                            }
                             .map { (category, items) ->
                                 CategorySum(category = category, total = items.sumOf { it.amount })
                             }
@@ -399,8 +405,8 @@ class HomeViewModel @Inject constructor(
     ) {
         // 입력 데이터 해시 비교 — 동일하면 재생성 스킵 (탭 전환/resume 시 불필요한 Gemini 호출 방지)
         val inputHash = listOf(monthlyExpense, lastMonthExpense, todayExpense, topCategories).hashCode()
-        if (inputHash == lastInsightInputHash && _uiState.value.aiInsight.isNotEmpty()) return
-        lastInsightInputHash = inputHash
+        if (inputHash == lastInsightInputHash.get() && _uiState.value.aiInsight.isNotEmpty()) return
+        lastInsightInputHash.set(inputHash)
 
         // 요청 시점의 월 정보 캡처 — 응답 도착 시 월이 바뀌었으면 무시
         val requestMonth = _uiState.value.selectedMonth
@@ -437,8 +443,8 @@ class HomeViewModel @Inject constructor(
             newMonth = 12
             newYear -= 1
         }
+        lastInsightInputHash.set(0)
         _uiState.update { it.copy(selectedYear = newYear, selectedMonth = newMonth, aiInsight = "") }
-        lastInsightInputHash = 0
         loadData()
     }
 
@@ -451,8 +457,8 @@ class HomeViewModel @Inject constructor(
             newMonth = 1
             newYear += 1
         }
+        lastInsightInputHash.set(0)
         _uiState.update { it.copy(selectedYear = newYear, selectedMonth = newMonth, aiInsight = "") }
-        lastInsightInputHash = 0
         loadData()
     }
 

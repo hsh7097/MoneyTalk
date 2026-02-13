@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.sanha.moneytalk.core.util.toDpTextUnit
 
 /**
  * 세그먼트 스타일 탭 Row.
@@ -79,14 +80,14 @@ private fun SegmentedTab(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(12.dp),
+                    modifier = Modifier.size(14.dp),
                     tint = textColor
                 )
                 Spacer(modifier = Modifier.width(2.dp))
             }
             Text(
                 text = info.label,
-                style = MaterialTheme.typography.labelSmall,
+                fontSize = 14.toDpTextUnit,
                 fontWeight = if (info.isSelected) FontWeight.Bold else FontWeight.Normal,
                 color = textColor,
                 textAlign = TextAlign.Center

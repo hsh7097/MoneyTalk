@@ -768,9 +768,11 @@ class HistoryViewModel @Inject constructor(
     /** transactionListItems 갱신 */
     private fun updateTransactionListItems() {
         val state = _uiState.value
-        // 카테고리 필터는 지출에만 적용, 수입은 항상 표시
+        // 카테고리 필터 활성화 시 수입 항목 제외
+        val filteredIncomes =
+            if (state.selectedCategory != null) emptyList() else state.incomes
         val items = buildTransactionListItems(
-            state.expenses, state.incomes, state.sortOrder,
+            state.expenses, filteredIncomes, state.sortOrder,
             state.showExpenses, state.showIncomes
         )
         _uiState.update { it.copy(transactionListItems = items) }
