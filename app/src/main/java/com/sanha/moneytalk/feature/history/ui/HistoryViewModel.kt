@@ -270,8 +270,7 @@ class HistoryViewModel @Inject constructor(
                 )
             }
 
-            // 월별/일별 총액은 제외 키워드 필터 적용 후 계산 (필터링 안된 전체 데이터 기준으로 별도 로드)
-            // 카드/카테고리 필터 없이 전체 데이터 기준으로 총액 계산
+            // 월별/일별 총액 계산 (제외 키워드 + 카테고리 필터 적용)
             try {
                 expenseRepository.getExpensesByDateRange(startTime, endTime)
                     .first()
@@ -288,11 +287,16 @@ class HistoryViewModel @Inject constructor(
                                 }
                             }
                         }
-                        val monthlyTotal = filteredForTotal.sumOf { it.amount }
-                        // 일별 총액도 필터링된 데이터 기준으로 계산
+                        // 카테고리 필터 적용
+                        val categoryFiltered = if (categoriesForFilter != null) {
+                            filteredForTotal.filter { it.category in categoriesForFilter }
+                        } else {
+                            filteredForTotal
+                        }
+                        val monthlyTotal = categoryFiltered.sumOf { it.amount }
                         val dateFormat =
                             java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
-                        val dailyTotalsMap = filteredForTotal
+                        val dailyTotalsMap = categoryFiltered
                             .groupBy { dateFormat.format(java.util.Date(it.dateTime)) }
                             .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
                         val incomeTotal =
@@ -676,22 +680,22 @@ class HistoryViewModel @Inject constructor(
                         smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
                     }
                 }
-                val total = filteredForTotal.sumOf { it.amount }
-                // 일별 총액도 필터링된 데이터 기준
-                val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
-                val map = filteredForTotal
-                    .groupBy { dateFormat.format(java.util.Date(it.dateTime)) }
-                    .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
                 // 대 카테고리 선택 시 소 카테고리도 포함
                 val syncCategoryFilter = state.selectedCategory?.let { catName ->
                     Category.fromDisplayName(catName).displayNamesIncludingSub
                 }
-                val expenses = filteredForTotal
+                val categoryFiltered = filteredForTotal
                     .filter { expense ->
                         syncCategoryFilter == null || expense.category in syncCategoryFilter
                     }
+                // 카테고리 필터 적용된 데이터 기준으로 총액/일별 계산
+                val total = categoryFiltered.sumOf { it.amount }
+                val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
+                val map = categoryFiltered
+                    .groupBy { dateFormat.format(java.util.Date(it.dateTime)) }
+                    .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
                 // 정렬 적용
-                val sorted = sortExpenses(expenses, state.sortOrder)
+                val sorted = sortExpenses(categoryFiltered, state.sortOrder)
                 Triple(total, map, sorted)
             }
 
