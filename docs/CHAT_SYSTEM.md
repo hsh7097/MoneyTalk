@@ -48,6 +48,20 @@ MoneyTalk의 채팅 시스템은 사용자의 자연어 질문을 분석하여 �
 **프롬프트**: `res/values/string_prompt.xml` — `prompt_query_analyzer_system`
 
 사용자의 자연어 질문을 분석하여 필요한 DB 쿼리와 액션을 JSON으로 결정합니다.
+질문이 모호한 경우 쿼리 대신 `clarification` 응답을 반환하여 사용자에게 추가 정보를 요청합니다.
+
+#### Clarification 응답 (모호한 질문 처리)
+
+질문이 모호하여 정확한 쿼리를 생성할 수 없을 때 반환:
+- 기간 불명확: "얼마 썼어?" (어느 기간?)
+- 대상 불명확: "줄여야 할까?" (무엇을?)
+- 다중 해석: "카드 정리해줘" (조회? 삭제? 변경?)
+
+```json
+{"clarification": "어떤 카테고리의 절약을 알아볼까요? 예: 카페, 배달, 쇼핑 등"}
+```
+
+대화 맥락으로 의도가 파악 가능하면 clarification 없이 바로 쿼리 생성.
 
 #### 쿼리 타입 (17종)
 
@@ -136,6 +150,12 @@ System Instruction에 재무 상담사 역할이 정의되어 있으며, 다음 
 - 조회된 데이터와 ANALYTICS 계산 결과만 사용 (직접 계산 금지)
 - 실행한 액션에 대해서만 결과 보고 (실행 안 한 액션 언급 금지)
 - 삭제/수정 작업의 되돌리기는 불가능하다는 안내
+
+#### 수치 정확성 규칙 (Karpathy Guidelines 적용)
+- **직접 계산 금지**: 리스트 항목 합산/평균 금지 → ANALYTICS 결과값만 인용
+- **비율 계산 금지**: 직접 나눗셈으로 % 산출 금지 → 데이터에 비율이 있으면 사용, 없으면 미제시
+- **교차 계산 금지**: 서로 다른 쿼리 결과끼리 합산/비교하여 새 수치 생성 금지
+- **불확실하면 인정**: "데이터에서 확인된 값은 ~입니다"로 범위 한정
 
 #### 답변 스타일
 - 한국어 반말
@@ -266,7 +286,11 @@ chat_history 테이블
 │   └── 통합 프롬프트 생성
 │
 ├── 3. Step 1: analyzeQueryNeeds()
-│   └── JSON 파싱 → DataQueryRequest (쿼리 + 액션)
+│   └── JSON 파싱 → DataQueryRequest (쿼리 + 액션 + clarification)
+│
+├── 3-1. Clarification 분기 (질문이 모호한 경우)
+│   ├── isClarification = true → 확인 질문을 AI 응답으로 저장
+│   └── Step 4~6 건너뜀 → 사용자 추가 입력 대기
 │
 ├── 4. 데이터 조회 (DataQueryParser → ExpenseDao 등)
 │   └── QueryResult 목록 생성
@@ -286,6 +310,7 @@ chat_history 테이블
 ```
 
 ### 추가 기능
+- **Clarification 루프**: 질문이 모호하면 쿼리 생성 대신 확인 질문 반환 → 사용자 추가 입력 후 재분석
 - **자동 타이틀 생성**: 채팅방 나갈 때 대화 내용 기반 LLM 타이틀 생성 (15자 제한)
 - **재시도**: AI 응답 실패 시 canRetry 플래그로 재시도 허용
 - **Mutex**: sendMutex로 동시 메시지 전송 방지
@@ -330,7 +355,7 @@ chat_history 테이블
 | `feature/chat/data/ChatPrompts.kt` | 프롬프트 키 참조 (실제 내용은 string_prompt.xml) |
 | `feature/chat/ui/ChatViewModel.kt` | 채팅 UI 상태 + 쿼리/액션/분석 실행 |
 | `feature/chat/ui/ChatScreen.kt` | 채팅 UI (Compose) |
-| `core/util/DataQueryParser.kt` | JSON → 쿼리/액션 요청 파싱 + QueryType/ActionType enum |
+| `core/util/DataQueryParser.kt` | JSON → 쿼리/액션/clarification 파싱 + QueryType/ActionType enum |
 | `core/util/StoreAliasManager.kt` | 가게명 별칭 관리 (일괄 처리 지원) |
 | `core/database/dao/ChatDao.kt` | 세션/메시지 DAO |
 | `core/database/entity/ChatEntity.kt` | 메시지 엔티티 |
@@ -354,4 +379,4 @@ chat_history 테이블
 
 ---
 
-*마지막 업데이트: 2026-02-11*
+*마지막 업데이트: 2026-02-13*

@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-11
+> **최종 갱신**: 2026-02-13
 
 ---
 
@@ -29,6 +29,13 @@
 - TransactionCard/GroupHeader/SegmentedTabRow 공통 컴포넌트
 - HistoryScreen Intent 패턴 적용
 - 카테고리 이모지 → 벡터 아이콘 교체 → 원복 (이모지 유지)
+
+**채팅 프롬프트 개선**: ✅ 완료 (2026-02-13)
+- Karpathy Guidelines 적용: clarification 루프 + 수치 정확성 규칙
+- query_analyzer에 clarification 응답 타입 추가 (모호한 질문 시 확인 질문 반환)
+- financial_advisor에 수치 정확성 필수 규칙 추가 (직접 계산/비율/교차 계산 금지)
+- DataQueryRequest에 clarification 필드 추가
+- ChatViewModel에 clarification 분기 처리
 
 ### 대기 중인 작업: Phase 2 후보 (우선순위 미정)
 
@@ -76,7 +83,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 ### 알려진 이슈
 - `SmsBatchProcessor.kt`의 그룹핑 임계값(0.95)과 `StoreNameGrouper.kt`(0.88)은 의도적으로 다름 (SMS 패턴 vs 가게명)
-- ChatViewModel.kt가 대형 파일(~1500줄) — 향후 query/action 로직 분리 후보
+- ChatViewModel.kt가 대형 파일(~1670줄) — 향후 query/action 로직 분리 후보
 
 ### Git 규칙
 - 브랜치 전략: `develop`에서 분기
@@ -89,6 +96,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-13 | 채팅 프롬프트 Karpathy Guidelines 적용 + Clarification 루프 구현 | 완료 |
 | 2026-02-11 | HistoryScreen UI 공통화 + Intent 패턴 적용 | 완료 |
 | 2026-02-11 | 카테고리 이모지 → 벡터 아이콘 교체 → revert (이모지 원복) | 완료 |
 | 2026-02-09 | ANALYTICS 쿼리 + 채팅 할루시네이션 개선 | 완료 |

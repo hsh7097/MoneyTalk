@@ -58,6 +58,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 - **브랜치 전략**: `master` (릴리스), `develop` (개발), 기능 브랜치는 `develop`에서 분기
 - **GitHub**: https://github.com/hsh7097/MoneyTalk.git
+- **커밋/푸시 시 브랜치 규칙**: 현재 브랜치가 `develop` 또는 `master`이면 **반드시 새 브랜치를 생성**하여 작업한다. 사용자가 명시적으로 "develop에서 작업해"라고 지시한 경우에만 예외.
 
 ---
 

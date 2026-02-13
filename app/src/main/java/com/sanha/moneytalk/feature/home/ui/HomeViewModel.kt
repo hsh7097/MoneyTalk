@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -156,6 +157,9 @@ class HomeViewModel @Inject constructor(
 
     /** 현재 실행 중인 데이터 로드 작업 (취소 가능) */
     private var loadJob: kotlinx.coroutines.Job? = null
+
+    /** 마지막 AI 인사이트 생성 시 사용된 입력 데이터 해시 (동일 데이터 재생성 방지) */
+    private var lastInsightInputHash: Int = 0
 
     init {
         loadSettings()
@@ -327,6 +331,7 @@ class HomeViewModel @Inject constructor(
                 }
 
                 // 지출 내역은 Flow로 실시간 감지 (Room DB 변경 시 자동 업데이트)
+                var insightLoaded = false
                 expenseRepository.getExpensesByDateRange(monthStart, monthEnd)
                     .catch { e ->
                         _uiState.update { it.copy(isLoading = false, errorMessage = e.message) }
@@ -362,8 +367,9 @@ class HomeViewModel @Inject constructor(
                             )
                         }
 
-                        // AI 인사이트 생성 (최초 1회만, 월 전환 시 빈 문자열로 초기화됨)
-                        if (totalExpense > 0 && _uiState.value.aiInsight.isEmpty()) {
+                        // AI 인사이트 생성 (loadData 호출 시 첫 emit에서만 생성, DB 변경 emit은 스킵)
+                        if (!insightLoaded) {
+                            insightLoaded = true
                             loadAiInsight(
                                 totalExpense,
                                 filteredLastMonthExpense,
@@ -372,6 +378,8 @@ class HomeViewModel @Inject constructor(
                             )
                         }
                     }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(isLoading = false, errorMessage = e.message)
@@ -380,13 +388,18 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /** AI 인사이트 비동기 생성 (월 전환 시 이전 응답 무시) */
+    /** AI 인사이트 비동기 생성 (월 전환 시 이전 응답 무시, 입력 데이터 동일 시 스킵) */
     private fun loadAiInsight(
         monthlyExpense: Int,
         lastMonthExpense: Int,
         todayExpense: Int,
         topCategories: List<Pair<String, Int>>
     ) {
+        // 입력 데이터 해시 비교 — 동일하면 재생성 스킵 (탭 전환/resume 시 불필요한 Gemini 호출 방지)
+        val inputHash = listOf(monthlyExpense, lastMonthExpense, todayExpense, topCategories).hashCode()
+        if (inputHash == lastInsightInputHash && _uiState.value.aiInsight.isNotEmpty()) return
+        lastInsightInputHash = inputHash
+
         // 요청 시점의 월 정보 캡처 — 응답 도착 시 월이 바뀌었으면 무시
         val requestMonth = _uiState.value.selectedMonth
         val requestYear = _uiState.value.selectedYear
@@ -423,6 +436,7 @@ class HomeViewModel @Inject constructor(
             newYear -= 1
         }
         _uiState.update { it.copy(selectedYear = newYear, selectedMonth = newMonth, aiInsight = "") }
+        lastInsightInputHash = 0
         loadData()
     }
 
@@ -436,6 +450,7 @@ class HomeViewModel @Inject constructor(
             newYear += 1
         }
         _uiState.update { it.copy(selectedYear = newYear, selectedMonth = newMonth, aiInsight = "") }
+        lastInsightInputHash = 0
         loadData()
     }
 

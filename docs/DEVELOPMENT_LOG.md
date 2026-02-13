@@ -4,6 +4,31 @@
 
 ---
 
+## 2026-02-13 - 채팅 프롬프트 Karpathy Guidelines 적용 + Clarification 루프
+
+### 작업 내용
+
+#### 1. Query Analyzer 프롬프트 업데이트
+- `[clarification 응답 규칙]` 섹션 추가: 모호한 질문 시 추측 대신 확인 질문 반환
+- clarification 사용/미사용 기준 명시 (대화 맥락 유무, 기간 생략 가능 여부)
+- 기존 "queries/actions 비어있지 않게" 규칙 제거 (clarification 응답 허용)
+
+#### 2. Financial Advisor 프롬프트 업데이트
+- `[수치 정확성 필수 규칙]` 섹션 추가 (Karpathy "Simplicity First" 적용)
+- 직접 계산/비율 계산/교차 계산 금지, 불확실 시 인정 규칙
+
+#### 3. Clarification 루프 구현
+- `DataQueryRequest`에 `clarification: String?` 필드 + `isClarification` computed property 추가
+- `ChatViewModel.sendMessage()`에 clarification 분기 처리
+- clarification이면 확인 질문을 AI 응답으로 저장, 쿼리/답변 생성 건너뜀
+
+### 변경 파일
+- `res/values/string_prompt.xml` — query_analyzer, financial_advisor 프롬프트
+- `core/util/DataQueryParser.kt` — DataQueryRequest clarification 필드
+- `feature/chat/ui/ChatViewModel.kt` — clarification 분기 처리
+
+---
+
 ## 2026-02-12 - History UI 개편 및 하단 네비게이션 개선
 
 ### 작업 내용
@@ -264,6 +289,7 @@ app/src/main/java/com/sanha/moneytalk/
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|-----------|
+| 2026-02-13 | 0.5.0 | 채팅 Clarification 루프 + Karpathy 수치 정확성 규칙 |
 | 2026-02-05 | 0.1.0 | 프로젝트 초기 설정 및 기본 구조 완성 |
 | 2026-02-05 | 0.1.1 | 색상 리소스 대폭 추가 (80+ 색상) |
 | 2026-02-08 | 0.2.0 | Phase 1 리팩토링, 채팅 액션 확장, Claude 레거시 제거 |

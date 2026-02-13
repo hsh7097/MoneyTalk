@@ -1,7 +1,7 @@
 # AI_CONTEXT.md - MoneyTalk 프로젝트 컨텍스트
 
 > AI 에이전트가 MoneyTalk 프로젝트를 이해하고 작업하기 위한 핵심 컨텍스트 문서
-> **최종 갱신**: 2026-02-11
+> **최종 갱신**: 2026-02-13
 
 ---
 
@@ -275,13 +275,24 @@ CategoryClassifierService.getCategory(storeName)
    → 참조 리스트: CategoryReferenceProvider → 모든 LLM 프롬프트에 주입
 ```
 
-### 5-3. AI 채팅 흐름
+### 5-3. Gemini API 최적화 방식 비교
+
+| 방식 | 적합성 | 이유 |
+|------|--------|------|
+| Context Caching | 불가 | 최소 32k 토큰 미달 |
+| Function Calling | 이미 적용 중 | query_analyzer가 사실상 이 구조 (쿼리/액션 타입 정의 → JSON 반환) |
+| Vertex AI Managed Prompt | 과잉 | GCP 전환 비용 대비 효과 미미 |
+| 프롬프트 다이어트 (RAG) | 검토 가능 | 카테고리 가이드 부분만 동적으로 축소 |
+
+### 5-4. AI 채팅 흐름
 ```
 ChatViewModel.sendMessage(message)
    → ChatRepository.sendMessageAndBuildContext() [Rolling Summary + 윈도우]
-   → GeminiRepository.analyzeQueryNeeds() [쿼리/액션 JSON 파싱]
-   → executeQuery() / executeAction() / executeAnalytics() [DB 조회/수정/분석]
-   → GeminiRepository.generateFinalAnswerWithContext() [최종 답변]
+   → GeminiRepository.analyzeQueryNeeds() [쿼리/액션/clarification JSON 파싱]
+   → [분기] isClarification?
+      → Yes: 확인 질문을 AI 응답으로 저장 → 사용자 추가 입력 대기
+      → No:  executeQuery() / executeAction() / executeAnalytics() [DB 조회/수정/분석]
+             → GeminiRepository.generateFinalAnswerWithContext() [최종 답변]
    → ChatRepository.saveAiResponseAndUpdateSummary() [요약 갱신]
 ```
 

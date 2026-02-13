@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+### Added (2026-02-13)
+- **Clarification 루프**: 쿼리 분석기가 모호한 질문에 추측 대신 확인 질문 반환
+  - DataQueryRequest에 `clarification` 필드 추가
+  - ChatViewModel에서 clarification 분기 처리 (쿼리/답변 생성 건너뜀)
+  - 사용자 추가 입력 후 대화 맥락 포함 재분석
+
+### Changed (2026-02-13)
+- **Financial Advisor 수치 정확성 규칙 강화** (Karpathy Guidelines 적용)
+  - 직접 계산 금지 (리스트 합산/평균 금지)
+  - 비율 계산 금지 (직접 나눗셈 금지)
+  - 데이터 간 교차 계산 금지
+- **Query Analyzer clarification 응답 규칙 추가**
+  - 기간/대상/의도 불명확 시 clarification JSON 반환
+  - 기존 "queries 또는 actions 비어있지 않게" 규칙 제거
+
 ### Changed (2026-02-12)
 - **History 필터 UI 전면 개편**
   - FilterPanel(가로 3칩) → ModalBottomSheet로 전환 (정렬/거래유형/카테고리)
