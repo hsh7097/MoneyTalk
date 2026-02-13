@@ -275,7 +275,16 @@ CategoryClassifierService.getCategory(storeName)
    → 참조 리스트: CategoryReferenceProvider → 모든 LLM 프롬프트에 주입
 ```
 
-### 5-3. AI 채팅 흐름
+### 5-3. Gemini API 최적화 방식 비교
+
+| 방식 | 적합성 | 이유 |
+|------|--------|------|
+| Context Caching | 불가 | 최소 32k 토큰 미달 |
+| Function Calling | 이미 적용 중 | query_analyzer가 사실상 이 구조 (쿼리/액션 타입 정의 → JSON 반환) |
+| Vertex AI Managed Prompt | 과잉 | GCP 전환 비용 대비 효과 미미 |
+| 프롬프트 다이어트 (RAG) | 검토 가능 | 카테고리 가이드 부분만 동적으로 축소 |
+
+### 5-4. AI 채팅 흐름
 ```
 ChatViewModel.sendMessage(message)
    → ChatRepository.sendMessageAndBuildContext() [Rolling Summary + 윈도우]
