@@ -267,4 +267,58 @@
     <string name="classify_progress_title">지출 정리 중</string>
     <string name="classify_complete">%d건 정리 완료!</string>
     <string name="classify_complete_with_remaining">%1$d건 정리 완료. %2$d건은 직접 확인이 필요합니다.</string>
+
+    <!-- 달력 뷰 (History Calendar) -->
+    <string name="calendar_day_expense_title">%1$s월 %2$d일 지출 내역</string>
+    <string name="calendar_no_expense_for_day">해당 날짜에 지출 내역이 없습니다</string>
+
+    <!-- 수입 상세 다이얼로그 (Income Detail) -->
+    <string name="income_detail_type">유형</string>
+    <string name="income_detail_source">출처</string>
+    <string name="income_detail_time">입금 시간</string>
+    <string name="income_detail_recurring">고정 수입</string>
+    <string name="income_detail_recurring_day">매월 %s일</string>
+    <string name="income_detail_memo_add">메모 추가</string>
+    <string name="income_detail_memo_edit">메모 편집</string>
+    <string name="income_detail_memo_placeholder">메모를 입력하세요</string>
+    <string name="income_detail_no_sms">원본 문자 정보가 없습니다</string>
+    <string name="income_delete_title">수입 삭제</string>
+    <string name="income_delete_message">이 수입 항목을 삭제하시겠습니까?\n%1$s (%2$s원)</string>
+
+    <!-- 설정 - 테마 -->
+    <string name="settings_theme_title">테마 설정</string>
+    <string name="settings_theme_system">시스템 설정</string>
+    <string name="settings_theme_light">라이트 모드</string>
+    <string name="settings_theme_dark">다크 모드</string>
+    <string name="settings_theme_label">테마</string>
+
+    <!-- 설정 - 섹션 타이틀 -->
+    <string name="settings_section_display">화면 설정 (DISPLAY)</string>
+
+    <!-- 설정 - 카테고리 정리 -->
+    <string name="settings_classify_title">카테고리 정리</string>
+    <string name="settings_classify_no_api_key">API 키를 먼저 설정해주세요</string>
+    <string name="settings_classify_background">백그라운드에서 분류 진행 중…</string>
+    <string name="settings_classify_unclassified">미정리 %d건</string>
+    <string name="settings_classify_done">정리할 항목 없음</string>
+
+    <!-- 설정 - SMS 제외 키워드 -->
+    <string name="settings_exclusion_title">SMS 제외 키워드</string>
+    <string name="settings_exclusion_subtitle_count">%1$d개 사용자 키워드 / %2$d개 기본 키워드</string>
+    <string name="settings_exclusion_subtitle_empty">제외할 키워드를 관리합니다</string>
+    <string name="settings_exclusion_description">해당 키워드가 포함된 문자는 결제/수입 문자에서 제외됩니다</string>
+    <string name="settings_exclusion_input_hint">키워드 입력</string>
+    <string name="settings_exclusion_user_section">사용자 키워드 (%d개)</string>
+    <string name="settings_exclusion_default_section">기본 키워드 (%d개)</string>
+    <string name="settings_exclusion_empty">등록된 키워드가 없습니다</string>
+    <string name="settings_exclusion_source_chat">(채팅)</string>
+
+    <!-- 공통 suffix -->
+    <string name="common_suffix_won">원</string>
+    <string name="common_suffix_day">일</string>
+    <string name="settings_classify_progress">%1$d / %2$d건</string>
+
+    <!-- 설정 - 중복 삭제 -->
+    <string name="settings_duplicate_title">중복 데이터 삭제</string>
+    <string name="settings_duplicate_subtitle">금액, 가게명, 시간이 같은 중복 항목 제거</string>
 </resources>

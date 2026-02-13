@@ -4,7 +4,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,52 +13,36 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -76,7 +59,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -89,13 +71,7 @@ import com.sanha.moneytalk.core.ui.component.settings.SettingsItemCompose
 import com.sanha.moneytalk.core.ui.component.settings.SettingsItemInfo
 import com.sanha.moneytalk.core.ui.component.settings.SettingsSectionCompose
 import com.sanha.moneytalk.core.util.DataBackupManager
-import com.sanha.moneytalk.core.util.DriveBackupFile
-import com.sanha.moneytalk.core.util.ExportFilter
-import com.sanha.moneytalk.core.util.ExportFormat
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @Composable
 fun SettingsScreen(
@@ -201,11 +177,11 @@ fun SettingsScreen(
             // 화면 설정 (테마)
             item {
                 val themeModeLabel = when (uiState.themeMode) {
-                    ThemeMode.SYSTEM -> "시스템 설정"
-                    ThemeMode.LIGHT -> "라이트 모드"
-                    ThemeMode.DARK -> "다크 모드"
+                    ThemeMode.SYSTEM -> stringResource(R.string.settings_theme_system)
+                    ThemeMode.LIGHT -> stringResource(R.string.settings_theme_light)
+                    ThemeMode.DARK -> stringResource(R.string.settings_theme_dark)
                 }
-                SettingsSectionCompose(title = "화면 설정 (DISPLAY)") {
+                SettingsSectionCompose(title = stringResource(R.string.settings_section_display)) {
                     SettingsItemCompose(
                         info = object : SettingsItemInfo {
                             override val icon = when (uiState.themeMode) {
@@ -213,7 +189,7 @@ fun SettingsScreen(
                                 ThemeMode.LIGHT -> Icons.Default.LightMode
                                 ThemeMode.DARK -> Icons.Default.DarkMode
                             }
-                            override val title = "테마"
+                            override val title = stringResource(R.string.settings_theme_label)
                             override val subtitle = themeModeLabel
                         },
                         onClick = { viewModel.onIntent(SettingsIntent.ShowThemeDialog) }
@@ -290,7 +266,7 @@ fun SettingsScreen(
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "카테고리 정리",
+                                    text = stringResource(R.string.settings_classify_title),
                                     style = MaterialTheme.typography.bodyLarge
                                 )
                                 Row(
@@ -306,10 +282,10 @@ fun SettingsScreen(
                                     }
                                     Text(
                                         text = when {
-                                            !uiState.hasApiKey -> "API 키를 먼저 설정해주세요"
-                                            uiState.isBackgroundClassifying -> "백그라운드에서 분류 진행 중..."
-                                            uiState.unclassifiedCount > 0 -> "미정리 ${uiState.unclassifiedCount}건"
-                                            else -> "정리할 항목 없음"
+                                            !uiState.hasApiKey -> stringResource(R.string.settings_classify_no_api_key)
+                                            uiState.isBackgroundClassifying -> stringResource(R.string.settings_classify_background)
+                                            uiState.unclassifiedCount > 0 -> stringResource(R.string.settings_classify_unclassified, uiState.unclassifiedCount)
+                                            else -> stringResource(R.string.settings_classify_done)
                                         },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
@@ -336,11 +312,11 @@ fun SettingsScreen(
                     SettingsItemCompose(
                         info = object : SettingsItemInfo {
                             override val icon = Icons.Default.Block
-                            override val title = "SMS 제외 키워드"
+                            override val title = stringResource(R.string.settings_exclusion_title)
                             override val subtitle = if (uiState.exclusionKeywords.isNotEmpty()) {
-                                "${userKeywordCount}개 사용자 키워드 / ${defaultKeywordCount}개 기본 키워드"
+                                stringResource(R.string.settings_exclusion_subtitle_count, userKeywordCount, defaultKeywordCount)
                             } else {
-                                "제외할 키워드를 관리합니다"
+                                stringResource(R.string.settings_exclusion_subtitle_empty)
                             }
                         },
                         onClick = { viewModel.onIntent(SettingsIntent.ShowExclusionKeywordDialog) }
@@ -398,8 +374,8 @@ fun SettingsScreen(
                     SettingsItemCompose(
                         info = object : SettingsItemInfo {
                             override val icon = Icons.Default.ContentCopy
-                            override val title = "중복 데이터 삭제"
-                            override val subtitle = "금액, 가게명, 시간이 같은 중복 항목 제거"
+                            override val title = stringResource(R.string.settings_duplicate_title)
+                            override val subtitle = stringResource(R.string.settings_duplicate_subtitle)
                         },
                         onClick = { viewModel.onIntent(SettingsIntent.DeleteDuplicates) }
                     )
@@ -475,7 +451,7 @@ fun SettingsScreen(
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    text = "${uiState.classifyProgressCurrent} / ${uiState.classifyProgressTotal}건",
+                                    text = stringResource(R.string.settings_classify_progress, uiState.classifyProgressCurrent, uiState.classifyProgressTotal),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
@@ -505,7 +481,7 @@ fun SettingsScreen(
     when (uiState.activeDialog) {
         SettingsDialog.API_KEY -> {
             ApiKeySettingDialog(
-                currentKeyHint = if (uiState.hasApiKey) "현재 설정됨" else "",
+                currentKeyHint = if (uiState.hasApiKey) stringResource(R.string.dialog_api_key_current) else "",
                 onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) },
                 onConfirm = { key -> viewModel.onIntent(SettingsIntent.SaveApiKey(key)) }
             )
@@ -669,915 +645,6 @@ fun SettingsScreen(
         }
 
         null -> { /* 다이얼로그 미표시 */
-        }
-    }
-}
-
-@Composable
-fun ExportDialog(
-    availableCards: List<String>,
-    availableCategories: List<String>,
-    currentFilter: ExportFilter,
-    currentFormat: ExportFormat,
-    isGoogleSignedIn: Boolean,
-    onDismiss: () -> Unit,
-    onFilterChange: (ExportFilter) -> Unit,
-    onFormatChange: (ExportFormat) -> Unit,
-    onExportLocal: () -> Unit,
-    onExportGoogleDrive: () -> Unit,
-    onSignInGoogle: () -> Unit
-) {
-    var selectedCards by remember { mutableStateOf(currentFilter.cardNames.toSet()) }
-    var selectedCategories by remember { mutableStateOf(currentFilter.categories.toSet()) }
-    var includeExpenses by remember { mutableStateOf(currentFilter.includeExpenses) }
-    var includeIncomes by remember { mutableStateOf(currentFilter.includeIncomes) }
-    var selectedFormat by remember { mutableStateOf(currentFormat) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.export_dialog_title)) },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // 형식 선택
-                Text(
-                    stringResource(R.string.export_format),
-                    style = MaterialTheme.typography.labelLarge
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = selectedFormat == ExportFormat.JSON,
-                        onClick = {
-                            selectedFormat = ExportFormat.JSON
-                            onFormatChange(ExportFormat.JSON)
-                        },
-                        label = { Text(stringResource(R.string.export_format_json)) },
-                        leadingIcon = if (selectedFormat == ExportFormat.JSON) {
-                            {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        } else null
-                    )
-                    FilterChip(
-                        selected = selectedFormat == ExportFormat.CSV,
-                        onClick = {
-                            selectedFormat = ExportFormat.CSV
-                            onFormatChange(ExportFormat.CSV)
-                        },
-                        label = { Text(stringResource(R.string.export_format_csv)) },
-                        leadingIcon = if (selectedFormat == ExportFormat.CSV) {
-                            {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        } else null
-                    )
-                }
-
-                HorizontalDivider()
-
-                // 데이터 유형
-                Text(
-                    stringResource(R.string.export_data_type),
-                    style = MaterialTheme.typography.labelLarge
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = includeExpenses,
-                        onClick = {
-                            includeExpenses = !includeExpenses
-                            onFilterChange(currentFilter.copy(includeExpenses = !includeExpenses))
-                        },
-                        label = { Text(stringResource(R.string.export_expense)) },
-                        leadingIcon = if (includeExpenses) {
-                            {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        } else null
-                    )
-                    FilterChip(
-                        selected = includeIncomes,
-                        onClick = {
-                            includeIncomes = !includeIncomes
-                            onFilterChange(currentFilter.copy(includeIncomes = !includeIncomes))
-                        },
-                        label = { Text(stringResource(R.string.export_income)) },
-                        leadingIcon = if (includeIncomes) {
-                            {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        } else null
-                    )
-                }
-
-                // 카드 필터
-                if (availableCards.isNotEmpty()) {
-                    HorizontalDivider()
-                    Text(
-                        stringResource(R.string.export_card_filter),
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        availableCards.forEach { card ->
-                            FilterChip(
-                                selected = card in selectedCards,
-                                onClick = {
-                                    selectedCards = if (card in selectedCards) {
-                                        selectedCards - card
-                                    } else {
-                                        selectedCards + card
-                                    }
-                                    onFilterChange(currentFilter.copy(cardNames = selectedCards.toList()))
-                                },
-                                label = { Text(card, maxLines = 1) }
-                            )
-                        }
-                    }
-                }
-
-                // 카테고리 필터
-                if (availableCategories.isNotEmpty()) {
-                    HorizontalDivider()
-                    Text(
-                        stringResource(R.string.export_category_filter),
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        availableCategories.take(10).forEach { category ->
-                            FilterChip(
-                                selected = category in selectedCategories,
-                                onClick = {
-                                    selectedCategories = if (category in selectedCategories) {
-                                        selectedCategories - category
-                                    } else {
-                                        selectedCategories + category
-                                    }
-                                    onFilterChange(currentFilter.copy(categories = selectedCategories.toList()))
-                                },
-                                label = { Text(category, maxLines = 1) }
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // 로컬 저장
-                Button(
-                    onClick = onExportLocal,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Download, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringResource(R.string.export_save_local))
-                }
-
-                // 구글 드라이브
-                if (isGoogleSignedIn) {
-                    OutlinedButton(
-                        onClick = onExportGoogleDrive,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Cloud, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.export_save_google_drive))
-                    }
-                } else {
-                    OutlinedButton(
-                        onClick = onSignInGoogle,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Cloud, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.export_google_login))
-                    }
-                }
-
-                // 취소
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                ) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            }
-        }
-    )
-}
-
-@Composable
-fun GoogleDriveDialog(
-    backupFiles: List<DriveBackupFile>,
-    accountName: String?,
-    onDismiss: () -> Unit,
-    onRefresh: () -> Unit,
-    onRestore: (String) -> Unit,
-    onDelete: (String) -> Unit,
-    onSignOut: () -> Unit
-) {
-    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(stringResource(R.string.google_drive_title))
-                IconButton(onClick = onRefresh) {
-                    Icon(
-                        Icons.Default.Refresh,
-                        contentDescription = stringResource(R.string.common_refresh)
-                    )
-                }
-            }
-        },
-        text = {
-            Column {
-                // 계정 정보
-                accountName?.let {
-                    Text(
-                        text = stringResource(R.string.google_drive_account, it),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                if (backupFiles.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(100.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.google_drive_no_backup),
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.heightIn(max = 300.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(backupFiles) { file ->
-                            DriveBackupFileItem(
-                                file = file,
-                                dateFormat = dateFormat,
-                                onRestore = { onRestore(file.id) },
-                                onDelete = { onDelete(file.id) }
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_close))
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onSignOut,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
-                )
-            ) {
-                Text(stringResource(R.string.google_drive_logout))
-            }
-        }
-    )
-}
-
-@Composable
-fun DriveBackupFileItem(
-    file: DriveBackupFile,
-    dateFormat: SimpleDateFormat,
-    onRestore: () -> Unit,
-    onDelete: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = file.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = dateFormat.format(Date(file.createdTime)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            }
-            Row {
-                IconButton(onClick = onRestore) {
-                    Icon(
-                        Icons.Default.Restore,
-                        contentDescription = stringResource(R.string.common_restore),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = stringResource(R.string.common_delete),
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ThemeModeDialog(
-    currentMode: ThemeMode,
-    onModeChange: (ThemeMode) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("테마 설정") },
-        text = {
-            Column {
-                ThemeMode.entries.forEach { mode ->
-                    val label = when (mode) {
-                        ThemeMode.SYSTEM -> "시스템 설정"
-                        ThemeMode.LIGHT -> "라이트 모드"
-                        ThemeMode.DARK -> "다크 모드"
-                    }
-                    val icon = when (mode) {
-                        ThemeMode.SYSTEM -> Icons.Default.Settings
-                        ThemeMode.LIGHT -> Icons.Default.LightMode
-                        ThemeMode.DARK -> Icons.Default.DarkMode
-                    }
-                    val isSelected = currentMode == mode
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onModeChange(mode) }
-                            .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = label,
-                            tint = if (isSelected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        )
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (isSelected) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("닫기")
-            }
-        }
-    )
-}
-
-@Composable
-fun ApiKeySettingDialog(
-    currentKeyHint: String = "",
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
-) {
-    var apiKey by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.dialog_api_key_title)) },
-        text = {
-            Column {
-                Text(
-                    text = stringResource(R.string.dialog_api_key_message_settings),
-                    style = MaterialTheme.typography.bodySmall
-                )
-                if (currentKeyHint.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = currentKeyHint,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = apiKey,
-                    onValueChange = { apiKey = it },
-                    label = { Text(stringResource(R.string.dialog_api_key_label)) },
-                    placeholder = { Text(stringResource(R.string.dialog_api_key_placeholder)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(apiKey) },
-                enabled = apiKey.isNotBlank()
-            ) {
-                Text(stringResource(R.string.common_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_cancel))
-            }
-        }
-    )
-}
-
-@Composable
-fun MonthStartDayDialog(
-    initialValue: Int = 1,
-    onDismiss: () -> Unit,
-    onConfirm: (Int) -> Unit
-) {
-    var dayText by remember {
-        mutableStateOf(initialValue.toString())
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.dialog_month_start_title)) },
-        text = {
-            Column {
-                Text(
-                    text = stringResource(R.string.dialog_month_start_message),
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = dayText,
-                    onValueChange = {
-                        val filtered = it.filter { char -> char.isDigit() }
-                        val number = filtered.toIntOrNull() ?: 0
-                        if (number <= 31) {
-                            dayText = filtered
-                        }
-                    },
-                    label = { Text(stringResource(R.string.dialog_month_start_label)) },
-                    suffix = { Text("일") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.dialog_month_start_hint),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    val day = dayText.toIntOrNull()?.coerceIn(1, 31) ?: 1
-                    onConfirm(day)
-                },
-                enabled = dayText.isNotBlank()
-            ) {
-                Text(stringResource(R.string.common_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_cancel))
-            }
-        }
-    )
-}
-
-@Composable
-fun AppInfoDialog(
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = {
-            Text(
-                text = "\uD83D\uDCB0",
-                style = MaterialTheme.typography.headlineLarge
-            )
-        },
-        title = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = stringResource(R.string.app_info_version, BuildConfig.VERSION_NAME),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            }
-        },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.app_info_description),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-
-                HorizontalDivider()
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = stringResource(R.string.app_info_developer),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                    Text(
-                        text = stringResource(R.string.app_info_developer_name),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = stringResource(R.string.app_info_contact),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                    Text(
-                        text = stringResource(R.string.app_info_contact_email),
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-
-                Text(
-                    text = stringResource(R.string.app_info_license),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_close))
-            }
-        }
-    )
-}
-
-@Composable
-fun PrivacyPolicyDialog(
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.privacy_title)) },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.privacy_intro),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-
-                HorizontalDivider()
-
-                // 1. 수집하는 정보
-                Text(
-                    text = stringResource(R.string.privacy_section_collect),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = stringResource(R.string.privacy_collect_detail),
-                    style = MaterialTheme.typography.bodySmall
-                )
-
-                // 2. 정보 이용 목적
-                Text(
-                    text = stringResource(R.string.privacy_section_usage),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = stringResource(R.string.privacy_usage_detail),
-                    style = MaterialTheme.typography.bodySmall
-                )
-
-                // 3. 정보 저장
-                Text(
-                    text = stringResource(R.string.privacy_section_storage),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = stringResource(R.string.privacy_storage_detail),
-                    style = MaterialTheme.typography.bodySmall
-                )
-
-                // 4. 제3자 제공
-                Text(
-                    text = stringResource(R.string.privacy_section_thirdparty),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = stringResource(R.string.privacy_thirdparty_detail),
-                    style = MaterialTheme.typography.bodySmall
-                )
-
-                // 5. 사용자 권리
-                Text(
-                    text = stringResource(R.string.privacy_section_rights),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = stringResource(R.string.privacy_rights_detail),
-                    style = MaterialTheme.typography.bodySmall
-                )
-
-                HorizontalDivider()
-
-                Text(
-                    text = stringResource(R.string.privacy_last_updated),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_close))
-            }
-        }
-    )
-}
-
-@Composable
-fun ExclusionKeywordDialog(
-    keywords: List<com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity>,
-    onDismiss: () -> Unit,
-    onAdd: (String) -> Unit,
-    onRemove: (String) -> Unit
-) {
-    var newKeyword by remember { mutableStateOf("") }
-
-    // 기본 키워드와 사용자 키워드 분리
-    val defaultKeywords = keywords.filter { it.source == "default" }
-    val userKeywords = keywords.filter { it.source != "default" }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Column {
-                Text("SMS 제외 키워드")
-                Text(
-                    text = "해당 키워드가 포함된 문자는 결제/수입 문자에서 제외됩니다",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            }
-        },
-        text = {
-            Column {
-                // 키워드 추가 입력
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = newKeyword,
-                        onValueChange = { newKeyword = it },
-                        placeholder = { Text("키워드 입력") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Button(
-                        onClick = {
-                            if (newKeyword.isNotBlank()) {
-                                onAdd(newKeyword.trim())
-                                newKeyword = ""
-                            }
-                        },
-                        enabled = newKeyword.isNotBlank(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        Text("추가")
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 350.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    // 사용자 키워드 섹션
-                    if (userKeywords.isNotEmpty()) {
-                        item {
-                            Text(
-                                text = "사용자 키워드 (${userKeywords.size}개)",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-                        }
-                        items(userKeywords, key = { it.keyword }) { entity ->
-                            ExclusionKeywordItem(
-                                keyword = entity.keyword,
-                                source = entity.source,
-                                canDelete = true,
-                                onDelete = { onRemove(entity.keyword) }
-                            )
-                        }
-                    }
-
-                    // 기본 키워드 섹션
-                    if (defaultKeywords.isNotEmpty()) {
-                        item {
-                            if (userKeywords.isNotEmpty()) {
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                            }
-                            Text(
-                                text = "기본 키워드 (${defaultKeywords.size}개)",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-                        }
-                        items(defaultKeywords, key = { it.keyword }) { entity ->
-                            ExclusionKeywordItem(
-                                keyword = entity.keyword,
-                                source = entity.source,
-                                canDelete = false,
-                                onDelete = { }
-                            )
-                        }
-                    }
-
-                    // 비어있을 때
-                    if (keywords.isEmpty()) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(80.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "등록된 키워드가 없습니다",
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_close))
-            }
-        }
-    )
-}
-
-@Composable
-private fun ExclusionKeywordItem(
-    keyword: String,
-    source: String,
-    canDelete: Boolean,
-    onDelete: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
-        ) {
-            Text(
-                text = keyword,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (canDelete) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                }
-            )
-            if (source == "chat") {
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "(채팅)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                )
-            }
-        }
-        IconButton(
-            onClick = onDelete,
-            enabled = canDelete,
-            modifier = Modifier.size(32.dp)
-        ) {
-            Icon(
-                Icons.Default.Close,
-                contentDescription = "삭제",
-                modifier = Modifier.size(18.dp),
-                tint = if (canDelete) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
-                }
-            )
         }
     }
 }
