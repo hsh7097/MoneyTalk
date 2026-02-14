@@ -16,14 +16,13 @@
 
 ---
 
-## 경로 (중요!)
+## 경로
 
 | 구분 | 경로 |
 |------|------|
-| **코드 수정 경로** | `C:\Users\hsh70\AndroidStudioProjects\MoneyTalk` |
-| CWD (git 전용) | `C:\Users\hsh70\OneDrive\문서\Android\MoneyTalk` |
+| **프로젝트 경로** | `C:\Users\hsh70\AndroidStudioProjects\MoneyTalk` |
 
-> **반드시 AndroidStudioProjects 경로에서 코드를 수정할 것!**
+> 코드 수정, git, 빌드 모두 이 경로에서 수행
 
 ---
 
