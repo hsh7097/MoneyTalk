@@ -317,7 +317,6 @@ fun HomeScreen(
             },
             onCategoryChange = { newCategory ->
                 viewModel.updateExpenseCategory(
-                    expenseId = expense.id,
                     storeName = expense.storeName,
                     newCategory = newCategory
                 )

@@ -55,7 +55,7 @@ sealed interface HistoryIntent {
 
     // 지출 액션
     data class DeleteExpense(val expense: ExpenseEntity) : HistoryIntent
-    data class ChangeCategory(val expenseId: Long, val storeName: String, val newCategory: String) :
+    data class ChangeCategory(val storeName: String, val newCategory: String) :
         HistoryIntent
 
     data class UpdateExpenseMemo(val expenseId: Long, val memo: String?) : HistoryIntent
@@ -443,7 +443,7 @@ class HistoryViewModel @Inject constructor(
      * 특정 지출의 카테고리 변경
      * 동일 가게명의 모든 지출을 일괄 변경 + 벡터 학습 + 유사 가게 전파
      */
-    fun updateExpenseCategory(expenseId: Long, storeName: String, newCategory: String) {
+    fun updateExpenseCategory(storeName: String, newCategory: String) {
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
@@ -740,7 +740,7 @@ class HistoryViewModel @Inject constructor(
 
             is HistoryIntent.ChangeCategory -> {
                 _uiState.update { it.copy(selectedExpense = null) }
-                updateExpenseCategory(intent.expenseId, intent.storeName, intent.newCategory)
+                updateExpenseCategory(intent.storeName, intent.newCategory)
             }
 
             is HistoryIntent.UpdateExpenseMemo -> {

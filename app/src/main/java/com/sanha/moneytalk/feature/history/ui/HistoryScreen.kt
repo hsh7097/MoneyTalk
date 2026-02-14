@@ -156,7 +156,7 @@ fun HistoryScreen(
                     expenses = uiState.expenses,
                     onDelete = { viewModel.deleteExpense(it) },
                     onCategoryChange = { expense, newCategory ->
-                        viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
+                        viewModel.updateExpenseCategory(expense.storeName, newCategory)
                     },
                     onExpenseMemoChange = { id, memo -> viewModel.updateExpenseMemo(id, memo) }
                 )
@@ -178,7 +178,6 @@ fun HistoryScreen(
             onCategoryChange = { newCategory ->
                 viewModel.onIntent(
                     HistoryIntent.ChangeCategory(
-                        expense.id,
                         expense.storeName,
                         newCategory
                     )
