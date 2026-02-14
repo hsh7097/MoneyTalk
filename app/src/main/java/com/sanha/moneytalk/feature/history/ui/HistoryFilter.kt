@@ -40,6 +40,16 @@ import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.Category
 
+private fun isFilterDefault(
+    sortOrder: SortOrder,
+    showExpenses: Boolean,
+    showIncomes: Boolean,
+    category: String?
+): Boolean = sortOrder == SortOrder.DATE_DESC
+        && showExpenses
+        && showIncomes
+        && category == null
+
 /**
  * 필터 BottomSheet
  * 정렬 / 거래 유형 / 카테고리 선택 후 적용
@@ -73,13 +83,36 @@ fun FilterBottomSheet(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp)
         ) {
-            // 제목
-            Text(
-                text = stringResource(R.string.history_filter_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 20.dp)
-            )
+            // 제목 + 초기화
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.history_filter_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                if (!isFilterDefault(tempSortOrder, tempShowExpenses, tempShowIncomes, tempCategory)) {
+                    Text(
+                        text = stringResource(R.string.history_filter_reset),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                tempSortOrder = SortOrder.DATE_DESC
+                                tempShowExpenses = true
+                                tempShowIncomes = true
+                                tempCategory = null
+                            }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
 
             // ── 정렬 ──
             Text(

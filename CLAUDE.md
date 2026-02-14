@@ -73,3 +73,4 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 3. **임계값 SSOT**: 임계값 수치는 `AI_CONTEXT.md`의 레지스트리가 기준 (SimilarityPolicy 구현체)
 4. **DB 스키마 불변**: Room entity 변경 시 마이그레이션 필수 (가급적 하지 않기)
 5. **경로 주의**: OneDrive 경로가 아닌 AndroidStudioProjects 경로에서 작업
+6. **셀프 리뷰 필수**: 모든 작업 완료 후 변경된 코드를 다시 읽고 셀프 리뷰 수행. 문제 발견 시 즉시 수정한 뒤 작업 완료 보고

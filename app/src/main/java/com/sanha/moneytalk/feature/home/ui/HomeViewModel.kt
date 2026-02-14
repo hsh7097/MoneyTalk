@@ -796,6 +796,7 @@ class HomeViewModel @Inject constructor(
                             )
                         } catch (e: Exception) {
                             android.util.Log.e("HomeViewModel", "벡터 패턴 학습 실패: ${e.message}", e)
+                            snackbarBus.show("벡터 패턴 학습 일부 실패 (다음 동기화 시 재시도)")
                         }
                     }
                 }

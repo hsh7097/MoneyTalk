@@ -36,7 +36,6 @@ class HybridSmsClassifier @Inject constructor(
 ) {
     companion object {
         private const val TAG = "HybridSmsClassifier"
-        private const val BOOTSTRAP_THRESHOLD = 10  // 부트스트랩 모드 임계값
 
         /** 임베딩 배치 처리 크기 (Google batchEmbedContents 최대값) */
         private const val EMBEDDING_BATCH_SIZE = 100

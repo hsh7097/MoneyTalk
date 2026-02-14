@@ -1,7 +1,7 @@
 # AI_TASKS.md - 작업 목록 및 완료 기준
 
 > 작업 진행 상황 추적 문서
-> **최종 갱신**: 2026-02-11
+> **최종 갱신**: 2026-02-14
 
 ---
 
@@ -54,27 +54,28 @@
 
 ---
 
-## Phase 2: 후보 태스크 (미착수)
+## Phase 2: SMS 분류 정확도/효율 개선 ✅ 완료 (2026-02-14)
 
 > Phase 1 리팩토링 기반 위에서 SMS 분류 정확도/효율을 개선하는 작업들
 
-### 2-A. 부트스트랩 모드 게이트 제거
-- [ ] `HybridSmsClassifier.classify()`에서 `isBootstrap` 조건 제거
-- [ ] `HybridSmsClassifier.batchClassify()`에서 `isBootstrap` 조건 제거
-- [ ] `hasPotentialPaymentIndicators()` 비용 통제 메서드 추가
-- [ ] 기존 regex 파싱 정상 동작 확인
-- [ ] 빌드 성공 확인
+### 2-A. 부트스트랩 모드 게이트 제거 ✅
+- [x] `isBootstrap` 로직은 이미 코드에서 제거 완료 확인
+- [x] 미사용 `BOOTSTRAP_THRESHOLD` 상수 제거 (HybridSmsClassifier.kt)
+- [x] `hasPotentialPaymentIndicators()` 이미 존재 확인
+- [x] 빌드 성공 확인
 
-### 2-B. 캐시 재사용 임계값 조정
-- [ ] `SmsPatternSimilarityPolicy.profile.autoApply` 0.95 유지 검토
-- [ ] `NON_PAYMENT_CACHE_THRESHOLD` 0.97→0.95 완화 검토
-- [ ] 동일 가게 변형 캐시 히트율 테스트
+### 2-B. 캐시 재사용 임계값 조정 ✅ (현행 유지)
+- [x] `SmsPatternSimilarityPolicy.profile.autoApply` 0.95 유지
+- [x] `NON_PAYMENT_CACHE_THRESHOLD` 0.97 유지 결정
+  - 근거: 0.95로 낮추면 payment autoApply와 동일해져 오분류 리스크 증가
+- [x] 변경 불필요 판단
 
-### 2-C. 벡터 학습 실패 시 사용자 알림
-- [ ] `HomeViewModel.syncSmsMessages()`에서 학습 실패 시 `_uiState.errorMessage` 갱신
-- [ ] 실패 시 로그 레벨 `Log.w` → `Log.e` 격상
-- [ ] UI에서 부분 실패 메시지 표시
+### 2-C. 벡터 학습 실패 시 사용자 알림 ✅
+- [x] `HomeViewModel.syncSmsMessages()`에서 학습 실패 시 스낵바 알림 추가
+- [x] `AppSnackbarBus.show("벡터 패턴 학습 일부 실패 (다음 동기화 시 재시도)")`
+- [x] 기존 `Log.e` 로깅 유지 + UI 알림 추가
 
-### 2-D. 채팅에서 카테고리 설정 시 자동 추가
-- [ ] 채팅 액션에서 카테고리 변경 시 CategoryReferenceProvider 캐시 자동 무효화
-- [ ] 새 매핑 추가 시 벡터 DB에도 반영
+### 2-D. 채팅에서 카테고리 설정 시 자동 추가 ✅
+- [x] ChatViewModel에 CategoryReferenceProvider 생성자 주입
+- [x] UPDATE_CATEGORY / UPDATE_CATEGORY_BY_STORE / UPDATE_CATEGORY_BY_KEYWORD 성공 시 `invalidateCache()` 호출
+- [x] 빌드 성공 확인

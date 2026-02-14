@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### Added (2026-02-14)
+- **History 필터 초기화 버튼**: FilterBottomSheet 상단에 조건부 "초기화" 버튼
+  - 필터가 기본값이 아닐 때만 표시
+  - 클릭 시 정렬/거래유형/카테고리 모두 기본값으로 리셋
+- **벡터 학습 실패 시 스낵바 알림**: HomeViewModel에서 학습 실패 시 사용자에게 알림 표시
+
+### Changed (2026-02-14)
+- **Phase 2-A**: HybridSmsClassifier에서 미사용 `BOOTSTRAP_THRESHOLD` 상수 제거
+- **Phase 2-B**: `NON_PAYMENT_CACHE_THRESHOLD` 0.97 유지 결정 (0.95 완화 시 오분류 리스크)
+- **Phase 2-D**: ChatViewModel에서 카테고리 변경 액션 성공 시 CategoryReferenceProvider 캐시 자동 무효화
+
 ### Added (2026-02-13)
 - **Clarification 루프**: 쿼리 분석기가 모호한 질문에 추측 대신 확인 질문 반환
   - DataQueryRequest에 `clarification` 필드 추가

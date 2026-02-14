@@ -4,6 +4,40 @@
 
 ---
 
+## 2026-02-14 - Phase 2 완료 + History 필터 초기화 버튼
+
+### 작업 내용
+
+#### 1. History 필터 초기화 버튼
+- FilterBottomSheet 상단에 "초기화" 텍스트 버튼 추가
+- 필터가 기본값(날짜순 + 지출/수입 모두 + 전체 카테고리)이 아닐 때만 표시
+- 클릭 시 모든 필터를 기본값으로 리셋
+
+#### 2. Phase 2-A: 부트스트랩 모드 게이트 제거
+- `isBootstrap` 로직은 이미 이전에 제거 완료 확인
+- 미사용 `BOOTSTRAP_THRESHOLD = 10` 상수 제거
+
+#### 3. Phase 2-B: 캐시 재사용 임계값 검토
+- `NON_PAYMENT_CACHE_THRESHOLD` 0.97 → 0.95 완화 검토
+- 결론: 0.97 유지 (payment autoApply=0.95와 동일하면 오분류 리스크)
+
+#### 4. Phase 2-C: 벡터 학습 실패 시 사용자 알림
+- HomeViewModel의 batchLearnFromRegexResults catch 블록에 스낵바 알림 추가
+- `AppSnackbarBus.show("벡터 패턴 학습 일부 실패 (다음 동기화 시 재시도)")`
+
+#### 5. Phase 2-D: 채팅 카테고리 변경 시 캐시 무효화
+- ChatViewModel에 CategoryReferenceProvider 생성자 주입
+- UPDATE_CATEGORY / UPDATE_CATEGORY_BY_STORE / UPDATE_CATEGORY_BY_KEYWORD 성공 시 `categoryReferenceProvider.invalidateCache()` 호출
+
+### 변경 파일
+- `HistoryFilter.kt` — 필터 초기화 버튼 + isFilterDefault() 헬퍼
+- `strings.xml` — `history_filter_reset` 문자열 추가
+- `HybridSmsClassifier.kt` — BOOTSTRAP_THRESHOLD 상수 제거
+- `HomeViewModel.kt` — 벡터 학습 실패 시 스낵바 알림
+- `ChatViewModel.kt` — CategoryReferenceProvider 주입 + invalidateCache() 호출
+
+---
+
 ## 2026-02-13 - 채팅 프롬프트 Karpathy Guidelines 적용 + Clarification 루프
 
 ### 작업 내용
@@ -289,6 +323,7 @@ app/src/main/java/com/sanha/moneytalk/
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|-----------|
+| 2026-02-14 | 0.6.0 | Phase 2 완료 + History 필터 초기화 버튼 |
 | 2026-02-13 | 0.5.0 | 채팅 Clarification 루프 + Karpathy 수치 정확성 규칙 |
 | 2026-02-05 | 0.1.0 | 프로젝트 초기 설정 및 기본 구조 완성 |
 | 2026-02-05 | 0.1.1 | 색상 리소스 대폭 추가 (80+ 색상) |

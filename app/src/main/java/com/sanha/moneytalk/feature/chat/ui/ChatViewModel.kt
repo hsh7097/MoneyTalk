@@ -12,6 +12,7 @@ import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.ActionType
 import com.sanha.moneytalk.core.util.AnalyticsFilter
 import com.sanha.moneytalk.core.util.AnalyticsMetric
+import com.sanha.moneytalk.core.util.CategoryReferenceProvider
 import com.sanha.moneytalk.core.util.ChatContextBuilder
 import com.sanha.moneytalk.core.util.DataAction
 import com.sanha.moneytalk.core.util.DataQuery
@@ -82,7 +83,8 @@ class ChatViewModel @Inject constructor(
     private val incomeRepository: IncomeRepository,
     private val chatDao: ChatDao,
     private val settingsDataStore: SettingsDataStore,
-    private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository
+    private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
+    private val categoryReferenceProvider: CategoryReferenceProvider
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -1300,6 +1302,7 @@ class ChatViewModel @Inject constructor(
                     )
                 } else {
                     val affected = expenseRepository.updateCategoryById(expenseId, newCategory)
+                    if (affected > 0) categoryReferenceProvider.invalidateCache()
                     ActionResult(
                         actionType = ActionType.UPDATE_CATEGORY,
                         success = affected > 0,
@@ -1329,6 +1332,7 @@ class ChatViewModel @Inject constructor(
                             newCategory
                         )
                     }
+                    if (totalAffected > 0) categoryReferenceProvider.invalidateCache()
                     ActionResult(
                         actionType = ActionType.UPDATE_CATEGORY_BY_STORE,
                         success = totalAffected > 0,
@@ -1358,6 +1362,7 @@ class ChatViewModel @Inject constructor(
                             newCategory
                         )
                     }
+                    if (totalAffected > 0) categoryReferenceProvider.invalidateCache()
                     ActionResult(
                         actionType = ActionType.UPDATE_CATEGORY_BY_KEYWORD,
                         success = totalAffected > 0,

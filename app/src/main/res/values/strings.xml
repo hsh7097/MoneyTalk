@@ -159,6 +159,7 @@
     <string name="history_sort_amount_short">금액순</string>
     <string name="history_sort_store">사용처별</string>
     <string name="history_filter_title">내역 필터</string>
+    <string name="history_filter_reset">초기화</string>
     <string name="history_filter_sort">정렬</string>
     <string name="history_filter_type">거래 유형</string>
     <string name="history_filter_category">카테고리</string>

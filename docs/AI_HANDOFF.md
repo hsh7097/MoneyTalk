@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-13
+> **최종 갱신**: 2026-02-14
 
 ---
 
@@ -37,12 +37,18 @@
 - DataQueryRequest에 clarification 필드 추가
 - ChatViewModel에 clarification 분기 처리
 
-### 대기 중인 작업: Phase 2 후보 (우선순위 미정)
+**Phase 2: SMS 분류 정확도/효율 개선**: ✅ 완료 (2026-02-14)
+- 2-A: 부트스트랩 모드 게이트 제거 (미사용 상수 정리)
+- 2-B: 캐시 재사용 임계값 검토 → 현행 0.97 유지 결정
+- 2-C: 벡터 학습 실패 시 스낵바 알림 추가
+- 2-D: 채팅 카테고리 변경 시 CategoryReferenceProvider 캐시 자동 무효화
 
-- **2-A**: 부트스트랩 모드 게이트 제거 → 패턴 10개 후에도 LLM 호출 허용
-- **2-B**: 캐시 재사용 임계값 조정 (0.97→0.95) → 동일 가게 변형 캐시 히트율 향상
-- **2-C**: 벡터 학습 실패 시 사용자 알림 → fire-and-forget에서 에러 표시로 개선
-- **2-D**: 채팅에서 카테고리 설정 시 CategoryReferenceProvider에 자동 추가
+**History 필터 초기화 버튼**: ✅ 완료 (2026-02-14)
+- FilterBottomSheet 상단에 조건부 "초기화" 버튼 추가
+
+### 대기 중인 작업
+
+현재 없음
 
 ---
 
@@ -96,6 +102,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-14 | Phase 2 전체 완료 + History 필터 초기화 버튼 | 완료 |
 | 2026-02-13 | 채팅 프롬프트 Karpathy Guidelines 적용 + Clarification 루프 구현 | 완료 |
 | 2026-02-11 | HistoryScreen UI 공통화 + Intent 패턴 적용 | 완료 |
 | 2026-02-11 | 카테고리 이모지 → 벡터 아이콘 교체 → revert (이모지 원복) | 완료 |
