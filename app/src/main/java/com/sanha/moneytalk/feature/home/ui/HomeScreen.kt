@@ -53,7 +53,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -96,11 +96,12 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
     onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
     autoSyncOnStart: Boolean = false,
-    onAutoSyncConsumed: () -> Unit = {}
+    onAutoSyncConsumed: () -> Unit = {},
+    onNavigateToHistory: (category: String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val contentResolver = context.contentResolver
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // 선택된 지출 항목 (상세보기용)
     var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
@@ -204,9 +205,18 @@ fun HomeScreen(
                     categoryExpenses = uiState.categoryExpenses,
                     selectedCategory = uiState.selectedCategory,
                     onCategorySelected = { category ->
-                        viewModel.selectCategory(category)
+                        if (category != null) {
+                            onNavigateToHistory(category)
+                        }
                     }
                 )
+            }
+
+            // AI 인사이트
+            if (uiState.aiInsight.isNotBlank()) {
+                item {
+                    AiInsightCard(insight = uiState.aiInsight)
+                }
             }
 
             // 오늘의 지출 + 전월 대비
@@ -216,8 +226,7 @@ fun HomeScreen(
                     todayExpenseCount = uiState.todayExpenseCount,
                     monthlyExpense = uiState.monthlyExpense,
                     lastMonthExpense = uiState.lastMonthExpense,
-                    comparisonPeriodLabel = uiState.comparisonPeriodLabel,
-                    aiInsight = uiState.aiInsight
+                    comparisonPeriodLabel = uiState.comparisonPeriodLabel
                 )
             }
 
@@ -308,7 +317,6 @@ fun HomeScreen(
             },
             onCategoryChange = { newCategory ->
                 viewModel.updateExpenseCategory(
-                    expenseId = expense.id,
                     storeName = expense.storeName,
                     newCategory = newCategory
                 )
@@ -407,7 +415,7 @@ fun HomeScreen(
     if (uiState.showSyncDialog) {
         AlertDialog(
             onDismissRequest = { /* 진행 중에는 닫기 불가 */ },
-            title = { Text("지출 내역 읽는 중") },
+            title = { Text(stringResource(R.string.home_sync_dialog_title)) },
             text = {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -478,7 +486,7 @@ fun MonthlyOverviewSection(
     onFullSync: () -> Unit,
     isSyncing: Boolean
 ) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
     var showSyncMenu by remember { mutableStateOf(false) }
 
     Column(
@@ -634,7 +642,7 @@ fun CategoryExpenseSection(
     selectedCategory: String? = null,
     onCategorySelected: (String?) -> Unit = {}
 ) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
     var showAll by remember { mutableStateOf(false) }
 
     // 기타 + 미분류를 하나로 합치고, 금액 내림차순 정렬
@@ -788,10 +796,9 @@ fun TodayAndComparisonSection(
     todayExpenseCount: Int,
     monthlyExpense: Int,
     lastMonthExpense: Int,
-    comparisonPeriodLabel: String,
-    aiInsight: String
+    comparisonPeriodLabel: String
 ) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
 
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -877,24 +884,6 @@ fun TodayAndComparisonSection(
             }
         }
 
-        // AI 인사이트 (API 키 있고 데이터 있을 때만 표시)
-        if (aiInsight.isNotBlank()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = aiInsight,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(12.dp),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
     }
 }
 
@@ -919,6 +908,24 @@ fun EmptyExpenseSection() {
             text = stringResource(R.string.home_empty_expense_subtitle),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+    }
+}
+
+@Composable
+fun AiInsightCard(insight: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Text(
+            text = insight,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(12.dp),
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }

@@ -28,7 +28,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,12 +72,12 @@ class MainActivity : ComponentActivity() {
         permissionChecked.value = true
 
         if (allGranted) {
-            Toast.makeText(this, "SMS 권한이 허용되었습니다", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.permission_sms_granted), Toast.LENGTH_SHORT).show()
             // 앱 시작 시 권한 획득 후 자동 동기화 플래그 설정
             shouldAutoSync.value = true
             pendingSyncAction?.invoke()
         } else {
-            Toast.makeText(this, "SMS 권한이 거부되었습니다. 설정에서 권한을 허용해주세요.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.permission_sms_denied), Toast.LENGTH_LONG).show()
         }
         pendingSyncAction = null
     }
@@ -90,7 +90,7 @@ class MainActivity : ComponentActivity() {
         checkInitialPermissions()
 
         setContent {
-            val themeModeStr by settingsDataStore.themeModeFlow.collectAsState(initial = "SYSTEM")
+            val themeModeStr by settingsDataStore.themeModeFlow.collectAsStateWithLifecycle(initialValue = "SYSTEM")
             val themeMode = try {
                 ThemeMode.valueOf(themeModeStr)
             } catch (_: Exception) {
@@ -218,11 +218,11 @@ fun MoneyTalkApp(
                         tonalElevation = 0.dp
                     ) {
                         bottomNavItems.forEach { item ->
-                            val isSelected = currentRoute == item.route
+                            val isSelected = currentRoute?.startsWith(item.route.substringBefore("?")) == true
                             NavigationBarItem(
                                 selected = isSelected,
                                 onClick = {
-                                    if (currentRoute != item.route) {
+                                    if (!isSelected) {
                                         navController.navigate(item.route) {
                                             popUpTo(Screen.Home.route) {
                                                 saveState = true
@@ -310,7 +310,7 @@ fun BackPressHandler(
                     onExitApp()
                 } else {
                     backPressedTime = currentTime
-                    Toast.makeText(context, "한 번 더 누르면 종료됩니다", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.exit_confirm), Toast.LENGTH_SHORT).show()
                 }
             }
 

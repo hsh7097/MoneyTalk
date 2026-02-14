@@ -2,8 +2,10 @@ package com.sanha.moneytalk.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.sanha.moneytalk.feature.chat.ui.ChatScreen
 import com.sanha.moneytalk.feature.history.ui.HistoryScreen
 import com.sanha.moneytalk.feature.home.ui.HomeScreen
@@ -36,12 +38,29 @@ fun NavGraph(
             HomeScreen(
                 onRequestSmsPermission = onRequestSmsPermission,
                 autoSyncOnStart = autoSyncOnStart,
-                onAutoSyncConsumed = onAutoSyncConsumed
+                onAutoSyncConsumed = onAutoSyncConsumed,
+                onNavigateToHistory = { category ->
+                    navController.navigate(Screen.History.createRoute(category)) {
+                        popUpTo(Screen.Home.route) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = false
+                    }
+                }
             )
         }
 
-        composable(Screen.History.route) {
-            HistoryScreen()
+        composable(
+            route = Screen.History.route,
+            arguments = listOf(
+                navArgument("category") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val category = backStackEntry.arguments?.getString("category")
+            HistoryScreen(filterCategory = category)
         }
 
         composable(Screen.Chat.route) {

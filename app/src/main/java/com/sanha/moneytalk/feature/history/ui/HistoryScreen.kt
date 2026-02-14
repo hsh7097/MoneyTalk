@@ -24,7 +24,7 @@ import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,9 +55,24 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
-    viewModel: HistoryViewModel = hiltViewModel()
+    viewModel: HistoryViewModel = hiltViewModel(),
+    filterCategory: String? = null
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    // 외부에서 전달된 카테고리 필터 적용 (홈 → 내역 이동 시, 일회성)
+    var filterConsumed by remember { mutableStateOf(false) }
+    LaunchedEffect(filterCategory) {
+        if (filterCategory != null && !filterConsumed) {
+            filterConsumed = true
+            viewModel.applyFilter(
+                sortOrder = SortOrder.DATE_DESC,
+                showExpenses = true,
+                showIncomes = true,
+                category = filterCategory
+            )
+        }
+    }
+
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -123,6 +138,11 @@ fun HistoryScreen(
                     showExpenses = uiState.showExpenses,
                     showIncomes = uiState.showIncomes,
                     hasActiveFilter = uiState.selectedCategory != null,
+                    scrollResetKey = Triple(
+                        uiState.selectedCategory,
+                        uiState.sortOrder,
+                        uiState.selectedYear to uiState.selectedMonth
+                    ),
                     onIntent = viewModel::onIntent
                 )
             }
@@ -136,7 +156,7 @@ fun HistoryScreen(
                     expenses = uiState.expenses,
                     onDelete = { viewModel.deleteExpense(it) },
                     onCategoryChange = { expense, newCategory ->
-                        viewModel.updateExpenseCategory(expense.id, expense.storeName, newCategory)
+                        viewModel.updateExpenseCategory(expense.storeName, newCategory)
                     },
                     onExpenseMemoChange = { id, memo -> viewModel.updateExpenseMemo(id, memo) }
                 )
@@ -158,7 +178,6 @@ fun HistoryScreen(
             onCategoryChange = { newCategory ->
                 viewModel.onIntent(
                     HistoryIntent.ChangeCategory(
-                        expense.id,
                         expense.storeName,
                         newCategory
                     )
@@ -212,13 +231,14 @@ fun TransactionListView(
     showExpenses: Boolean = true,
     showIncomes: Boolean = true,
     hasActiveFilter: Boolean = false,
+    scrollResetKey: Any? = null,
     onIntent: (HistoryIntent) -> Unit
 ) {
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    // 필터 변경 시 최상단 스크롤
-    LaunchedEffect(items) {
+    // 필터/월 변경 시에만 최상단 스크롤 (DB emit에는 반응하지 않음)
+    LaunchedEffect(scrollResetKey) {
         listState.scrollToItem(0)
     }
 

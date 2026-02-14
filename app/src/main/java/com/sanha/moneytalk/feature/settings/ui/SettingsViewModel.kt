@@ -3,6 +3,7 @@ package com.sanha.moneytalk.feature.settings.ui
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
@@ -79,6 +80,7 @@ enum class SettingsDialog {
     THEME
 }
 
+@Stable
 data class SettingsUiState(
     val apiKey: String = "",
     val hasApiKey: Boolean = false,

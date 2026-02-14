@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.feature.history.ui
 
 import android.content.Context
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.R
@@ -54,7 +55,7 @@ sealed interface HistoryIntent {
 
     // 지출 액션
     data class DeleteExpense(val expense: ExpenseEntity) : HistoryIntent
-    data class ChangeCategory(val expenseId: Long, val storeName: String, val newCategory: String) :
+    data class ChangeCategory(val storeName: String, val newCategory: String) :
         HistoryIntent
 
     data class UpdateExpenseMemo(val expenseId: Long, val memo: String?) : HistoryIntent
@@ -110,6 +111,7 @@ sealed interface TransactionListItem {
  * @property showExpenses 지출 표시 여부 (BottomSheet 필터)
  * @property showIncomes 수입 표시 여부 (BottomSheet 필터)
  */
+@Stable
 data class HistoryUiState(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
@@ -138,9 +140,9 @@ data class HistoryUiState(
     val filteredExpenseTotal: Int
         get() = if (showExpenses) expenses.sumOf { it.amount } else 0
 
-    /** 필터 적용된 수입 총합 (카테고리 필터는 지출에만 적용, 수입은 항상 표시) */
+    /** 필터 적용된 수입 총합 (카테고리 필터 시 수입 숨김) */
     val filteredIncomeTotal: Int
-        get() = if (showIncomes) incomes.sumOf { it.amount } else 0
+        get() = if (showIncomes && selectedCategory == null) incomes.sumOf { it.amount } else 0
 }
 
 /**
@@ -268,8 +270,7 @@ class HistoryViewModel @Inject constructor(
                 )
             }
 
-            // 월별/일별 총액은 제외 키워드 필터 적용 후 계산 (필터링 안된 전체 데이터 기준으로 별도 로드)
-            // 카드/카테고리 필터 없이 전체 데이터 기준으로 총액 계산
+            // 월별/일별 총액 계산 (제외 키워드 + 카테고리 필터 적용)
             try {
                 expenseRepository.getExpensesByDateRange(startTime, endTime)
                     .first()
@@ -286,11 +287,16 @@ class HistoryViewModel @Inject constructor(
                                 }
                             }
                         }
-                        val monthlyTotal = filteredForTotal.sumOf { it.amount }
-                        // 일별 총액도 필터링된 데이터 기준으로 계산
+                        // 카테고리 필터 적용
+                        val categoryFiltered = if (categoriesForFilter != null) {
+                            filteredForTotal.filter { it.category in categoriesForFilter }
+                        } else {
+                            filteredForTotal
+                        }
+                        val monthlyTotal = categoryFiltered.sumOf { it.amount }
                         val dateFormat =
                             java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
-                        val dailyTotalsMap = filteredForTotal
+                        val dailyTotalsMap = categoryFiltered
                             .groupBy { dateFormat.format(java.util.Date(it.dateTime)) }
                             .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
                         val incomeTotal =
@@ -325,13 +331,12 @@ class HistoryViewModel @Inject constructor(
                     }
                     val currentState = _uiState.value
                     val sortedExpenses = sortExpenses(expenses, currentState.sortOrder)
-                    // 카테고리 필터는 지출에만 적용, 수입은 항상 표시
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             expenses = sortedExpenses,
                             transactionListItems = buildTransactionListItems(
-                                sortedExpenses, currentState.incomes, currentState.sortOrder,
+                                sortedExpenses, getFilteredIncomes(currentState), currentState.sortOrder,
                                 currentState.showExpenses, currentState.showIncomes
                             )
                         )
@@ -436,14 +441,13 @@ class HistoryViewModel @Inject constructor(
 
     /**
      * 특정 지출의 카테고리 변경
-     * Room 매핑도 함께 업데이트하여 동일 가게명에 대해 학습
+     * 동일 가게명의 모든 지출을 일괄 변경 + 벡터 학습 + 유사 가게 전파
      */
-    fun updateExpenseCategory(expenseId: Long, storeName: String, newCategory: String) {
+    fun updateExpenseCategory(storeName: String, newCategory: String) {
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    categoryClassifierService.updateExpenseCategory(
-                        expenseId,
+                    categoryClassifierService.updateCategoryForAllSameStore(
                         storeName,
                         newCategory
                     )
@@ -502,15 +506,13 @@ class HistoryViewModel @Inject constructor(
                 }
                 val currentState = _uiState.value
                 val sortedResults = sortExpenses(results, currentState.sortOrder)
-                val filteredIncomes =
-                    if (currentState.selectedCategory != null) emptyList() else currentState.incomes
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         expenses = sortedResults,
                         monthlyTotal = results.sumOf { e -> e.amount },
                         transactionListItems = buildTransactionListItems(
-                            sortedResults, filteredIncomes, currentState.sortOrder,
+                            sortedResults, getFilteredIncomes(currentState), currentState.sortOrder,
                             currentState.showExpenses, currentState.showIncomes
                         )
                     )
@@ -677,29 +679,26 @@ class HistoryViewModel @Inject constructor(
                         smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
                     }
                 }
-                val total = filteredForTotal.sumOf { it.amount }
-                // 일별 총액도 필터링된 데이터 기준
-                val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
-                val map = filteredForTotal
-                    .groupBy { dateFormat.format(java.util.Date(it.dateTime)) }
-                    .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
                 // 대 카테고리 선택 시 소 카테고리도 포함
                 val syncCategoryFilter = state.selectedCategory?.let { catName ->
                     Category.fromDisplayName(catName).displayNamesIncludingSub
                 }
-                val expenses = filteredForTotal
+                val categoryFiltered = filteredForTotal
                     .filter { expense ->
                         syncCategoryFilter == null || expense.category in syncCategoryFilter
                     }
+                // 카테고리 필터 적용된 데이터 기준으로 총액/일별 계산
+                val total = categoryFiltered.sumOf { it.amount }
+                val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
+                val map = categoryFiltered
+                    .groupBy { dateFormat.format(java.util.Date(it.dateTime)) }
+                    .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
                 // 정렬 적용
-                val sorted = sortExpenses(expenses, state.sortOrder)
+                val sorted = sortExpenses(categoryFiltered, state.sortOrder)
                 Triple(total, map, sorted)
             }
 
             val state2 = _uiState.value
-            // 카테고리 필터 활성화 시 수입 항목 제외
-            val filteredIncomes =
-                if (state2.selectedCategory != null) emptyList() else state2.incomes
             _uiState.update {
                 it.copy(
                     monthlyTotal = result.first,
@@ -707,7 +706,7 @@ class HistoryViewModel @Inject constructor(
                     expenses = result.third,
                     isLoading = false,
                     transactionListItems = buildTransactionListItems(
-                        result.third, filteredIncomes, state2.sortOrder,
+                        result.third, getFilteredIncomes(state2), state2.sortOrder,
                         state2.showExpenses, state2.showIncomes
                     )
                 )
@@ -741,7 +740,7 @@ class HistoryViewModel @Inject constructor(
 
             is HistoryIntent.ChangeCategory -> {
                 _uiState.update { it.copy(selectedExpense = null) }
-                updateExpenseCategory(intent.expenseId, intent.storeName, intent.newCategory)
+                updateExpenseCategory(intent.storeName, intent.newCategory)
             }
 
             is HistoryIntent.UpdateExpenseMemo -> {
@@ -763,12 +762,15 @@ class HistoryViewModel @Inject constructor(
 
     // ========== 리스트 데이터 가공 ==========
 
+    /** 카테고리 필터 활성화 시 수입 제외 (전체 카테고리일 때만 수입 표시) */
+    private fun getFilteredIncomes(state: HistoryUiState): List<IncomeEntity> =
+        if (state.selectedCategory != null) emptyList() else state.incomes
+
     /** transactionListItems 갱신 */
     private fun updateTransactionListItems() {
         val state = _uiState.value
-        // 카테고리 필터는 지출에만 적용, 수입은 항상 표시
         val items = buildTransactionListItems(
-            state.expenses, state.incomes, state.sortOrder,
+            state.expenses, getFilteredIncomes(state), state.sortOrder,
             state.showExpenses, state.showIncomes
         )
         _uiState.update { it.copy(transactionListItems = items) }
