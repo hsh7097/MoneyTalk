@@ -8,6 +8,7 @@ import com.google.ai.client.generativeai.type.generationConfig
 import com.google.gson.JsonParser
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
 import com.sanha.moneytalk.core.model.Category
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -31,7 +32,8 @@ import javax.inject.Singleton
 class GeminiSmsExtractor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsDataStore: SettingsDataStore,
-    private val categoryReferenceProvider: CategoryReferenceProvider
+    private val categoryReferenceProvider: CategoryReferenceProvider,
+    private val apiKeyProvider: GeminiApiKeyProvider
 ) {
     companion object {
         private const val TAG = "gemini"
@@ -120,7 +122,7 @@ class GeminiSmsExtractor @Inject constructor(
     private var batchExtractorModel: GenerativeModel? = null
 
     private suspend fun getModel(): GenerativeModel? {
-        val apiKey = settingsDataStore.getGeminiApiKey()
+        val apiKey = apiKeyProvider.getApiKey()
         if (apiKey.isBlank()) return null
 
         if (extractorModel == null) {
@@ -139,7 +141,7 @@ class GeminiSmsExtractor @Inject constructor(
 
     /** 배치 추출용 모델 (maxOutputTokens가 더 큼) */
     private suspend fun getBatchModel(): GenerativeModel? {
-        val apiKey = settingsDataStore.getGeminiApiKey()
+        val apiKey = apiKeyProvider.getApiKey()
         if (apiKey.isBlank()) return null
 
         if (batchExtractorModel == null) {
