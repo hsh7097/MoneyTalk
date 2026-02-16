@@ -106,6 +106,14 @@
     <string name="home_empty_expense_subtitle">문자를 동기화해서 지출을 추가해보세요</string>
     <string name="home_sync_dialog_title">지출 내역 읽는 중</string>
 
+    <!-- 음성 입력 (STT) -->
+    <string name="stt_start">음성 입력 시작</string>
+    <string name="stt_stop">음성 입력 중지</string>
+    <string name="stt_error_no_match">음성을 인식하지 못했어요. 다시 시도해주세요.</string>
+    <string name="stt_error_audio">마이크 오류가 발생했어요.</string>
+    <string name="stt_error_general">음성 인식 중 오류가 발생했어요.</string>
+    <string name="permission_audio_denied">마이크 권한이 필요합니다.</string>
+
     <!-- 권한 및 종료 -->
     <string name="permission_sms_granted">SMS 권한이 허용되었습니다</string>
     <string name="permission_sms_denied">SMS 권한이 거부되었습니다. 설정에서 권한을 허용해주세요.</string>

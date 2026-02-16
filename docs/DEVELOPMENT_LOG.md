@@ -4,6 +4,57 @@
 
 ---
 
+## 2026-02-14~ - Compose Stability + 리팩토링 + 기능 개선
+
+### 작업 내용
+
+#### 1. 대형 파일 분할 + Repository 추상화
+- Repository 인터페이스/구현체 분리 (GeminiRepository, ChatRepository, StoreEmbeddingRepository, GeminiCategoryRepository, CategoryClassifierService)
+- 하드코딩 문자열 → strings.xml 이전
+- Hilt binding 수정 (GeminiRepository 인터페이스 바인딩 추가)
+
+#### 2. Compose Stability 최적화
+- @Immutable/@Stable 어노테이션 적용 (데이터 클래스, sealed interface 등)
+- 릴리스 DB 안전성 개선 (fallbackToDestructiveMigration 대신 안전한 마이그레이션)
+- 코드 리뷰 리포트 파일 제거 (레거시 스냅샷)
+
+#### 3. 홈→내역 카테고리 네비게이션
+- Screen.History에 `category` optional 파라미터 추가
+- 홈에서 카테고리 클릭 시 해당 카테고리 필터가 적용된 내역 화면으로 이동
+- AI 인사이트를 별도 컴포넌트로 분리
+
+#### 4. 달력 뷰 카테고리 필터 버그 수정
+- dailyTotals/monthlyTotal에 카테고리 필터가 미적용되던 버그 수정
+
+#### 5. AI 인사이트 전월 비교 데이터 추가
+- 프롬프트에 전월 카테고리별 비교 데이터 포함
+
+#### 6. 가맹점 일괄 카테고리 업데이트
+- 카테고리 변경 시 동일 가맹점 전체 일괄 업데이트
+- updateExpenseCategory에서 미사용 expenseId 파라미터 제거
+
+#### 7. safe-commit 스킬 추가
+- `.claude/skills/safe-commit/SKILL.md` 추가 (셀프 리뷰 후 안전 커밋)
+
+### 변경 파일
+- `HomeScreen.kt` — AI 인사이트 분리, 카테고리 네비게이션
+- `HomeViewModel.kt` — AI 인사이트 전월 비교 데이터, 인사이트 입력 해시 가드
+- `HistoryScreen.kt` — 카테고리 파라미터 수신, 필터 적용
+- `HistoryViewModel.kt` — 카테고리 필터 적용 달력 뷰 수정
+- `Screen.kt` — History 라우트에 category 파라미터
+- `NavGraph.kt` — category argument 전달
+- `GeminiRepository.kt` / `GeminiRepositoryImpl.kt` — 인터페이스/구현 분리
+- `ChatRepository.kt` / `ChatRepositoryImpl.kt` — 인터페이스/구현 분리
+- `StoreEmbeddingRepository.kt` / `StoreEmbeddingRepositoryImpl.kt` — 인터페이스/구현 분리
+- `CategoryClassifierService.kt` / `CategoryClassifierServiceImpl.kt` — 인터페이스/구현 분리
+- `GeminiCategoryRepository.kt` / `GeminiCategoryRepositoryImpl.kt` — 인터페이스/구현 분리
+- `RepositoryModule.kt` — Hilt 바인딩 추가
+- `string_prompt.xml` — AI 인사이트 프롬프트 업데이트
+- `strings.xml` — 하드코딩 문자열 이전
+- `.claude/skills/safe-commit/SKILL.md` — 신규
+
+---
+
 ## 2026-02-14 - Phase 2 완료 + History 필터 초기화 버튼
 
 ### 작업 내용
@@ -323,10 +374,13 @@ app/src/main/java/com/sanha/moneytalk/
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|-----------|
+| 2026-02-15 | - | 문서 갱신 (ARCHITECTURE, AI_CONTEXT, AI_HANDOFF, PROJECT_CONTEXT 등) |
+| 2026-02-14~ | 0.7.0 | safe-commit 스킬, 홈→내역 네비게이션, AI 인사이트 개선, 가맹점 일괄 업데이트, Compose Stability, 리팩토링 |
 | 2026-02-14 | 0.6.0 | Phase 2 완료 + History 필터 초기화 버튼 |
 | 2026-02-13 | 0.5.0 | 채팅 Clarification 루프 + Karpathy 수치 정확성 규칙 |
-| 2026-02-05 | 0.1.0 | 프로젝트 초기 설정 및 기본 구조 완성 |
-| 2026-02-05 | 0.1.1 | 색상 리소스 대폭 추가 (80+ 색상) |
-| 2026-02-08 | 0.2.0 | Phase 1 리팩토링, 채팅 액션 확장, Claude 레거시 제거 |
-| 2026-02-09 | 0.3.0 | OwnedCard, SMS 제외 키워드, ANALYTICS, DB v5 |
+| 2026-02-12 | - | History UI 개편, 필터 BottomSheet, NavigationBar 컴팩트화, DpTextUnit 유틸 |
 | 2026-02-11 | 0.4.0 | UI 공통화 (TransactionCard, GroupHeader, SegmentedTab), Intent 패턴 |
+| 2026-02-09 | 0.3.0 | OwnedCard, SMS 제외 키워드, ANALYTICS, DB v5 |
+| 2026-02-08 | 0.2.0 | Phase 1 리팩토링, 채팅 액션 확장, Claude 레거시 제거 |
+| 2026-02-05 | 0.1.1 | 색상 리소스 대폭 추가 (80+ 색상) |
+| 2026-02-05 | 0.1.0 | 프로젝트 초기 설정 및 기본 구조 완성 |

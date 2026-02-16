@@ -1,7 +1,7 @@
 # MoneyTalk 앱 엔트리 포인트 맵
 
 > 코드 기준 앱 시작 지점과 주요 화면 진입 흐름 정리
-> 마지막 확인: 2026-02-09
+> 마지막 확인: 2026-02-15
 
 ## 1. 엔트리 포인트
 
@@ -37,7 +37,7 @@
 |---|---|---|---|
 | `splash` | `Screen.Splash` | 앱 시작 직후 | `feature/splash/ui/SplashScreen.kt` |
 | `home` | `Screen.Home` | 스플래시 완료 후 기본 진입 | `feature/home/ui/HomeScreen.kt` |
-| `history` | `Screen.History` | 하단 탭 | `feature/history/ui/HistoryScreen.kt` |
+| `history?category={category}` | `Screen.History` | 하단 탭 / 홈 카테고리 클릭 | `feature/history/ui/HistoryScreen.kt` |
 | `chat` | `Screen.Chat` | 하단 탭 | `feature/chat/ui/ChatScreen.kt` |
 | `settings` | `Screen.Settings` | 하단 탭 | `feature/settings/ui/SettingsScreen.kt` |
 
@@ -55,3 +55,9 @@
 
 탭 정의 파일:
 - `app/src/main/java/com/sanha/moneytalk/navigation/BottomNavItem.kt`
+
+## 5. 화면 간 딥링크
+
+| 출발 | 도착 | 파라미터 | 설명 |
+|------|------|---------|------|
+| Home (카테고리 클릭) | History | `category={카테고리명}` | 해당 카테고리 필터가 적용된 내역 화면으로 이동 |

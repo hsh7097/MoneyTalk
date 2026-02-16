@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+### Added (2026-02-14 이후)
+- **safe-commit 스킬**: `.claude/skills/safe-commit/SKILL.md` 추가 (셀프 리뷰 후 안전 커밋)
+- **홈→내역 카테고리 네비게이션**: 홈에서 카테고리 클릭 시 내역 화면으로 이동
+- **AI 인사이트 분리**: HomeScreen에서 AI 인사이트 카드 별도 컴포넌트화
+- **AI 인사이트 전월 비교**: 프롬프트에 전월 카테고리별 비교 데이터 추가
+- **가맹점 일괄 카테고리 업데이트**: 카테고리 변경 시 동일 가맹점 일괄 업데이트
+
+### Changed (2026-02-14 이후)
+- **Compose Stability 최적화**: @Immutable/@Stable 어노테이션, 릴리스 DB 안전성 개선
+- **대형 파일 분할**: Repository 추상화 (Interface + Impl 분리)
+- **하드코딩 문자열 제거**: strings.xml로 이전
+
+### Fixed (2026-02-14 이후)
+- **달력 뷰 카테고리 필터 버그**: dailyTotals/monthlyTotal에 카테고리 필터 미적용 수정
+- **수입 필터 버그 수정**
+
 ### Added (2026-02-14)
 - **History 필터 초기화 버튼**: FilterBottomSheet 상단에 조건부 "초기화" 버튼
   - 필터가 기본값이 아닐 때만 표시

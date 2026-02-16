@@ -1,7 +1,7 @@
 # AI_CONTEXT.md - MoneyTalk 프로젝트 컨텍스트
 
 > AI 에이전트가 MoneyTalk 프로젝트를 이해하고 작업하기 위한 핵심 컨텍스트 문서
-> **최종 갱신**: 2026-02-13
+> **최종 갱신**: 2026-02-15
 
 ---
 
@@ -27,17 +27,19 @@ app/src/main/java/com/sanha/moneytalk/
 ├── core/
 │   ├── database/          # Room DB (entity, dao, repository 일부)
 │   │   ├── entity/        # 10개 Entity
-│   │   ├── dao/           # 10개 DAO
+│   │   ├── dao/           # 9개 DAO
 │   │   ├── converter/     # FloatListConverter
 │   │   ├── OwnedCardRepository.kt      # 카드 화이트리스트
 │   │   └── SmsExclusionRepository.kt   # SMS 제외 키워드
 │   ├── datastore/         # DataStore (설정값)
 │   ├── di/                # Hilt DI 모듈
 │   ├── model/             # Category enum, SmsAnalysisResult 등
-│   ├── ui/component/      # 공통 UI 컴포넌트
-│   │   ├── transaction/card/    # TransactionCardCompose/Info
-│   │   ├── transaction/header/  # TransactionGroupHeaderCompose/Info
-│   │   └── tab/                 # SegmentedTabRowCompose/Info
+│   ├── ui/                # 공통 UI (AppSnackbarBus, ClassificationState)
+│   │   └── component/     # 공통 UI 컴포넌트 (11개)
+│   │       ├── CategoryIcon, ExpenseItemCard
+│   │       ├── settings/          # SettingsItem/Section Compose/Info
+│   │       ├── tab/               # SegmentedTabRowCompose/Info
+│   │       └── transaction/       # card/ (TransactionCard), header/ (GroupHeader)
 │   ├── similarity/        # 유사도 판정 정책 (SimilarityPolicy 구현체)
 │   └── util/              # 핵심 유틸 (SMS파싱, 벡터엔진, 분류기 등)
 ├── feature/
@@ -298,7 +300,7 @@ ChatViewModel.sendMessage(message)
 
 ---
 
-## 6. UI 공통 컴포넌트 (core/ui/component/)
+## 6. UI 공통 컴포넌트 (core/ui/component/, 11개 파일)
 
 ### 6-1. TransactionCard (거래 카드)
 - **Interface**: `TransactionCardInfo` — title, subtitle, amount, isIncome, category, iconEmoji
@@ -312,11 +314,20 @@ ChatViewModel.sendMessage(message)
 - **사용처**: HistoryScreen
 
 ### 6-3. SegmentedTabRow (탭 버튼)
-- **Interface**: `SegmentedTabInfo` — label, isSelected, selectedColor, selectedTextColor
-- **Composable**: `SegmentedTabRowCompose` — 라운드 버튼 스타일 탭
-- **사용처**: HistoryScreen (정렬 옵션)
+- **Interface**: `SegmentedTabInfo` — label, isSelected, selectedColor, selectedTextColor, icon
+- **Composable**: `SegmentedTabRowCompose` — 라운드 버튼 스타일 탭 (아이콘 지원)
+- **사용처**: HistoryScreen (보기 모드 전환)
 
-### 6-4. Preview 배치 규칙
+### 6-4. SettingsItem / SettingsSection (설정 항목)
+- **Interface**: `SettingsItemInfo` — title, subtitle, onClick 등
+- **Composable**: `SettingsItemCompose`, `SettingsSectionCompose`
+- **사용처**: SettingsScreen
+
+### 6-5. CategoryIcon (카테고리 아이콘)
+- **Composable**: `CategoryIcon` — 카테고리별 이모지 아이콘 렌더링
+- **사용처**: HomeScreen, HistoryScreen, ChatScreen
+
+### 6-6. Preview 배치 규칙
 - Preview 파일은 `src/debug/` 소스셋에 동일 패키지 경로로 배치 (release 빌드 제외)
 
 ---

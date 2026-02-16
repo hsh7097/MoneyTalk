@@ -231,6 +231,14 @@
     <string name="dialog_api_key_message_settings">Get a free API key from\nGoogle AI Studio (aistudio.google.com)</string>
     <string name="dialog_api_key_current">Currently set</string>
 
+    <!-- Speech-to-Text (STT) -->
+    <string name="stt_start">Start voice input</string>
+    <string name="stt_stop">Stop voice input</string>
+    <string name="stt_error_no_match">Could not recognize speech. Please try again.</string>
+    <string name="stt_error_audio">Microphone error occurred.</string>
+    <string name="stt_error_general">An error occurred during speech recognition.</string>
+    <string name="permission_audio_denied">Microphone permission is required.</string>
+
     <!-- Category Classification Dialog -->
     <string name="classify_dialog_title">Auto-Classify Categories</string>
     <string name="classify_dialog_message">%d items need classification.\n\nAI will automatically classify categories.\nThis may take a moment on first run.</string>

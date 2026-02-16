@@ -1,5 +1,15 @@
 package com.sanha.moneytalk.feature.chat.ui
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,6 +33,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledIconButton
@@ -34,6 +46,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -42,10 +55,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.R
 
@@ -144,6 +159,87 @@ fun ChatRoomView(
 ) {
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val context = LocalContext.current
+
+    // ==================== 음성 입력 (STT) ====================
+    var isListening by remember { mutableStateOf(false) }
+
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            isListening = true
+        } else {
+            Toast.makeText(
+                context,
+                context.getString(R.string.permission_audio_denied),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    val speechRecognizer = remember {
+        SpeechRecognizer.createSpeechRecognizer(context)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            speechRecognizer.destroy()
+        }
+    }
+
+    LaunchedEffect(isListening) {
+        if (isListening) {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                )
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault().toLanguageTag())
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            }
+
+            speechRecognizer.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {}
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {}
+
+                override fun onError(error: Int) {
+                    isListening = false
+                    val errorMsg = when (error) {
+                        SpeechRecognizer.ERROR_NO_MATCH ->
+                            context.getString(R.string.stt_error_no_match)
+                        SpeechRecognizer.ERROR_AUDIO ->
+                            context.getString(R.string.stt_error_audio)
+                        else ->
+                            context.getString(R.string.stt_error_general)
+                    }
+                    Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                }
+
+                override fun onResults(results: Bundle?) {
+                    isListening = false
+                    val matches = results
+                        ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    val spokenText = matches?.firstOrNull() ?: return
+                    messageText = if (messageText.isBlank()) {
+                        spokenText
+                    } else {
+                        "${messageText} $spokenText"
+                    }
+                }
+
+                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+
+            speechRecognizer.startListening(intent)
+        } else {
+            speechRecognizer.stopListening()
+        }
+    }
 
     // 새 메시지가 오면 스크롤
     LaunchedEffect(uiState.messages.size) {
@@ -286,6 +382,38 @@ fun ChatRoomView(
                     maxLines = 3,
                     enabled = hasApiKey && !uiState.isLoading
                 )
+
+                // 마이크 버튼 (음성 입력)
+                IconButton(
+                    onClick = {
+                        if (isListening) {
+                            isListening = false
+                        } else {
+                            val hasPermission = ContextCompat.checkSelfPermission(
+                                context, Manifest.permission.RECORD_AUDIO
+                            ) == PackageManager.PERMISSION_GRANTED
+
+                            if (hasPermission) {
+                                isListening = true
+                            } else {
+                                audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        }
+                    },
+                    enabled = hasApiKey && !uiState.isLoading
+                ) {
+                    Icon(
+                        imageVector = if (isListening) Icons.Default.Mic else Icons.Default.MicOff,
+                        contentDescription = stringResource(
+                            if (isListening) R.string.stt_stop else R.string.stt_start
+                        ),
+                        tint = if (isListening) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
 
                 FilledIconButton(
                     onClick = {
