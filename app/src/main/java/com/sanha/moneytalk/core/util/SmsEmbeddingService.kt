@@ -4,7 +4,6 @@ import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,7 +25,6 @@ import javax.inject.Singleton
  */
 @Singleton
 class SmsEmbeddingService @Inject constructor(
-    private val settingsDataStore: SettingsDataStore,
     private val apiKeyProvider: GeminiApiKeyProvider
 ) {
     companion object {

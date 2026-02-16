@@ -5,7 +5,6 @@ import android.util.Log
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.generationConfig
 import com.sanha.moneytalk.R
-import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
 import com.sanha.moneytalk.core.model.Category
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -25,7 +24,6 @@ import kotlin.random.Random
 @Singleton
 class GeminiCategoryRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val settingsDataStore: SettingsDataStore,
     private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider,
     private val apiKeyProvider: GeminiApiKeyProvider
 ) : GeminiCategoryRepository {
@@ -55,12 +53,14 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
     }
 
     private var generativeModel: GenerativeModel? = null
+    private var cachedApiKey: String? = null
 
     /**
      * Gemini API 키 설정
      */
     override suspend fun setApiKey(apiKey: String) {
         apiKeyProvider.saveUserApiKey(apiKey)
+        cachedApiKey = apiKey
         initModel(apiKey)
     }
 
@@ -118,11 +118,12 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 return@withContext emptyMap()
             }
 
-            if (generativeModel == null) {
+            if (generativeModel == null || apiKey != cachedApiKey) {
                 Log.e(
                     "sanha",
                     "GeminiCategoryRepository[classifyStoreNames] : 모델 초기화 필요 → initModel() 호출"
                 )
+                cachedApiKey = apiKey
                 initModel(apiKey)
             }
 

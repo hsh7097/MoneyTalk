@@ -7,7 +7,6 @@ import com.google.ai.client.generativeai.type.content
 import com.google.ai.client.generativeai.type.generationConfig
 import com.google.gson.JsonParser
 import com.sanha.moneytalk.R
-import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
 import com.sanha.moneytalk.core.model.Category
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -31,7 +30,6 @@ import javax.inject.Singleton
 @Singleton
 class GeminiSmsExtractor @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val settingsDataStore: SettingsDataStore,
     private val categoryReferenceProvider: CategoryReferenceProvider,
     private val apiKeyProvider: GeminiApiKeyProvider
 ) {
@@ -120,12 +118,14 @@ class GeminiSmsExtractor @Inject constructor(
 
     private var extractorModel: GenerativeModel? = null
     private var batchExtractorModel: GenerativeModel? = null
+    private var cachedApiKey: String? = null
 
     private suspend fun getModel(): GenerativeModel? {
         val apiKey = apiKeyProvider.getApiKey()
         if (apiKey.isBlank()) return null
 
-        if (extractorModel == null) {
+        if (extractorModel == null || apiKey != cachedApiKey) {
+            cachedApiKey = apiKey
             extractorModel = GenerativeModel(
                 modelName = "gemini-2.5-flash-lite",
                 apiKey = apiKey,
@@ -144,7 +144,8 @@ class GeminiSmsExtractor @Inject constructor(
         val apiKey = apiKeyProvider.getApiKey()
         if (apiKey.isBlank()) return null
 
-        if (batchExtractorModel == null) {
+        if (batchExtractorModel == null || apiKey != cachedApiKey) {
+            cachedApiKey = apiKey
             batchExtractorModel = GenerativeModel(
                 modelName = "gemini-2.5-flash-lite",
                 apiKey = apiKey,

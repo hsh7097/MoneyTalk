@@ -5,7 +5,6 @@ import android.util.Log
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
 import com.google.ai.client.generativeai.type.generationConfig
-import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
 import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.DataQueryParser
@@ -29,7 +28,6 @@ import javax.inject.Singleton
 @Singleton
 class GeminiRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val settingsDataStore: SettingsDataStore,
     private val apiKeyProvider: GeminiApiKeyProvider
 ) : GeminiRepository {
     private var cachedApiKey: String? = null
