@@ -14,7 +14,12 @@
       "Bash(git checkout:*)",
       "Bash(gh pr create:*)",
       "Bash(git fetch:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(claude:*)",
+      "Bash(npm view:*)",
+      "Bash(npm show:*)",
+      "Bash(python3:*)",
+      "Bash(done)"
     ]
   }
 }
