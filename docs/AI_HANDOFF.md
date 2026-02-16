@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-14
+> **최종 갱신**: 2026-02-15
 
 ---
 
@@ -46,9 +46,18 @@
 **History 필터 초기화 버튼**: ✅ 완료 (2026-02-14)
 - FilterBottomSheet 상단에 조건부 "초기화" 버튼 추가
 
+**추가 개선** (2026-02-14 이후)
+- safe-commit 스킬 추가 (.claude/skills/safe-commit/SKILL.md)
+- 홈→내역 카테고리 네비게이션 + AI 인사이트 분리
+- 달력 뷰 카테고리 필터 적용 버그 수정
+- AI 인사이트 프롬프트에 전월 카테고리별 비교 데이터 추가
+- 동일 가맹점 카테고리 변경 시 일괄 업데이트
+- Compose Stability 최적화 + 릴리스 DB 안전성 개선
+- 대형 파일 분할 + Repository 추상화 + 하드코딩 문자열 제거
+
 ### 대기 중인 작업
 
-현재 없음
+- `chore/add-safe-commit-skill` 브랜치 → develop 머지 필요 (safe-commit 스킬 추가)
 
 ---
 
@@ -57,9 +66,8 @@
 | 구분 | 경로 |
 |------|------|
 | **실제 작업 경로** | `C:\Users\hsh70\AndroidStudioProjects\MoneyTalk` |
-| CWD 경로 (Claude Code) | `C:\Users\hsh70\OneDrive\문서\Android\MoneyTalk` |
 
-> **코드 수정은 반드시 AndroidStudioProjects 경로에서!** OneDrive 경로는 git만 공유.
+> 코드 수정, git, 빌드 모두 이 경로에서 수행
 
 ---
 
@@ -89,7 +97,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 ### 알려진 이슈
 - `SmsBatchProcessor.kt`의 그룹핑 임계값(0.95)과 `StoreNameGrouper.kt`(0.88)은 의도적으로 다름 (SMS 패턴 vs 가게명)
-- ChatViewModel.kt가 대형 파일(~1670줄) — 향후 query/action 로직 분리 후보
+- ChatViewModel.kt가 대형 파일(~1717줄) — 향후 query/action 로직 분리 후보
 
 ### Git 규칙
 - 브랜치 전략: `develop`에서 분기
@@ -102,6 +110,8 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-15 | 문서 갱신 (ARCHITECTURE, AI_CONTEXT, AI_HANDOFF, PROJECT_CONTEXT 등) | 완료 |
+| 2026-02-14~ | safe-commit 스킬, 홈→내역 네비게이션, 달력 필터 버그 수정, AI 인사이트, 가맹점 일괄 업데이트, Compose Stability, 리팩토링 | 완료 |
 | 2026-02-14 | Phase 2 전체 완료 + History 필터 초기화 버튼 | 완료 |
 | 2026-02-13 | 채팅 프롬프트 Karpathy Guidelines 적용 + Clarification 루프 구현 | 완료 |
 | 2026-02-11 | HistoryScreen UI 공통화 + Intent 패턴 적용 | 완료 |
@@ -163,12 +173,19 @@ feature/chat/ui/ChatViewModel.kt        ← 채팅 UI + 쿼리/액션/분석 실
 res/values/string_prompt.xml            ← 모든 AI 프롬프트 (6종)
 ```
 
-### UI 공통 컴포넌트
+### UI 공통 컴포넌트 (11개 파일)
 ```
+core/ui/AppSnackbarBus.kt                                       ← 전역 스낵바 이벤트 버스
+core/ui/ClassificationState.kt                                  ← 분류 상태 관리
+core/ui/component/CategoryIcon.kt                               ← 카테고리 이모지 아이콘
+core/ui/component/ExpenseItemCard.kt                            ← 지출 항목 카드
+core/ui/component/settings/SettingsItemCompose.kt               ← 설정 항목
+core/ui/component/settings/SettingsItemInfo.kt                  ← 설정 항목 Contract
+core/ui/component/settings/SettingsSectionCompose.kt            ← 설정 섹션
 core/ui/component/transaction/card/TransactionCardCompose.kt    ← 거래 카드
 core/ui/component/transaction/card/TransactionCardInfo.kt       ← 거래 카드 Contract
 core/ui/component/transaction/header/TransactionGroupHeaderCompose.kt ← 그룹 헤더
 core/ui/component/transaction/header/TransactionGroupHeaderInfo.kt    ← 그룹 헤더 Contract
-core/ui/component/tab/SegmentedTabRowCompose.kt                 ← 탭 버튼
+core/ui/component/tab/SegmentedTabRowCompose.kt                 ← 탭 버튼 (아이콘 지원)
 core/ui/component/tab/SegmentedTabInfo.kt                       ← 탭 Contract
 ```

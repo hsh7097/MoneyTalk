@@ -11,7 +11,6 @@
 - **슬로건**: "돈과 대화하다, AI와 함께"
 - **패키지명**: `com.sanha.moneytalk`
 - **실제 작업 경로**: `C:\Users\hsh70\AndroidStudioProjects\MoneyTalk`
-- **CWD 경로**: `C:\Users\hsh70\OneDrive\문서\Android\MoneyTalk` (Claude Code용, git만 공유)
 
 ### 앱의 목적
 카드 결제 문자(SMS/MMS/RCS)를 자동으로 수집하고, AI가 지출 정보를 추출하여
@@ -51,7 +50,7 @@
 - 중복 방지 (smsId 기반)
 - **상세**: [SMS_PARSING.md](./SMS_PARSING.md)
 
-### 2.2 카테고리 자동 분류 (15개 카테고리)
+### 2.2 카테고리 자동 분류 (18개 카테고리)
 - 4-tier 분류: Room 캐시 → 벡터 유사도 → 로컬 키워드 → Gemini 배치
 - 사용자 수정 시 유사 가게에 자동 전파 (벡터 유사도 ≥ 0.90)
 - 시맨틱 그룹핑으로 Gemini API 호출 ~40% 절감
@@ -94,10 +93,12 @@
 | 📖 | 교육 | EDUCATION | |
 | 🏠 | 주거 | HOUSING | |
 | 🧺 | 생활 | LIVING | |
+| 🛡️ | 보험 | INSURANCE | |
+| 🔄 | 계좌이체 | TRANSFER | |
 | 📋 | 경조 | EVENTS | |
-| 💸 | 배달 | DELIVERY | |
+| 🛵 | 배달 | DELIVERY | FOOD의 서브카테고리 |
 | 💌 | 기타 | ETC | |
-| 🛵 | 미분류 | UNCLASSIFIED | AI 분류 전 기본값 |
+| ❓ | 미분류 | UNCLASSIFIED | AI 분류 전 기본값 |
 
 ---
 
@@ -209,81 +210,38 @@ app/src/main/java/com/sanha/moneytalk/
 ├── MainActivity.kt                       # 메인 액티비티 + Navigation
 │
 ├── core/
-│   ├── database/
-│   │   ├── AppDatabase.kt               # Room Database
-│   │   ├── dao/
-│   │   │   ├── ExpenseDao.kt            # 지출 DAO
-│   │   │   ├── IncomeDao.kt             # 수입 DAO
-│   │   │   ├── ChatDao.kt               # 채팅 기록 DAO
-│   │   │   ├── SmsPatternDao.kt         # SMS 벡터 패턴 DAO
-│   │   │   ├── StoreEmbeddingDao.kt     # 가게 임베딩 DAO
-│   │   │   └── CategoryMappingDao.kt    # 카테고리 매핑 DAO
-│   │   └── entity/
-│   │       ├── ExpenseEntity.kt          # 지출 엔티티
-│   │       ├── IncomeEntity.kt           # 수입 엔티티
-│   │       ├── ChatEntity.kt             # 채팅 메시지 엔티티
-│   │       ├── ChatSessionEntity.kt      # 채팅 세션 엔티티
-│   │       ├── SmsPatternEntity.kt       # SMS 벡터 패턴 (768차원)
-│   │       ├── StoreEmbeddingEntity.kt   # 가게 임베딩 (768차원)
-│   │       └── CategoryMappingEntity.kt  # 카테고리 정확 매핑 캐시
-│   │
+│   ├── database/                         # Room DB (v5, 10 entities, 9 DAOs)
+│   │   ├── AppDatabase.kt
+│   │   ├── dao/                          # 9개 DAO
+│   │   ├── entity/                       # 10개 Entity
+│   │   ├── OwnedCardRepository.kt       # 카드 화이트리스트
+│   │   └── SmsExclusionRepository.kt    # SMS 제외 키워드
 │   ├── datastore/
-│   │   └── SettingsDataStore.kt          # API 키, 수입, 설정 저장
-│   │
-│   └── util/
-│       ├── SmsReader.kt                  # SMS/MMS/RCS 통합 읽기
-│       ├── SmsParser.kt                  # 정규식 기반 SMS 파싱
-│       ├── HybridSmsClassifier.kt        # 3-tier 하이브리드 분류기
-│       ├── GeminiSmsExtractor.kt         # Gemini LLM SMS 추출
-│       ├── SmsEmbeddingService.kt        # 임베딩 생성 (768차원)
-│       ├── VectorSearchEngine.kt         # 코사인 유사도 검색
-│       ├── SmsBatchProcessor.kt          # 대량 배치 처리 최적화
-│       ├── StoreNameGrouper.kt           # 시맨틱 가게명 그룹핑
-│       ├── ChatContextBuilder.kt         # 채팅 컨텍스트 조립
-│       ├── DataQueryParser.kt            # 쿼리/액션 JSON 파싱
-│       └── DateUtils.kt                  # 날짜 유틸리티
-│
-├── domain/
-│   └── model/
-│       └── Category.kt                   # 카테고리 enum (17개)
+│   │   └── SettingsDataStore.kt
+│   ├── di/                               # Hilt DI (Database, Network, Repository)
+│   ├── model/
+│   │   ├── Category.kt                   # 카테고리 enum (18개)
+│   │   └── SmsAnalysisResult.kt
+│   ├── similarity/                       # 유사도 정책 SSOT (5개)
+│   ├── ui/                               # 공통 UI (11개 컴포넌트)
+│   │   ├── AppSnackbarBus.kt
+│   │   ├── ClassificationState.kt
+│   │   └── component/                    # settings/, tab/, transaction/
+│   └── util/                             # 핵심 유틸 (19개)
 │
 ├── feature/
-│   ├── home/
-│   │   ├── ui/
-│   │   │   ├── HomeScreen.kt            # 홈 화면 UI
-│   │   │   └── HomeViewModel.kt         # 홈 ViewModel + 동기화
-│   │   └── data/
-│   │       ├── CategoryClassifierService.kt  # 4-tier 카테고리 분류
-│   │       ├── StoreEmbeddingRepository.kt   # 가게 벡터 DB
-│   │       └── CategoryRepository.kt         # 카테고리 매핑 DB
-│   │
-│   ├── history/
-│   │   └── ui/
-│   │       ├── HistoryScreen.kt         # 내역 화면 (목록/달력/수입)
-│   │       └── HistoryViewModel.kt
-│   │
-│   ├── chat/
-│   │   ├── ui/
-│   │   │   ├── ChatScreen.kt            # AI 상담 화면
-│   │   │   └── ChatViewModel.kt
-│   │   └── data/
-│   │       ├── GeminiRepository.kt       # Gemini API (3개 모델)
-│   │       ├── ChatRepository.kt         # 채팅 데이터 인터페이스
-│   │       ├── ChatRepositoryImpl.kt     # Rolling Summary 구현
-│   │       └── ChatPrompts.kt            # 시스템 프롬프트 정의
-│   │
-│   └── settings/
-│       └── ui/
-│           ├── SettingsScreen.kt         # 설정 화면
-│           └── SettingsViewModel.kt
+│   ├── home/                             # 홈 (data 9개 + ui 2개)
+│   ├── history/                          # 내역 (ui 6개: Screen, ViewModel, Calendar, Dialogs, Filter, Header)
+│   ├── chat/                             # AI 상담 (data 5개 + ui 4개)
+│   ├── settings/                         # 설정 (ui 5개)
+│   └── splash/                           # 스플래시 (ui 1개)
 │
-├── di/
-│   ├── DatabaseModule.kt                # Room DI
-│   └── AppModule.kt                     # 앱 전역 DI
-│
+├── navigation/                           # NavGraph, Screen, BottomNavItem
 └── receiver/
-    └── SmsReceiver.kt                   # SMS 실시간 수신
+    └── SmsReceiver.kt                    # SMS 실시간 수신
 ```
+
+**총 107개 .kt 파일**
 
 ---
 
@@ -295,7 +253,7 @@ app/src/main/java/com/sanha/moneytalk/
 | 쿼리 분석 (채팅) | gemini-2.5-pro | 0.3 | 사용자 질문→DB 쿼리 결정 |
 | 재무 상담 (채팅) | gemini-2.5-pro | 0.7 | 데이터 기반 조언 생성 |
 | 대화 요약 | gemini-2.5-flash | 0.3 | Rolling Summary 생성 |
-| 카테고리 분류 | gemini-2.5-flash | -- | 미분류 가게명 배치 분류 |
+| 카테고리 분류 | gemini-2.5-flash-lite | -- | 미분류 가게명 배치 분류 |
 | 임베딩 생성 | gemini-embedding-001 | -- | 768차원 벡터 (REST API) |
 
 ---
@@ -323,4 +281,4 @@ app/src/main/java/com/sanha/moneytalk/
 
 ---
 
-*마지막 업데이트: 2026-02-08*
+*마지막 업데이트: 2026-02-15*
