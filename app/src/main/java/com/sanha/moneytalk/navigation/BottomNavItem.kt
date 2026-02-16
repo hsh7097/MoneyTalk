@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.navigation
 
+import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.History
@@ -10,10 +11,11 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.sanha.moneytalk.R
 
 data class BottomNavItem(
     val route: String,
-    val title: String,
+    @StringRes val titleRes: Int,
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector
 )
@@ -21,25 +23,25 @@ data class BottomNavItem(
 val bottomNavItems = listOf(
     BottomNavItem(
         route = Screen.Home.route,
-        title = "홈",
+        titleRes = R.string.nav_home,
         selectedIcon = Icons.Filled.Home,
         unselectedIcon = Icons.Outlined.Home
     ),
     BottomNavItem(
         route = Screen.History.createRoute(),
-        title = "내역",
+        titleRes = R.string.nav_history,
         selectedIcon = Icons.Filled.History,
         unselectedIcon = Icons.Outlined.History
     ),
     BottomNavItem(
         route = Screen.Chat.route,
-        title = "상담",
+        titleRes = R.string.nav_chat,
         selectedIcon = Icons.Filled.Chat,
         unselectedIcon = Icons.Outlined.Chat
     ),
     BottomNavItem(
         route = Screen.Settings.route,
-        title = "설정",
+        titleRes = R.string.nav_settings,
         selectedIcon = Icons.Filled.Settings,
         unselectedIcon = Icons.Outlined.Settings
     )

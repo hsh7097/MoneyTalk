@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavHostController
@@ -153,6 +154,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** 앱 루트 Composable. Scaffold + BottomNavigation + NavGraph + 전역 스낵바를 구성 */
 @Composable
 fun MoneyTalkApp(
     permissionChecked: Boolean,
@@ -218,6 +220,7 @@ fun MoneyTalkApp(
                         tonalElevation = 0.dp
                     ) {
                         bottomNavItems.forEach { item ->
+                            val title = stringResource(item.titleRes)
                             val isSelected = currentRoute?.startsWith(item.route.substringBefore("?")) == true
                             NavigationBarItem(
                                 selected = isSelected,
@@ -248,11 +251,11 @@ fun MoneyTalkApp(
                                                 } else {
                                                     item.unselectedIcon
                                                 },
-                                                contentDescription = item.title,
+                                                contentDescription = title,
                                                 modifier = Modifier.size(20.dp)
                                             )
                                             Text(
-                                                text = item.title,
+                                                text = title,
                                                 fontSize = 12.dp.toDpTextUnit
                                             )
                                         }
@@ -292,6 +295,7 @@ fun MoneyTalkApp(
     }
 }
 
+/** 뒤로가기 핸들러. 채팅방 내부에서 뒤로가기 시 채팅방 목록으로 복귀 처리 */
 @Composable
 fun BackPressHandler(
     navController: NavHostController,

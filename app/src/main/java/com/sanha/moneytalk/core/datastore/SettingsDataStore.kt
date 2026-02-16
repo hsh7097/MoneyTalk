@@ -3,6 +3,7 @@ package com.sanha.moneytalk.core.datastore
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -29,6 +30,7 @@ class SettingsDataStore @Inject constructor(
         private val LAST_SYNC_TIME = longPreferencesKey("last_sync_time")
         private val MONTH_START_DAY = intPreferencesKey("month_start_day")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
+        private val CHAT_VOICE_HINT_SEEN = booleanPreferencesKey("chat_voice_hint_seen")
     }
 
     // API 키 저장
@@ -129,5 +131,17 @@ class SettingsDataStore @Inject constructor(
     // 테마 모드 가져오기 (기본값: SYSTEM)
     val themeModeFlow: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[THEME_MODE] ?: "SYSTEM"
+    }
+
+    // 채팅 음성 힌트 표시 여부 저장 (true=이미 표시됨)
+    suspend fun setChatVoiceHintSeen(seen: Boolean = true) {
+        context.dataStore.edit { preferences ->
+            preferences[CHAT_VOICE_HINT_SEEN] = seen
+        }
+    }
+
+    // 채팅 음성 힌트 표시 여부 가져오기 (기본값: false)
+    val chatVoiceHintSeenFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[CHAT_VOICE_HINT_SEEN] ?: false
     }
 }

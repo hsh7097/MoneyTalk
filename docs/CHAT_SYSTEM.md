@@ -22,9 +22,9 @@ MoneyTalk의 채팅 시스템은 사용자의 자연어 질문을 분석하여 �
              │
              ▼
 ┌────────────────────────────────────────────┐
-│ Step 2: 데이터 조회/액션 실행 (Room DB)      │
+│ Step 2: 데이터 조회/액션 실행 (Room DB)        │
 │  └ ExpenseDao.getExpenseSumByCategory()    │
-│  └ 또는 executeAnalytics() (클라이언트 집계) │
+│  └ 또는 executeAnalytics() (클라이언트 집계)   │
 │  └ 결과: 식비 350,000원                     │
 └────────────┬───────────────────────────────┘
              │
@@ -43,9 +43,9 @@ MoneyTalk의 채팅 시스템은 사용자의 자연어 질문을 분석하여 �
 
 ### Step 1: 쿼리/액션 분석
 
-**파일**: `feature/chat/data/GeminiRepository.kt` — `analyzeQueryNeeds()`
+**파일**: [`feature/chat/data/GeminiRepository.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) — `analyzeQueryNeeds()`
 **모델**: `gemini-2.5-pro` (temperature: 0.3)
-**프롬프트**: `res/values/string_prompt.xml` — `prompt_query_analyzer_system`
+**프롬프트**: [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml) — `prompt_query_analyzer_system`
 
 사용자의 자연어 질문을 분석하여 필요한 DB 쿼리와 액션을 JSON으로 결정합니다.
 질문이 모호한 경우 쿼리 대신 `clarification` 응답을 반환하여 사용자에게 추가 정보를 요청합니다.
@@ -124,7 +124,7 @@ ChatViewModel에서 인메모리로 실행되는 복합 분석 기능:
 
 ### Step 2: 데이터 조회 / 액션 실행
 
-**파일**: `feature/chat/ui/ChatViewModel.kt`
+**파일**: [`feature/chat/ui/ChatViewModel.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt)
 
 - `executeQuery()`: DB 쿼리 실행 (Room DAO 호출)
 - `executeAction()`: DB 수정 액션 실행
@@ -136,7 +136,7 @@ ChatViewModel에서 인메모리로 실행되는 복합 분석 기능:
 ### Step 3: 답변 생성
 
 **모델**: `gemini-2.5-pro` (temperature: 0.7)
-**프롬프트**: `res/values/string_prompt.xml` — `prompt_financial_advisor_system`
+**프롬프트**: [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml) — `prompt_financial_advisor_system`
 
 System Instruction에 재무 상담사 역할이 정의되어 있으며, 다음 데이터를 바탕으로 답변합니다:
 
@@ -207,7 +207,7 @@ AI에 전달되는 내용:
 
 ### 요약 모델 설정
 - **모델**: `gemini-2.5-flash` (temperature: 0.3)
-- **프롬프트**: `res/values/string_prompt.xml` — `prompt_summary_system`
+- **프롬프트**: [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml) — `prompt_summary_system`
 - **규칙**: 200자 이내, 한국어, 요약체
 
 ### 저장 위치
@@ -227,7 +227,7 @@ AI에 전달되는 내용:
 
 ### 프롬프트 위치 (XML 리소스)
 
-> 모든 시스템 프롬프트는 `res/values/string_prompt.xml`에서 관리
+> 모든 시스템 프롬프트는 [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml)에서 관리
 
 | 프롬프트 | XML key | 사용처 |
 |---------|---------|-------|
@@ -349,18 +349,18 @@ chat_history 테이블
 
 | 파일 | 역할 |
 |------|------|
-| `feature/chat/data/GeminiRepository.kt` | Gemini API 통신 (3개 모델) |
-| `feature/chat/data/ChatRepository.kt` | 채팅 데이터 관리 인터페이스 |
-| `feature/chat/data/ChatRepositoryImpl.kt` | 채팅 데이터 관리 구현 |
-| `feature/chat/data/ChatPrompts.kt` | 프롬프트 키 참조 (실제 내용은 string_prompt.xml) |
-| `feature/chat/ui/ChatViewModel.kt` | 채팅 UI 상태 + 쿼리/액션/분석 실행 |
-| `feature/chat/ui/ChatScreen.kt` | 채팅 UI (Compose) |
-| `core/util/DataQueryParser.kt` | JSON → 쿼리/액션/clarification 파싱 + QueryType/ActionType enum |
-| `core/util/StoreAliasManager.kt` | 가게명 별칭 관리 (일괄 처리 지원) |
-| `core/database/dao/ChatDao.kt` | 세션/메시지 DAO |
-| `core/database/entity/ChatEntity.kt` | 메시지 엔티티 |
-| `core/database/entity/ChatSessionEntity.kt` | 세션 엔티티 |
-| `res/values/string_prompt.xml` | 모든 AI 시스템 프롬프트 (6종) |
+| [`feature/chat/data/GeminiRepository.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) | Gemini API 통신 (3개 모델) |
+| [`feature/chat/data/ChatRepository.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/ChatRepository.kt) | 채팅 데이터 관리 인터페이스 |
+| [`feature/chat/data/ChatRepositoryImpl.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/ChatRepositoryImpl.kt) | 채팅 데이터 관리 구현 |
+| [`feature/chat/data/ChatPrompts.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/ChatPrompts.kt) | 프롬프트 키 참조 (실제 내용은 string_prompt.xml) |
+| [`feature/chat/ui/ChatViewModel.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt) | 채팅 UI 상태 + 쿼리/액션/분석 실행 |
+| [`feature/chat/ui/ChatScreen.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatScreen.kt) | 채팅 UI (Compose) |
+| [`core/util/DataQueryParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/DataQueryParser.kt) | JSON → 쿼리/액션/clarification 파싱 + QueryType/ActionType enum |
+| [`core/util/StoreAliasManager.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/StoreAliasManager.kt) | 가게명 별칭 관리 (일괄 처리 지원) |
+| [`core/database/dao/ChatDao.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/dao/ChatDao.kt) | 세션/메시지 DAO |
+| [`core/database/entity/ChatEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/ChatEntity.kt) | 메시지 엔티티 |
+| [`core/database/entity/ChatSessionEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/ChatSessionEntity.kt) | 세션 엔티티 |
+| [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml) | 모든 AI 시스템 프롬프트 (6종) |
 
 ---
 

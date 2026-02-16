@@ -62,11 +62,11 @@ app/src/main/java/com/sanha/moneytalk/
 
 | 시스템 | 설명 | 핵심 파일 |
 |--------|------|-----------|
-| SMS 파싱 (3-tier) | Regex → Vector → Gemini LLM | HybridSmsClassifier.kt, VectorSearchEngine.kt |
-| 카테고리 분류 (4-tier) | Room → Vector → Keyword → Gemini Batch | CategoryClassifierService.kt, StoreEmbeddingRepository.kt |
-| AI 채팅 (3-step) | 쿼리분석 → DB조회/액션 → 답변생성 | ChatViewModel.kt, GeminiRepository.kt |
-| 카드 관리 | 소유 카드 화이트리스트 + 카드명 정규화 | OwnedCardRepository.kt, CardNameNormalizer.kt |
-| SMS 필터링 | 제외 키워드 블랙리스트 | SmsExclusionRepository.kt |
+| SMS 파싱 (3-tier) | Regex → Vector → Gemini LLM | [HybridSmsClassifier.kt](../app/src/main/java/com/sanha/moneytalk/core/util/HybridSmsClassifier.kt), [VectorSearchEngine.kt](../app/src/main/java/com/sanha/moneytalk/core/util/VectorSearchEngine.kt) |
+| 카테고리 분류 (4-tier) | Room → Vector → Keyword → Gemini Batch | [CategoryClassifierService.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt), [StoreEmbeddingRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreEmbeddingRepository.kt) |
+| AI 채팅 (3-step) | 쿼리분석 → DB조회/액션 → 답변생성 | [ChatViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt), [GeminiRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) |
+| 카드 관리 | 소유 카드 화이트리스트 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
+| SMS 필터링 | 제외 키워드 블랙리스트 | [SmsExclusionRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/SmsExclusionRepository.kt) |
 
 ### 2-3. DB 엔티티 (10개)
 
@@ -230,7 +230,7 @@ ANALYTICS 쿼리는 ChatViewModel에서 클라이언트 사이드로 실행되�
 
 ### 4-5. 프롬프트 위치
 
-> 모든 시스템 프롬프트는 `res/values/string_prompt.xml`에서 관리
+> 모든 시스템 프롬프트는 [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml)에서 관리
 
 | 프롬프트 | XML key | 모델 |
 |---------|---------|------|
@@ -351,7 +351,7 @@ HistoryScreen에 `HistoryIntent` sealed interface 패턴을 적용하여 UI-비�
 ### SSOT (Single Source of Truth) 원칙
 - 임계값 수치 → 이 문서의 "임계값 레지스트리" 섹션이 SSOT
 - 코드 변경 시 → 이 문서를 먼저 업데이트, 코드에 반영
-- 문서 간 충돌 시 → AI_CONTEXT.md > 개별 문서 (SMS_PARSING.md 등)
+- 문서 간 충돌 시 → [AI_CONTEXT.md](AI_CONTEXT.md) > 개별 문서 ([SMS_PARSING.md](SMS_PARSING.md) 등)
 
 ### 갱신 타이밍
 - 임계값 변경 시 → 즉시 갱신

@@ -57,6 +57,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** 데이터 내보내기 다이얼로그. JSON/CSV 형식 선택, 필터 적용 후 로컬 또는 Google Drive로 내보내기 */
 @Composable
 fun ExportDialog(
     availableCards: List<String>,
@@ -280,6 +281,7 @@ fun ExportDialog(
     )
 }
 
+/** Google Drive 백업 다이얼로그. 드라이브 백업 파일 목록 조회, 업로드, 복원, 삭제 기능 */
 @Composable
 fun GoogleDriveDialog(
     backupFiles: List<DriveBackupFile>,
@@ -368,6 +370,7 @@ fun GoogleDriveDialog(
     )
 }
 
+/** Google Drive 백업 파일 아이템. 파일명, 크기, 날짜와 복원/삭제 버튼을 표시 */
 @Composable
 fun DriveBackupFileItem(
     file: DriveBackupFile,
@@ -418,6 +421,7 @@ fun DriveBackupFileItem(
     }
 }
 
+/** SMS 제외 키워드 관리 다이얼로그. 키워드 목록 표시, 추가, 삭제 기능 */
 @Composable
 fun ExclusionKeywordDialog(
     keywords: List<com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity>,
@@ -551,6 +555,7 @@ fun ExclusionKeywordDialog(
     )
 }
 
+/** SMS 제외 키워드 개별 아이템. 키워드 텍스트와 소스 라벨, 삭제 버튼을 표시 */
 @Composable
 internal fun ExclusionKeywordItem(
     keyword: String,

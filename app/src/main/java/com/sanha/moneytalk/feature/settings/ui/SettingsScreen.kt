@@ -73,6 +73,7 @@ import com.sanha.moneytalk.core.ui.component.settings.SettingsSectionCompose
 import com.sanha.moneytalk.core.util.DataBackupManager
 import kotlinx.coroutines.launch
 
+/** 설정 탭 메인 화면. API 키, 월 시작일, 카드 관리, 데이터 관리 등 앱 설정 항목을 표시 */
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()

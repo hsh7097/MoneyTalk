@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.R
 
+/** 앱 정보 다이얼로그. 앱 버전, 빌드 정보, 오픈소스 라이선스 등을 표시 */
 @Composable
 fun AppInfoDialog(
     onDismiss: () -> Unit
@@ -105,6 +106,7 @@ fun AppInfoDialog(
     )
 }
 
+/** 개인정보 처리방침 다이얼로그. 개인정보 수집/이용 안내를 스크롤 가능한 텍스트로 표시 */
 @Composable
 fun PrivacyPolicyDialog(
     onDismiss: () -> Unit

@@ -87,12 +87,28 @@
 
 ## 5. Claude Code로 개발 이어가기
 
+### Windows 예시
+
 ```
 머니톡 프로젝트를 이어서 작업하려고 해.
 프로젝트 경로: C:\Users\hsh70\AndroidStudioProjects\MoneyTalk
 
 아래 파일을 먼저 읽어줘:
-C:\Users\hsh70\AndroidStudioProjects\MoneyTalk\docs\PROJECT_CONTEXT.md
+C:\Users\hsh70\AndroidStudioProjects\MoneyTalk\CLAUDE.md
+C:\Users\hsh70\AndroidStudioProjects\MoneyTalk\docs\AI_CONTEXT.md
+
+그리고 [원하는 작업]을 해줘.
+```
+
+### macOS 예시
+
+```
+머니톡 프로젝트를 이어서 작업하려고 해.
+프로젝트 경로: /Users/sanha/Documents/Android/MoneyTalk/MoneyTalk
+
+아래 파일을 먼저 읽어줘:
+/Users/sanha/Documents/Android/MoneyTalk/MoneyTalk/CLAUDE.md
+/Users/sanha/Documents/Android/MoneyTalk/MoneyTalk/docs/AI_CONTEXT.md
 
 그리고 [원하는 작업]을 해줘.
 ```
@@ -101,14 +117,14 @@ C:\Users\hsh70\AndroidStudioProjects\MoneyTalk\docs\PROJECT_CONTEXT.md
 
 | 파일 | 설명 |
 |------|------|
-| `feature/home/ui/HomeViewModel.kt` | 동기화, 데이터 로딩 핵심 로직 |
-| `core/util/HybridSmsClassifier.kt` | 3-tier SMS 분류기 |
-| `core/util/SmsReader.kt` | SMS/MMS/RCS 읽기 |
-| `core/util/SmsParser.kt` | 정규식 파싱 |
-| `feature/chat/data/GeminiRepository.kt` | Gemini API 통신 |
-| `feature/home/data/CategoryClassifierService.kt` | 4-tier 카테고리 분류 |
+| [`feature/home/ui/HomeViewModel.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeViewModel.kt) | 동기화, 데이터 로딩 핵심 로직 |
+| [`core/util/HybridSmsClassifier.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/HybridSmsClassifier.kt) | 3-tier SMS 분류기 |
+| [`core/util/SmsReader.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/SmsReader.kt) | SMS/MMS/RCS 읽기 |
+| [`core/util/SmsParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/SmsParser.kt) | 정규식 파싱 |
+| [`feature/chat/data/GeminiRepository.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) | Gemini API 통신 |
+| [`feature/home/data/CategoryClassifierService.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt) | 4-tier 카테고리 분류 |
 | `docs/` | 기술 문서 전체 |
 
 ---
 
-*최종 업데이트: 2026-02-08*
+*최종 업데이트: 2026-02-16*

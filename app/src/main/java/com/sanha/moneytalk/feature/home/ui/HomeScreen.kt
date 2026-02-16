@@ -91,6 +91,7 @@ import java.text.NumberFormat
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
+/** 홈 탭 메인 화면. 월간 현황, 카테고리별 지출, 오늘 지출/전월 대비, 오늘 거래 내역을 표시 */
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
@@ -471,6 +472,7 @@ fun HomeScreen(
     }
 }
 
+/** 월간 수입/지출 현황 섹션. 월 네비게이션, 총 수입·지출 금액, 월별 잔액을 표시 */
 @Composable
 fun MonthlyOverviewSection(
     year: Int,
@@ -636,6 +638,7 @@ fun MonthlyOverviewSection(
     }
 }
 
+/** 카테고리별 지출 비율 섹션. 상위 카테고리 막대 그래프 + 전체 목록을 표시 */
 @Composable
 fun CategoryExpenseSection(
     categoryExpenses: List<CategorySum>,
@@ -790,6 +793,7 @@ fun CategoryExpenseSection(
 }
 
 
+/** 오늘의 지출 카드와 전월 대비 카드를 가로 2분할 배치하는 래퍼 섹션 */
 @Composable
 fun TodayAndComparisonSection(
     todayExpense: Int,
@@ -798,95 +802,136 @@ fun TodayAndComparisonSection(
     lastMonthExpense: Int,
     comparisonPeriodLabel: String
 ) {
-    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
-
-    Column(
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // 오늘의 지출 + 전월 대비 (가로 2분할, 동일 스펙)
-        val cardColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        val cardShape = RoundedCornerShape(12.dp)
-        val labelStyle = MaterialTheme.typography.bodySmall
-        val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-        val valueStyle = MaterialTheme.typography.titleMedium
-        val subStyle = MaterialTheme.typography.bodySmall
-        val subColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-
-        // 전월 대비 계산
-        val diff = monthlyExpense - lastMonthExpense
-        val comparisonValue = when {
-            lastMonthExpense == 0 -> "-"
-            diff > 0 -> "+₩${numberFormat.format(diff)}"
-            diff < 0 -> "-₩${numberFormat.format(-diff)}"
-            else -> "₩0"
-        }
-        val comparisonSub = when {
-            lastMonthExpense == 0 -> stringResource(R.string.home_vs_last_month_no_data)
-            diff > 0 -> stringResource(R.string.home_vs_last_month_more, numberFormat.format(diff))
-            diff < 0 -> stringResource(R.string.home_vs_last_month_less, numberFormat.format(-diff))
-            else -> stringResource(R.string.home_vs_last_month_same)
-        }
-        val comparisonValueColor = when {
-            lastMonthExpense == 0 -> MaterialTheme.colorScheme.onSurface
-            diff > 0 -> MaterialTheme.colorScheme.error
-            diff < 0 -> MaterialTheme.moneyTalkColors.income
-            else -> MaterialTheme.colorScheme.onSurface
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // 오늘의 지출 카드
-            Card(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                colors = CardDefaults.cardColors(containerColor = cardColor),
-                shape = cardShape
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(text = stringResource(R.string.home_today_expense), style = labelStyle, color = labelColor)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = "₩${numberFormat.format(todayExpense)}", style = valueStyle, fontWeight = FontWeight.Bold)
-                    Text(
-                        text = if (todayExpenseCount > 0) stringResource(R.string.home_today_count, todayExpenseCount) else " ",
-                        style = subStyle,
-                        color = subColor
-                    )
-                }
-            }
-
-            // 전월 대비 카드
-            Card(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                colors = CardDefaults.cardColors(containerColor = cardColor),
-                shape = cardShape
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(text = stringResource(R.string.home_vs_last_month), style = labelStyle, color = labelColor)
-                        if (comparisonPeriodLabel.isNotBlank()) {
-                            Text(
-                                text = "($comparisonPeriodLabel)",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = labelColor.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = comparisonValue, style = valueStyle, fontWeight = FontWeight.Bold, color = comparisonValueColor)
-                    Text(text = comparisonSub, style = subStyle, color = subColor)
-                }
-            }
-        }
-
+        TodayExpenseCard(
+            todayExpense = todayExpense,
+            todayExpenseCount = todayExpenseCount,
+            modifier = Modifier.weight(1f).fillMaxHeight()
+        )
+        MonthComparisonCard(
+            monthlyExpense = monthlyExpense,
+            lastMonthExpense = lastMonthExpense,
+            comparisonPeriodLabel = comparisonPeriodLabel,
+            modifier = Modifier.weight(1f).fillMaxHeight()
+        )
     }
 }
 
+/** 오늘의 지출 카드. 오늘 총 지출 금액과 건수를 표시 */
+@Composable
+fun TodayExpenseCard(
+    todayExpense: Int,
+    todayExpenseCount: Int,
+    modifier: Modifier = Modifier
+) {
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
+
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = stringResource(R.string.home_today_expense),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "₩${numberFormat.format(todayExpense)}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = if (todayExpenseCount > 0) stringResource(R.string.home_today_count, todayExpenseCount) else " ",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            )
+        }
+    }
+}
+
+/** 전월 대비 카드. 이번 달과 지난달 동일 기간의 지출 차이를 표시 */
+@Composable
+fun MonthComparisonCard(
+    monthlyExpense: Int,
+    lastMonthExpense: Int,
+    comparisonPeriodLabel: String,
+    modifier: Modifier = Modifier
+) {
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
+    val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+
+    val diff = monthlyExpense - lastMonthExpense
+    val comparisonValue = when {
+        lastMonthExpense == 0 -> "-"
+        diff > 0 -> "+₩${numberFormat.format(diff)}"
+        diff < 0 -> "-₩${numberFormat.format(-diff)}"
+        else -> "₩0"
+    }
+    val comparisonSub = when {
+        lastMonthExpense == 0 -> stringResource(R.string.home_vs_last_month_no_data)
+        diff > 0 -> stringResource(R.string.home_vs_last_month_more, numberFormat.format(diff))
+        diff < 0 -> stringResource(R.string.home_vs_last_month_less, numberFormat.format(-diff))
+        else -> stringResource(R.string.home_vs_last_month_same)
+    }
+    val comparisonValueColor = when {
+        lastMonthExpense == 0 -> MaterialTheme.colorScheme.onSurface
+        diff > 0 -> MaterialTheme.colorScheme.error
+        diff < 0 -> MaterialTheme.moneyTalkColors.income
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.home_vs_last_month),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = labelColor
+                )
+                if (comparisonPeriodLabel.isNotBlank()) {
+                    Text(
+                        text = "($comparisonPeriodLabel)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = labelColor.copy(alpha = 0.7f)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = comparisonValue,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = comparisonValueColor
+            )
+            Text(
+                text = comparisonSub,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            )
+        }
+    }
+}
+
+/** 지출 내역이 없을 때 표시하는 빈 상태 섹션 */
 @Composable
 fun EmptyExpenseSection() {
     Column(
@@ -912,6 +957,7 @@ fun EmptyExpenseSection() {
     }
 }
 
+/** AI 인사이트 카드. Gemini가 생성한 이번 달 소비 분석 요약을 표시 */
 @Composable
 fun AiInsightCard(insight: String) {
     Card(

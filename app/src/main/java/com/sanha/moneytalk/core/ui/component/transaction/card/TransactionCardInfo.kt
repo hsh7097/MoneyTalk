@@ -49,8 +49,7 @@ interface TransactionCardInfo {
 class ExpenseTransactionCardInfo(
     private val expense: ExpenseEntity
 ) : TransactionCardInfo {
-    private val timeFormat = SimpleDateFormat("HH:mm", Locale.KOREA)
-    private val amPmFormat = SimpleDateFormat("a", Locale.ENGLISH)
+    private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     override val title: String = expense.storeName
     override val subtitle: String = "${expense.category} | ${expense.cardName}"
@@ -58,9 +57,7 @@ class ExpenseTransactionCardInfo(
     override val isIncome: Boolean = false
     override val category: Category = Category.fromDisplayName(expense.category)
     override val categoryTag: String = expense.category
-    override val time: String = "${timeFormat.format(Date(expense.dateTime))} ${
-        amPmFormat.format(Date(expense.dateTime)).uppercase()
-    }"
+    override val time: String = timeFormat.format(Date(expense.dateTime))
     override val cardNameText: String = expense.cardName
 }
 
@@ -68,8 +65,7 @@ class ExpenseTransactionCardInfo(
 class IncomeTransactionCardInfo(
     private val income: IncomeEntity
 ) : TransactionCardInfo {
-    private val timeFormat = SimpleDateFormat("HH:mm", Locale.KOREA)
-    private val amPmFormat = SimpleDateFormat("a", Locale.ENGLISH)
+    private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     override val title: String = income.description.ifBlank { income.type }
     override val subtitle: String = "${income.type} | ${timeFormat.format(Date(income.dateTime))}"
@@ -77,7 +73,5 @@ class IncomeTransactionCardInfo(
     override val isIncome: Boolean = true
     override val iconEmoji: String = "\uD83D\uDCB0"
     override val categoryTag: String = income.type
-    override val time: String = "${timeFormat.format(Date(income.dateTime))} ${
-        amPmFormat.format(Date(income.dateTime)).uppercase()
-    }"
+    override val time: String = timeFormat.format(Date(income.dateTime))
 }

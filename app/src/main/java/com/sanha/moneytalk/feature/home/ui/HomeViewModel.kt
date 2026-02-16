@@ -31,8 +31,11 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import androidx.compose.runtime.Stable
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
@@ -164,6 +167,8 @@ class HomeViewModel @Inject constructor(
 
     /** 마지막 AI 인사이트 생성 시 사용된 입력 데이터 해시 (동일 데이터 재생성 방지) */
     private val lastInsightInputHash = AtomicInteger(0)
+    /** resume 자동 분류 중복 실행 방지 플래그 */
+    private val isResumeClassificationChecking = AtomicBoolean(false)
 
     init {
         loadSettings()
@@ -179,6 +184,8 @@ class HomeViewModel @Inject constructor(
             dataRefreshEvent.refreshEvent.collect { event ->
                 when (event) {
                     DataRefreshEvent.RefreshType.ALL_DATA_DELETED -> {
+                        // 진행 중인 백그라운드 분류 작업 즉시 취소
+                        classificationState.cancelIfRunning()
                         // 수입/지출 상태를 즉시 0으로 초기화하고 데이터 새로고침
                         _uiState.update {
                             it.copy(
@@ -274,8 +281,8 @@ class HomeViewModel @Inject constructor(
                     todayExpenses
                 } else {
                     todayExpenses.filter { expense ->
-                        val smsLower = expense.originalSms?.lowercase()
-                        smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                        val smsLower = expense.originalSms.lowercase()
+                        exclusionKeywords.none { kw -> smsLower.contains(kw) }
                     }
                 }
 
@@ -312,8 +319,8 @@ class HomeViewModel @Inject constructor(
                     lastMonthExpenses
                 } else {
                     lastMonthExpenses.filter { expense ->
-                        val smsLower = expense.originalSms?.lowercase()
-                        smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                        val smsLower = expense.originalSms.lowercase()
+                        exclusionKeywords.none { kw -> smsLower.contains(kw) }
                     }
                 }
                 val filteredLastMonthExpense = filteredLastMonthExpenses.sumOf { it.amount }
@@ -347,12 +354,8 @@ class HomeViewModel @Inject constructor(
                             allExpenses
                         } else {
                             allExpenses.filter { expense ->
-                                val smsLower = expense.originalSms?.lowercase()
-                                smsLower == null || exclusionKeywords.none { kw ->
-                                    smsLower.contains(
-                                        kw
-                                    )
-                                }
+                                val smsLower = expense.originalSms.lowercase()
+                                exclusionKeywords.none { kw -> smsLower.contains(kw) }
                             }
                         }
                         val totalExpense = expenses.sumOf { it.amount }
@@ -480,6 +483,37 @@ class HomeViewModel @Inject constructor(
     /** 화면이 다시 표시될 때 데이터 새로고침 (LaunchedEffect에서 호출) */
     fun refreshData() {
         loadData()
+        // resume 시 미분류 항목이 있고 분류가 진행 중이 아니면 자동 분류 시작
+        tryResumeClassification()
+    }
+
+    /**
+     * resume 시 미분류 항목 자동 분류 시도
+     * 조건: (1) 분류 미진행 (2) Gemini API 키 존재 (3) 미분류 항목 존재
+     */
+    private fun tryResumeClassification() {
+        if (classificationState.isRunning.value) return
+        if (!isResumeClassificationChecking.compareAndSet(false, true)) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val hasApiKey = settingsDataStore.getGeminiApiKey().isNotBlank()
+                if (!hasApiKey) return@launch
+
+                val unclassifiedCount = categoryClassifierService.getUnclassifiedCount()
+                if (unclassifiedCount == 0) return@launch
+                if (classificationState.isRunning.value) return@launch
+
+                android.util.Log.d("HomeViewModel", "Resume 시 미분류 ${unclassifiedCount}건 발견, 자동 분류 시작")
+                withContext(Dispatchers.Main) {
+                    if (!classificationState.isRunning.value) {
+                        launchBackgroundCategoryClassification()
+                    }
+                }
+            } finally {
+                isResumeClassificationChecking.set(false)
+            }
+        }
     }
 
     /**
@@ -945,8 +979,7 @@ class HomeViewModel @Inject constructor(
         hybridSmsList: List<SmsMessage>,
         forceFullSync: Boolean
     ) {
-        viewModelScope.launch(Dispatchers.IO) {
-            classificationState.setRunning(true)
+        val job = viewModelScope.launch(Dispatchers.IO) {
             try {
                 android.util.Log.d("HomeViewModel", "백그라운드 Hybrid 분류 시작: ${hybridSmsList.size}건")
                 var hybridCount = 0
@@ -1065,15 +1098,20 @@ class HomeViewModel @Inject constructor(
                     }
 
                     // 추가된 결제건에 대해 카테고리 분류도 비동기 실행
-                    // (launchBackgroundCategoryClassificationInternal의 finally에서 setRunning(false) 처리)
+                    // (현재 Job 종료 시 completeJob으로 running 상태가 해제됨)
                     launchBackgroundCategoryClassificationInternal()
-                } else {
-                    classificationState.setRunning(false)
                 }
+            } catch (e: CancellationException) {
+                android.util.Log.d("HomeViewModel", "백그라운드 Hybrid 분류 취소됨")
             } catch (e: Exception) {
-                classificationState.setRunning(false)
                 android.util.Log.e("HomeViewModel", "백그라운드 Hybrid 분류 실패: ${e.message}", e)
+            } finally {
+                coroutineContext[Job]?.let { classificationState.completeJob(it) }
             }
+        }
+        classificationState.registerJob(job)
+        if (job.isCompleted) {
+            classificationState.completeJob(job)
         }
     }
 
@@ -1082,8 +1120,16 @@ class HomeViewModel @Inject constructor(
      * 동기화 완료 후 호출됨
      */
     private fun launchBackgroundCategoryClassification() {
-        viewModelScope.launch(Dispatchers.IO) {
-            launchBackgroundCategoryClassificationInternal()
+        val job = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                launchBackgroundCategoryClassificationInternal()
+            } finally {
+                coroutineContext[Job]?.let { classificationState.completeJob(it) }
+            }
+        }
+        classificationState.registerJob(job)
+        if (job.isCompleted) {
+            classificationState.completeJob(job)
         }
     }
 
@@ -1102,7 +1148,6 @@ class HomeViewModel @Inject constructor(
                 return
             }
 
-            classificationState.setRunning(true)
             android.util.Log.d("HomeViewModel", "백그라운드 카테고리 자동 분류 시작: ${count}건")
 
             // ===== Phase 1: 상위 50개 가게 빠르게 분류 =====
@@ -1148,10 +1193,10 @@ class HomeViewModel @Inject constructor(
             }
 
             android.util.Log.d("HomeViewModel", "백그라운드 카테고리 자동 분류 완료")
+        } catch (e: CancellationException) {
+            android.util.Log.d("HomeViewModel", "백그라운드 카테고리 자동 분류 취소됨")
         } catch (e: Exception) {
             android.util.Log.e("HomeViewModel", "백그라운드 카테고리 자동 분류 실패: ${e.message}", e)
-        } finally {
-            classificationState.setRunning(false)
         }
     }
 

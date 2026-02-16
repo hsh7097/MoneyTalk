@@ -17,6 +17,10 @@
     <string name="common_processing">처리 중…</string>
     <string name="common_apply">적용</string>
     <string name="common_won">%s원</string>
+    <string name="nav_home">홈</string>
+    <string name="nav_history">내역</string>
+    <string name="nav_chat">상담</string>
+    <string name="nav_settings">설정</string>
     <string name="error_response">죄송해요, 응답을 받는 중 오류가 발생했어요: %s</string>
     <string name="error_general">오류가 발생했어요: %s</string>
 
@@ -29,6 +33,7 @@
     <string name="chat_subtitle_with_api">Gemini와 대화하세요</string>
     <string name="chat_subtitle_no_api">API 키를 설정해주세요</string>
     <string name="chat_input_placeholder">메시지를 입력하세요…</string>
+    <string name="chat_voice_hint">오른쪽 음성 명령 버튼으로 말해서 질문할 수 있어요.</string>
     <string name="chat_send">전송</string>
     <string name="chat_thinking">생각 중…</string>
     <string name="chat_session_list">대화 목록</string>
@@ -109,6 +114,8 @@
     <!-- 음성 입력 (STT) -->
     <string name="stt_start">음성 입력 시작</string>
     <string name="stt_stop">음성 입력 중지</string>
+    <string name="stt_button_start">음성 명령</string>
+    <string name="stt_button_stop">중지</string>
     <string name="stt_error_no_match">음성을 인식하지 못했어요. 다시 시도해주세요.</string>
     <string name="stt_error_audio">마이크 오류가 발생했어요.</string>
     <string name="stt_error_general">음성 인식 중 오류가 발생했어요.</string>
@@ -125,6 +132,9 @@
     <string name="detail_card">카드</string>
     <string name="detail_payment_time">결제 시간</string>
     <string name="detail_memo">메모</string>
+    <string name="detail_add_memo">메모 추가</string>
+    <string name="detail_edit_memo">메모 편집</string>
+    <string name="detail_edit_category">카테고리 변경</string>
     <string name="detail_original_sms">원본 문자</string>
 
     <!-- 가계부 화면 -->
@@ -143,6 +153,7 @@
     <string name="history_store_name">가게명</string>
     <string name="history_category">카테고리</string>
     <string name="history_payment_method">결제수단</string>
+    <string name="history_default_payment_method_cash">현금</string>
     <string name="common_back">뒤로</string>
     <string name="common_clear">지우기</string>
 
@@ -161,7 +172,7 @@
     <string name="day_thursday">목요일</string>
     <string name="day_friday">금요일</string>
     <string name="day_saturday">토요일</string>
-    <string name="history_day_header">%d일 %s</string>
+    <string name="history_day_header">%1$d일 %2$s</string>
     <string name="history_sort_amount">금액 높은순</string>
     <string name="history_sort_date">최신순</string>
     <string name="history_sort_amount_short">금액순</string>
@@ -173,6 +184,8 @@
     <string name="history_filter_category">카테고리</string>
     <string name="history_count_suffix">건</string>
     <string name="history_visit_suffix">회</string>
+    <string name="history_count_with_unit">%d건</string>
+    <string name="history_visit_with_unit">%d회</string>
     <string name="history_no_income">수입 내역이 없습니다</string>
 
     <!-- 설정 화면 -->

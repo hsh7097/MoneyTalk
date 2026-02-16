@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -53,6 +54,7 @@ import java.text.NumberFormat
 import java.util.Calendar
 import java.util.Locale
 
+/** 내역 검색 바. 가게명/메모 키워드 입력으로 지출 내역을 실시간 검색 */
 @Composable
 fun SearchBar(
     query: String,
@@ -92,6 +94,7 @@ fun SearchBar(
     }
 }
 
+/** 기간 요약 카드. 날짜 네비게이션과 해당 기간 총 수입/지출 금액을 표시 */
 @Composable
 fun PeriodSummaryCard(
     year: Int,
@@ -201,7 +204,7 @@ fun PeriodSummaryCard(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    modifier = Modifier.width(120.dp),
+                    modifier = Modifier.widthIn(min = 120.dp),
                     text = stringResource(R.string.common_won, numberFormat.format(totalExpense)),
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.sp),
                     fontWeight = FontWeight.Bold,
@@ -223,7 +226,7 @@ fun PeriodSummaryCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        modifier = Modifier.width(120.dp),
+                        modifier = Modifier.widthIn(min = 120.dp),
                         text = stringResource(
                             R.string.common_won,
                             numberFormat.format(totalIncome)

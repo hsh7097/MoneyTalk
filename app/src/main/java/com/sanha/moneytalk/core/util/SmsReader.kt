@@ -1393,10 +1393,18 @@ class SmsReader @Inject constructor() {
                 Log.e(TAG, "  총 행: ${it.count}")
                 var idx = 0
                 while (it.moveToNext() && idx < 5) {
-                    val d = it.getLong(it.getColumnIndex("date"))
-                    val addr = it.getString(it.getColumnIndex("address")) ?: "?"
-                    val body = it.getString(it.getColumnIndex("body")) ?: ""
-                    val type = it.getInt(it.getColumnIndex("type"))
+                    val dateIdx = it.getColumnIndex("date")
+                    val addressIdx = it.getColumnIndex("address")
+                    val bodyIdx = it.getColumnIndex("body")
+                    val typeIdx = it.getColumnIndex("type")
+                    if (dateIdx < 0 || addressIdx < 0 || bodyIdx < 0 || typeIdx < 0) {
+                        Log.e(TAG, "  필수 컬럼 누락: date/address/body/type")
+                        break
+                    }
+                    val d = it.getLong(dateIdx)
+                    val addr = it.getString(addressIdx) ?: "?"
+                    val body = it.getString(bodyIdx) ?: ""
+                    val type = it.getInt(typeIdx)
                     val preview = if (body.length > 40) body.take(40)
                         .replace("\n", " ") + "..." else body.replace("\n", " ")
                     Log.e(
@@ -1429,10 +1437,18 @@ class SmsReader @Inject constructor() {
                 Log.e(TAG, "  총 행: ${it.count}")
                 var idx = 0
                 while (it.moveToNext() && idx < 5) {
-                    val id = it.getString(it.getColumnIndex("_id"))
-                    val d = it.getLong(it.getColumnIndex("date"))
-                    val msgBox = it.getInt(it.getColumnIndex("msg_box"))
-                    val sub = it.getString(it.getColumnIndex("sub")) ?: "(null)"
+                    val idIdx = it.getColumnIndex("_id")
+                    val dateIdx = it.getColumnIndex("date")
+                    val msgBoxIdx = it.getColumnIndex("msg_box")
+                    val subIdx = it.getColumnIndex("sub")
+                    if (idIdx < 0 || dateIdx < 0 || msgBoxIdx < 0 || subIdx < 0) {
+                        Log.e(TAG, "  필수 컬럼 누락: _id/date/msg_box/sub")
+                        break
+                    }
+                    val id = it.getString(idIdx)
+                    val d = it.getLong(dateIdx)
+                    val msgBox = it.getInt(msgBoxIdx)
+                    val sub = it.getString(subIdx) ?: "(null)"
                     val dMs = d * 1000
                     val body = getMmsTextBody(contentResolver, id) ?: "(본문없음)"
                     val preview = if (body.length > 40) body.take(40)

@@ -73,6 +73,7 @@ val guideQuestions = listOf(
     GuideQuestion(R.string.guide_category_manage, R.string.guide_q_manage_uncategorized)
 )
 
+/** 가이드 질문 오버레이. 빈 채팅방에서 예시 질문 칩을 표시하여 대화 시작을 유도 */
 @Composable
 fun GuideQuestionsOverlay(
     questions: List<GuideQuestion>,
@@ -185,6 +186,7 @@ fun GuideQuestionsOverlay(
     }
 }
 
+/** 채팅 메시지 버블. 사용자/AI 메시지를 좌우 정렬하고 마크다운 렌더링 지원 */
 @Composable
 fun ChatBubble(message: ChatMessage) {
     Column(
@@ -230,6 +232,7 @@ fun ChatBubble(message: ChatMessage) {
 
 private val BounceInterpolator = CubicBezierEasing(0.34f, 1.56f, 0.64f, 1f)
 
+/** 타이핑 인디케이터. AI 응답 생성 중임을 점 애니메이션으로 표시 */
 @Composable
 fun TypingIndicator() {
     val infiniteTransition = rememberInfiniteTransition(label = "typing")
@@ -322,6 +325,7 @@ fun TypingIndicator() {
     }
 }
 
+/** 재시도 버튼. AI 응답 실패 시 다시 시도할 수 있는 버튼을 표시 */
 @Composable
 fun RetryButton(
     onClick: () -> Unit
@@ -354,6 +358,7 @@ fun RetryButton(
     }
 }
 
+/** API 키 입력 다이얼로그. 채팅 시작 시 Gemini API 키가 없으면 표시 */
 @Composable
 fun ApiKeyDialog(
     onDismiss: () -> Unit,

@@ -137,7 +137,7 @@ fun ExpenseDetailDialog(
                             )
                             Icon(
                                 imageVector = Icons.Default.Edit,
-                                contentDescription = "카테고리 변경",
+                                contentDescription = stringResource(R.string.detail_edit_category),
                                 modifier = Modifier.size(16.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
@@ -183,7 +183,7 @@ fun ExpenseDetailDialog(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = if (memoText.isBlank()) "메모 추가" else memoText,
+                                text = if (memoText.isBlank()) stringResource(R.string.detail_add_memo) else memoText,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = if (memoText.isBlank()) MaterialTheme.colorScheme.onSurface.copy(
@@ -195,7 +195,7 @@ fun ExpenseDetailDialog(
                             )
                             Icon(
                                 imageVector = Icons.Default.Edit,
-                                contentDescription = "메모 편집",
+                                contentDescription = stringResource(R.string.detail_edit_memo),
                                 modifier = Modifier.size(16.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )

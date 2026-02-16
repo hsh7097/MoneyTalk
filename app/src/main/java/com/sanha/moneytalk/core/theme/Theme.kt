@@ -146,7 +146,7 @@ private val LightColorScheme = lightColorScheme(
 
 // ============================================================================
 // MoneyTalkTheme
-// ============================================================================
+/** MoneyTalk 앱 테마. 라이트/다크 모드에 따른 색상 스킴과 상태바 설정을 적용 */
 @Composable
 fun MoneyTalkTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,

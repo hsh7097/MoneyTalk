@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -38,6 +40,7 @@ import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,6 +67,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.R
 
+/** 채팅 탭 메인 화면. 채팅방 목록과 채팅방 내부 화면을 전환하여 표시 */
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel()
@@ -93,6 +97,8 @@ fun ChatScreen(
                 onSendMessage = { viewModel.sendMessage(it) },
                 onRetry = { viewModel.retryLastMessage() },
                 hasApiKey = uiState.hasApiKey,
+                showVoiceHint = uiState.showVoiceHint,
+                onVoiceHintShown = { viewModel.markVoiceHintSeen() },
                 onApiKeyClick = { showApiKeyDialog = true }
             )
         } else {
@@ -148,6 +154,7 @@ fun ChatScreen(
 
 // ==================== 채팅방 내부 화면 ====================
 
+/** 채팅방 내부 화면. 메시지 목록, 입력창, 가이드 질문 오버레이를 포함 */
 @Composable
 fun ChatRoomView(
     uiState: ChatUiState,
@@ -155,6 +162,8 @@ fun ChatRoomView(
     onSendMessage: (String) -> Unit,
     onRetry: () -> Unit,
     hasApiKey: Boolean,
+    showVoiceHint: Boolean,
+    onVoiceHintShown: () -> Unit,
     onApiKeyClick: () -> Unit
 ) {
     var messageText by remember { mutableStateOf("") }
@@ -365,6 +374,14 @@ fun ChatRoomView(
                 thickness = 1.dp,
                 color = MaterialTheme.colorScheme.outlineVariant
             )
+            if (showVoiceHint && uiState.messages.isEmpty() && hasApiKey && !uiState.isLoading) {
+                Text(
+                    text = stringResource(R.string.chat_voice_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp)
+                )
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -383,9 +400,12 @@ fun ChatRoomView(
                     enabled = hasApiKey && !uiState.isLoading
                 )
 
-                // 마이크 버튼 (음성 입력)
-                IconButton(
+                // 음성 명령 버튼 (아이콘 + 텍스트)
+                FilledTonalButton(
                     onClick = {
+                        if (showVoiceHint) {
+                            onVoiceHintShown()
+                        }
                         if (isListening) {
                             isListening = false
                         } else {
@@ -403,7 +423,7 @@ fun ChatRoomView(
                     enabled = hasApiKey && !uiState.isLoading
                 ) {
                     Icon(
-                        imageVector = if (isListening) Icons.Default.Mic else Icons.Default.MicOff,
+                        imageVector = if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
                         contentDescription = stringResource(
                             if (isListening) R.string.stt_stop else R.string.stt_start
                         ),
@@ -412,6 +432,13 @@ fun ChatRoomView(
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         }
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = stringResource(
+                            if (isListening) R.string.stt_button_stop else R.string.stt_button_start
+                        ),
+                        style = MaterialTheme.typography.labelLarge
                     )
                 }
 

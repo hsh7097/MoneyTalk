@@ -7,18 +7,18 @@
 
 ### Application
 - 클래스: `MoneyTalkApplication`
-- 경로: `app/src/main/java/com/sanha/moneytalk/MoneyTalkApplication.kt`
+- 경로: [`MoneyTalkApplication.kt`](../app/src/main/java/com/sanha/moneytalk/MoneyTalkApplication.kt)
 - 역할: `@HiltAndroidApp`로 DI 루트 초기화
 
 ### Launcher Activity
 - 클래스: `MainActivity`
-- 경로: `app/src/main/java/com/sanha/moneytalk/MainActivity.kt`
+- 경로: [`MainActivity.kt`](../app/src/main/java/com/sanha/moneytalk/MainActivity.kt)
 - Manifest 등록: `android.intent.action.MAIN` + `android.intent.category.LAUNCHER`
-- Manifest 경로: `app/src/main/AndroidManifest.xml`
+- Manifest 경로: [`AndroidManifest.xml`](../app/src/main/AndroidManifest.xml)
 
 ### Broadcast Receiver (백그라운드 진입점)
 - 클래스: `SmsReceiver`
-- 경로: `app/src/main/java/com/sanha/moneytalk/receiver/SmsReceiver.kt`
+- 경로: [`SmsReceiver.kt`](../app/src/main/java/com/sanha/moneytalk/receiver/SmsReceiver.kt)
 - Intent: `android.provider.Telephony.SMS_RECEIVED`
 - 역할: SMS 수신 시 실시간 파싱 파이프라인 시작
 
@@ -35,15 +35,15 @@
 
 | Route | Screen 객체 | 진입 위치 | 화면 파일 |
 |---|---|---|---|
-| `splash` | `Screen.Splash` | 앱 시작 직후 | `feature/splash/ui/SplashScreen.kt` |
-| `home` | `Screen.Home` | 스플래시 완료 후 기본 진입 | `feature/home/ui/HomeScreen.kt` |
-| `history?category={category}` | `Screen.History` | 하단 탭 / 홈 카테고리 클릭 | `feature/history/ui/HistoryScreen.kt` |
-| `chat` | `Screen.Chat` | 하단 탭 | `feature/chat/ui/ChatScreen.kt` |
-| `settings` | `Screen.Settings` | 하단 탭 | `feature/settings/ui/SettingsScreen.kt` |
+| `splash` | `Screen.Splash` | 앱 시작 직후 | [`SplashScreen.kt`](../app/src/main/java/com/sanha/moneytalk/feature/splash/ui/SplashScreen.kt) |
+| `home` | `Screen.Home` | 스플래시 완료 후 기본 진입 | [`HomeScreen.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
+| `history?category={category}` | `Screen.History` | 하단 탭 / 홈 카테고리 클릭 | [`HistoryScreen.kt`](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryScreen.kt) |
+| `chat` | `Screen.Chat` | 하단 탭 | [`ChatScreen.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatScreen.kt) |
+| `settings` | `Screen.Settings` | 하단 탭 | [`SettingsScreen.kt`](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsScreen.kt) |
 
 라우트 정의 파일:
-- `app/src/main/java/com/sanha/moneytalk/navigation/Screen.kt`
-- `app/src/main/java/com/sanha/moneytalk/navigation/NavGraph.kt`
+- [`Screen.kt`](../app/src/main/java/com/sanha/moneytalk/navigation/Screen.kt)
+- [`NavGraph.kt`](../app/src/main/java/com/sanha/moneytalk/navigation/NavGraph.kt)
 
 ## 4. 하단 네비게이션 구성
 
@@ -54,7 +54,7 @@
 - 설정 (`settings`)
 
 탭 정의 파일:
-- `app/src/main/java/com/sanha/moneytalk/navigation/BottomNavItem.kt`
+- [`BottomNavItem.kt`](../app/src/main/java/com/sanha/moneytalk/navigation/BottomNavItem.kt)
 
 ## 5. 화면 간 딥링크
 

@@ -857,8 +857,8 @@ class HistoryViewModel @Inject constructor(
         val totalCount = expenses.size + incomes.size
         items.add(
             TransactionListItem.Header(
-                title = "${context.getString(R.string.history_sort_amount)} ($totalCount${
-                    context.getString(R.string.history_count_suffix)
+                title = "${context.getString(R.string.history_sort_amount)} (${
+                    context.getString(R.string.history_count_with_unit, totalCount)
                 })",
                 expenseTotal = expenses.sumOf { it.amount },
                 incomeTotal = incomes.sumOf { it.amount }
@@ -888,7 +888,9 @@ class HistoryViewModel @Inject constructor(
             val storeTotal = storeExpenses.sumOf { it.amount }
             items.add(
                 TransactionListItem.Header(
-                    title = "$storeName (${storeExpenses.size}${context.getString(R.string.history_visit_suffix)})",
+                    title = "$storeName (${
+                        context.getString(R.string.history_visit_with_unit, storeExpenses.size)
+                    })",
                     expenseTotal = storeTotal
                 )
             )
@@ -906,7 +908,9 @@ class HistoryViewModel @Inject constructor(
                 val sourceTotal = sourceIncomes.sumOf { it.amount }
                 items.add(
                     TransactionListItem.Header(
-                        title = "$source (${sourceIncomes.size}${context.getString(R.string.history_count_suffix)})",
+                        title = "$source (${
+                            context.getString(R.string.history_count_with_unit, sourceIncomes.size)
+                        })",
                         incomeTotal = sourceTotal
                     )
                 )
