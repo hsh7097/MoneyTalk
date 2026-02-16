@@ -35,6 +35,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
@@ -166,6 +167,8 @@ class HomeViewModel @Inject constructor(
 
     /** 마지막 AI 인사이트 생성 시 사용된 입력 데이터 해시 (동일 데이터 재생성 방지) */
     private val lastInsightInputHash = AtomicInteger(0)
+    /** resume 자동 분류 중복 실행 방지 플래그 */
+    private val isResumeClassificationChecking = AtomicBoolean(false)
 
     init {
         loadSettings()
@@ -490,17 +493,25 @@ class HomeViewModel @Inject constructor(
      */
     private fun tryResumeClassification() {
         if (classificationState.isRunning.value) return
+        if (!isResumeClassificationChecking.compareAndSet(false, true)) return
 
         viewModelScope.launch(Dispatchers.IO) {
-            val hasApiKey = settingsDataStore.getGeminiApiKey().isNotBlank()
-            if (!hasApiKey) return@launch
+            try {
+                val hasApiKey = settingsDataStore.getGeminiApiKey().isNotBlank()
+                if (!hasApiKey) return@launch
 
-            val unclassifiedCount = categoryClassifierService.getUnclassifiedCount()
-            if (unclassifiedCount == 0) return@launch
+                val unclassifiedCount = categoryClassifierService.getUnclassifiedCount()
+                if (unclassifiedCount == 0) return@launch
+                if (classificationState.isRunning.value) return@launch
 
-            android.util.Log.d("HomeViewModel", "Resume 시 미분류 ${unclassifiedCount}건 발견, 자동 분류 시작")
-            withContext(Dispatchers.Main) {
-                launchBackgroundCategoryClassification()
+                android.util.Log.d("HomeViewModel", "Resume 시 미분류 ${unclassifiedCount}건 발견, 자동 분류 시작")
+                withContext(Dispatchers.Main) {
+                    if (!classificationState.isRunning.value) {
+                        launchBackgroundCategoryClassification()
+                    }
+                }
+            } finally {
+                isResumeClassificationChecking.set(false)
             }
         }
     }

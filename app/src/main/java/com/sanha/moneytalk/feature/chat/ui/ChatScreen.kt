@@ -257,12 +257,6 @@ fun ChatRoomView(
         }
     }
 
-    LaunchedEffect(showVoiceHint, hasApiKey, uiState.messages.isEmpty(), uiState.isLoading) {
-        if (showVoiceHint && hasApiKey && uiState.messages.isEmpty() && !uiState.isLoading) {
-            onVoiceHintShown()
-        }
-    }
-
     // 현재 세션 제목 찾기
     val currentSessionTitle = uiState.sessions
         .find { it.id == uiState.currentSessionId }
@@ -409,6 +403,9 @@ fun ChatRoomView(
                 // 음성 명령 버튼 (아이콘 + 텍스트)
                 FilledTonalButton(
                     onClick = {
+                        if (showVoiceHint) {
+                            onVoiceHintShown()
+                        }
                         if (isListening) {
                             isListening = false
                         } else {
