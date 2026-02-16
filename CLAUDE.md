@@ -20,16 +20,23 @@
 
 | 구분 | 경로 |
 |------|------|
-| **프로젝트 경로** | `C:\Users\hsh70\AndroidStudioProjects\MoneyTalk` |
+| **Windows** | `C:\Users\hsh70\AndroidStudioProjects\MoneyTalk` |
+| **macOS** | `/Users/sanha/Documents/Android/MoneyTalk/MoneyTalk` |
 
-> 코드 수정, git, 빌드 모두 이 경로에서 수행
+> 코드 수정, git, 빌드 모두 해당 OS의 프로젝트 경로에서 수행
 
 ---
 
 ## 빌드
 
+**Windows**
 ```bash
 cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.bat assembleDebug"
+```
+
+**macOS**
+```bash
+./gradlew assembleDebug
 ```
 
 ---
@@ -46,10 +53,12 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | [docs/SMS_PARSING.md](docs/SMS_PARSING.md) | SMS 파싱 시스템 상세 | SMS 관련 작업 시 |
 | [docs/CATEGORY_CLASSIFICATION.md](docs/CATEGORY_CLASSIFICATION.md) | 카테고리 분류 시스템 상세 | 분류 관련 작업 시 |
 | [docs/CHAT_SYSTEM.md](docs/CHAT_SYSTEM.md) | AI 채팅 시스템 상세 | 채팅 관련 작업 시 |
+| [docs/COMPOSABLE_MAP.md](docs/COMPOSABLE_MAP.md) | 화면별 Composable 계층 구조 + IDE 점프 링크 | UI 작업 시 |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | 버전별 변경 이력 | 변경 히스토리 확인 시 |
 | [docs/DEVELOPMENT_LOG.md](docs/DEVELOPMENT_LOG.md) | 날짜별 개발 로그 | 작업 기록 확인 시 |
 | [docs/GIT_CONVENTION.md](docs/GIT_CONVENTION.md) | Git 컨벤션 | 커밋/브랜치 규칙 확인 시 |
 | [docs/QUICK_START.md](docs/QUICK_START.md) | 빠른 시작 가이드 | 환경 설정 시 |
+| [docs/APP_MAP.md](docs/APP_MAP.md) | 앱 진입점/네비게이션 맵 | 라우팅 파악 시 |
 
 ---
 
@@ -74,3 +83,5 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 4. **DB 스키마 불변**: Room entity 변경 시 마이그레이션 필수 (가급적 하지 않기)
 5. **경로 주의**: OneDrive 경로가 아닌 AndroidStudioProjects 경로에서 작업
 6. **셀프 리뷰 필수**: 모든 작업 완료 후 변경된 코드를 다시 읽고 셀프 리뷰 수행. 문제 발견 시 즉시 수정한 뒤 작업 완료 보고
+7. **Composable 맵 동기화**: 커밋/푸시 시 Composable 함수의 추가·삭제·변경이 있으면 반드시 `docs/COMPOSABLE_MAP.md`를 갱신한다
+8. **Composable 분리 원칙**: Composable은 기능 단위로 분리한다. 하나의 Composable이 서로 다른 기능(예: 오늘 지출 카드 + 전월 비교 카드)을 포함하면 각각 독립 Composable로 분리하여 관리한다

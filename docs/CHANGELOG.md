@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### Changed (2026-02-16)
+- **분류 상태 관리 안정화**: `ClassificationState`를 activeJob 기반으로 정리하고 `registerJob/completeJob/cancelIfRunning` 흐름으로 통일
+- **백그라운드 분류 종료 처리 개선**: HomeViewModel에서 Job 완료 시점 기반 상태 해제로 경합 가능성 완화
+- **내역 헤더 정렬 개선**: PeriodSummaryCard의 지출/수입 금액 영역 최소 폭(`120.dp`) 적용으로 정렬/노출 일관성 확보
+
+### Fixed (2026-02-16)
+- **전체 데이터 삭제 시 분류 작업 정리**: 진행 중인 백그라운드 분류 작업 즉시 취소 처리
+- **SmsReader Lint Range 이슈**: cursor 컬럼 인덱스 가드 추가로 `getColumnIndex` 관련 잠재 오류 제거
+- **AndroidManifest Lint 이슈**: `android.hardware.telephony`를 optional 처리해 ChromeOS 호환 lint 이슈 해소
+- **문자열 포맷/번역 이슈 정리**: `history_day_header` positional format 적용 + `values-en` 누락 번역 키 보강
+
 ### Added (2026-02-14 이후)
 - **safe-commit 스킬**: `.claude/skills/safe-commit/SKILL.md` 추가 (셀프 리뷰 후 안전 커밋)
 - **홈→내역 카테고리 네비게이션**: 홈에서 카테고리 클릭 시 내역 화면으로 이동

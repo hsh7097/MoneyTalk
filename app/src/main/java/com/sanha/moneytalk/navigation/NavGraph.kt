@@ -12,6 +12,7 @@ import com.sanha.moneytalk.feature.home.ui.HomeScreen
 import com.sanha.moneytalk.feature.settings.ui.SettingsScreen
 import com.sanha.moneytalk.feature.splash.ui.SplashScreen
 
+/** 앱 전체 네비게이션 그래프. 스플래시, 홈, 내역, 채팅, 설정 화면 간 라우팅 정의 */
 @Composable
 fun NavGraph(
     navController: NavHostController,

@@ -64,6 +64,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.R
 
+/** 채팅 탭 메인 화면. 채팅방 목록과 채팅방 내부 화면을 전환하여 표시 */
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel()
@@ -148,6 +149,7 @@ fun ChatScreen(
 
 // ==================== 채팅방 내부 화면 ====================
 
+/** 채팅방 내부 화면. 메시지 목록, 입력창, 가이드 질문 오버레이를 포함 */
 @Composable
 fun ChatRoomView(
     uiState: ChatUiState,

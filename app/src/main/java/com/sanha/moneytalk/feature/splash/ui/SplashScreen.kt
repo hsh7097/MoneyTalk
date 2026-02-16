@@ -33,6 +33,7 @@ import com.sanha.moneytalk.core.theme.PrimaryDark
 import com.sanha.moneytalk.core.theme.PrimaryLight
 import kotlinx.coroutines.delay
 
+/** 스플래시 화면. 앱 로고 페이드인 애니메이션 후 홈 화면으로 자동 전환 */
 @Composable
 fun SplashScreen(
     onSplashFinished: () -> Unit

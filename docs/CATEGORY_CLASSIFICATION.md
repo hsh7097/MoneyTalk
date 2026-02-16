@@ -58,9 +58,9 @@ MoneyTalk은 SMS에서 추출한 가게명을 기반으로 지출 카테고리�
 ## 2. Tier 1: Room DB 매핑 (캐시)
 
 ### 파일 위치
-- `core/database/entity/CategoryMappingEntity.kt`
-- `core/database/dao/CategoryMappingDao.kt`
-- `feature/home/data/CategoryRepository.kt`
+- [`core/database/entity/CategoryMappingEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/CategoryMappingEntity.kt)
+- [`core/database/dao/CategoryMappingDao.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/dao/CategoryMappingDao.kt)
+- [`feature/home/data/CategoryRepository.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryRepository.kt)
 
 ### category_mappings 테이블
 
@@ -86,10 +86,10 @@ MoneyTalk은 SMS에서 추출한 가게명을 기반으로 지출 카테고리�
 ## 3. Tier 1.5: 벡터 유사도 매칭 (NEW)
 
 ### 파일 위치
-- `core/database/entity/StoreEmbeddingEntity.kt`
-- `core/database/dao/StoreEmbeddingDao.kt`
-- `feature/home/data/StoreEmbeddingRepository.kt`
-- `core/util/VectorSearchEngine.kt` (findBestStoreMatch)
+- [`core/database/entity/StoreEmbeddingEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/StoreEmbeddingEntity.kt)
+- [`core/database/dao/StoreEmbeddingDao.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/dao/StoreEmbeddingDao.kt)
+- [`feature/home/data/StoreEmbeddingRepository.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreEmbeddingRepository.kt)
+- [`core/util/VectorSearchEngine.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/VectorSearchEngine.kt) (findBestStoreMatch)
 
 ### store_embeddings 테이블
 
@@ -137,7 +137,7 @@ MoneyTalk은 SMS에서 추출한 가게명을 기반으로 지출 카테고리�
 ## 4. Tier 2: 로컬 키워드 매칭 (SmsParser.inferCategory)
 
 ### 파일 위치
-`core/util/SmsParser.kt` -- `inferCategory()` 메소드
+[`core/util/SmsParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/SmsParser.kt) -- `inferCategory()` 메소드
 
 ### 카테고리별 키워드 사전 (250+ 키워드)
 
@@ -163,9 +163,9 @@ MoneyTalk은 SMS에서 추출한 가게명을 기반으로 지출 카테고리�
 ## 5. Tier 3: Gemini 배치 분류 (시맨틱 그룹핑)
 
 ### 파일 위치
-- `feature/home/data/GeminiCategoryRepository.kt` -- Gemini API 호출
-- `feature/home/data/CategoryClassifierService.kt` -- 분류 오케스트레이터
-- `core/util/StoreNameGrouper.kt` -- 시맨틱 그룹핑
+- [`feature/home/data/GeminiCategoryRepository.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/data/GeminiCategoryRepository.kt) -- Gemini API 호출
+- [`feature/home/data/CategoryClassifierService.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt) -- 분류 오케스트레이터
+- [`core/util/StoreNameGrouper.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/StoreNameGrouper.kt) -- 시맨틱 그룹핑
 
 ### 시맨틱 그룹핑 최적화
 
@@ -198,7 +198,7 @@ Room + 벡터 DB에 저장
 ## 6. 동적 참조 리스트 (CategoryReferenceProvider)
 
 ### 파일 위치
-`core/util/CategoryReferenceProvider.kt`
+[`core/util/CategoryReferenceProvider.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/CategoryReferenceProvider.kt)
 
 ### 개요
 사용자가 학습시킨 가게명→카테고리 매핑을 모든 LLM 프롬프트에 동적 참조 리스트로 주입합니다.

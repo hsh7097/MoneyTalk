@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-15
+> **최종 갱신**: 2026-02-16
 
 ---
 
@@ -55,9 +55,16 @@
 - Compose Stability 최적화 + 릴리스 DB 안전성 개선
 - 대형 파일 분할 + Repository 추상화 + 하드코딩 문자열 제거
 
+**안정화/품질 개선**: ✅ 완료 (2026-02-16)
+- ClassificationState를 activeJob 기반으로 정리하여 백그라운드 분류 취소/종료 경합 안정화
+- 전체 데이터 삭제 이벤트에서 진행 중 분류 작업 즉시 취소 처리
+- SmsReader cursor column index 가드 추가로 Lint Range 이슈 해소
+- AndroidManifest telephony feature optional 처리로 ChromeOS 관련 lint 이슈 해소
+- 문자열 포맷 positional 정리(`history_day_header`) + values-en 누락 키 보강
+
 ### 대기 중인 작업
 
-- `chore/add-safe-commit-skill` 브랜치 → develop 머지 필요 (safe-commit 스킬 추가)
+- 현재 대기 중인 필수 작업 없음 (2026-02-16 기준)
 
 ---
 
@@ -65,26 +72,33 @@
 
 | 구분 | 경로 |
 |------|------|
-| **실제 작업 경로** | `C:\Users\hsh70\AndroidStudioProjects\MoneyTalk` |
+| **Windows** | `C:\Users\hsh70\AndroidStudioProjects\MoneyTalk` |
+| **macOS** | `/Users/sanha/Documents/Android/MoneyTalk/MoneyTalk` |
 
-> 코드 수정, git, 빌드 모두 이 경로에서 수행
+> 코드 수정, git, 빌드는 OS에 맞는 실제 프로젝트 경로에서 수행
 
 ---
 
 ## 3. 빌드 방법
 
+**Windows**
 ```bash
 cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.bat assembleDebug"
+```
+
+**macOS**
+```bash
+./gradlew assembleDebug
 ```
 
 ---
 
 ## 4. 필수 읽기 순서 (새 에이전트용)
 
-1. **CLAUDE.md** (프로젝트 루트) → 허브, 전체 구조 파악
-2. **docs/AI_CONTEXT.md** → 아키텍처, 임계값 레지스트리, 쿼리/액션 전체 목록
-3. **docs/AI_TASKS.md** → 현재 태스크 목록 + 완료 기준
-4. **docs/AI_HANDOFF.md** (이 문서) → 현재 진행 상황 + 주의사항
+1. **[CLAUDE.md](../CLAUDE.md)** (프로젝트 루트) → 허브, 전체 구조 파악
+2. **[docs/AI_CONTEXT.md](AI_CONTEXT.md)** → 아키텍처, 임계값 레지스트리, 쿼리/액션 전체 목록
+3. **[docs/AI_TASKS.md](AI_TASKS.md)** → 현재 태스크 목록 + 완료 기준
+4. **[docs/AI_HANDOFF.md](AI_HANDOFF.md)** (이 문서) → 현재 진행 상황 + 주의사항
 
 ---
 
@@ -92,7 +106,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 ### 절대 금지
 - DB 스키마 변경 시 마이그레이션 필수 (현재 v5)
-- 임계값 수치 변경 시 AI_CONTEXT.md SSOT 먼저 업데이트
+- 임계값 수치 변경 시 [AI_CONTEXT.md](AI_CONTEXT.md) SSOT 먼저 업데이트
 - `!!` non-null assertion 사용 금지
 
 ### 알려진 이슈
@@ -110,6 +124,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-16 | 분류 Job 경합 안정화 + lint 이슈 정리 + 문서 동기화 | 완료 |
 | 2026-02-15 | 문서 갱신 (ARCHITECTURE, AI_CONTEXT, AI_HANDOFF, PROJECT_CONTEXT 등) | 완료 |
 | 2026-02-14~ | safe-commit 스킬, 홈→내역 네비게이션, 달력 필터 버그 수정, AI 인사이트, 가맹점 일괄 업데이트, Compose Stability, 리팩토링 | 완료 |
 | 2026-02-14 | Phase 2 전체 완료 + History 필터 초기화 버튼 | 완료 |
@@ -136,56 +151,61 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 ## 7. 핵심 파일 위치 (빠른 참조)
 
 ### 데이터 레이어
-```
-core/database/AppDatabase.kt                    ← Room DB 정의 (v5, 10 entities)
-core/database/entity/OwnedCardEntity.kt          ← 카드 화이트리스트 Entity
-core/database/entity/SmsExclusionKeywordEntity.kt ← SMS 제외 키워드 Entity
-core/database/OwnedCardRepository.kt             ← 카드 관리 + CardNameNormalizer 연동
-core/database/SmsExclusionRepository.kt          ← SMS 제외 키워드 관리
-```
+
+| 파일 | 설명 |
+|------|------|
+| [`AppDatabase.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/AppDatabase.kt) | Room DB 정의 (v5, 10 entities) |
+| [`OwnedCardEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/OwnedCardEntity.kt) | 카드 화이트리스트 Entity |
+| [`SmsExclusionKeywordEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/SmsExclusionKeywordEntity.kt) | SMS 제외 키워드 Entity |
+| [`OwnedCardRepository.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt) | 카드 관리 + CardNameNormalizer 연동 |
+| [`SmsExclusionRepository.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/SmsExclusionRepository.kt) | SMS 제외 키워드 관리 |
 
 ### SMS/분류 핵심
-```
-core/util/HybridSmsClassifier.kt      ← 3-tier SMS 분류
-core/util/SmsBatchProcessor.kt        ← SMS 배치 처리
-core/util/VectorSearchEngine.kt       ← 순수 벡터 연산
-core/util/CardNameNormalizer.kt       ← 카드명 정규화
-core/util/StoreAliasManager.kt        ← 가게명 별칭 관리
-core/util/CategoryReferenceProvider.kt ← 동적 참조 리스트
-feature/home/data/CategoryClassifierService.kt ← 4-tier 카테고리 분류
-feature/home/data/StoreEmbeddingRepository.kt  ← 가게명 벡터 캐시 + 전파
-```
+
+| 파일 | 설명 |
+|------|------|
+| [`HybridSmsClassifier.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/HybridSmsClassifier.kt) | 3-tier SMS 분류 |
+| [`SmsBatchProcessor.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/SmsBatchProcessor.kt) | SMS 배치 처리 |
+| [`VectorSearchEngine.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/VectorSearchEngine.kt) | 순수 벡터 연산 |
+| [`CardNameNormalizer.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) | 카드명 정규화 |
+| [`StoreAliasManager.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/StoreAliasManager.kt) | 가게명 별칭 관리 |
+| [`CategoryReferenceProvider.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/CategoryReferenceProvider.kt) | 동적 참조 리스트 |
+| [`CategoryClassifierService.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt) | 4-tier 카테고리 분류 |
+| [`StoreEmbeddingRepository.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreEmbeddingRepository.kt) | 가게명 벡터 캐시 + 전파 |
 
 ### 유사도 정책
-```
-core/similarity/SimilarityPolicy.kt           ← 인터페이스
-core/similarity/SimilarityProfile.kt          ← 임계값 데이터 클래스
-core/similarity/SmsPatternSimilarityPolicy.kt ← SMS 분류 정책
-core/similarity/StoreNameSimilarityPolicy.kt  ← 가게명 매칭 정책
-core/similarity/CategoryPropagationPolicy.kt  ← 카테고리 전파 정책
-```
+
+| 파일 | 설명 |
+|------|------|
+| [`SimilarityPolicy.kt`](../app/src/main/java/com/sanha/moneytalk/core/similarity/SimilarityPolicy.kt) | 인터페이스 |
+| [`SimilarityProfile.kt`](../app/src/main/java/com/sanha/moneytalk/core/similarity/SimilarityProfile.kt) | 임계값 데이터 클래스 |
+| [`SmsPatternSimilarityPolicy.kt`](../app/src/main/java/com/sanha/moneytalk/core/similarity/SmsPatternSimilarityPolicy.kt) | SMS 분류 정책 |
+| [`StoreNameSimilarityPolicy.kt`](../app/src/main/java/com/sanha/moneytalk/core/similarity/StoreNameSimilarityPolicy.kt) | 가게명 매칭 정책 |
+| [`CategoryPropagationPolicy.kt`](../app/src/main/java/com/sanha/moneytalk/core/similarity/CategoryPropagationPolicy.kt) | 카테고리 전파 정책 |
 
 ### AI 채팅
-```
-feature/chat/data/GeminiRepository.kt   ← Gemini API (3개 모델)
-feature/chat/data/ChatRepositoryImpl.kt ← 채팅 데이터 + Rolling Summary
-feature/chat/ui/ChatViewModel.kt        ← 채팅 UI + 쿼리/액션/분석 실행
-res/values/string_prompt.xml            ← 모든 AI 프롬프트 (6종)
-```
 
-### UI 공통 컴포넌트 (11개 파일)
-```
-core/ui/AppSnackbarBus.kt                                       ← 전역 스낵바 이벤트 버스
-core/ui/ClassificationState.kt                                  ← 분류 상태 관리
-core/ui/component/CategoryIcon.kt                               ← 카테고리 이모지 아이콘
-core/ui/component/ExpenseItemCard.kt                            ← 지출 항목 카드
-core/ui/component/settings/SettingsItemCompose.kt               ← 설정 항목
-core/ui/component/settings/SettingsItemInfo.kt                  ← 설정 항목 Contract
-core/ui/component/settings/SettingsSectionCompose.kt            ← 설정 섹션
-core/ui/component/transaction/card/TransactionCardCompose.kt    ← 거래 카드
-core/ui/component/transaction/card/TransactionCardInfo.kt       ← 거래 카드 Contract
-core/ui/component/transaction/header/TransactionGroupHeaderCompose.kt ← 그룹 헤더
-core/ui/component/transaction/header/TransactionGroupHeaderInfo.kt    ← 그룹 헤더 Contract
-core/ui/component/tab/SegmentedTabRowCompose.kt                 ← 탭 버튼 (아이콘 지원)
-core/ui/component/tab/SegmentedTabInfo.kt                       ← 탭 Contract
-```
+| 파일 | 설명 |
+|------|------|
+| [`GeminiRepository.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) | Gemini API (3개 모델) |
+| [`ChatRepositoryImpl.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/ChatRepositoryImpl.kt) | 채팅 데이터 + Rolling Summary |
+| [`ChatViewModel.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt) | 채팅 UI + 쿼리/액션/분석 실행 |
+| [`string_prompt.xml`](../app/src/main/res/values/string_prompt.xml) | 모든 AI 프롬프트 (6종) |
+
+### UI 공통 컴포넌트 (13개 파일)
+
+| 파일 | 설명 |
+|------|------|
+| [`AppSnackbarBus.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/AppSnackbarBus.kt) | 전역 스낵바 이벤트 버스 |
+| [`ClassificationState.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/ClassificationState.kt) | 분류 상태 관리 |
+| [`CategoryIcon.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/CategoryIcon.kt) | 카테고리 이모지 아이콘 |
+| [`ExpenseItemCard.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) | 지출 항목 카드 |
+| [`SettingsItemCompose.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsItemCompose.kt) | 설정 항목 |
+| [`SettingsItemInfo.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsItemInfo.kt) | 설정 항목 Contract |
+| [`SettingsSectionCompose.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsSectionCompose.kt) | 설정 섹션 |
+| [`TransactionCardCompose.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/card/TransactionCardCompose.kt) | 거래 카드 |
+| [`TransactionCardInfo.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/card/TransactionCardInfo.kt) | 거래 카드 Contract |
+| [`TransactionGroupHeaderCompose.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/header/TransactionGroupHeaderCompose.kt) | 그룹 헤더 |
+| [`TransactionGroupHeaderInfo.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/header/TransactionGroupHeaderInfo.kt) | 그룹 헤더 Contract |
+| [`SegmentedTabRowCompose.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/tab/SegmentedTabRowCompose.kt) | 탭 버튼 (아이콘 지원) |
+| [`SegmentedTabInfo.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/tab/SegmentedTabInfo.kt) | 탭 Contract |

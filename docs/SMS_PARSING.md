@@ -52,7 +52,7 @@ SMS/MMS/RCS 수신 (SmsReader)
 ## 2. Tier 1: 정규식 파싱 (SmsParser)
 
 ### 파일 위치
-`core/util/SmsParser.kt`
+[`core/util/SmsParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/SmsParser.kt)
 
 ### 결제 문자 판별 조건
 1. 광고/안내 키워드가 **없어야** 함 (광고, 명세서, 청구서 등)
@@ -92,9 +92,9 @@ KB국민카드는 줄바꿈으로 구분된 독특한 형식을 사용합니다:
 ## 3. Tier 2: 벡터 유사도 분류 (HybridSmsClassifier)
 
 ### 파일 위치
-- `core/util/HybridSmsClassifier.kt` - 3-tier 오케스트레이터
-- `core/util/SmsEmbeddingService.kt` - 임베딩 생성
-- `core/util/VectorSearchEngine.kt` - 코사인 유사도 검색
+- [`core/util/HybridSmsClassifier.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/HybridSmsClassifier.kt) - 3-tier 오케스트레이터
+- [`core/util/SmsEmbeddingService.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/SmsEmbeddingService.kt) - 임베딩 생성
+- [`core/util/VectorSearchEngine.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/VectorSearchEngine.kt) - 코사인 유사도 검색
 
 ### 동작 원리
 
@@ -178,7 +178,7 @@ LLM이 비결제로 판정한 SMS도 벡터 DB에 등록하여 비결제 패턴�
 ## 4. Tier 3: LLM 추출 (GeminiSmsExtractor)
 
 ### 파일 위치
-`core/util/GeminiSmsExtractor.kt`
+[`core/util/GeminiSmsExtractor.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/GeminiSmsExtractor.kt)
 
 ### 사용 모델
 `gemini-2.5-flash-lite` (temperature: 0.1)
@@ -206,7 +206,7 @@ System Instruction에 한국 카드 결제 SMS 전문가 역할을 부여하고,
 
 ### 참조 리스트 (CategoryReferenceProvider)
 SMS 추출 프롬프트에 동적 참조 리스트가 추가됩니다. 사용자가 학습시킨 가게명→카테고리 매핑을 LLM 프롬프트에 주입하여 일관성을 높입니다.
-- 파일: `core/util/CategoryReferenceProvider.kt`
+- 파일: [`core/util/CategoryReferenceProvider.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/CategoryReferenceProvider.kt)
 - source="user" 매핑 우선, 카테고리당 최대 5개 예시
 
 ---
@@ -214,7 +214,7 @@ SMS 추출 프롬프트에 동적 참조 리스트가 추가됩니다. 사용자
 ## 5. 대량 배치 처리 (SmsBatchProcessor)
 
 ### 파일 위치
-`core/util/SmsBatchProcessor.kt`
+[`core/util/SmsBatchProcessor.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/SmsBatchProcessor.kt)
 
 ### 사용 시점
 - 전체 동기화 (forceFullSync)
@@ -256,7 +256,7 @@ Step 4: 대표 샘플 LLM 검증
 ## 6. 메시지 읽기 (SmsReader)
 
 ### 파일 위치
-`core/util/SmsReader.kt`
+[`core/util/SmsReader.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/SmsReader.kt)
 
 ### 지원 메시지 유형
 

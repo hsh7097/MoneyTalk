@@ -48,20 +48,20 @@
 - 결제 금액, 가게명, 카드사, 날짜, 카테고리 자동 추출
 - 수입 문자(입금, 급여 등)도 자동 감지
 - 중복 방지 (smsId 기반)
-- **상세**: [SMS_PARSING.md](./SMS_PARSING.md)
+- **상세**: [SMS_PARSING.md](SMS_PARSING.md)
 
 ### 2.2 카테고리 자동 분류 (18개 카테고리)
 - 4-tier 분류: Room 캐시 → 벡터 유사도 → 로컬 키워드 → Gemini 배치
 - 사용자 수정 시 유사 가게에 자동 전파 (벡터 유사도 ≥ 0.90)
 - 시맨틱 그룹핑으로 Gemini API 호출 ~40% 절감
-- **상세**: [CATEGORY_CLASSIFICATION.md](./CATEGORY_CLASSIFICATION.md)
+- **상세**: [CATEGORY_CLASSIFICATION.md](CATEGORY_CLASSIFICATION.md)
 
 ### 2.3 AI 재무 상담 (채팅)
 - 자연어로 지출 데이터 조회 ("이번 달 식비 얼마야?")
 - 자연어로 카테고리 변경 ("쿠팡은 쇼핑으로 바꿔줘")
 - 수입 대비 지출 분석, 절약 조언 제공
 - Rolling Summary로 긴 대화 맥락 유지
-- **상세**: [CHAT_SYSTEM.md](./CHAT_SYSTEM.md)
+- **상세**: [CHAT_SYSTEM.md](CHAT_SYSTEM.md)
 
 ### 2.4 수입/예산 관리
 - 월 수입 등록 및 지출 대비 잔여 예산 표시
@@ -273,11 +273,11 @@ app/src/main/java/com/sanha/moneytalk/
 
 | 문서 | 설명 |
 |------|------|
-| [SMS_PARSING.md](./SMS_PARSING.md) | SMS 파싱 & 벡터 캐싱 시스템 |
-| [CATEGORY_CLASSIFICATION.md](./CATEGORY_CLASSIFICATION.md) | 카테고리 분류 & 벡터 전파 시스템 |
-| [CHAT_SYSTEM.md](./CHAT_SYSTEM.md) | AI 채팅 상담 & 컨텍스트 관리 |
-| [GIT_CONVENTION.md](./GIT_CONVENTION.md) | Git 브랜치 전략 |
-| [DEVELOPMENT_LOG.md](./DEVELOPMENT_LOG.md) | 개발 이력 |
+| [SMS_PARSING.md](SMS_PARSING.md) | SMS 파싱 & 벡터 캐싱 시스템 |
+| [CATEGORY_CLASSIFICATION.md](CATEGORY_CLASSIFICATION.md) | 카테고리 분류 & 벡터 전파 시스템 |
+| [CHAT_SYSTEM.md](CHAT_SYSTEM.md) | AI 채팅 상담 & 컨텍스트 관리 |
+| [GIT_CONVENTION.md](GIT_CONVENTION.md) | Git 브랜치 전략 |
+| [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) | 개발 이력 |
 
 ---
 

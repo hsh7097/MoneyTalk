@@ -563,6 +563,9 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
+                // 진행 중인 백그라운드 분류 작업 즉시 취소
+                classificationState.cancelIfRunning()
+
                 withContext(Dispatchers.IO) {
                     // 선택적 테이블 삭제 (벡터 데이터 보존)
                     // SmsPatternEntity, StoreEmbeddingEntity는 학습 데이터이므로 유지

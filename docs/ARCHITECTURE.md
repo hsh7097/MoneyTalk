@@ -248,7 +248,7 @@ SMS 수신 → Tier 1 (Regex) → Tier 2 (Vector 캐시) → Tier 3 (Gemini LLM)
 
 ## AI 프롬프트 위치
 
-> 모든 시스템 프롬프트는 `res/values/string_prompt.xml`에서 관리
+> 모든 시스템 프롬프트는 [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml)에서 관리
 
 | 프롬프트 | XML key | 모델 | 목적 |
 |---------|---------|------|------|

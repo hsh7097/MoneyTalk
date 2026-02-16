@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.ThemeMode
 
+/** 테마 모드 선택 다이얼로그. 시스템/라이트/다크 모드 중 선택 */
 @Composable
 fun ThemeModeDialog(
     currentMode: ThemeMode,
@@ -106,6 +107,7 @@ fun ThemeModeDialog(
     )
 }
 
+/** Gemini API 키 설정 다이얼로그. API 키 입력 및 저장 */
 @Composable
 fun ApiKeySettingDialog(
     currentKeyHint: String = "",
@@ -158,6 +160,7 @@ fun ApiKeySettingDialog(
     )
 }
 
+/** 월 시작일 설정 다이얼로그. 1~28일 중 정산 시작일 선택 */
 @Composable
 fun MonthStartDayDialog(
     initialValue: Int = 1,

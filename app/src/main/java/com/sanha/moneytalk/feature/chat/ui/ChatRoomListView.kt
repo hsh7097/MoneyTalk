@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.util.DateUtils
 
+/** 채팅방 목록 화면. 기존 대화 세션 목록과 새 채팅 시작 버튼을 표시 */
 @Composable
 fun ChatRoomListView(
     sessions: List<ChatSession>,
@@ -145,6 +146,7 @@ fun ChatRoomListView(
     }
 }
 
+/** 채팅 세션 아이템. 세션 제목, 최근 메시지 미리보기, 시간을 표시 */
 @Composable
 fun SessionItem(
     session: ChatSession,

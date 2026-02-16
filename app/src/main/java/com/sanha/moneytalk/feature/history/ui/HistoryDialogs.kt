@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.component.CategorySelectDialog
 import java.text.NumberFormat
@@ -59,10 +60,11 @@ fun AddExpenseDialog(
     onDismiss: () -> Unit,
     onConfirm: (amount: Int, storeName: String, category: String, cardName: String) -> Unit
 ) {
+    val defaultCardName = stringResource(R.string.history_default_payment_method_cash)
     var amountText by remember { mutableStateOf("") }
     var storeName by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf("기타") }
-    var cardName by remember { mutableStateOf("현금") }
+    var selectedCategory by remember { mutableStateOf(Category.ETC.displayName) }
+    var cardName by remember { mutableStateOf(defaultCardName) }
     var showCategoryDropdown by remember { mutableStateOf(false) }
 
     AlertDialog(
