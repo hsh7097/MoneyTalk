@@ -69,6 +69,8 @@ data class ChatUiState(
     val loadingSessionId: Long? = null,
     val errorMessage: String? = null,
     val hasApiKey: Boolean = false,
+    /** 음성 명령 힌트 노출 여부 (true면 아직 1회 노출 전) */
+    val showVoiceHint: Boolean = true,
     val showSessionList: Boolean = false,
     val canRetry: Boolean = false,
     /** 채팅방 내부 화면 표시 여부 (false=목록, true=채팅방 내부) */
@@ -101,6 +103,7 @@ class ChatViewModel @Inject constructor(
     init {
         loadSessions()
         checkApiKey()
+        observeVoiceHintSeen()
         autoCreateSessionIfEmpty()
     }
 
@@ -292,6 +295,20 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             val hasKey = withContext(Dispatchers.IO) { geminiRepository.hasApiKey() }
             _uiState.update { it.copy(hasApiKey = hasKey) }
+        }
+    }
+
+    private fun observeVoiceHintSeen() {
+        viewModelScope.launch {
+            settingsDataStore.chatVoiceHintSeenFlow.collect { seen ->
+                _uiState.update { it.copy(showVoiceHint = !seen) }
+            }
+        }
+    }
+
+    fun markVoiceHintSeen() {
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsDataStore.setChatVoiceHintSeen(true)
         }
     }
 

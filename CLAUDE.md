@@ -56,7 +56,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | [docs/COMPOSABLE_MAP.md](docs/COMPOSABLE_MAP.md) | 화면별 Composable 계층 구조 + IDE 점프 링크 | UI 작업 시 |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | 버전별 변경 이력 | 변경 히스토리 확인 시 |
 | [docs/DEVELOPMENT_LOG.md](docs/DEVELOPMENT_LOG.md) | 날짜별 개발 로그 | 작업 기록 확인 시 |
-| [docs/GIT_CONVENTION.md](docs/GIT_CONVENTION.md) | Git 컨벤션 | 커밋/브랜치 규칙 확인 시 |
+| [docs/GIT_CONVENTION.md](docs/GIT_CONVENTION.md) | Git 컨벤션 | 커밋/브랜치/푸시/PR 규칙 확인 시 |
 | [docs/QUICK_START.md](docs/QUICK_START.md) | 빠른 시작 가이드 | 환경 설정 시 |
 | [docs/APP_MAP.md](docs/APP_MAP.md) | 앱 진입점/네비게이션 맵 | 라우팅 파악 시 |
 
@@ -64,9 +64,9 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 ## Git
 
-- **상세 규칙**: [docs/GIT_CONVENTION.md](docs/GIT_CONVENTION.md) (커밋/브랜치/푸시/PR 모든 규칙)
+- **커밋/푸시/PR/브랜치 규칙 SSOT**: [docs/GIT_CONVENTION.md](docs/GIT_CONVENTION.md)
+- **원칙**: `CLAUDE.md`에는 Git 상세 규칙을 중복 정의하지 않고, 항상 위 문서를 참조한다.
 - **GitHub**: https://github.com/hsh7097/MoneyTalk.git
-- **핵심**: `develop`/`master` 직접 커밋 금지, 작업별 분리 커밋 필수
 
 ---
 

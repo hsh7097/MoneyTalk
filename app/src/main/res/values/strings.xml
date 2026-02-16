@@ -33,6 +33,7 @@
     <string name="chat_subtitle_with_api">Gemini와 대화하세요</string>
     <string name="chat_subtitle_no_api">API 키를 설정해주세요</string>
     <string name="chat_input_placeholder">메시지를 입력하세요…</string>
+    <string name="chat_voice_hint">오른쪽 음성 명령 버튼으로 말해서 질문할 수 있어요.</string>
     <string name="chat_send">전송</string>
     <string name="chat_thinking">생각 중…</string>
     <string name="chat_session_list">대화 목록</string>
@@ -113,6 +114,8 @@
     <!-- 음성 입력 (STT) -->
     <string name="stt_start">음성 입력 시작</string>
     <string name="stt_stop">음성 입력 중지</string>
+    <string name="stt_button_start">음성 명령</string>
+    <string name="stt_button_stop">중지</string>
     <string name="stt_error_no_match">음성을 인식하지 못했어요. 다시 시도해주세요.</string>
     <string name="stt_error_audio">마이크 오류가 발생했어요.</string>
     <string name="stt_error_general">음성 인식 중 오류가 발생했어요.</string>
@@ -181,6 +184,8 @@
     <string name="history_filter_category">카테고리</string>
     <string name="history_count_suffix">건</string>
     <string name="history_visit_suffix">회</string>
+    <string name="history_count_with_unit">%d건</string>
+    <string name="history_visit_with_unit">%d회</string>
     <string name="history_no_income">수입 내역이 없습니다</string>
 
     <!-- 설정 화면 -->

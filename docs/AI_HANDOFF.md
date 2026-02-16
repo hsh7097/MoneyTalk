@@ -114,8 +114,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 - ChatViewModel.kt가 대형 파일(~1717줄) — 향후 query/action 로직 분리 후보
 
 ### Git 규칙
-- 브랜치 전략: `develop`에서 분기
-- 커밋 메시지: 한국어 가능, 간결하게
+- 커밋/푸시/PR/브랜치 규칙 SSOT: [GIT_CONVENTION.md](GIT_CONVENTION.md)
 - 병렬 브랜치 작업 주의 (2026-02-06 브랜치 꼬임 경험)
 
 ---

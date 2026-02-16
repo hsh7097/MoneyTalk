@@ -32,6 +32,7 @@
     <string name="chat_subtitle_with_api">Chat with Gemini</string>
     <string name="chat_subtitle_no_api">Please set up API key</string>
     <string name="chat_input_placeholder">Type a message…</string>
+    <string name="chat_voice_hint">Use the Voice Command button on the right to speak your question.</string>
     <string name="chat_send">Send</string>
     <string name="chat_thinking">Thinking…</string>
     <string name="chat_session_list">Conversations</string>
@@ -242,6 +243,8 @@
     <!-- Speech-to-Text (STT) -->
     <string name="stt_start">Start voice input</string>
     <string name="stt_stop">Stop voice input</string>
+    <string name="stt_button_start">Voice Command</string>
+    <string name="stt_button_stop">Stop</string>
     <string name="stt_error_no_match">Could not recognize speech. Please try again.</string>
     <string name="stt_error_audio">Microphone error occurred.</string>
     <string name="stt_error_general">An error occurred during speech recognition.</string>
@@ -265,6 +268,7 @@
     <string name="common_suffix_won">won</string>
     <string name="exit_confirm">Press one more time to exit</string>
     <string name="history_count_suffix">items</string>
+    <string name="history_count_with_unit">%d items</string>
     <string name="history_filter_category">Category</string>
     <string name="history_filter_reset">Reset</string>
     <string name="history_filter_sort">Sort</string>
@@ -277,6 +281,7 @@
     <string name="history_sort_date">Newest</string>
     <string name="history_sort_store">By Store</string>
     <string name="history_visit_suffix">times</string>
+    <string name="history_visit_with_unit">%d times</string>
     <string name="home_expense_top3">Top 3 Expenses</string>
     <string name="home_income_badge">Income %s won</string>
     <string name="home_no_today_transactions">No transactions yet today</string>

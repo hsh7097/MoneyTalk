@@ -22,45 +22,46 @@ class ClassificationState @Inject constructor() {
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
     private val lock = Any()
 
-    /** 현재 실행 중인 분류 Job (외부에서 취소 가능) */
-    @Volatile
-    private var activeJob: Job? = null
+    /** 현재 실행 중인 분류 Job 집합 (외부에서 취소 가능) */
+    private val activeJobs = mutableSetOf<Job>()
 
     fun setRunning(running: Boolean) {
         synchronized(lock) {
-            _isRunning.value = running
             if (!running) {
-                activeJob = null
+                activeJobs.clear()
             }
+            _isRunning.value = running
         }
     }
 
     /** 분류 Job을 등록하여 외부에서 취소 가능하게 함 */
     fun registerJob(job: Job) {
         synchronized(lock) {
-            activeJob = job
-            _isRunning.value = true
+            activeJobs.removeAll { it.isCompleted }
+            if (!job.isCompleted) {
+                activeJobs.add(job)
+            }
+            _isRunning.value = activeJobs.isNotEmpty()
         }
     }
 
-    /** 지정한 Job이 현재 활성 Job일 때만 상태를 종료 처리 */
+    /** 지정한 Job을 활성 집합에서 제거하고 상태를 갱신 */
     fun completeJob(job: Job) {
         synchronized(lock) {
-            if (activeJob === job) {
-                activeJob = null
-                _isRunning.value = false
-            }
+            activeJobs.remove(job)
+            activeJobs.removeAll { it.isCompleted }
+            _isRunning.value = activeJobs.isNotEmpty()
         }
     }
 
     /** 진행 중인 분류 작업을 취소하고 상태를 초기화 */
     fun cancelIfRunning() {
-        val jobToCancel = synchronized(lock) {
-            val current = activeJob
-            activeJob = null
+        val jobsToCancel = synchronized(lock) {
+            val snapshot = activeJobs.toList()
+            activeJobs.clear()
             _isRunning.value = false
-            current
+            snapshot
         }
-        jobToCancel?.cancel()
+        jobsToCancel.forEach { job -> job.cancel() }
     }
 }

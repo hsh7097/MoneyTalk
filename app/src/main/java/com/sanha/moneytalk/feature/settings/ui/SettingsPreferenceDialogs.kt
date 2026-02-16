@@ -160,7 +160,7 @@ fun ApiKeySettingDialog(
     )
 }
 
-/** 월 시작일 설정 다이얼로그. 1~28일 중 정산 시작일 선택 */
+/** 월 시작일 설정 다이얼로그. 1~31일 중 정산 시작일 선택 */
 @Composable
 fun MonthStartDayDialog(
     initialValue: Int = 1,

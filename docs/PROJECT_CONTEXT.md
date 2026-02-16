@@ -276,9 +276,9 @@ app/src/main/java/com/sanha/moneytalk/
 | [SMS_PARSING.md](SMS_PARSING.md) | SMS 파싱 & 벡터 캐싱 시스템 |
 | [CATEGORY_CLASSIFICATION.md](CATEGORY_CLASSIFICATION.md) | 카테고리 분류 & 벡터 전파 시스템 |
 | [CHAT_SYSTEM.md](CHAT_SYSTEM.md) | AI 채팅 상담 & 컨텍스트 관리 |
-| [GIT_CONVENTION.md](GIT_CONVENTION.md) | Git 브랜치 전략 |
+| [GIT_CONVENTION.md](GIT_CONVENTION.md) | Git 규칙 SSOT (브랜치/커밋/푸시/PR) |
 | [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) | 개발 이력 |
 
 ---
 
-*마지막 업데이트: 2026-02-15*
+*마지막 업데이트: 2026-02-16*
