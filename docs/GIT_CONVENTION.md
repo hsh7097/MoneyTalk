@@ -1,17 +1,35 @@
 # Git 컨벤션
 
-## 커밋 메시지 규칙
+> 커밋, 브랜치, 푸시, PR에 관한 모든 규칙을 이 문서에서 관리한다.
+> 스킬(`/커밋`)은 이 문서를 참조하여 동작한다.
 
-### 언어
-- **한글**로 작성
+---
+
+## 1. 브랜치 전략
+
+| 브랜치 | 역할 | 직접 커밋 |
+|--------|------|----------|
+| `master` | 릴리스 | ❌ 금지 |
+| `develop` | 개발 통합 | ❌ 금지 (예외: 사용자가 명시적으로 지시) |
+| 기능 브랜치 | 작업 단위 | ✅ 허용 |
+
+### 브랜치 생성 규칙
+- `develop` 또는 `master`에서 작업 시 **반드시 새 브랜치 생성** 후 작업
+- 브랜치명: `{타입}/{작업내용}` (예: `feature/chat-stt`, `fix/calendar-filter-bug`)
+- 타입: `feature/`, `fix/`, `refactor/`, `docs/`, `chore/`
+
+---
+
+## 2. 커밋 메시지
 
 ### 형식
 ```
 [타입]: 제목
 
-본문 (선택)
+- 상세 변경 내용 1
+- 상세 변경 내용 2
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 ```
 
 ### 타입
@@ -27,6 +45,9 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
 | 설정 | 빌드, 설정 파일 변경 |
 | 기타 | 위에 해당하지 않는 경우 |
 
+### 언어
+- **한글**로 작성
+
 ### 예시
 ```
 기능: SMS 권한 요청을 앱 시작 시 표시
@@ -35,18 +56,123 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
 - PermissionHandler 클래스 추가
 - MainActivity에서 권한 체크 로직 구현
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 ```
 
 ```
-수정: HomeViewModel suspend 함수 호출 오류 해결
+수정: 달력 뷰 카테고리 필터 미적용 버그
 
-- setApiKey() 호출을 viewModelScope.launch로 감싸기
-- hasApiKey()를 콜백 패턴으로 변경
+- dailyTotals/monthlyTotal에 카테고리 필터 누락 수정
+- HistoryViewModel에서 필터 조건 전달 추가
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 ```
 
 ---
 
-*마지막 업데이트: 2026-02-05*
+## 3. 작업별 분리 커밋 (필수)
+
+하나의 커밋에 **서로 다른 목적의 변경을 섞지 않는다**.
+
+### 분리 기준
+
+| 구분 | 별도 커밋 |
+|------|----------|
+| 코드 변경 vs 문서 변경 | ✅ 분리 |
+| 기능 A vs 기능 B | ✅ 분리 |
+| 버그 수정 vs 리팩토링 | ✅ 분리 |
+| Lint 수정 vs 기능 변경 | ✅ 분리 |
+| 같은 기능의 코드 + 관련 문서 | ⚠️ 함께 가능 (해당 기능에 직접 연관된 문서만) |
+
+### 나쁜 예시
+```
+개선: 분류 상태 관리 + Lint 수정 + 문서 링크 정비   ← 3가지 목적이 섞임
+```
+
+### 좋은 예시
+```
+# 커밋 1
+개선: ClassificationState를 activeJob 기반으로 정리
+
+# 커밋 2
+수정: SmsReader cursor 컬럼 인덱스 가드 추가
+
+# 커밋 3
+문서: docs/ 코드 경로를 마크다운 링크로 전환
+```
+
+### 실행 방법
+1. `git diff --stat`으로 변경 파일 확인
+2. 목적별로 파일 그룹핑
+3. 그룹별로 `git add [파일들]` → `git commit`
+4. 모든 커밋 완료 후 한 번에 `git push`
+
+---
+
+## 4. 푸시
+
+- 커밋 후 사용자가 "푸시해줘" 또는 "커밋푸시해줘"라고 요청한 경우에만 수행
+- 원격 추적이 없는 브랜치는 `-u` 플래그 사용: `git push -u origin {브랜치명}`
+- `master`에 직접 force push 금지
+
+---
+
+## 5. PR 작성
+
+### 중요 규칙
+- **PR 작성 요청 시 실제로 `gh` 명령어로 PR을 생성하지 않는다**
+- 텍스트로만 작성하여 사용자가 복사해서 사용할 수 있도록 제공한다
+
+### 작성 규칙
+- **작업 내용 및 동기 설명**: 최대한 간단하게 한줄로 작성
+- **주요 변경점**: 간결하게 작성. 코드까지 포함할 필요 없음
+- **상세 리뷰 요청 / 필수 리뷰어**: 내용 작성하지 않음 (항목 자체는 유지)
+- **스크린샷**: 필요시에만 첨부
+- 템플릿의 모든 항목(`<br>`, 리뷰 등록시 주의사항 등)은 그대로 유지하고, 내용만 채울 것
+
+### 템플릿
+```
+#### 📢  *작업내용 요약*
++ 작업 내용 및 동기 설명 :
++ 관련 지라 및 위키: [이슈번호](https://jira.gmarket.com/browse/이슈번호)
+
+
+<br>
+
+#### 📂  *주요 변경점*
++ 변경내용 :
+
+
+<br>
+
+#### 📷   *스크린샷*
+<br>
+
+#### 🛠️  *리뷰 상세 요청*
++ 상세 리뷰 요청 내용 :
++ 필수 리뷰어 등록 멘션(@태그활용) :
+
+
+<br>
+
+---
+
+##### 리뷰 등록시 주의사항
+##### &nbsp; &nbsp; &nbsp; 1. 현재 PR상태에 따라 라벨을 정의 해주세요 : [라벨 정책링크](https://wiki.gmarket.com/pages/viewpage.action?pageId=318740537)
+##### &nbsp; &nbsp; &nbsp; 2. 라벨에 따라 코드량 제한을 지켜주세요
+##### &nbsp; &nbsp; &nbsp; 3. 리뷰가 등록되었을때 수정한 후 커밋 ID를 댓글에 첨부해주세요
+```
+
+---
+
+## 6. 커밋 전 체크리스트
+
+- [ ] `develop`/`master`에서 직접 커밋하고 있지 않은지 확인
+- [ ] 작업 목적별로 커밋이 분리되어 있는지 확인
+- [ ] 민감 파일(.env, credentials)이 포함되지 않았는지 확인
+- [ ] `git add -A` 대신 파일을 명시적으로 지정했는지 확인
+- [ ] Composable 추가/삭제/변경 시 `docs/COMPOSABLE_MAP.md` 갱신했는지 확인
+
+---
+
+*마지막 업데이트: 2026-02-16*
