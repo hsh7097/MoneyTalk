@@ -480,6 +480,29 @@ class HomeViewModel @Inject constructor(
     /** 화면이 다시 표시될 때 데이터 새로고침 (LaunchedEffect에서 호출) */
     fun refreshData() {
         loadData()
+        // resume 시 미분류 항목이 있고 분류가 진행 중이 아니면 자동 분류 시작
+        tryResumeClassification()
+    }
+
+    /**
+     * resume 시 미분류 항목 자동 분류 시도
+     * 조건: (1) 분류 미진행 (2) Gemini API 키 존재 (3) 미분류 항목 존재
+     */
+    private fun tryResumeClassification() {
+        if (classificationState.isRunning.value) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val hasApiKey = settingsDataStore.getGeminiApiKey().isNotBlank()
+            if (!hasApiKey) return@launch
+
+            val unclassifiedCount = categoryClassifierService.getUnclassifiedCount()
+            if (unclassifiedCount == 0) return@launch
+
+            android.util.Log.d("HomeViewModel", "Resume 시 미분류 ${unclassifiedCount}건 발견, 자동 분류 시작")
+            withContext(Dispatchers.Main) {
+                launchBackgroundCategoryClassification()
+            }
+        }
     }
 
     /**
