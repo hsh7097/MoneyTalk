@@ -2,7 +2,7 @@
 
 > 각 화면의 Composable 계층 구조를 트리로 정리한 문서
 > 함수 참조 클릭 시 IDE에서 해당 파일로 이동 가능
-> **최종 갱신**: 2026-02-16
+> **최종 갱신**: 2026-02-18
 
 ---
 
@@ -120,7 +120,8 @@ ChatScreen                           ← 채팅 탭 메인 (목록 ↔ 채팅방
 │       ├── ChatBubble               ← 메시지 버블 (사용자/AI 좌우 정렬)
 │       ├── TypingIndicator          ← AI 응답 중 점 애니메이션
 │       ├── RetryButton              ← 응답 실패 시 재시도 버튼
-│       └── GuideQuestionsOverlay    ← 빈 채팅방 예시 질문 칩
+│       ├── GuideQuestionsOverlay    ← 빈 채팅방 예시 질문 칩
+│       └── RewardAdDialog           ← 리워드 광고 시청 안내 다이얼로그
 │
 └── ApiKeyDialog                     ← Gemini API 키 입력 (채팅 시작 시)
 ```
@@ -135,6 +136,7 @@ ChatScreen                           ← 채팅 탭 메인 (목록 ↔ 채팅방
 | ChatBubble | 메시지 버블 (마크다운 렌더링) | [ChatComponentsKt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatComponents.kt) |
 | TypingIndicator | AI 응답 중 점 애니메이션 | [ChatComponentsKt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatComponents.kt) |
 | RetryButton | 응답 실패 시 재시도 버튼 | [ChatComponentsKt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatComponents.kt) |
+| RewardAdDialog | 리워드 광고 시청 안내 다이얼로그 | [ChatScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatScreen.kt) |
 | ApiKeyDialog | Gemini API 키 입력 (채팅용) | [ChatComponentsKt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatComponents.kt) |
 
 ---
