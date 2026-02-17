@@ -20,6 +20,15 @@ android {
     namespace = "com.sanha.moneytalk"
     compileSdk = 34
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(localProperties.getProperty("STORE_FILE", "moneytalk-release.jks"))
+            storePassword = localProperties.getProperty("STORE_PASSWORD", "")
+            keyAlias = localProperties.getProperty("KEY_ALIAS", "")
+            keyPassword = localProperties.getProperty("KEY_PASSWORD", "")
+        }
+    }
+
     defaultConfig {
         applicationId = "com.sanha.moneytalk"
         minSdk = 26
@@ -52,6 +61,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
@@ -134,6 +144,9 @@ dependencies {
 
     // Google Generative AI (Gemini)
     implementation(libs.generative.ai)
+
+    // Google AdMob
+    implementation(libs.play.services.ads)
 
     // Firebase
     implementation(platform(libs.firebase.bom))
