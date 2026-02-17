@@ -61,7 +61,9 @@ class PremiumManager @Inject constructor(
                     geminiApiKey = snapshot.child("gemini_api_key").getValue(String::class.java) ?: "",
                     freeTierEnabled = snapshot.child("free_tier_enabled").getValue(Boolean::class.java) ?: true,
                     serviceEnabled = snapshot.child("service_enabled").getValue(Boolean::class.java) ?: true,
-                    maintenanceMessage = snapshot.child("maintenance_message").getValue(String::class.java) ?: ""
+                    maintenanceMessage = snapshot.child("maintenance_message").getValue(String::class.java) ?: "",
+                    rewardAdEnabled = snapshot.child("reward_ad_enabled").getValue(Boolean::class.java) ?: false,
+                    rewardAdChatCount = snapshot.child("reward_ad_chat_count").getValue(Int::class.java) ?: 5
                 )
                 _premiumConfig.value = config
                 Log.d(TAG, "서버 설정 갱신: freeTierEnabled=${config.freeTierEnabled}, serviceEnabled=${config.serviceEnabled}")
@@ -142,7 +144,9 @@ class PremiumManager @Inject constructor(
                     geminiApiKey = snapshot.child("gemini_api_key").getValue(String::class.java) ?: "",
                     freeTierEnabled = snapshot.child("free_tier_enabled").getValue(Boolean::class.java) ?: true,
                     serviceEnabled = snapshot.child("service_enabled").getValue(Boolean::class.java) ?: true,
-                    maintenanceMessage = snapshot.child("maintenance_message").getValue(String::class.java) ?: ""
+                    maintenanceMessage = snapshot.child("maintenance_message").getValue(String::class.java) ?: "",
+                    rewardAdEnabled = snapshot.child("reward_ad_enabled").getValue(Boolean::class.java) ?: false,
+                    rewardAdChatCount = snapshot.child("reward_ad_chat_count").getValue(Int::class.java) ?: 5
                 )
                 _premiumConfig.value = config
                 onResult(config)

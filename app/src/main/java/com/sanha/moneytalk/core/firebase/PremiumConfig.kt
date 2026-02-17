@@ -9,7 +9,9 @@ package com.sanha.moneytalk.core.firebase
  *   "gemini_api_key": "서버 관리 API 키",
  *   "free_tier_enabled": true,
  *   "service_enabled": true,
- *   "maintenance_message": ""
+ *   "maintenance_message": "",
+ *   "reward_ad_enabled": false,
+ *   "reward_ad_chat_count": 5
  * }
  * ```
  */
@@ -21,5 +23,9 @@ data class PremiumConfig(
     /** 서비스 전체 활성화 여부 (점검 시 false) */
     val serviceEnabled: Boolean = true,
     /** 점검 시 표시할 메시지 */
-    val maintenanceMessage: String = ""
+    val maintenanceMessage: String = "",
+    /** 리워드 광고 활성화 여부 (true면 채팅 시 광고 시청 필요) */
+    val rewardAdEnabled: Boolean = false,
+    /** 리워드 광고 1회 시청 시 충전되는 채팅 횟수 */
+    val rewardAdChatCount: Int = 5
 )

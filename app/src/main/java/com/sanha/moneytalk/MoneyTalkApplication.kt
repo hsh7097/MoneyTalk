@@ -1,6 +1,7 @@
 package com.sanha.moneytalk
 
 import android.app.Application
+import com.google.android.gms.ads.MobileAds
 import com.google.firebase.FirebaseApp
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.sanha.moneytalk.core.firebase.CrashlyticsHelper
@@ -25,6 +26,9 @@ class MoneyTalkApplication : Application() {
             setCrashlyticsCollectionEnabled(!BuildConfig.DEBUG)
         }
         CrashlyticsHelper.setCustomKey("app_version", BuildConfig.VERSION_NAME)
+
+        // Google AdMob 초기화
+        MobileAds.initialize(this) {}
 
         // Firebase Realtime Database 서버 설정 실시간 감시 시작
         premiumManager.startObservingConfig()

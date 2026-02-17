@@ -33,6 +33,7 @@ class SettingsDataStore @Inject constructor(
         private val THEME_MODE = stringPreferencesKey("theme_mode")
         private val CHAT_VOICE_HINT_SEEN = booleanPreferencesKey("chat_voice_hint_seen")
         private val SERVICE_TIER = stringPreferencesKey("service_tier")
+        private val REWARD_CHAT_REMAINING = intPreferencesKey("reward_chat_remaining")
     }
 
     // API 키 저장
@@ -162,5 +163,21 @@ class SettingsDataStore @Inject constructor(
     suspend fun getServiceTier(): ServiceTier {
         val stored = context.dataStore.data.first()[SERVICE_TIER] ?: "FREE"
         return ServiceTier.fromString(stored)
+    }
+
+    // 리워드 광고 채팅 잔여 횟수 저장
+    suspend fun saveRewardChatRemaining(count: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[REWARD_CHAT_REMAINING] = count.coerceAtLeast(0)
+        }
+    }
+
+    // 리워드 광고 채팅 잔여 횟수 가져오기 (기본값: 0)
+    val rewardChatRemainingFlow: Flow<Int> = context.dataStore.data.map { preferences ->
+        preferences[REWARD_CHAT_REMAINING] ?: 0
+    }
+
+    suspend fun getRewardChatRemaining(): Int {
+        return context.dataStore.data.first()[REWARD_CHAT_REMAINING] ?: 0
     }
 }

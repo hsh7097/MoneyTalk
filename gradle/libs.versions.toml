@@ -88,6 +88,9 @@ google-api-services-drive = { group = "com.google.apis", name = "google-api-serv
 # Google Generative AI (Gemini)
 generative-ai = { group = "com.google.ai.client.generativeai", name = "generativeai", version = "0.9.0" }
 
+# Google AdMob
+play-services-ads = { group = "com.google.android.gms", name = "play-services-ads", version = "23.6.0" }
+
 # Firebase
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics-ktx" }

@@ -349,4 +349,13 @@
     <!-- 설정 - 중복 삭제 -->
     <string name="settings_duplicate_title">중복 데이터 삭제</string>
     <string name="settings_duplicate_subtitle">금액, 가게명, 시간이 같은 중복 항목 제거</string>
+
+    <!-- 리워드 광고 -->
+    <string name="reward_ad_dialog_title">무료 상담 횟수 소진</string>
+    <string name="reward_ad_dialog_message">무료 채팅 횟수를 모두 사용했습니다.\n광고를 시청하면 %d회 추가 상담이 가능합니다.</string>
+    <string name="reward_ad_watch_button">광고 보고 %d회 충전</string>
+    <string name="reward_ad_later">나중에</string>
+    <string name="reward_ad_remaining">남은 무료 상담: %d회</string>
+    <string name="reward_ad_load_failed">광고 로드에 실패했습니다. 잠시 후 다시 시도해주세요.</string>
+    <string name="reward_ad_rewarded">%d회 무료 상담이 충전되었습니다!</string>
 </resources>

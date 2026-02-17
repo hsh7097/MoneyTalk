@@ -1,8 +1,10 @@
 package com.sanha.moneytalk.feature.chat.ui
 
+import android.app.Activity
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sanha.moneytalk.core.ad.RewardAdManager
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
@@ -23,6 +25,7 @@ import com.sanha.moneytalk.core.util.StoreAliasManager
 import com.sanha.moneytalk.feature.chat.data.ChatRepository
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
+import com.sanha.moneytalk.core.firebase.PremiumManager
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.compose.runtime.Stable
@@ -74,7 +77,15 @@ data class ChatUiState(
     val showSessionList: Boolean = false,
     val canRetry: Boolean = false,
     /** 채팅방 내부 화면 표시 여부 (false=목록, true=채팅방 내부) */
-    val isInChatRoom: Boolean = false
+    val isInChatRoom: Boolean = false,
+    /** 리워드 광고 다이얼로그 표시 여부 */
+    val showRewardAdDialog: Boolean = false,
+    /** 리워드 채팅 잔여 횟수 */
+    val rewardChatRemaining: Int = 0,
+    /** 광고 시청 후 전송할 대기 메시지 */
+    val pendingMessage: String? = null,
+    /** 리워드 광고 기능 활성화 여부 */
+    val isRewardAdEnabled: Boolean = false
 )
 
 @HiltViewModel
@@ -86,7 +97,9 @@ class ChatViewModel @Inject constructor(
     private val chatDao: ChatDao,
     private val settingsDataStore: SettingsDataStore,
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
-    private val categoryReferenceProvider: CategoryReferenceProvider
+    private val categoryReferenceProvider: CategoryReferenceProvider,
+    private val rewardAdManager: RewardAdManager,
+    private val premiumManager: PremiumManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -105,6 +118,7 @@ class ChatViewModel @Inject constructor(
         checkApiKey()
         observeVoiceHintSeen()
         autoCreateSessionIfEmpty()
+        observeRewardAdState()
     }
 
     /**
@@ -312,14 +326,86 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 리워드 광고 관련 상태 감시
+     * - 잔여 횟수 Flow 수집
+     * - PremiumConfig의 rewardAdEnabled 변경 시 광고 프리로드
+     */
+    private fun observeRewardAdState() {
+        viewModelScope.launch {
+            rewardAdManager.rewardChatRemainingFlow.collect { remaining ->
+                _uiState.update { it.copy(rewardChatRemaining = remaining) }
+            }
+        }
+        viewModelScope.launch {
+            premiumManager.premiumConfig.collect { config ->
+                _uiState.update { it.copy(isRewardAdEnabled = config.rewardAdEnabled) }
+                if (config.rewardAdEnabled) {
+                    rewardAdManager.preloadAd()
+                }
+            }
+        }
+    }
+
+    /**
+     * 리워드 광고 시청 완료 처리
+     * 보상 충전 후 대기 중인 메시지를 자동 전송합니다.
+     */
+    fun onRewardAdWatched() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                rewardAdManager.addRewardChats()
+            }
+            val pending = _uiState.value.pendingMessage
+            _uiState.update { it.copy(showRewardAdDialog = false, pendingMessage = null) }
+            if (pending != null) {
+                sendMessage(pending)
+            }
+        }
+    }
+
+    /** 리워드 광고 다이얼로그 닫기 (광고 시청 안 함) */
+    fun onRewardAdDismissed() {
+        _uiState.update { it.copy(showRewardAdDialog = false, pendingMessage = null) }
+    }
+
+    /**
+     * Activity에서 리워드 광고 표시
+     */
+    fun showRewardAd(activity: Activity) {
+        rewardAdManager.showAd(
+            activity = activity,
+            onRewarded = { onRewardAdWatched() },
+            onFailed = {
+                _uiState.update { it.copy(showRewardAdDialog = false, pendingMessage = null) }
+            }
+        )
+    }
+
+    /** 리워드 1회 시청 시 충전되는 횟수 */
+    fun getRewardChatCount(): Int = rewardAdManager.getRewardChatCount()
+
     fun sendMessage(message: String) {
         if (message.isBlank()) return
         if (sendMutex.isLocked) return  // 이미 처리 중이면 무시
 
-        lastUserMessage = message
-        _uiState.update { it.copy(canRetry = false) }
-
         viewModelScope.launch {
+            // 리워드 광고 체크: 활성 상태이고 잔여 횟수가 0이면 광고 다이얼로그 표시
+            if (rewardAdManager.isAdRequired()) {
+                _uiState.update {
+                    it.copy(showRewardAdDialog = true, pendingMessage = message)
+                }
+                return@launch
+            }
+
+            // 잔여 횟수 차감 (광고 기능 활성 시에만 차감)
+            withContext(Dispatchers.IO) {
+                rewardAdManager.consumeRewardChat()
+            }
+
+            lastUserMessage = message
+            _uiState.update { it.copy(canRetry = false) }
+
             val acquired = withTimeoutOrNull(90_000L) {
                 sendMutex.withLock {
                     processSendMessage(message)
