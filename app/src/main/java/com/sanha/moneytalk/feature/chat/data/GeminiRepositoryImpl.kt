@@ -6,6 +6,7 @@ import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
 import com.google.ai.client.generativeai.type.generationConfig
 import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
+import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.DataQueryParser
 import com.sanha.moneytalk.core.util.DataQueryRequest
@@ -18,10 +19,12 @@ import javax.inject.Singleton
 /**
  * Gemini AI Repository 구현체
  *
- * 3개의 GenerativeModel을 내부적으로 관리하며, API 키 변경 시 자동으로 모델을 재생성합니다.
- * - queryAnalyzerModel (gemini-2.5-pro): 쿼리/액션 분석용
- * - financialAdvisorModel (gemini-2.5-pro): 재무 상담 답변용
- * - summaryModel (gemini-2.5-flash): 대화 요약용
+ * 3개의 GenerativeModel을 내부적으로 관리하며, API 키 또는 모델 설정 변경 시 자동으로 재생성합니다.
+ * - queryAnalyzerModel: 쿼리/액션 분석용
+ * - financialAdvisorModel: 재무 상담 답변용
+ * - summaryModel: 대화 요약용
+ *
+ * 모델명은 Firebase RTDB에서 원격 관리됩니다 (GeminiModelConfig).
  *
  * @see GeminiRepository 인터페이스
  */
@@ -31,11 +34,12 @@ class GeminiRepositoryImpl @Inject constructor(
     private val apiKeyProvider: GeminiApiKeyProvider
 ) : GeminiRepository {
     private var cachedApiKey: String? = null
+    private var cachedModelConfig: GeminiModelConfig? = null
 
-    // 쿼리 분석용 모델 (System Instruction에 스키마 포함)
+    // 쿼리 분석용 모델
     private var queryAnalyzerModel: GenerativeModel? = null
 
-    // 재무 상담용 모델 (System Instruction에 상담사 역할 포함)
+    // 재무 상담용 모델
     private var financialAdvisorModel: GenerativeModel? = null
 
     // 요약 전용 모델
@@ -45,12 +49,14 @@ class GeminiRepositoryImpl @Inject constructor(
         private const val TAG = "gemini"
     }
 
-    // GeminiApiKeyProvider를 통해 API 키 가져오기 (서비스 티어 반영)
+    // API 키 또는 모델 설정 변경 감지 → 모델 재생성
     private suspend fun getApiKey(): String {
         val key = apiKeyProvider.getApiKey()
-        if (key != cachedApiKey) {
+        val currentModelConfig = apiKeyProvider.modelConfig
+        if (key != cachedApiKey || currentModelConfig != cachedModelConfig) {
             cachedApiKey = key
-            // 키가 변경되면 모델 재생성
+            cachedModelConfig = currentModelConfig
+            // 키 또는 모델 설정 변경 시 모델 재생성
             queryAnalyzerModel = null
             financialAdvisorModel = null
             summaryModel = null
@@ -63,9 +69,9 @@ class GeminiRepositoryImpl @Inject constructor(
         val apiKey = getApiKey()
         if (apiKey.isBlank()) return null
 
-        if (queryAnalyzerModel == null || cachedApiKey != apiKey) {
+        if (queryAnalyzerModel == null) {
             queryAnalyzerModel = GenerativeModel(
-                modelName = "gemini-2.5-pro",
+                modelName = apiKeyProvider.modelConfig.queryAnalyzer,
                 apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.3f  // 쿼리 분석은 정확도가 중요
@@ -90,9 +96,9 @@ class GeminiRepositoryImpl @Inject constructor(
         val apiKey = getApiKey()
         if (apiKey.isBlank()) return null
 
-        if (financialAdvisorModel == null || cachedApiKey != apiKey) {
+        if (financialAdvisorModel == null) {
             financialAdvisorModel = GenerativeModel(
-                modelName = "gemini-2.5-pro",
+                modelName = apiKeyProvider.modelConfig.financialAdvisor,
                 apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.7f
@@ -117,9 +123,9 @@ class GeminiRepositoryImpl @Inject constructor(
         val apiKey = getApiKey()
         if (apiKey.isBlank()) return null
 
-        if (summaryModel == null || cachedApiKey != apiKey) {
+        if (summaryModel == null) {
             summaryModel = GenerativeModel(
-                modelName = "gemini-2.5-flash",
+                modelName = apiKeyProvider.modelConfig.summary,
                 apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.3f  // 요약은 정확도가 중요
@@ -145,7 +151,7 @@ class GeminiRepositoryImpl @Inject constructor(
 
         return try {
             val model = GenerativeModel(
-                modelName = "gemini-2.5-flash-lite",
+                modelName = apiKeyProvider.modelConfig.homeInsight,
                 apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.7f
@@ -177,12 +183,9 @@ class GeminiRepositoryImpl @Inject constructor(
         }
     }
 
+    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
     override suspend fun setApiKey(key: String) {
-        cachedApiKey = key
-        queryAnalyzerModel = null
-        financialAdvisorModel = null
-        summaryModel = null
-        apiKeyProvider.saveUserApiKey(key)
+        // RTDB 기반 키 관리로 전환 — 로컬 키 저장 제거
     }
 
     override suspend fun hasApiKey(): Boolean {

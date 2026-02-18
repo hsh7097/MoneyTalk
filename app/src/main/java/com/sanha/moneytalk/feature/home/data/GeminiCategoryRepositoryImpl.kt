@@ -6,6 +6,7 @@ import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.generationConfig
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
+import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.model.Category
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +19,8 @@ import kotlin.random.Random
 
 /**
  * Gemini API를 사용한 카테고리 분류 Repository 구현체
+ *
+ * 모델명은 Firebase RTDB에서 원격 관리됩니다 (GeminiModelConfig).
  *
  * @see GeminiCategoryRepository
  */
@@ -54,14 +57,11 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
 
     private var generativeModel: GenerativeModel? = null
     private var cachedApiKey: String? = null
+    private var cachedModelConfig: GeminiModelConfig? = null
 
-    /**
-     * Gemini API 키 설정
-     */
+    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
     override suspend fun setApiKey(apiKey: String) {
-        apiKeyProvider.saveUserApiKey(apiKey)
-        cachedApiKey = apiKey
-        initModel(apiKey)
+        // RTDB 기반 키 관리로 전환 — 로컬 키 저장 제거
     }
 
     /**
@@ -78,11 +78,11 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
         return apiKeyProvider.getApiKey()
     }
 
-    private fun initModel(apiKey: String) {
+    private fun initModel(apiKey: String, modelName: String) {
         if (apiKey.isBlank()) return
 
         generativeModel = GenerativeModel(
-            modelName = "gemini-2.5-flash-lite",
+            modelName = modelName,
             apiKey = apiKey,
             generationConfig = generationConfig {
                 temperature = 0.1f  // 낮은 온도로 일관된 분류
@@ -118,13 +118,15 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 return@withContext emptyMap()
             }
 
-            if (generativeModel == null || apiKey != cachedApiKey) {
+            val currentModelConfig = apiKeyProvider.modelConfig
+            if (generativeModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
                 Log.e(
                     "sanha",
                     "GeminiCategoryRepository[classifyStoreNames] : 모델 초기화 필요 → initModel() 호출"
                 )
                 cachedApiKey = apiKey
-                initModel(apiKey)
+                cachedModelConfig = currentModelConfig
+                initModel(apiKey, currentModelConfig.categoryClassifier)
             }
 
             val model = generativeModel
@@ -228,7 +230,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 val prompt = buildClassificationPrompt(batch, categories, referenceText)
 
                 Log.d(TAG, "=== REQUEST [배치 ${batchIndex + 1}/$totalBatches, 시도 $attempt] ===")
-                Log.d(TAG, "모델: gemini-2.5-flash-lite, 배치 크기: ${batch.size}개")
+                Log.d(TAG, "모델: ${apiKeyProvider.modelConfig.categoryClassifier}, 배치 크기: ${batch.size}개")
                 Log.d(TAG, "가게명 목록: ${batch.joinToString(", ")}")
                 logLongString(TAG, "PROMPT", prompt)
 

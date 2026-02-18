@@ -261,15 +261,9 @@ class SettingsViewModel @Inject constructor(
 
     private fun loadSettings() {
         viewModelScope.launch {
-            // Gemini API 키 로드
-            settingsDataStore.geminiApiKeyFlow.collect { key ->
-                _uiState.update {
-                    it.copy(
-                        apiKey = maskApiKey(key),
-                        hasApiKey = key.isNotBlank()
-                    )
-                }
-            }
+            // API 키 존재 여부 (Firebase RTDB 기반)
+            val hasKey = withContext(Dispatchers.IO) { geminiRepository.hasApiKey() }
+            _uiState.update { it.copy(hasApiKey = hasKey) }
         }
 
         viewModelScope.launch {
@@ -312,31 +306,9 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
     fun saveApiKey(key: String) {
-        viewModelScope.launch {
-            Log.e("sanha", "SettingsViewModel[saveApiKey] : API 키 저장 시작 (길이=${key.length})")
-            _uiState.update { it.copy(isLoading = true) }
-            try {
-                withContext(Dispatchers.IO) { geminiRepository.setApiKey(key) }
-                Log.e("sanha", "SettingsViewModel[saveApiKey] : API 키 저장 완료 → 백그라운드 재분류 트리거")
-                snackbarBus.show("Gemini API 키가 저장되었습니다")
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        hasApiKey = true,
-                        apiKey = maskApiKey(key)
-                    )
-                }
-                launchBackgroundReclassification()
-            } catch (e: Exception) {
-                snackbarBus.show("저장 실패: ${e.message}")
-                _uiState.update {
-                    it.copy(
-                        isLoading = false
-                    )
-                }
-            }
-        }
+        // RTDB 기반 키 관리로 전환 — 로컬 키 저장 제거
     }
 
     fun saveMonthStartDay(day: Int) {

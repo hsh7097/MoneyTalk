@@ -18,8 +18,8 @@ import javax.inject.Singleton
 /**
  * SMS 텍스트 임베딩 생성 서비스
  *
- * Gemini Embedding API (gemini-embedding-001)를 사용하여
- * SMS 본문의 임베딩 벡터를 생성합니다.
+ * Gemini Embedding API를 사용하여 SMS 본문의 임베딩 벡터를 생성합니다.
+ * 임베딩 모델명은 Firebase RTDB에서 원격 관리됩니다 (GeminiModelConfig).
  *
  * REST API를 직접 호출 (SDK에 embedding 메서드가 없으므로)
  */
@@ -29,7 +29,6 @@ class SmsEmbeddingService @Inject constructor(
 ) {
     companion object {
         private const val TAG = "gemini"
-        private const val EMBEDDING_MODEL = "gemini-embedding-001"
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
         /** 429 Rate Limit 재시도 최대 횟수 */
@@ -88,10 +87,11 @@ class SmsEmbeddingService @Inject constructor(
                 return@withContext null
             }
 
-            val url = "$BASE_URL/$EMBEDDING_MODEL:embedContent?key=$apiKey"
+            val embeddingModel = apiKeyProvider.modelConfig.embedding
+            val url = "$BASE_URL/$embeddingModel:embedContent?key=$apiKey"
 
             val requestBody = JsonObject().apply {
-                add("model", gson.toJsonTree("models/$EMBEDDING_MODEL"))
+                add("model", gson.toJsonTree("models/$embeddingModel"))
                 add("content", JsonObject().apply {
                     add("parts", gson.toJsonTree(listOf(mapOf("text" to text))))
                 })
@@ -148,11 +148,12 @@ class SmsEmbeddingService @Inject constructor(
                     return@withContext texts.map { null }
                 }
 
-                val url = "$BASE_URL/$EMBEDDING_MODEL:batchEmbedContents?key=$apiKey"
+                val embeddingModel = apiKeyProvider.modelConfig.embedding
+                val url = "$BASE_URL/$embeddingModel:batchEmbedContents?key=$apiKey"
 
                 val requests = texts.map { text ->
                     mapOf(
-                        "model" to "models/$EMBEDDING_MODEL",
+                        "model" to "models/$embeddingModel",
                         "content" to mapOf(
                             "parts" to listOf(mapOf("text" to text))
                         )

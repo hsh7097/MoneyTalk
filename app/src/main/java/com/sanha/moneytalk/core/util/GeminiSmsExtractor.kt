@@ -8,6 +8,7 @@ import com.google.ai.client.generativeai.type.generationConfig
 import com.google.gson.JsonParser
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
+import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.model.Category
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,8 @@ import javax.inject.Singleton
  *
  * 정규식으로 파싱이 실패한 결제 문자에서
  * Gemini를 사용하여 금액, 가게명, 카드사 등을 추출합니다.
+ *
+ * 모델명은 Firebase RTDB에서 원격 관리됩니다 (GeminiModelConfig).
  *
  * 3-tier 시스템의 3번째 단계: Regex → Vector → **LLM 추출**
  */
@@ -119,15 +122,21 @@ class GeminiSmsExtractor @Inject constructor(
     private var extractorModel: GenerativeModel? = null
     private var batchExtractorModel: GenerativeModel? = null
     private var cachedApiKey: String? = null
+    private var cachedModelConfig: GeminiModelConfig? = null
 
     private suspend fun getModel(): GenerativeModel? {
         val apiKey = apiKeyProvider.getApiKey()
         if (apiKey.isBlank()) return null
 
-        if (extractorModel == null || apiKey != cachedApiKey) {
+        val currentModelConfig = apiKeyProvider.modelConfig
+        if (extractorModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
             cachedApiKey = apiKey
+            cachedModelConfig = currentModelConfig
+            // 모델 설정 변경 시 배치 모델도 함께 재생성
+            extractorModel = null
+            batchExtractorModel = null
             extractorModel = GenerativeModel(
-                modelName = "gemini-2.5-flash-lite",
+                modelName = currentModelConfig.smsExtractor,
                 apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.1f  // 정확한 추출을 위해 낮은 온도
@@ -144,10 +153,15 @@ class GeminiSmsExtractor @Inject constructor(
         val apiKey = apiKeyProvider.getApiKey()
         if (apiKey.isBlank()) return null
 
-        if (batchExtractorModel == null || apiKey != cachedApiKey) {
+        val currentModelConfig = apiKeyProvider.modelConfig
+        if (batchExtractorModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
             cachedApiKey = apiKey
+            cachedModelConfig = currentModelConfig
+            // 모델 설정 변경 시 단일 모델도 함께 재생성
+            extractorModel = null
+            batchExtractorModel = null
             batchExtractorModel = GenerativeModel(
-                modelName = "gemini-2.5-flash-lite",
+                modelName = currentModelConfig.smsBatchExtractor,
                 apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.1f

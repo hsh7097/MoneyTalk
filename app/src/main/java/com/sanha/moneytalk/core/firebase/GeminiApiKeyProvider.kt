@@ -1,36 +1,37 @@
 package com.sanha.moneytalk.core.firebase
 
 import android.util.Log
-import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Gemini API 키 제공자
+ * Gemini API 키 및 모델 설정 제공자
  *
- * 서비스 티어(무료/프리미엄)와 서버 설정에 따라 올바른 API 키를 제공합니다.
+ * PremiumManager의 Firebase RTDB 설정을 기반으로 API 키와 모델명을 제공합니다.
  * 모든 Gemini 소비자(GeminiRepositoryImpl, GeminiCategoryRepositoryImpl,
- * GeminiSmsExtractor, SmsEmbeddingService)가 이 클래스를 통해 API 키를 얻습니다.
+ * GeminiSmsExtractor, SmsEmbeddingService)가 이 클래스를 통해 API 키와 모델 설정을 얻습니다.
  *
  * ## 키 결정 로직
- * - FREE 티어 + 무료 허용: 사용자 직접 입력 키 (DataStore)
- * - FREE 티어 + 무료 차단: 빈 문자열 (서비스 불가)
- * - PREMIUM 티어: 서버 관리 키 (Firebase Realtime DB)
- * - 서버 점검 중: 빈 문자열 (서비스 불가)
+ * - RTDB 키 풀(gemini_api_keys)에서 라운드로빈 선택
+ * - 키 풀이 비어있으면 gemini_api_key 단일 키 fallback
+ * - 서비스 비활성화 시 빈 문자열
+ *
+ * ## 모델 설정
+ * - RTDB /config/models/ 에서 역할별 모델명을 읽어옴
+ * - RTDB에 값이 없으면 GeminiModelConfig 기본값 사용
  */
 @Singleton
 class GeminiApiKeyProvider @Inject constructor(
-    private val premiumManager: PremiumManager,
-    private val settingsDataStore: SettingsDataStore
+    private val premiumManager: PremiumManager
 ) {
     companion object {
         private const val TAG = "GeminiApiKeyProvider"
     }
 
     /**
-     * 현재 유효한 API 키를 즉시 반환
+     * 현재 유효한 API 키를 라운드로빈으로 반환
      */
     suspend fun getApiKey(): String {
         return premiumManager.getEffectiveApiKey()
@@ -46,32 +47,31 @@ class GeminiApiKeyProvider @Inject constructor(
     /**
      * API 키 변경을 실시간으로 관찰하는 Flow
      *
-     * 서비스 티어 변경, 서버 설정 변경, 사용자 키 변경 모두 반영됩니다.
+     * 키 풀 또는 단일 키의 변경을 감지합니다.
+     * Flow에서는 첫 번째 키만 emit하여 변경 감지용으로 사용합니다.
      */
-    val apiKeyFlow: Flow<String> = combine(
-        premiumManager.serviceTierFlow,
-        premiumManager.premiumConfig,
-        settingsDataStore.geminiApiKeyFlow
-    ) { tier, config, userKey ->
-        when {
-            !config.serviceEnabled -> ""
-            tier == ServiceTier.PREMIUM && config.geminiApiKey.isNotBlank() -> config.geminiApiKey
-            tier == ServiceTier.FREE && config.freeTierEnabled -> userKey
-            tier == ServiceTier.FREE && !config.freeTierEnabled -> ""
-            else -> userKey
+    val apiKeyFlow: Flow<String> = premiumManager.premiumConfig.map { config ->
+        if (!config.serviceEnabled) return@map ""
+        val keys = config.geminiApiKeys.ifEmpty {
+            if (config.geminiApiKey.isNotBlank()) listOf(config.geminiApiKey) else emptyList()
         }
+        keys.firstOrNull() ?: ""
     }
+
+    /**
+     * 현재 모델 설정 (즉시 조회)
+     */
+    val modelConfig: GeminiModelConfig
+        get() = premiumManager.premiumConfig.value.modelConfig
+
+    /**
+     * 모델 설정 변경을 실시간으로 관찰하는 Flow
+     */
+    val modelConfigFlow: Flow<GeminiModelConfig> =
+        premiumManager.premiumConfig.map { it.modelConfig }
 
     /**
      * 현재 서비스 상태를 실시간으로 관찰하는 Flow
      */
     val serviceStatusFlow: Flow<ServiceStatus> = premiumManager.serviceStatusFlow
-
-    /**
-     * 사용자가 직접 입력한 API 키 저장 (무료 티어 전용)
-     */
-    suspend fun saveUserApiKey(apiKey: String) {
-        settingsDataStore.saveGeminiApiKey(apiKey)
-        Log.d(TAG, "사용자 API 키 저장됨")
-    }
 }
