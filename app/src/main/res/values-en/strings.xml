@@ -342,4 +342,10 @@
     <string name="reward_ad_remaining">Free chats remaining: %d</string>
     <string name="reward_ad_load_failed">Failed to load ad. Please try again later.</string>
     <string name="reward_ad_rewarded">%d free chats added!</string>
+
+    <!-- Force Update -->
+    <string name="force_update_title">Update Required</string>
+    <string name="force_update_message">A new version is available.\nPlease update to version %1$s to continue using the app.\n\nCurrent version: %2$s</string>
+    <string name="force_update_button">Update</string>
+    <string name="force_update_exit">Exit</string>
 </resources>

@@ -63,10 +63,13 @@ class PremiumManager @Inject constructor(
                     serviceEnabled = snapshot.child("service_enabled").getValue(Boolean::class.java) ?: true,
                     maintenanceMessage = snapshot.child("maintenance_message").getValue(String::class.java) ?: "",
                     rewardAdEnabled = snapshot.child("reward_ad_enabled").getValue(Boolean::class.java) ?: false,
-                    rewardAdChatCount = snapshot.child("reward_ad_chat_count").getValue(Int::class.java) ?: 5
+                    rewardAdChatCount = snapshot.child("reward_ad_chat_count").getValue(Int::class.java) ?: 5,
+                    minVersionCode = snapshot.child("min_version_code").getValue(Int::class.java) ?: 1,
+                    minVersionName = snapshot.child("min_version_name").getValue(String::class.java) ?: "1.0.0",
+                    forceUpdateMessage = snapshot.child("force_update_message").getValue(String::class.java) ?: ""
                 )
                 _premiumConfig.value = config
-                Log.d(TAG, "서버 설정 갱신: freeTierEnabled=${config.freeTierEnabled}, serviceEnabled=${config.serviceEnabled}")
+                Log.d(TAG, "서버 설정 갱신: freeTierEnabled=${config.freeTierEnabled}, serviceEnabled=${config.serviceEnabled}, minVersionCode=${config.minVersionCode}")
             }
 
             override fun onCancelled(error: DatabaseError) {
@@ -146,7 +149,10 @@ class PremiumManager @Inject constructor(
                     serviceEnabled = snapshot.child("service_enabled").getValue(Boolean::class.java) ?: true,
                     maintenanceMessage = snapshot.child("maintenance_message").getValue(String::class.java) ?: "",
                     rewardAdEnabled = snapshot.child("reward_ad_enabled").getValue(Boolean::class.java) ?: false,
-                    rewardAdChatCount = snapshot.child("reward_ad_chat_count").getValue(Int::class.java) ?: 5
+                    rewardAdChatCount = snapshot.child("reward_ad_chat_count").getValue(Int::class.java) ?: 5,
+                    minVersionCode = snapshot.child("min_version_code").getValue(Int::class.java) ?: 1,
+                    minVersionName = snapshot.child("min_version_name").getValue(String::class.java) ?: "1.0.0",
+                    forceUpdateMessage = snapshot.child("force_update_message").getValue(String::class.java) ?: ""
                 )
                 _premiumConfig.value = config
                 onResult(config)

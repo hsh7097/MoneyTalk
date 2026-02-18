@@ -358,4 +358,10 @@
     <string name="reward_ad_remaining">남은 무료 상담: %d회</string>
     <string name="reward_ad_load_failed">광고 로드에 실패했습니다. 잠시 후 다시 시도해주세요.</string>
     <string name="reward_ad_rewarded">%d회 무료 상담이 충전되었습니다!</string>
+
+    <!-- 강제 업데이트 -->
+    <string name="force_update_title">업데이트 필요</string>
+    <string name="force_update_message">새 버전이 출시되었습니다.\n최신 버전(%1$s)으로 업데이트해야 앱을 사용할 수 있습니다.\n\n현재 버전: %2$s</string>
+    <string name="force_update_button">업데이트</string>
+    <string name="force_update_exit">종료</string>
 </resources>
