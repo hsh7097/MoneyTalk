@@ -405,8 +405,15 @@ class ChatViewModel @Inject constructor(
             }
 
             // 잔여 횟수 차감 (광고 기능 활성 시에만 차감)
-            withContext(Dispatchers.IO) {
+            val consumed = withContext(Dispatchers.IO) {
                 rewardAdManager.consumeRewardChat()
+            }
+            if (!consumed) {
+                // race condition 방어: 차감 실패 시 광고 다이얼로그 표시
+                _uiState.update {
+                    it.copy(showRewardAdDialog = true, pendingMessage = message)
+                }
+                return@launch
             }
 
             lastUserMessage = message
