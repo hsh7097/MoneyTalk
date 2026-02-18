@@ -16,6 +16,8 @@ import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransaction
 import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderInfo
+import com.sanha.moneytalk.core.ui.component.MonthKey
+import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
@@ -95,17 +97,31 @@ sealed interface TransactionListItem {
 }
 
 /**
+ * 내역 화면의 페이지별(월별) 데이터.
+ * HorizontalPager의 각 페이지가 독립적으로 렌더링할 수 있도록 월별 데이터를 캡슐화.
+ */
+@Stable
+data class HistoryPageData(
+    val isLoading: Boolean = true,
+    val expenses: List<ExpenseEntity> = emptyList(),
+    val incomes: List<IncomeEntity> = emptyList(),
+    val monthlyTotal: Int = 0,
+    val dailyTotals: Map<String, Int> = emptyMap(),
+    val monthlyIncomeTotal: Int = 0,
+    val transactionListItems: List<TransactionListItem> = emptyList()
+)
+
+/**
  * 내역 화면 UI 상태
  *
- * @property isLoading 데이터 로딩 중 여부
- * @property isRefreshing Pull-to-Refresh 진행 중 여부
- * @property expenses 필터링된 지출 내역 목록
+ * 월별 데이터는 [pageCache]에서 관리하며, 글로벌 상태만 직접 보유.
+ * HorizontalPager의 각 페이지는 pageCache[MonthKey]에서 자기 월의 데이터를 읽어 렌더링.
+ *
+ * @property pageCache 월별 페이지 데이터 캐시 (최대 3~5개)
  * @property selectedCategory 선택된 카테고리 필터 (null이면 전체)
  * @property selectedYear 선택된 연도
  * @property selectedMonth 선택된 월
  * @property monthStartDay 월 시작일 (1~28, 사용자 설정)
- * @property monthlyTotal 해당 월 총 지출
- * @property dailyTotals 일별 지출 합계 (캘린더 표시용, "yyyy-MM-dd" -> 금액)
  * @property errorMessage 에러 메시지 (null이면 에러 없음)
  * @property searchQuery 검색어
  * @property isSearchMode 검색 모드 여부
@@ -115,36 +131,33 @@ sealed interface TransactionListItem {
  */
 @Stable
 data class HistoryUiState(
-    val isLoading: Boolean = false,
+    val pageCache: Map<MonthKey, HistoryPageData> = emptyMap(),
     val isRefreshing: Boolean = false,
-    val expenses: List<ExpenseEntity> = emptyList(),
     val selectedCategory: String? = null,
     val selectedYear: Int = DateUtils.getCurrentYear(),
     val selectedMonth: Int = DateUtils.getCurrentMonth(),
     val monthStartDay: Int = 1,
-    val monthlyTotal: Int = 0,
-    val dailyTotals: Map<String, Int> = emptyMap(),
     val errorMessage: String? = null,
     val searchQuery: String = "",
     val isSearchMode: Boolean = false,
     val sortOrder: SortOrder = SortOrder.DATE_DESC,
     val showExpenses: Boolean = true,
     val showIncomes: Boolean = true,
-    val incomes: List<IncomeEntity> = emptyList(),
-    val monthlyIncomeTotal: Int = 0,
-    // 가공된 리스트 데이터 (TransactionListView용)
-    val transactionListItems: List<TransactionListItem> = emptyList(),
     // 다이얼로그 상태 (Composable에서 remember 대신 ViewModel에서 관리)
     val selectedExpense: ExpenseEntity? = null,
     val selectedIncome: IncomeEntity? = null
 ) {
-    /** 필터 적용된 지출 총합 (필터 활성 시 expenses 합계, 비활성 시 월 전체) */
+    /** 현재 선택 월의 페이지 데이터 (하위 호환용) */
+    private val currentPageData: HistoryPageData
+        get() = pageCache[MonthKey(selectedYear, selectedMonth)] ?: HistoryPageData()
+
+    /** 필터 적용된 지출 총합 */
     val filteredExpenseTotal: Int
-        get() = if (showExpenses) expenses.sumOf { it.amount } else 0
+        get() = if (showExpenses) currentPageData.expenses.sumOf { it.amount } else 0
 
     /** 필터 적용된 수입 총합 (카테고리 필터 시 수입 숨김) */
     val filteredIncomeTotal: Int
-        get() = if (showIncomes && selectedCategory == null) incomes.sumOf { it.amount } else 0
+        get() = if (showIncomes && selectedCategory == null) currentPageData.incomes.sumOf { it.amount } else 0
 }
 
 /**
@@ -176,13 +189,64 @@ class HistoryViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(HistoryUiState())
     val uiState: StateFlow<HistoryUiState> = _uiState.asStateFlow()
 
-    /** 현재 실행 중인 데이터 로드 작업 (취소 가능) */
-    private var loadJob: Job? = null
+    /** 페이지별 로드 Job 관리 (월별 독립 취소) */
+    private val pageLoadJobs = mutableMapOf<MonthKey, Job>()
+
+    /** 페이지 캐시 최대 허용 범위 (현재 월 ± 이 값) */
+    private companion object {
+        const val PAGE_CACHE_RANGE = 2
+    }
 
     init {
         loadSettings()
         observeDataRefreshEvents()
     }
+
+    // ========== 페이지 캐시 관리 ==========
+
+    /** 특정 월의 페이지 캐시 업데이트 */
+    private fun updatePageCache(key: MonthKey, data: HistoryPageData) {
+        _uiState.update { state ->
+            state.copy(pageCache = state.pageCache + (key to data))
+        }
+    }
+
+    /** 현재 월 ± PAGE_CACHE_RANGE 밖의 캐시 정리 */
+    private fun evictDistantCache(year: Int, month: Int) {
+        val currentTotal = year * 12 + month
+        _uiState.update { state ->
+            val filtered = state.pageCache.filter { (key, _) ->
+                val keyTotal = key.year * 12 + key.month
+                kotlin.math.abs(keyTotal - currentTotal) <= PAGE_CACHE_RANGE
+            }
+            state.copy(pageCache = filtered)
+        }
+    }
+
+    /** 전체 페이지 캐시 클리어 */
+    private fun clearAllPageCache() {
+        pageLoadJobs.values.forEach { it.cancel() }
+        pageLoadJobs.clear()
+        _uiState.update { it.copy(pageCache = emptyMap()) }
+    }
+
+    /** 현재 + 인접 월 데이터 로드 (공통 진입점) */
+    private fun loadCurrentAndAdjacentPages() {
+        val state = _uiState.value
+        val year = state.selectedYear
+        val month = state.selectedMonth
+
+        loadPageData(year, month)
+        val (prevY, prevM) = MonthPagerUtils.adjacentMonth(year, month, -1)
+        loadPageData(prevY, prevM)
+        val (nextY, nextM) = MonthPagerUtils.adjacentMonth(year, month, +1)
+        if (!MonthPagerUtils.isFutureYearMonth(nextY, nextM)) {
+            loadPageData(nextY, nextM)
+        }
+        evictDistantCache(year, month)
+    }
+
+    // ========== 전역 이벤트 처리 ==========
 
     /** 내 카드 변경 등 전역 이벤트 감지 */
     private fun observeDataRefreshEvents() {
@@ -191,20 +255,13 @@ class HistoryViewModel @Inject constructor(
                 when (event) {
                     DataRefreshEvent.RefreshType.OWNED_CARD_UPDATED,
                     DataRefreshEvent.RefreshType.CATEGORY_UPDATED -> {
-                        loadExpenses()
+                        clearAllPageCache()
+                        loadCurrentAndAdjacentPages()
                     }
 
                     DataRefreshEvent.RefreshType.ALL_DATA_DELETED -> {
-                        _uiState.update {
-                            it.copy(
-                                monthlyTotal = 0,
-                                expenses = emptyList(),
-                                dailyTotals = emptyMap(),
-                                incomes = emptyList(),
-                                monthlyIncomeTotal = 0
-                            )
-                        }
-                        loadExpenses()
+                        clearAllPageCache()
+                        loadCurrentAndAdjacentPages()
                     }
                 }
             }
@@ -219,26 +276,36 @@ class HistoryViewModel @Inject constructor(
         viewModelScope.launch {
             settingsDataStore.monthStartDayFlow.collect { startDay ->
                 _uiState.update { it.copy(monthStartDay = startDay) }
-                loadExpenses()
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
             }
         }
     }
 
+    // ========== 페이지별 데이터 로드 ==========
+
     /**
-     * 지출 내역 로드
-     * 선택된 월과 필터 조건에 맞는 지출 내역을 조회합니다.
-     * 기존 로드 작업이 있으면 취소하고 새로 시작합니다.
+     * 특정 월의 페이지 데이터 로드
+     * 해당 월의 지출, 수입, 일별 합계, 가공된 리스트를 조회하여 pageCache에 저장.
+     * @param year 대상 연도
+     * @param month 대상 월
      */
-    private fun loadExpenses() {
-        loadJob?.cancel()
-        loadJob = viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+    private fun loadPageData(year: Int, month: Int) {
+        val key = MonthKey(year, month)
+        // 이미 로드 완료된 캐시가 있으면 스킵 (스와이프 시 불필요한 재로드 방지)
+        val existing = _uiState.value.pageCache[key]
+        if (existing != null && !existing.isLoading) return
+
+        pageLoadJobs[key]?.cancel()
+        pageLoadJobs[key] = viewModelScope.launch {
+            // 캐시에 없으면 로딩 상태로 초기화
+            if (_uiState.value.pageCache[key] == null) {
+                updatePageCache(key, HistoryPageData(isLoading = true))
+            }
 
             val state = _uiState.value
             val (startTime, endTime) = DateUtils.getCustomMonthPeriod(
-                state.selectedYear,
-                state.selectedMonth,
-                state.monthStartDay
+                year, month, state.monthStartDay
             )
 
             // 제외 키워드 로드 (필터링용)
@@ -246,16 +313,34 @@ class HistoryViewModel @Inject constructor(
                 smsExclusionRepository.getAllKeywordStrings()
             }
 
-            // 수입 항상 로드 (목록 모드에서도 수입 표시)
-            loadIncomes(exclusionKeywords)
-
-            // 필터링된 지출 내역 로드 (Flow는 Room이 자동으로 IO에서 실행)
-            // 대 카테고리 선택 시 소 카테고리도 포함 (예: "식비" → "식비" + "배달")
+            // 카테고리 필터
             val categoryFilter = state.selectedCategory
             val categoriesForFilter = categoryFilter?.let {
                 val cat = Category.fromDisplayName(it)
-                cat.displayNamesIncludingSub  // 대 카테고리 + 소 카테고리 displayName 목록
+                cat.displayNamesIncludingSub
             }
+
+            // 수입 로드 (1회성)
+            val allIncomes = withContext(Dispatchers.IO) {
+                incomeRepository.getIncomesByDateRangeOnce(startTime, endTime)
+            }
+            val filteredIncomes = if (exclusionKeywords.isEmpty()) {
+                allIncomes
+            } else {
+                allIncomes.filter { income ->
+                    val smsLower = income.originalSms?.lowercase()
+                    smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                }
+            }
+            val sortedIncomes = filteredIncomes.sortedByDescending { inc -> inc.dateTime }
+            val incomeTotal = filteredIncomes.sumOf { it.amount }
+
+            // 수입 데이터를 먼저 캐시에 반영
+            val currentData = _uiState.value.pageCache[key] ?: HistoryPageData()
+            updatePageCache(key, currentData.copy(
+                incomes = sortedIncomes,
+                monthlyIncomeTotal = incomeTotal
+            ))
 
             val expenseFlow = if (categoriesForFilter != null) {
                 expenseRepository.getExpensesFilteredByCategories(
@@ -284,13 +369,10 @@ class HistoryViewModel @Inject constructor(
                             allExpensesForTotal.filter { expense ->
                                 val smsLower = expense.originalSms?.lowercase()
                                 smsLower == null || exclusionKeywords.none { kw ->
-                                    smsLower.contains(
-                                        kw
-                                    )
+                                    smsLower.contains(kw)
                                 }
                             }
                         }
-                        // 카테고리 필터 적용
                         val categoryFiltered = if (categoriesForFilter != null) {
                             filteredForTotal.filter { it.category in categoriesForFilter }
                         } else {
@@ -302,28 +384,24 @@ class HistoryViewModel @Inject constructor(
                         val dailyTotalsMap = categoryFiltered
                             .groupBy { dateFormat.format(java.util.Date(it.dateTime)) }
                             .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
-                        val incomeTotal =
-                            incomeRepository.getTotalIncomeByDateRange(startTime, endTime)
-                        _uiState.update {
-                            it.copy(
-                                monthlyTotal = monthlyTotal,
-                                dailyTotals = dailyTotalsMap,
-                                monthlyIncomeTotal = incomeTotal
-                            )
-                        }
+                        val cached = _uiState.value.pageCache[key] ?: HistoryPageData()
+                        updatePageCache(key, cached.copy(
+                            monthlyTotal = monthlyTotal,
+                            dailyTotals = dailyTotalsMap,
+                            monthlyIncomeTotal = incomeTotal
+                        ))
                     }
             } catch (e: Exception) {
                 // 총액 로딩 실패 시 무시
             }
 
+            // 지출 내역 Flow로 실시간 감지 (Room DB 변경 시 자동 업데이트)
             expenseFlow
                 .catch { e ->
-                    _uiState.update {
-                        it.copy(isLoading = false, errorMessage = e.message)
-                    }
+                    val cached = _uiState.value.pageCache[key] ?: HistoryPageData()
+                    updatePageCache(key, cached.copy(isLoading = false))
                 }
                 .collect { allExpenses ->
-                    // 제외 키워드 필터 적용
                     val expenses = if (exclusionKeywords.isEmpty()) {
                         allExpenses
                     } else {
@@ -334,16 +412,19 @@ class HistoryViewModel @Inject constructor(
                     }
                     val currentState = _uiState.value
                     val sortedExpenses = sortExpenses(expenses, currentState.sortOrder)
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            expenses = sortedExpenses,
-                            transactionListItems = buildTransactionListItems(
-                                sortedExpenses, getFilteredIncomes(currentState), currentState.sortOrder,
-                                currentState.showExpenses, currentState.showIncomes
-                            )
+                    // 수입: 카테고리 필터 활성 시 제외
+                    val incomesForList = if (currentState.selectedCategory != null) emptyList()
+                    else (_uiState.value.pageCache[key]?.incomes ?: emptyList())
+
+                    val cached = _uiState.value.pageCache[key] ?: HistoryPageData()
+                    updatePageCache(key, cached.copy(
+                        isLoading = false,
+                        expenses = sortedExpenses,
+                        transactionListItems = buildTransactionListItems(
+                            sortedExpenses, incomesForList, currentState.sortOrder,
+                            currentState.showExpenses, currentState.showIncomes
                         )
-                    }
+                    ))
                 }
         }
     }
@@ -370,16 +451,17 @@ class HistoryViewModel @Inject constructor(
 
     /** 정렬 순서 변경 */
     fun setSortOrder(sortOrder: SortOrder) {
-        val currentExpenses = _uiState.value.expenses
-        val sortedExpenses = sortExpenses(currentExpenses, sortOrder)
-        _uiState.update { it.copy(sortOrder = sortOrder, expenses = sortedExpenses) }
-        updateTransactionListItems()
+        _uiState.update { it.copy(sortOrder = sortOrder) }
+        // 캐시 내 모든 페이지의 transactionListItems 재빌드
+        rebuildAllPageListItems()
     }
 
-    /** 특정 년/월로 이동 */
+    /** 특정 년/월로 이동 (HorizontalPager에서 호출) */
     fun setMonth(year: Int, month: Int) {
+        val state = _uiState.value
+        if (state.selectedYear == year && state.selectedMonth == month) return
         _uiState.update { it.copy(selectedYear = year, selectedMonth = month) }
-        loadExpenses()
+        loadCurrentAndAdjacentPages()
     }
 
     /** 이전 월로 이동 */
@@ -414,7 +496,8 @@ class HistoryViewModel @Inject constructor(
     fun filterByCategory(category: String?) {
         analyticsHelper.logClick(AnalyticsEvent.SCREEN_HISTORY, AnalyticsEvent.CLICK_CATEGORY_FILTER)
         _uiState.update { it.copy(selectedCategory = category) }
-        loadExpenses()
+        clearAllPageCache()
+        loadCurrentAndAdjacentPages()
     }
 
     /** 지출 항목 삭제 */
@@ -422,7 +505,8 @@ class HistoryViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) { expenseRepository.delete(expense) }
-                loadExpenses()
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
             }
@@ -435,7 +519,8 @@ class HistoryViewModel @Inject constructor(
             try {
                 withContext(Dispatchers.IO) { incomeRepository.delete(income) }
                 snackbarBus.show("수입이 삭제되었습니다")
-                loadExpenses() // 수입도 함께 다시 로드됨
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "수입 삭제 실패: ${e.message}") }
             }
@@ -460,7 +545,8 @@ class HistoryViewModel @Inject constructor(
                         newCategory
                     )
                 }
-                loadExpenses() // 화면 새로고침
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "카테고리 변경 실패: ${e.message}") }
             }
@@ -474,7 +560,8 @@ class HistoryViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true) }
-            loadExpensesSync()
+            clearAllPageCache()
+            loadCurrentAndAdjacentPages()
             _uiState.update { it.copy(isRefreshing = false) }
         }
     }
@@ -489,24 +576,28 @@ class HistoryViewModel @Inject constructor(
     /** 검색 모드 종료 */
     fun exitSearchMode() {
         _uiState.update { it.copy(isSearchMode = false, searchQuery = "") }
-        loadExpenses()
+        clearAllPageCache()
+        loadCurrentAndAdjacentPages()
     }
 
     /** 검색어 변경 및 검색 실행 */
     fun search(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
         if (query.isBlank()) {
-            loadExpenses()
+            clearAllPageCache()
+            loadCurrentAndAdjacentPages()
         } else {
             searchExpenses(query)
         }
     }
 
-    /** 지출 내역 검색 */
+    /** 지출 내역 검색 (검색 결과는 현재 월의 pageCache에 저장) */
     private fun searchExpenses(query: String) {
-        loadJob?.cancel()
-        loadJob = viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+        val state = _uiState.value
+        val key = MonthKey(state.selectedYear, state.selectedMonth)
+        pageLoadJobs[key]?.cancel()
+        pageLoadJobs[key] = viewModelScope.launch {
+            updatePageCache(key, HistoryPageData(isLoading = true))
 
             try {
                 val results = withContext(Dispatchers.IO) {
@@ -514,21 +605,18 @@ class HistoryViewModel @Inject constructor(
                 }
                 val currentState = _uiState.value
                 val sortedResults = sortExpenses(results, currentState.sortOrder)
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        expenses = sortedResults,
-                        monthlyTotal = results.sumOf { e -> e.amount },
-                        transactionListItems = buildTransactionListItems(
-                            sortedResults, getFilteredIncomes(currentState), currentState.sortOrder,
-                            currentState.showExpenses, currentState.showIncomes
-                        )
+                updatePageCache(key, HistoryPageData(
+                    isLoading = false,
+                    expenses = sortedResults,
+                    monthlyTotal = results.sumOf { e -> e.amount },
+                    transactionListItems = buildTransactionListItems(
+                        sortedResults, emptyList(), currentState.sortOrder,
+                        currentState.showExpenses, currentState.showIncomes
                     )
-                }
+                ))
             } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(isLoading = false, errorMessage = e.message)
-                }
+                updatePageCache(key, HistoryPageData(isLoading = false))
+                _uiState.update { it.copy(errorMessage = e.message) }
             }
         }
     }
@@ -561,7 +649,8 @@ class HistoryViewModel @Inject constructor(
                     expenseRepository.insert(expense)
                 }
                 snackbarBus.show("지출이 추가되었습니다")
-                loadExpenses()
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "지출 추가 실패: ${e.message}") }
             }
@@ -576,7 +665,8 @@ class HistoryViewModel @Inject constructor(
                     expenseRepository.updateMemo(expenseId, memo?.ifBlank { null })
                 }
                 snackbarBus.show("메모가 저장되었습니다")
-                loadExpenses()
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "메모 저장 실패: ${e.message}") }
             }
@@ -591,7 +681,8 @@ class HistoryViewModel @Inject constructor(
                     incomeRepository.updateMemo(incomeId, memo?.ifBlank { null })
                 }
                 snackbarBus.show("메모가 저장되었습니다")
-                loadExpenses()
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "메모 저장 실패: ${e.message}") }
             }
@@ -616,112 +707,8 @@ class HistoryViewModel @Inject constructor(
                 selectedCategory = category
             )
         }
-        loadExpenses()
-    }
-
-    /** 수입 내역 로드 */
-    private fun loadIncomes(exclusionKeywords: Set<String> = emptySet()) {
-        viewModelScope.launch {
-            val state = _uiState.value
-            val (startTime, endTime) = DateUtils.getCustomMonthPeriod(
-                state.selectedYear,
-                state.selectedMonth,
-                state.monthStartDay
-            )
-
-            try {
-                incomeRepository.getIncomesByDateRange(startTime, endTime)
-                    .collect { allIncomes ->
-                        // 제외 키워드 필터 적용
-                        val incomes = if (exclusionKeywords.isEmpty()) {
-                            allIncomes
-                        } else {
-                            allIncomes.filter { income ->
-                                val smsLower = income.originalSms?.lowercase()
-                                smsLower == null || exclusionKeywords.none { kw ->
-                                    smsLower.contains(
-                                        kw
-                                    )
-                                }
-                            }
-                        }
-                        val total = incomes.sumOf { it.amount }
-                        val sortedIncomes = incomes.sortedByDescending { inc -> inc.dateTime }
-                        _uiState.update {
-                            it.copy(
-                                incomes = sortedIncomes,
-                                monthlyIncomeTotal = total
-                            )
-                        }
-                        // 수입 갱신 후 transactionListItems도 재빌드
-                        updateTransactionListItems()
-                    }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = "수입 로드 실패: ${e.message}") }
-            }
-        }
-    }
-
-    /**
-     * 지출 내역 동기 로드 (refresh에서 사용)
-     */
-    private suspend fun loadExpensesSync() {
-        val state = _uiState.value
-        val (startTime, endTime) = DateUtils.getCustomMonthPeriod(
-            state.selectedYear,
-            state.selectedMonth,
-            state.monthStartDay
-        )
-
-        try {
-            val result = withContext(Dispatchers.IO) {
-                // 제외 키워드 로드
-                val exclusionKeywords = smsExclusionRepository.getAllKeywordStrings()
-                // 전체 데이터 로드 후 제외 키워드 필터 적용하여 총액 계산
-                val allExpenses = expenseRepository.getExpensesByDateRangeOnce(startTime, endTime)
-                val filteredForTotal = if (exclusionKeywords.isEmpty()) {
-                    allExpenses
-                } else {
-                    allExpenses.filter { expense ->
-                        val smsLower = expense.originalSms?.lowercase()
-                        smsLower == null || exclusionKeywords.none { kw -> smsLower.contains(kw) }
-                    }
-                }
-                // 대 카테고리 선택 시 소 카테고리도 포함
-                val syncCategoryFilter = state.selectedCategory?.let { catName ->
-                    Category.fromDisplayName(catName).displayNamesIncludingSub
-                }
-                val categoryFiltered = filteredForTotal
-                    .filter { expense ->
-                        syncCategoryFilter == null || expense.category in syncCategoryFilter
-                    }
-                // 카테고리 필터 적용된 데이터 기준으로 총액/일별 계산
-                val total = categoryFiltered.sumOf { it.amount }
-                val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
-                val map = categoryFiltered
-                    .groupBy { dateFormat.format(java.util.Date(it.dateTime)) }
-                    .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
-                // 정렬 적용
-                val sorted = sortExpenses(categoryFiltered, state.sortOrder)
-                Triple(total, map, sorted)
-            }
-
-            val state2 = _uiState.value
-            _uiState.update {
-                it.copy(
-                    monthlyTotal = result.first,
-                    dailyTotals = result.second,
-                    expenses = result.third,
-                    isLoading = false,
-                    transactionListItems = buildTransactionListItems(
-                        result.third, getFilteredIncomes(state2), state2.sortOrder,
-                        state2.showExpenses, state2.showIncomes
-                    )
-                )
-            }
-        } catch (e: Exception) {
-            _uiState.update { it.copy(errorMessage = e.message, isLoading = false) }
-        }
+        clearAllPageCache()
+        loadCurrentAndAdjacentPages()
     }
 
     // ========== Intent 처리 ==========
@@ -770,18 +757,21 @@ class HistoryViewModel @Inject constructor(
 
     // ========== 리스트 데이터 가공 ==========
 
-    /** 카테고리 필터 활성화 시 수입 제외 (전체 카테고리일 때만 수입 표시) */
-    private fun getFilteredIncomes(state: HistoryUiState): List<IncomeEntity> =
-        if (state.selectedCategory != null) emptyList() else state.incomes
-
-    /** transactionListItems 갱신 */
-    private fun updateTransactionListItems() {
+    /** 캐시 내 모든 페이지의 transactionListItems 재빌드 (정렬/필터 변경 시) */
+    private fun rebuildAllPageListItems() {
         val state = _uiState.value
-        val items = buildTransactionListItems(
-            state.expenses, getFilteredIncomes(state), state.sortOrder,
-            state.showExpenses, state.showIncomes
-        )
-        _uiState.update { it.copy(transactionListItems = items) }
+        val updatedCache = state.pageCache.mapValues { (_, pageData) ->
+            val incomesForList = if (state.selectedCategory != null) emptyList() else pageData.incomes
+            val sortedExpenses = sortExpenses(pageData.expenses, state.sortOrder)
+            pageData.copy(
+                expenses = sortedExpenses,
+                transactionListItems = buildTransactionListItems(
+                    sortedExpenses, incomesForList, state.sortOrder,
+                    state.showExpenses, state.showIncomes
+                )
+            )
+        }
+        _uiState.update { it.copy(pageCache = updatedCache) }
     }
 
     /**

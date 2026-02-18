@@ -206,7 +206,7 @@ SettingsScreen                       ← 설정 탭 메인 화면
 | CategoryPickerDialog | 카테고리 선택 (하위 호환) | AddExpenseDialog 내부 | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
 | SettingsSectionCompose | 설정 섹션 (타이틀 + Card) | 설정 | [SettingsSectionComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsSectionCompose.kt) |
 | SettingsItemCompose | 설정 아이템 (아이콘 + 텍스트) | 설정 | [SettingsItemComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsItemCompose.kt) |
-| swipeToNavigateMonth | 좌우 스와이프 월 이동 Modifier | 홈, 내역 | [SwipeToNavigateKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/SwipeToNavigate.kt) |
+| MonthPagerUtils | HorizontalPager 페이지↔월 변환 유틸 | 홈, 내역 | [MonthPagerUtilsKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/MonthPagerUtils.kt) |
 
 ---
 

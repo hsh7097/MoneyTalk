@@ -1,8 +1,5 @@
 package com.sanha.moneytalk.core.ui.component.chart
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,11 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,14 +45,20 @@ import java.util.Locale
  * @property amount 해당 카테고리 지출 금액
  * @property percentage 전체 대비 비율 (0.0 ~ 1.0)
  * @property color 차트 arc 색상
+ * @property displayLabel 범례 표시용 라벨 오버라이드 (null이면 "emoji displayName" 사용)
  */
 @Immutable
 data class DonutSlice(
     val category: Category,
     val amount: Int,
     val percentage: Float,
-    val color: Color
-)
+    val color: Color,
+    val displayLabel: String? = null
+) {
+    /** 범례/접근성에서 사용할 표시 이름 */
+    val label: String
+        get() = displayLabel ?: "${category.emoji} ${category.displayName}"
+}
 
 /**
  * 카테고리별 지출 도넛 차트.
@@ -70,38 +69,21 @@ data class DonutSlice(
  * @param slices 카테고리별 도넛 조각 리스트 (금액 내림차순)
  * @param totalAmount 전체 지출 합계
  * @param modifier 외부 Modifier
- * @param animationDurationMs 0°→360° 그리기 애니메이션 시간 (ms)
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DonutChartCompose(
     slices: List<DonutSlice>,
     totalAmount: Int,
-    modifier: Modifier = Modifier,
-    animationDurationMs: Int = 1000
+    modifier: Modifier = Modifier
 ) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
-
-    // 애니메이션: 데이터 변경 시 0 → 1로 재트리거
-    var animationTriggered by remember { mutableStateOf(false) }
-    LaunchedEffect(slices) {
-        animationTriggered = false
-        animationTriggered = true
-    }
-    val sweepProgress by animateFloatAsState(
-        targetValue = if (animationTriggered) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = animationDurationMs,
-            easing = FastOutSlowInEasing
-        ),
-        label = "donutSweep"
-    )
 
     // 접근성 텍스트
     val accessibilityText = remember(slices, totalAmount) {
         "카테고리별 지출 차트. 총 지출 ${numberFormat.format(totalAmount)}원. " +
             slices.joinToString(", ") {
-                "${it.category.displayName} ${(it.percentage * 100).toInt()}%"
+                "${it.label} ${(it.percentage * 100).toInt()}%"
             }
     }
 
@@ -130,7 +112,7 @@ fun DonutChartCompose(
                 var currentAngle = -90f
 
                 slices.forEach { slice ->
-                    val sweep = slice.percentage * 360f * sweepProgress
+                    val sweep = slice.percentage * 360f
 
                     if (sweep > 0f) {
                         drawArc(
@@ -187,7 +169,7 @@ fun DonutChartCompose(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "${slice.category.emoji} ${slice.category.displayName} ${(slice.percentage * 100).toInt()}%",
+                        text = "${slice.label} ${(slice.percentage * 100).toInt()}%",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )

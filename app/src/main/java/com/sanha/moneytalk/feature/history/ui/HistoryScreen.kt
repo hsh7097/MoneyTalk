@@ -41,7 +41,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.moneyTalkColors
-import com.sanha.moneytalk.core.ui.component.swipeToNavigateMonth
+import com.sanha.moneytalk.core.ui.component.MonthKey
+import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
@@ -77,13 +80,25 @@ fun HistoryScreen(
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
     var showAddDialog by remember { mutableStateOf(false) }
 
+    // HorizontalPager — Virtual Infinite Pager
+    val initialPage = remember {
+        MonthPagerUtils.yearMonthToPage(uiState.selectedYear, uiState.selectedMonth)
+    }
+    val pagerState = rememberPagerState(
+        initialPage = initialPage,
+        pageCount = { MonthPagerUtils.TOTAL_PAGE_COUNT }
+    )
+    val coroutineScope = rememberCoroutineScope()
+
+    // 페이지 변경 시 ViewModel에 월 변경 통지
+    LaunchedEffect(pagerState.currentPage) {
+        val (year, month) = MonthPagerUtils.pageToYearMonth(pagerState.currentPage)
+        viewModel.setMonth(year, month)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .swipeToNavigateMonth(
-                onSwipeLeft = { viewModel.nextMonth() },
-                onSwipeRight = { viewModel.previousMonth() }
-            )
             .background(MaterialTheme.colorScheme.background)
     ) {
         // 검색 모드일 때 검색 바, 아니면 일반 헤더
@@ -109,8 +124,19 @@ fun HistoryScreen(
                 monthStartDay = uiState.monthStartDay,
                 totalExpense = uiState.filteredExpenseTotal,
                 totalIncome = uiState.filteredIncomeTotal,
-                onPreviousMonth = { viewModel.previousMonth() },
-                onNextMonth = { viewModel.nextMonth() }
+                onPreviousMonth = {
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                    }
+                },
+                onNextMonth = {
+                    coroutineScope.launch {
+                        val target = pagerState.currentPage + 1
+                        if (!MonthPagerUtils.isFutureMonth(target)) {
+                            pagerState.animateScrollToPage(target)
+                        }
+                    }
+                }
             )
         }
 
@@ -134,37 +160,53 @@ fun HistoryScreen(
             )
         }
 
-        // 콘텐츠
-        when {
-            viewMode == ViewMode.LIST -> {
-                TransactionListView(
-                    items = uiState.transactionListItems,
-                    isLoading = uiState.isLoading,
-                    showExpenses = uiState.showExpenses,
-                    showIncomes = uiState.showIncomes,
-                    hasActiveFilter = uiState.selectedCategory != null,
-                    scrollResetKey = Triple(
-                        uiState.selectedCategory,
-                        uiState.sortOrder,
-                        uiState.selectedYear to uiState.selectedMonth
-                    ),
-                    onIntent = viewModel::onIntent
-                )
+        // 콘텐츠 — HorizontalPager로 월별 페이징
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            beyondViewportPageCount = 1,
+            key = { it },
+            userScrollEnabled = !uiState.isSearchMode
+        ) { page ->
+            // 이 페이지의 (year, month) 계산
+            val (pageYear, pageMonth) = remember(page) {
+                MonthPagerUtils.pageToYearMonth(page)
             }
+            // pageCache에서 이 페이지의 데이터 읽기 (없으면 기본값)
+            val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
+                ?: HistoryPageData()
 
-            viewMode == ViewMode.CALENDAR -> {
-                BillingCycleCalendarView(
-                    year = uiState.selectedYear,
-                    month = uiState.selectedMonth,
-                    monthStartDay = uiState.monthStartDay,
-                    dailyTotals = uiState.dailyTotals,
-                    expenses = uiState.expenses,
-                    onDelete = { viewModel.deleteExpense(it) },
-                    onCategoryChange = { expense, newCategory ->
-                        viewModel.updateExpenseCategory(expense.storeName, newCategory)
-                    },
-                    onExpenseMemoChange = { id, memo -> viewModel.updateExpenseMemo(id, memo) }
-                )
+            when {
+                viewMode == ViewMode.LIST -> {
+                    TransactionListView(
+                        items = pageData.transactionListItems,
+                        isLoading = pageData.isLoading,
+                        showExpenses = uiState.showExpenses,
+                        showIncomes = uiState.showIncomes,
+                        hasActiveFilter = uiState.selectedCategory != null,
+                        scrollResetKey = Triple(
+                            uiState.selectedCategory,
+                            uiState.sortOrder,
+                            pageYear to pageMonth
+                        ),
+                        onIntent = viewModel::onIntent
+                    )
+                }
+
+                viewMode == ViewMode.CALENDAR -> {
+                    BillingCycleCalendarView(
+                        year = pageYear,
+                        month = pageMonth,
+                        monthStartDay = uiState.monthStartDay,
+                        dailyTotals = pageData.dailyTotals,
+                        expenses = pageData.expenses,
+                        onDelete = { viewModel.deleteExpense(it) },
+                        onCategoryChange = { expense, newCategory ->
+                            viewModel.updateExpenseCategory(expense.storeName, newCategory)
+                        },
+                        onExpenseMemoChange = { id, memo -> viewModel.updateExpenseMemo(id, memo) }
+                    )
+                }
             }
         }
     }

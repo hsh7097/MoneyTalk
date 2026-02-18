@@ -29,7 +29,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
@@ -40,7 +39,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -84,7 +82,10 @@ import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.chart.DonutChartCompose
 import com.sanha.moneytalk.core.ui.component.chart.DonutSlice
 import com.sanha.moneytalk.core.ui.component.getCategoryChartColor
-import com.sanha.moneytalk.core.ui.component.swipeToNavigateMonth
+import com.sanha.moneytalk.core.ui.component.MonthKey
+import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
@@ -136,187 +137,89 @@ fun HomeScreen(
     // Flow 기반 데이터 로딩: Room DB 변경 시 자동으로 UI 갱신됨
     // (다른 탭에서 카테고리 변경, 지출 삭제 등의 변경사항이 실시간 반영)
 
-    val listState = rememberLazyListState()
+    // HorizontalPager — Virtual Infinite Pager (1200페이지, 중앙이 현재 월)
+    val initialPage = remember {
+        MonthPagerUtils.yearMonthToPage(uiState.selectedYear, uiState.selectedMonth)
+    }
+    val pagerState = rememberPagerState(
+        initialPage = initialPage,
+        pageCount = { MonthPagerUtils.TOTAL_PAGE_COUNT }
+    )
     val coroutineScope = rememberCoroutineScope()
-    val showScrollToTop by remember {
-        derivedStateOf {
-            listState.firstVisibleItemIndex > 0 ||
-                    (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 200)
-        }
+
+    // 페이지 변경 시 ViewModel에 월 변경 통지
+    LaunchedEffect(pagerState.currentPage) {
+        val (year, month) = MonthPagerUtils.pageToYearMonth(pagerState.currentPage)
+        viewModel.setMonth(year, month)
     }
 
-    // 오늘 지출 + 수입을 시간순 통합
-    val todayTransactions = remember(
-        uiState.todayExpenses,
-        uiState.todayIncomes
-    ) {
-        val items = mutableListOf<TodayItem>()
-        uiState.todayExpenses.forEach { items.add(TodayItem.Expense(it)) }
-        uiState.todayIncomes.forEach { items.add(TodayItem.Income(it)) }
-        items.sortedByDescending { item ->
-            when (item) {
-                is TodayItem.Expense -> item.expense.dateTime
-                is TodayItem.Income -> item.income.dateTime
-            }
-        }
-    }
-
-    Box(
+    HorizontalPager(
+        state = pagerState,
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .swipeToNavigateMonth(
-                    onSwipeLeft = { viewModel.nextMonth() },
-                    onSwipeRight = { viewModel.previousMonth() }
-                )
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // 월간 현황
-            item {
-                MonthlyOverviewSection(
-                    year = uiState.selectedYear,
-                    month = uiState.selectedMonth,
-                    monthStartDay = uiState.monthStartDay,
-                    periodLabel = uiState.periodLabel,
-                    income = uiState.monthlyIncome,
-                    expense = uiState.monthlyExpense,
-                    onPreviousMonth = { viewModel.previousMonth() },
-                    onNextMonth = { viewModel.nextMonth() },
-                    onIncrementalSync = {
-                        onRequestSmsPermission {
-                            viewModel.syncSmsMessages(contentResolver, forceFullSync = false)
-                        }
-                    },
-                    onTodaySync = {
-                        onRequestSmsPermission {
-                            viewModel.syncSmsMessages(contentResolver, todayOnly = true)
-                        }
-                    },
-                    onFullSync = {
-                        onRequestSmsPermission {
-                            viewModel.syncSmsMessages(contentResolver, forceFullSync = true)
-                        }
-                    },
-                    isSyncing = uiState.isSyncing
-                )
-            }
-
-            // 카테고리별 지출
-            item {
-                CategoryExpenseSection(
-                    categoryExpenses = uiState.categoryExpenses,
-                    selectedCategory = uiState.selectedCategory,
-                    onCategorySelected = { category ->
-                        if (category != null) {
-                            onNavigateToHistory(category)
-                        }
-                    }
-                )
-            }
-
-            // AI 인사이트
-            if (uiState.aiInsight.isNotBlank()) {
-                item {
-                    AiInsightCard(
-                        insight = uiState.aiInsight,
-                        monthlyExpense = uiState.monthlyExpense,
-                        lastMonthExpense = uiState.lastMonthExpense
-                    )
-                }
-            }
-
-            // 오늘의 지출 + 전월 대비
-            item {
-                TodayAndComparisonSection(
-                    todayExpense = uiState.todayExpense,
-                    todayExpenseCount = uiState.todayExpenseCount,
-                    monthlyExpense = uiState.monthlyExpense,
-                    lastMonthExpense = uiState.lastMonthExpense,
-                    comparisonPeriodLabel = uiState.comparisonPeriodLabel
-                )
-            }
-
-            // 오늘 내역 (지출 + 수입 시간순 통합)
-            item {
-                Text(
-                    text = stringResource(R.string.home_today_transactions),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 6.dp)
-                )
-            }
-
-            if (todayTransactions.isEmpty()) {
-                item {
-                    Text(
-                        text = stringResource(R.string.home_no_today_transactions),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(vertical = 16.dp)
-                    )
-                }
-            } else {
-                items(
-                    count = todayTransactions.size,
-                    key = { index ->
-                        when (val item = todayTransactions[index]) {
-                            is TodayItem.Expense -> "expense_${item.expense.id}"
-                            is TodayItem.Income -> "income_${item.income.id}"
-                        }
-                    }
-                ) { index ->
-                    when (val item = todayTransactions[index]) {
-                        is TodayItem.Expense -> TransactionCardCompose(
-                            info = ExpenseTransactionCardInfo(item.expense),
-                            onClick = { selectedExpense = item.expense }
-                        )
-                        is TodayItem.Income -> TransactionCardCompose(
-                            info = IncomeTransactionCardInfo(item.income),
-                            onClick = { }
-                        )
-                    }
-                }
-            }
+            .background(MaterialTheme.colorScheme.background),
+        beyondViewportPageCount = 1,
+        key = { it }
+    ) { page ->
+        // 이 페이지의 (year, month) 계산
+        val (pageYear, pageMonth) = remember(page) {
+            MonthPagerUtils.pageToYearMonth(page)
         }
+        // pageCache에서 이 페이지의 데이터 읽기 (없으면 기본값)
+        val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
+            ?: HomePageData()
 
-        // Scroll to Top FAB
-        AnimatedVisibility(
-            visible = showScrollToTop,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp)
-        ) {
-            SmallFloatingActionButton(
-                onClick = {
-                    coroutineScope.launch {
-                        listState.animateScrollToItem(0)
+        HomePageContent(
+            pageData = pageData,
+            year = pageYear,
+            month = pageMonth,
+            monthStartDay = uiState.monthStartDay,
+            isSyncing = uiState.isSyncing,
+            selectedCategory = uiState.selectedCategory,
+            onPreviousMonth = {
+                coroutineScope.launch {
+                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                }
+            },
+            onNextMonth = {
+                coroutineScope.launch {
+                    val target = pagerState.currentPage + 1
+                    if (!MonthPagerUtils.isFutureMonth(target)) {
+                        pagerState.animateScrollToPage(target)
                     }
-                },
-                shape = CircleShape,
-                containerColor = MaterialTheme.moneyTalkColors.income,
-                contentColor = Color.White,
-                elevation = FloatingActionButtonDefaults.elevation(
-                    defaultElevation = 4.dp,
-                    pressedElevation = 8.dp
-                )
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_arrow_up),
-                    contentDescription = stringResource(R.string.common_scroll_to_top),
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
-    }
+                }
+            },
+            onIncrementalSync = {
+                onRequestSmsPermission {
+                    viewModel.syncSmsMessages(contentResolver, forceFullSync = false)
+                }
+            },
+            onTodaySync = {
+                onRequestSmsPermission {
+                    viewModel.syncSmsMessages(contentResolver, todayOnly = true)
+                }
+            },
+            onFullSync = {
+                if (uiState.isFullSyncUnlocked) {
+                    // 이미 해제됨 → 바로 전체 동기화
+                    onRequestSmsPermission {
+                        viewModel.syncSmsMessages(contentResolver, forceFullSync = true)
+                    }
+                } else {
+                    // 미해제 → 광고 다이얼로그 표시
+                    viewModel.preloadFullSyncAd()
+                    viewModel.showFullSyncAdDialog()
+                }
+            },
+            onCategorySelected = { category ->
+                if (category != null) {
+                    onNavigateToHistory(category)
+                }
+            },
+            onExpenseSelected = { expense -> selectedExpense = expense },
+            coroutineScope = coroutineScope
+        )
+    } // HorizontalPager
 
     // 지출 상세 다이얼로그 (공통 컴포넌트 사용)
     selectedExpense?.let { expense ->
@@ -482,6 +385,222 @@ fun HomeScreen(
             confirmButton = { }
         )
     }
+
+    // 전체 동기화 해제 광고 다이얼로그
+    if (uiState.showFullSyncAdDialog) {
+        val activity = context as? android.app.Activity
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissFullSyncAdDialog() },
+            title = { Text(stringResource(R.string.full_sync_ad_dialog_title)) },
+            text = { Text(stringResource(R.string.full_sync_ad_dialog_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (activity != null) {
+                            viewModel.dismissFullSyncAdDialog()
+                            viewModel.adManager.showAd(
+                                activity = activity,
+                                onRewarded = {
+                                    onRequestSmsPermission {
+                                        viewModel.unlockFullSync(contentResolver)
+                                    }
+                                },
+                                onFailed = {
+                                    // 광고 로드/표시 실패 시 — 다이얼로그는 이미 dismiss된 상태
+                                }
+                            )
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.full_sync_ad_watch_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissFullSyncAdDialog() }) {
+                    Text(stringResource(R.string.full_sync_ad_later))
+                }
+            }
+        )
+    }
+}
+
+/**
+ * 홈 HorizontalPager의 각 페이지 콘텐츠.
+ * pageCache에서 가져온 HomePageData를 기반으로 월간 현황, 카테고리, 오늘 거래 등을 렌더링.
+ */
+@Composable
+fun HomePageContent(
+    pageData: HomePageData,
+    year: Int,
+    month: Int,
+    monthStartDay: Int,
+    isSyncing: Boolean,
+    selectedCategory: String?,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    onIncrementalSync: () -> Unit,
+    onTodaySync: () -> Unit,
+    onFullSync: () -> Unit,
+    onCategorySelected: (String?) -> Unit,
+    onExpenseSelected: (ExpenseEntity) -> Unit,
+    coroutineScope: kotlinx.coroutines.CoroutineScope
+) {
+    val listState = rememberLazyListState()
+    val showScrollToTop by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 ||
+                    (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 200)
+        }
+    }
+
+    // 오늘 지출 + 수입을 시간순 통합 (pageData 기준)
+    val todayTransactions = remember(
+        pageData.todayExpenses,
+        pageData.todayIncomes
+    ) {
+        val items = mutableListOf<TodayItem>()
+        pageData.todayExpenses.forEach { items.add(TodayItem.Expense(it)) }
+        pageData.todayIncomes.forEach { items.add(TodayItem.Income(it)) }
+        items.sortedByDescending { item ->
+            when (item) {
+                is TodayItem.Expense -> item.expense.dateTime
+                is TodayItem.Income -> item.income.dateTime
+            }
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // 월간 현황
+            item {
+                MonthlyOverviewSection(
+                    year = year,
+                    month = month,
+                    monthStartDay = monthStartDay,
+                    periodLabel = pageData.periodLabel,
+                    income = pageData.monthlyIncome,
+                    expense = pageData.monthlyExpense,
+                    onPreviousMonth = onPreviousMonth,
+                    onNextMonth = onNextMonth,
+                    onIncrementalSync = onIncrementalSync,
+                    onTodaySync = onTodaySync,
+                    onFullSync = onFullSync,
+                    isSyncing = isSyncing
+                )
+            }
+
+            // 카테고리별 지출
+            item {
+                CategoryExpenseSection(
+                    categoryExpenses = pageData.categoryExpenses,
+                    selectedCategory = selectedCategory,
+                    onCategorySelected = onCategorySelected
+                )
+            }
+
+            // AI 인사이트
+            if (pageData.aiInsight.isNotBlank()) {
+                item {
+                    AiInsightCard(
+                        insight = pageData.aiInsight,
+                        monthlyExpense = pageData.monthlyExpense,
+                        lastMonthExpense = pageData.lastMonthExpense
+                    )
+                }
+            }
+
+            // 오늘의 지출 + 전월 대비
+            item {
+                TodayAndComparisonSection(
+                    todayExpense = pageData.todayExpense,
+                    todayExpenseCount = pageData.todayExpenseCount,
+                    monthlyExpense = pageData.monthlyExpense,
+                    lastMonthExpense = pageData.lastMonthExpense,
+                    comparisonPeriodLabel = pageData.comparisonPeriodLabel
+                )
+            }
+
+            // 오늘 내역 (지출 + 수입 시간순 통합)
+            item {
+                Text(
+                    text = stringResource(R.string.home_today_transactions),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+            }
+
+            if (todayTransactions.isEmpty()) {
+                item {
+                    Text(
+                        text = stringResource(R.string.home_no_today_transactions),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
+                }
+            } else {
+                items(
+                    count = todayTransactions.size,
+                    key = { index ->
+                        when (val item = todayTransactions[index]) {
+                            is TodayItem.Expense -> "expense_${item.expense.id}"
+                            is TodayItem.Income -> "income_${item.income.id}"
+                        }
+                    }
+                ) { index ->
+                    when (val item = todayTransactions[index]) {
+                        is TodayItem.Expense -> TransactionCardCompose(
+                            info = ExpenseTransactionCardInfo(item.expense),
+                            onClick = { onExpenseSelected(item.expense) }
+                        )
+                        is TodayItem.Income -> TransactionCardCompose(
+                            info = IncomeTransactionCardInfo(item.income),
+                            onClick = { }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Scroll to Top FAB
+        AnimatedVisibility(
+            visible = showScrollToTop,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+        ) {
+            SmallFloatingActionButton(
+                onClick = {
+                    coroutineScope.launch {
+                        listState.animateScrollToItem(0)
+                    }
+                },
+                shape = CircleShape,
+                containerColor = MaterialTheme.moneyTalkColors.income,
+                contentColor = Color.White,
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = 4.dp,
+                    pressedElevation = 8.dp
+                )
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_arrow_up),
+                    contentDescription = stringResource(R.string.common_scroll_to_top),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    } // Box
 }
 
 /** 월간 수입/지출 현황 섹션. 월 네비게이션, 총 수입·지출 금액, 월별 잔액을 표시 */
@@ -669,6 +788,7 @@ fun CategoryExpenseSection(
 ) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
     var showAll by remember { mutableStateOf(false) }
+    val othersLabel = stringResource(R.string.home_chart_others_label)
 
     // 기타 + 미분류를 하나로 합치고, 금액 내림차순 정렬
     val mergedExpenses = remember(categoryExpenses) {
@@ -724,7 +844,8 @@ fun CategoryExpenseSection(
                     category = Category.ETC,
                     amount = othersTotal,
                     percentage = if (totalExpense > 0) othersTotal.toFloat() / totalExpense else 0f,
-                    color = Color(0xFFBDBDBD)
+                    color = Color(0xFFBDBDBD),
+                    displayLabel = othersLabel
                 )
             } else {
                 top3
