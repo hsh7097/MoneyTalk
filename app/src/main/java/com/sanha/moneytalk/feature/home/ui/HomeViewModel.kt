@@ -405,8 +405,10 @@ class HomeViewModel @Inject constructor(
                 val comparisonLabel = "${dateFormat.format(java.util.Date(lastMonthStart))} ~ ${dateFormat.format(java.util.Date(lastMonthSamePoint))}"
 
                 // 1회성 데이터를 먼저 캐시에 저장 (Flow 수집 전)
+                // 기존 캐시가 있으면 isLoading 유지 (깜빡임 방지)
+                val existingData = _uiState.value.pageCache[key]
                 updatePageCache(key, HomePageData(
-                    isLoading = true, // Flow 수집 전이므로 아직 로딩
+                    isLoading = existingData == null, // 캐시 없을 때만 로딩 표시
                     periodLabel = periodLabel,
                     monthlyIncome = totalIncome,
                     todayExpense = filteredTodayExpenses.sumOf { e -> e.amount },
@@ -576,7 +578,7 @@ class HomeViewModel @Inject constructor(
 
     /** 화면이 다시 표시될 때 데이터 새로고침 (LaunchedEffect에서 호출) */
     fun refreshData() {
-        clearAllPageCache()
+        // 캐시를 지우지 않고 재로드 → 기존 데이터 유지하면서 갱신 (깜빡임 방지)
         loadCurrentAndAdjacentPages()
         // resume 시 미분류 항목이 있고 분류가 진행 중이 아니면 자동 분류 시작
         tryResumeClassification()
@@ -659,15 +661,40 @@ class HomeViewModel @Inject constructor(
 
                     // 전체 동기화 해제 여부 확인
                     val isFullSyncUnlocked = settingsDataStore.isFullSyncUnlocked()
+                    val savedSyncTimeRaw = settingsDataStore.getLastSyncTime()
+                    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.KOREA)
+
+                    // Auto Backup 복원 감지: savedSyncTime이 있지만 DB가 비어있으면 stale → 리셋
+                    // (existingSmsIds를 여기서 미리 로드 — 아래에서 중복 제거에도 재사용)
+                    val existingSmsIdsPreload = expenseRepository.getAllSmsIds()
+                    val dbExpenseCount = existingSmsIdsPreload.size
+                    val effectiveSyncTime = if (savedSyncTimeRaw > 0 && dbExpenseCount == 0) {
+                        android.util.Log.e("sanha", "⚠️ Auto Backup 감지: savedSyncTime=${sdf.format(java.util.Date(savedSyncTimeRaw))} 이지만 DB 비어있음 → 0으로 리셋")
+                        settingsDataStore.saveLastSyncTime(0L)
+                        0L
+                    } else {
+                        savedSyncTimeRaw
+                    }
+
+                    android.util.Log.e("sanha", "=== syncSmsMessages 분기 판단 ===")
+                    android.util.Log.e("sanha", "forceFullSync=$forceFullSync, todayOnly=$todayOnly")
+                    android.util.Log.e("sanha", "isFullSyncUnlocked=$isFullSyncUnlocked")
+                    android.util.Log.e("sanha", "savedSyncTimeRaw=$savedSyncTimeRaw (${if (savedSyncTimeRaw > 0) sdf.format(java.util.Date(savedSyncTimeRaw)) else "없음"})")
+                    android.util.Log.e("sanha", "effectiveSyncTime=$effectiveSyncTime (dbExpenseCount=$dbExpenseCount)")
+                    android.util.Log.e("sanha", "THREE_MONTHS_MILLIS=$THREE_MONTHS_MILLIS (${THREE_MONTHS_MILLIS / 1000 / 60 / 60 / 24}일)")
+                    android.util.Log.e("sanha", "System.currentTimeMillis()=${System.currentTimeMillis()}")
+                    android.util.Log.e("sanha", "3개월 전 시각=${sdf.format(java.util.Date(System.currentTimeMillis() - THREE_MONTHS_MILLIS))}")
 
                     // 마지막 동기화 시간 가져오기
                     val lastSyncTime = when {
                         forceFullSync -> {
                             if (isFullSyncUnlocked) {
+                                android.util.Log.e("sanha", "→ 분기: forceFullSync + unlocked → 0L (처음부터)")
                                 0L // 전체 동기화 해제 → 처음부터
                             } else {
-                                // 미해제 → 3개월 전부터
-                                System.currentTimeMillis() - THREE_MONTHS_MILLIS
+                                val t = System.currentTimeMillis() - THREE_MONTHS_MILLIS
+                                android.util.Log.e("sanha", "→ 분기: forceFullSync + locked → 3개월 전 ($t = ${sdf.format(java.util.Date(t))})")
+                                t
                             }
                         }
                         todayOnly -> {
@@ -677,39 +704,31 @@ class HomeViewModel @Inject constructor(
                             cal.set(java.util.Calendar.MINUTE, 0)
                             cal.set(java.util.Calendar.SECOND, 0)
                             cal.set(java.util.Calendar.MILLISECOND, 0)
+                            android.util.Log.e("sanha", "→ 분기: todayOnly → ${cal.timeInMillis} (${sdf.format(cal.time)})")
                             cal.timeInMillis
                         }
 
                         else -> {
-                            val savedSyncTime = settingsDataStore.getLastSyncTime()
-                            if (savedSyncTime == 0L && !isFullSyncUnlocked) {
-                                // 첫 동기화 + 전체 동기화 미해제 → 3개월 전부터
-                                System.currentTimeMillis() - THREE_MONTHS_MILLIS
+                            val threeMonthsAgo = System.currentTimeMillis() - THREE_MONTHS_MILLIS
+                            if (effectiveSyncTime == 0L && !isFullSyncUnlocked) {
+                                android.util.Log.e("sanha", "→ 분기: else + savedSync=0 + locked → 3개월 전 ($threeMonthsAgo = ${sdf.format(java.util.Date(threeMonthsAgo))})")
+                                threeMonthsAgo
+                            } else if (!isFullSyncUnlocked && effectiveSyncTime < threeMonthsAgo) {
+                                android.util.Log.e("sanha", "→ 분기: else + locked + saved<3개월 → 3개월 전 ($threeMonthsAgo = ${sdf.format(java.util.Date(threeMonthsAgo))})")
+                                threeMonthsAgo
                             } else {
-                                savedSyncTime
+                                android.util.Log.e("sanha", "→ 분기: else + 증분 → effectiveSyncTime ($effectiveSyncTime = ${if (effectiveSyncTime > 0) sdf.format(java.util.Date(effectiveSyncTime)) else "0"})")
+                                effectiveSyncTime
                             }
                         }
                     }
                     val currentTime = System.currentTimeMillis()
 
                     android.util.Log.e("sanha", "=== syncSmsMessages (Hybrid) 시작 ===")
+                    android.util.Log.e("sanha", "최종 lastSyncTime=$lastSyncTime, currentTime=$currentTime")
                     android.util.Log.e(
                         "sanha",
-                        "forceFullSync: $forceFullSync, todayOnly: $todayOnly, lastSyncTime: $lastSyncTime"
-                    )
-                    android.util.Log.e(
-                        "sanha",
-                        "currentTime: $currentTime, 범위: ${
-                            java.text.SimpleDateFormat(
-                                "yyyy-MM-dd HH:mm:ss",
-                                java.util.Locale.KOREA
-                            ).format(java.util.Date(lastSyncTime))
-                        } ~ ${
-                            java.text.SimpleDateFormat(
-                                "yyyy-MM-dd HH:mm:ss",
-                                java.util.Locale.KOREA
-                            ).format(java.util.Date(currentTime))
-                        }"
+                        "최종 범위: ${sdf.format(java.util.Date(lastSyncTime))} ~ ${sdf.format(java.util.Date(currentTime))}"
                     )
 
                     // 진단: todayOnly일 때 모든 메시지 provider 탐색 (신한카드 등 RCS 메시지 위치 확인)
@@ -719,7 +738,7 @@ class HomeViewModel @Inject constructor(
 
                     // ===== 성능 최적화: 인메모리 캐시 초기화 =====
                     _uiState.update { it.copy(syncProgress = "준비 중...") }
-                    val existingSmsIds = expenseRepository.getAllSmsIds() // O(1) 조회용 HashSet
+                    val existingSmsIds = existingSmsIdsPreload // 위에서 이미 로드됨
                     val existingIncomeSmsIds = incomeRepository.getAllSmsIds().toHashSet()
                     categoryClassifierService.initCategoryCache() // DB 쿼리 제거
 
@@ -734,6 +753,11 @@ class HomeViewModel @Inject constructor(
                     } else {
                         smsReader.readAllMessagesByDateRange(contentResolver, 0L, currentTime)
                     }
+
+                    android.util.Log.e("sanha", "=== SMS 읽기 결과 ===")
+                    android.util.Log.e("sanha", "allSmsList.size=${allSmsList.size}건")
+                    android.util.Log.e("sanha", "existingSmsIds.size=${existingSmsIds.size}건 (DB에 이미 존재)")
+                    android.util.Log.e("sanha", "existingIncomeSmsIds.size=${existingIncomeSmsIds.size}건")
 
                     _uiState.update {
                         it.copy(

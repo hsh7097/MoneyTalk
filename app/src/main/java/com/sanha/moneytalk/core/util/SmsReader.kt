@@ -300,7 +300,13 @@ class SmsReader @Inject constructor() {
             }
         }
 
-        Log.d("SmsReader", "전체 SMS 읽기 완료: ${smsList.size}건 ($startDate ~ $endDate)")
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.KOREA)
+        Log.e("sanha", "SmsReader[readAllSmsByDateRange] : ${smsList.size}건, 범위: ${sdf.format(java.util.Date(startDate))} ~ ${sdf.format(java.util.Date(endDate))}")
+        if (smsList.isNotEmpty()) {
+            val oldest = smsList.minByOrNull { it.date }
+            val newest = smsList.maxByOrNull { it.date }
+            Log.e("sanha", "SmsReader[readAllSmsByDateRange] : 가장 오래된 SMS=${oldest?.date?.let { sdf.format(java.util.Date(it)) }}, 최신 SMS=${newest?.date?.let { sdf.format(java.util.Date(it)) }}")
+        }
         return smsList
     }
 
@@ -880,15 +886,22 @@ class SmsReader @Inject constructor() {
         startDate: Long,
         endDate: Long
     ): List<SmsMessage> {
+        val sdfRange = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.KOREA)
+        Log.e("sanha", "SmsReader[readAllMessagesByDateRange] : 요청 범위 ${sdfRange.format(java.util.Date(startDate))} ~ ${sdfRange.format(java.util.Date(endDate))}")
         val smsList = readAllSmsByDateRange(contentResolver, startDate, endDate)
         val mmsList = readAllMmsByDateRange(contentResolver, startDate, endDate)
         val rcsList = readAllRcsByDateRange(contentResolver, startDate, endDate)
         val combined =
             (smsList + mmsList + rcsList).distinctBy { it.id }.sortedByDescending { it.date }
-        Log.d(
-            TAG,
-            "통합 전체 메시지 읽기: SMS ${smsList.size}건 + MMS ${mmsList.size}건 + RCS ${rcsList.size}건 = 총 ${combined.size}건"
+        Log.e(
+            "sanha",
+            "SmsReader[readAllMessagesByDateRange] : SMS ${smsList.size}건 + MMS ${mmsList.size}건 + RCS ${rcsList.size}건 = 총 ${combined.size}건"
         )
+        if (combined.isNotEmpty()) {
+            val oldest = combined.minByOrNull { it.date }
+            val newest = combined.maxByOrNull { it.date }
+            Log.e("sanha", "SmsReader[readAllMessagesByDateRange] : 가장 오래된=${oldest?.date?.let { sdfRange.format(java.util.Date(it)) }}, 최신=${newest?.date?.let { sdfRange.format(java.util.Date(it)) }}")
+        }
         return combined
     }
 
