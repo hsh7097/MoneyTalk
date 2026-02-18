@@ -815,18 +815,19 @@ fun CategoryExpenseSection(
     var showAll by remember { mutableStateOf(false) }
     val othersLabel = stringResource(R.string.home_chart_others_label)
 
-    // 기타 + 미분류를 하나로 합치고, 금액 내림차순 정렬
+    // 금액 내림차순 정렬 ("AI 분류 중" 항목은 항상 마지막에 배치)
     val mergedExpenses = remember(categoryExpenses) {
-        val etcTotal = categoryExpenses
-            .filter { it.category == "기타" || it.category == "미분류" }
+        val classified = categoryExpenses
+            .filter { it.category != "미분류" }
+            .sortedByDescending { it.total }
+        val unclassifiedTotal = categoryExpenses
+            .filter { it.category == "미분류" }
             .sumOf { it.total }
-        val others = categoryExpenses
-            .filter { it.category != "기타" && it.category != "미분류" }
-        val result = others.toMutableList()
-        if (etcTotal > 0) {
-            result.add(CategorySum("기타", etcTotal))
+        if (unclassifiedTotal > 0) {
+            classified + CategorySum(Category.UNCLASSIFIED.displayName, unclassifiedTotal)
+        } else {
+            classified
         }
-        result.sortedByDescending { it.total }
     }
 
     val totalExpense = remember(mergedExpenses) {

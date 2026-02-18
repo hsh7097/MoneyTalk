@@ -31,7 +31,7 @@ enum class Category(
     EVENTS("💌", "경조"),
     DELIVERY("🛵", "배달", FOOD),
     ETC("📦", "기타"),
-    UNCLASSIFIED("🔍", "미분류");
+    UNCLASSIFIED("⏳", "AI 분류 중");
 
     /** 이 카테고리가 대 카테고리인지 (소 카테고리가 아닌지) */
     val isParent: Boolean get() = parentCategory == null
@@ -46,6 +46,8 @@ enum class Category(
 
     companion object {
         fun fromDisplayName(name: String): Category {
+            // DB 호환: 기존 "미분류" 데이터도 UNCLASSIFIED로 매핑
+            if (name == "미분류") return UNCLASSIFIED
             return entries.find { it.displayName == name } ?: ETC
         }
 

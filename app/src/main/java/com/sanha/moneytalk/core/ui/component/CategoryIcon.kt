@@ -71,7 +71,7 @@ fun getCategoryChartColor(category: Category): Color {
         Category.TRANSFER -> Color(0xFF3B82F6)                   // Blue 500
         Category.EVENTS -> Color(0xFFD946EF)                     // Fuchsia 500
         Category.ETC -> Color(0xFF9CA3AF)                        // Gray 400
-        Category.UNCLASSIFIED -> Color(0xFF6B7280)               // Gray 500
+        Category.UNCLASSIFIED -> Color(0xFF94A3B8)               // Slate 400 (분류 대기 구분)
     }
 }
 
