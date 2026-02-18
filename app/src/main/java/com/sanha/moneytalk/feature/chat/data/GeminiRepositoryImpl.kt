@@ -5,7 +5,7 @@ import android.util.Log
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
 import com.google.ai.client.generativeai.type.generationConfig
-import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
 import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.DataQueryParser
 import com.sanha.moneytalk.core.util.DataQueryRequest
@@ -28,7 +28,7 @@ import javax.inject.Singleton
 @Singleton
 class GeminiRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val settingsDataStore: SettingsDataStore
+    private val apiKeyProvider: GeminiApiKeyProvider
 ) : GeminiRepository {
     private var cachedApiKey: String? = null
 
@@ -45,10 +45,15 @@ class GeminiRepositoryImpl @Inject constructor(
         private const val TAG = "gemini"
     }
 
-    // DataStore에서 API 키 가져오기 (캐싱)
+    // GeminiApiKeyProvider를 통해 API 키 가져오기 (서비스 티어 반영)
     private suspend fun getApiKey(): String {
-        if (cachedApiKey.isNullOrBlank()) {
-            cachedApiKey = settingsDataStore.getGeminiApiKey()
+        val key = apiKeyProvider.getApiKey()
+        if (key != cachedApiKey) {
+            cachedApiKey = key
+            // 키가 변경되면 모델 재생성
+            queryAnalyzerModel = null
+            financialAdvisorModel = null
+            summaryModel = null
         }
         return cachedApiKey ?: ""
     }
@@ -177,11 +182,11 @@ class GeminiRepositoryImpl @Inject constructor(
         queryAnalyzerModel = null
         financialAdvisorModel = null
         summaryModel = null
-        settingsDataStore.saveGeminiApiKey(key)
+        apiKeyProvider.saveUserApiKey(key)
     }
 
     override suspend fun hasApiKey(): Boolean {
-        return getApiKey().isNotBlank()
+        return apiKeyProvider.hasValidApiKey()
     }
 
     override suspend fun analyzeQueryNeeds(contextualMessage: String): Result<DataQueryRequest?> {

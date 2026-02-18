@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-16
+> **최종 갱신**: 2026-02-18
 
 ---
 
@@ -62,9 +62,21 @@
 - AndroidManifest telephony feature optional 처리로 ChromeOS 관련 lint 이슈 해소
 - 문자열 포맷 positional 정리(`history_day_header`) + values-en 누락 키 보강
 
+**Google AdMob + Firebase Crashlytics**: ✅ 완료 (2026-02-16~17)
+- 리워드 광고 연동 (RewardAdManager, SettingsViewModel 광고 상태 관리)
+- Firebase Crashlytics 연동 + Release signingConfig 설정
+
+**알파 배포 준비**: ✅ 완료 (2026-02-18)
+- 버전 1.0.0 설정 (versionCode=1, versionName="1.0.0")
+- Firebase RTDB 기반 강제 업데이트 시스템 (ForceUpdateChecker + MainActivity 다이얼로그)
+- 개인정보처리방침 웹 페이지 (docs/privacy-policy.html, GitHub Pages용)
+- ProGuard 규칙 추가 (Hilt/Room/Gson/Firebase/Gemini/AdMob 등)
+- GIT_CONVENTION.md에 커밋 본문 템플릿 + Kotlin Android 체크리스트 추가
+
 ### 대기 중인 작업
 
-- 현재 대기 중인 필수 작업 없음 (2026-02-16 기준)
+- GitHub Pages 설정 (Settings → Pages → `/docs` 디렉토리) — 개인정보처리방침 URL 활성화용
+- Google Play Console 알파 트랙 AAB 업로드 + SMS 권한 선언 양식 제출
 
 ---
 
@@ -123,6 +135,8 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-18 | 알파 배포 준비 (강제 업데이트, 개인정보처리방침, ProGuard, 커밋 가이드) | 완료 |
+| 2026-02-17 | Google AdMob 리워드 광고 + Firebase Crashlytics + Release 서명 | 완료 |
 | 2026-02-16 | 분류 Job 경합 안정화 + lint 이슈 정리 + 문서 동기화 | 완료 |
 | 2026-02-15 | 문서 갱신 (ARCHITECTURE, AI_CONTEXT, AI_HANDOFF, PROJECT_CONTEXT 등) | 완료 |
 | 2026-02-14~ | safe-commit 스킬, 홈→내역 네비게이션, 달력 필터 버그 수정, AI 인사이트, 가맹점 일괄 업데이트, Compose Stability, 리팩토링 | 완료 |
@@ -148,6 +162,15 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 ---
 
 ## 7. 핵심 파일 위치 (빠른 참조)
+
+### Firebase / 서버 설정
+
+| 파일 | 설명 |
+|------|------|
+| [`PremiumManager.kt`](../app/src/main/java/com/sanha/moneytalk/core/firebase/PremiumManager.kt) | Firebase RTDB 설정 실시간 감시 |
+| [`PremiumConfig.kt`](../app/src/main/java/com/sanha/moneytalk/core/firebase/PremiumConfig.kt) | 서버 설정 data class (9개 필드) |
+| [`ForceUpdateChecker.kt`](../app/src/main/java/com/sanha/moneytalk/core/firebase/ForceUpdateChecker.kt) | versionCode 비교 기반 강제 업데이트 판정 |
+| [`CrashlyticsHelper.kt`](../app/src/main/java/com/sanha/moneytalk/core/firebase/CrashlyticsHelper.kt) | Crashlytics 래퍼 |
 
 ### 데이터 레이어
 

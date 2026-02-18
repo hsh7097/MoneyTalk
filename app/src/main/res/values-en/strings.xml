@@ -333,4 +333,19 @@
     <string name="settings_theme_light">Light Mode</string>
     <string name="settings_theme_system">System Default</string>
     <string name="settings_theme_title">Theme Settings</string>
+
+    <!-- Reward Ad -->
+    <string name="reward_ad_dialog_title">Free chats used up</string>
+    <string name="reward_ad_dialog_message">You\'ve used all free chat turns.\nWatch an ad to get %d more chats.</string>
+    <string name="reward_ad_watch_button">Watch ad for %d chats</string>
+    <string name="reward_ad_later">Later</string>
+    <string name="reward_ad_remaining">Free chats remaining: %d</string>
+    <string name="reward_ad_load_failed">Failed to load ad. Please try again later.</string>
+    <string name="reward_ad_rewarded">%d free chats added!</string>
+
+    <!-- Force Update -->
+    <string name="force_update_title">Update Required</string>
+    <string name="force_update_message">A new version is available.\nPlease update to version %1$s to continue using the app.\n\nCurrent version: %2$s</string>
+    <string name="force_update_button">Update</string>
+    <string name="force_update_exit">Exit</string>
 </resources>

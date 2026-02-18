@@ -1,7 +1,9 @@
 package com.sanha.moneytalk
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +29,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -42,6 +46,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.firebase.ForceUpdateChecker
+import com.sanha.moneytalk.core.firebase.ForceUpdateState
 import com.sanha.moneytalk.core.theme.MoneyTalkTheme
 import com.sanha.moneytalk.core.theme.ThemeMode
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
@@ -59,6 +65,8 @@ class MainActivity : ComponentActivity() {
     lateinit var snackbarBus: AppSnackbarBus
     @Inject
     lateinit var settingsDataStore: SettingsDataStore
+    @Inject
+    lateinit var forceUpdateChecker: ForceUpdateChecker
 
     private var pendingSyncAction: (() -> Unit)? = null
     private var permissionChecked = mutableStateOf(false)
@@ -99,6 +107,24 @@ class MainActivity : ComponentActivity() {
             }
 
             MoneyTalkTheme(themeMode = themeMode) {
+                // 강제 업데이트 체크
+                val forceUpdateState by forceUpdateChecker.forceUpdateRequired
+                    .collectAsStateWithLifecycle(initialValue = ForceUpdateState.NotRequired)
+
+                if (forceUpdateState is ForceUpdateState.Required) {
+                    ForceUpdateDialog(
+                        state = forceUpdateState as ForceUpdateState.Required,
+                        onUpdate = {
+                            val intent = Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+                            )
+                            startActivity(intent)
+                        },
+                        onExit = { finish() }
+                    )
+                }
+
                 MoneyTalkApp(
                     permissionChecked = permissionChecked.value,
                     permissionGranted = permissionGranted.value,
@@ -329,4 +355,48 @@ fun BackPressHandler(
             }
         }
     }
+}
+
+/** 강제 업데이트 다이얼로그. 닫기 불가 — 업데이트 또는 종료만 가능 */
+@Composable
+fun ForceUpdateDialog(
+    state: ForceUpdateState.Required,
+    onUpdate: () -> Unit,
+    onExit: () -> Unit
+) {
+    val message = if (state.message.isNotBlank()) {
+        state.message
+    } else {
+        stringResource(
+            R.string.force_update_message,
+            state.requiredVersion,
+            state.currentVersion
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = { /* 닫기 차단 — 강제 업데이트 */ },
+        title = {
+            Text(
+                text = stringResource(R.string.force_update_title),
+                style = MaterialTheme.typography.headlineSmall
+            )
+        },
+        text = {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onUpdate) {
+                Text(stringResource(R.string.force_update_button))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onExit) {
+                Text(stringResource(R.string.force_update_exit))
+            }
+        }
+    )
 }

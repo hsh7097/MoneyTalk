@@ -4,7 +4,7 @@ import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -25,7 +25,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class SmsEmbeddingService @Inject constructor(
-    private val settingsDataStore: SettingsDataStore
+    private val apiKeyProvider: GeminiApiKeyProvider
 ) {
     companion object {
         private const val TAG = "gemini"
@@ -82,7 +82,7 @@ class SmsEmbeddingService @Inject constructor(
      */
     suspend fun generateEmbedding(text: String): List<Float>? = withContext(Dispatchers.IO) {
         try {
-            val apiKey = settingsDataStore.getGeminiApiKey()
+            val apiKey = apiKeyProvider.getApiKey()
             if (apiKey.isBlank()) {
                 Log.e(TAG, "API 키가 설정되지 않음")
                 return@withContext null
@@ -142,7 +142,7 @@ class SmsEmbeddingService @Inject constructor(
     suspend fun generateEmbeddings(texts: List<String>): List<List<Float>?> =
         withContext(Dispatchers.IO) {
             try {
-                val apiKey = settingsDataStore.getGeminiApiKey()
+                val apiKey = apiKeyProvider.getApiKey()
                 if (apiKey.isBlank()) {
                     Log.e(TAG, "API 키가 설정되지 않음")
                     return@withContext texts.map { null }

@@ -5,7 +5,7 @@ import android.util.Log
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.generationConfig
 import com.sanha.moneytalk.R
-import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
 import com.sanha.moneytalk.core.model.Category
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -24,8 +24,8 @@ import kotlin.random.Random
 @Singleton
 class GeminiCategoryRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val settingsDataStore: SettingsDataStore,
-    private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider
+    private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider,
+    private val apiKeyProvider: GeminiApiKeyProvider
 ) : GeminiCategoryRepository {
     companion object {
         private const val TAG = "gemini"
@@ -53,12 +53,14 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
     }
 
     private var generativeModel: GenerativeModel? = null
+    private var cachedApiKey: String? = null
 
     /**
      * Gemini API 키 설정
      */
     override suspend fun setApiKey(apiKey: String) {
-        settingsDataStore.saveGeminiApiKey(apiKey)
+        apiKeyProvider.saveUserApiKey(apiKey)
+        cachedApiKey = apiKey
         initModel(apiKey)
     }
 
@@ -66,14 +68,14 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
      * API 키 존재 여부 확인
      */
     override suspend fun hasApiKey(): Boolean {
-        return settingsDataStore.getGeminiApiKey().isNotEmpty()
+        return apiKeyProvider.hasValidApiKey()
     }
 
     /**
-     * API 키 가져오기
+     * API 키 가져오기 (서비스 티어 반영)
      */
     override suspend fun getApiKey(): String {
-        return settingsDataStore.getGeminiApiKey()
+        return apiKeyProvider.getApiKey()
     }
 
     private fun initModel(apiKey: String) {
@@ -102,7 +104,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 "sanha",
                 "GeminiCategoryRepository[classifyStoreNames] : === 호출됨 (${storeNames.size}건) ==="
             )
-            val apiKey = settingsDataStore.getGeminiApiKey()
+            val apiKey = apiKeyProvider.getApiKey()
             Log.e(
                 "sanha",
                 "GeminiCategoryRepository[classifyStoreNames] : API 키 상태: ${
@@ -116,11 +118,12 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 return@withContext emptyMap()
             }
 
-            if (generativeModel == null) {
+            if (generativeModel == null || apiKey != cachedApiKey) {
                 Log.e(
                     "sanha",
                     "GeminiCategoryRepository[classifyStoreNames] : 모델 초기화 필요 → initModel() 호출"
                 )
+                cachedApiKey = apiKey
                 initModel(apiKey)
             }
 

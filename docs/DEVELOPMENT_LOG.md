@@ -4,6 +4,46 @@
 
 ---
 
+## 2026-02-18 - 알파 배포 준비
+
+### 작업 내용
+
+#### 1. 강제 업데이트 시스템
+- Firebase RTDB `min_version_code` vs `BuildConfig.VERSION_CODE` 비교
+- ForceUpdateChecker 싱글톤 (Flow 기반, distinctUntilChanged)
+- MainActivity에 닫기 불가 AlertDialog (업데이트/종료만 가능)
+- PremiumConfig에 minVersionCode/minVersionName/forceUpdateMessage 필드 추가
+- PremiumManager 양쪽(startObservingConfig/fetchConfigOnce) 파싱 추가
+- Firebase RTDB `/config` 노드에 3개 필드 등록 완료
+
+#### 2. 버전 변경
+- versionName "1.0" → "1.0.0", versionCode 1 유지
+
+#### 3. 개인정보처리방침 웹 페이지
+- `docs/privacy-policy.html` 생성 (한국어/영어 전환)
+- Google Play 알파 배포용 URL 제공 예정 (GitHub Pages 설정 필요)
+
+#### 4. ProGuard 규칙
+- Hilt/Room/Gson/Firebase/Gemini/AdMob/OkHttp/Coroutines/Compose/Lottie/DataStore 전체 커버
+
+#### 5. GIT_CONVENTION.md 강화
+- 커밋 본문 권장 템플릿 (문제→원인→조치→검증) 추가
+- Kotlin Android 특화 체크리스트 추가 (MVVM, Flow, Compose, Hilt)
+- 코드 식별자 영어 사용 규칙 명시
+
+### 변경 파일
+- `app/build.gradle.kts` — versionName 변경
+- `app/proguard-rules.pro` — ProGuard 규칙 전면 작성
+- `ForceUpdateChecker.kt` — 신규
+- `PremiumConfig.kt` — 3개 필드 추가
+- `PremiumManager.kt` — 파싱 추가
+- `MainActivity.kt` — 강제 업데이트 다이얼로그 연동
+- `strings.xml` (ko/en) — 강제 업데이트 문자열
+- `docs/privacy-policy.html` — 신규
+- `docs/GIT_CONVENTION.md` — 커밋 가이드 반영
+
+---
+
 ## 2026-02-14~ - Compose Stability + 리팩토링 + 기능 개선
 
 ### 작업 내용

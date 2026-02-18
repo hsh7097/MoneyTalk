@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoneyTalk - Privacy Policy</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            line-height: 1.7;
+            color: #333;
+            background: #f8f9fa;
+            padding: 20px;
+        }
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            padding: 40px 32px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        h1 {
+            font-size: 1.6rem;
+            margin-bottom: 8px;
+            color: #1a1a1a;
+        }
+        .lang-toggle {
+            text-align: right;
+            margin-bottom: 24px;
+        }
+        .lang-toggle a {
+            color: #4a90d9;
+            text-decoration: none;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .intro {
+            font-size: 1rem;
+            color: #555;
+            margin-bottom: 28px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        h2 {
+            font-size: 1.15rem;
+            color: #1a1a1a;
+            margin-top: 24px;
+            margin-bottom: 10px;
+        }
+        ul {
+            list-style: none;
+            padding-left: 0;
+            margin-bottom: 16px;
+        }
+        ul li {
+            position: relative;
+            padding-left: 20px;
+            margin-bottom: 4px;
+            color: #444;
+        }
+        ul li::before {
+            content: "\2022";
+            position: absolute;
+            left: 6px;
+            color: #4a90d9;
+        }
+        .updated {
+            margin-top: 32px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            font-size: 0.85rem;
+            color: #999;
+        }
+        .contact {
+            margin-top: 8px;
+            font-size: 0.85rem;
+            color: #999;
+        }
+        .contact a { color: #4a90d9; text-decoration: none; }
+        /* English section hidden by default */
+        .en { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="lang-toggle">
+            <a onclick="toggleLang()">English / Korean</a>
+        </div>
+
+        <!-- Korean -->
+        <div id="ko" class="ko">
+            <h1>MoneyTalk 개인정보 처리방침</h1>
+            <p class="intro">MoneyTalk은 사용자의 개인정보를 소중히 보호합니다.</p>
+
+            <h2>1. 수집하는 정보</h2>
+            <ul>
+                <li>SMS 문자 메시지 (결제 내역 파싱 목적)</li>
+                <li>설정한 월 수입 및 예산 정보</li>
+            </ul>
+
+            <h2>2. 정보 이용 목적</h2>
+            <ul>
+                <li>지출/수입 자동 기록 및 분류</li>
+                <li>AI 기반 카테고리 분류 (Gemini API)</li>
+                <li>AI 재무 상담 서비스</li>
+            </ul>
+
+            <h2>3. 정보 저장</h2>
+            <ul>
+                <li>모든 데이터는 기기 내부에만 저장됩니다</li>
+                <li>서버에 개인정보를 전송하지 않습니다</li>
+            </ul>
+
+            <h2>4. 제3자 제공</h2>
+            <ul>
+                <li>AI 분류 및 상담을 위해 가게명 등 비식별 정보가 Google Gemini API로 전송될 수 있습니다</li>
+                <li>광고 서비스를 위해 Google AdMob SDK가 사용됩니다</li>
+                <li>그 외 개인정보는 제3자에게 제공되지 않습니다</li>
+            </ul>
+
+            <h2>5. 광고</h2>
+            <ul>
+                <li>본 앱은 Google AdMob을 통해 리워드 광고를 표시할 수 있습니다</li>
+                <li>AdMob은 광고 제공을 위해 기기 식별자 등의 정보를 수집할 수 있습니다</li>
+                <li>자세한 내용은 <a href="https://policies.google.com/privacy" target="_blank" style="color:#4a90d9;">Google 개인정보 처리방침</a>을 참조하세요</li>
+            </ul>
+
+            <h2>6. 사용자 권리</h2>
+            <ul>
+                <li>설정에서 언제든 모든 데이터를 삭제할 수 있습니다</li>
+                <li>앱 삭제 시 모든 로컬 데이터가 함께 삭제됩니다</li>
+                <li>SMS 권한은 시스템 설정에서 언제든 철회할 수 있습니다</li>
+            </ul>
+
+            <p class="updated">최종 수정: 2025년 2월</p>
+            <p class="contact">문의: <a href="mailto:hsh709735@gmail.com">hsh709735@gmail.com</a></p>
+        </div>
+
+        <!-- English -->
+        <div id="en" class="en">
+            <h1>MoneyTalk Privacy Policy</h1>
+            <p class="intro">MoneyTalk values and protects your privacy.</p>
+
+            <h2>1. Information Collected</h2>
+            <ul>
+                <li>SMS messages (for payment parsing)</li>
+                <li>Monthly income and budget settings</li>
+            </ul>
+
+            <h2>2. Purpose of Use</h2>
+            <ul>
+                <li>Automatic expense/income tracking and classification</li>
+                <li>AI-based category classification (Gemini API)</li>
+                <li>AI financial consultation service</li>
+            </ul>
+
+            <h2>3. Data Storage</h2>
+            <ul>
+                <li>All data is stored locally on your device</li>
+                <li>No personal data is transmitted to our servers</li>
+            </ul>
+
+            <h2>4. Third-Party Sharing</h2>
+            <ul>
+                <li>Store names and non-identifying information may be sent to Google Gemini API for AI classification and consultation</li>
+                <li>Google AdMob SDK is used for advertising services</li>
+                <li>No other personal data is shared with third parties</li>
+            </ul>
+
+            <h2>5. Advertising</h2>
+            <ul>
+                <li>This app may display rewarded ads through Google AdMob</li>
+                <li>AdMob may collect device identifiers and other information for ad delivery</li>
+                <li>For more details, see <a href="https://policies.google.com/privacy" target="_blank" style="color:#4a90d9;">Google Privacy Policy</a></li>
+            </ul>
+
+            <h2>6. Your Rights</h2>
+            <ul>
+                <li>You can delete all data at any time from Settings</li>
+                <li>Uninstalling the app removes all local data</li>
+                <li>SMS permissions can be revoked at any time from system settings</li>
+            </ul>
+
+            <p class="updated">Last updated: February 2025</p>
+            <p class="contact">Contact: <a href="mailto:hsh709735@gmail.com">hsh709735@gmail.com</a></p>
+        </div>
+    </div>
+
+    <script>
+        function toggleLang() {
+            var ko = document.getElementById('ko');
+            var en = document.getElementById('en');
+            if (ko.style.display === 'none') {
+                ko.style.display = 'block';
+                en.style.display = 'none';
+            } else {
+                ko.style.display = 'none';
+                en.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>

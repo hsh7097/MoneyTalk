@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.feature.chat.ui
 
+import android.app.Activity
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -99,7 +100,10 @@ fun ChatScreen(
                 hasApiKey = uiState.hasApiKey,
                 showVoiceHint = uiState.showVoiceHint,
                 onVoiceHintShown = { viewModel.markVoiceHintSeen() },
-                onApiKeyClick = { showApiKeyDialog = true }
+                onApiKeyClick = { showApiKeyDialog = true },
+                onShowRewardAd = { activity -> viewModel.showRewardAd(activity) },
+                onDismissRewardAdDialog = { viewModel.onRewardAdDismissed() },
+                rewardChatCount = viewModel.getRewardChatCount()
             )
         } else {
             ChatRoomListView(
@@ -164,7 +168,10 @@ fun ChatRoomView(
     hasApiKey: Boolean,
     showVoiceHint: Boolean,
     onVoiceHintShown: () -> Unit,
-    onApiKeyClick: () -> Unit
+    onApiKeyClick: () -> Unit,
+    onShowRewardAd: (Activity) -> Unit = {},
+    onDismissRewardAdDialog: () -> Unit = {},
+    rewardChatCount: Int = 5
 ) {
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -295,10 +302,12 @@ fun ChatRoomView(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = if (hasApiKey) {
-                            stringResource(R.string.chat_subtitle_with_api)
-                        } else {
+                        text = if (!hasApiKey) {
                             stringResource(R.string.chat_subtitle_no_api)
+                        } else if (uiState.isRewardAdEnabled) {
+                            stringResource(R.string.reward_ad_remaining, uiState.rewardChatRemaining)
+                        } else {
+                            stringResource(R.string.chat_subtitle_with_api)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -459,4 +468,44 @@ fun ChatRoomView(
             }
         }
     }
+
+    // 리워드 광고 다이얼로그
+    if (uiState.showRewardAdDialog) {
+        RewardAdDialog(
+            rewardChatCount = rewardChatCount,
+            onWatchAd = {
+                val activity = context as? Activity
+                if (activity != null) {
+                    onShowRewardAd(activity)
+                }
+            },
+            onDismiss = onDismissRewardAdDialog
+        )
+    }
+}
+
+/** 리워드 광고 시청 안내 다이얼로그 */
+@Composable
+fun RewardAdDialog(
+    rewardChatCount: Int,
+    onWatchAd: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.reward_ad_dialog_title)) },
+        text = {
+            Text(stringResource(R.string.reward_ad_dialog_message, rewardChatCount))
+        },
+        confirmButton = {
+            FilledTonalButton(onClick = onWatchAd) {
+                Text(stringResource(R.string.reward_ad_watch_button, rewardChatCount))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.reward_ad_later))
+            }
+        }
+    )
 }
