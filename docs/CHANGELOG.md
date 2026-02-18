@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### Added (2026-02-18)
+- **Firebase RTDB 기반 강제 업데이트**: ForceUpdateChecker + MainActivity 다이얼로그 (닫기 불가, 업데이트/종료)
+- **개인정보처리방침 웹 페이지**: `docs/privacy-policy.html` (한/영 전환, GitHub Pages용)
+- **docs-sync 스킬**: 작업 전/후 docs/ 문서 확인·갱신 스킬
+
+### Changed (2026-02-18)
+- **버전 1.0.0**: versionName "1.0" → "1.0.0" 변경
+- **PremiumConfig 확장**: minVersionCode/minVersionName/forceUpdateMessage 3개 필드 추가
+- **ProGuard 규칙 추가**: Hilt/Room/Gson/Firebase/Gemini/AdMob/OkHttp 등 전체 의존성 커버
+- **GIT_CONVENTION.md 강화**: 커밋 본문 권장 템플릿(문제→원인→조치→검증) + Kotlin Android 특화 체크리스트
+
 ### Changed (2026-02-16)
 - **분류 상태 관리 안정화**: `ClassificationState`를 activeJob 기반으로 정리하고 `registerJob/completeJob/cancelIfRunning` 흐름으로 통일
 - **백그라운드 분류 종료 처리 개선**: HomeViewModel에서 Job 완료 시점 기반 상태 해제로 경합 가능성 완화

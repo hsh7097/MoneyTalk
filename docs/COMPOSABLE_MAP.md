@@ -9,6 +9,7 @@
 ## 앱 루트
 
 ```
+ForceUpdateDialog                    ← 강제 업데이트 다이얼로그 (닫기 불가)
 MoneyTalkApp                         ← 앱 최상위 Scaffold + BottomNav + 전역 스낵바
 ├── NavGraph                         ← 화면 라우팅 (스플래시 → 홈/내역/채팅/설정)
 ├── BackPressHandler                 ← 채팅방 뒤로가기 처리
@@ -17,6 +18,7 @@ MoneyTalkApp                         ← 앱 최상위 Scaffold + BottomNav + �
 
 | 함수 | 설명 | 참조 |
 |------|------|------|
+| ForceUpdateDialog | 강제 업데이트 다이얼로그 (닫기 불가, 업데이트/종료) | [MainActivityKt](../app/src/main/java/com/sanha/moneytalk/MainActivity.kt) |
 | MoneyTalkApp | Scaffold + BottomNav + 전역 스낵바 | [MainActivityKt](../app/src/main/java/com/sanha/moneytalk/MainActivity.kt) |
 | BackPressHandler | 채팅방 뒤로가기 처리 | [MainActivityKt](../app/src/main/java/com/sanha/moneytalk/MainActivity.kt) |
 | NavGraph | 화면 라우팅 정의 | [NavGraphKt](../app/src/main/java/com/sanha/moneytalk/navigation/NavGraph.kt) |

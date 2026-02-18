@@ -1,7 +1,7 @@
 # AI_CONTEXT.md - MoneyTalk 프로젝트 컨텍스트
 
 > AI 에이전트가 MoneyTalk 프로젝트를 이해하고 작업하기 위한 핵심 컨텍스트 문서
-> **최종 갱신**: 2026-02-15
+> **최종 갱신**: 2026-02-18
 
 ---
 
@@ -31,6 +31,7 @@ app/src/main/java/com/sanha/moneytalk/
 │   │   ├── converter/     # FloatListConverter
 │   │   ├── OwnedCardRepository.kt      # 카드 화이트리스트
 │   │   └── SmsExclusionRepository.kt   # SMS 제외 키워드
+│   ├── firebase/          # Firebase (PremiumManager, ForceUpdateChecker, CrashlyticsHelper)
 │   ├── datastore/         # DataStore (설정값)
 │   ├── di/                # Hilt DI 모듈
 │   ├── model/             # Category enum, SmsAnalysisResult 등

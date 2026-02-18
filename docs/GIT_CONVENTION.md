@@ -48,6 +48,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ### 언어
 - **한글**로 작성
+- 코드 식별자(`observeRewardAdState`, `hasApiKey` 등)는 영어 그대로 사용
 
 ### 예시
 ```
@@ -68,6 +69,23 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 ```
+
+### 커밋 본문 권장 템플릿 (버그 수정 시)
+
+복잡한 수정이나 디버깅 이력이 있는 경우, 아래 구조로 본문을 작성한다:
+
+```
+[수정]: premiumConfig 변경 시 hasApiKey 동기화
+
+- 문제: 프리미엄 설정 변경 후에도 UI에 이전 API 키 상태가 표시됨
+- 원인: premiumConfig Flow 수집 시 hasApiKey 파생값이 갱신되지 않음
+- 조치: SettingsViewModel에서 premiumConfig 변경 시 hasApiKey 재계산 로직 추가
+- 검증: assembleDebug 빌드 성공, 설정 변경 후 UI 즉시 반영 확인
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+```
+
+> 단순 기능 추가/문서 변경 등에서는 기존 `- 상세 변경 내용` 형식을 사용한다.
 
 ---
 
@@ -174,12 +192,20 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ## 6. 커밋 전 체크리스트
 
+### 공통
 - [ ] `develop`/`master`에서 직접 커밋하고 있지 않은지 확인
 - [ ] 작업 목적별로 커밋이 분리되어 있는지 확인
 - [ ] 민감 파일(.env, credentials)이 포함되지 않았는지 확인
 - [ ] `git add -A` 대신 파일을 명시적으로 지정했는지 확인
 - [ ] Composable 추가/삭제/변경 시 `docs/COMPOSABLE_MAP.md` 갱신했는지 확인
+- [ ] 리뷰어가 `git show`만으로 의도를 이해할 수 있는지 확인
+
+### Kotlin Android 특화
+- [ ] MVVM 경계 준수 (ViewModel/Repository 책임 분리)
+- [ ] Flow 수집 시 상태 동기화 누락 여부 점검
+- [ ] Compose UI 상태(`uiState`) 파생값이 stale하지 않은지 확인
+- [ ] Hilt 주입 객체의 스레드/IO 사용 적절성 확인
 
 ---
 
-*마지막 업데이트: 2026-02-16*
+*마지막 업데이트: 2026-02-18*
