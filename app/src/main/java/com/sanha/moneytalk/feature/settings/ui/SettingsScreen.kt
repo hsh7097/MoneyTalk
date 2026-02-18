@@ -219,22 +219,9 @@ fun SettingsScreen(
                 }
             }
 
-            // API 설정
+            // AI 설정
             item {
                 SettingsSectionCompose(title = stringResource(R.string.settings_section_ai)) {
-                    SettingsItemCompose(
-                        info = object : SettingsItemInfo {
-                            override val icon = Icons.Default.Key
-                            override val title = stringResource(R.string.settings_api_key_title)
-                            override val subtitle = if (uiState.hasApiKey) {
-                                stringResource(R.string.settings_api_key_set, uiState.apiKey)
-                            } else {
-                                stringResource(R.string.settings_api_key_not_set)
-                            }
-                        },
-                        onClick = { viewModel.onIntent(SettingsIntent.ShowApiKeyDialog) }
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // 카테고리 정리 버튼 (커스텀 레이아웃 - 공통 컴포넌트 미적용)
                     val isClassifyEnabled = uiState.hasApiKey &&
                             uiState.unclassifiedCount > 0 &&
@@ -481,11 +468,8 @@ fun SettingsScreen(
 
     when (uiState.activeDialog) {
         SettingsDialog.API_KEY -> {
-            ApiKeySettingDialog(
-                currentKeyHint = if (uiState.hasApiKey) stringResource(R.string.dialog_api_key_current) else "",
-                onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) },
-                onConfirm = { key -> viewModel.onIntent(SettingsIntent.SaveApiKey(key)) }
-            )
+            // API 키 직접 설정 UI 제거됨 (서버 키 사용)
+            viewModel.onIntent(SettingsIntent.DismissDialog)
         }
 
         SettingsDialog.MONTH_START_DAY -> {
