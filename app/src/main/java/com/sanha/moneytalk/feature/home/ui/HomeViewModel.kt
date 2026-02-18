@@ -7,6 +7,8 @@ import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.firebase.AnalyticsEvent
+import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
@@ -125,7 +127,8 @@ class HomeViewModel @Inject constructor(
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
     private val geminiRepository: GeminiRepository,
     private val snackbarBus: AppSnackbarBus,
-    private val classificationState: ClassificationState
+    private val classificationState: ClassificationState,
+    private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
 
     companion object {
@@ -534,6 +537,7 @@ class HomeViewModel @Inject constructor(
         forceFullSync: Boolean = false,
         todayOnly: Boolean = false
     ) {
+        analyticsHelper.logClick(AnalyticsEvent.SCREEN_HOME, AnalyticsEvent.CLICK_SYNC_SMS)
         viewModelScope.launch {
             _uiState.update {
                 it.copy(

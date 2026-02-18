@@ -46,6 +46,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.firebase.AnalyticsEvent
+import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.firebase.ForceUpdateChecker
 import com.sanha.moneytalk.core.firebase.ForceUpdateState
 import com.sanha.moneytalk.core.theme.MoneyTalkTheme
@@ -67,6 +69,8 @@ class MainActivity : ComponentActivity() {
     lateinit var settingsDataStore: SettingsDataStore
     @Inject
     lateinit var forceUpdateChecker: ForceUpdateChecker
+    @Inject
+    lateinit var analyticsHelper: AnalyticsHelper
 
     private var pendingSyncAction: (() -> Unit)? = null
     private var permissionChecked = mutableStateOf(false)
@@ -134,7 +138,8 @@ class MainActivity : ComponentActivity() {
                         checkAndRequestSmsPermission(onGranted)
                     },
                     onExitApp = { finish() },
-                    snackbarBus = snackbarBus
+                    snackbarBus = snackbarBus,
+                    analyticsHelper = analyticsHelper
                 )
             }
         }
@@ -189,7 +194,8 @@ fun MoneyTalkApp(
     onAutoSyncConsumed: () -> Unit,
     onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
     onExitApp: () -> Unit,
-    snackbarBus: AppSnackbarBus
+    snackbarBus: AppSnackbarBus,
+    analyticsHelper: AnalyticsHelper
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -210,6 +216,18 @@ fun MoneyTalkApp(
                 duration = event.duration
             )
         }
+    }
+
+    // 화면 전환 시 PV 트래킹
+    LaunchedEffect(currentRoute) {
+        val screenName = when {
+            currentRoute == Screen.Home.route -> AnalyticsEvent.SCREEN_HOME
+            currentRoute?.startsWith("history") == true -> AnalyticsEvent.SCREEN_HISTORY
+            currentRoute == Screen.Chat.route -> AnalyticsEvent.SCREEN_CHAT
+            currentRoute == Screen.Settings.route -> AnalyticsEvent.SCREEN_SETTINGS
+            else -> null
+        }
+        screenName?.let { analyticsHelper.logScreenView(it) }
     }
 
     // 뒤로가기 처리

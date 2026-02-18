@@ -8,6 +8,8 @@ import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.firebase.AnalyticsEvent
+import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
@@ -167,7 +169,8 @@ class HistoryViewModel @Inject constructor(
     private val dataRefreshEvent: DataRefreshEvent,
     private val snackbarBus: AppSnackbarBus,
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HistoryUiState())
@@ -405,6 +408,7 @@ class HistoryViewModel @Inject constructor(
 
     /** 카테고리 필터 적용 (null이면 전체) */
     fun filterByCategory(category: String?) {
+        analyticsHelper.logClick(AnalyticsEvent.SCREEN_HISTORY, AnalyticsEvent.CLICK_CATEGORY_FILTER)
         _uiState.update { it.copy(selectedCategory = category) }
         loadExpenses()
     }
