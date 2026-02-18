@@ -126,7 +126,7 @@ object SmsParser {
     )
 
     /** SMS 최대 글자수 (일반 결제 SMS는 40~100자, 안내/광고성은 100자 이상) */
-    private const val MAX_SMS_LENGTH = 100
+    const val MAX_SMS_LENGTH = 100
 
     // ========================
     // 사전 컴파일 Regex 상수 (매 호출마다 재컴파일 방지)
@@ -774,6 +774,25 @@ object SmsParser {
                     if (nextLine == "출금취소") {
                         return "출금취소"
                     }
+                }
+            }
+        }
+
+        // 멀티라인 패턴: 날짜+시간 줄 다음에 가게명이 별도 줄로 오는 경우
+        // 예: 현대카드 "03/20 19:02\n포식구리갈매\n누적..." 포맷
+        for (i in lines.indices) {
+            val line = lines[i]
+            // 날짜+시간 패턴: "MM/DD HH:MM" 또는 "MM-DD HH:MM"
+            if (line.matches(STORE_DATETIME_PATTERN) && i + 1 < lines.size) {
+                val nextLine = lines[i + 1].trim()
+                val cleanNext = cleanStoreName(nextLine)
+                // 다음 줄이 유효한 가게명이고, "누적"으로 시작하지 않으며,
+                // 카드 키워드를 포함하지 않는 경우
+                if (isValidStoreName(cleanNext) &&
+                    !nextLine.startsWith("누적") &&
+                    !cardKeywords.any { cleanNext.lowercase().contains(it) }
+                ) {
+                    return cleanNext
                 }
             }
         }

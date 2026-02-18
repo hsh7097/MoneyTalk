@@ -153,11 +153,14 @@ class HybridSmsClassifier @Inject constructor(
 
         if (regexUnresolved.isEmpty()) return results.toList()
 
-        // ===== Step 2: 사전 필터링 (인증번호, 광고 등 제외) =====
+        // ===== Step 2: 사전 필터링 (인증번호, 광고, 장문 등 제외) =====
         val vectorCandidateIndices = mutableListOf<Int>()
         for (idx in regexUnresolved) {
             val body = smsList[idx].first
-            if (isObviouslyNonPayment(body)) {
+            if (body.length > SmsParser.MAX_SMS_LENGTH) {
+                // 100자 초과 장문 SMS → 안내/광고성이므로 비결제 처리 (벡터/LLM 스킵)
+                results[idx] = ClassificationResult(isPayment = false, tier = 0, confidence = 0f)
+            } else if (isObviouslyNonPayment(body)) {
                 // 명백한 비결제 → 즉시 비결제 판정 (벡터 매칭도 스킵)
                 results[idx] = ClassificationResult(isPayment = false, tier = 0, confidence = 0f)
             } else {
