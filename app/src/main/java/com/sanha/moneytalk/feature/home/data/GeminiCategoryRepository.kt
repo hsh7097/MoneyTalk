@@ -8,8 +8,9 @@ package com.sanha.moneytalk.feature.home.data
 interface GeminiCategoryRepository {
 
     /**
-     * Gemini API 키 설정
+     * Gemini API 키 설정 — RTDB 기반으로 전환됨, 사용 중단
      */
+    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
     suspend fun setApiKey(apiKey: String)
 
     /**

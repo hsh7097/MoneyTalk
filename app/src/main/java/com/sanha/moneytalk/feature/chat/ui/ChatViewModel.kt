@@ -1781,11 +1781,9 @@ class ChatViewModel @Inject constructor(
         return results
     }
 
+    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
     fun setApiKey(key: String) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) { geminiRepository.setApiKey(key) }
-            checkApiKey()
-        }
+        // RTDB 기반 키 관리로 전환 — 로컬 키 저장 제거
     }
 
     fun clearCurrentSessionHistory() {
