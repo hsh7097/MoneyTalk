@@ -32,7 +32,8 @@ MoneyTalkApp                         ← 앱 최상위 Scaffold + BottomNav + �
 ```
 HomeScreen                           ← 홈 탭 메인 화면
 ├── MonthlyOverviewSection           ← 월간 수입/지출 현황 + 월 네비게이션
-├── CategoryExpenseSection           ← 카테고리별 지출 비율 (상위 3개 + 전체)
+├── CategoryExpenseSection           ← 카테고리별 지출 (도넛 차트 + 리스트)
+│   ├── DonutChartCompose            ← 도넛 차트 (3+ 카테고리, Canvas)
 │   └── CategoryIcon                 ← 카테고리 이모지 아이콘 (공통)
 ├── AiInsightCard                    ← Gemini AI 소비 분석 요약
 ├── TodayAndComparisonSection        ← 오늘 지출 + 전월 대비 래퍼
@@ -199,11 +200,13 @@ SettingsScreen                       ← 설정 탭 메인 화면
 | TransactionGroupHeaderCompose | 날짜/가게/금액 그룹 헤더 | 내역(목록) | [TransactionGroupHeaderComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/header/TransactionGroupHeaderCompose.kt) |
 | SegmentedTabRowCompose | 세그먼트 스타일 탭 Row | 내역(FilterTabRow) | [SegmentedTabRowComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/tab/SegmentedTabRowCompose.kt) |
 | CategoryIcon | 카테고리 이모지 아이콘 (원형 배경) | 홈, 거래 카드 | [CategoryIconKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/CategoryIcon.kt) |
+| DonutChartCompose | 도넛 차트 (Canvas drawArc + 범례) | 홈(CategoryExpenseSection) | [DonutChartComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/chart/DonutChartCompose.kt) |
 | ExpenseDetailDialog | 지출 상세/수정/삭제 다이얼로그 | 홈, 내역 | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
 | CategorySelectDialog | 카테고리 변경 (3열 그리드) | ExpenseDetailDialog 내부 | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
 | CategoryPickerDialog | 카테고리 선택 (하위 호환) | AddExpenseDialog 내부 | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
 | SettingsSectionCompose | 설정 섹션 (타이틀 + Card) | 설정 | [SettingsSectionComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsSectionCompose.kt) |
 | SettingsItemCompose | 설정 아이템 (아이콘 + 텍스트) | 설정 | [SettingsItemComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsItemCompose.kt) |
+| swipeToNavigateMonth | 좌우 스와이프 월 이동 Modifier | 홈, 내역 | [SwipeToNavigateKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/SwipeToNavigate.kt) |
 
 ---
 

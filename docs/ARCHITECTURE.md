@@ -47,8 +47,17 @@ com.sanha.moneytalk/
 │   │
 │   ├── di/                               # Hilt DI 모듈
 │   │   ├── DatabaseModule.kt             # DB 의존성 주입
+│   │   ├── FirebaseModule.kt             # Firebase 의존성 주입 (Analytics, Crashlytics, RTDB)
 │   │   ├── NetworkModule.kt              # 네트워크 의존성 주입
 │   │   └── RepositoryModule.kt           # Repository 의존성 주입
+│   │
+│   ├── firebase/                         # Firebase 관련
+│   │   ├── AnalyticsEvent.kt             # 화면/클릭 이벤트 상수
+│   │   ├── AnalyticsHelper.kt            # Firebase Analytics 래퍼 (@Singleton)
+│   │   ├── CrashlyticsHelper.kt          # Crashlytics 래퍼
+│   │   ├── ForceUpdateChecker.kt         # 강제 업데이트 판정
+│   │   ├── PremiumConfig.kt              # 서버 설정 data class (API 키 풀, 모델 설정)
+│   │   └── PremiumManager.kt             # Firebase RTDB 설정 실시간 감시
 │   │
 │   ├── model/                            # 공통 모델
 │   │   ├── Category.kt                   # 지출 카테고리 Enum (18개)
@@ -167,7 +176,7 @@ com.sanha.moneytalk/
     └── SmsReceiver.kt                    # SMS 수신 리시버 (goAsync)
 ```
 
-**총 107개 .kt 파일**
+**총 117개 .kt 파일**
 
 ## 주요 기능
 
@@ -306,6 +315,8 @@ SMS 수신 (SmsReceiver)
 | **Network** | OkHttp | 4.12.0 |
 | **AI** | Google Generative AI (Gemini) | 0.9.0 |
 | **Cloud** | Google Drive API, Play Services Auth | v3, 21.0.0 |
+| **Analytics** | Firebase Analytics, Crashlytics | BOM |
+| **Ads** | Google AdMob (Rewarded) | - |
 | **Navigation** | Compose Navigation | 2.7.7 |
 | **Animation** | Lottie | 6.3.0 |
 | **Serialization** | Gson | 2.10.1 |
@@ -321,3 +332,4 @@ SMS 수신 (SmsReceiver)
 - minSdk: 26
 - targetSdk: 34
 - JVM Target: 17
+- R8 (ProGuard): release 빌드에서 minify + shrinkResources 활성화

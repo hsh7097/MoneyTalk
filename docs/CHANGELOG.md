@@ -5,15 +5,26 @@
 ## [Unreleased]
 
 ### Added (2026-02-18)
+- **Firebase Analytics 트래킹**: AnalyticsHelper(@Singleton) + AnalyticsEvent 상수로 화면 PV 및 클릭 이벤트 수집
+  - 화면 PV: home, history, chat, settings (LaunchedEffect 중앙 집중 방식)
+  - 클릭 이벤트: syncSms, sendChat, categoryFilter, backup, restore, themeChange (4개 ViewModel)
+- **Gemini API 키 풀링**: geminiApiKeys 배열 + 라운드로빈 분산 (PremiumManager)
+- **Gemini 모델명 원격 관리**: GeminiModelConfig 8개 모델, Firebase RTDB `/config/models/`에서 실시간 반영
 - **Firebase RTDB 기반 강제 업데이트**: ForceUpdateChecker + MainActivity 다이얼로그 (닫기 불가, 업데이트/종료)
 - **개인정보처리방침 웹 페이지**: `docs/privacy-policy.html` (한/영 전환, GitHub Pages용)
 - **docs-sync 스킬**: 작업 전/후 docs/ 문서 확인·갱신 스킬
 
 ### Changed (2026-02-18)
-- **버전 1.0.0**: versionName "1.0" → "1.0.0" 변경
-- **PremiumConfig 확장**: minVersionCode/minVersionName/forceUpdateMessage 3개 필드 추가
-- **ProGuard 규칙 추가**: Hilt/Room/Gson/Firebase/Gemini/AdMob/OkHttp 등 전체 의존성 커버
+- **ProGuard(R8) 활성화**: isMinifyEnabled=true, isShrinkResources=true (릴리스 빌드)
+- **ProGuard keep 규칙 보강**: Gson 모델 17개 keep + entity 경로 버그 수정 + Apache HTTP dontwarn
+- **Gradle JVM heap 증가**: 1024m → 2048m (R8 빌드 OOM 방지)
+- **버전 1.1.0**: versionCode=2, versionName="1.1.0" (API 키 풀링 + 모델 원격 관리)
+- **PremiumConfig 확장**: geminiApiKeys, GeminiModelConfig, minVersionCode/minVersionName/forceUpdateMessage 필드 추가
+- **BuildConfig.GEMINI_API_KEY 폐기**: PremiumManager.getGeminiApiKey()로 일원화
 - **GIT_CONVENTION.md 강화**: 커밋 본문 권장 템플릿(문제→원인→조치→검증) + Kotlin Android 특화 체크리스트
+
+### Fixed (2026-02-18)
+- **proguard-rules.pro 경로 버그**: `core.db.entity` → `core.database.entity` (실제 패키지 경로로 수정)
 
 ### Changed (2026-02-16)
 - **분류 상태 관리 안정화**: `ClassificationState`를 activeJob 기반으로 정리하고 `registerJob/completeJob/cancelIfRunning` 흐름으로 통일

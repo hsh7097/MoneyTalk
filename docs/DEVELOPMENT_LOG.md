@@ -4,6 +4,73 @@
 
 ---
 
+## 2026-02-18 - ProGuard(R8) 활성화 + Firebase Analytics 트래킹
+
+### 작업 내용
+
+#### 1. ProGuard(R8) 활성화
+- `isMinifyEnabled = true`, `isShrinkResources = true` 릴리스 빌드 설정
+- proguard-rules.pro 버그 수정: `core.db.entity` → `core.database.entity` 경로 오류
+- Gson 직렬화 모델 keep 규칙 17개 추가 (DataQueryRequest, BackupData 등)
+- Apache HTTP/javax.naming/ietf.jgss dontwarn 규칙 추가 (Google Drive API 의존)
+- Gradle JVM heap 1024m → 2048m (R8 OOM 방지)
+
+#### 2. Firebase Analytics 트래킹
+- AnalyticsHelper.kt 신규 (Hilt @Singleton, logScreenView/logClick/logEvent)
+- AnalyticsEvent.kt 신규 (화면 4종 + 클릭 7종 상수)
+- FirebaseModule에 FirebaseAnalytics DI provider 추가
+- MainActivity에서 LaunchedEffect(currentRoute)로 화면 PV 중앙 집중 트래킹
+- 4개 ViewModel에 클릭 이벤트 트래킹 (Home: syncSms, Chat: sendChat, History: categoryFilter, Settings: backup/restore/theme)
+
+### 변경 파일
+- `app/build.gradle.kts` — isMinifyEnabled=true, isShrinkResources=true
+- `app/proguard-rules.pro` — 경로 버그 수정 + Gson 모델 keep + Apache dontwarn
+- `gradle.properties` — jvmargs 2048m
+- `AnalyticsHelper.kt` — 신규
+- `AnalyticsEvent.kt` — 신규
+- `FirebaseModule.kt` — provideFirebaseAnalytics 추가
+- `MainActivity.kt` — analyticsHelper 주입, PV 트래킹
+- `HomeViewModel.kt` — analyticsHelper 주입, syncSms 이벤트
+- `ChatViewModel.kt` — analyticsHelper 주입, sendChat 이벤트
+- `HistoryViewModel.kt` — analyticsHelper 주입, categoryFilter 이벤트
+- `SettingsViewModel.kt` — analyticsHelper 주입, backup/restore/theme 이벤트
+
+---
+
+## 2026-02-18 - Firebase RTDB 원격 설정 마이그레이션
+
+### 작업 내용
+
+#### 1. Gemini API 키 풀링
+- PremiumConfig에 `geminiApiKeys: List<String>` 배열 필드 추가
+- PremiumManager에 라운드로빈 방식 `getGeminiApiKey()` 구현 (AtomicInteger 카운터)
+- 기존 단일 키(`geminiApiKey`) 하위호환 유지
+
+#### 2. Gemini 모델명 원격 관리
+- GeminiModelConfig data class 신설 (8개 모델: queryAnalyzer, financialAdvisor, summary 등)
+- PremiumConfig에 `modelConfig: GeminiModelConfig` 필드 추가
+- PremiumManager에서 Firebase RTDB `/config/models/` 파싱
+- GeminiRepository/CategoryClassifier/SmsExtractor 등 11개 파일에서 하드코딩 모델명 → 원격 설정 참조로 전환
+
+#### 3. BuildConfig 정리 + 버전 업
+- BuildConfig.GEMINI_API_KEY 폐기 (local.properties에서 제거)
+- 버전 1.1.0 (versionCode=2, versionName="1.1.0")
+
+### 변경 파일
+- `PremiumConfig.kt` — geminiApiKeys, GeminiModelConfig 추가
+- `PremiumManager.kt` — 키 풀링 + 모델명 파싱
+- `GeminiRepositoryImpl.kt` — 원격 모델명 사용
+- `CategoryClassifierServiceImpl.kt` — 원격 모델명 사용
+- `GeminiCategoryRepositoryImpl.kt` — 원격 모델명 사용
+- `GeminiSmsExtractor.kt` — 원격 모델명 사용
+- `SmsEmbeddingService.kt` — 원격 모델명 사용
+- `HomeViewModel.kt` — 원격 모델명 사용
+- `app/build.gradle.kts` — 버전 1.1.0, GEMINI_API_KEY 제거
+- `proguard-rules.pro` — GeminiModelConfig keep 규칙
+- `FirebaseModule.kt` — FirebaseDatabase DI 추가
+
+---
+
 ## 2026-02-18 - 알파 배포 준비
 
 ### 작업 내용
@@ -414,6 +481,9 @@ app/src/main/java/com/sanha/moneytalk/
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|-----------|
+| 2026-02-18 | 1.1.0 | ProGuard(R8) 활성화 + Firebase Analytics 트래킹 |
+| 2026-02-18 | 1.1.0 | Firebase RTDB 원격 설정 (API 키 풀링 + 모델명 관리) |
+| 2026-02-18 | 1.0.0 | 알파 배포 준비 (강제 업데이트, 개인정보처리방침, ProGuard 규칙) |
 | 2026-02-15 | - | 문서 갱신 (ARCHITECTURE, AI_CONTEXT, AI_HANDOFF, PROJECT_CONTEXT 등) |
 | 2026-02-14~ | 0.7.0 | safe-commit 스킬, 홈→내역 네비게이션, AI 인사이트 개선, 가맹점 일괄 업데이트, Compose Stability, 리팩토링 |
 | 2026-02-14 | 0.6.0 | Phase 2 완료 + History 필터 초기화 버튼 |
