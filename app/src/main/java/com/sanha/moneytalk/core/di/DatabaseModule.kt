@@ -12,7 +12,6 @@ import com.sanha.moneytalk.core.database.dao.OwnedCardDao
 import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
-import com.sanha.moneytalk.BuildConfig
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -26,9 +25,8 @@ import javax.inject.Singleton
  * Room 데이터베이스와 모든 DAO를 싱글톤으로 제공합니다.
  * 앱 전체에서 하나의 DB 인스턴스를 공유하여 일관성을 보장합니다.
  *
- * 마이그레이션 전략:
- * - 릴리스: 명시적 Migration만 사용 (데이터 보존)
- * - 디버그: fallbackToDestructiveMigration() 허용 (개발 편의)
+ * DB v1: Entity 어노테이션 기반으로 전체 스키마를 생성합니다.
+ * 향후 스키마 변경 시 버전 업 + Migration 추가가 필요합니다.
  *
  * @see AppDatabase
  */
@@ -48,19 +46,7 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
-        )
-            .addMigrations(
-                AppDatabase.MIGRATION_1_2,
-                AppDatabase.MIGRATION_2_3,
-                AppDatabase.MIGRATION_3_4,
-                AppDatabase.MIGRATION_4_5
-            )
-            .apply {
-                if (BuildConfig.DEBUG) {
-                    fallbackToDestructiveMigration()
-                }
-            }
-            .build()
+        ).build()
     }
 
     /** 지출 DAO 제공 - 카드 결제 내역 CRUD */
