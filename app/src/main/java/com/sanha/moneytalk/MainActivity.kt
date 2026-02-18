@@ -46,6 +46,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.firebase.AnalyticsEvent
+import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.firebase.ForceUpdateChecker
 import com.sanha.moneytalk.core.firebase.ForceUpdateState
 import com.sanha.moneytalk.core.theme.MoneyTalkTheme
@@ -67,6 +69,8 @@ class MainActivity : ComponentActivity() {
     lateinit var settingsDataStore: SettingsDataStore
     @Inject
     lateinit var forceUpdateChecker: ForceUpdateChecker
+    @Inject
+    lateinit var analyticsHelper: AnalyticsHelper
 
     private var pendingSyncAction: (() -> Unit)? = null
     private var permissionChecked = mutableStateOf(false)
@@ -134,7 +138,8 @@ class MainActivity : ComponentActivity() {
                         checkAndRequestSmsPermission(onGranted)
                     },
                     onExitApp = { finish() },
-                    snackbarBus = snackbarBus
+                    snackbarBus = snackbarBus,
+                    analyticsHelper = analyticsHelper
                 )
             }
         }
@@ -189,7 +194,8 @@ fun MoneyTalkApp(
     onAutoSyncConsumed: () -> Unit,
     onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
     onExitApp: () -> Unit,
-    snackbarBus: AppSnackbarBus
+    snackbarBus: AppSnackbarBus,
+    analyticsHelper: AnalyticsHelper
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -199,6 +205,10 @@ fun MoneyTalkApp(
     val showBottomBar = currentRoute != Screen.Splash.route
 
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // 탭 재클릭 → 오늘 페이지로 이동 이벤트
+    val homeTabReClickEvent = remember { kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+    val historyTabReClickEvent = remember { kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
 
     // App-wide snackbar (toast-like): collect one-off events at the root
     LaunchedEffect(snackbarBus) {
@@ -210,6 +220,18 @@ fun MoneyTalkApp(
                 duration = event.duration
             )
         }
+    }
+
+    // 화면 전환 시 PV 트래킹
+    LaunchedEffect(currentRoute) {
+        val screenName = when {
+            currentRoute == Screen.Home.route -> AnalyticsEvent.SCREEN_HOME
+            currentRoute?.startsWith("history") == true -> AnalyticsEvent.SCREEN_HISTORY
+            currentRoute == Screen.Chat.route -> AnalyticsEvent.SCREEN_CHAT
+            currentRoute == Screen.Settings.route -> AnalyticsEvent.SCREEN_SETTINGS
+            else -> null
+        }
+        screenName?.let { analyticsHelper.logScreenView(it) }
     }
 
     // 뒤로가기 처리
@@ -259,6 +281,12 @@ fun MoneyTalkApp(
                                             launchSingleTop = true
                                             restoreState = true
                                         }
+                                    } else if (item.route == Screen.Home.route) {
+                                        // 홈 탭 재클릭 → 오늘 페이지로 이동
+                                        homeTabReClickEvent.tryEmit(Unit)
+                                    } else if (item.route.startsWith("history")) {
+                                        // 내역 탭 재클릭 → 오늘 페이지로 이동
+                                        historyTabReClickEvent.tryEmit(Unit)
                                     }
                                 },
                                 icon = {
@@ -315,7 +343,9 @@ fun MoneyTalkApp(
                 navController = navController,
                 onRequestSmsPermission = onRequestSmsPermission,
                 autoSyncOnStart = shouldAutoSync,
-                onAutoSyncConsumed = onAutoSyncConsumed
+                onAutoSyncConsumed = onAutoSyncConsumed,
+                homeTabReClickEvent = homeTabReClickEvent,
+                historyTabReClickEvent = historyTabReClickEvent
             )
         }
     }

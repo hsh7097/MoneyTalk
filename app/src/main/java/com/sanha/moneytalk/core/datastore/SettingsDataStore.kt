@@ -34,6 +34,7 @@ class SettingsDataStore @Inject constructor(
         private val CHAT_VOICE_HINT_SEEN = booleanPreferencesKey("chat_voice_hint_seen")
         private val SERVICE_TIER = stringPreferencesKey("service_tier")
         private val REWARD_CHAT_REMAINING = intPreferencesKey("reward_chat_remaining")
+        private val FULL_SYNC_UNLOCKED = booleanPreferencesKey("full_sync_unlocked")
     }
 
     // API 키 저장
@@ -180,5 +181,21 @@ class SettingsDataStore @Inject constructor(
 
     suspend fun getRewardChatRemaining(): Int {
         return context.dataStore.data.first()[REWARD_CHAT_REMAINING] ?: 0
+    }
+
+    // 전체 동기화 해제 여부 저장 (광고 시청 후 true)
+    suspend fun saveFullSyncUnlocked(unlocked: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[FULL_SYNC_UNLOCKED] = unlocked
+        }
+    }
+
+    // 전체 동기화 해제 여부 가져오기 (기본값: false → 3개월만 동기화)
+    val fullSyncUnlockedFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[FULL_SYNC_UNLOCKED] ?: false
+    }
+
+    suspend fun isFullSyncUnlocked(): Boolean {
+        return context.dataStore.data.first()[FULL_SYNC_UNLOCKED] ?: false
     }
 }

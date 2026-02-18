@@ -7,10 +7,14 @@ import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.firebase.AnalyticsEvent
+import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.ClassificationState
+import com.sanha.moneytalk.core.ui.component.MonthKey
+import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.util.HybridSmsClassifier
@@ -40,47 +44,48 @@ import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
 /**
- * 홈 화면 UI 상태
- *
- * @property isLoading 데이터 로딩 중 여부
- * @property isRefreshing Pull-to-Refresh 진행 중 여부
- * @property selectedYear 선택된 연도
- * @property selectedMonth 선택된 월
- * @property monthStartDay 월 시작일 (1~28, 사용자 설정)
- * @property monthlyIncome 해당 월 총 수입
- * @property monthlyExpense 해당 월 총 지출
- * @property categoryExpenses 카테고리별 지출 합계 목록
- * @property recentExpenses 최근 지출 내역 목록 (카테고리 필터용)
- * @property todayExpenses 오늘 지출 내역 (오늘 내역 섹션용)
- * @property todayIncomes 오늘 수입 내역 (오늘 내역 섹션용)
- * @property periodLabel 표시용 기간 레이블 (예: "1/25 ~ 2/24")
- * @property errorMessage 에러 메시지 (null이면 에러 없음)
- * @property isSyncing SMS 동기화 진행 중 여부
+ * 홈 화면의 페이지별(월별) 데이터.
+ * HorizontalPager의 각 페이지가 독립적으로 렌더링할 수 있도록 월별 데이터를 캡슐화.
  */
 @Stable
-data class HomeUiState(
-    val isLoading: Boolean = false,
-    val isRefreshing: Boolean = false,
-    val selectedYear: Int = DateUtils.getCurrentYear(),
-    val selectedMonth: Int = DateUtils.getCurrentMonth(),
-    val monthStartDay: Int = 1,
+data class HomePageData(
+    val isLoading: Boolean = true,
     val monthlyIncome: Int = 0,
     val monthlyExpense: Int = 0,
     val categoryExpenses: List<CategorySum> = emptyList(),
     val recentExpenses: List<ExpenseEntity> = emptyList(),
     val todayExpenses: List<ExpenseEntity> = emptyList(),
     val todayIncomes: List<IncomeEntity> = emptyList(),
-    val periodLabel: String = "",
-    val errorMessage: String? = null,
-    val isSyncing: Boolean = false,
-    // 오늘의 지출
     val todayExpense: Int = 0,
     val todayExpenseCount: Int = 0,
-    // 전월 대비
     val lastMonthExpense: Int = 0,
-    val comparisonPeriodLabel: String = "", // 예: "2/21 ~ 2/28"
-    // AI 인사이트
-    val aiInsight: String = "",
+    val comparisonPeriodLabel: String = "",
+    val periodLabel: String = "",
+    val aiInsight: String = ""
+)
+
+/**
+ * 홈 화면 UI 상태
+ *
+ * 월별 데이터는 [pageCache]에서 관리하며, 글로벌 상태만 직접 보유.
+ * HorizontalPager의 각 페이지는 pageCache[MonthKey]에서 자기 월의 데이터를 읽어 렌더링.
+ *
+ * @property pageCache 월별 페이지 데이터 캐시 (최대 3~5개)
+ * @property selectedYear 현재 선택된 연도
+ * @property selectedMonth 현재 선택된 월
+ * @property monthStartDay 월 시작일 (1~28, 사용자 설정)
+ * @property errorMessage 에러 메시지 (null이면 에러 없음)
+ * @property isSyncing SMS 동기화 진행 중 여부
+ */
+@Stable
+data class HomeUiState(
+    val pageCache: Map<MonthKey, HomePageData> = emptyMap(),
+    val isRefreshing: Boolean = false,
+    val selectedYear: Int = DateUtils.getCurrentYear(),
+    val selectedMonth: Int = DateUtils.getCurrentMonth(),
+    val monthStartDay: Int = 1,
+    val errorMessage: String? = null,
+    val isSyncing: Boolean = false,
     // 카테고리 필터 (null이면 전체 표시)
     val selectedCategory: String? = null,
     // 카테고리 분류 관련
@@ -94,7 +99,10 @@ data class HomeUiState(
     val showSyncDialog: Boolean = false,
     val syncProgress: String = "",
     val syncProgressCurrent: Int = 0,
-    val syncProgressTotal: Int = 0
+    val syncProgressTotal: Int = 0,
+    // 전체 동기화 해제 관련
+    val isFullSyncUnlocked: Boolean = false,
+    val showFullSyncAdDialog: Boolean = false
 )
 
 /**
@@ -104,7 +112,7 @@ data class HomeUiState(
  * SMS 동기화 기능을 통해 카드 결제 문자에서 자동으로 지출 내역을 추출합니다.
  *
  * 주요 기능:
- * - 월별 수입/지출/잔여 예산 표시
+ * - 월별 수입/지출/잔여 예산 표시 (페이지별 독립 캐시)
  * - 카테고리별 지출 합계 표시
  * - 최근 지출 내역 목록 표시
  * - SMS 동기화 (증분/전체)
@@ -125,7 +133,9 @@ class HomeViewModel @Inject constructor(
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
     private val geminiRepository: GeminiRepository,
     private val snackbarBus: AppSnackbarBus,
-    private val classificationState: ClassificationState
+    private val classificationState: ClassificationState,
+    private val analyticsHelper: AnalyticsHelper,
+    private val rewardAdManager: com.sanha.moneytalk.core.ad.RewardAdManager
 ) : ViewModel() {
 
     companion object {
@@ -135,11 +145,17 @@ class HomeViewModel @Inject constructor(
         /** 기본 조회 기간 (1년, 밀리초) */
         private const val ONE_YEAR_MILLIS = 365L * 24 * 60 * 60 * 1000
 
+        /** 초기 동기화 제한 기간 (3개월, 밀리초) — 전체 동기화 미해제 시 적용 */
+        private const val THREE_MONTHS_MILLIS = 90L * 24 * 60 * 60 * 1000
+
         /** 배치 처리 최소 건수 (이 이상이면 배치 처리) */
         private const val BATCH_PROCESSING_THRESHOLD = 50
 
         /** 카테고리 분류 최대 반복 횟수 */
         private const val MAX_CLASSIFICATION_ROUNDS = 3
+
+        /** 페이지 캐시 최대 허용 범위 (현재 월 ± 이 값) */
+        private const val PAGE_CACHE_RANGE = 2
 
         /**
          * 동적 진행률 업데이트 간격 계산
@@ -162,8 +178,11 @@ class HomeViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    /** 현재 실행 중인 데이터 로드 작업 (취소 가능) */
-    private var loadJob: kotlinx.coroutines.Job? = null
+    /** 광고 매니저 접근 (HomeScreen에서 Activity 기반 광고 표시에 필요) */
+    val adManager: com.sanha.moneytalk.core.ad.RewardAdManager get() = rewardAdManager
+
+    /** 페이지별 로드 Job 관리 (월별 독립 취소) */
+    private val pageLoadJobs = mutableMapOf<MonthKey, Job>()
 
     /** 마지막 AI 인사이트 생성 시 사용된 입력 데이터 해시 (동일 데이터 재생성 방지) */
     private val lastInsightInputHash = AtomicInteger(0)
@@ -174,6 +193,52 @@ class HomeViewModel @Inject constructor(
         loadSettings()
         observeDataRefreshEvents()
     }
+
+    // ========== 페이지 캐시 관리 ==========
+
+    /** 특정 월의 페이지 캐시 업데이트 */
+    private fun updatePageCache(key: MonthKey, data: HomePageData) {
+        _uiState.update { state ->
+            state.copy(pageCache = state.pageCache + (key to data))
+        }
+    }
+
+    /** 현재 월 ± PAGE_CACHE_RANGE 밖의 캐시 정리 */
+    private fun evictDistantCache(year: Int, month: Int) {
+        val currentTotal = year * 12 + month
+        _uiState.update { state ->
+            val filtered = state.pageCache.filter { (key, _) ->
+                val keyTotal = key.year * 12 + key.month
+                kotlin.math.abs(keyTotal - currentTotal) <= PAGE_CACHE_RANGE
+            }
+            state.copy(pageCache = filtered)
+        }
+    }
+
+    /** 전체 페이지 캐시 클리어 */
+    private fun clearAllPageCache() {
+        pageLoadJobs.values.forEach { it.cancel() }
+        pageLoadJobs.clear()
+        _uiState.update { it.copy(pageCache = emptyMap()) }
+    }
+
+    /** 현재 + 인접 월 데이터 로드 (공통 진입점) */
+    private fun loadCurrentAndAdjacentPages() {
+        val state = _uiState.value
+        val year = state.selectedYear
+        val month = state.selectedMonth
+
+        loadPageData(year, month)
+        val (prevY, prevM) = MonthPagerUtils.adjacentMonth(year, month, -1)
+        loadPageData(prevY, prevM)
+        val (nextY, nextM) = MonthPagerUtils.adjacentMonth(year, month, +1)
+        if (!MonthPagerUtils.isFutureYearMonth(nextY, nextM)) {
+            loadPageData(nextY, nextM)
+        }
+        evictDistantCache(year, month)
+    }
+
+    // ========== 전역 이벤트 처리 ==========
 
     /**
      * 전역 데이터 새로고침 이벤트 구독
@@ -186,21 +251,14 @@ class HomeViewModel @Inject constructor(
                     DataRefreshEvent.RefreshType.ALL_DATA_DELETED -> {
                         // 진행 중인 백그라운드 분류 작업 즉시 취소
                         classificationState.cancelIfRunning()
-                        // 수입/지출 상태를 즉시 0으로 초기화하고 데이터 새로고침
-                        _uiState.update {
-                            it.copy(
-                                monthlyIncome = 0,
-                                monthlyExpense = 0,
-                                categoryExpenses = emptyList(),
-                                recentExpenses = emptyList()
-                            )
-                        }
+                        clearAllPageCache()
                         loadSettings()
                     }
 
                     DataRefreshEvent.RefreshType.CATEGORY_UPDATED,
                     DataRefreshEvent.RefreshType.OWNED_CARD_UPDATED -> {
-                        loadData()
+                        clearAllPageCache()
+                        loadCurrentAndAdjacentPages()
                     }
                 }
             }
@@ -229,27 +287,47 @@ class HomeViewModel @Inject constructor(
                         selectedMonth = month
                     )
                 }
-                loadData()
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
+            }
+        }
+        // 전체 동기화 해제 상태 로드
+        viewModelScope.launch {
+            settingsDataStore.fullSyncUnlockedFlow.collect { unlocked ->
+                _uiState.update { it.copy(isFullSyncUnlocked = unlocked) }
             }
         }
     }
 
+    // ========== 페이지별 데이터 로드 ==========
+
     /**
-     * 홈 화면 데이터 로드
-     * 선택된 월의 수입, 지출, 카테고리별 합계, 최근 지출 내역을 조회합니다.
+     * 특정 월의 페이지 데이터 로드
+     * 해당 월의 수입, 지출, 카테고리별 합계, 오늘 내역을 조회하여 pageCache에 저장.
+     * @param year 대상 연도
+     * @param month 대상 월
+     * @param withInsight true면 AI 인사이트도 생성 (현재 월에서만 사용)
      */
-    private fun loadData() {
-        loadJob?.cancel()
-        loadJob = viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+    private fun loadPageData(year: Int, month: Int, withInsight: Boolean = false) {
+        val key = MonthKey(year, month)
+        // 이미 로드 완료된 캐시가 있으면 스킵 (스와이프 시 불필요한 재로드 방지)
+        val existing = _uiState.value.pageCache[key]
+        if (existing != null && !existing.isLoading) return
+
+        pageLoadJobs[key]?.cancel()
+        pageLoadJobs[key] = viewModelScope.launch {
+            // 캐시에 없으면 로딩 상태로 초기화
+            if (_uiState.value.pageCache[key] == null) {
+                updatePageCache(key, HomePageData(isLoading = true))
+            }
 
             try {
                 val state = _uiState.value
                 val (monthStart, monthEnd) = DateUtils.getCustomMonthPeriod(
-                    state.selectedYear, state.selectedMonth, state.monthStartDay
+                    year, month, state.monthStartDay
                 )
                 val periodLabel = DateUtils.formatCustomMonthPeriod(
-                    state.selectedYear, state.selectedMonth, state.monthStartDay
+                    year, month, state.monthStartDay
                 )
 
                 // 제외 키워드 로드 (필터링용)
@@ -300,21 +378,18 @@ class HomeViewModel @Inject constructor(
                 }
 
                 // 전월 동일 기간 지출 조회
-                // 선택 월 기준: 현재 시점이 선택 월 내라면 현재 시각, 아니면 monthEnd를 기준점으로 사용
                 val now = System.currentTimeMillis()
                 val referencePoint = if (now in monthStart..monthEnd) now else monthEnd
                 val elapsedDays = ((referencePoint - monthStart) / (24L * 60 * 60 * 1000)).toInt()
-                val prevYear = if (state.selectedMonth == 1) state.selectedYear - 1 else state.selectedYear
-                val prevMonth = if (state.selectedMonth == 1) 12 else state.selectedMonth - 1
+                val prevYear = if (month == 1) year - 1 else year
+                val prevMonth = if (month == 1) 12 else month - 1
                 val (lastMonthStart, _) = DateUtils.getCustomMonthPeriod(
                     prevYear, prevMonth, state.monthStartDay
                 )
-                // 전월 시작일 + 동일 경과일수 = 전월 동일 시점
                 val lastMonthSamePoint = lastMonthStart + (elapsedDays.toLong() * 24 * 60 * 60 * 1000)
                 val lastMonthExpenses = withContext(Dispatchers.IO) {
                     expenseRepository.getExpensesByDateRangeOnce(lastMonthStart, lastMonthSamePoint)
                 }
-                // 전월 지출에도 제외 키워드 필터 적용
                 val filteredLastMonthExpenses = if (exclusionKeywords.isEmpty()) {
                     lastMonthExpenses
                 } else {
@@ -325,28 +400,35 @@ class HomeViewModel @Inject constructor(
                 }
                 val filteredLastMonthExpense = filteredLastMonthExpenses.sumOf { it.amount }
 
-                // 비교 기간 레이블 생성 - 전월 기간 표시 (예: "1/21 ~ 1/28")
+                // 비교 기간 레이블 생성
                 val dateFormat = java.text.SimpleDateFormat("M/d", java.util.Locale.KOREA)
                 val comparisonLabel = "${dateFormat.format(java.util.Date(lastMonthStart))} ~ ${dateFormat.format(java.util.Date(lastMonthSamePoint))}"
 
-                _uiState.update {
-                    it.copy(
-                        periodLabel = periodLabel,
-                        monthlyIncome = totalIncome,
-                        todayExpense = filteredTodayExpenses.sumOf { e -> e.amount },
-                        todayExpenseCount = filteredTodayExpenses.size,
-                        todayExpenses = filteredTodayExpenses.sortedByDescending { e -> e.dateTime },
-                        todayIncomes = filteredTodayIncomes.sortedByDescending { e -> e.dateTime },
-                        lastMonthExpense = filteredLastMonthExpense,
-                        comparisonPeriodLabel = comparisonLabel
-                    )
-                }
+                // 1회성 데이터를 먼저 캐시에 저장 (Flow 수집 전)
+                // 기존 캐시가 있으면 isLoading 유지 (깜빡임 방지)
+                val existingData = _uiState.value.pageCache[key]
+                updatePageCache(key, HomePageData(
+                    isLoading = existingData == null, // 캐시 없을 때만 로딩 표시
+                    periodLabel = periodLabel,
+                    monthlyIncome = totalIncome,
+                    todayExpense = filteredTodayExpenses.sumOf { e -> e.amount },
+                    todayExpenseCount = filteredTodayExpenses.size,
+                    todayExpenses = filteredTodayExpenses.sortedByDescending { e -> e.dateTime },
+                    todayIncomes = filteredTodayIncomes.sortedByDescending { e -> e.dateTime },
+                    lastMonthExpense = filteredLastMonthExpense,
+                    comparisonPeriodLabel = comparisonLabel
+                ))
 
                 // 지출 내역은 Flow로 실시간 감지 (Room DB 변경 시 자동 업데이트)
                 var insightLoaded = false
+                // 현재 선택 월인 경우에만 AI 인사이트 생성
+                val shouldLoadInsight = withInsight ||
+                    (_uiState.value.selectedYear == year && _uiState.value.selectedMonth == month)
+
                 expenseRepository.getExpensesByDateRange(monthStart, monthEnd)
                     .catch { e ->
-                        _uiState.update { it.copy(isLoading = false, errorMessage = e.message) }
+                        updatePageCache(key, (_uiState.value.pageCache[key] ?: HomePageData())
+                            .copy(isLoading = false))
                     }
                     .collect { allExpenses ->
                         // 제외 키워드 필터 적용
@@ -359,8 +441,6 @@ class HomeViewModel @Inject constructor(
                             }
                         }
                         val totalExpense = expenses.sumOf { it.amount }
-                        // 카테고리별 합계도 필터링된 데이터 기준으로 계산
-                        // 소 카테고리(예: 배달)는 대 카테고리(예: 식비)에 합산
                         val categories = expenses
                             .groupBy { expense ->
                                 val cat = Category.fromDisplayName(expense.category)
@@ -370,19 +450,19 @@ class HomeViewModel @Inject constructor(
                                 CategorySum(category = category, total = items.sumOf { it.amount })
                             }
                             .sortedByDescending { it.total }
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                monthlyExpense = totalExpense,
-                                categoryExpenses = categories,
-                                recentExpenses = expenses.sortedByDescending { e -> e.dateTime }
-                            )
-                        }
 
-                        // AI 인사이트 생성 (loadData 호출 시 첫 emit에서만 생성, DB 변경 emit은 스킵)
-                        if (!insightLoaded) {
+                        // 현재 캐시의 1회성 데이터를 유지하면서 지출 데이터 업데이트
+                        val current = _uiState.value.pageCache[key] ?: HomePageData()
+                        updatePageCache(key, current.copy(
+                            isLoading = false,
+                            monthlyExpense = totalExpense,
+                            categoryExpenses = categories,
+                            recentExpenses = expenses.sortedByDescending { e -> e.dateTime }
+                        ))
+
+                        // AI 인사이트 생성 (현재 선택 월의 첫 emit에서만)
+                        if (shouldLoadInsight && !insightLoaded) {
                             insightLoaded = true
-                            // 이번 달 TOP 3 카테고리 기준으로 전월 동일 카테고리 금액 매칭
                             val top3 = categories.take(3)
                             val lastMonthByCategory = filteredLastMonthExpenses
                                 .groupBy { expense ->
@@ -394,6 +474,7 @@ class HomeViewModel @Inject constructor(
                                 Pair(c.category, lastMonthByCategory[c.category] ?: 0)
                             }
                             loadAiInsight(
+                                key,
                                 totalExpense,
                                 filteredLastMonthExpense,
                                 filteredTodayExpenses.sumOf { e -> e.amount },
@@ -405,29 +486,28 @@ class HomeViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(isLoading = false, errorMessage = e.message)
-                }
+                updatePageCache(key, (_uiState.value.pageCache[key] ?: HomePageData())
+                    .copy(isLoading = false))
+                _uiState.update { it.copy(errorMessage = e.message) }
             }
         }
     }
 
-    /** AI 인사이트 비동기 생성 (월 전환 시 이전 응답 무시, 입력 데이터 동일 시 스킵) */
+    /** AI 인사이트 비동기 생성 (특정 월의 pageCache에 저장) */
     private fun loadAiInsight(
+        monthKey: MonthKey,
         monthlyExpense: Int,
         lastMonthExpense: Int,
         todayExpense: Int,
         topCategories: List<Pair<String, Int>>,
         lastMonthTopCategories: List<Pair<String, Int>>
     ) {
-        // 입력 데이터 해시 비교 — 동일하면 재생성 스킵 (탭 전환/resume 시 불필요한 Gemini 호출 방지)
+        // 입력 데이터 해시 비교
         val inputHash = listOf(monthlyExpense, lastMonthExpense, todayExpense, topCategories, lastMonthTopCategories).hashCode()
-        if (inputHash == lastInsightInputHash.get() && _uiState.value.aiInsight.isNotEmpty()) return
+        val existingInsight = _uiState.value.pageCache[monthKey]?.aiInsight
+        if (inputHash == lastInsightInputHash.get() && existingInsight?.isNotEmpty() == true) return
         lastInsightInputHash.set(inputHash)
 
-        // 요청 시점의 월 정보 캡처 — 응답 도착 시 월이 바뀌었으면 무시
-        val requestMonth = _uiState.value.selectedMonth
-        val requestYear = _uiState.value.selectedYear
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val insight = geminiRepository.generateHomeInsight(
@@ -438,12 +518,13 @@ class HomeViewModel @Inject constructor(
                     lastMonthTopCategories = lastMonthTopCategories
                 )
                 if (insight != null) {
+                    // 응답 도착 시 해당 월이 아직 선택 중인지 확인
                     val currentState = _uiState.value
-                    // 응답 도착 시 월이 바뀌었으면 무시
-                    if (currentState.selectedMonth == requestMonth &&
-                        currentState.selectedYear == requestYear
+                    if (currentState.selectedYear == monthKey.year &&
+                        currentState.selectedMonth == monthKey.month
                     ) {
-                        _uiState.update { it.copy(aiInsight = insight) }
+                        val current = currentState.pageCache[monthKey] ?: return@launch
+                        updatePageCache(monthKey, current.copy(aiInsight = insight))
                     }
                 }
             } catch (e: Exception) {
@@ -451,6 +532,8 @@ class HomeViewModel @Inject constructor(
             }
         }
     }
+
+    // ========== 월 이동 ==========
 
     /** 이전 월로 이동 */
     fun previousMonth() {
@@ -462,13 +545,17 @@ class HomeViewModel @Inject constructor(
             newYear -= 1
         }
         lastInsightInputHash.set(0)
-        _uiState.update { it.copy(selectedYear = newYear, selectedMonth = newMonth, aiInsight = "") }
-        loadData()
+        _uiState.update { it.copy(selectedYear = newYear, selectedMonth = newMonth) }
+        loadCurrentAndAdjacentPages()
     }
 
-    /** 다음 월로 이동 */
+    /** 다음 월로 이동 (현재 월 이후로는 이동 불가) */
     fun nextMonth() {
         val state = _uiState.value
+        val currentYear = DateUtils.getCurrentYear()
+        val currentMonth = DateUtils.getCurrentMonth()
+        if (state.selectedYear >= currentYear && state.selectedMonth >= currentMonth) return
+
         var newYear = state.selectedYear
         var newMonth = state.selectedMonth + 1
         if (newMonth > 12) {
@@ -476,13 +563,23 @@ class HomeViewModel @Inject constructor(
             newYear += 1
         }
         lastInsightInputHash.set(0)
-        _uiState.update { it.copy(selectedYear = newYear, selectedMonth = newMonth, aiInsight = "") }
-        loadData()
+        _uiState.update { it.copy(selectedYear = newYear, selectedMonth = newMonth) }
+        loadCurrentAndAdjacentPages()
+    }
+
+    /** 특정 년/월로 이동 (HorizontalPager에서 호출) */
+    fun setMonth(year: Int, month: Int) {
+        val state = _uiState.value
+        if (state.selectedYear == year && state.selectedMonth == month) return
+        lastInsightInputHash.set(0)
+        _uiState.update { it.copy(selectedYear = year, selectedMonth = month) }
+        loadCurrentAndAdjacentPages()
     }
 
     /** 화면이 다시 표시될 때 데이터 새로고침 (LaunchedEffect에서 호출) */
     fun refreshData() {
-        loadData()
+        // 캐시를 지우지 않고 재로드 → 기존 데이터 유지하면서 갱신 (깜빡임 방지)
+        loadCurrentAndAdjacentPages()
         // resume 시 미분류 항목이 있고 분류가 진행 중이 아니면 자동 분류 시작
         tryResumeClassification()
     }
@@ -534,6 +631,7 @@ class HomeViewModel @Inject constructor(
         forceFullSync: Boolean = false,
         todayOnly: Boolean = false
     ) {
+        analyticsHelper.logClick(AnalyticsEvent.SCREEN_HOME, AnalyticsEvent.CLICK_SYNC_SMS)
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
@@ -561,9 +659,44 @@ class HomeViewModel @Inject constructor(
                     val userExcludeKeywords = smsExclusionRepository.getUserKeywords()
                     SmsParser.setUserExcludeKeywords(userExcludeKeywords)
 
+                    // 전체 동기화 해제 여부 확인
+                    val isFullSyncUnlocked = settingsDataStore.isFullSyncUnlocked()
+                    val savedSyncTimeRaw = settingsDataStore.getLastSyncTime()
+                    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.KOREA)
+
+                    // Auto Backup 복원 감지: savedSyncTime이 있지만 DB가 비어있으면 stale → 리셋
+                    // (existingSmsIds를 여기서 미리 로드 — 아래에서 중복 제거에도 재사용)
+                    val existingSmsIdsPreload = expenseRepository.getAllSmsIds()
+                    val dbExpenseCount = existingSmsIdsPreload.size
+                    val effectiveSyncTime = if (savedSyncTimeRaw > 0 && dbExpenseCount == 0) {
+                        android.util.Log.e("sanha", "⚠️ Auto Backup 감지: savedSyncTime=${sdf.format(java.util.Date(savedSyncTimeRaw))} 이지만 DB 비어있음 → 0으로 리셋")
+                        settingsDataStore.saveLastSyncTime(0L)
+                        0L
+                    } else {
+                        savedSyncTimeRaw
+                    }
+
+                    android.util.Log.e("sanha", "=== syncSmsMessages 분기 판단 ===")
+                    android.util.Log.e("sanha", "forceFullSync=$forceFullSync, todayOnly=$todayOnly")
+                    android.util.Log.e("sanha", "isFullSyncUnlocked=$isFullSyncUnlocked")
+                    android.util.Log.e("sanha", "savedSyncTimeRaw=$savedSyncTimeRaw (${if (savedSyncTimeRaw > 0) sdf.format(java.util.Date(savedSyncTimeRaw)) else "없음"})")
+                    android.util.Log.e("sanha", "effectiveSyncTime=$effectiveSyncTime (dbExpenseCount=$dbExpenseCount)")
+                    android.util.Log.e("sanha", "THREE_MONTHS_MILLIS=$THREE_MONTHS_MILLIS (${THREE_MONTHS_MILLIS / 1000 / 60 / 60 / 24}일)")
+                    android.util.Log.e("sanha", "System.currentTimeMillis()=${System.currentTimeMillis()}")
+                    android.util.Log.e("sanha", "3개월 전 시각=${sdf.format(java.util.Date(System.currentTimeMillis() - THREE_MONTHS_MILLIS))}")
+
                     // 마지막 동기화 시간 가져오기
                     val lastSyncTime = when {
-                        forceFullSync -> 0L
+                        forceFullSync -> {
+                            if (isFullSyncUnlocked) {
+                                android.util.Log.e("sanha", "→ 분기: forceFullSync + unlocked → 0L (처음부터)")
+                                0L // 전체 동기화 해제 → 처음부터
+                            } else {
+                                val t = System.currentTimeMillis() - THREE_MONTHS_MILLIS
+                                android.util.Log.e("sanha", "→ 분기: forceFullSync + locked → 3개월 전 ($t = ${sdf.format(java.util.Date(t))})")
+                                t
+                            }
+                        }
                         todayOnly -> {
                             // 오늘 자정 (00:00:00) 기준
                             val cal = java.util.Calendar.getInstance()
@@ -571,31 +704,31 @@ class HomeViewModel @Inject constructor(
                             cal.set(java.util.Calendar.MINUTE, 0)
                             cal.set(java.util.Calendar.SECOND, 0)
                             cal.set(java.util.Calendar.MILLISECOND, 0)
+                            android.util.Log.e("sanha", "→ 분기: todayOnly → ${cal.timeInMillis} (${sdf.format(cal.time)})")
                             cal.timeInMillis
                         }
 
-                        else -> settingsDataStore.getLastSyncTime()
+                        else -> {
+                            val threeMonthsAgo = System.currentTimeMillis() - THREE_MONTHS_MILLIS
+                            if (effectiveSyncTime == 0L && !isFullSyncUnlocked) {
+                                android.util.Log.e("sanha", "→ 분기: else + savedSync=0 + locked → 3개월 전 ($threeMonthsAgo = ${sdf.format(java.util.Date(threeMonthsAgo))})")
+                                threeMonthsAgo
+                            } else if (!isFullSyncUnlocked && effectiveSyncTime < threeMonthsAgo) {
+                                android.util.Log.e("sanha", "→ 분기: else + locked + saved<3개월 → 3개월 전 ($threeMonthsAgo = ${sdf.format(java.util.Date(threeMonthsAgo))})")
+                                threeMonthsAgo
+                            } else {
+                                android.util.Log.e("sanha", "→ 분기: else + 증분 → effectiveSyncTime ($effectiveSyncTime = ${if (effectiveSyncTime > 0) sdf.format(java.util.Date(effectiveSyncTime)) else "0"})")
+                                effectiveSyncTime
+                            }
+                        }
                     }
                     val currentTime = System.currentTimeMillis()
 
                     android.util.Log.e("sanha", "=== syncSmsMessages (Hybrid) 시작 ===")
+                    android.util.Log.e("sanha", "최종 lastSyncTime=$lastSyncTime, currentTime=$currentTime")
                     android.util.Log.e(
                         "sanha",
-                        "forceFullSync: $forceFullSync, todayOnly: $todayOnly, lastSyncTime: $lastSyncTime"
-                    )
-                    android.util.Log.e(
-                        "sanha",
-                        "currentTime: $currentTime, 범위: ${
-                            java.text.SimpleDateFormat(
-                                "yyyy-MM-dd HH:mm:ss",
-                                java.util.Locale.KOREA
-                            ).format(java.util.Date(lastSyncTime))
-                        } ~ ${
-                            java.text.SimpleDateFormat(
-                                "yyyy-MM-dd HH:mm:ss",
-                                java.util.Locale.KOREA
-                            ).format(java.util.Date(currentTime))
-                        }"
+                        "최종 범위: ${sdf.format(java.util.Date(lastSyncTime))} ~ ${sdf.format(java.util.Date(currentTime))}"
                     )
 
                     // 진단: todayOnly일 때 모든 메시지 provider 탐색 (신한카드 등 RCS 메시지 위치 확인)
@@ -605,13 +738,11 @@ class HomeViewModel @Inject constructor(
 
                     // ===== 성능 최적화: 인메모리 캐시 초기화 =====
                     _uiState.update { it.copy(syncProgress = "준비 중...") }
-                    val existingSmsIds = expenseRepository.getAllSmsIds() // O(1) 조회용 HashSet
+                    val existingSmsIds = existingSmsIdsPreload // 위에서 이미 로드됨
                     val existingIncomeSmsIds = incomeRepository.getAllSmsIds().toHashSet()
                     categoryClassifierService.initCategoryCache() // DB 쿼리 제거
 
                     // ===== 전체 SMS를 한 번만 읽고 지출/수입 동시 분류 =====
-                    // ContentResolver 쿼리 6회(지출3+수입3) → 3회(전체1세트)로 절반 감소
-                    // for-loop 2회(지출+수입) → 1회로 통합
                     _uiState.update { it.copy(syncProgress = "문자 내역 확인 중...") }
                     val allSmsList = if (lastSyncTime > 0) {
                         smsReader.readAllMessagesByDateRange(
@@ -622,6 +753,11 @@ class HomeViewModel @Inject constructor(
                     } else {
                         smsReader.readAllMessagesByDateRange(contentResolver, 0L, currentTime)
                     }
+
+                    android.util.Log.e("sanha", "=== SMS 읽기 결과 ===")
+                    android.util.Log.e("sanha", "allSmsList.size=${allSmsList.size}건")
+                    android.util.Log.e("sanha", "existingSmsIds.size=${existingSmsIds.size}건 (DB에 이미 존재)")
+                    android.util.Log.e("sanha", "existingIncomeSmsIds.size=${existingIncomeSmsIds.size}건")
 
                     _uiState.update {
                         it.copy(
@@ -642,8 +778,6 @@ class HomeViewModel @Inject constructor(
                     val hybridCandidates = mutableListOf<SmsMessage>()
                     val hasGeminiKey = geminiRepository.hasApiKey()
 
-                    // 동적 진행률 업데이트 간격 (SMS 건수에 따라 UI recomposition 횟수 조절)
-                    // 2만 건 기준: 50건마다 → 400회 recomposition → 500건마다 → 40회로 90% 감소
                     val progressInterval = calculateProgressInterval(allSmsList.size)
 
                     for ((smsIdx, sms) in allSmsList.withIndex()) {
@@ -658,9 +792,6 @@ class HomeViewModel @Inject constructor(
                                 }
                             }
 
-                            // ===== 성능 최적화: classifySmsType()로 지출/수입 동시 판별 =====
-                            // 기존: isCardPaymentSms() + isIncomeSms() → lowercase() 2회 + 키워드 스캔 중복
-                            // 개선: classifySmsType() → lowercase() 1회 + 공통 키워드 스캔 1회
                             val smsType = SmsParser.classifySmsType(sms.body)
 
                             // --- 지출 체크 ---
@@ -708,7 +839,7 @@ class HomeViewModel @Inject constructor(
                                 continue
                             }
 
-                            // --- 수입 체크 (classifySmsType이 수입으로 판별한 경우만) ---
+                            // --- 수입 체크 ---
                             if (smsType.isIncome) {
                                 processedSmsIds.add(sms.id)
                                 if (sms.id in existingIncomeSmsIds) continue
@@ -741,7 +872,7 @@ class HomeViewModel @Inject constructor(
                                 continue
                             }
 
-                            // --- 미분류: Hybrid 후보 (지출도 수입도 아닌 SMS) ---
+                            // --- 미분류: Hybrid 후보 ---
                             if (hasGeminiKey &&
                                 sms.id !in existingSmsIds &&
                                 sms.body.length >= 10
@@ -771,7 +902,6 @@ class HomeViewModel @Inject constructor(
                     }
                     android.util.Log.e("sanha", "통합 분류: 지출 ${regexCount}건, 수입 ${incomeCount}건 처리")
 
-                    // ===== 2~3단계: 비동기 처리할 미분류 SMS =====
                     val hybridSmsList: List<SmsMessage> = hybridCandidates
 
                     android.util.Log.e("sanha", "미분류 SMS: ${hybridSmsList.size}건 (비동기 처리 예정)")
@@ -781,18 +911,13 @@ class HomeViewModel @Inject constructor(
                         "Regex: ${regexCount}건, 수입: ${incomeCount}건, 미분류 SMS: ${hybridSmsList.size}건 (비동기), 처리된 SMS ID: ${processedSmsIds.size}건"
                     )
 
-                    // ===== 성능 최적화: 캐시 정리 =====
                     _uiState.update { it.copy(syncProgress = "정리 중...") }
                     categoryClassifierService.flushPendingMappings()
                     categoryClassifierService.clearCategoryCache()
 
-                    // 마지막 동기화 시간 저장
                     settingsDataStore.saveLastSyncTime(currentTime)
-
-                    // 오래된 패턴 정리
                     hybridSmsClassifier.cleanupStalePatterns()
 
-                    // ===== OwnedCard 자동 등록: 동기화된 지출의 카드명 수집 (중복 포함) =====
                     val allCardNames = expenseRepository.getAllCardNamesWithDuplicates()
 
                     SyncResult(
@@ -819,7 +944,7 @@ class HomeViewModel @Inject constructor(
                     }
                 }
 
-                // 벡터 DB 배치 학습 (백그라운드, 동기화 시간에 영향 없음)
+                // 벡터 DB 배치 학습 (백그라운드)
                 if (result.regexLearningData.isNotEmpty() && result.hasGeminiKey) {
                     viewModelScope.launch(Dispatchers.IO) {
                         try {
@@ -835,8 +960,9 @@ class HomeViewModel @Inject constructor(
                     }
                 }
 
-                // 데이터 새로고침
-                loadData()
+                // 데이터 새로고침 (캐시 클리어 후 재로드)
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
 
                 // 결과 메시지 생성
                 val resultMessage = when {
@@ -857,11 +983,7 @@ class HomeViewModel @Inject constructor(
                     )
                 }
 
-                // ===== 비동기 처리: Hybrid SMS 분류 + 카테고리 자동 분류 =====
-                // 로딩 다이얼로그에 표시하지 않고 백그라운드에서 처리
-                // 주의: Hybrid와 Category를 동시에 실행하면 Gemini API 경쟁 + DB 경합 → 렉 발생
-                // Hybrid가 있으면 Hybrid 완료 후 순차로 Category 실행 (내부에서 호출)
-                // Hybrid가 없으면 Category만 단독 실행
+                // 비동기 처리: Hybrid SMS 분류 + 카테고리 자동 분류
                 if (result.hybridSmsList.isNotEmpty() && result.hasGeminiKey) {
                     snackbarBus.show("백그라운드에서 카테고리를 분류하고 있습니다")
                     launchBackgroundHybridClassification(result.hybridSmsList, forceFullSync)
@@ -870,7 +992,6 @@ class HomeViewModel @Inject constructor(
                     launchBackgroundCategoryClassification()
                 }
             } catch (e: Exception) {
-                // 예외 시에도 캐시 정리
                 categoryClassifierService.clearCategoryCache()
 
                 _uiState.update {
@@ -889,7 +1010,6 @@ class HomeViewModel @Inject constructor(
 
     /**
      * Pull-to-Refresh 및 외부에서 호출 가능한 데이터 새로고침
-     * 다른 화면에서 DB 변경 시에도 호출됨
      */
     fun refresh() {
         viewModelScope.launch {
@@ -916,11 +1036,11 @@ class HomeViewModel @Inject constructor(
                     )
                 }
 
-                // loadData()가 Flow 기반이므로 새로 시작하면 자동 갱신
-                loadData()
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isLoading = false, isRefreshing = false, errorMessage = e.message)
+                    it.copy(isRefreshing = false, errorMessage = e.message)
                 }
             }
         }
@@ -936,6 +1056,37 @@ class HomeViewModel @Inject constructor(
         _uiState.update { it.copy(errorMessage = null) }
     }
 
+    // ========== 전체 동기화 해제 (리워드 광고) ==========
+
+    /** 전체 동기화 광고 다이얼로그 표시 */
+    fun showFullSyncAdDialog() {
+        _uiState.update { it.copy(showFullSyncAdDialog = true) }
+    }
+
+    /** 전체 동기화 광고 다이얼로그 닫기 */
+    fun dismissFullSyncAdDialog() {
+        _uiState.update { it.copy(showFullSyncAdDialog = false) }
+    }
+
+    /**
+     * 전체 동기화 해제 (광고 시청 완료 후 호출)
+     * DataStore에 해제 상태 저장 후 전체 동기화 실행
+     */
+    fun unlockFullSync(contentResolver: ContentResolver) {
+        viewModelScope.launch {
+            settingsDataStore.saveFullSyncUnlocked(true)
+            _uiState.update { it.copy(isFullSyncUnlocked = true, showFullSyncAdDialog = false) }
+            snackbarBus.show("전체 동기화가 해제되었습니다. 전체 문자를 가져옵니다.")
+            // 전체 동기화 실행
+            syncSmsMessages(contentResolver, forceFullSync = true)
+        }
+    }
+
+    /** 전체 동기화 해제용 광고 준비 */
+    fun preloadFullSyncAd() {
+        rewardAdManager.preloadAd()
+    }
+
     /**
      * 미분류 항목을 Gemini로 일괄 분류
      */
@@ -946,7 +1097,8 @@ class HomeViewModel @Inject constructor(
                     categoryClassifierService.classifyUnclassifiedExpenses()
                 }
                 if (count > 0) {
-                    loadData()
+                    clearAllPageCache()
+                    loadCurrentAndAdjacentPages()
                 }
                 onResult(count)
             } catch (e: Exception) {
@@ -972,8 +1124,6 @@ class HomeViewModel @Inject constructor(
 
     /**
      * Hybrid SMS 분류를 백그라운드에서 비동기 처리
-     * Tier 2~3(벡터+LLM) 분류 → 추가 결제건 저장 → 카테고리 자동 분류 → 토스트 알림
-     * 로딩 다이얼로그에 표시하지 않음
      */
     private fun launchBackgroundHybridClassification(
         hybridSmsList: List<SmsMessage>,
@@ -987,7 +1137,6 @@ class HomeViewModel @Inject constructor(
                 val existingSmsIds = expenseRepository.getAllSmsIds()
 
                 if (forceFullSync || hybridSmsList.size > BATCH_PROCESSING_THRESHOLD) {
-                    // 배치 모드
                     val batchData = hybridSmsList.map { sms ->
                         SmsBatchProcessor.SmsData(
                             id = sms.id,
@@ -1038,7 +1187,6 @@ class HomeViewModel @Inject constructor(
                         }
                     }
                 } else {
-                    // 소량 배치 모드
                     try {
                         val batchInput = hybridSmsList.map { sms ->
                             Triple(sms.body, sms.date, sms.address)
@@ -1081,7 +1229,6 @@ class HomeViewModel @Inject constructor(
                     }
                 }
 
-                // 남은 배치 저장
                 if (expenseBatch.isNotEmpty()) {
                     expenseRepository.insertAll(expenseBatch)
                 }
@@ -1089,16 +1236,14 @@ class HomeViewModel @Inject constructor(
                 android.util.Log.d("HomeViewModel", "백그라운드 Hybrid 분류 완료: ${hybridCount}건 추가")
 
                 if (hybridCount > 0) {
-                    // 데이터 변경 → UI 새로고침 + 토스트
                     withContext(Dispatchers.Main) {
-                        loadData()
+                        clearAllPageCache()
+                        loadCurrentAndAdjacentPages()
                         _uiState.update {
                             it.copy(errorMessage = "${hybridCount}건의 추가 지출이 발견되었습니다")
                         }
                     }
 
-                    // 추가된 결제건에 대해 카테고리 분류도 비동기 실행
-                    // (현재 Job 종료 시 completeJob으로 running 상태가 해제됨)
                     launchBackgroundCategoryClassificationInternal()
                 }
             } catch (e: CancellationException) {
@@ -1117,7 +1262,6 @@ class HomeViewModel @Inject constructor(
 
     /**
      * 카테고리 자동 분류를 백그라운드에서 실행 (얼럿 없이 자동)
-     * 동기화 완료 후 호출됨
      */
     private fun launchBackgroundCategoryClassification() {
         val job = viewModelScope.launch(Dispatchers.IO) {
@@ -1135,10 +1279,6 @@ class HomeViewModel @Inject constructor(
 
     /**
      * 카테고리 자동 분류 내부 로직 (IO 디스패처에서 실행)
-     *
-     * 2-phase 전략:
-     * Phase 1: 상위 50개 가게(총액 기준)만 빠르게 분류 → 즉시 UI 반영
-     * Phase 2: 나머지를 백그라운드에서 전체 분류 (최대 3라운드)
      */
     private suspend fun launchBackgroundCategoryClassificationInternal() {
         try {
@@ -1150,19 +1290,18 @@ class HomeViewModel @Inject constructor(
 
             android.util.Log.d("HomeViewModel", "백그라운드 카테고리 자동 분류 시작: ${count}건")
 
-            // ===== Phase 1: 상위 50개 가게 빠르게 분류 =====
             val phase1Count = categoryClassifierService.classifyUnclassifiedExpenses(
                 maxStoreCount = 50
             )
 
             if (phase1Count > 0) {
                 withContext(Dispatchers.Main) {
-                    loadData()
+                    clearAllPageCache()
+                    loadCurrentAndAdjacentPages()
                     _uiState.update { it.copy(errorMessage = "${phase1Count}건의 카테고리가 정리되었습니다") }
                 }
             }
 
-            // ===== Phase 2: 나머지 전체 분류 =====
             val remainingCount = categoryClassifierService.getUnclassifiedCount()
             if (remainingCount > 0) {
                 android.util.Log.d("HomeViewModel", "Phase 2: 남은 ${remainingCount}건 전체 분류 시작")
@@ -1186,7 +1325,8 @@ class HomeViewModel @Inject constructor(
                         "카테고리 정리가 완료되었습니다"
                     }
                     withContext(Dispatchers.Main) {
-                        loadData()
+                        clearAllPageCache()
+                        loadCurrentAndAdjacentPages()
                         _uiState.update { it.copy(errorMessage = message) }
                     }
                 }
@@ -1202,7 +1342,6 @@ class HomeViewModel @Inject constructor(
 
     /**
      * 동기화 완료 후 미분류 항목 확인하고 분류 다이얼로그 표시
-     * (설정에서 수동으로 호출할 때만 사용)
      */
     fun checkUnclassifiedAfterSync() {
         viewModelScope.launch {
@@ -1220,9 +1359,6 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 분류 다이얼로그 닫기
-     */
     fun dismissClassifyDialog() {
         _uiState.update { it.copy(showClassifyDialog = false) }
     }
@@ -1269,7 +1405,8 @@ class HomeViewModel @Inject constructor(
                     )
                 }
 
-                loadData()
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
 
                 val finalRemaining = withContext(Dispatchers.IO) {
                     categoryClassifierService.getUnclassifiedCount()
@@ -1304,9 +1441,6 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Gemini API 키 존재 여부 확인
-     */
     fun hasGeminiApiKey(callback: (Boolean) -> Unit) {
         viewModelScope.launch {
             val hasKey = withContext(Dispatchers.IO) {
@@ -1318,7 +1452,6 @@ class HomeViewModel @Inject constructor(
 
     /**
      * 특정 지출의 카테고리 변경
-     * 동일 가게명의 모든 지출을 일괄 변경 + 벡터 학습 + 유사 가게 전파
      */
     fun updateExpenseCategory(storeName: String, newCategory: String) {
         viewModelScope.launch {
@@ -1329,7 +1462,8 @@ class HomeViewModel @Inject constructor(
                         newCategory
                     )
                 }
-                loadData()
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
             } catch (e: Exception) {
                 android.util.Log.e("HomeViewModel", "카테고리 변경 실패: ${e.message}")
             }
@@ -1343,7 +1477,8 @@ class HomeViewModel @Inject constructor(
                     expenseRepository.delete(expense)
                 }
                 _uiState.update { it.copy(errorMessage = "지출이 삭제되었습니다") }
-                loadData()
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "삭제 실패: ${e.message}") }
             }
@@ -1356,7 +1491,8 @@ class HomeViewModel @Inject constructor(
                 withContext(Dispatchers.IO) {
                     expenseRepository.updateMemo(expenseId, memo?.ifBlank { null })
                 }
-                loadData()
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "메모 저장 실패: ${e.message}") }
             }

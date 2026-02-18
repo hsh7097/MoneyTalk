@@ -4,16 +4,51 @@
 
 ## [Unreleased]
 
+### Added (2026-02-19)
+- **빈 상태 전체 동기화 CTA**: 3개월 이전 빈 페이지에서 "광고 보고 전체 데이터 가져오기" CTA 표시 (Home/History)
+- **FullSyncCtaSection 공용 Composable**: 전체 동기화 해제 CTA 공통 컴포넌트
+- **탭 재클릭 → 오늘 페이지 이동**: 홈/내역 탭 재클릭 시 현재 월 페이지로 animateScrollToPage
+- **HorizontalPager 월별 독립 페이지 캐시**: Home/History 화면에 beyondViewportPageCount=1 기반 페이지별 캐시 적용
+- **MonthPagerUtils 유틸**: MonthKey, pageToYearMonth, adjacentMonth, isFutureMonth
+- **HomePageContent Composable 분리**: HorizontalPager 내부 렌더링 단위 추출
+- **초기 동기화 3개월 제한**: 첫 동기화 시 최근 3개월만 읽기 (THREE_MONTHS_MILLIS=90일)
+- **리워드 광고 전체 동기화 해제**: 광고 시청 후 FULL_SYNC_UNLOCKED=true → 전체 기간 동기화 가능
+- **전체 동기화 해제 다이얼로그**: HomeScreen/HistoryScreen에 광고 안내 AlertDialog
+
+### Changed (2026-02-19)
+- **DonutChartCompose**: 불필요한 rotate 애니메이션 제거 (즉시 렌더링), displayLabel 추가
+- **SwipeToNavigate 제거**: HorizontalPager 네이티브 스와이프로 대체
+- **광고 로드/표시 실패 시 보상 처리**: Home/History/Chat 모든 onFailed에서 보상 지급 (앱 이슈 = 유저 책임 아님)
+- **홈 새로고침 깜빡임 제거**: refreshData()에서 캐시 클리어 제거 + isLoading 조건부 설정
+- **"오늘 문자만 동기화" 메뉴 제거**: HomeScreen 새로고침 드롭다운에서 삭제
+
+### Fixed (2026-02-19)
+- **Android Auto Backup 복원 감지**: 앱 재설치 시 DataStore lastSyncTime이 복원되어 동기화 범위가 잘못되는 버그 수정
+- **DataStore 백업 제외**: backup_rules.xml, data_extraction_rules.xml에서 DataStore preferences 백업 제외
+- **내역 수입 0원 표시**: HistoryHeader에서 수입이 0일 때 섹션이 사라지는 버그 수정
+- **SMS 100자 초과 필터 누락**: HybridSmsClassifier.batchClassify() Step 2에서 100자 초과 SMS가 Vector/LLM으로 전달되던 문제 수정
+
 ### Added (2026-02-18)
+- **Firebase Analytics 트래킹**: AnalyticsHelper(@Singleton) + AnalyticsEvent 상수로 화면 PV 및 클릭 이벤트 수집
+  - 화면 PV: home, history, chat, settings (LaunchedEffect 중앙 집중 방식)
+  - 클릭 이벤트: syncSms, sendChat, categoryFilter, backup, restore, themeChange (4개 ViewModel)
+- **Gemini API 키 풀링**: geminiApiKeys 배열 + 라운드로빈 분산 (PremiumManager)
+- **Gemini 모델명 원격 관리**: GeminiModelConfig 8개 모델, Firebase RTDB `/config/models/`에서 실시간 반영
 - **Firebase RTDB 기반 강제 업데이트**: ForceUpdateChecker + MainActivity 다이얼로그 (닫기 불가, 업데이트/종료)
 - **개인정보처리방침 웹 페이지**: `docs/privacy-policy.html` (한/영 전환, GitHub Pages용)
 - **docs-sync 스킬**: 작업 전/후 docs/ 문서 확인·갱신 스킬
 
 ### Changed (2026-02-18)
-- **버전 1.0.0**: versionName "1.0" → "1.0.0" 변경
-- **PremiumConfig 확장**: minVersionCode/minVersionName/forceUpdateMessage 3개 필드 추가
-- **ProGuard 규칙 추가**: Hilt/Room/Gson/Firebase/Gemini/AdMob/OkHttp 등 전체 의존성 커버
+- **ProGuard(R8) 활성화**: isMinifyEnabled=true, isShrinkResources=true (릴리스 빌드)
+- **ProGuard keep 규칙 보강**: Gson 모델 17개 keep + entity 경로 버그 수정 + Apache HTTP dontwarn
+- **Gradle JVM heap 증가**: 1024m → 2048m (R8 빌드 OOM 방지)
+- **버전 1.1.0**: versionCode=2, versionName="1.1.0" (API 키 풀링 + 모델 원격 관리)
+- **PremiumConfig 확장**: geminiApiKeys, GeminiModelConfig, minVersionCode/minVersionName/forceUpdateMessage 필드 추가
+- **BuildConfig.GEMINI_API_KEY 폐기**: PremiumManager.getGeminiApiKey()로 일원화
 - **GIT_CONVENTION.md 강화**: 커밋 본문 권장 템플릿(문제→원인→조치→검증) + Kotlin Android 특화 체크리스트
+
+### Fixed (2026-02-18)
+- **proguard-rules.pro 경로 버그**: `core.db.entity` → `core.database.entity` (실제 패키지 경로로 수정)
 
 ### Changed (2026-02-16)
 - **분류 상태 관리 안정화**: `ClassificationState`를 activeJob 기반으로 정리하고 `registerJob/completeJob/cancelIfRunning` 흐름으로 통일

@@ -11,6 +11,8 @@ import com.sanha.moneytalk.core.database.AppDatabase
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.firebase.AnalyticsEvent
+import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.theme.ThemeMode
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.ClassificationState
@@ -133,7 +135,8 @@ class SettingsViewModel @Inject constructor(
     private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
     private val snackbarBus: AppSnackbarBus,
-    private val classificationState: ClassificationState
+    private val classificationState: ClassificationState,
+    private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
 
     companion object {
@@ -241,6 +244,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun saveThemeMode(mode: ThemeMode) {
+        analyticsHelper.logClick(AnalyticsEvent.SCREEN_SETTINGS, AnalyticsEvent.CLICK_THEME_CHANGE)
         viewModelScope.launch {
             settingsDataStore.saveThemeMode(mode.name)
         }
@@ -352,6 +356,7 @@ class SettingsViewModel @Inject constructor(
      * 데이터 백업 준비 (필터 적용)
      */
     fun prepareBackup() {
+        analyticsHelper.logClick(AnalyticsEvent.SCREEN_SETTINGS, AnalyticsEvent.CLICK_BACKUP)
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
@@ -448,6 +453,7 @@ class SettingsViewModel @Inject constructor(
      * 백업 파일에서 복원
      */
     fun importBackup(context: Context, uri: Uri) {
+        analyticsHelper.logClick(AnalyticsEvent.SCREEN_SETTINGS, AnalyticsEvent.CLICK_RESTORE)
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {

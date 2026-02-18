@@ -9,6 +9,8 @@ import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.firebase.AnalyticsEvent
+import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.ActionType
@@ -99,7 +101,8 @@ class ChatViewModel @Inject constructor(
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
     private val categoryReferenceProvider: CategoryReferenceProvider,
     private val rewardAdManager: RewardAdManager,
-    private val premiumManager: PremiumManager
+    private val premiumManager: PremiumManager,
+    private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -383,7 +386,8 @@ class ChatViewModel @Inject constructor(
             activity = activity,
             onRewarded = { onRewardAdWatched() },
             onFailed = {
-                _uiState.update { it.copy(showRewardAdDialog = false, pendingMessage = null) }
+                // 광고 로드/표시 실패는 앱/광고 이슈 → 유저 책임 아님 → 보상 처리
+                onRewardAdWatched()
             }
         )
     }
@@ -395,6 +399,7 @@ class ChatViewModel @Inject constructor(
         if (message.isBlank()) return
         if (sendMutex.isLocked) return  // 이미 처리 중이면 무시
 
+        analyticsHelper.logClick(AnalyticsEvent.SCREEN_CHAT, AnalyticsEvent.CLICK_SEND_CHAT)
         viewModelScope.launch {
             // 리워드 광고 체크: 활성 상태이고 잔여 횟수가 0이면 광고 다이얼로그 표시
             if (rewardAdManager.isAdRequired()) {

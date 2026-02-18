@@ -202,6 +202,22 @@ class RewardAdManager @Inject constructor(
     }
 
     /**
+     * 전체 동기화 해제 (광고 시청 완료 후 호출)
+     * DataStore에 전체 동기화 해제 상태를 저장합니다.
+     */
+    suspend fun unlockFullSync() {
+        settingsDataStore.saveFullSyncUnlocked(true)
+        Log.d(TAG, "전체 동기화 해제 완료 (광고 시청 보상)")
+    }
+
+    /**
+     * 전체 동기화가 이미 해제되었는지 확인
+     */
+    suspend fun isFullSyncUnlocked(): Boolean {
+        return settingsDataStore.isFullSyncUnlocked()
+    }
+
+    /**
      * 리워드 광고 기능이 활성화되어 있는지 확인
      */
     fun isRewardAdEnabled(): Boolean {

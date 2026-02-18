@@ -174,15 +174,22 @@ fun PeriodSummaryCard(
                 )
             }
 
+            val isCurrentMonth = year >= DateUtils.getCurrentYear() &&
+                month >= DateUtils.getCurrentMonth()
             IconButton(
                 onClick = onNextMonth,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(28.dp),
+                enabled = !isCurrentMonth
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = stringResource(R.string.home_next_month),
                     modifier = Modifier.size(28.dp),
-                    tint = MaterialTheme.colorScheme.onSurface
+                    tint = if (isCurrentMonth) {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
                 )
             }
         }
@@ -212,31 +219,29 @@ fun PeriodSummaryCard(
                     textAlign = TextAlign.End
                 )
             }
-            // 수입
-            if (totalIncome > 0) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.home_income),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(28.dp),
-                        textAlign = TextAlign.End
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        modifier = Modifier.widthIn(min = 120.dp),
-                        text = stringResource(
-                            R.string.common_won,
-                            numberFormat.format(totalIncome)
-                        ),
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.sp),
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.moneyTalkColors.income,
-                        textAlign = TextAlign.End
-                    )
-                }
+            // 수입 (0원이어도 항상 표시)
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.home_income),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(28.dp),
+                    textAlign = TextAlign.End
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    modifier = Modifier.widthIn(min = 120.dp),
+                    text = stringResource(
+                        R.string.common_won,
+                        numberFormat.format(totalIncome)
+                    ),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.sp),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.moneyTalkColors.income,
+                    textAlign = TextAlign.End
+                )
             }
         }
     }

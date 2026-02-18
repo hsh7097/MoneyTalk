@@ -11,6 +11,7 @@ import com.sanha.moneytalk.feature.history.ui.HistoryScreen
 import com.sanha.moneytalk.feature.home.ui.HomeScreen
 import com.sanha.moneytalk.feature.settings.ui.SettingsScreen
 import com.sanha.moneytalk.feature.splash.ui.SplashScreen
+import kotlinx.coroutines.flow.SharedFlow
 
 /** 앱 전체 네비게이션 그래프. 스플래시, 홈, 내역, 채팅, 설정 화면 간 라우팅 정의 */
 @Composable
@@ -19,7 +20,9 @@ fun NavGraph(
     onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
     autoSyncOnStart: Boolean = false,
     onAutoSyncConsumed: () -> Unit = {},
-    showSplash: Boolean = true
+    showSplash: Boolean = true,
+    homeTabReClickEvent: SharedFlow<Unit>? = null,
+    historyTabReClickEvent: SharedFlow<Unit>? = null
 ) {
     NavHost(
         navController = navController,
@@ -40,6 +43,7 @@ fun NavGraph(
                 onRequestSmsPermission = onRequestSmsPermission,
                 autoSyncOnStart = autoSyncOnStart,
                 onAutoSyncConsumed = onAutoSyncConsumed,
+                homeTabReClickEvent = homeTabReClickEvent,
                 onNavigateToHistory = { category ->
                     navController.navigate(Screen.History.createRoute(category)) {
                         popUpTo(Screen.Home.route) { saveState = true }
@@ -61,7 +65,10 @@ fun NavGraph(
             )
         ) { backStackEntry ->
             val category = backStackEntry.arguments?.getString("category")
-            HistoryScreen(filterCategory = category)
+            HistoryScreen(
+                filterCategory = category,
+                historyTabReClickEvent = historyTabReClickEvent
+            )
         }
 
         composable(Screen.Chat.route) {

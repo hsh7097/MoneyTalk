@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-18
+> **최종 갱신**: 2026-02-19
 
 ---
 
@@ -73,8 +73,43 @@
 - ProGuard 규칙 추가 (Hilt/Room/Gson/Firebase/Gemini/AdMob 등)
 - GIT_CONVENTION.md에 커밋 본문 템플릿 + Kotlin Android 체크리스트 추가
 
+**Firebase RTDB 원격 설정 마이그레이션**: ✅ 완료 (2026-02-18)
+- Gemini API 키 풀링 (geminiApiKeys 배열 + 라운드로빈 분산)
+- Gemini 모델명 원격 관리 (GeminiModelConfig 8개 모델, Firebase RTDB `/config/models/`)
+- BuildConfig.GEMINI_API_KEY 폐기 → PremiumManager.getGeminiApiKey() 일원화
+- 버전 1.1.0 (versionCode=2)
+
+**ProGuard(R8) 활성화 + Firebase Analytics**: ✅ 완료 (2026-02-18)
+- R8 minification + resource shrinking 활성화 (릴리스 빌드)
+- ProGuard keep 규칙 보강 (Gson 모델 17개, Apache HTTP dontwarn, entity 경로 버그 수정)
+- Firebase Analytics 화면 PV 트래킹 (LaunchedEffect 중앙 집중 방식)
+- 클릭 이벤트 트래킹 (Home/Chat/History/Settings 4개 ViewModel)
+- AnalyticsHelper + AnalyticsEvent 신규 파일, FirebaseModule에 Analytics DI 추가
+- Gradle JVM heap 1024m → 2048m (R8 OOM 방지)
+
+**HorizontalPager pageCache + 동기화 제한**: ✅ 완료 (2026-02-19)
+- HorizontalPager beyondViewportPageCount=1 기반 월별 독립 페이지 캐시 (Home/History)
+- MonthPagerUtils 유틸 (MonthKey, adjacentMonth, isFutureMonth)
+- HomePageContent Composable 분리 (HorizontalPager 내부 렌더링)
+- SwipeToNavigate 제거 → HorizontalPager 네이티브 스와이프 대체
+- DonutChartCompose 애니메이션 제거 + displayLabel 추가
+- SMS 100자 초과 필터를 HybridSmsClassifier batchClassify()에도 적용
+- 초기 동기화 3개월 제한 + 리워드 광고 시청 후 전체 동기화 해제
+- SettingsDataStore FULL_SYNC_UNLOCKED 키, RewardAdManager 전체 동기화 해제 메서드
+
+**UX 개선 + 버그 수정 + CTA**: ✅ 완료 (2026-02-19)
+- Android Auto Backup 복원 감지 (DataStore lastSyncTime stale → 0L 리셋)
+- DataStore preferences 백업 제외 (backup_rules.xml, data_extraction_rules.xml)
+- 홈/내역 탭 재클릭 시 오늘 페이지로 이동 (SharedFlow 이벤트)
+- 홈 새로고침 깜빡임 수정 (캐시 클리어 제거 + 조건부 isLoading)
+- "오늘 문자만 동기화" 메뉴 제거
+- 내역 수입 0원 표시 (조건 제거)
+- 빈 상태 "광고 보고 전체 데이터 가져오기" CTA (FullSyncCtaSection 공용 Composable)
+- 광고 로드/표시 실패 시 보상 처리 (Home/History/Chat onFailed → 앱 이슈 = 유저 책임 아님)
+
 ### 대기 중인 작업
 
+- `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지
 - GitHub Pages 설정 (Settings → Pages → `/docs` 디렉토리) — 개인정보처리방침 URL 활성화용
 - Google Play Console 알파 트랙 AAB 업로드 + SMS 권한 선언 양식 제출
 
@@ -135,6 +170,11 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-19 | 빈 상태 CTA + 광고 실패 보상 + 탭 재클릭 + Auto Backup 수정 + 깜빡임 수정 | 완료 |
+| 2026-02-19 | HorizontalPager pageCache + 3개월 동기화 제한 + 리워드 광고 전체 해제 | 완료 |
+| 2026-02-19 | SMS 100자 초과 필터 HybridSmsClassifier 적용 | 완료 |
+| 2026-02-18 | ProGuard(R8) 활성화 + Firebase Analytics PV/클릭 트래킹 | 완료 |
+| 2026-02-18 | Firebase RTDB 원격 설정 (API 키 풀링 + 모델명 관리) + 버전 1.1.0 | 완료 |
 | 2026-02-18 | 알파 배포 준비 (강제 업데이트, 개인정보처리방침, ProGuard, 커밋 가이드) | 완료 |
 | 2026-02-17 | Google AdMob 리워드 광고 + Firebase Crashlytics + Release 서명 | 완료 |
 | 2026-02-16 | 분류 Job 경합 안정화 + lint 이슈 정리 + 문서 동기화 | 완료 |
@@ -171,6 +211,8 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | [`PremiumConfig.kt`](../app/src/main/java/com/sanha/moneytalk/core/firebase/PremiumConfig.kt) | 서버 설정 data class (9개 필드) |
 | [`ForceUpdateChecker.kt`](../app/src/main/java/com/sanha/moneytalk/core/firebase/ForceUpdateChecker.kt) | versionCode 비교 기반 강제 업데이트 판정 |
 | [`CrashlyticsHelper.kt`](../app/src/main/java/com/sanha/moneytalk/core/firebase/CrashlyticsHelper.kt) | Crashlytics 래퍼 |
+| [`AnalyticsHelper.kt`](../app/src/main/java/com/sanha/moneytalk/core/firebase/AnalyticsHelper.kt) | Firebase Analytics 래퍼 (@Singleton) |
+| [`AnalyticsEvent.kt`](../app/src/main/java/com/sanha/moneytalk/core/firebase/AnalyticsEvent.kt) | 화면/클릭 이벤트 상수 |
 
 ### 데이터 레이어
 
@@ -231,3 +273,5 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | [`TransactionGroupHeaderInfo.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/header/TransactionGroupHeaderInfo.kt) | 그룹 헤더 Contract |
 | [`SegmentedTabRowCompose.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/tab/SegmentedTabRowCompose.kt) | 탭 버튼 (아이콘 지원) |
 | [`SegmentedTabInfo.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/tab/SegmentedTabInfo.kt) | 탭 Contract |
+| [`MonthPagerUtils.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/MonthPagerUtils.kt) | HorizontalPager 월별 유틸 (MonthKey, adjacentMonth) |
+| [`FullSyncCtaSection.kt`](../app/src/main/java/com/sanha/moneytalk/core/ui/component/FullSyncCtaSection.kt) | 전체 동기화 해제 CTA (빈 상태 공용) |

@@ -39,10 +39,31 @@
 -keep class * implements com.google.gson.JsonDeserializer { *; }
 # Keep model classes used with Gson
 -keep class com.sanha.moneytalk.core.firebase.PremiumConfig { *; }
+-keep class com.sanha.moneytalk.core.firebase.GeminiModelConfig { *; }
+# Gemini API 응답 파싱 모델 (DataQueryParser.kt)
+-keep class com.sanha.moneytalk.core.util.DataQueryRequest { *; }
+-keep class com.sanha.moneytalk.core.util.DataQuery { *; }
+-keep class com.sanha.moneytalk.core.util.DataAction { *; }
+-keep class com.sanha.moneytalk.core.util.AnalyticsFilter { *; }
+-keep class com.sanha.moneytalk.core.util.AnalyticsMetric { *; }
+-keep enum com.sanha.moneytalk.core.util.QueryType { *; }
+-keep enum com.sanha.moneytalk.core.util.ActionType { *; }
+# 백업/복원 모델 (DataBackupManager.kt)
+-keep class com.sanha.moneytalk.core.util.BackupData { *; }
+-keep class com.sanha.moneytalk.core.util.BackupSettings { *; }
+-keep class com.sanha.moneytalk.core.util.ExpenseBackup { *; }
+-keep class com.sanha.moneytalk.core.util.IncomeBackup { *; }
+-keep class com.sanha.moneytalk.core.util.ExportFilter { *; }
+-keep enum com.sanha.moneytalk.core.util.ExportFormat { *; }
+# @SerializedName 어노테이션 필드 보존
+-keepclassmembers class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
 
 # ---------- Firebase ----------
 -keep class com.google.firebase.** { *; }
 -dontwarn com.google.firebase.**
+-keep class com.google.firebase.analytics.** { *; }
 -keep class com.google.android.gms.** { *; }
 -dontwarn com.google.android.gms.**
 
@@ -59,6 +80,11 @@
 -dontwarn com.google.api.services.drive.**
 -keep class com.google.api.client.** { *; }
 -dontwarn com.google.api.client.**
+
+# ---------- Apache HTTP (Google Drive / Google API Client 의존) ----------
+-dontwarn org.apache.http.**
+-dontwarn javax.naming.**
+-dontwarn org.ietf.jgss.**
 
 # ---------- OkHttp ----------
 -dontwarn okhttp3.**
@@ -87,5 +113,5 @@
 -dontwarn com.airbnb.lottie.**
 
 # ---------- App Models (prevent stripping of data classes) ----------
--keep class com.sanha.moneytalk.core.db.entity.** { *; }
+-keep class com.sanha.moneytalk.core.database.entity.** { *; }
 -keep class com.sanha.moneytalk.core.model.** { *; }
