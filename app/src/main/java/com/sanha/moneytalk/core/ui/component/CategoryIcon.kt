@@ -49,6 +49,33 @@ fun CategoryIcon(
 }
 
 /**
+ * 카테고리별 차트 색상 반환.
+ * 도넛 차트 arc 및 프로그레스바에 사용할 선명한(채도 높은) 색상.
+ * [getCategoryBackgroundColor]와 달리 시각적 구분이 명확한 Tailwind 500 계열 색상을 사용한다.
+ */
+fun getCategoryChartColor(category: Category): Color {
+    return when (category) {
+        Category.FOOD, Category.DELIVERY -> Color(0xFFEF4444)  // Red 500
+        Category.CAFE -> Color(0xFFF59E0B)                      // Amber 500
+        Category.DRINKING -> Color(0xFFF97316)                   // Orange 500
+        Category.TRANSPORT -> Color(0xFF22C55E)                  // Green 500
+        Category.SHOPPING -> Color(0xFFA855F7)                   // Purple 500
+        Category.SUBSCRIPTION -> Color(0xFF6366F1)               // Indigo 500
+        Category.HEALTH -> Color(0xFFEC4899)                     // Pink 500
+        Category.FITNESS -> Color(0xFF06B6D4)                    // Cyan 500
+        Category.CULTURE -> Color(0xFF8B5CF6)                    // Violet 500
+        Category.EDUCATION -> Color(0xFFEAB308)                  // Yellow 500
+        Category.HOUSING -> Color(0xFFFB923C)                    // Orange 400
+        Category.LIVING -> Color(0xFFF472B6)                     // Pink 400
+        Category.INSURANCE -> Color(0xFF0EA5E9)                  // Sky 500
+        Category.TRANSFER -> Color(0xFF3B82F6)                   // Blue 500
+        Category.EVENTS -> Color(0xFFD946EF)                     // Fuchsia 500
+        Category.ETC -> Color(0xFF9CA3AF)                        // Gray 400
+        Category.UNCLASSIFIED -> Color(0xFF6B7280)               // Gray 500
+    }
+}
+
+/**
  * 카테고리별 배경색 반환.
  * 각 카테고리의 특성에 맞는 연한 파스텔 톤을 사용한다.
  */

@@ -81,6 +81,10 @@ import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
+import com.sanha.moneytalk.core.ui.component.chart.DonutChartCompose
+import com.sanha.moneytalk.core.ui.component.chart.DonutSlice
+import com.sanha.moneytalk.core.ui.component.getCategoryChartColor
+import com.sanha.moneytalk.core.ui.component.swipeToNavigateMonth
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
@@ -166,6 +170,10 @@ fun HomeScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .swipeToNavigateMonth(
+                    onSwipeLeft = { viewModel.nextMonth() },
+                    onSwipeRight = { viewModel.previousMonth() }
+                )
                 .padding(horizontal = 16.dp),
             contentPadding = PaddingValues(vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -216,7 +224,11 @@ fun HomeScreen(
             // AI 인사이트
             if (uiState.aiInsight.isNotBlank()) {
                 item {
-                    AiInsightCard(insight = uiState.aiInsight)
+                    AiInsightCard(
+                        insight = uiState.aiInsight,
+                        monthlyExpense = uiState.monthlyExpense,
+                        lastMonthExpense = uiState.lastMonthExpense
+                    )
                 }
             }
 
@@ -527,10 +539,20 @@ fun MonthlyOverviewSection(
             }
 
             Row {
-                IconButton(onClick = onNextMonth) {
+                val isCurrentMonth = year >= DateUtils.getCurrentYear() &&
+                    month >= DateUtils.getCurrentMonth()
+                IconButton(
+                    onClick = onNextMonth,
+                    enabled = !isCurrentMonth
+                ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = stringResource(R.string.home_next_month)
+                        contentDescription = stringResource(R.string.home_next_month),
+                        tint = if (isCurrentMonth) {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
                     )
                 }
 
@@ -671,6 +693,45 @@ fun CategoryExpenseSection(
         if (showAll) mergedExpenses else mergedExpenses.take(3)
     }
 
+    // 도넛 차트용 슬라이스 데이터 — showAll 상태에 따라 도넛도 연동
+    // 기본: TOP3 + "그 외" 4조각 (범례와 정합), 전체보기: 전체 카테고리
+    val chartSlices = remember(mergedExpenses, totalExpense, showAll) {
+        if (showAll || mergedExpenses.size <= 3) {
+            // 전체 카테고리 도넛
+            mergedExpenses.map { item ->
+                val category = Category.fromDisplayName(item.category)
+                DonutSlice(
+                    category = category,
+                    amount = item.total,
+                    percentage = if (totalExpense > 0) item.total.toFloat() / totalExpense else 0f,
+                    color = getCategoryChartColor(category)
+                )
+            }
+        } else {
+            // TOP3 + "그 외" 합산 = 4조각
+            val top3 = mergedExpenses.take(3).map { item ->
+                val category = Category.fromDisplayName(item.category)
+                DonutSlice(
+                    category = category,
+                    amount = item.total,
+                    percentage = if (totalExpense > 0) item.total.toFloat() / totalExpense else 0f,
+                    color = getCategoryChartColor(category)
+                )
+            }
+            val othersTotal = mergedExpenses.drop(3).sumOf { it.total }
+            if (othersTotal > 0) {
+                top3 + DonutSlice(
+                    category = Category.ETC,
+                    amount = othersTotal,
+                    percentage = if (totalExpense > 0) othersTotal.toFloat() / totalExpense else 0f,
+                    color = Color(0xFFBDBDBD)
+                )
+            } else {
+                top3
+            }
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -681,7 +742,7 @@ fun CategoryExpenseSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = stringResource(R.string.home_expense_top3),
+                text = stringResource(R.string.home_category_expense),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -705,11 +766,18 @@ fun CategoryExpenseSection(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
         } else {
-            val barColor = MaterialTheme.moneyTalkColors.income
-            val rankAlphas = listOf(1.0f, 0.65f, 0.4f)
+            // 3개 이상 카테고리일 때 도넛 차트 표시
+            if (mergedExpenses.size >= 3) {
+                DonutChartCompose(
+                    slices = chartSlices,
+                    totalAmount = totalExpense
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
-            displayList.forEachIndexed { index, item ->
+            displayList.forEach { item ->
                 val category = Category.fromDisplayName(item.category)
+                val chartColor = getCategoryChartColor(category)
                 val percentage = if (totalExpense > 0) {
                     (item.total.toFloat() / totalExpense * 100).toInt()
                 } else 0
@@ -717,7 +785,6 @@ fun CategoryExpenseSection(
                     item.total.toFloat() / totalExpense
                 } else 0f
                 val isSelected = selectedCategory == item.category
-                val alpha = rankAlphas.getOrElse(index) { 0.3f }
 
                 Column(
                     modifier = Modifier
@@ -728,7 +795,7 @@ fun CategoryExpenseSection(
                         }
                         .padding(vertical = 4.dp)
                 ) {
-                    // 카테고리명 + 퍼센트
+                    // 카테고리명 + 금액/퍼센트
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -738,10 +805,9 @@ fun CategoryExpenseSection(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            CategoryIcon(
-                                category = category,
-                                containerSize = 28.dp,
-                                fontSize = 18.sp
+                            Text(
+                                text = category.emoji,
+                                fontSize = 20.sp
                             )
                             Text(
                                 text = category.displayName,
@@ -749,17 +815,26 @@ fun CategoryExpenseSection(
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                             )
                         }
-                        Text(
-                            text = "${percentage}%",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.End
+                        ) {
+                            Text(
+                                text = "₩${numberFormat.format(item.total)}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "${percentage}%",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    // 프로그레스 바 (순위별 알파)
+                    // 프로그레스 바 (카테고리별 고유 색상 — 도넛 차트와 동기화)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -772,20 +847,9 @@ fun CategoryExpenseSection(
                                 .fillMaxWidth(progress)
                                 .height(8.dp)
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(barColor.copy(alpha = alpha))
+                                .background(chartColor)
                         )
                     }
-
-                    Spacer(modifier = Modifier.height(2.dp))
-
-                    // 금액 (우측 정렬)
-                    Text(
-                        text = "₩${numberFormat.format(item.total)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.End
-                    )
                 }
             }
         }
@@ -957,9 +1021,16 @@ fun EmptyExpenseSection() {
     }
 }
 
-/** AI 인사이트 카드. Gemini가 생성한 이번 달 소비 분석 요약을 표시 */
+/** AI 인사이트 카드. Gemini가 생성한 이번 달 소비 분석 요약 + 전월 대비 절대금액 표시 */
 @Composable
-fun AiInsightCard(insight: String) {
+fun AiInsightCard(
+    insight: String,
+    monthlyExpense: Int = 0,
+    lastMonthExpense: Int = 0
+) {
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
+    val diff = monthlyExpense - lastMonthExpense
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -967,12 +1038,35 @@ fun AiInsightCard(insight: String) {
         ),
         shape = RoundedCornerShape(12.dp)
     ) {
-        Text(
-            text = insight,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(12.dp),
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = insight,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            // 전월 대비 절대금액 변화 (전월 데이터 있을 때만)
+            if (lastMonthExpense > 0 && diff != 0) {
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = if (diff > 0) {
+                        stringResource(R.string.home_insight_diff_more, numberFormat.format(diff))
+                    } else {
+                        stringResource(R.string.home_insight_diff_less, numberFormat.format(-diff))
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (diff > 0) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.moneyTalkColors.income
+                    }
+                )
+            }
+        }
     }
 }
 

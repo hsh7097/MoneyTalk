@@ -90,6 +90,8 @@
     <string name="home_remaining_budget">Remaining: ₩%s</string>
     <string name="home_category_expense">Spending by Category</string>
     <string name="home_no_expense">No expenses yet</string>
+    <string name="home_total_expense_label">Total Expenses</string>
+    <string name="home_chart_legend_others">Others %d%%</string>
     <string name="home_recent_expense">Recent Expenses</string>
     <string name="home_empty_expense_title">No expenses yet</string>
     <string name="home_empty_expense_subtitle">Sync your messages to add expenses</string>
@@ -288,6 +290,8 @@
     <string name="home_sync_dialog_title">Reading expense history</string>
     <string name="home_this_month_expense">This Month Expense</string>
     <string name="home_today_count">%d items</string>
+    <string name="home_insight_diff_more">vs Last Month +₩%s</string>
+    <string name="home_insight_diff_less">vs Last Month -₩%s</string>
     <string name="home_today_expense">Today Expense</string>
     <string name="home_today_transactions">Today Transactions</string>
     <string name="home_view_all">View All</string>
