@@ -149,6 +149,17 @@ fun HomeScreen(
     )
     val coroutineScope = rememberCoroutineScope()
 
+    // ViewModel의 선택 월이 외부 요인(예: DataStore 설정 로드)으로 변경되면 Pager 위치도 동기화
+    LaunchedEffect(uiState.selectedYear, uiState.selectedMonth) {
+        val selectedPage = MonthPagerUtils.yearMonthToPage(
+            uiState.selectedYear,
+            uiState.selectedMonth
+        )
+        if (pagerState.currentPage != selectedPage) {
+            pagerState.scrollToPage(selectedPage)
+        }
+    }
+
     // 페이지 변경 시 ViewModel에 월 변경 통지
     LaunchedEffect(pagerState.currentPage) {
         val (year, month) = MonthPagerUtils.pageToYearMonth(pagerState.currentPage)
