@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.moneyTalkColors
+import com.sanha.moneytalk.core.ui.component.swipeToNavigateMonth
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
@@ -79,6 +80,10 @@ fun HistoryScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .swipeToNavigateMonth(
+                onSwipeLeft = { viewModel.nextMonth() },
+                onSwipeRight = { viewModel.previousMonth() }
+            )
             .background(MaterialTheme.colorScheme.background)
     ) {
         // 검색 모드일 때 검색 바, 아니면 일반 헤더

@@ -174,15 +174,22 @@ fun PeriodSummaryCard(
                 )
             }
 
+            val isCurrentMonth = year >= DateUtils.getCurrentYear() &&
+                month >= DateUtils.getCurrentMonth()
             IconButton(
                 onClick = onNextMonth,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(28.dp),
+                enabled = !isCurrentMonth
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = stringResource(R.string.home_next_month),
                     modifier = Modifier.size(28.dp),
-                    tint = MaterialTheme.colorScheme.onSurface
+                    tint = if (isCurrentMonth) {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
                 )
             }
         }

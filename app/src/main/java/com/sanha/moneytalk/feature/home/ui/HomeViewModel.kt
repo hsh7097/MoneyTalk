@@ -469,9 +469,13 @@ class HomeViewModel @Inject constructor(
         loadData()
     }
 
-    /** 다음 월로 이동 */
+    /** 다음 월로 이동 (현재 월 이후로는 이동 불가) */
     fun nextMonth() {
         val state = _uiState.value
+        val currentYear = DateUtils.getCurrentYear()
+        val currentMonth = DateUtils.getCurrentMonth()
+        if (state.selectedYear >= currentYear && state.selectedMonth >= currentMonth) return
+
         var newYear = state.selectedYear
         var newMonth = state.selectedMonth + 1
         if (newMonth > 12) {
