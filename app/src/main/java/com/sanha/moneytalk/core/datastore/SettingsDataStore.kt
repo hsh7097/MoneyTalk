@@ -59,18 +59,19 @@ class SettingsDataStore @Inject constructor(
     }
 
     // Gemini API 키 저장
+    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
     suspend fun saveGeminiApiKey(apiKey: String) {
-        context.dataStore.edit { preferences ->
-            preferences[GEMINI_API_KEY] = apiKey
-        }
+        // RTDB 기반 키 관리로 전환 — 로컬 키 저장 제거
     }
 
     // Gemini API 키 가져오기 (DataStore에 없으면 BuildConfig에서 가져옴)
+    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
     val geminiApiKeyFlow: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[GEMINI_API_KEY] ?: BuildConfig.GEMINI_API_KEY
     }
 
     // Gemini API 키 즉시 가져오기
+    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
     suspend fun getGeminiApiKey(): String {
         val storedKey = context.dataStore.data.first()[GEMINI_API_KEY]
         return if (storedKey.isNullOrBlank()) {

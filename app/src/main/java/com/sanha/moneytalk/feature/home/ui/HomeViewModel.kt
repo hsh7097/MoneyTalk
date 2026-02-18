@@ -497,7 +497,7 @@ class HomeViewModel @Inject constructor(
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val hasApiKey = settingsDataStore.getGeminiApiKey().isNotBlank()
+                val hasApiKey = geminiRepository.hasApiKey()
                 if (!hasApiKey) return@launch
 
                 val unclassifiedCount = categoryClassifierService.getUnclassifiedCount()
@@ -640,7 +640,7 @@ class HomeViewModel @Inject constructor(
                     val regexLearningData =
                         mutableListOf<Triple<String, String, SmsAnalysisResult>>()
                     val hybridCandidates = mutableListOf<SmsMessage>()
-                    val hasGeminiKey = settingsDataStore.getGeminiApiKey().isNotBlank()
+                    val hasGeminiKey = geminiRepository.hasApiKey()
 
                     // 동적 진행률 업데이트 간격 (SMS 건수에 따라 UI recomposition 횟수 조절)
                     // 2만 건 기준: 50건마다 → 400회 recomposition → 500건마다 → 40회로 90% 감소
