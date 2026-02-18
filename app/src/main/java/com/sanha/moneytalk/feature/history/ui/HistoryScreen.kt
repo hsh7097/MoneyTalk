@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -22,6 +23,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -60,7 +63,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel(),
-    filterCategory: String? = null
+    filterCategory: String? = null,
+    historyTabReClickEvent: kotlinx.coroutines.flow.SharedFlow<Unit>? = null
 ) {
     // 외부에서 전달된 카테고리 필터 적용 (홈 → 내역 이동 시, 일회성)
     var filterConsumed by remember { mutableStateOf(false) }
@@ -94,6 +98,19 @@ fun HistoryScreen(
     LaunchedEffect(pagerState.currentPage) {
         val (year, month) = MonthPagerUtils.pageToYearMonth(pagerState.currentPage)
         viewModel.setMonth(year, month)
+    }
+
+    // 내역 탭 재클릭 → 오늘(현재 월) 페이지로 이동
+    LaunchedEffect(historyTabReClickEvent) {
+        historyTabReClickEvent?.collect {
+            val todayPage = MonthPagerUtils.yearMonthToPage(
+                com.sanha.moneytalk.core.util.DateUtils.getCurrentYear(),
+                com.sanha.moneytalk.core.util.DateUtils.getCurrentMonth()
+            )
+            if (pagerState.currentPage != todayPage) {
+                pagerState.animateScrollToPage(todayPage)
+            }
+        }
     }
 
     Column(
@@ -176,6 +193,10 @@ fun HistoryScreen(
             val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
                 ?: HistoryPageData()
 
+            // CTA 판별용: 현재 월 여부
+            val isCurrentMonth = pageYear == com.sanha.moneytalk.core.util.DateUtils.getCurrentYear() &&
+                    pageMonth == com.sanha.moneytalk.core.util.DateUtils.getCurrentMonth()
+
             when {
                 viewMode == ViewMode.LIST -> {
                     TransactionListView(
@@ -184,6 +205,9 @@ fun HistoryScreen(
                         showExpenses = uiState.showExpenses,
                         showIncomes = uiState.showIncomes,
                         hasActiveFilter = uiState.selectedCategory != null,
+                        isCurrentMonth = isCurrentMonth,
+                        isFullSyncUnlocked = uiState.isFullSyncUnlocked,
+                        onRequestFullSync = { viewModel.showFullSyncAdDialog() },
                         scrollResetKey = Triple(
                             uiState.selectedCategory,
                             uiState.sortOrder,
@@ -261,6 +285,43 @@ fun HistoryScreen(
             }
         )
     }
+
+    // 전체 동기화 해제 광고 다이얼로그
+    if (uiState.showFullSyncAdDialog) {
+        val context = LocalContext.current
+        val activity = context as? android.app.Activity
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissFullSyncAdDialog() },
+            title = { Text(stringResource(R.string.full_sync_ad_dialog_title)) },
+            text = { Text(stringResource(R.string.full_sync_ad_dialog_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (activity != null) {
+                            viewModel.dismissFullSyncAdDialog()
+                            viewModel.rewardAdManager.showAd(
+                                activity = activity,
+                                onRewarded = {
+                                    viewModel.unlockFullSync()
+                                },
+                                onFailed = {
+                                    // 광고 로드/표시 실패 시에도 해제 처리
+                                    viewModel.unlockFullSync()
+                                }
+                            )
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.full_sync_ad_watch_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissFullSyncAdDialog() }) {
+                    Text(stringResource(R.string.full_sync_ad_later))
+                }
+            }
+        )
+    }
 }
 
 enum class ViewMode {
@@ -278,6 +339,9 @@ fun TransactionListView(
     showExpenses: Boolean = true,
     showIncomes: Boolean = true,
     hasActiveFilter: Boolean = false,
+    isCurrentMonth: Boolean = true,
+    isFullSyncUnlocked: Boolean = true,
+    onRequestFullSync: () -> Unit = {},
     scrollResetKey: Any? = null,
     onIntent: (HistoryIntent) -> Unit
 ) {
@@ -307,26 +371,34 @@ fun TransactionListView(
     }
 
     if (items.isEmpty()) {
+        // 데이터 0건 + 현재 월 아님 + 전체 동기화 미해제 + 필터 없음 → CTA 표시
+        val showFullSyncCta = !isCurrentMonth && !isFullSyncUnlocked && !hasActiveFilter
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                val isIncomeOnly = !showExpenses && showIncomes
-                val emptyMessageRes = when {
-                    hasActiveFilter -> R.string.history_no_filtered
-                    isIncomeOnly -> R.string.history_no_income
-                    else -> R.string.history_no_expense
+            if (showFullSyncCta) {
+                com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
+                    onRequestFullSync = onRequestFullSync
+                )
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    val isIncomeOnly = !showExpenses && showIncomes
+                    val emptyMessageRes = when {
+                        hasActiveFilter -> R.string.history_no_filtered
+                        isIncomeOnly -> R.string.history_no_income
+                        else -> R.string.history_no_expense
+                    }
+                    Text(
+                        text = if (hasActiveFilter) "🔍" else if (isIncomeOnly) "💰" else "📭",
+                        style = MaterialTheme.typography.displayLarge
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(emptyMessageRes),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
-                Text(
-                    text = if (hasActiveFilter) "🔍" else if (isIncomeOnly) "💰" else "📭",
-                    style = MaterialTheme.typography.displayLarge
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = stringResource(emptyMessageRes),
-                    style = MaterialTheme.typography.bodyLarge
-                )
             }
         }
         return

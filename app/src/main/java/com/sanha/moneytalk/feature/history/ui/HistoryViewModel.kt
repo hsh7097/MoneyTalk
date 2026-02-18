@@ -145,7 +145,10 @@ data class HistoryUiState(
     val showIncomes: Boolean = true,
     // 다이얼로그 상태 (Composable에서 remember 대신 ViewModel에서 관리)
     val selectedExpense: ExpenseEntity? = null,
-    val selectedIncome: IncomeEntity? = null
+    val selectedIncome: IncomeEntity? = null,
+    // 전체 동기화 해제 여부
+    val isFullSyncUnlocked: Boolean = false,
+    val showFullSyncAdDialog: Boolean = false
 ) {
     /** 현재 선택 월의 페이지 데이터 (하위 호환용) */
     private val currentPageData: HistoryPageData
@@ -183,7 +186,8 @@ class HistoryViewModel @Inject constructor(
     private val snackbarBus: AppSnackbarBus,
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
     @ApplicationContext private val context: Context,
-    private val analyticsHelper: AnalyticsHelper
+    private val analyticsHelper: AnalyticsHelper,
+    val rewardAdManager: com.sanha.moneytalk.core.ad.RewardAdManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HistoryUiState())
@@ -279,6 +283,10 @@ class HistoryViewModel @Inject constructor(
                 clearAllPageCache()
                 loadCurrentAndAdjacentPages()
             }
+        }
+        viewModelScope.launch {
+            val unlocked = settingsDataStore.isFullSyncUnlocked()
+            _uiState.update { it.copy(isFullSyncUnlocked = unlocked) }
         }
     }
 
@@ -974,6 +982,33 @@ class HistoryViewModel @Inject constructor(
             Calendar.FRIDAY -> R.string.day_friday
             Calendar.SATURDAY -> R.string.day_saturday
             else -> R.string.day_sunday
+        }
+    }
+
+    // ========== 전체 동기화 해제 (광고) ==========
+
+    /** 전체 동기화 광고 프리로드 */
+    fun preloadFullSyncAd() {
+        rewardAdManager.preloadAd()
+    }
+
+    /** 전체 동기화 광고 다이얼로그 표시 */
+    fun showFullSyncAdDialog() {
+        rewardAdManager.preloadAd()
+        _uiState.update { it.copy(showFullSyncAdDialog = true) }
+    }
+
+    /** 전체 동기화 광고 다이얼로그 닫기 */
+    fun dismissFullSyncAdDialog() {
+        _uiState.update { it.copy(showFullSyncAdDialog = false) }
+    }
+
+    /** 전체 동기화 해제 (광고 시청 완료 후 호출) */
+    fun unlockFullSync() {
+        viewModelScope.launch {
+            settingsDataStore.saveFullSyncUnlocked(true)
+            _uiState.update { it.copy(isFullSyncUnlocked = true, showFullSyncAdDialog = false) }
+            snackbarBus.show(context.getString(R.string.full_sync_unlocked_message))
         }
     }
 }

@@ -206,6 +206,10 @@ fun MoneyTalkApp(
 
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // 탭 재클릭 → 오늘 페이지로 이동 이벤트
+    val homeTabReClickEvent = remember { kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+    val historyTabReClickEvent = remember { kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+
     // App-wide snackbar (toast-like): collect one-off events at the root
     LaunchedEffect(snackbarBus) {
         snackbarBus.events.collect { event ->
@@ -277,6 +281,12 @@ fun MoneyTalkApp(
                                             launchSingleTop = true
                                             restoreState = true
                                         }
+                                    } else if (item.route == Screen.Home.route) {
+                                        // 홈 탭 재클릭 → 오늘 페이지로 이동
+                                        homeTabReClickEvent.tryEmit(Unit)
+                                    } else if (item.route.startsWith("history")) {
+                                        // 내역 탭 재클릭 → 오늘 페이지로 이동
+                                        historyTabReClickEvent.tryEmit(Unit)
                                     }
                                 },
                                 icon = {
@@ -333,7 +343,9 @@ fun MoneyTalkApp(
                 navController = navController,
                 onRequestSmsPermission = onRequestSmsPermission,
                 autoSyncOnStart = shouldAutoSync,
-                onAutoSyncConsumed = onAutoSyncConsumed
+                onAutoSyncConsumed = onAutoSyncConsumed,
+                homeTabReClickEvent = homeTabReClickEvent,
+                historyTabReClickEvent = historyTabReClickEvent
             )
         }
     }

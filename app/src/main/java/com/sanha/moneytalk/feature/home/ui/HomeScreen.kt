@@ -81,6 +81,7 @@ import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.chart.DonutChartCompose
 import com.sanha.moneytalk.core.ui.component.chart.DonutSlice
+import com.sanha.moneytalk.core.ui.component.FullSyncCtaSection
 import com.sanha.moneytalk.core.ui.component.getCategoryChartColor
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
@@ -103,6 +104,7 @@ fun HomeScreen(
     onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
     autoSyncOnStart: Boolean = false,
     onAutoSyncConsumed: () -> Unit = {},
+    homeTabReClickEvent: kotlinx.coroutines.flow.SharedFlow<Unit>? = null,
     onNavigateToHistory: (category: String) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -153,6 +155,19 @@ fun HomeScreen(
         viewModel.setMonth(year, month)
     }
 
+    // 홈 탭 재클릭 → 오늘(현재 월) 페이지로 이동
+    LaunchedEffect(homeTabReClickEvent) {
+        homeTabReClickEvent?.collect {
+            val todayPage = MonthPagerUtils.yearMonthToPage(
+                DateUtils.getCurrentYear(),
+                DateUtils.getCurrentMonth()
+            )
+            if (pagerState.currentPage != todayPage) {
+                pagerState.animateScrollToPage(todayPage)
+            }
+        }
+    }
+
     HorizontalPager(
         state = pagerState,
         modifier = Modifier
@@ -175,6 +190,7 @@ fun HomeScreen(
             month = pageMonth,
             monthStartDay = uiState.monthStartDay,
             isSyncing = uiState.isSyncing,
+            isFullSyncUnlocked = uiState.isFullSyncUnlocked,
             selectedCategory = uiState.selectedCategory,
             onPreviousMonth = {
                 coroutineScope.launch {
@@ -192,11 +208,6 @@ fun HomeScreen(
             onIncrementalSync = {
                 onRequestSmsPermission {
                     viewModel.syncSmsMessages(contentResolver, forceFullSync = false)
-                }
-            },
-            onTodaySync = {
-                onRequestSmsPermission {
-                    viewModel.syncSmsMessages(contentResolver, todayOnly = true)
                 }
             },
             onFullSync = {
@@ -406,7 +417,10 @@ fun HomeScreen(
                                     }
                                 },
                                 onFailed = {
-                                    // 광고 로드/표시 실패 시 — 다이얼로그는 이미 dismiss된 상태
+                                    // 광고 로드/표시 실패는 앱/광고 이슈 → 유저 책임 아님 → 보상 처리
+                                    onRequestSmsPermission {
+                                        viewModel.unlockFullSync(contentResolver)
+                                    }
                                 }
                             )
                         }
@@ -435,11 +449,11 @@ fun HomePageContent(
     month: Int,
     monthStartDay: Int,
     isSyncing: Boolean,
+    isFullSyncUnlocked: Boolean,
     selectedCategory: String?,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onIncrementalSync: () -> Unit,
-    onTodaySync: () -> Unit,
     onFullSync: () -> Unit,
     onCategorySelected: (String?) -> Unit,
     onExpenseSelected: (ExpenseEntity) -> Unit,
@@ -490,81 +504,92 @@ fun HomePageContent(
                     onPreviousMonth = onPreviousMonth,
                     onNextMonth = onNextMonth,
                     onIncrementalSync = onIncrementalSync,
-                    onTodaySync = onTodaySync,
                     onFullSync = onFullSync,
                     isSyncing = isSyncing
                 )
             }
 
-            // 카테고리별 지출
-            item {
-                CategoryExpenseSection(
-                    categoryExpenses = pageData.categoryExpenses,
-                    selectedCategory = selectedCategory,
-                    onCategorySelected = onCategorySelected
-                )
-            }
+            // 데이터 0건 + 현재 월 아님 + 전체 동기화 미해제 → CTA 표시
+            val isCurrentMonth = year == DateUtils.getCurrentYear() && month == DateUtils.getCurrentMonth()
+            val hasNoData = !pageData.isLoading &&
+                    pageData.monthlyExpense == 0 && pageData.monthlyIncome == 0
+            val showFullSyncCta = hasNoData && !isCurrentMonth && !isFullSyncUnlocked
 
-            // AI 인사이트
-            if (pageData.aiInsight.isNotBlank()) {
+            if (showFullSyncCta) {
                 item {
-                    AiInsightCard(
-                        insight = pageData.aiInsight,
-                        monthlyExpense = pageData.monthlyExpense,
-                        lastMonthExpense = pageData.lastMonthExpense
-                    )
-                }
-            }
-
-            // 오늘의 지출 + 전월 대비
-            item {
-                TodayAndComparisonSection(
-                    todayExpense = pageData.todayExpense,
-                    todayExpenseCount = pageData.todayExpenseCount,
-                    monthlyExpense = pageData.monthlyExpense,
-                    lastMonthExpense = pageData.lastMonthExpense,
-                    comparisonPeriodLabel = pageData.comparisonPeriodLabel
-                )
-            }
-
-            // 오늘 내역 (지출 + 수입 시간순 통합)
-            item {
-                Text(
-                    text = stringResource(R.string.home_today_transactions),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 6.dp)
-                )
-            }
-
-            if (todayTransactions.isEmpty()) {
-                item {
-                    Text(
-                        text = stringResource(R.string.home_no_today_transactions),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(vertical = 16.dp)
-                    )
+                    FullSyncCtaSection(onRequestFullSync = onFullSync)
                 }
             } else {
-                items(
-                    count = todayTransactions.size,
-                    key = { index ->
-                        when (val item = todayTransactions[index]) {
-                            is TodayItem.Expense -> "expense_${item.expense.id}"
-                            is TodayItem.Income -> "income_${item.income.id}"
-                        }
+                // 카테고리별 지출
+                item {
+                    CategoryExpenseSection(
+                        categoryExpenses = pageData.categoryExpenses,
+                        selectedCategory = selectedCategory,
+                        onCategorySelected = onCategorySelected
+                    )
+                }
+
+                // AI 인사이트
+                if (pageData.aiInsight.isNotBlank()) {
+                    item {
+                        AiInsightCard(
+                            insight = pageData.aiInsight,
+                            monthlyExpense = pageData.monthlyExpense,
+                            lastMonthExpense = pageData.lastMonthExpense
+                        )
                     }
-                ) { index ->
-                    when (val item = todayTransactions[index]) {
-                        is TodayItem.Expense -> TransactionCardCompose(
-                            info = ExpenseTransactionCardInfo(item.expense),
-                            onClick = { onExpenseSelected(item.expense) }
+                }
+
+                // 오늘의 지출 + 전월 대비
+                item {
+                    TodayAndComparisonSection(
+                        todayExpense = pageData.todayExpense,
+                        todayExpenseCount = pageData.todayExpenseCount,
+                        monthlyExpense = pageData.monthlyExpense,
+                        lastMonthExpense = pageData.lastMonthExpense,
+                        comparisonPeriodLabel = pageData.comparisonPeriodLabel
+                    )
+                }
+
+                // 오늘 내역 (지출 + 수입 시간순 통합)
+                item {
+                    Text(
+                        text = stringResource(R.string.home_today_transactions),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                }
+
+                if (todayTransactions.isEmpty()) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.home_no_today_transactions),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(vertical = 16.dp)
                         )
-                        is TodayItem.Income -> TransactionCardCompose(
-                            info = IncomeTransactionCardInfo(item.income),
-                            onClick = { }
-                        )
+                    }
+                } else {
+                    items(
+                        count = todayTransactions.size,
+                        key = { index ->
+                            when (val item = todayTransactions[index]) {
+                                is TodayItem.Expense -> "expense_${item.expense.id}"
+                                is TodayItem.Income -> "income_${item.income.id}"
+                            }
+                        }
+                    ) { index ->
+                        when (val item = todayTransactions[index]) {
+                            is TodayItem.Expense -> TransactionCardCompose(
+                                info = ExpenseTransactionCardInfo(item.expense),
+                                onClick = { onExpenseSelected(item.expense) }
+                            )
+                            is TodayItem.Income -> TransactionCardCompose(
+                                info = IncomeTransactionCardInfo(item.income),
+                                onClick = { }
+                            )
+                        }
                     }
                 }
             }
@@ -615,7 +640,6 @@ fun MonthlyOverviewSection(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onIncrementalSync: () -> Unit,
-    onTodaySync: () -> Unit,
     onFullSync: () -> Unit,
     isSyncing: Boolean
 ) {
@@ -706,16 +730,6 @@ fun MonthlyOverviewSection(
                             },
                             leadingIcon = {
                                 Icon(Icons.Default.Refresh, contentDescription = null)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.home_sync_today)) },
-                            onClick = {
-                                showSyncMenu = false
-                                onTodaySync()
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.Notifications, contentDescription = null)
                             }
                         )
                         DropdownMenuItem(

@@ -386,7 +386,8 @@ class ChatViewModel @Inject constructor(
             activity = activity,
             onRewarded = { onRewardAdWatched() },
             onFailed = {
-                _uiState.update { it.copy(showRewardAdDialog = false, pendingMessage = null) }
+                // 광고 로드/표시 실패는 앱/광고 이슈 → 유저 책임 아님 → 보상 처리
+                onRewardAdWatched()
             }
         )
     }
