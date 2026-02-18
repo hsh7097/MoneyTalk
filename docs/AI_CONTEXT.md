@@ -253,8 +253,14 @@ SMS 수신 → SmsReceiver → classifyRegexOnly (Tier 1)
    → 실패: 로그만 (실시간은 Tier 1만)
 
 SMS 동기화 (HomeViewModel.syncSmsMessages)
-   → SmsReader.readAllSms()
+   → 동기화 범위 결정:
+      - 첫 동기화 + fullSyncUnlocked=false → 3개월 전부터 (THREE_MONTHS_MILLIS)
+      - 첫 동기화 + fullSyncUnlocked=true → 전체 (0L)
+      - forceFullSync + unlocked → 전체, 미해제 → 3개월
+      - 증분 → lastSyncTime 이후
+   → SmsReader.readAllMessagesByDateRange()
    → SMS 제외 키워드 필터링 (SmsExclusionRepository)
+   → 100자 초과 SMS 사전 필터링 (batchClassify Step 2)
    → HybridSmsClassifier.batchClassify() [Tier 1→2→3]
       → 벡터 매칭 → SmsPatternSimilarityPolicy 판단 → Tier 승격/차단
    → ExpenseRepository.insert() / IncomeRepository.insert()

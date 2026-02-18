@@ -2,7 +2,7 @@
 
 > 각 화면의 Composable 계층 구조를 트리로 정리한 문서
 > 함수 참조 클릭 시 IDE에서 해당 파일로 이동 가능
-> **최종 갱신**: 2026-02-18
+> **최종 갱신**: 2026-02-19
 
 ---
 
@@ -42,6 +42,7 @@ HomeScreen                           ← 홈 탭 메인 화면
 ├── TransactionCardCompose           ← 오늘 거래 카드 (공통)
 │   └── CategoryIcon                 ← 카테고리 이모지 아이콘 (공통)
 ├── EmptyExpenseSection              ← 지출 없을 때 빈 상태
+├── FullSyncCtaSection              ← 전체 동기화 해제 CTA (공통)
 ├── ExpenseDetailDialog              ← 지출 상세/수정/삭제 다이얼로그 (공통)
 │   └── CategorySelectDialog         ← 카테고리 변경 다이얼로그 (공통)
 └── [AlertDialog]                    ← 분류 확인/진행률/SMS 동기화 다이얼로그
@@ -57,6 +58,7 @@ HomeScreen                           ← 홈 탭 메인 화면
 | TodayExpenseCard | 오늘 총 지출 금액/건수 카드 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 | MonthComparisonCard | 전월 동일 기간 대비 차이 카드 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 | EmptyExpenseSection | 지출 없을 때 빈 상태 표시 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
+| FullSyncCtaSection | 전체 동기화 해제 CTA (3개월 이전 빈 페이지) | [FullSyncCtaSectionKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/FullSyncCtaSection.kt) |
 
 ---
 
@@ -73,8 +75,9 @@ HistoryScreen                        ← 내역 탭 메인 화면
 ├── [목록 모드]
 │   └── TransactionListView          ← 통합 거래 목록 (순수 렌더링)
 │       ├── TransactionGroupHeaderCompose ← 날짜/가게/금액 그룹 헤더 (공통)
-│       └── TransactionCardCompose   ← 지출/수입 거래 카드 (공통)
-│           └── CategoryIcon         ← 카테고리 이모지 아이콘 (공통)
+│       ├── TransactionCardCompose   ← 지출/수입 거래 카드 (공통)
+│       │   └── CategoryIcon         ← 카테고리 이모지 아이콘 (공통)
+│       └── FullSyncCtaSection       ← 전체 동기화 해제 CTA (공통, 빈 상태)
 │
 ├── [달력 모드]
 │   └── BillingCycleCalendarView     ← 결제 기간 기준 달력

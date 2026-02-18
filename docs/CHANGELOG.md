@@ -4,6 +4,30 @@
 
 ## [Unreleased]
 
+### Added (2026-02-19)
+- **빈 상태 전체 동기화 CTA**: 3개월 이전 빈 페이지에서 "광고 보고 전체 데이터 가져오기" CTA 표시 (Home/History)
+- **FullSyncCtaSection 공용 Composable**: 전체 동기화 해제 CTA 공통 컴포넌트
+- **탭 재클릭 → 오늘 페이지 이동**: 홈/내역 탭 재클릭 시 현재 월 페이지로 animateScrollToPage
+- **HorizontalPager 월별 독립 페이지 캐시**: Home/History 화면에 beyondViewportPageCount=1 기반 페이지별 캐시 적용
+- **MonthPagerUtils 유틸**: MonthKey, pageToYearMonth, adjacentMonth, isFutureMonth
+- **HomePageContent Composable 분리**: HorizontalPager 내부 렌더링 단위 추출
+- **초기 동기화 3개월 제한**: 첫 동기화 시 최근 3개월만 읽기 (THREE_MONTHS_MILLIS=90일)
+- **리워드 광고 전체 동기화 해제**: 광고 시청 후 FULL_SYNC_UNLOCKED=true → 전체 기간 동기화 가능
+- **전체 동기화 해제 다이얼로그**: HomeScreen/HistoryScreen에 광고 안내 AlertDialog
+
+### Changed (2026-02-19)
+- **DonutChartCompose**: 불필요한 rotate 애니메이션 제거 (즉시 렌더링), displayLabel 추가
+- **SwipeToNavigate 제거**: HorizontalPager 네이티브 스와이프로 대체
+- **광고 로드/표시 실패 시 보상 처리**: Home/History/Chat 모든 onFailed에서 보상 지급 (앱 이슈 = 유저 책임 아님)
+- **홈 새로고침 깜빡임 제거**: refreshData()에서 캐시 클리어 제거 + isLoading 조건부 설정
+- **"오늘 문자만 동기화" 메뉴 제거**: HomeScreen 새로고침 드롭다운에서 삭제
+
+### Fixed (2026-02-19)
+- **Android Auto Backup 복원 감지**: 앱 재설치 시 DataStore lastSyncTime이 복원되어 동기화 범위가 잘못되는 버그 수정
+- **DataStore 백업 제외**: backup_rules.xml, data_extraction_rules.xml에서 DataStore preferences 백업 제외
+- **내역 수입 0원 표시**: HistoryHeader에서 수입이 0일 때 섹션이 사라지는 버그 수정
+- **SMS 100자 초과 필터 누락**: HybridSmsClassifier.batchClassify() Step 2에서 100자 초과 SMS가 Vector/LLM으로 전달되던 문제 수정
+
 ### Added (2026-02-18)
 - **Firebase Analytics 트래킹**: AnalyticsHelper(@Singleton) + AnalyticsEvent 상수로 화면 PV 및 클릭 이벤트 수집
   - 화면 PV: home, history, chat, settings (LaunchedEffect 중앙 집중 방식)

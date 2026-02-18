@@ -4,6 +4,95 @@
 
 ---
 
+## 2026-02-19 - 버그 수정 + UX 개선 + 빈 상태 CTA + 광고 실패 보상
+
+### 작업 내용
+
+#### 1. Android Auto Backup 복원 감지 + 3개월 동기화 버그 수정
+- 앱 재설치 시 Auto Backup이 DataStore(lastSyncTime)를 복원하여 동기화 범위가 잘못되는 버그 수정
+- 2-Layer 방어: (1) 코드: savedSyncTime > 0 && DB 비어있으면 stale → 0으로 리셋 (2) backup_rules.xml/data_extraction_rules.xml에서 DataStore 백업 제외
+
+#### 2. 탭 재클릭 → 오늘 페이지 이동
+- 홈/내역 탭 재클릭 시 HorizontalPager를 오늘(현재 월) 페이지로 animateScrollToPage
+- MutableSharedFlow<Unit> 패턴으로 MainActivity → NavGraph → Screen 이벤트 전달
+
+#### 3. 홈 새로고침 깜빡임 수정
+- refreshData()에서 clearAllPageCache() 제거 → 기존 캐시 유지하면서 재로드
+- isLoading을 캐시 미존재 시에만 true로 설정
+
+#### 4. "오늘 문자만 동기화" 메뉴 제거
+- HomeScreen의 새로고침 DropdownMenu에서 "오늘 문자만 동기화" 항목 삭제
+
+#### 5. 내역 수입 0원 표시
+- HistoryHeader PeriodSummaryCard에서 `if (totalIncome > 0)` 조건 제거 → 수입 항상 표시
+
+#### 6. 빈 상태 "광고 보고 전체 데이터 가져오기" CTA
+- FullSyncCtaSection 공용 Composable 생성 (core/ui/component)
+- HomeScreen: 데이터 0건 + 현재 월 아님 + isFullSyncUnlocked=false → CTA 표시
+- HistoryScreen(TransactionListView): 동일 조건으로 CTA 표시
+- HistoryViewModel에 RewardAdManager 주입 + 광고 다이얼로그 로직 추가
+
+#### 7. 광고 로드/표시 실패 시 보상 처리
+- Home/History/Chat 모든 광고 onFailed 콜백에서 보상 처리 (앱/광고 이슈 = 유저 책임 아님)
+- 유저 취소(백키/태스크 킬)는 onAdDismissedFullScreenContent에서 별도 처리됨
+
+### 변경 파일
+- `FullSyncCtaSection.kt` — 신규 (공용 CTA Composable)
+- `HomeScreen.kt` — CTA + 탭 재클릭 + 오늘 동기화 제거 + 광고 실패 보상
+- `HomeViewModel.kt` — Auto Backup 감지 + 깜빡임 수정
+- `HistoryScreen.kt` — CTA + 탭 재클릭 + 광고 다이얼로그
+- `HistoryViewModel.kt` — RewardAdManager 주입 + isFullSyncUnlocked + 광고 로직
+- `HistoryHeader.kt` — 수입 0원 표시
+- `ChatViewModel.kt` — 광고 실패 보상
+- `MainActivity.kt` — 탭 재클릭 SharedFlow
+- `NavGraph.kt` — homeTabReClickEvent + historyTabReClickEvent 전달
+- `SmsReader.kt` — 디버그 로그 추가
+- `strings.xml` — CTA 문자열 3건
+- `backup_rules.xml`, `data_extraction_rules.xml` — DataStore 백업 제외
+- `COMPOSABLE_MAP.md` — FullSyncCtaSection 추가
+
+---
+
+## 2026-02-19 - HorizontalPager pageCache + 동기화 제한 + SMS 필터 보강 (이전 세션)
+
+### 작업 내용
+
+#### 1. HorizontalPager 월별 독립 페이지 캐시
+- Home/History 화면에 HorizontalPager(beyondViewportPageCount=1) 적용
+- MonthPagerUtils 유틸 추가 (MonthKey, pageToYearMonth, adjacentMonth, isFutureMonth)
+- HomePageContent Composable 분리 (HorizontalPager 내부 렌더링 단위)
+- 기존 SwipeToNavigate 제거 → HorizontalPager 네이티브 스와이프 대체
+
+#### 2. DonutChartCompose 개선
+- 불필요한 rotate 애니메이션 제거 (즉시 렌더링)
+- displayLabel 프로퍼티 추가 (DonutSlice)
+
+#### 3. SMS 100자 초과 필터 보강
+- HybridSmsClassifier.batchClassify() Step 2에 body.length > MAX_SMS_LENGTH 체크 추가
+- SmsParser.MAX_SMS_LENGTH를 const(public)로 변경
+
+#### 4. 초기 동기화 3개월 제한 + 리워드 광고 전체 해제
+- 첫 동기화 시 fullSyncUnlocked=false면 3개월 전부터만 SMS 읽기
+- 전체 동기화 버튼 → 미해제 시 광고 다이얼로그 → 시청 → 해제 → 전체 동기화
+- SettingsDataStore에 FULL_SYNC_UNLOCKED 키 추가
+- RewardAdManager에 unlockFullSync/isFullSyncUnlocked 추가
+- HomeScreen에 전체 동기화 해제 광고 AlertDialog 추가
+
+#### 5. 수익화 문서
+- MONETIZATION.md Section 8: 동기화 범위 제한 + 보상형 광고
+- MONETIZATION.md Section 9: Vector-First + LLM 아키텍처 향후 개선안
+
+### 변경 파일
+- `HomeScreen.kt`, `HomeViewModel.kt`, `HistoryScreen.kt`, `HistoryViewModel.kt` — pageCache + 동기화 분기
+- `MonthPagerUtils.kt` — 신규, `SwipeToNavigate.kt` — 삭제
+- `DonutChartCompose.kt` — 애니메이션 제거
+- `HybridSmsClassifier.kt`, `SmsParser.kt` — 100자 필터
+- `SettingsDataStore.kt`, `RewardAdManager.kt` — 전체 동기화 해제
+- `strings.xml` — 전체 동기화 해제 문자열
+- `COMPOSABLE_MAP.md`, `MONETIZATION.md` — 문서
+
+---
+
 ## 2026-02-18 - ProGuard(R8) 활성화 + Firebase Analytics 트래킹
 
 ### 작업 내용
@@ -481,6 +570,7 @@ app/src/main/java/com/sanha/moneytalk/
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|-----------|
+| 2026-02-19 | 1.1.0 | HorizontalPager pageCache + 3개월 동기화 제한 + SMS 100자 필터 보강 |
 | 2026-02-18 | 1.1.0 | ProGuard(R8) 활성화 + Firebase Analytics 트래킹 |
 | 2026-02-18 | 1.1.0 | Firebase RTDB 원격 설정 (API 키 풀링 + 모델명 관리) |
 | 2026-02-18 | 1.0.0 | 알파 배포 준비 (강제 업데이트, 개인정보처리방침, ProGuard 규칙) |
