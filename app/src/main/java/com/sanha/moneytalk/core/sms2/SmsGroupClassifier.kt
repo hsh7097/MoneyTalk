@@ -118,6 +118,69 @@ class SmsGroupClassifier @Inject constructor(
         val members: MutableList<EmbeddedSms>
     )
 
+    /**
+     * 발신번호 단위 그룹 — 같은 발신번호의 모든 VectorGroup을 묶는 단위
+     *
+     * 발신번호 기반 생태계 분석의 핵심 단위:
+     * - 하나의 발신번호(카드사)가 보내는 모든 SMS 형식을 한눈에 파악
+     * - 분포도 기반으로 메인 케이스(최대 서브그룹)와 예외 케이스 분리
+     * - LLM에 전체 컨텍스트(모든 서브그룹 템플릿 + 분포 + 원본 샘플)를 전달
+     *
+     * @property address 정규화된 발신번호
+     * @property subGroups 벡터 유사도로 클러스터링된 서브그룹 목록 (멤버 수 내림차순)
+     * @property totalCount 전체 SMS 수
+     */
+    private data class SourceGroup(
+        val address: String,
+        val subGroups: List<VectorGroup>,
+        val totalCount: Int
+    ) {
+        /** 메인 그룹 = 가장 큰 서브그룹 */
+        val mainGroup: VectorGroup get() = subGroups.first()
+
+        /** 예외 그룹 = 메인 그룹을 제외한 나머지 */
+        val exceptionGroups: List<VectorGroup> get() = subGroups.drop(1)
+
+        /**
+         * LLM 프롬프트용 분포도 요약 문자열 생성
+         *
+         * 예외 케이스 LLM 호출 시, 메인 케이스의 컨텍스트를 함께 전달하여
+         * LLM이 "이 번호의 주 형식은 결제이므로 이 변형도 결제일 가능성 높음"
+         * 같은 판단을 할 수 있도록 함.
+         */
+        fun buildDistributionSummary(): String {
+            val sb = StringBuilder()
+            sb.appendLine("발신번호 $address 총 ${totalCount}건:")
+            subGroups.forEachIndexed { idx, group ->
+                val ratio = (group.members.size * 100 / totalCount)
+                val label = if (idx == 0) " (메인)" else ""
+                val sample = group.representative.input.body
+                    .replace("\n", " ")
+                    .take(60)
+                sb.appendLine("  - 서브그룹${idx + 1}$label: ${group.members.size}건(${ratio}%) | 원본: $sample")
+            }
+            return sb.toString().trimEnd()
+        }
+    }
+
+    /**
+     * 메인 케이스 참조 정보 — 예외 케이스 LLM 호출 시 함께 전달
+     *
+     * 메인 케이스가 "결제"로 확인된 후, 예외 케이스 LLM 호출에
+     * 이 정보를 포함하여 분류 정확도를 높임.
+     *
+     * @property cardName 메인 케이스에서 추출된 카드명 (예: "KB국민")
+     * @property template 메인 케이스의 템플릿 (예: "[KB]{DATE} {STORE} {AMOUNT}원 승인")
+     * @property sample 메인 케이스의 원본 SMS 샘플
+     * @property isPayment 메인 케이스가 결제인지 여부
+     */
+    private data class MainCaseContext(
+        val cardName: String,
+        val template: String,
+        val sample: String,
+        val isPayment: Boolean
+    )
+
     /** regex 생성 실패 쿨다운 추적 */
     private val regexFailureStates = ConcurrentHashMap<String, RegexFailureState>()
     private data class RegexFailureState(val failCount: Int, val lastFailedAt: Long)
@@ -128,10 +191,20 @@ class SmsGroupClassifier @Inject constructor(
     // ===== 메인 진입점 =====
 
     /**
-     * 미매칭 SMS를 그룹핑 → LLM → regex 생성 → 파싱
+     * 미매칭 SMS를 그룹핑 → 발신번호 단위 LLM → regex 생성 → 파싱
+     *
+     * **핵심 전략: 발신번호 기반 생태계 분석**
+     *
+     * 기존: VectorGroup별 독립 LLM 호출 (컨텍스트 없음)
+     * 변경: 같은 발신번호의 모든 서브그룹을 SourceGroup으로 묶어서
+     *       메인 케이스 먼저 처리 → 메인 결과를 예외 케이스에 참조 전달
+     *
+     * 이점:
+     * - 메인 케이스(95%+) 결과가 예외 케이스 LLM 판단의 힌트로 작용
+     * - "이 번호는 KB카드이고 주 형식은 승인 SMS" → 해외승인/ATM도 결제 판정 정확도 향상
+     * - LLM이 전체 그림을 보고 판단 → 오파싱/오분류 감소
      *
      * @param unmatchedList Step 4에서 미매칭된 EmbeddedSms 리스트
-     *                      (각각 input.body 원본 + template + embedding 보유)
      * @param onProgress 진행률 콜백
      * @return 결제로 확인되고 파싱 성공한 결과 리스트
      */
@@ -143,27 +216,31 @@ class SmsGroupClassifier @Inject constructor(
 
         val results = mutableListOf<SmsParseResult>()
 
-        // [5-1] 그룹핑
+        // [5-1] 그룹핑 (Level 1~3: 발신번호 → 벡터 유사도 → 소그룹 병합)
         onProgress?.invoke("그룹핑", 0, unmatchedList.size)
         val groups = groupByAddressThenSimilarity(unmatchedList)
         Log.d(TAG, "그룹핑 완료: ${unmatchedList.size}건 → ${groups.size}그룹")
 
-        // [5-2 ~ 5-4] 그룹별 LLM 호출 + regex 생성 + 파싱
-        // LLM_BATCH_SIZE(20)씩 묶어서, Semaphore(5)로 병렬 제한
+        // [5-1.5] 발신번호 단위로 재집계 → SourceGroup 생성
+        val sourceGroups = buildSourceGroups(groups)
+        Log.d(TAG, "발신번호 집계: ${groups.size}그룹 → ${sourceGroups.size}발신번호")
+
+        // [5-2 ~ 5-4] 발신번호 단위로 처리
+        // 각 SourceGroup 내에서: 메인 케이스 먼저 → 예외 케이스에 메인 컨텍스트 전달
         val semaphore = Semaphore(LLM_CONCURRENCY)
-        val processedGroups = AtomicInteger(0)
+        val processedSources = AtomicInteger(0)
 
         coroutineScope {
-            groups.chunked(LLM_BATCH_SIZE).forEach { batch ->
-                val batchResults = batch.map { group ->
+            sourceGroups.chunked(LLM_BATCH_SIZE).forEach { batch ->
+                val batchResults = batch.map { sourceGroup ->
                     async(Dispatchers.IO) {
                         semaphore.acquire()
                         try {
-                            processGroup(group)
+                            processSourceGroup(sourceGroup)
                         } finally {
                             semaphore.release()
-                            val done = processedGroups.incrementAndGet()
-                            onProgress?.invoke("LLM 분석", done, groups.size)
+                            val done = processedSources.incrementAndGet()
+                            onProgress?.invoke("LLM 분석", done, sourceGroups.size)
                         }
                     }
                 }.awaitAll()
@@ -177,22 +254,129 @@ class SmsGroupClassifier @Inject constructor(
     }
 
     /**
+     * VectorGroup 리스트를 발신번호 단위 SourceGroup으로 재집계
+     *
+     * groupByAddressThenSimilarity()의 결과는 VectorGroup 리스트(멤버 수 정렬)이지만,
+     * 같은 발신번호의 서브그룹이 분산되어 있음.
+     * 이를 발신번호 기준으로 다시 묶어서 SourceGroup을 생성.
+     *
+     * @param groups 벡터 유사도 기반 그룹 리스트
+     * @return 발신번호 단위 그룹 리스트 (전체 SMS 수 내림차순)
+     */
+    private fun buildSourceGroups(groups: List<VectorGroup>): List<SourceGroup> {
+        // 발신번호별 서브그룹 집계
+        val addressMap = linkedMapOf<String, MutableList<VectorGroup>>()
+        for (group in groups) {
+            val address = normalizeAddress(group.representative.input.address)
+            addressMap.getOrPut(address) { mutableListOf() }.add(group)
+        }
+
+        return addressMap.map { (address, subGroups) ->
+            // 서브그룹을 멤버 수 내림차순 정렬 (메인 그룹이 first)
+            val sorted = subGroups.sortedByDescending { it.members.size }
+            val totalCount = sorted.sumOf { it.members.size }
+            SourceGroup(
+                address = address,
+                subGroups = sorted,
+                totalCount = totalCount
+            )
+        }.sortedByDescending { it.totalCount }
+    }
+
+    /**
+     * 발신번호 단위 처리: 메인 케이스 먼저 → 예외 케이스에 메인 컨텍스트 전달
+     *
+     * 처리 순서:
+     * 1. 메인 그룹(가장 큰 서브그룹) → processGroup()으로 LLM 호출
+     * 2. 메인 결과를 MainCaseContext로 저장
+     * 3. 예외 그룹들 → processGroup(mainContext)로 LLM 호출
+     *    - LLM에 "이 번호의 메인 형식은 [KB] 승인 SMS (카드: KB국민)"를 힌트로 전달
+     *
+     * 서브그룹이 1개면 기존과 동일하게 처리.
+     */
+    private suspend fun processSourceGroup(sourceGroup: SourceGroup): List<SmsParseResult> {
+        val results = mutableListOf<SmsParseResult>()
+
+        if (sourceGroup.subGroups.size == 1) {
+            // 서브그룹 1개 = 메인만 존재 → 기존 처리
+            results.addAll(processGroup(sourceGroup.mainGroup))
+            return results
+        }
+
+        Log.d(TAG, "발신번호 ${sourceGroup.address}: ${sourceGroup.subGroups.size}서브그룹, " +
+            "메인 ${sourceGroup.mainGroup.members.size}건/${sourceGroup.totalCount}건")
+
+        // Step 1: 메인 그룹 먼저 처리
+        val mainResults = processGroup(sourceGroup.mainGroup)
+        results.addAll(mainResults)
+
+        // Step 2: 메인 결과로 컨텍스트 생성
+        val mainContext = if (mainResults.isNotEmpty()) {
+            MainCaseContext(
+                cardName = mainResults.first().analysis.cardName,
+                template = sourceGroup.mainGroup.representative.template,
+                sample = sourceGroup.mainGroup.representative.input.body
+                    .replace("\n", " ")
+                    .take(80),
+                isPayment = true
+            )
+        } else {
+            // 메인이 비결제 → 예외 그룹도 비결제 가능성 높지만 독립 판단
+            MainCaseContext(
+                cardName = "",
+                template = sourceGroup.mainGroup.representative.template,
+                sample = sourceGroup.mainGroup.representative.input.body
+                    .replace("\n", " ")
+                    .take(80),
+                isPayment = false
+            )
+        }
+
+        // Step 3: 예외 그룹 처리 (메인 컨텍스트 전달)
+        for (exceptionGroup in sourceGroup.exceptionGroups) {
+            val exResults = processGroup(
+                group = exceptionGroup,
+                mainContext = mainContext,
+                distributionSummary = sourceGroup.buildDistributionSummary()
+            )
+            results.addAll(exResults)
+        }
+
+        return results
+    }
+
+    /**
      * 단일 그룹 처리: LLM 배치 추출 → regex 생성 → 패턴 등록 → 멤버 파싱
      *
      * 처리 흐름:
      * 1. 그룹 대표 SMS 원본(input.body)을 LLM에 전달하여 결제 정보 추출
+     *    - mainContext가 있으면 LLM 프롬프트에 메인 케이스 참조 정보 추가
      * 2. 결제 확인 시: regex 생성 (멤버 ≥3건) 또는 템플릿 폴백 regex
      * 3. 패턴 DB에 등록 (향후 같은 형식 SMS는 Step 4에서 매칭)
      * 4. 등록된 regex로 그룹 전체 멤버의 원본 파싱 → SmsParseResult 생성
+     *
+     * @param group 처리할 벡터 그룹
+     * @param mainContext 메인 케이스 참조 정보 (예외 그룹 처리 시 non-null)
+     * @param distributionSummary 발신번호 전체 분포도 요약 (예외 그룹 처리 시 non-null)
      */
-    private suspend fun processGroup(group: VectorGroup): List<SmsParseResult> {
+    private suspend fun processGroup(
+        group: VectorGroup,
+        mainContext: MainCaseContext? = null,
+        distributionSummary: String? = null
+    ): List<SmsParseResult> {
         val results = mutableListOf<SmsParseResult>()
         val representative = group.representative
 
         // --- [5-2] LLM 배치 추출 ---
-        // 대표 SMS 원본을 LLM에 보내 결제 정보 추출
+        // 대표 SMS 원본 + (예외 케이스인 경우) 메인 케이스 참조 정보를 LLM에 전달
+        val smsBodyForLlm = if (mainContext != null && distributionSummary != null) {
+            buildContextualLlmInput(representative.input.body, mainContext, distributionSummary)
+        } else {
+            representative.input.body
+        }
+
         val llmResults = smsExtractor.extractFromSmsBatch(
-            smsMessages = listOf(representative.input.body),
+            smsMessages = listOf(smsBodyForLlm),
             smsTimestamps = listOf(representative.input.date)
         )
         val llmResult = llmResults.firstOrNull() ?: return emptyList()
@@ -311,6 +495,41 @@ class SmsGroupClassifier @Inject constructor(
         }
 
         return results
+    }
+
+    /**
+     * 예외 케이스 LLM 호출을 위한 컨텍스트 포함 입력 구성
+     *
+     * 원본 SMS 본문 앞에 메인 케이스 참조 정보와 분포도 요약을 추가.
+     * LLM이 "이 SMS가 어떤 맥락에서 온 것인지"를 이해하고 판단할 수 있도록 함.
+     *
+     * 예:
+     * "[참조 정보]
+     *  이 SMS는 아래 발신번호의 예외 케이스입니다.
+     *  발신번호 15881688 총 85건:
+     *    - 서브그룹1 (메인): 80건(94%) | 원본: [KB]02/05 14:30 스타벅스 11,940원 승인
+     *    - 서브그룹2: 3건(4%) | 원본: [KB]해외승인 02/05 STARBUCKS USD12.00
+     *  메인 케이스 카드: KB국민
+     *
+     *  [분석 대상 SMS]
+     *  [KB]해외승인 02/05 STARBUCKS USD12.00"
+     */
+    private fun buildContextualLlmInput(
+        smsBody: String,
+        mainContext: MainCaseContext,
+        distributionSummary: String
+    ): String {
+        val contextInfo = StringBuilder()
+        contextInfo.appendLine("[참조 정보]")
+        contextInfo.appendLine("이 SMS는 아래 발신번호의 예외 케이스입니다.")
+        contextInfo.appendLine(distributionSummary)
+        if (mainContext.isPayment && mainContext.cardName.isNotBlank()) {
+            contextInfo.appendLine("메인 케이스 카드: ${mainContext.cardName}")
+        }
+        contextInfo.appendLine()
+        contextInfo.appendLine("[분석 대상 SMS]")
+        contextInfo.append(smsBody)
+        return contextInfo.toString()
     }
 
     // ===== [5-1] 그룹핑 =====
