@@ -81,20 +81,29 @@ class SmsPipeline @Inject constructor(
      *
      * @param smsList 처리할 SMS 목록 (호출자가 SmsInput으로 변환하여 전달)
      * @param onProgress 진행률 콜백 (UI 표시용, 선택)
+     * @param skipPreFilter true면 사전 필터링 스킵 (SmsSyncCoordinator에서 이미 수행한 경우)
      * @return 결제로 확인되고 파싱 성공한 결과 리스트
      */
     suspend fun process(
         smsList: List<SmsInput>,
-        onProgress: ((step: String, current: Int, total: Int) -> Unit)? = null
+        onProgress: ((step: String, current: Int, total: Int) -> Unit)? = null,
+        skipPreFilter: Boolean = false
     ): List<SmsParseResult> {
         if (smsList.isEmpty()) return emptyList()
 
         Log.d(TAG, "=== 파이프라인 시작: ${smsList.size}건 ===")
 
         // Step 2: 사전 필터링 — 비결제 SMS 제거
-        onProgress?.invoke("사전 필터링", 0, smsList.size)
-        val filtered = preFilter.filter(smsList)
-        Log.d(TAG, "필터링: ${smsList.size}건 → ${filtered.size}건 (${smsList.size - filtered.size}건 제외)")
+        // SmsSyncCoordinator 경유 시 이미 필터링 완료 → 스킵
+        val filtered = if (skipPreFilter) {
+            Log.d(TAG, "사전 필터링 스킵 (SmsSyncCoordinator에서 처리됨)")
+            smsList
+        } else {
+            onProgress?.invoke("사전 필터링", 0, smsList.size)
+            val result = preFilter.filter(smsList)
+            Log.d(TAG, "필터링: ${smsList.size}건 → ${result.size}건 (${smsList.size - result.size}건 제외)")
+            result
+        }
 
         if (filtered.isEmpty()) return emptyList()
 
