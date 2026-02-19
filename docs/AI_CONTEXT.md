@@ -266,11 +266,11 @@ SMS 동기화 (HomeViewModel.syncSmsMessages)
    → SmsReader.readAllMessagesByDateRange()
    → 010/070 발신자 조건부 제외 (SmsFilter.shouldSkipBySender)
    → SMS 제외 키워드 필터링 (SmsExclusionRepository)
-   → 100자 초과 SMS 사전 필터링 (batchClassify Step 2)
-   → HybridSmsClassifier.batchClassify() [Tier 1→2→3]
-      → Regex 오파싱 방어: storeName='결제'이면 null → Tier 2/3 이관
-      → 벡터 매칭 → 3-tier: ≥0.95 캐시, 0.92~0.95 확정, 0.80~0.92 LLM 트리거
-      → 벡터 매칭 → SmsPatternSimilarityPolicy 판단 → Tier 승격/차단
+   → HybridSmsClassifier.batchClassify() [사전필터→Regex→Vector→LLM]
+      → Step 1: 사전 필터링 (100자 초과 + 비결제 키워드 → Regex 스킵)
+      → Step 2: Regex 오파싱 방어: storeName='결제'이면 null → Tier 2/3 이관
+      → Step 3~4: 벡터 매칭 → ≥0.95 캐시, 0.92~0.95 확정, 0.80~0.92 LLM 트리거
+      → Step 5: LLM → SmsPatternSimilarityPolicy 판단 → Tier 승격/차단
    → ExpenseRepository.insert() / IncomeRepository.insert()
    → OwnedCardRepository.registerCardsFromSync() (카드명 정규화 + 등록)
    → batchLearnFromRegexResults() (벡터 학습)
