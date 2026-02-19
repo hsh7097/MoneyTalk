@@ -199,7 +199,7 @@ object DataBackupManager {
         sb.append('\uFEFF')
 
         // 헤더
-        sb.appendLine("날짜,가맹점,카테고리,카드,금액")
+        sb.appendLine("날짜,가맹점,카테고리,카드,금액,메모,문자원본")
 
         // 데이터
         expenses.forEach { expense ->
@@ -208,7 +208,9 @@ object DataBackupManager {
                         "${escapeCsv(expense.storeName)}," +
                         "${escapeCsv(expense.category)}," +
                         "${escapeCsv(expense.cardName)}," +
-                        "${expense.amount}"
+                        "${expense.amount}," +
+                        "${escapeCsv(expense.memo ?: "")}," +
+                        escapeCsv(expense.originalSms)
             )
         }
 
@@ -252,7 +254,7 @@ object DataBackupManager {
         sb.append('\uFEFF')
 
         // 헤더
-        sb.appendLine("유형,날짜,이름,카테고리,카드/출처,메모,금액")
+        sb.appendLine("유형,날짜,이름,카테고리,카드/출처,메모,금액,문자원본")
 
         // 지출 데이터
         expenses.forEach { expense ->
@@ -263,7 +265,8 @@ object DataBackupManager {
                         "${escapeCsv(expense.category)}," +
                         "${escapeCsv(expense.cardName)}," +
                         "${escapeCsv(expense.memo ?: "")}," +
-                        "-${expense.amount}"
+                        "-${expense.amount}," +
+                        escapeCsv(expense.originalSms)
             )
         }
 
@@ -276,7 +279,8 @@ object DataBackupManager {
                         "," +
                         "," +
                         "${escapeCsv(income.description)}," +
-                        "+${income.amount}"
+                        "+${income.amount}," +
+                        ""
             )
         }
 

@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import androidx.compose.runtime.Stable
 import kotlinx.coroutines.CancellationException
@@ -286,26 +287,38 @@ class HomeViewModel @Inject constructor(
      * 월 시작일이 변경되면 자동으로 홈 데이터를 다시 로드합니다.
      */
     private fun loadSettings() {
+        var isFirstEmit = true
         viewModelScope.launch {
-            settingsDataStore.monthStartDayFlow.collect { monthStartDay ->
-                val (year, month) = withContext(Dispatchers.IO) {
-                    val (_, endTs) = DateUtils.getCurrentCustomMonthPeriod(monthStartDay)
-                    val calendar = java.util.Calendar.getInstance().apply { timeInMillis = endTs }
-                    Pair(
-                        calendar.get(java.util.Calendar.YEAR),
-                        calendar.get(java.util.Calendar.MONTH) + 1
-                    )
+            settingsDataStore.monthStartDayFlow
+                .distinctUntilChanged()
+                .collect { monthStartDay ->
+                    if (isFirstEmit) {
+                        // 최초: 현재 월 기준으로 selectedYear/selectedMonth 설정
+                        val (year, month) = withContext(Dispatchers.IO) {
+                            val (_, endTs) = DateUtils.getCurrentCustomMonthPeriod(monthStartDay)
+                            val calendar = java.util.Calendar.getInstance().apply { timeInMillis = endTs }
+                            Pair(
+                                calendar.get(java.util.Calendar.YEAR),
+                                calendar.get(java.util.Calendar.MONTH) + 1
+                            )
+                        }
+                        _uiState.update {
+                            it.copy(
+                                monthStartDay = monthStartDay,
+                                selectedYear = year,
+                                selectedMonth = month
+                            )
+                        }
+                        isFirstEmit = false
+                    } else {
+                        // 이후: monthStartDay만 갱신 (사용자가 보고 있는 월은 유지)
+                        _uiState.update {
+                            it.copy(monthStartDay = monthStartDay)
+                        }
+                    }
+                    clearAllPageCache()
+                    loadCurrentAndAdjacentPages()
                 }
-                _uiState.update {
-                    it.copy(
-                        monthStartDay = monthStartDay,
-                        selectedYear = year,
-                        selectedMonth = month
-                    )
-                }
-                clearAllPageCache()
-                loadCurrentAndAdjacentPages()
-            }
         }
         // 월별 동기화 해제 상태 로드
         viewModelScope.launch {
