@@ -107,6 +107,16 @@
 - 빈 상태 "광고 보고 전체 데이터 가져오기" CTA (FullSyncCtaSection 공용 Composable)
 - 광고 로드/표시 실패 시 보상 처리 (Home/History/Chat onFailed → 앱 이슈 = 유저 책임 아님)
 
+**SMS 동기화 최적화 + 필터링 강화**: ✅ 완료 (2026-02-19)
+- 초기 동기화 3개월 → 2개월 축소 (DEFAULT_SYNC_PERIOD_MILLIS=60일)
+- 광고 시청 후 해당 월만 동기화 (syncMonthData + calculateMonthRange)
+- 010/070 발신자 조건부 제외 (SmsFilter: normalizeAddress + hasFinancialHints + shouldSkipBySender)
+- SMS/MMS/RCS 모든 채널에 발신자 필터 통일 적용
+- LLM 트리거 0.80 정책 (벡터 유사도 0.80~0.92 → LLM 호출, 결제 판정 아님)
+- Regex 오파싱 방어 (storeName='결제' → Tier 2/3 이관)
+- 배치 분류 tier별 관측성 로그 추가
+- core/sms 패키지 분리 (SmsParser, SmsReader, HybridSmsClassifier 등 7개 파일 이동)
+
 ### 대기 중인 작업
 
 - `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지
@@ -170,6 +180,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-19 | SMS 동기화 최적화 (2개월 축소 + 월별 동기화 + 발신자 필터 + LLM 0.80 트리거 + 오파싱 방어 + core/sms 패키지 분리) | 완료 |
 | 2026-02-19 | 빈 상태 CTA + 광고 실패 보상 + 탭 재클릭 + Auto Backup 수정 + 깜빡임 수정 | 완료 |
 | 2026-02-19 | HorizontalPager pageCache + 3개월 동기화 제한 + 리워드 광고 전체 해제 | 완료 |
 | 2026-02-19 | SMS 100자 초과 필터 HybridSmsClassifier 적용 | 완료 |
@@ -228,9 +239,12 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 파일 | 설명 |
 |------|------|
-| [`HybridSmsClassifier.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/HybridSmsClassifier.kt) | 3-tier SMS 분류 |
-| [`SmsBatchProcessor.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/SmsBatchProcessor.kt) | SMS 배치 처리 |
-| [`VectorSearchEngine.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/VectorSearchEngine.kt) | 순수 벡터 연산 |
+| [`HybridSmsClassifier.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/HybridSmsClassifier.kt) | 3-tier SMS 분류 |
+| [`SmsBatchProcessor.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsBatchProcessor.kt) | SMS 배치 처리 |
+| [`VectorSearchEngine.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/VectorSearchEngine.kt) | 순수 벡터 연산 |
+| [`SmsFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsFilter.kt) | 010/070 발신자 조건부 제외 |
+| [`SmsReader.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsReader.kt) | SMS/MMS/RCS 읽기 |
+| [`SmsParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsParser.kt) | SMS 정규식 파싱 |
 | [`CardNameNormalizer.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) | 카드명 정규화 |
 | [`StoreAliasManager.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/StoreAliasManager.kt) | 가게명 별칭 관리 |
 | [`CategoryReferenceProvider.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/CategoryReferenceProvider.kt) | 동적 참조 리스트 |

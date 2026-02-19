@@ -5,6 +5,24 @@
 ## [Unreleased]
 
 ### Added (2026-02-19)
+- **SmsFilter 발신자 조건부 제외**: 010/070 발신자 SMS를 조건부 제외 (금융 힌트 있으면 보존)
+  - `SmsFilter.normalizeAddress()`: +82→0 변환, 하이픈/공백 제거
+  - `SmsFilter.hasFinancialHints()`: 금액 패턴 + 카드/은행 키워드 검출
+  - SMS/MMS/RCS 모든 채널에 통일 적용
+- **LLM 트리거 0.80 정책**: 벡터 유사도 0.80~0.92 구간에서 LLM 호출 (결제 판정 아님, 확인 요청)
+  - `SmsPatternSimilarityPolicy.LLM_TRIGGER_THRESHOLD = 0.80f`
+  - batchClassify 3-tier: ≥0.95 캐시, 0.92~0.95 확정, 0.80~0.92 LLM 트리거
+- **Regex 오파싱 방어**: storeName='결제'(기본값) 시 Tier 1 결과 거부 → Tier 2/3 이관
+- **배치 분류 관측성 로그**: tier별 카운트, 사전필터 수, LLM 호출 수 출력
+- **core/sms 패키지 분리**: SmsParser, SmsReader, HybridSmsClassifier, SmsBatchProcessor, VectorSearchEngine, SmsEmbeddingService, GeminiSmsExtractor를 `core/util` → `core/sms`로 이동
+
+### Changed (2026-02-19)
+- **초기 동기화 2개월 축소**: DEFAULT_SYNC_PERIOD_MILLIS = 60일 (기존 3개월)
+- **광고 시청 후 월별 동기화**: "전체 데이터 가져오기" → 현재 페이지의 해당 월만 동기화
+  - `HomeViewModel.syncMonthData(year, month)` + `calculateMonthRange()` 추가
+  - HomeScreen/HistoryScreen에서 이미 해제된 경우 해당 월만 재동기화
+
+### Added (이전 2026-02-19)
 - **빈 상태 전체 동기화 CTA**: 3개월 이전 빈 페이지에서 "광고 보고 전체 데이터 가져오기" CTA 표시 (Home/History)
 - **FullSyncCtaSection 공용 Composable**: 전체 동기화 해제 CTA 공통 컴포넌트
 - **탭 재클릭 → 오늘 페이지 이동**: 홈/내역 탭 재클릭 시 현재 월 페이지로 animateScrollToPage

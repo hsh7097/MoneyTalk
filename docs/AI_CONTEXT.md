@@ -1,7 +1,7 @@
 # AI_CONTEXT.md - MoneyTalk 프로젝트 컨텍스트
 
 > AI 에이전트가 MoneyTalk 프로젝트를 이해하고 작업하기 위한 핵심 컨텍스트 문서
-> **최종 갱신**: 2026-02-18
+> **최종 갱신**: 2026-02-19
 
 ---
 
@@ -42,7 +42,8 @@ app/src/main/java/com/sanha/moneytalk/
 │   │       ├── tab/               # SegmentedTabRowCompose/Info
 │   │       └── transaction/       # card/ (TransactionCard), header/ (GroupHeader)
 │   ├── similarity/        # 유사도 판정 정책 (SimilarityPolicy 구현체)
-│   └── util/              # 핵심 유틸 (SMS파싱, 벡터엔진, 분류기 등)
+│   ├── sms/               # SMS 핵심 (SmsParser, SmsReader, HybridSmsClassifier, VectorSearchEngine 등)
+│   └── util/              # 유틸 (DateUtils, CardNameNormalizer, StoreNameGrouper 등)
 ├── feature/
 │   ├── home/              # 홈 화면 (월간 현황, SMS 동기화)
 │   │   ├── data/          # Repository (Expense, Income, StoreEmbedding, Category, GeminiCategory, CategoryClassifier)
@@ -63,7 +64,8 @@ app/src/main/java/com/sanha/moneytalk/
 
 | 시스템 | 설명 | 핵심 파일 |
 |--------|------|-----------|
-| SMS 파싱 (3-tier) | Regex → Vector → Gemini LLM | [HybridSmsClassifier.kt](../app/src/main/java/com/sanha/moneytalk/core/util/HybridSmsClassifier.kt), [VectorSearchEngine.kt](../app/src/main/java/com/sanha/moneytalk/core/util/VectorSearchEngine.kt) |
+| SMS 파싱 (3-tier) | Regex → Vector → Gemini LLM | [HybridSmsClassifier.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/HybridSmsClassifier.kt), [VectorSearchEngine.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/VectorSearchEngine.kt) |
+| SMS 필터링 (발신자) | 010/070 조건부 제외 + 금융 힌트 보존 | [SmsFilter.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsFilter.kt) |
 | 카테고리 분류 (4-tier) | Room → Vector → Keyword → Gemini Batch | [CategoryClassifierService.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt), [StoreEmbeddingRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreEmbeddingRepository.kt) |
 | AI 채팅 (3-step) | 쿼리분석 → DB조회/액션 → 답변생성 | [ChatViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt), [GeminiRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) |
 | 카드 관리 | 소유 카드 화이트리스트 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
@@ -126,6 +128,7 @@ SimilarityPolicy (판단 인터페이스)
 | `profile.autoApply` | 0.95 | 캐시된 파싱 결과 재사용 | HybridSmsClassifier |
 | `profile.group` | 0.95 | SMS 패턴 벡터 그룹핑 | SmsBatchProcessor |
 | `NON_PAYMENT_CACHE_THRESHOLD` | 0.97 | 비결제 패턴 캐시 히트 | HybridSmsClassifier |
+| `LLM_TRIGGER_THRESHOLD` | 0.80 | LLM 호출 대상 선별 (결제 판정 아님) | HybridSmsClassifier |
 
 ### 3-3. StoreNameSimilarityPolicy (가게명 매칭용)
 
@@ -160,7 +163,8 @@ SimilarityPolicy (판단 인터페이스)
        ─── 가게명 → 카테고리 자동 적용 (StoreNameSimilarityPolicy.profile.autoApply)
 0.90 ─── 카테고리 전파 (StoreNameSimilarityPolicy.profile.propagate)
 0.88 ─── 가게명 시맨틱 그룹핑 (StoreNameSimilarityPolicy.profile.group)
-0.80 ─── LLM 고정 confidence
+0.80 ─── LLM 트리거 임계값 (SmsPatternSimilarityPolicy.LLM_TRIGGER_THRESHOLD) — 결제 판정 아님
+       ─── LLM 고정 confidence
 0.60 ─── confidence 차단 임계값 (CategoryPropagationPolicy.MIN_PROPAGATION_CONFIDENCE)
 0.00 ─── 매칭 없음
 ```
@@ -254,14 +258,18 @@ SMS 수신 → SmsReceiver → classifyRegexOnly (Tier 1)
 
 SMS 동기화 (HomeViewModel.syncSmsMessages)
    → 동기화 범위 결정:
-      - 첫 동기화 + fullSyncUnlocked=false → 3개월 전부터 (THREE_MONTHS_MILLIS)
+      - 첫 동기화 + fullSyncUnlocked=false → 2개월 전부터 (DEFAULT_SYNC_PERIOD_MILLIS=60일)
       - 첫 동기화 + fullSyncUnlocked=true → 전체 (0L)
-      - forceFullSync + unlocked → 전체, 미해제 → 3개월
+      - targetMonthRange 지정 시 → 해당 월만 (광고 시청 후 월별 동기화)
+      - forceFullSync + unlocked → 전체, 미해제 → 2개월
       - 증분 → lastSyncTime 이후
    → SmsReader.readAllMessagesByDateRange()
+   → 010/070 발신자 조건부 제외 (SmsFilter.shouldSkipBySender)
    → SMS 제외 키워드 필터링 (SmsExclusionRepository)
    → 100자 초과 SMS 사전 필터링 (batchClassify Step 2)
    → HybridSmsClassifier.batchClassify() [Tier 1→2→3]
+      → Regex 오파싱 방어: storeName='결제'이면 null → Tier 2/3 이관
+      → 벡터 매칭 → 3-tier: ≥0.95 캐시, 0.92~0.95 확정, 0.80~0.92 LLM 트리거
       → 벡터 매칭 → SmsPatternSimilarityPolicy 판단 → Tier 승격/차단
    → ExpenseRepository.insert() / IncomeRepository.insert()
    → OwnedCardRepository.registerCardsFromSync() (카드명 정규화 + 등록)
