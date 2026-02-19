@@ -4,6 +4,49 @@
 
 ---
 
+## 2026-02-20 - sms2 파이프라인 마이그레이션 완료
+
+### 작업 내용
+
+#### 1. sms2 신규 파일 4개 추가
+- `SmsSyncCoordinator.kt`: 유일한 외부 진입점 — process(smsList, onProgress) → SyncResult
+  - SmsPreFilter → SmsIncomeFilter → SmsPipeline 순차 호출
+  - SMS 읽기/DB 저장/lastSyncTime 관리 없음 (순수 분류 로직만)
+- `SmsReaderV2.kt`: SMS/MMS/RCS 통합 읽기 → List<SmsInput> 직접 반환
+  - V1의 SmsMessage 중간 변환 제거, SmsFilter.shouldSkipBySender 통합
+- `SmsIncomeFilter.kt`: PAYMENT/INCOME/SKIP 3분류
+  - financialKeywords 46개, cancellationKeywords(출금취소 등), incomeExcludeKeywords
+  - classifyAll()로 배치 분류 지원
+- `SmsIncomeParser.kt`: 수입 SMS 파싱 Object 싱글톤
+  - extractIncomeAmount/Type/Source/DateTime
+  - KB 스타일 멀티라인 소스 추출, FROM_PATTERN, DEPOSIT_PATTERN
+
+#### 2. HomeViewModel syncSmsV2() 오케스트레이터 전환
+- syncSmsMessages() 전체 삭제 (~400줄)
+- syncSmsV2() 내부를 5개 private 메소드로 분리:
+  - readAndFilterSms(): SMS 읽기 + smsId 중복 제거
+  - processSmsPipeline(): SmsSyncCoordinator.process() 호출
+  - saveExpenses(): SmsParseResult → ExpenseEntity 변환 + 배치 저장
+  - saveIncomes(): SmsIncomeParser로 파싱 + IncomeEntity 저장
+  - postSyncCleanup(): 카테고리 분류, 패턴 정리, lastSyncTime 등
+- syncIncremental() + calculateIncrementalRange() 추가
+- HomeScreen 2곳 호출부 변경 (syncSmsMessages → syncIncremental)
+- SmsBatchProcessor DI 제거, launchBackgroundHybridClassification() 삭제
+
+#### 3. V1 유지 범위
+- core/sms(V1): SmsProcessingService 실시간 수신 전용으로 유지
+- 공유: SmsFilter(shouldSkipBySender), GeminiSmsExtractor(LLM 호출)
+
+### 변경 파일
+- `core/sms2/SmsSyncCoordinator.kt` — 신규
+- `core/sms2/SmsReaderV2.kt` — 신규
+- `core/sms2/SmsIncomeFilter.kt` — 신규
+- `core/sms2/SmsIncomeParser.kt` — 신규
+- `feature/home/ui/HomeViewModel.kt` — syncSmsV2 분리 + syncSmsMessages 삭제
+- `feature/home/ui/HomeScreen.kt` — 2개 호출부 syncIncremental로 변경
+
+---
+
 ## 2026-02-19 - SMS 통합 파이프라인 (sms2 패키지) 골격 생성
 
 ### 작업 내용

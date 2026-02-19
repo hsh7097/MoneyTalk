@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-19
+> **최종 갱신**: 2026-02-20
 
 ---
 
@@ -142,15 +142,16 @@
 - isKbWithdrawalLine() 헬퍼 도입으로 KB 스타일 출금 줄 판별 통합
 - 보험 카테고리 키워드 추가 (삼성화, 현대해, 메리츠, DB손해, 한화손해, 흥국화)
 
-**SMS 통합 파이프라인 (sms2 패키지)**: 🔧 골격 생성 완료 (2026-02-19)
-- core/sms2/ 패키지에 통합 파이프라인 6개 파일 생성 (골격 + 주석 + TODO)
-- SmsPipelineModels.kt: 데이터 클래스 (SmsInput, EmbeddedSms, SmsParseResult)
-- SmsPreFilter.kt: Step 2 사전 필터링 (전체 구현)
-- SmsTemplateEngine.kt: Step 3 템플릿화 + 임베딩 API (전체 구현)
-- SmsPatternMatcher.kt: Step 4 벡터 매칭 + regex 파싱 (전체 구현, 자체 코사인 유사도)
-- SmsGroupClassifier.kt: Step 5 그룹핑 + LLM + regex 생성 (전체 구현)
-- SmsPipeline.kt: 오케스트레이터 (전체 구현)
-- 기존 core/sms 패키지 무변경 (호출자 연결은 다음 단계)
+**SMS 통합 파이프라인 (sms2) 마이그레이션**: ✅ 완료 (2026-02-19~20)
+- core/sms2/ 패키지에 통합 파이프라인 10개 파일 (6개 골격 + 4개 신규)
+- SmsReaderV2.kt: SMS/MMS/RCS 통합 읽기 → List<SmsInput> 직접 반환 (SmsMessage 중간 변환 제거)
+- SmsIncomeParser.kt: 수입 SMS 파싱 (extractIncomeAmount/Type/Source/DateTime)
+- SmsSyncCoordinator.kt: 유일한 외부 진입점 (process → SmsPreFilter → SmsIncomeFilter → SmsPipeline)
+- SmsIncomeFilter.kt: PAYMENT/INCOME/SKIP 3분류 (financialKeywords 46개 기반)
+- HomeViewModel: syncSmsMessages() 삭제 → syncSmsV2() 오케스트레이터 (5개 private 메소드)
+- syncIncremental() + calculateIncrementalRange() 추가
+- SmsBatchProcessor DI 제거, launchBackgroundHybridClassification() 삭제
+- core/sms (V1)은 SmsProcessingService 실시간 수신 전용으로 유지
 
 ### 대기 중인 작업
 
@@ -202,8 +203,9 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 - `!!` non-null assertion 사용 금지
 
 ### 알려진 이슈
-- `SmsBatchProcessor.kt`의 그룹핑 임계값(0.95)과 `StoreNameGrouper.kt`(0.88)은 의도적으로 다름 (SMS 패턴 vs 가게명)
+- `SmsGroupClassifier.kt`(sms2)의 그룹핑 임계값(0.95)과 `StoreNameGrouper.kt`(0.88)은 의도적으로 다름 (SMS 패턴 vs 가게명)
 - ChatViewModel.kt가 대형 파일(~1717줄) — 향후 query/action 로직 분리 후보
+- core/sms(V1)은 SmsProcessingService 실시간 수신에서만 사용, 배치 동기화는 sms2로 완전 전환
 
 ### Git 규칙
 - 커밋/푸시/PR/브랜치 규칙 SSOT: [GIT_CONVENTION.md](GIT_CONVENTION.md)
@@ -215,6 +217,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-20 | sms2 마이그레이션 완료: SmsReaderV2/SmsIncomeParser/SmsSyncCoordinator/SmsIncomeFilter 신규 + syncSmsV2 오케스트레이터 + syncSmsMessages 삭제 | 완료 |
 | 2026-02-19 | SMS 통합 파이프라인 sms2 패키지 6개 파일 생성 (SmsPipeline, SmsPatternMatcher 등) | 완료 |
 | 2026-02-19 | SmsParser KB 출금 유형 확장 (FBS출금, 공동CMS출) + 보험 카테고리 키워드 | 완료 |
 | 2026-02-19 | 레거시 FULL_SYNC_UNLOCKED 사용자 월별 동기화 호환성 수정 | 완료 |
@@ -293,14 +296,18 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | [`CategoryClassifierService.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt) | 4-tier 카테고리 분류 |
 | [`StoreEmbeddingRepository.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreEmbeddingRepository.kt) | 가게명 벡터 캐시 + 전파 |
 
-### SMS 통합 파이프라인 (sms2, 신규)
+### SMS 통합 파이프라인 (sms2)
 
 | 파일 | 설명 |
 |------|------|
+| [`SmsSyncCoordinator.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsSyncCoordinator.kt) | 유일한 외부 진입점 (process → PreFilter → IncomeFilter → Pipeline) |
+| [`SmsReaderV2.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsReaderV2.kt) | SMS/MMS/RCS 통합 읽기 → List\<SmsInput\> 직접 반환 |
+| [`SmsIncomeFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsIncomeFilter.kt) | PAYMENT/INCOME/SKIP 3분류 (financialKeywords 46개) |
+| [`SmsIncomeParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsIncomeParser.kt) | 수입 SMS 파싱 (금액/유형/출처/날짜시간) |
 | [`SmsPipeline.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipeline.kt) | 오케스트레이터 (Step 2→3→4→5) |
-| [`SmsPipelineModels.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipelineModels.kt) | 데이터 클래스 (SmsInput, EmbeddedSms, SmsParseResult) |
-| [`SmsPreFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPreFilter.kt) | Step 2: 사전 필터링 |
-| [`SmsTemplateEngine.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsTemplateEngine.kt) | Step 3: 템플릿화 + 임베딩 API |
+| [`SmsPipelineModels.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipelineModels.kt) | 데이터 클래스 (SmsInput, EmbeddedSms, SmsParseResult, SyncResult) |
+| [`SmsPreFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPreFilter.kt) | Step 2: 사전 필터링 (키워드 + 구조) |
+| [`SmsTemplateEngine.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsTemplateEngine.kt) | Step 3: 템플릿화 + Gemini Embedding API |
 | [`SmsPatternMatcher.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPatternMatcher.kt) | Step 4: 벡터 매칭 + regex 파싱 |
 | [`SmsGroupClassifier.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsGroupClassifier.kt) | Step 5: 그룹핑 + LLM + regex 생성 |
 

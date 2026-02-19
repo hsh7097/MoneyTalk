@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+### Added (2026-02-20)
+- **sms2 마이그레이션 완료**: 배치 동기화 경로를 V1(HybridSmsClassifier/SmsBatchProcessor)에서 sms2(SmsSyncCoordinator)로 전면 전환
+  - `SmsSyncCoordinator.kt`: 유일한 외부 진입점 (process → SmsPreFilter → SmsIncomeFilter → SmsPipeline)
+  - `SmsReaderV2.kt`: SMS/MMS/RCS 통합 읽기 → List\<SmsInput\> 직접 반환 (SmsMessage 중간 변환 제거)
+  - `SmsIncomeFilter.kt`: PAYMENT/INCOME/SKIP 3분류 (financialKeywords 46개)
+  - `SmsIncomeParser.kt`: 수입 SMS 파싱 Object 싱글톤 (금액/유형/출처/날짜시간)
+  - `syncIncremental()` + `calculateIncrementalRange()`: HomeScreen용 증분 동기화 래퍼
+
+### Changed (2026-02-20)
+- **syncSmsV2() 오케스트레이터 전환**: 내부를 5개 private 메소드로 분리 (readAndFilterSms, processSmsPipeline, saveExpenses, saveIncomes, postSyncCleanup)
+- **HomeScreen 호출부 변경**: syncSmsMessages → syncIncremental (2곳)
+
+### Removed (2026-02-20)
+- **syncSmsMessages() 삭제**: HomeViewModel에서 V1 동기화 메소드 전체 제거 (~400줄)
+- **SmsBatchProcessor DI 제거**: HomeViewModel 생성자에서 제거
+- **launchBackgroundHybridClassification() 삭제**: V1 배경 분류 메소드 제거
+
 ### Added (2026-02-19)
 - **GeneratedSmsRegexParser**: LLM 생성 정규식 파서 신규 추가 (group1 캡처 규약, 폴백 체인)
 - **SmsBatchProcessor 발신번호 2레벨 그룹핑**: 37그룹 → 2~4그룹으로 대폭 감소
