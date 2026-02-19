@@ -59,6 +59,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | [docs/GIT_CONVENTION.md](docs/GIT_CONVENTION.md) | Git 컨벤션 | 커밋/브랜치/푸시/PR 규칙 확인 시 |
 | [docs/QUICK_START.md](docs/QUICK_START.md) | 빠른 시작 가이드 | 환경 설정 시 |
 | [docs/APP_MAP.md](docs/APP_MAP.md) | 앱 진입점/네비게이션 맵 | 라우팅 파악 시 |
+| [docs/MONETIZATION.md](docs/MONETIZATION.md) | 과금 전략, 요금제, 광고, API 비용 구조 | 과금/수익화 관련 작업 시 |
 
 ---
 
