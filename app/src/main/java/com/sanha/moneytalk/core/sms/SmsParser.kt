@@ -92,7 +92,8 @@ object SmsParser {
 
     /** 결제 관련 키워드 (결제 문자 판별용) */
     private val paymentKeywords = listOf(
-        "결제", "승인", "사용", "출금", "이용"
+        "결제", "승인", "사용", "출금", "이용",
+        "CMS출"  // 공동CMS출 (보험 CMS 자동이체)
     )
 
     /** 수입 관련 키워드 (입금 문자 판별용) */
@@ -281,7 +282,8 @@ object SmsParser {
         ),
         // 보험
         "보험" to listOf(
-            "보험", "보험료"
+            "보험", "보험료",
+            "삼성화", "현대해", "메리츠", "DB손해", "한화손해", "흥국화"
         )
     )
 
@@ -575,10 +577,24 @@ object SmsParser {
     }
 
     /**
+     * KB 스타일 출금 유형 줄인지 판별
+     * "체크카드출금", "출금", "FBS출금", "공동CMS출" 등 KB 계좌 SMS의 출금유형 줄 매칭
+     * 공동CMS출 뒤 공백이 올 수 있으므로 trim 후 비교
+     */
+    private fun isKbWithdrawalLine(line: String): Boolean {
+        val trimmed = line.trim()
+        return trimmed.contains("체크카드출금") ||
+                trimmed == "출금" ||
+                trimmed.contains("FBS출금") ||
+                trimmed.contains("공동CMS출")
+    }
+
+    /**
      * SMS에서 결제 금액 추출
      *
      * 지원 형식:
      * 1. KB 스타일: "체크카드출금\n금액\n잔액..." (원 단위 없음)
+     *    - FBS출금 (카드/페이 자동이체), 공동CMS출 (보험 CMS) 포함
      * 2. 일반 형식: "금액원" (예: 15,000원)
      * 3. 줄바꿈 숫자: 순수 숫자만 있는 줄
      *
@@ -588,10 +604,10 @@ object SmsParser {
     fun extractAmount(message: String): Int? {
         val lines = message.split("\n").map { it.trim() }
 
-        // KB 스타일 우선 처리 - "체크카드출금" 또는 "출금" 다음 줄의 숫자
-        // 예: 체크카드출금\n11,940\n잔액45,091
+        // KB 스타일 우선 처리 - 출금유형 줄 다음의 숫자
+        // 예: 체크카드출금\n11,940\n잔액45,091 / FBS출금\n71,000 / 공동CMS출\n44,490
         for (i in lines.indices) {
-            if (lines[i].contains("체크카드출금") || lines[i] == "출금") {
+            if (isKbWithdrawalLine(lines[i])) {
                 // 바로 다음 줄이 금액
                 if (i + 1 < lines.size) {
                     val nextLine = lines[i + 1]
@@ -707,12 +723,12 @@ object SmsParser {
      * 한국 카드사 SMS 형식에 맞춰 가게명을 추출합니다.
      *
      * 지원 형식:
-     * 1. KB 스타일: 줄바꿈으로 구분된 형식 (체크카드출금 위 줄 탐색)
+     * 1. KB 스타일: 줄바꿈으로 구분된 형식 (출금유형 줄 위에서 가게명 탐색)
      *    [KB]
      *    02/05 22:47
      *    801302**775 (카드번호)
      *    *60원캐쉬백주식회사 (가게명)
-     *    체크카드출금
+     *    체크카드출금 / FBS출금 / 공동CMS출
      *    11,940 (금액)
      *    잔액45,091
      *
@@ -724,11 +740,12 @@ object SmsParser {
      * @return 가게명 (추출 실패 시 "결제")
      */
     fun extractStoreName(message: String): String {
-        // KB 스타일 패턴 - "체크카드출금" 또는 "출금" 줄 기준으로 위 줄에서 가게명 탐색
+        // KB 스타일 패턴 - 출금유형 줄 기준으로 위 줄에서 가게명 탐색
+        // 체크카드출금, 출금, FBS출금, 공동CMS출 모두 동일 구조
         val lines = message.split("\n").map { it.trim() }
         for (i in lines.indices) {
             val line = lines[i]
-            if (line.contains("체크카드출금") || line == "출금") {
+            if (isKbWithdrawalLine(line)) {
                 // 위로 올라가면서 유효한 가게명 찾기
                 for (j in (i - 1) downTo 0) {
                     val potentialStore = lines[j]
