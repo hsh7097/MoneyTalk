@@ -109,6 +109,12 @@ class SmsProcessingService @Inject constructor(
 
         val analysis = result.analysisResult
 
+        // 금액 유효성 검증
+        if (analysis.amount <= 0) {
+            Log.d(TAG, "잘못된 금액: ${analysis.amount}")
+            return ProcessResult(ProcessResult.ResultType.PARSE_FAILED)
+        }
+
         // 카테고리 분류 (Tier 1~2, Gemini 호출 안함)
         val category = if (analysis.category.isNotBlank() &&
             analysis.category != "미분류" &&
@@ -145,7 +151,7 @@ class SmsProcessingService @Inject constructor(
         }
 
         // UI 갱신 이벤트
-        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.EXPENSE_ADDED)
+        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
 
         return ProcessResult(
             type = ProcessResult.ResultType.EXPENSE_SAVED,
@@ -186,7 +192,7 @@ class SmsProcessingService @Inject constructor(
         Log.d(TAG, "수입 저장: ${amount}원 ($incomeType)")
 
         // UI 갱신 이벤트
-        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.EXPENSE_ADDED)
+        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
 
         return ProcessResult(
             type = ProcessResult.ResultType.INCOME_SAVED,

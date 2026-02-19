@@ -268,7 +268,7 @@ class HistoryViewModel @Inject constructor(
                         loadCurrentAndAdjacentPages()
                     }
 
-                    DataRefreshEvent.RefreshType.EXPENSE_ADDED -> {
+                    DataRefreshEvent.RefreshType.TRANSACTION_ADDED -> {
                         clearAllPageCache()
                         loadCurrentAndAdjacentPages()
                     }

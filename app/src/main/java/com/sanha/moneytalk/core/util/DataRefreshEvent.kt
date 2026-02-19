@@ -38,6 +38,6 @@ class DataRefreshEvent @Inject constructor() {
         OWNED_CARD_UPDATED,
 
         /** 실시간 SMS 수신으로 지출/수입 추가 */
-        EXPENSE_ADDED
+        TRANSACTION_ADDED
     }
 }
