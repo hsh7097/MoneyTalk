@@ -102,6 +102,7 @@ data class HomeUiState(
     val syncProgressTotal: Int = 0,
     // 월별 동기화 해제 관련
     val syncedMonths: Set<String> = emptySet(),
+    val isLegacyFullSyncUnlocked: Boolean = false,
     val showFullSyncAdDialog: Boolean = false
 )
 
@@ -324,6 +325,13 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             settingsDataStore.syncedMonthsFlow.collect { months ->
                 _uiState.update { it.copy(syncedMonths = months) }
+            }
+        }
+        // 레거시 전역 동기화 해제 상태 (FULL_SYNC_UNLOCKED=true 마이그레이션 호환)
+        @Suppress("DEPRECATION")
+        viewModelScope.launch {
+            settingsDataStore.fullSyncUnlockedFlow.collect { unlocked ->
+                _uiState.update { it.copy(isLegacyFullSyncUnlocked = unlocked) }
             }
         }
     }
@@ -1154,8 +1162,11 @@ class HomeViewModel @Inject constructor(
 
     /** 해당 월이 이미 동기화(광고 시청) 되었는지 확인 */
     fun isMonthSynced(year: Int, month: Int): Boolean {
+        val state = _uiState.value
+        // 레거시: 기존 FULL_SYNC_UNLOCKED=true 사용자는 모든 월 해제로 처리
+        if (state.isLegacyFullSyncUnlocked) return true
         val yearMonth = String.format("%04d-%02d", year, month)
-        return yearMonth in _uiState.value.syncedMonths
+        return yearMonth in state.syncedMonths
     }
 
     /**
@@ -1173,10 +1184,13 @@ class HomeViewModel @Inject constructor(
      * 미동기화 시 → 커스텀 월 시작이 (현재 - DEFAULT_SYNC_PERIOD_MILLIS) 이전이면 부분 커버
      */
     fun isPagePartiallyCovered(year: Int, month: Int): Boolean {
+        val state = _uiState.value
+        // 레거시 전역 해제 또는 월별 해제 시 완전 커버로 처리
+        if (state.isLegacyFullSyncUnlocked) return false
         val yearMonth = String.format("%04d-%02d", year, month)
-        if (yearMonth in _uiState.value.syncedMonths) return false
+        if (yearMonth in state.syncedMonths) return false
         val (customMonthStart, _) = DateUtils.getCustomMonthPeriod(
-            year, month, _uiState.value.monthStartDay
+            year, month, state.monthStartDay
         )
         val syncCoverageStart = System.currentTimeMillis() - DEFAULT_SYNC_PERIOD_MILLIS
         return customMonthStart < syncCoverageStart
