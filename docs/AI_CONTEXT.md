@@ -15,7 +15,7 @@
 - **AI**: Google Gemini (2.5-pro/2.5-flash/2.5-flash-lite)
 - **Min SDK**: 26 (Android 8.0)
 - **Package**: `com.sanha.moneytalk`
-- **DB 버전**: 5 (moneytalk_v4.db)
+- **DB 버전**: 6 (moneytalk_v4.db)
 
 ---
 
@@ -42,7 +42,7 @@ app/src/main/java/com/sanha/moneytalk/
 │   │       ├── tab/               # SegmentedTabRowCompose/Info
 │   │       └── transaction/       # card/ (TransactionCard), header/ (GroupHeader)
 │   ├── similarity/        # 유사도 판정 정책 (SimilarityPolicy 구현체)
-│   ├── sms/               # SMS 핵심 (SmsParser, SmsReader, HybridSmsClassifier, VectorSearchEngine 등)
+│   ├── sms/               # SMS 핵심 (9개: SmsParser, SmsReader, SmsFilter, HybridSmsClassifier, SmsBatchProcessor, GeminiSmsExtractor, GeneratedSmsRegexParser, SmsEmbeddingService, VectorSearchEngine)
 │   └── util/              # 유틸 (DateUtils, CardNameNormalizer, StoreNameGrouper 등)
 ├── feature/
 │   ├── home/              # 홈 화면 (월간 현황, SMS 동기화)
@@ -94,6 +94,7 @@ app/src/main/java/com/sanha/moneytalk/
 | v2→v3 | owned_cards 테이블 생성 (카드 화이트리스트) |
 | v3→v4 | sms_exclusion_keywords 테이블 생성 (SMS 제외 키워드) |
 | v4→v5 | expenses/incomes 성능 인덱스 추가 (smsId UNIQUE, dateTime, category, cardName, storeName+dateTime) |
+| v5→v6 | sms_patterns 테이블에 amountRegex, storeRegex, cardRegex, parseSource 컬럼 추가 |
 
 ---
 
@@ -130,6 +131,28 @@ SimilarityPolicy (판단 인터페이스)
 | `NON_PAYMENT_CACHE_THRESHOLD` | 0.97 | 비결제 패턴 캐시 히트 | HybridSmsClassifier |
 | `LLM_TRIGGER_THRESHOLD` | 0.80 | LLM 호출 대상 선별 (결제 판정 아님) | HybridSmsClassifier |
 
+#### SmsBatchProcessor 내부 상수 (SimilarityPolicy 외)
+
+| 상수 | 값 | 용도 | 파일 |
+|------|-----|------|------|
+| `SMALL_GROUP_MERGE_THRESHOLD` | 5 | 소그룹 병합 대상 멤버 수 상한 | SmsBatchProcessor |
+| `SMALL_GROUP_MERGE_MIN_SIMILARITY` | 0.70 | 소그룹 병합 시 대표 벡터 최소 유사도 | SmsBatchProcessor |
+| `RTDB_DEDUP_SIMILARITY` | 0.99 | RTDB 표본 중복 판정 유사도 | SmsBatchProcessor |
+| `REGEX_MIN_SAMPLES_FOR_GENERATION` | 3 | 정규식 생성 최소 샘플 수 | SmsBatchProcessor |
+| `REGEX_FAILURE_THRESHOLD` | 2 | 정규식 생성 실패 쿨다운 기준 | SmsBatchProcessor |
+| `LLM_CONCURRENCY` | 5 | LLM 병렬 동시 실행 수 | SmsBatchProcessor |
+| `EMBEDDING_CONCURRENCY` | 10 | 임베딩 배치 병렬 동시 실행 수 | SmsBatchProcessor |
+
+#### SmsPatternEntity.parseSource 값
+
+| source | 의미 | confidence |
+|--------|------|-----------|
+| `regex` | SmsParser 하드코딩 정규식으로 파싱 | 1.0 |
+| `llm_regex` | LLM 생성 정규식으로 파싱 성공 | 1.0 |
+| `template_regex` | 같은 그룹 내 다른 SMS의 정규식으로 파싱 | 0.85 |
+| `llm` | LLM 직접 추출 (정규식 없음) | 0.8 |
+| `llm_non_payment` | LLM이 비결제로 판정 | 0.8 |
+
 ### 3-3. StoreNameSimilarityPolicy (가게명 매칭용)
 
 | 속성 | 값 | 용도 | 참조 파일 |
@@ -163,8 +186,10 @@ SimilarityPolicy (판단 인터페이스)
        ─── 가게명 → 카테고리 자동 적용 (StoreNameSimilarityPolicy.profile.autoApply)
 0.90 ─── 카테고리 전파 (StoreNameSimilarityPolicy.profile.propagate)
 0.88 ─── 가게명 시맨틱 그룹핑 (StoreNameSimilarityPolicy.profile.group)
+0.85 ─── template_regex confidence (SmsBatchProcessor)
 0.80 ─── LLM 트리거 임계값 (SmsPatternSimilarityPolicy.LLM_TRIGGER_THRESHOLD) — 결제 판정 아님
        ─── LLM 고정 confidence
+0.70 ─── 소그룹 병합 최소 유사도 (SmsBatchProcessor.SMALL_GROUP_MERGE_MIN_SIMILARITY)
 0.60 ─── confidence 차단 임계값 (CategoryPropagationPolicy.MIN_PROPAGATION_CONFIDENCE)
 0.00 ─── 매칭 없음
 ```

@@ -4,6 +4,44 @@
 
 ---
 
+## 2026-02-19 - SMS 배치 처리 가드레일 + 그룹핑 최적화
+
+### 작업 내용
+
+#### 1. SmsBatchProcessor 그룹핑 최적화
+- 발신번호 기반 2레벨 그룹핑 도입 (37그룹 → 2~4그룹으로 대폭 감소)
+- 가게명 {STORE} 플레이스홀더 치환 (SmsEmbeddingService.templateizeSms)
+- LLM 배치 호출 병렬화 (async + Semaphore, 직렬 → 병렬)
+- Step1+2 임베딩 통합 (중복 API 호출 제거)
+- 멤버별 가게명 개별 추출 (대표 가게명 복제 방지)
+
+#### 2. 가드레일 3종 (Codex 분석 기반)
+- template_regex 신뢰도 1.0 → 0.85 하향 (미검증 정규식에 높은 신뢰도 부여 방지)
+- 소그룹 병합 시 코사인 유사도 검증 추가 (SMALL_GROUP_MERGE_MIN_SIMILARITY=0.70)
+- RTDB 업로드 품질 게이트 (검증된 소스만 정규식 포함)
+
+#### 3. 신규 파일 및 기능
+- GeneratedSmsRegexParser.kt: LLM 생성 정규식 파서 (group1 캡처 규약, 폴백 체인)
+- GeminiSmsExtractor: 배치 추출 + 정규식 자동 생성
+- SmsPatternEntity: amountRegex/storeRegex/cardRegex/parseSource 필드 추가 (DB v5→v6)
+- DatabaseMigrations.kt: v5→v6 마이그레이션
+
+#### 4. 문서 갱신
+- SMS_PARSING.md 전면 재작성 + RTDB 정규식 다운로드 로드맵 (Section 16)
+- 임베딩 차원 수 768 → 3072 수정 (6개 파일)
+
+### 변경 파일
+- `SmsBatchProcessor.kt` — 2레벨 그룹핑 + LLM 병렬화 + 가드레일 3종
+- `SmsEmbeddingService.kt` — {STORE} 플레이스홀더 + 차원 주석 수정
+- `GeminiSmsExtractor.kt` — 배치 추출 + 정규식 생성
+- `GeneratedSmsRegexParser.kt` — 신규 (LLM 정규식 파서)
+- `DatabaseMigrations.kt` — 신규 (v5→v6)
+- `SmsPatternEntity.kt` — regex 필드 4개 추가
+- `FloatListConverter.kt`, `StoreEmbeddingEntity.kt` — 차원 주석 수정
+- `docs/SMS_PARSING.md`, `CATEGORY_CLASSIFICATION.md`, `PROJECT_CONTEXT.md` — 문서 갱신
+
+---
+
 ## 2026-02-19 - SMS 동기화 최적화 + 부분 데이터 CTA
 
 ### 작업 내용

@@ -5,6 +5,13 @@
 ## [Unreleased]
 
 ### Added (2026-02-19)
+- **GeneratedSmsRegexParser**: LLM 생성 정규식 파서 신규 추가 (group1 캡처 규약, 폴백 체인)
+- **SmsBatchProcessor 발신번호 2레벨 그룹핑**: 37그룹 → 2~4그룹으로 대폭 감소
+- **SmsBatchProcessor LLM 병렬화**: async + Semaphore로 배치 간 병렬 실행
+- **SmsBatchProcessor 가드레일 3종**: template_regex 신뢰도 하향(0.85), 소그룹 병합 유사도 검증(≥0.70), RTDB 업로드 품질 게이트
+- **SmsEmbeddingService {STORE} 플레이스홀더**: 줄바꿈 형식 SMS에서 가게명 줄 자동 치환
+- **SmsPatternEntity regex 필드**: amountRegex/storeRegex/cardRegex/parseSource 4개 필드 추가 (DB v5→v6)
+- **SMS_PARSING.md RTDB 정규식 로드맵**: Section 16 추가 (정규식 다운로드 구조 설계)
 - **SmsFilter 발신자 조건부 제외**: 010/070 발신자 SMS를 조건부 제외 (금융 힌트 있으면 보존)
   - `SmsFilter.normalizeAddress()`: +82→0 변환, 하이픈/공백 제거
   - `SmsFilter.hasFinancialHints()`: 금액 패턴 + 카드/은행 키워드 검출
