@@ -16,7 +16,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class AnalyticsHelper @Inject constructor(
-    private val analytics: FirebaseAnalytics
+    private val analytics: FirebaseAnalytics?
 ) {
     private companion object {
         const val TAG = "AnalyticsHelper"
@@ -33,7 +33,7 @@ class AnalyticsHelper @Inject constructor(
             val bundle = Bundle().apply {
                 putString(FirebaseAnalytics.Param.SCREEN_NAME, screenName)
             }
-            analytics.logEvent(FirebaseAnalytics.Event.SCREEN_VIEW, bundle)
+            analytics?.logEvent(FirebaseAnalytics.Event.SCREEN_VIEW, bundle)
         } catch (e: Exception) {
             Log.w(TAG, "화면 PV 로깅 실패: ${e.message}")
         }
@@ -52,7 +52,7 @@ class AnalyticsHelper @Inject constructor(
                 putString(FirebaseAnalytics.Param.SCREEN_NAME, screenName)
                 putString(PARAM_BUTTON_NAME, buttonName)
             }
-            analytics.logEvent(EVENT_CLICK, bundle)
+            analytics?.logEvent(EVENT_CLICK, bundle)
         } catch (e: Exception) {
             Log.w(TAG, "클릭 이벤트 로깅 실패: ${e.message}")
         }
@@ -63,7 +63,7 @@ class AnalyticsHelper @Inject constructor(
      */
     fun logEvent(eventName: String, params: Bundle? = null) {
         try {
-            analytics.logEvent(eventName, params)
+            analytics?.logEvent(eventName, params)
         } catch (e: Exception) {
             Log.w(TAG, "이벤트 로깅 실패: ${e.message}")
         }
