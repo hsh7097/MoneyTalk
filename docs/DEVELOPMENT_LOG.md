@@ -4,6 +4,56 @@
 
 ---
 
+## 2026-02-19 - SMS 통합 파이프라인 (sms2 패키지) 골격 생성
+
+### 작업 내용
+
+#### 1. core/sms2/ 패키지 신규 생성 (6개 파일)
+- 기존 3개 경로(SmsBatchProcessor, HybridSmsClassifier, SmsProcessingService)에 파편화된 SMS 처리를 단일 파이프라인으로 통합
+- Tier 1 로컬 regex(SmsParser) 제거 — 모든 SMS가 임베딩 경로(Tier 2/3)로 처리
+- sms2 패키지는 core/sms에서 import하지 않음 (GeminiSmsExtractor 제외, 자체 구현)
+
+#### 2. 파일별 구현 상태
+- `SmsPipelineModels.kt`: 데이터 클래스 3종 (SmsInput, EmbeddedSms, SmsParseResult) — 전체 구현
+- `SmsPreFilter.kt`: Step 2 사전 필터링 (키워드 + 구조 필터) — 전체 구현
+- `SmsTemplateEngine.kt`: Step 3 템플릿화 + Gemini Embedding API — 전체 구현
+- `SmsPatternMatcher.kt`: Step 4 벡터 매칭 + regex 파싱 (자체 코사인 유사도 포함) — 전체 구현
+- `SmsGroupClassifier.kt`: Step 5 그룹핑 + LLM + regex 생성 + 패턴 DB 등록 — 전체 구현
+- `SmsPipeline.kt`: 오케스트레이터 (Step 2→3→4→5) — 전체 구현
+
+#### 3. SmsParser KB 출금 유형 확장
+- FBS출금 (카드/페이 자동이체), 공동CMS출 (보험 CMS) 지원 추가
+- `isKbWithdrawalLine()` 헬퍼 도입으로 KB 스타일 출금 줄 판별 통합
+- `paymentKeywords`에 "CMS출" 추가
+- 보험 카테고리 키워드 추가 (삼성화, 현대해, 메리츠, DB손해, 한화손해, 흥국화)
+
+### 변경 파일
+- `core/sms2/SmsPipelineModels.kt` — 신규
+- `core/sms2/SmsPreFilter.kt` — 신규
+- `core/sms2/SmsTemplateEngine.kt` — 신규
+- `core/sms2/SmsPatternMatcher.kt` — 신규
+- `core/sms2/SmsGroupClassifier.kt` — 신규
+- `core/sms2/SmsPipeline.kt` — 신규
+- `core/sms/SmsParser.kt` — KB 출금 유형 확장 + 보험 키워드 추가
+
+---
+
+## 2026-02-19 - 레거시 FULL_SYNC_UNLOCKED 호환성 수정
+
+### 작업 내용
+
+#### 1. 레거시 전역 해제 사용자 regression 수정
+- 기존 FULL_SYNC_UNLOCKED=true 사용자가 월별 동기화 업데이트 후 CTA가 다시 표시되는 문제 수정
+- HomeUiState/HistoryUiState에 `isLegacyFullSyncUnlocked` 필드 추가
+- `isMonthSynced()`/`isPagePartiallyCovered()`에서 레거시 전역 해제 상태 체크
+- PR #21 Codex 리뷰 P1 피드백 반영
+
+### 변경 파일
+- `HomeViewModel.kt` — isLegacyFullSyncUnlocked 로딩 + isMonthSynced/isPagePartiallyCovered 레거시 체크
+- `HistoryViewModel.kt` — isLegacyFullSyncUnlocked 로딩 + isMonthSynced/isPagePartiallyCovered 레거시 체크
+
+---
+
 ## 2026-02-19 - SMS 배치 처리 가드레일 + 그룹핑 최적화
 
 ### 작업 내용
@@ -650,6 +700,8 @@ app/src/main/java/com/sanha/moneytalk/
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|-----------|
+| 2026-02-19 | 1.1.0 | SMS 통합 파이프라인 sms2 패키지 6개 파일 생성 + SmsParser KB 출금 유형 확장 |
+| 2026-02-19 | 1.1.0 | 레거시 FULL_SYNC_UNLOCKED 호환성 수정 (PR #21 리뷰 반영) |
 | 2026-02-19 | 1.1.0 | SMS 동기화 최적화 (2개월 축소 + 발신자 필터 + LLM 트리거 + core/sms 분리 + 부분 데이터 CTA) |
 | 2026-02-19 | 1.1.0 | HorizontalPager pageCache + 3개월 동기화 제한 + SMS 100자 필터 보강 |
 | 2026-02-18 | 1.1.0 | ProGuard(R8) 활성화 + Firebase Analytics 트래킹 |

@@ -132,6 +132,26 @@
 - 비결제 키워드 "결제내역" 추가
 - 임베딩 차원 문서/주석 768 → 3072 수정
 
+**레거시 FULL_SYNC_UNLOCKED 호환성**: ✅ 완료 (2026-02-19)
+- 기존 FULL_SYNC_UNLOCKED=true 사용자가 업데이트 시 CTA가 다시 표시되는 regression 수정
+- HomeUiState/HistoryUiState에 isLegacyFullSyncUnlocked 필드 추가
+- isMonthSynced()/isPagePartiallyCovered()에서 레거시 전역 해제 상태 체크
+
+**SmsParser KB 출금 유형 확장**: ✅ 완료 (2026-02-19)
+- FBS출금 (카드/페이 자동이체), 공동CMS출 (보험 CMS) 지원 추가
+- isKbWithdrawalLine() 헬퍼 도입으로 KB 스타일 출금 줄 판별 통합
+- 보험 카테고리 키워드 추가 (삼성화, 현대해, 메리츠, DB손해, 한화손해, 흥국화)
+
+**SMS 통합 파이프라인 (sms2 패키지)**: 🔧 골격 생성 완료 (2026-02-19)
+- core/sms2/ 패키지에 통합 파이프라인 6개 파일 생성 (골격 + 주석 + TODO)
+- SmsPipelineModels.kt: 데이터 클래스 (SmsInput, EmbeddedSms, SmsParseResult)
+- SmsPreFilter.kt: Step 2 사전 필터링 (전체 구현)
+- SmsTemplateEngine.kt: Step 3 템플릿화 + 임베딩 API (전체 구현)
+- SmsPatternMatcher.kt: Step 4 벡터 매칭 + regex 파싱 (전체 구현, 자체 코사인 유사도)
+- SmsGroupClassifier.kt: Step 5 그룹핑 + LLM + regex 생성 (전체 구현)
+- SmsPipeline.kt: 오케스트레이터 (전체 구현)
+- 기존 core/sms 패키지 무변경 (호출자 연결은 다음 단계)
+
 ### 대기 중인 작업
 
 - `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지
@@ -195,6 +215,9 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-19 | SMS 통합 파이프라인 sms2 패키지 6개 파일 생성 (SmsPipeline, SmsPatternMatcher 등) | 완료 |
+| 2026-02-19 | SmsParser KB 출금 유형 확장 (FBS출금, 공동CMS출) + 보험 카테고리 키워드 | 완료 |
+| 2026-02-19 | 레거시 FULL_SYNC_UNLOCKED 사용자 월별 동기화 호환성 수정 | 완료 |
 | 2026-02-19 | SMS 배치 가드레일 + 그룹핑 최적화 + LLM 병렬화 + GeneratedSmsRegexParser 신규 | 완료 |
 | 2026-02-19 | SMS 동기화 최적화 (2개월 축소 + 월별 동기화 + 발신자 필터 + LLM 0.80 트리거 + 오파싱 방어 + core/sms 패키지 분리) | 완료 |
 | 2026-02-19 | 빈 상태 CTA + 광고 실패 보상 + 탭 재클릭 + Auto Backup 수정 + 깜빡임 수정 | 완료 |
@@ -269,6 +292,17 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | [`CategoryReferenceProvider.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/CategoryReferenceProvider.kt) | 동적 참조 리스트 |
 | [`CategoryClassifierService.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt) | 4-tier 카테고리 분류 |
 | [`StoreEmbeddingRepository.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreEmbeddingRepository.kt) | 가게명 벡터 캐시 + 전파 |
+
+### SMS 통합 파이프라인 (sms2, 신규)
+
+| 파일 | 설명 |
+|------|------|
+| [`SmsPipeline.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipeline.kt) | 오케스트레이터 (Step 2→3→4→5) |
+| [`SmsPipelineModels.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipelineModels.kt) | 데이터 클래스 (SmsInput, EmbeddedSms, SmsParseResult) |
+| [`SmsPreFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPreFilter.kt) | Step 2: 사전 필터링 |
+| [`SmsTemplateEngine.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsTemplateEngine.kt) | Step 3: 템플릿화 + 임베딩 API |
+| [`SmsPatternMatcher.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPatternMatcher.kt) | Step 4: 벡터 매칭 + regex 파싱 |
+| [`SmsGroupClassifier.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsGroupClassifier.kt) | Step 5: 그룹핑 + LLM + regex 생성 |
 
 ### 유사도 정책
 

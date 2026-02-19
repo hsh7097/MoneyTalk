@@ -99,7 +99,19 @@ core/database/dao/
 core/util/
 ├── CategoryReferenceProvider.kt # LLM 프롬프트용 카테고리 참조 리스트
 └── DateUtils.kt                 # 날짜 검증 유틸리티
+
+core/sms2/                        # ★ 통합 파이프라인 (신규, Tier 1 제거)
+├── SmsPipeline.kt               # 오케스트레이터 (Step 2→3→4→5)
+├── SmsPipelineModels.kt         # 데이터 클래스 (SmsInput, EmbeddedSms, SmsParseResult)
+├── SmsPreFilter.kt              # Step 2: 사전 필터링 (키워드 + 구조)
+├── SmsTemplateEngine.kt         # Step 3: 템플릿화 + Gemini Embedding API
+├── SmsPatternMatcher.kt         # Step 4: 벡터 매칭 + regex 파싱
+└── SmsGroupClassifier.kt        # Step 5: 그룹핑 + LLM + regex 생성
 ```
+
+> **sms2 패키지**: 기존 sms 패키지의 3경로(SmsBatchProcessor, HybridSmsClassifier, SmsProcessingService)를
+> 단일 `SmsPipeline.process()`로 통합. Tier 1 로컬 regex(SmsParser)를 제거하고 모든 SMS를 임베딩 경로로 처리.
+> sms2는 core/sms에서 import하지 않음 (GeminiSmsExtractor만 예외). 호출자 연결은 다음 단계.
 
 ---
 

@@ -97,7 +97,7 @@ com.sanha.moneytalk/
 │   │               ├── TransactionGroupHeaderCompose.kt # 그룹 헤더
 │   │               └── TransactionGroupHeaderInfo.kt    # 그룹 헤더 Contract
 │   │
-│   ├── sms/                              # SMS 핵심 (9개)
+│   ├── sms/                              # SMS 핵심 - 레거시 (9개)
 │   │   ├── SmsParser.kt                  # SMS 정규식 파싱 (Tier 1)
 │   │   ├── SmsReader.kt                  # SMS/MMS/RCS 통합 읽기
 │   │   ├── SmsFilter.kt                  # 발신번호 기반 사전 필터링
@@ -107,6 +107,14 @@ com.sanha.moneytalk/
 │   │   ├── GeneratedSmsRegexParser.kt    # LLM 생성 정규식 파서 (폴백 체인)
 │   │   ├── SmsEmbeddingService.kt        # SMS 템플릿화 + 임베딩 생성
 │   │   └── VectorSearchEngine.kt         # 코사인 유사도 검색 엔진
+│   │
+│   ├── sms2/                             # SMS 통합 파이프라인 (신규, 6개)
+│   │   ├── SmsPipeline.kt               # 오케스트레이터 (Step 2→3→4→5)
+│   │   ├── SmsPipelineModels.kt         # 데이터 클래스 (SmsInput, EmbeddedSms, SmsParseResult)
+│   │   ├── SmsPreFilter.kt              # Step 2: 사전 필터링 (키워드 + 구조)
+│   │   ├── SmsTemplateEngine.kt         # Step 3: 템플릿화 + Gemini Embedding API
+│   │   ├── SmsPatternMatcher.kt         # Step 4: 벡터 매칭 + regex 파싱
+│   │   └── SmsGroupClassifier.kt        # Step 5: 그룹핑 + LLM + regex 생성
 │   │
 │   └── util/                             # 유틸리티 (12개)
 │       ├── CategoryReferenceProvider.kt  # 카테고리 참조 데이터 제공

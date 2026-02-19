@@ -47,7 +47,21 @@
 - **홈 새로고침 깜빡임 제거**: refreshData()에서 캐시 클리어 제거 + isLoading 조건부 설정
 - **"오늘 문자만 동기화" 메뉴 제거**: HomeScreen 새로고침 드롭다운에서 삭제
 
+### Added (2026-02-19 후반)
+- **SMS 통합 파이프라인 (core/sms2/)**: 기존 3경로 파편화 SMS 처리를 단일 파이프라인으로 통합 (6개 파일)
+  - `SmsPipeline.kt`: 오케스트레이터 (Step 2→3→4→5)
+  - `SmsPreFilter.kt`: 사전 필터링 (키워드 + 구조)
+  - `SmsTemplateEngine.kt`: 템플릿화 + Gemini Embedding API
+  - `SmsPatternMatcher.kt`: 벡터 매칭 + regex 파싱 (자체 코사인 유사도)
+  - `SmsGroupClassifier.kt`: 그룹핑 + LLM + regex 생성 + 패턴 DB 등록
+  - `SmsPipelineModels.kt`: 데이터 클래스 (SmsInput, EmbeddedSms, SmsParseResult)
+- **SmsParser KB 출금 유형 확장**: FBS출금 (카드/페이 자동이체), 공동CMS출 (보험 CMS) 지원
+- **SmsParser 보험 카테고리 키워드**: 삼성화, 현대해, 메리츠, DB손해, 한화손해, 흥국화 추가
+
 ### Fixed (2026-02-19)
+- **레거시 FULL_SYNC_UNLOCKED 호환성**: 기존 FULL_SYNC_UNLOCKED=true 사용자가 월별 동기화 업데이트 후 CTA가 다시 표시되는 regression 수정
+  - HomeUiState/HistoryUiState에 `isLegacyFullSyncUnlocked` 필드 추가
+  - isMonthSynced()/isPagePartiallyCovered()에서 레거시 전역 해제 상태 체크
 - **Android Auto Backup 복원 감지**: 앱 재설치 시 DataStore lastSyncTime이 복원되어 동기화 범위가 잘못되는 버그 수정
 - **DataStore 백업 제외**: backup_rules.xml, data_extraction_rules.xml에서 DataStore preferences 백업 제외
 - **내역 수입 0원 표시**: HistoryHeader에서 수입이 0일 때 섹션이 사라지는 버그 수정
