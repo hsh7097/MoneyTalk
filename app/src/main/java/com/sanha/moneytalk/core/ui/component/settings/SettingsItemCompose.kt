@@ -65,14 +65,16 @@ fun SettingsItemCompose(
                         MaterialTheme.colorScheme.onSurface
                     }
                 )
-                if (info.subtitle.isNotEmpty()) {
-                    Text(
-                        text = info.subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        maxLines = 1
-                    )
-                }
+                Text(
+                    text = info.subtitle.ifEmpty { " " },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (info.subtitle.isNotEmpty()) {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0f)
+                    },
+                    maxLines = 1
+                )
             }
         }
         Icon(
