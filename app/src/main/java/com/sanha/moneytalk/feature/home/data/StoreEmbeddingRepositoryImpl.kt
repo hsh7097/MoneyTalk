@@ -5,8 +5,8 @@ import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
 import com.sanha.moneytalk.core.similarity.CategoryPropagationPolicy
 import com.sanha.moneytalk.core.similarity.StoreNameSimilarityPolicy
-import com.sanha.moneytalk.core.util.SmsEmbeddingService
-import com.sanha.moneytalk.core.util.VectorSearchEngine
+import com.sanha.moneytalk.core.sms.SmsEmbeddingService
+import com.sanha.moneytalk.core.sms.VectorSearchEngine
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton

@@ -2,6 +2,8 @@ package com.sanha.moneytalk.core.util
 
 import android.util.Log
 import com.sanha.moneytalk.core.similarity.StoreNameSimilarityPolicy
+import com.sanha.moneytalk.core.sms.SmsEmbeddingService
+import com.sanha.moneytalk.core.sms.VectorSearchEngine
 import javax.inject.Inject
 import javax.inject.Singleton
 

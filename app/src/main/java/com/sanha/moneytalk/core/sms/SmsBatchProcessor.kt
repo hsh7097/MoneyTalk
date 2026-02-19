@@ -1,10 +1,11 @@
-package com.sanha.moneytalk.core.util
+package com.sanha.moneytalk.core.sms
 
 import android.util.Log
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
 import com.sanha.moneytalk.core.similarity.SmsPatternSimilarityPolicy
+import com.sanha.moneytalk.core.util.DateUtils
 import kotlinx.coroutines.yield
 import javax.inject.Inject
 import javax.inject.Singleton

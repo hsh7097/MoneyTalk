@@ -1,10 +1,11 @@
-package com.sanha.moneytalk.core.util
+package com.sanha.moneytalk.core.sms
 
 import android.util.Log
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
 import com.sanha.moneytalk.core.similarity.SmsPatternSimilarityPolicy
+import com.sanha.moneytalk.core.util.DateUtils
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -231,19 +232,19 @@ class HybridSmsClassifier @Inject constructor(
                 }
             }
 
-            // 결제 패턴 매칭
+            // 결제 패턴 매칭 — LLM 트리거(0.80) 이상부터 검색
             if (paymentPatterns.isNotEmpty()) {
                 val bestMatch = VectorSearchEngine.findBestMatch(
                     queryVector = embedding,
                     patterns = paymentPatterns,
-                    minSimilarity = SmsPatternSimilarityPolicy.profile.confirm
+                    minSimilarity = SmsPatternSimilarityPolicy.LLM_TRIGGER_THRESHOLD
                 )
 
                 if (bestMatch != null) {
                     smsPatternDao.incrementMatchCount(bestMatch.pattern.id)
 
                     if (bestMatch.similarity >= SmsPatternSimilarityPolicy.profile.autoApply) {
-                        // 높은 유사도 → 캐시 재사용
+                        // 높은 유사도(≥0.95) → 캐시 재사용
                         val cached = bestMatch.pattern
                         val currentAmount = SmsParser.extractAmount(body) ?: cached.parsedAmount
                         val currentDateTime = SmsParser.extractDateTime(body, timestamp)
@@ -260,8 +261,8 @@ class HybridSmsClassifier @Inject constructor(
                             tier = 2,
                             confidence = bestMatch.similarity
                         )
-                    } else {
-                        // 중간 유사도 → 결제 판정은 됐지만 파싱은 캐시 폴백
+                    } else if (bestMatch.similarity >= SmsPatternSimilarityPolicy.profile.confirm) {
+                        // 중간 유사도(0.92~0.95) → 결제 판정은 됐지만 파싱은 캐시 폴백
                         val fallbackAmount =
                             SmsParser.extractAmount(body) ?: bestMatch.pattern.parsedAmount
                         val fallbackDateTime = SmsParser.extractDateTime(body, timestamp)
@@ -281,12 +282,16 @@ class HybridSmsClassifier @Inject constructor(
                             tier = 2,
                             confidence = bestMatch.similarity
                         )
+                    } else {
+                        // 낮은 유사도(0.80~0.92) → 결제 가능성은 있지만 확정 아님 → LLM 트리거
+                        Log.d(TAG, "[batchClassify] 벡터 유사도 ${bestMatch.similarity} (0.80~0.92) → LLM 트리거: ${body.take(30)}")
+                        llmCandidates.add(originalIdx)
                     }
                     continue
                 }
             }
 
-            // 벡터 매칭 안 됨 → 결제 가능성 있으면 LLM 후보
+            // 벡터 매칭 안 됨 (0.80 미만) → 기존 키워드 기반 LLM 후보 선별
             if (hasPotentialPaymentIndicators(body)) {
                 llmCandidates.add(originalIdx)
             }
@@ -315,10 +320,17 @@ class HybridSmsClassifier @Inject constructor(
             }
         }
 
-        val paymentCount = results.count { it.isPayment }
-        Log.d(TAG, "=== 배치 분류 완료: ${smsList.size}건 중 결제 ${paymentCount}건 ===")
+        val resultList = results.toList()
+        val paymentCount = resultList.count { it.isPayment }
+        val tier1Count = resultList.count { it.isPayment && it.tier == 1 }
+        val tier2Count = resultList.count { it.isPayment && it.tier == 2 }
+        val tier3Count = resultList.count { it.isPayment && it.tier == 3 }
+        val preFilteredCount = regexUnresolved.size - vectorCandidateIndices.size
+        Log.d(TAG, "=== 배치 분류 완료: ${smsList.size}건 중 결제 ${paymentCount}건 " +
+                "(Tier1:$tier1Count, Tier2:$tier2Count, Tier3:$tier3Count) " +
+                "사전필터:${preFilteredCount}건, LLM호출:${llmCandidates.size}건 ===")
 
-        return results.toList()
+        return resultList
     }
 
     /**
@@ -433,6 +445,14 @@ class HybridSmsClassifier @Inject constructor(
 
         val analysis = SmsParser.parseSms(smsBody, smsTimestamp)
         if (analysis.amount <= 0) {
+            return null
+        }
+
+        // Regex 오파싱 방어: 가게명이 기본값("결제")이면 파싱 품질 불충분
+        // → Tier 2/3으로 이관하여 Vector/LLM이 정확한 가게명을 추출하도록 함
+        // 현대카드 등 카드사별 다른 포맷에서 regex가 "성공하되 잘못 파싱"하는 케이스 방어
+        if (analysis.storeName == "결제") {
+            Log.d(TAG, "Regex 오파싱 방어: storeName='결제' → Tier 2/3 이관 [${smsBody.take(40)}]")
             return null
         }
 

@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.util
+package com.sanha.moneytalk.core.sms
 
 import android.content.Context
 import android.util.Log
@@ -10,6 +10,7 @@ import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
 import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.util.CategoryReferenceProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay

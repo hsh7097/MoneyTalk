@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.util
+package com.sanha.moneytalk.core.sms
 
 import android.content.ContentResolver
 import android.net.Uri
@@ -263,6 +263,7 @@ class SmsReader @Inject constructor() {
         endDate: Long
     ): List<SmsMessage> {
         val smsList = mutableListOf<SmsMessage>()
+        var senderSkipCount = 0
 
         val cursor = contentResolver.query(
             Uri.parse("content://sms/inbox"),
@@ -289,6 +290,12 @@ class SmsReader @Inject constructor() {
                 val body = it.getString(bodyIndex) ?: continue
                 val date = it.getLong(dateIndex)
 
+                // 010/070 개인번호 조건부 제외 (금융 힌트 없으면 스킵)
+                if (SmsFilter.shouldSkipBySender(address, body)) {
+                    senderSkipCount++
+                    continue
+                }
+
                 smsList.add(
                     SmsMessage(
                         id = SmsParser.generateSmsId(address, body, date),
@@ -301,7 +308,7 @@ class SmsReader @Inject constructor() {
         }
 
         val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.KOREA)
-        Log.e("sanha", "SmsReader[readAllSmsByDateRange] : ${smsList.size}건, 범위: ${sdf.format(java.util.Date(startDate))} ~ ${sdf.format(java.util.Date(endDate))}")
+        Log.e("sanha", "SmsReader[readAllSmsByDateRange] : ${smsList.size}건 (010/070 제외: ${senderSkipCount}건), 범위: ${sdf.format(java.util.Date(startDate))} ~ ${sdf.format(java.util.Date(endDate))}")
         if (smsList.isNotEmpty()) {
             val oldest = smsList.minByOrNull { it.date }
             val newest = smsList.maxByOrNull { it.date }
@@ -698,6 +705,7 @@ class SmsReader @Inject constructor() {
         endDate: Long
     ): List<SmsMessage> {
         val mmsList = mutableListOf<SmsMessage>()
+        var senderSkipCount = 0
         val startSec = startDate / 1000
         val endSec = endDate / 1000
 
@@ -722,6 +730,12 @@ class SmsReader @Inject constructor() {
                     val body = getMmsTextBody(contentResolver, mmsId) ?: continue
                     val address = getMmsAddress(contentResolver, mmsId)
 
+                    // 010/070 개인번호 조건부 제외 (금융 힌트 없으면 스킵)
+                    if (SmsFilter.shouldSkipBySender(address, body)) {
+                        senderSkipCount++
+                        continue
+                    }
+
                     mmsList.add(
                         SmsMessage(
                             id = SmsParser.generateSmsId(address, body, dateMs),
@@ -736,7 +750,7 @@ class SmsReader @Inject constructor() {
             Log.e(TAG, "MMS 전체 읽기(기간별) 실패: ${e.message}")
         }
 
-        Log.d(TAG, "전체 MMS 읽기 완료: ${mmsList.size}건 ($startDate ~ $endDate)")
+        Log.d(TAG, "전체 MMS 읽기 완료: ${mmsList.size}건 (010/070 제외: ${senderSkipCount}건, $startDate ~ $endDate)")
         return mmsList
     }
 
@@ -1183,6 +1197,7 @@ class SmsReader @Inject constructor() {
         endDate: Long
     ): List<SmsMessage> {
         val rcsList = mutableListOf<SmsMessage>()
+        var senderSkipCount = 0
         if (!isRcsAvailable(contentResolver)) return rcsList
 
         try {
@@ -1209,6 +1224,12 @@ class SmsReader @Inject constructor() {
 
                     if (body.isBlank()) continue
 
+                    // 010/070 개인번호 조건부 제외 (금융 힌트 없으면 스킵)
+                    if (SmsFilter.shouldSkipBySender(address, body)) {
+                        senderSkipCount++
+                        continue
+                    }
+
                     rcsList.add(
                         SmsMessage(
                             id = SmsParser.generateSmsId(address, body, date),
@@ -1223,7 +1244,7 @@ class SmsReader @Inject constructor() {
             Log.e(TAG, "RCS 전체 읽기(기간별) 실패: ${e.message}")
         }
 
-        Log.d(TAG, "전체 RCS 읽기 완료: ${rcsList.size}건 ($startDate ~ $endDate)")
+        Log.d(TAG, "전체 RCS 읽기 완료: ${rcsList.size}건 (010/070 제외: ${senderSkipCount}건, $startDate ~ $endDate)")
         return rcsList
     }
 

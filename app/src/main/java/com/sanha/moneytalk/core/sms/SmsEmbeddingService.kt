@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.util
+package com.sanha.moneytalk.core.sms
 
 import android.util.Log
 import com.google.gson.Gson
