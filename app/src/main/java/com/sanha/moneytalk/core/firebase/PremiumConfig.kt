@@ -23,6 +23,7 @@ package com.sanha.moneytalk.core.firebase
  *     "home_insight": "gemini-2.5-flash-lite",
  *     "category_classifier": "gemini-2.5-flash-lite",
  *     "sms_extractor": "gemini-2.5-flash-lite",
+ *     "sms_regex_extractor": "gemini-2.5-flash",
  *     "sms_batch_extractor": "gemini-2.5-flash-lite",
  *     "embedding": "gemini-embedding-001"
  *   }
@@ -75,6 +76,8 @@ data class GeminiModelConfig(
     val categoryClassifier: String = DEFAULT_CATEGORY_CLASSIFIER,
     /** SMS 추출 모델 (단일 SMS → 결제 데이터) */
     val smsExtractor: String = DEFAULT_SMS_EXTRACTOR,
+    /** SMS 정규식 생성 모델 (그룹 샘플 기반 regex 생성) */
+    val smsRegexExtractor: String = DEFAULT_SMS_REGEX_EXTRACTOR,
     /** SMS 배치 추출 모델 (다건 SMS → 결제 데이터) */
     val smsBatchExtractor: String = DEFAULT_SMS_BATCH_EXTRACTOR,
     /** 임베딩 모델 (SMS/가게명 벡터 생성, REST API) */
@@ -87,6 +90,7 @@ data class GeminiModelConfig(
         const val DEFAULT_HOME_INSIGHT = "gemini-2.5-flash-lite"
         const val DEFAULT_CATEGORY_CLASSIFIER = "gemini-2.5-flash-lite"
         const val DEFAULT_SMS_EXTRACTOR = "gemini-2.5-flash-lite"
+        const val DEFAULT_SMS_REGEX_EXTRACTOR = "gemini-2.5-flash"
         const val DEFAULT_SMS_BATCH_EXTRACTOR = "gemini-2.5-flash-lite"
         const val DEFAULT_EMBEDDING = "gemini-embedding-001"
     }

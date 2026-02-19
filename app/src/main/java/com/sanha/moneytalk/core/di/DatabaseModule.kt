@@ -3,6 +3,7 @@ package com.sanha.moneytalk.core.di
 import android.content.Context
 import androidx.room.Room
 import com.sanha.moneytalk.core.database.AppDatabase
+import com.sanha.moneytalk.core.database.DatabaseMigrations
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
@@ -46,7 +47,9 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
-        ).build()
+        )
+            .addMigrations(DatabaseMigrations.MIGRATION_1_2)
+            .build()
     }
 
     /** 지출 DAO 제공 - 카드 결제 내역 CRUD */

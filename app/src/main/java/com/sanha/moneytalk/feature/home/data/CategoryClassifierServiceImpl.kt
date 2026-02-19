@@ -188,7 +188,7 @@ class CategoryClassifierServiceImpl @Inject constructor(
         }
 
         // Tier 3 대기: 미분류로 반환 (Gemini 분류는 배치로 별도 처리)
-        Log.e("sanha", "CategoryClassifier[getCategory] : $storeName → 미분류 (모든 Tier 실패)")
+        Log.e("MT_DEBUG", "CategoryClassifier[getCategory] : $storeName → 미분류 (모든 Tier 실패)")
         return "미분류"
     }
 
@@ -283,17 +283,21 @@ class CategoryClassifierServiceImpl @Inject constructor(
         onStepProgress: (suspend (step: String, current: Int, total: Int) -> Unit)?,
         maxStoreCount: Int?
     ): Int {
+        val totalStartTime = System.currentTimeMillis()
         Log.e(
-            "sanha",
-            "CategoryClassifier[classifyUnclassifiedExpenses] : === 미분류 항목 분류 시작 (maxStoreCount=$maxStoreCount) ==="
+            "MT_DEBUG",
+            "CategoryClassifier[classifyUnclassifiedExpenses] : ========== 카테고리 분류 파이프라인 시작 (maxStoreCount=$maxStoreCount) =========="
         )
-        // 카테고리가 "미분류"인 지출 조회
+
+        // ===== [1/6] 미분류 항목 조회 =====
+        val step1Start = System.currentTimeMillis()
         onStepProgress?.invoke("미분류 항목 조회 중...", 0, 0)
         val unclassifiedExpenses = expenseRepository.getExpensesByCategoryOnce("미분류")
+        val step1Elapsed = System.currentTimeMillis() - step1Start
+        Log.e("MT_DEBUG", "CategoryClassifier[1/6 DB조회] : ${unclassifiedExpenses.size}건 (${step1Elapsed}ms)")
 
         if (unclassifiedExpenses.isEmpty()) {
-            Log.e("sanha", "CategoryClassifier[classifyUnclassifiedExpenses] : 미분류 항목 없음 → 종료")
-            Log.d(TAG, "분류할 항목 없음")
+            Log.e("MT_DEBUG", "CategoryClassifier : 미분류 항목 없음 → 종료 (총 ${step1Elapsed}ms)")
             return 0
         }
 
@@ -314,30 +318,24 @@ class CategoryClassifierServiceImpl @Inject constructor(
         }
 
         Log.e(
-            "sanha",
-            "CategoryClassifier[classifyUnclassifiedExpenses] : 미분류 지출 ${unclassifiedExpenses.size}건 / 고유 가게명 ${allStoreNames.size}개 (처리 대상: ${storeNames.size}개)"
+            "MT_DEBUG",
+            "CategoryClassifier : 미분류 지출 ${unclassifiedExpenses.size}건 / 고유 가게명 ${allStoreNames.size}개 (처리 대상: ${storeNames.size}개)"
         )
-        for (name in storeNames.take(20)) {
-            val amount = storeAmountMap[name] ?: 0
-            Log.e("sanha", "  - $name (총 ${amount}원)")
-        }
-        if (storeNames.size > 20) {
-            Log.e("sanha", "  - ... 외 ${storeNames.size - 20}개")
-        }
-        Log.d(TAG, "분류할 가게명: ${storeNames.size}개")
 
-        // ===== 로컬 룰 사전 분류 (Gemini 호출 절감) =====
+        // ===== [2/6] 로컬 룰 사전 분류 =====
+        val step2Start = System.currentTimeMillis()
         onStepProgress?.invoke("로컬 룰 분류 중...", 0, storeNames.size)
         val (ruleClassified, storeNamesForGemini) = preClassifyByRules(storeNames)
-        Log.d(TAG, "로컬 룰 사전 분류: ${ruleClassified.size}건, Gemini 대상: ${storeNamesForGemini.size}건")
+        val step2Elapsed = System.currentTimeMillis() - step2Start
+        Log.e("MT_DEBUG", "CategoryClassifier[2/6 로컬룰] : ${ruleClassified.size}건 분류, ${storeNamesForGemini.size}건 남음 (${step2Elapsed}ms)")
 
-        // ===== 시맨틱 그룹핑으로 Gemini 호출 최적화 =====
+        // ===== [3/6] 시맨틱 그룹핑 (임베딩 + 클러스터링) =====
+        val step3Start = System.currentTimeMillis()
         onStepProgress?.invoke("유사 가게 그룹핑 중...", 0, storeNamesForGemini.size)
         val groups = try {
             storeNameGrouper.groupStoreNames(storeNamesForGemini)
         } catch (e: Exception) {
             Log.w(TAG, "시맨틱 그룹핑 실패, 개별 처리로 폴백: ${e.message}")
-            // 폴백: 각 가게명을 독립 그룹으로 취급
             storeNamesForGemini.map {
                 StoreNameGrouper.StoreGroup(
                     representative = it,
@@ -345,58 +343,59 @@ class CategoryClassifierServiceImpl @Inject constructor(
                 )
             }
         }
+        val step3Elapsed = System.currentTimeMillis() - step3Start
 
         val representatives = groups.map { it.representative }
-
-        Log.d(
-            TAG, "시맨틱 그룹핑: ${storeNamesForGemini.size}개 → ${groups.size}그룹 " +
-                    "(${storeNames.size - groups.size - ruleClassified.size}개 Gemini 호출 절감)"
+        val multiMemberGroups = groups.count { it.members.size > 1 }
+        val maxGroupSize = groups.maxOfOrNull { it.members.size } ?: 0
+        Log.e(
+            "MT_DEBUG",
+            "CategoryClassifier[3/6 그룹핑] : ${storeNamesForGemini.size}개 → ${groups.size}그룹 (다중멤버: ${multiMemberGroups}개, 최대그룹: ${maxGroupSize}명) (${step3Elapsed}ms)"
         )
 
-        // 대표 가게명만 Gemini로 분류 (룰로 이미 분류된 건은 제외)
-        val classifications = if (representatives.isNotEmpty()) {
+        // ===== [4/6] Gemini LLM 분류 =====
+        val step4Start = System.currentTimeMillis()
+        val classifications: Map<String, String>
+        val step4Elapsed: Long
+        if (representatives.isNotEmpty()) {
             onStepProgress?.invoke("AI 분류 중...", 0, representatives.size)
+            val batchCount = (representatives.size + 49) / 50 // BATCH_SIZE=50 기준
             Log.e(
-                "sanha",
-                "CategoryClassifier[classifyUnclassifiedExpenses] : Gemini API 호출 시작 (대표 ${representatives.size}건)"
+                "MT_DEBUG",
+                "CategoryClassifier[4/6 Gemini] : 시작 — 대표 ${representatives.size}건, ${batchCount}개 배치 (병렬 5)"
             )
-            val result = geminiRepository.classifyStoreNames(representatives)
+            classifications = geminiRepository.classifyStoreNames(representatives)
+            step4Elapsed = System.currentTimeMillis() - step4Start
             Log.e(
-                "sanha",
-                "CategoryClassifier[classifyUnclassifiedExpenses] : Gemini 응답 ${result.size}건"
+                "MT_DEBUG",
+                "CategoryClassifier[4/6 Gemini] : 완료 — ${classifications.size}/${representatives.size}건 성공 (${step4Elapsed}ms, 건당 ${if (representatives.isNotEmpty()) step4Elapsed / representatives.size else 0}ms)"
             )
-            result
         } else {
-            Log.d(TAG, "Gemini 호출 불필요 (모두 로컬 룰로 분류됨)")
-            emptyMap()
+            Log.e("MT_DEBUG", "CategoryClassifier[4/6 Gemini] : 스킵 (모두 로컬 룰로 분류됨)")
+            classifications = emptyMap()
+            step4Elapsed = System.currentTimeMillis() - step4Start
         }
 
         if (classifications.isEmpty() && ruleClassified.isEmpty()) {
+            val totalElapsed = System.currentTimeMillis() - totalStartTime
             Log.e(
-                "sanha",
-                "CategoryClassifier[classifyUnclassifiedExpenses] : 분류 실패 (Gemini 빈 응답 + 룰 매칭 없음)"
+                "MT_DEBUG",
+                "CategoryClassifier : 분류 실패 (Gemini 빈 응답 + 룰 매칭 없음) (총 ${totalElapsed}ms)"
             )
-            Log.e(TAG, "분류 실패")
             return 0
         }
 
-        // ===== 그룹 멤버들에게 분류 결과 전파 =====
+        // ===== [5/6] 결과 전파 + Room 저장 + 벡터 DB 캐싱 =====
+        val step5Start = System.currentTimeMillis()
         val allClassifications = mutableMapOf<String, String>()
-
-        // 로컬 룰 분류 결과 먼저 추가
         allClassifications.putAll(ruleClassified)
 
         for (group in groups) {
             val category = classifications[group.representative] ?: continue
-
-            // 대표 가게명 매핑
             allClassifications[group.representative] = category
-
-            // 그룹 멤버들에게 같은 카테고리 전파
             for (member in group.members) {
                 if (member != group.representative) {
                     allClassifications[member] = category
-                    Log.d(TAG, "그룹 전파: '${group.representative}' → '$member' = $category")
                 }
             }
         }
@@ -405,16 +404,24 @@ class CategoryClassifierServiceImpl @Inject constructor(
         onStepProgress?.invoke("결과 저장 중...", classifications.size, representatives.size)
         val mappings = allClassifications.map { (store, category) -> store to category }
         categoryRepository.saveMappings(mappings, "gemini")
+        val roomSaveElapsed = System.currentTimeMillis() - step5Start
 
-        // ===== 벡터 DB에도 캐싱 (Tier 1.5 학습) =====
+        // 벡터 DB 캐싱
+        val vectorStart = System.currentTimeMillis()
         try {
             storeEmbeddingRepository.saveStoreEmbeddings(allClassifications, "gemini")
-            Log.d(TAG, "벡터 DB 캐싱: ${allClassifications.size}건")
         } catch (e: Exception) {
             Log.w(TAG, "벡터 DB 캐싱 실패 (무시): ${e.message}")
         }
+        val vectorElapsed = System.currentTimeMillis() - vectorStart
+        val step5Elapsed = System.currentTimeMillis() - step5Start
+        Log.e(
+            "MT_DEBUG",
+            "CategoryClassifier[5/6 저장] : Room ${allClassifications.size}건 (${roomSaveElapsed}ms), 벡터DB (${vectorElapsed}ms) → 총 ${step5Elapsed}ms"
+        )
 
-        // 지출 항목 카테고리 업데이트 (storeName 그룹 일괄 업데이트로 N+1 제거)
+        // ===== [6/6] 지출 항목 카테고리 업데이트 =====
+        val step6Start = System.currentTimeMillis()
         val storeNamesToUpdate = unclassifiedExpenses.map { it.storeName }.distinct()
             .filter { allClassifications.containsKey(it) }
         for ((idx, store) in storeNamesToUpdate.withIndex()) {
@@ -425,16 +432,26 @@ class CategoryClassifierServiceImpl @Inject constructor(
                 onStepProgress?.invoke("지출 업데이트 중...", idx, storeNamesToUpdate.size)
             }
         }
+        val step6Elapsed = System.currentTimeMillis() - step6Start
         val updatedCount =
             unclassifiedExpenses.count { allClassifications.containsKey(it.storeName) }
 
+        val totalElapsed = System.currentTimeMillis() - totalStartTime
         Log.e(
-            "sanha",
-            "CategoryClassifier[classifyUnclassifiedExpenses] : === 분류 완료: ${updatedCount}건 업데이트 (Gemini ${classifications.size}건, 전파 ${allClassifications.size - classifications.size}건) ==="
+            "MT_DEBUG",
+            "CategoryClassifier[6/6 업데이트] : ${storeNamesToUpdate.size}개 가게명 업데이트 (${step6Elapsed}ms)"
         )
-        Log.d(
-            TAG,
-            "분류 완료: ${updatedCount}건 (Gemini ${classifications.size}건, 전파 ${allClassifications.size - classifications.size}건)"
+        Log.e(
+            "MT_DEBUG",
+            "CategoryClassifier ========== 파이프라인 완료 =========="
+        )
+        Log.e(
+            "MT_DEBUG",
+            "CategoryClassifier [결과] ${updatedCount}건 업데이트 (Gemini ${classifications.size}건 + 전파 ${allClassifications.size - classifications.size - ruleClassified.size}건 + 룰 ${ruleClassified.size}건)"
+        )
+        Log.e(
+            "MT_DEBUG",
+            "CategoryClassifier [시간] 총 ${totalElapsed}ms = DB조회 ${step1Elapsed}ms + 로컬룰 ${step2Elapsed}ms + 그룹핑 ${step3Elapsed}ms + Gemini ${step4Elapsed}ms + 저장 ${step5Elapsed}ms + 업데이트 ${step6Elapsed}ms"
         )
         return updatedCount
     }
@@ -516,58 +533,58 @@ class CategoryClassifierServiceImpl @Inject constructor(
     override suspend fun reclassifyLowConfidenceItems(confidenceThreshold: Float): Int {
         try {
             Log.e(
-                "sanha",
+                "MT_DEBUG",
                 "CategoryClassifier[reclassifyLowConfidenceItems] : === 저신뢰도 재분류 시작 === threshold=$confidenceThreshold"
             )
             val lowConfidenceItems =
                 storeEmbeddingRepository.getLowConfidenceEmbeddings(confidenceThreshold)
             if (lowConfidenceItems.isEmpty()) {
-                Log.e("sanha", "CategoryClassifier[reclassifyLowConfidenceItems] : 재분류 대상 없음")
+                Log.e("MT_DEBUG", "CategoryClassifier[reclassifyLowConfidenceItems] : 재분류 대상 없음")
                 Log.d(TAG, "재분류 대상 없음 (threshold=$confidenceThreshold)")
                 return 0
             }
             Log.e(
-                "sanha",
+                "MT_DEBUG",
                 "CategoryClassifier[reclassifyLowConfidenceItems] : 재분류 대상 ${lowConfidenceItems.size}건 발견"
             )
             for (item in lowConfidenceItems) {
                 Log.e(
-                    "sanha",
+                    "MT_DEBUG",
                     "  - ${item.storeName} | category=${item.category} | source=${item.source} | confidence=${item.confidence}"
                 )
             }
             Log.d(TAG, "재분류 시작: ${lowConfidenceItems.size}건 (threshold=$confidenceThreshold)")
             val storeNames = lowConfidenceItems.map { it.storeName }
             Log.e(
-                "sanha",
+                "MT_DEBUG",
                 "CategoryClassifier[reclassifyLowConfidenceItems] : Gemini API 호출 시작 (${storeNames.size}건)"
             )
             val classifications = geminiRepository.classifyStoreNames(storeNames)
             Log.e(
-                "sanha",
+                "MT_DEBUG",
                 "CategoryClassifier[reclassifyLowConfidenceItems] : Gemini 응답 ${classifications.size}건"
             )
             var reclassifiedCount = 0
             for ((storeName, newCategory) in classifications) {
                 if (newCategory == "미분류") {
-                    Log.e("sanha", "  - SKIP: $storeName → 미분류 (변경 없음)")
+                    Log.e("MT_DEBUG", "  - SKIP: $storeName → 미분류 (변경 없음)")
                     continue
                 }
-                Log.e("sanha", "  - UPDATE: $storeName → $newCategory")
+                Log.e("MT_DEBUG", "  - UPDATE: $storeName → $newCategory")
                 categoryRepository.saveMapping(storeName, newCategory, "gemini")
                 storeEmbeddingRepository.updateCategory(storeName, newCategory, "gemini")
                 expenseRepository.updateCategoryByStoreName(storeName, newCategory)
                 reclassifiedCount++
             }
             Log.e(
-                "sanha",
+                "MT_DEBUG",
                 "CategoryClassifier[reclassifyLowConfidenceItems] : === 재분류 완료: ${reclassifiedCount}건 ==="
             )
             Log.d(TAG, "재분류 완료: ${reclassifiedCount}건")
             return reclassifiedCount
         } catch (e: Exception) {
             Log.e(
-                "sanha",
+                "MT_DEBUG",
                 "CategoryClassifier[reclassifyLowConfidenceItems] : 재분류 실패: ${e.message}",
                 e
             )

@@ -43,6 +43,15 @@ data class SmsPatternEntity(
     /** 파싱된 카테고리 (캐시) */
     val parsedCategory: String = "",
 
+    /** LLM이 생성한 금액 추출 정규식 (첫 번째 캡처 그룹 사용) */
+    val amountRegex: String = "",
+
+    /** LLM이 생성한 가게명 추출 정규식 (첫 번째 캡처 그룹 사용) */
+    val storeRegex: String = "",
+
+    /** LLM이 생성한 카드명 추출 정규식 (첫 번째 캡처 그룹 사용) */
+    val cardRegex: String = "",
+
     /** 파싱 소스 (regex, llm, manual) */
     val parseSource: String = "regex",
 

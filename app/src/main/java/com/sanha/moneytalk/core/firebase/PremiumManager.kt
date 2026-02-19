@@ -5,6 +5,7 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,9 +24,10 @@ import javax.inject.Singleton
  *
  * ## API 키 결정 로직
  * 1. 서비스 비활성화 → 빈 문자열
- * 2. gemini_api_keys 배열이 있으면 → 라운드로빈으로 키 선택
- * 3. gemini_api_key 단일 키가 있으면 → 해당 키 사용
- * 4. 키가 없으면 → 빈 문자열 (서비스 불가)
+ * 2. BuildConfig.GEMINI_API_KEYS 로컬 키 배열 (즉시 사용 가능, RTDB 로드 불필요)
+ * 3. RTDB gemini_api_keys 배열 (추가 키, 중복 제거)
+ * 4. RTDB gemini_api_key 단일 키 (하위호환, 중복 제거)
+ * 5. 키가 없으면 → 빈 문자열 (서비스 불가)
  *
  * ## Firebase Realtime Database 구조
  * ```
@@ -196,6 +198,8 @@ class PremiumManager @Inject constructor(
                 .getValue(String::class.java) ?: GeminiModelConfig.DEFAULT_CATEGORY_CLASSIFIER,
             smsExtractor = modelsSnapshot.child("sms_extractor")
                 .getValue(String::class.java) ?: GeminiModelConfig.DEFAULT_SMS_EXTRACTOR,
+            smsRegexExtractor = modelsSnapshot.child("sms_regex_extractor")
+                .getValue(String::class.java) ?: GeminiModelConfig.DEFAULT_SMS_REGEX_EXTRACTOR,
             smsBatchExtractor = modelsSnapshot.child("sms_batch_extractor")
                 .getValue(String::class.java) ?: GeminiModelConfig.DEFAULT_SMS_BATCH_EXTRACTOR,
             embedding = modelsSnapshot.child("embedding")
@@ -217,11 +221,40 @@ class PremiumManager @Inject constructor(
         )
     }
 
-    /** 사용 가능한 키 목록 반환 (풀 우선, 단일 키 fallback) */
+    /**
+     * 사용 가능한 키 목록 반환 (로컬 키 기본 + RTDB 키 추가)
+     *
+     * 우선순위:
+     * 1. BuildConfig.GEMINI_API_KEYS 로컬 키 배열 (즉시 사용 가능)
+     * 2. RTDB gemini_api_keys 배열 (추가 키, 중복 제거)
+     * 3. RTDB gemini_api_key 단일 키 (하위호환, 중복 제거)
+     *
+     * 로컬 키와 RTDB 키를 합쳐서 라운드로빈 풀을 구성합니다.
+     * RTDB 로드 전에도 로컬 키가 있으면 즉시 동작합니다.
+     */
     private fun getAvailableKeys(config: PremiumConfig): List<String> {
-        return config.geminiApiKeys.ifEmpty {
-            if (config.geminiApiKey.isNotBlank()) listOf(config.geminiApiKey) else emptyList()
+        val keys = mutableListOf<String>()
+
+        // 1. 로컬 키 배열 (BuildConfig, 즉시 사용 가능)
+        for (localKey in BuildConfig.GEMINI_API_KEYS) {
+            if (localKey.isNotBlank() && localKey !in keys) {
+                keys.add(localKey)
+            }
         }
+
+        // 2. RTDB 키 풀 (추가 키, 중복 제거)
+        for (rtdbKey in config.geminiApiKeys) {
+            if (rtdbKey.isNotBlank() && rtdbKey !in keys) {
+                keys.add(rtdbKey)
+            }
+        }
+
+        // 3. RTDB 단일 키 (하위호환, 중복 제거)
+        if (config.geminiApiKey.isNotBlank() && config.geminiApiKey !in keys) {
+            keys.add(config.geminiApiKey)
+        }
+
+        return keys
     }
 
     /** 사용 가능한 키가 있는지 확인 */

@@ -24,11 +24,13 @@ import com.sanha.moneytalk.R
  * - isPartial=true: 일부 데이터만 있을 때 → "일부 데이터만 표시되고 있어요"
  *
  * @param onRequestFullSync 전체 동기화 해제(광고 다이얼로그) 요청 콜백
+ * @param monthLabel 표시할 월 라벨 (예: "이번달", "2025년 12월")
  * @param isPartial 부분 데이터 모드 여부
  */
 @Composable
 fun FullSyncCtaSection(
     onRequestFullSync: () -> Unit,
+    monthLabel: String,
     isPartial: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -63,7 +65,7 @@ fun FullSyncCtaSection(
         )
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedButton(onClick = onRequestFullSync) {
-            Text(stringResource(R.string.full_sync_cta_button))
+            Text(stringResource(R.string.full_sync_cta_button, monthLabel))
         }
     }
 }

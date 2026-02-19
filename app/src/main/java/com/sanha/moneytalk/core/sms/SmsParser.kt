@@ -99,7 +99,16 @@ object SmsParser {
     private val incomeKeywords = listOf(
         "입금", "이체입금", "급여", "월급", "보너스", "상여",
         "환급", "정산", "송금", "받으셨습니다", "입금되었습니다",
-        "자동이체입금", "무통장입금", "계좌입금"
+        "자동이체입금", "무통장입금", "계좌입금",
+        "출금취소"  // 출금 취소 = 돈이 돌아옴 → 수입
+    )
+
+    /**
+     * 취소/환불 키워드: 결제 키워드와 함께 있어도 지출이 아닌 수입으로 판별
+     * "출금취소", "승인취소" 등 → 지출 판별에서 제외, 수입으로 분류
+     */
+    private val cancellationKeywords = listOf(
+        "출금취소", "승인취소", "결제취소", "취소승인", "취소완료"
     )
 
     /** 수입 제외 키워드 (자동이체 출금 등 제외) */
@@ -116,6 +125,7 @@ object SmsParser {
         "광고",       // "[광고]","(광고)" 등 모두 포함
         "홍보", "이벤트", "혜택안내", "포인트 적립",
         "명세서", "청구서", "이용대금",
+        "결제내역",   // 카드사 결제내역 안내
         "결제금액",   // 카드사 결제예정 금액 안내
         "카드대금",   // 카드 대금 결제/이체 안내
         "결제대금",   // 카드 결제대금 안내
@@ -300,6 +310,25 @@ object SmsParser {
     )
 
     /**
+     * SMS 공통 사전 필터: 처리 대상이 아닌 SMS를 즉시 스킵
+     *
+     * 지출/수입 판별 공통으로 적용되는 조건:
+     * 1. 빈 메시지
+     * 2. 100자 초과 (안내/광고성 SMS)
+     * 3. 제외 키워드 포함 (광고, 마케팅 등)
+     *
+     * @return true이면 이 SMS는 스킵해야 함
+     */
+    private fun shouldSkipSms(message: String): Boolean {
+        if (message.isBlank()) return true
+        if (message.length > MAX_SMS_LENGTH) return true
+        val msgLower = message.lowercase()
+        if (excludeKeywords.any { msgLower.contains(it) } ||
+            userExcludeKeywords.any { msgLower.contains(it) }) return true
+        return false
+    }
+
+    /**
      * SMS 유형을 한 번의 lowercase()로 동시 판별 (성능 최적화)
      *
      * isCardPaymentSms()와 isIncomeSms()를 개별 호출하면 message.lowercase()가
@@ -312,17 +341,10 @@ object SmsParser {
      * @return SmsTypeResult (isPayment, isIncome 동시 반환)
      */
     fun classifySmsType(message: String): SmsTypeResult {
-        // 빈 메시지 조기 반환
-        if (message.isBlank()) return SmsTypeResult()
+        // 공통 사전 필터: 빈 메시지, 100자 초과, 제외 키워드 → 즉시 스킵
+        if (shouldSkipSms(message)) return SmsTypeResult()
 
-        // 공통: lowercase 1회만 수행
         val msgLower = message.lowercase()
-
-        // 공통: 제외 키워드 체크 (지출/수입 모두 제외)
-        if (excludeKeywords.any { msgLower.contains(it) } ||
-            userExcludeKeywords.any { msgLower.contains(it) }) {
-            return SmsTypeResult()
-        }
 
         // 공통: 금융기관 키워드 (지출=카드사, 수입=은행 — 같은 키워드 세트)
         val hasCardKeyword = cardKeywordsSet.any { msgLower.contains(it) }
@@ -335,31 +357,27 @@ object SmsParser {
             )
         if (!hasAmount) return SmsTypeResult()
 
-        // ===== 지출 판별 =====
-        // 글자수 제한 (안내/광고성 SMS 필터링, 지출만 적용)
-        val isPayment = if (message.length <= MAX_SMS_LENGTH) {
-            val hasPaymentKeyword = paymentKeywords.any { msgLower.contains(it) }
-            hasPaymentKeyword
-        } else {
-            false
+        // ===== 취소 판별 (지출보다 우선) =====
+        // "출금취소", "승인취소" 등은 결제 키워드를 포함하지만 실제로는 수입
+        val hasCancellation = cancellationKeywords.any { msgLower.contains(it) }
+        if (hasCancellation) {
+            return SmsTypeResult(isIncome = true)
         }
 
-        // 지출이면 수입 체크 불필요 (동일 SMS가 지출+수입 동시에 해당될 수 없음)
-        if (isPayment) return SmsTypeResult(isPayment = true)
+        // ===== 지출 판별 =====
+        val hasPaymentKeyword = paymentKeywords.any { msgLower.contains(it) }
+        if (hasPaymentKeyword) return SmsTypeResult(isPayment = true)
 
         // ===== 수입 판별 =====
         val hasIncomeExclude = incomeExcludeKeywords.any { msgLower.contains(it) }
         if (hasIncomeExclude) return SmsTypeResult()
 
         val hasIncomeKeyword = incomeKeywords.any { msgLower.contains(it) }
-        val hasPaymentKeyword = paymentKeywords.any { msgLower.contains(it) }
-        val isIncome = hasIncomeKeyword && !hasPaymentKeyword
-
-        if (isIncome) {
-            Log.d("SmsParser", "수입 SMS 감지: ${message.take(50)}...")
+        if (hasIncomeKeyword) {
+            return SmsTypeResult(isIncome = true)
         }
 
-        return SmsTypeResult(isIncome = isIncome)
+        return SmsTypeResult()
     }
 
     /**
@@ -375,24 +393,15 @@ object SmsParser {
      * @return 카드 결제 문자이면 true
      */
     fun isCardPaymentSms(message: String): Boolean {
-        // 빈 메시지 조기 반환
-        if (message.isBlank()) return false
-
-        // 글자수 제한 (안내/광고성 SMS 필터링)
-        if (message.length > MAX_SMS_LENGTH) {
-            return false
-        }
+        // 공통 사전 필터: 빈 메시지, 100자 초과, 제외 키워드 → 즉시 스킵
+        if (shouldSkipSms(message)) return false
 
         val msgLower = message.lowercase()
 
-        // 기본 제외 키워드 + 사용자 제외 키워드 (리스트 합치기 대신 별도 체크)
-        if (excludeKeywords.any { msgLower.contains(it) } ||
-            userExcludeKeywords.any { msgLower.contains(it) }) {
-            Log.d("sanha", "제외 키워드 ${message.take(50)}")
-            return false
-        }
+        // 취소 키워드가 있으면 결제가 아님 (수입으로 처리)
+        if (cancellationKeywords.any { msgLower.contains(it) }) return false
 
-        // 카드사 키워드가 있고, 결제 관련 키워드가 있으면 true (find→any 최적화)
+        // 카드사 키워드가 있고, 결제 관련 키워드가 있으면 true
         val hasCardKeyword = cardKeywordsSet.any { msgLower.contains(it) }
         val hasPaymentKeyword = paymentKeywords.any { msgLower.contains(it) }
 
@@ -419,41 +428,33 @@ object SmsParser {
      * @return 수입 문자이면 true
      */
     fun isIncomeSms(message: String): Boolean {
-        // 빈 메시지 조기 반환 (isCardPaymentSms와 일관성)
-        if (message.isBlank()) return false
+        // 공통 사전 필터: 빈 메시지, 100자 초과, 제외 키워드 → 즉시 스킵
+        if (shouldSkipSms(message)) return false
 
         val msgLower = message.lowercase()
 
-        // 기본 제외 키워드 + 사용자 제외 키워드 (리스트 합치기 대신 별도 체크)
-        if (excludeKeywords.any { msgLower.contains(it) } ||
-            userExcludeKeywords.any { msgLower.contains(it) }) {
-            return false
+        // 취소 키워드가 있으면 수입으로 즉시 판정 (은행/금액 확인 후)
+        val hasCancellation = cancellationKeywords.any { msgLower.contains(it) }
+        if (hasCancellation) {
+            val hasBankKeyword = cardKeywordsSet.any { msgLower.contains(it) }
+            val hasAmount =
+                AMOUNT_PATTERN_WITH_WON.containsMatchIn(message) || AMOUNT_PATTERN_NUMBER_ONLY.containsMatchIn(message)
+            return hasBankKeyword && hasAmount
         }
 
         // 수입 제외 키워드가 있으면 false (자동이체 출금 등)
-        if (incomeExcludeKeywords.any { msgLower.contains(it) }) {
-            return false
-        }
+        if (incomeExcludeKeywords.any { msgLower.contains(it) }) return false
 
-        // 은행 키워드 확인
+        // 은행 키워드 + 입금 키워드 + 금액 패턴 + 결제 키워드 없음
         val hasBankKeyword = cardKeywordsSet.any { msgLower.contains(it) }
-
-        // 입금 관련 키워드 확인
         val hasIncomeKeyword = incomeKeywords.any { msgLower.contains(it) }
-
-        // 금액 패턴 확인 (사전 컴파일된 Regex 상수 사용)
         val hasAmount =
             AMOUNT_PATTERN_WITH_WON.containsMatchIn(message) || AMOUNT_PATTERN_NUMBER_ONLY.containsMatchIn(
                 message
             )
-
-        // 지출(결제) 관련 키워드가 있으면 수입으로 판단하지 않음
         val hasPaymentKeyword = paymentKeywords.any { msgLower.contains(it) }
 
         val isIncome = hasBankKeyword && hasIncomeKeyword && hasAmount && !hasPaymentKeyword
-        if (isIncome) {
-            Log.d("SmsParser", "수입 SMS 감지: ${message.take(50)}...")
-        }
 
         return isIncome
     }

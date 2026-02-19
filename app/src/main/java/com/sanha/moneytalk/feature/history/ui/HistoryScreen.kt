@@ -100,9 +100,10 @@ fun HistoryScreen(
         viewModel.setMonth(year, month)
     }
 
-    // 내역 탭 재클릭 → 오늘(현재 월) 페이지로 이동
+    // 내역 탭 재클릭 → 오늘(현재 월) 페이지로 이동 + 필터 초기화
     LaunchedEffect(historyTabReClickEvent) {
         historyTabReClickEvent?.collect {
+            viewModel.resetFilters()
             val todayPage = MonthPagerUtils.yearMonthToPage(
                 com.sanha.moneytalk.core.util.DateUtils.getCurrentYear(),
                 com.sanha.moneytalk.core.util.DateUtils.getCurrentMonth()
@@ -196,6 +197,7 @@ fun HistoryScreen(
             // CTA 판별용: 현재 월 여부
             val isCurrentMonth = pageYear == com.sanha.moneytalk.core.util.DateUtils.getCurrentYear() &&
                     pageMonth == com.sanha.moneytalk.core.util.DateUtils.getCurrentMonth()
+            val pageMonthLabel = if (isCurrentMonth) "이번달" else "${pageMonth}월"
 
             when {
                 viewMode == ViewMode.LIST -> {
@@ -206,8 +208,9 @@ fun HistoryScreen(
                         showIncomes = uiState.showIncomes,
                         hasActiveFilter = uiState.selectedCategory != null,
                         isCurrentMonth = isCurrentMonth,
-                        isFullSyncUnlocked = uiState.isFullSyncUnlocked,
+                        isMonthSynced = viewModel.isMonthSynced(pageYear, pageMonth),
                         isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
+                        monthLabel = pageMonthLabel,
                         onRequestFullSync = { viewModel.showFullSyncAdDialog() },
                         scrollResetKey = Triple(
                             uiState.selectedCategory,
@@ -239,7 +242,7 @@ fun HistoryScreen(
     // 다이얼로그 상태는 ViewModel에서 관리
     uiState.selectedExpense?.let { expense ->
         Log.e(
-            "sanha",
+            "MT_DEBUG",
             "HistoryScreen[selectedExpense] : \nstoreName : ${expense.storeName}\noriginalSms : ${expense.originalSms}\namount : ${expense.amount}원"
         )
 
@@ -263,7 +266,7 @@ fun HistoryScreen(
 
     uiState.selectedIncome?.let { income ->
         Log.e(
-            "sanha",
+            "MT_DEBUG",
             "HistoryScreen[selectedIncome] : ${income.originalSms}, ${income.amount}원"
         )
         IncomeDetailDialog(
@@ -291,10 +294,13 @@ fun HistoryScreen(
     if (uiState.showFullSyncAdDialog) {
         val context = LocalContext.current
         val activity = context as? android.app.Activity
+        val isCurrentMonthForDialog = uiState.selectedYear == com.sanha.moneytalk.core.util.DateUtils.getCurrentYear() &&
+                uiState.selectedMonth == com.sanha.moneytalk.core.util.DateUtils.getCurrentMonth()
+        val dialogMonthLabel = if (isCurrentMonthForDialog) "이번달" else "${uiState.selectedMonth}월"
         AlertDialog(
             onDismissRequest = { viewModel.dismissFullSyncAdDialog() },
-            title = { Text(stringResource(R.string.full_sync_ad_dialog_title)) },
-            text = { Text(stringResource(R.string.full_sync_ad_dialog_message)) },
+            title = { Text(stringResource(R.string.full_sync_ad_dialog_title, dialogMonthLabel)) },
+            text = { Text(stringResource(R.string.full_sync_ad_dialog_message, dialogMonthLabel)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -313,7 +319,7 @@ fun HistoryScreen(
                         }
                     }
                 ) {
-                    Text(stringResource(R.string.full_sync_ad_watch_button))
+                    Text(stringResource(R.string.full_sync_ad_watch_button, dialogMonthLabel))
                 }
             },
             dismissButton = {
@@ -341,8 +347,9 @@ fun TransactionListView(
     showIncomes: Boolean = true,
     hasActiveFilter: Boolean = false,
     isCurrentMonth: Boolean = true,
-    isFullSyncUnlocked: Boolean = true,
+    isMonthSynced: Boolean = false,
     isPartiallyCovered: Boolean = false,
+    monthLabel: String = "이번달",
     onRequestFullSync: () -> Unit = {},
     scrollResetKey: Any? = null,
     onIntent: (HistoryIntent) -> Unit
@@ -374,14 +381,15 @@ fun TransactionListView(
 
     if (items.isEmpty()) {
         // 데이터 0건 + 현재 월 아님 + 전체 동기화 미해제 + 필터 없음 → CTA 표시
-        val showFullSyncCta = !isCurrentMonth && !isFullSyncUnlocked && !hasActiveFilter
+        val showFullSyncCta = !isCurrentMonth && !isMonthSynced && !hasActiveFilter
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
             if (showFullSyncCta) {
                 com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
-                    onRequestFullSync = onRequestFullSync
+                    onRequestFullSync = onRequestFullSync,
+                    monthLabel = monthLabel
                 )
             } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -415,10 +423,11 @@ fun TransactionListView(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // 부분 데이터 안내 CTA (데이터 있지만 일부 기간 누락)
-            if (isPartiallyCovered && !isFullSyncUnlocked) {
+            if (isPartiallyCovered && !isMonthSynced) {
                 item(key = "partial_cta") {
                     com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
                         onRequestFullSync = onRequestFullSync,
+                        monthLabel = monthLabel,
                         isPartial = true
                     )
                 }

@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.core.firebase.ServiceTier
@@ -35,6 +36,7 @@ class SettingsDataStore @Inject constructor(
         private val SERVICE_TIER = stringPreferencesKey("service_tier")
         private val REWARD_CHAT_REMAINING = intPreferencesKey("reward_chat_remaining")
         private val FULL_SYNC_UNLOCKED = booleanPreferencesKey("full_sync_unlocked")
+        private val SYNCED_MONTHS = stringSetPreferencesKey("synced_months")
     }
 
     // API 키 저장
@@ -183,18 +185,54 @@ class SettingsDataStore @Inject constructor(
         return context.dataStore.data.first()[REWARD_CHAT_REMAINING] ?: 0
     }
 
-    // 전체 동기화 해제 여부 저장 (광고 시청 후 true)
+    // ===== 월별 동기화 해제 관리 =====
+
+    /**
+     * 특정 월의 동기화 해제 기록 추가
+     * @param yearMonth "YYYY-MM" 형식 (예: "2026-02")
+     */
+    suspend fun addSyncedMonth(yearMonth: String) {
+        context.dataStore.edit { preferences ->
+            val current = preferences[SYNCED_MONTHS] ?: emptySet()
+            preferences[SYNCED_MONTHS] = current + yearMonth
+        }
+    }
+
+    /** 동기화 해제된 월 목록 Flow */
+    val syncedMonthsFlow: Flow<Set<String>> = context.dataStore.data.map { preferences ->
+        preferences[SYNCED_MONTHS] ?: emptySet()
+    }
+
+    /** 특정 월이 동기화 해제되었는지 확인 */
+    suspend fun isMonthSynced(yearMonth: String): Boolean {
+        val months = context.dataStore.data.first()[SYNCED_MONTHS] ?: emptySet()
+        return yearMonth in months
+    }
+
+    /** 동기화 해제된 월이 하나라도 있는지 (= 광고를 한 번이라도 시청했는지) */
+    suspend fun hasAnySyncedMonth(): Boolean {
+        val prefs = context.dataStore.data.first()
+        val months = prefs[SYNCED_MONTHS] ?: emptySet()
+        if (months.isNotEmpty()) return true
+        // 하위 호환: 기존 전역 boolean이 true인 경우도 인정
+        return prefs[FULL_SYNC_UNLOCKED] ?: false
+    }
+
+    // ===== 하위 호환용 (기존 전역 boolean) =====
+
+    @Deprecated("월별 동기화로 전환. addSyncedMonth/isMonthSynced 사용")
     suspend fun saveFullSyncUnlocked(unlocked: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[FULL_SYNC_UNLOCKED] = unlocked
         }
     }
 
-    // 전체 동기화 해제 여부 가져오기 (기본값: false → 3개월만 동기화)
+    @Deprecated("월별 동기화로 전환. syncedMonthsFlow 사용")
     val fullSyncUnlockedFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[FULL_SYNC_UNLOCKED] ?: false
     }
 
+    @Deprecated("월별 동기화로 전환. isMonthSynced 사용")
     suspend fun isFullSyncUnlocked(): Boolean {
         return context.dataStore.data.first()[FULL_SYNC_UNLOCKED] ?: false
     }

@@ -7,7 +7,7 @@ import com.google.gson.reflect.TypeToken
 /**
  * Room TypeConverter: List<Float> ↔ String (JSON)
  *
- * SmsPatternEntity의 임베딩 벡터(768차원 Float 배열)를
+ * SmsPatternEntity의 임베딩 벡터(차원 수는 모델 의존, Float 배열)를
  * Room SQLite에 JSON 문자열로 직렬화/역직렬화합니다.
  *
  * 저장 형식 예시: "[0.123, -0.456, 0.789, ...]"
