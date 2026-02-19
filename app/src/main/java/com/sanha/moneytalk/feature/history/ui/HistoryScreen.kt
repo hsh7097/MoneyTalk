@@ -207,6 +207,7 @@ fun HistoryScreen(
                         hasActiveFilter = uiState.selectedCategory != null,
                         isCurrentMonth = isCurrentMonth,
                         isFullSyncUnlocked = uiState.isFullSyncUnlocked,
+                        isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
                         onRequestFullSync = { viewModel.showFullSyncAdDialog() },
                         scrollResetKey = Triple(
                             uiState.selectedCategory,
@@ -341,6 +342,7 @@ fun TransactionListView(
     hasActiveFilter: Boolean = false,
     isCurrentMonth: Boolean = true,
     isFullSyncUnlocked: Boolean = true,
+    isPartiallyCovered: Boolean = false,
     onRequestFullSync: () -> Unit = {},
     scrollResetKey: Any? = null,
     onIntent: (HistoryIntent) -> Unit
@@ -412,6 +414,16 @@ fun TransactionListView(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // 부분 데이터 안내 CTA (데이터 있지만 일부 기간 누락)
+            if (isPartiallyCovered && !isFullSyncUnlocked) {
+                item(key = "partial_cta") {
+                    com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
+                        onRequestFullSync = onRequestFullSync,
+                        isPartial = true
+                    )
+                }
+            }
+
             items(
                 count = items.size,
                 key = { index ->

@@ -199,6 +199,9 @@ class HistoryViewModel @Inject constructor(
     /** 페이지 캐시 최대 허용 범위 (현재 월 ± 이 값) */
     private companion object {
         const val PAGE_CACHE_RANGE = 2
+
+        /** 초기 동기화 제한 기간 (2개월, 밀리초) — HomeViewModel과 동일값 */
+        const val DEFAULT_SYNC_PERIOD_MILLIS = 60L * 24 * 60 * 60 * 1000
     }
 
     init {
@@ -991,6 +994,18 @@ class HistoryViewModel @Inject constructor(
     }
 
     // ========== 전체 동기화 해제 (광고) ==========
+
+    /**
+     * 해당 페이지의 커스텀 월이 동기화 범위에 부분만 포함되는지 판단
+     */
+    fun isPagePartiallyCovered(year: Int, month: Int): Boolean {
+        if (_uiState.value.isFullSyncUnlocked) return false
+        val (customMonthStart, _) = DateUtils.getCustomMonthPeriod(
+            year, month, _uiState.value.monthStartDay
+        )
+        val syncCoverageStart = System.currentTimeMillis() - DEFAULT_SYNC_PERIOD_MILLIS
+        return customMonthStart < syncCoverageStart
+    }
 
     /** 전체 동기화 광고 프리로드 */
     fun preloadFullSyncAd() {

@@ -202,6 +202,7 @@ fun HomeScreen(
             monthStartDay = uiState.monthStartDay,
             isSyncing = uiState.isSyncing,
             isFullSyncUnlocked = uiState.isFullSyncUnlocked,
+            isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
             selectedCategory = uiState.selectedCategory,
             onPreviousMonth = {
                 coroutineScope.launch {
@@ -223,9 +224,9 @@ fun HomeScreen(
             },
             onFullSync = {
                 if (uiState.isFullSyncUnlocked) {
-                    // 이미 해제됨 → 바로 전체 동기화
+                    // 이미 해제됨 → 현재 보고 있는 월만 동기화
                     onRequestSmsPermission {
-                        viewModel.syncSmsMessages(contentResolver, forceFullSync = true)
+                        viewModel.syncMonthData(contentResolver, pageYear, pageMonth)
                     }
                 } else {
                     // 미해제 → 광고 다이얼로그 표시
@@ -461,6 +462,7 @@ fun HomePageContent(
     monthStartDay: Int,
     isSyncing: Boolean,
     isFullSyncUnlocked: Boolean,
+    isPartiallyCovered: Boolean,
     selectedCategory: String?,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
@@ -520,17 +522,29 @@ fun HomePageContent(
                 )
             }
 
-            // 데이터 0건 + 현재 월 아님 + 전체 동기화 미해제 → CTA 표시
+            // 데이터 0건 + 현재 월 아님 + 전체 동기화 미해제 → 빈 CTA 표시
             val isCurrentMonth = year == DateUtils.getCurrentYear() && month == DateUtils.getCurrentMonth()
             val hasNoData = !pageData.isLoading &&
                     pageData.monthlyExpense == 0 && pageData.monthlyIncome == 0
-            val showFullSyncCta = hasNoData && !isCurrentMonth && !isFullSyncUnlocked
+            val showEmptyCta = hasNoData && !isCurrentMonth && !isFullSyncUnlocked
+            // 데이터 있지만 부분 커버 + 전체 동기화 미해제 → 부분 CTA 표시
+            val showPartialCta = !hasNoData && isPartiallyCovered && !isFullSyncUnlocked
 
-            if (showFullSyncCta) {
+            if (showEmptyCta) {
                 item {
                     FullSyncCtaSection(onRequestFullSync = onFullSync)
                 }
             } else {
+                // 부분 데이터 안내 CTA
+                if (showPartialCta) {
+                    item {
+                        FullSyncCtaSection(
+                            onRequestFullSync = onFullSync,
+                            isPartial = true
+                        )
+                    }
+                }
+
                 // 카테고리별 지출
                 item {
                     CategoryExpenseSection(

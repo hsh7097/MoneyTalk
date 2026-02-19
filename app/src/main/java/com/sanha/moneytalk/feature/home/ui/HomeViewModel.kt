@@ -17,11 +17,11 @@ import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
-import com.sanha.moneytalk.core.util.HybridSmsClassifier
-import com.sanha.moneytalk.core.util.SmsBatchProcessor
-import com.sanha.moneytalk.core.util.SmsMessage
-import com.sanha.moneytalk.core.util.SmsParser
-import com.sanha.moneytalk.core.util.SmsReader
+import com.sanha.moneytalk.core.sms.HybridSmsClassifier
+import com.sanha.moneytalk.core.sms.SmsBatchProcessor
+import com.sanha.moneytalk.core.sms.SmsMessage
+import com.sanha.moneytalk.core.sms.SmsParser
+import com.sanha.moneytalk.core.sms.SmsReader
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
@@ -145,8 +145,8 @@ class HomeViewModel @Inject constructor(
         /** 기본 조회 기간 (1년, 밀리초) */
         private const val ONE_YEAR_MILLIS = 365L * 24 * 60 * 60 * 1000
 
-        /** 초기 동기화 제한 기간 (3개월, 밀리초) — 전체 동기화 미해제 시 적용 */
-        private const val THREE_MONTHS_MILLIS = 90L * 24 * 60 * 60 * 1000
+        /** 초기 동기화 제한 기간 (2개월, 밀리초) — 전체 동기화 미해제 시 적용 */
+        private const val DEFAULT_SYNC_PERIOD_MILLIS = 60L * 24 * 60 * 60 * 1000
 
         /** 배치 처리 최소 건수 (이 이상이면 배치 처리) */
         private const val BATCH_PROCESSING_THRESHOLD = 50
@@ -630,11 +630,13 @@ class HomeViewModel @Inject constructor(
      *
      * @param contentResolver SMS 읽기용 ContentResolver
      * @param forceFullSync true면 전체 동기화, false면 마지막 동기화 이후만 (증분 동기화)
+     * @param targetMonthRange 특정 월만 동기화 시 (startMillis, endMillis) 쌍. null이면 기존 동작.
      */
     fun syncSmsMessages(
         contentResolver: ContentResolver,
         forceFullSync: Boolean = false,
-        todayOnly: Boolean = false
+        todayOnly: Boolean = false,
+        targetMonthRange: Pair<Long, Long>? = null
     ) {
         analyticsHelper.logClick(AnalyticsEvent.SCREEN_HOME, AnalyticsEvent.CLICK_SYNC_SMS)
         viewModelScope.launch {
@@ -686,19 +688,26 @@ class HomeViewModel @Inject constructor(
                     android.util.Log.e("sanha", "isFullSyncUnlocked=$isFullSyncUnlocked")
                     android.util.Log.e("sanha", "savedSyncTimeRaw=$savedSyncTimeRaw (${if (savedSyncTimeRaw > 0) sdf.format(java.util.Date(savedSyncTimeRaw)) else "없음"})")
                     android.util.Log.e("sanha", "effectiveSyncTime=$effectiveSyncTime (dbExpenseCount=$dbExpenseCount)")
-                    android.util.Log.e("sanha", "THREE_MONTHS_MILLIS=$THREE_MONTHS_MILLIS (${THREE_MONTHS_MILLIS / 1000 / 60 / 60 / 24}일)")
+                    android.util.Log.e("sanha", "DEFAULT_SYNC_PERIOD_MILLIS=$DEFAULT_SYNC_PERIOD_MILLIS (${DEFAULT_SYNC_PERIOD_MILLIS / 1000 / 60 / 60 / 24}일)")
                     android.util.Log.e("sanha", "System.currentTimeMillis()=${System.currentTimeMillis()}")
-                    android.util.Log.e("sanha", "3개월 전 시각=${sdf.format(java.util.Date(System.currentTimeMillis() - THREE_MONTHS_MILLIS))}")
+                    android.util.Log.e("sanha", "기본 동기화 기준 시각=${sdf.format(java.util.Date(System.currentTimeMillis() - DEFAULT_SYNC_PERIOD_MILLIS))}")
 
                     // 마지막 동기화 시간 가져오기
                     val lastSyncTime = when {
                         forceFullSync -> {
                             if (isFullSyncUnlocked) {
-                                android.util.Log.e("sanha", "→ 분기: forceFullSync + unlocked → 0L (처음부터)")
-                                0L // 전체 동기화 해제 → 처음부터
+                                // 특정 월 동기화 요청이면 해당 월만, 아니면 전체
+                                val targetRange = targetMonthRange
+                                if (targetRange != null) {
+                                    android.util.Log.e("sanha", "→ 분기: forceFullSync + unlocked + 월별 → ${sdf.format(java.util.Date(targetRange.first))}")
+                                    targetRange.first
+                                } else {
+                                    android.util.Log.e("sanha", "→ 분기: forceFullSync + unlocked → 0L (처음부터)")
+                                    0L
+                                }
                             } else {
-                                val t = System.currentTimeMillis() - THREE_MONTHS_MILLIS
-                                android.util.Log.e("sanha", "→ 분기: forceFullSync + locked → 3개월 전 ($t = ${sdf.format(java.util.Date(t))})")
+                                val t = System.currentTimeMillis() - DEFAULT_SYNC_PERIOD_MILLIS
+                                android.util.Log.e("sanha", "→ 분기: forceFullSync + locked → 기본 기간 ($t = ${sdf.format(java.util.Date(t))})")
                                 t
                             }
                         }
@@ -714,23 +723,24 @@ class HomeViewModel @Inject constructor(
                         }
 
                         else -> {
-                            val threeMonthsAgo = System.currentTimeMillis() - THREE_MONTHS_MILLIS
+                            val defaultPeriodAgo = System.currentTimeMillis() - DEFAULT_SYNC_PERIOD_MILLIS
                             if (effectiveSyncTime == 0L && !isFullSyncUnlocked) {
-                                android.util.Log.e("sanha", "→ 분기: else + savedSync=0 + locked → 3개월 전 ($threeMonthsAgo = ${sdf.format(java.util.Date(threeMonthsAgo))})")
-                                threeMonthsAgo
-                            } else if (!isFullSyncUnlocked && effectiveSyncTime < threeMonthsAgo) {
-                                android.util.Log.e("sanha", "→ 분기: else + locked + saved<3개월 → 3개월 전 ($threeMonthsAgo = ${sdf.format(java.util.Date(threeMonthsAgo))})")
-                                threeMonthsAgo
+                                android.util.Log.e("sanha", "→ 분기: else + savedSync=0 + locked → 기본 기간 ($defaultPeriodAgo = ${sdf.format(java.util.Date(defaultPeriodAgo))})")
+                                defaultPeriodAgo
+                            } else if (!isFullSyncUnlocked && effectiveSyncTime < defaultPeriodAgo) {
+                                android.util.Log.e("sanha", "→ 분기: else + locked + saved<기본기간 → 기본 기간 ($defaultPeriodAgo = ${sdf.format(java.util.Date(defaultPeriodAgo))})")
+                                defaultPeriodAgo
                             } else {
                                 android.util.Log.e("sanha", "→ 분기: else + 증분 → effectiveSyncTime ($effectiveSyncTime = ${if (effectiveSyncTime > 0) sdf.format(java.util.Date(effectiveSyncTime)) else "0"})")
                                 effectiveSyncTime
                             }
                         }
                     }
-                    val currentTime = System.currentTimeMillis()
+                    // endTime: 월별 동기화 시 해당 월 끝까지, 아니면 현재 시간
+                    val currentTime = targetMonthRange?.second ?: System.currentTimeMillis()
 
                     android.util.Log.e("sanha", "=== syncSmsMessages (Hybrid) 시작 ===")
-                    android.util.Log.e("sanha", "최종 lastSyncTime=$lastSyncTime, currentTime=$currentTime")
+                    android.util.Log.e("sanha", "최종 lastSyncTime=$lastSyncTime, currentTime=$currentTime, targetMonth=${targetMonthRange != null}")
                     android.util.Log.e(
                         "sanha",
                         "최종 범위: ${sdf.format(java.util.Date(lastSyncTime))} ~ ${sdf.format(java.util.Date(currentTime))}"
@@ -1074,17 +1084,62 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * 전체 동기화 해제 (광고 시청 완료 후 호출)
-     * DataStore에 해제 상태 저장 후 전체 동기화 실행
+     * 월별 동기화 해제 (광고 시청 완료 후 호출)
+     * 현재 보고 있는 달의 SMS만 가져온다.
+     * fullSyncUnlocked=true로 저장하여 이후 어떤 달이든 동기화 가능.
      */
     fun unlockFullSync(contentResolver: ContentResolver) {
         viewModelScope.launch {
             settingsDataStore.saveFullSyncUnlocked(true)
             _uiState.update { it.copy(isFullSyncUnlocked = true, showFullSyncAdDialog = false) }
-            snackbarBus.show("전체 동기화가 해제되었습니다. 전체 문자를 가져옵니다.")
-            // 전체 동기화 실행
-            syncSmsMessages(contentResolver, forceFullSync = true)
+
+            // 현재 보고 있는 월의 범위 계산
+            val state = _uiState.value
+            val monthRange = calculateMonthRange(state.selectedYear, state.selectedMonth)
+            val monthLabel = "${state.selectedYear}년 ${state.selectedMonth}월"
+            snackbarBus.show("${monthLabel} 데이터를 가져옵니다.")
+
+            syncSmsMessages(
+                contentResolver,
+                forceFullSync = true,
+                targetMonthRange = monthRange
+            )
         }
+    }
+
+    /**
+     * 특정 년/월의 커스텀 월 기간 계산 (사용자 설정 monthStartDay 반영)
+     * @return Pair(startMillis, endMillis)
+     */
+    private fun calculateMonthRange(year: Int, month: Int): Pair<Long, Long> {
+        return DateUtils.getCustomMonthPeriod(year, month, _uiState.value.monthStartDay)
+    }
+
+    /**
+     * 해당 페이지의 커스텀 월이 동기화 범위에 부분만 포함되는지 판단
+     *
+     * 전체 동기화 해제 시 → 항상 false (완전 커버)
+     * 미해제 시 → 커스텀 월 시작이 (현재 - DEFAULT_SYNC_PERIOD_MILLIS) 이전이면 부분 커버
+     */
+    fun isPagePartiallyCovered(year: Int, month: Int): Boolean {
+        if (_uiState.value.isFullSyncUnlocked) return false
+        val (customMonthStart, _) = DateUtils.getCustomMonthPeriod(
+            year, month, _uiState.value.monthStartDay
+        )
+        val syncCoverageStart = System.currentTimeMillis() - DEFAULT_SYNC_PERIOD_MILLIS
+        return customMonthStart < syncCoverageStart
+    }
+
+    /**
+     * 특정 월 데이터만 동기화 (해제 후 메뉴에서 호출)
+     */
+    fun syncMonthData(contentResolver: ContentResolver, year: Int, month: Int) {
+        val monthRange = calculateMonthRange(year, month)
+        syncSmsMessages(
+            contentResolver,
+            forceFullSync = true,
+            targetMonthRange = monthRange
+        )
     }
 
     /** 전체 동기화 해제용 광고 준비 */
