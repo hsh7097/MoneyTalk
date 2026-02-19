@@ -10,7 +10,12 @@ import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.model.Category
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,6 +39,8 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
         private const val TAG = "gemini"
         private const val BATCH_SIZE = 50
         private const val MAX_RETRIES = 3
+        /** LLM 배치 병렬 동시 실행 수 (API 키 5개 × 키당 1 = 5, LLM은 임베딩보다 무거움) */
+        private const val LLM_CONCURRENCY = 5
         private const val RETRY_BASE_DELAY_MS = 1000L  // 재시도 기본 딜레이 (1초)
         private const val MAX_RETRY_DELAY_MS = 30000L  // 최대 30초 딜레이
         private const val MAX_LOG_LENGTH = 3000     // Logcat 한 줄 최대 길이
@@ -86,7 +93,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             apiKey = apiKey,
             generationConfig = generationConfig {
                 temperature = 0.1f  // 낮은 온도로 일관된 분류
-                maxOutputTokens = 1024
+                maxOutputTokens = 4096
             }
         )
     }
@@ -101,12 +108,12 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
     override suspend fun classifyStoreNames(storeNames: List<String>): Map<String, String> =
         withContext(Dispatchers.IO) {
             Log.e(
-                "sanha",
+                "MT_DEBUG",
                 "GeminiCategoryRepository[classifyStoreNames] : === 호출됨 (${storeNames.size}건) ==="
             )
             val apiKey = apiKeyProvider.getApiKey()
             Log.e(
-                "sanha",
+                "MT_DEBUG",
                 "GeminiCategoryRepository[classifyStoreNames] : API 키 상태: ${
                     if (apiKey.isBlank()) "❌ 비어있음" else "✅ 설정됨 (길이=${apiKey.length}, prefix=${
                         apiKey.take(10)
@@ -121,7 +128,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             val currentModelConfig = apiKeyProvider.modelConfig
             if (generativeModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
                 Log.e(
-                    "sanha",
+                    "MT_DEBUG",
                     "GeminiCategoryRepository[classifyStoreNames] : 모델 초기화 필요 → initModel() 호출"
                 )
                 cachedApiKey = apiKey
@@ -132,12 +139,12 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             val model = generativeModel
             if (model == null) {
                 Log.e(
-                    "sanha",
+                    "MT_DEBUG",
                     "GeminiCategoryRepository[classifyStoreNames] : ❌ 모델 초기화 실패 → 빈 결과 반환"
                 )
                 return@withContext emptyMap()
             }
-            Log.e("sanha", "GeminiCategoryRepository[classifyStoreNames] : ✅ 모델 준비 완료")
+            Log.e("MT_DEBUG", "GeminiCategoryRepository[classifyStoreNames] : ✅ 모델 준비 완료")
 
             // 사용 가능한 카테고리 목록
             val categories = Category.entries.map { it.displayName }
@@ -149,58 +156,58 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 ""
             }
 
-            // 배치 처리 (한 번에 최대 50개)
+            // 배치 처리 (한 번에 최대 50개, 병렬)
             val results = mutableMapOf<String, String>()
             val batches = storeNames.chunked(BATCH_SIZE)
-            val failedBatches = mutableListOf<Pair<Int, List<String>>>()
 
-            Log.d(TAG, "총 ${storeNames.size}개를 ${batches.size}개 배치로 처리")
+            Log.d(TAG, "총 ${storeNames.size}개를 ${batches.size}개 배치로 처리 (병렬 $LLM_CONCURRENCY)")
 
-            var interBatchDelay = 0L  // 적응형 배치 간 딜레이 (429 발생 시에만 활성화)
+            val llmSemaphore = Semaphore(LLM_CONCURRENCY)
+            val classifyStart = System.currentTimeMillis()
+            val batchResults = coroutineScope {
+                batches.mapIndexed { index, batch ->
+                    async {
+                        llmSemaphore.withPermit {
+                            val batchStart = System.currentTimeMillis()
+                            val result = processBatchWithRetry(
+                                model,
+                                batch,
+                                categories,
+                                index,
+                                batches.size,
+                                referenceText
+                            )
+                            val batchElapsed = System.currentTimeMillis() - batchStart
+                            val successCount = result.first?.size ?: 0
+                            Log.e(
+                                "MT_DEBUG",
+                                "GeminiCategoryRepository[배치 ${index + 1}/${batches.size}] : 완료 — ${successCount}/${batch.size}건 (${batchElapsed}ms)"
+                            )
+                            result
+                        }
+                    }
+                }.awaitAll()
+            }
+            val classifyElapsed = System.currentTimeMillis() - classifyStart
+            Log.e(
+                "MT_DEBUG",
+                "GeminiCategoryRepository[classifyStoreNames] : 전체 배치 완료 — ${batches.size}개 배치 (${classifyElapsed}ms)"
+            )
 
-            for ((index, batch) in batches.withIndex()) {
-                // 이전 배치에서 429가 발생했으면 다음 배치 전에 딜레이
-                if (interBatchDelay > 0) {
-                    Log.d(TAG, "배치 ${index + 1}/${batches.size} 전 적응형 딜레이 ${interBatchDelay}ms")
-                    delay(interBatchDelay)
-                }
-
-                val (batchResult, hitRateLimit) = processBatchWithRetry(
-                    model,
-                    batch,
-                    categories,
-                    index,
-                    batches.size,
-                    referenceText
-                )
+            val failedBatches = mutableListOf<Int>()
+            for ((index, result) in batchResults.withIndex()) {
+                val (batchResult, _) = result
                 if (batchResult != null) {
                     batchResult.forEach { (store, category) ->
                         results[store] = category
                     }
                 } else {
-                    // 재시도 후에도 실패한 배치 기록
-                    failedBatches.add(index to batch)
-                }
-
-                // 429 발생 → 다음 배치에 딜레이 추가, 정상 → 딜레이 해제
-                interBatchDelay = if (hitRateLimit) {
-                    val newDelay = if (interBatchDelay == 0L) RETRY_BASE_DELAY_MS else min(
-                        interBatchDelay * 2,
-                        MAX_RETRY_DELAY_MS
-                    )
-                    Log.d(TAG, "429 감지 → 배치 간 딜레이 ${newDelay}ms로 설정")
-                    newDelay
-                } else {
-                    0L
+                    failedBatches.add(index + 1)
                 }
             }
 
-            // 실패한 배치 요약 로그
             if (failedBatches.isNotEmpty()) {
-                Log.w(
-                    TAG,
-                    "총 ${failedBatches.size}개 배치 처리 실패: ${failedBatches.map { it.first + 1 }}"
-                )
+                Log.w(TAG, "총 ${failedBatches.size}개 배치 처리 실패: $failedBatches")
             }
 
             Log.d(TAG, "분류 완료: ${storeNames.size}개 중 ${results.size}개 성공")

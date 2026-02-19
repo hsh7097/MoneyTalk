@@ -201,7 +201,8 @@ fun HomeScreen(
             month = pageMonth,
             monthStartDay = uiState.monthStartDay,
             isSyncing = uiState.isSyncing,
-            isFullSyncUnlocked = uiState.isFullSyncUnlocked,
+            isMonthSynced = viewModel.isMonthSynced(pageYear, pageMonth),
+            isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
             selectedCategory = uiState.selectedCategory,
             onPreviousMonth = {
                 coroutineScope.launch {
@@ -222,10 +223,10 @@ fun HomeScreen(
                 }
             },
             onFullSync = {
-                if (uiState.isFullSyncUnlocked) {
-                    // 이미 해제됨 → 바로 전체 동기화
+                if (viewModel.isMonthSynced(pageYear, pageMonth)) {
+                    // 이미 해제됨 → 현재 보고 있는 월만 동기화
                     onRequestSmsPermission {
-                        viewModel.syncSmsMessages(contentResolver, forceFullSync = true)
+                        viewModel.syncMonthData(contentResolver, pageYear, pageMonth)
                     }
                 } else {
                     // 미해제 → 광고 다이얼로그 표시
@@ -245,7 +246,7 @@ fun HomeScreen(
 
     // 지출 상세 다이얼로그 (공통 컴포넌트 사용)
     selectedExpense?.let { expense ->
-        Log.e("sanha", "HomeScreen[selectedExpense] : ${expense.storeName}, ${expense.amount}원")
+        Log.e("MT_DEBUG", "HomeScreen[selectedExpense] : ${expense.storeName}, ${expense.amount}원")
         ExpenseDetailDialog(
             expense = expense,
             onDismiss = { selectedExpense = null },
@@ -411,10 +412,13 @@ fun HomeScreen(
     // 전체 동기화 해제 광고 다이얼로그
     if (uiState.showFullSyncAdDialog) {
         val activity = context as? android.app.Activity
+        val isCurrentMonthForDialog = uiState.selectedYear == DateUtils.getCurrentYear() &&
+                uiState.selectedMonth == DateUtils.getCurrentMonth()
+        val dialogMonthLabel = if (isCurrentMonthForDialog) "이번달" else "${uiState.selectedMonth}월"
         AlertDialog(
             onDismissRequest = { viewModel.dismissFullSyncAdDialog() },
-            title = { Text(stringResource(R.string.full_sync_ad_dialog_title)) },
-            text = { Text(stringResource(R.string.full_sync_ad_dialog_message)) },
+            title = { Text(stringResource(R.string.full_sync_ad_dialog_title, dialogMonthLabel)) },
+            text = { Text(stringResource(R.string.full_sync_ad_dialog_message, dialogMonthLabel)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -437,7 +441,7 @@ fun HomeScreen(
                         }
                     }
                 ) {
-                    Text(stringResource(R.string.full_sync_ad_watch_button))
+                    Text(stringResource(R.string.full_sync_ad_watch_button, dialogMonthLabel))
                 }
             },
             dismissButton = {
@@ -460,7 +464,8 @@ fun HomePageContent(
     month: Int,
     monthStartDay: Int,
     isSyncing: Boolean,
-    isFullSyncUnlocked: Boolean,
+    isMonthSynced: Boolean,
+    isPartiallyCovered: Boolean,
     selectedCategory: String?,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
@@ -520,17 +525,35 @@ fun HomePageContent(
                 )
             }
 
-            // 데이터 0건 + 현재 월 아님 + 전체 동기화 미해제 → CTA 표시
+            // 데이터 0건 + 현재 월 아님 + 전체 동기화 미해제 → 빈 CTA 표시
             val isCurrentMonth = year == DateUtils.getCurrentYear() && month == DateUtils.getCurrentMonth()
             val hasNoData = !pageData.isLoading &&
                     pageData.monthlyExpense == 0 && pageData.monthlyIncome == 0
-            val showFullSyncCta = hasNoData && !isCurrentMonth && !isFullSyncUnlocked
+            val showEmptyCta = hasNoData && !isCurrentMonth && !isMonthSynced
+            // 데이터 있지만 부분 커버 + 해당 월 미동기화 → 부분 CTA 표시
+            val showPartialCta = !hasNoData && isPartiallyCovered && !isMonthSynced
+            // 월 라벨: 현재 월이면 "이번달", 아니면 "M월"
+            val ctaMonthLabel = if (isCurrentMonth) "이번달" else "${month}월"
 
-            if (showFullSyncCta) {
+            if (showEmptyCta) {
                 item {
-                    FullSyncCtaSection(onRequestFullSync = onFullSync)
+                    FullSyncCtaSection(
+                        onRequestFullSync = onFullSync,
+                        monthLabel = ctaMonthLabel
+                    )
                 }
             } else {
+                // 부분 데이터 안내 CTA
+                if (showPartialCta) {
+                    item {
+                        FullSyncCtaSection(
+                            onRequestFullSync = onFullSync,
+                            monthLabel = ctaMonthLabel,
+                            isPartial = true
+                        )
+                    }
+                }
+
                 // 카테고리별 지출
                 item {
                     CategoryExpenseSection(
@@ -551,55 +574,57 @@ fun HomePageContent(
                     }
                 }
 
-                // 오늘의 지출 + 전월 대비
-                item {
-                    TodayAndComparisonSection(
-                        todayExpense = pageData.todayExpense,
-                        todayExpenseCount = pageData.todayExpenseCount,
-                        monthlyExpense = pageData.monthlyExpense,
-                        lastMonthExpense = pageData.lastMonthExpense,
-                        comparisonPeriodLabel = pageData.comparisonPeriodLabel
-                    )
-                }
-
-                // 오늘 내역 (지출 + 수입 시간순 통합)
-                item {
-                    Text(
-                        text = stringResource(R.string.home_today_transactions),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 6.dp)
-                    )
-                }
-
-                if (todayTransactions.isEmpty()) {
+                // 오늘의 지출 + 전월 대비 (당월에서만 표시)
+                if (isCurrentMonth) {
                     item {
-                        Text(
-                            text = stringResource(R.string.home_no_today_transactions),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            modifier = Modifier.padding(vertical = 16.dp)
+                        TodayAndComparisonSection(
+                            todayExpense = pageData.todayExpense,
+                            todayExpenseCount = pageData.todayExpenseCount,
+                            monthlyExpense = pageData.monthlyExpense,
+                            lastMonthExpense = pageData.lastMonthExpense,
+                            comparisonPeriodLabel = pageData.comparisonPeriodLabel
                         )
                     }
-                } else {
-                    items(
-                        count = todayTransactions.size,
-                        key = { index ->
-                            when (val item = todayTransactions[index]) {
-                                is TodayItem.Expense -> "expense_${item.expense.id}"
-                                is TodayItem.Income -> "income_${item.income.id}"
-                            }
+
+                    // 오늘 내역 (지출 + 수입 시간순 통합)
+                    item {
+                        Text(
+                            text = stringResource(R.string.home_today_transactions),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                    }
+
+                    if (todayTransactions.isEmpty()) {
+                        item {
+                            Text(
+                                text = stringResource(R.string.home_no_today_transactions),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(vertical = 16.dp)
+                            )
                         }
-                    ) { index ->
-                        when (val item = todayTransactions[index]) {
-                            is TodayItem.Expense -> TransactionCardCompose(
-                                info = ExpenseTransactionCardInfo(item.expense),
-                                onClick = { onExpenseSelected(item.expense) }
-                            )
-                            is TodayItem.Income -> TransactionCardCompose(
-                                info = IncomeTransactionCardInfo(item.income),
-                                onClick = { }
-                            )
+                    } else {
+                        items(
+                            count = todayTransactions.size,
+                            key = { index ->
+                                when (val item = todayTransactions[index]) {
+                                    is TodayItem.Expense -> "expense_${item.expense.id}"
+                                    is TodayItem.Income -> "income_${item.income.id}"
+                                }
+                            }
+                        ) { index ->
+                            when (val item = todayTransactions[index]) {
+                                is TodayItem.Expense -> TransactionCardCompose(
+                                    info = ExpenseTransactionCardInfo(item.expense),
+                                    onClick = { onExpenseSelected(item.expense) }
+                                )
+                                is TodayItem.Income -> TransactionCardCompose(
+                                    info = IncomeTransactionCardInfo(item.income),
+                                    onClick = { }
+                                )
+                            }
                         }
                     }
                 }
@@ -913,8 +938,8 @@ fun CategoryExpenseSection(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
         } else {
-            // 3개 이상 카테고리일 때 도넛 차트 표시
-            if (mergedExpenses.size >= 3) {
+            // 카테고리가 있으면 도넛 차트 표시
+            if (mergedExpenses.isNotEmpty()) {
                 DonutChartCompose(
                     slices = chartSlices,
                     totalAmount = totalExpense

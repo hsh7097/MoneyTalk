@@ -27,6 +27,17 @@ class DataRefreshEvent @Inject constructor() {
         _refreshEvent.tryEmit(type)
     }
 
+    /** 월별 동기화 요청 이벤트 (History → Home 연동) */
+    data class MonthSyncRequest(val year: Int, val month: Int)
+
+    private val _monthSyncEvent = MutableSharedFlow<MonthSyncRequest>(extraBufferCapacity = 1)
+    val monthSyncEvent = _monthSyncEvent.asSharedFlow()
+
+    /** 특정 월 SMS 동기화 요청 발행 */
+    fun requestMonthSync(year: Int, month: Int) {
+        _monthSyncEvent.tryEmit(MonthSyncRequest(year, month))
+    }
+
     enum class RefreshType {
         /** 전체 데이터 삭제 (설정 초기화) */
         ALL_DATA_DELETED,

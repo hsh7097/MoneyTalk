@@ -58,6 +58,20 @@ android {
             "GEMINI_API_KEY",
             "\"${localProperties.getProperty("GEMINI_API_KEY", "")}\""
         )
+
+        // Gemini API 키 풀 (로컬 기본 키 5개)
+        val geminiKeys = listOf(
+            localProperties.getProperty("GEMINI_API_KEY", ""),
+            localProperties.getProperty("GEMINI_API_KEY_1", ""),
+            localProperties.getProperty("GEMINI_API_KEY_2", ""),
+            localProperties.getProperty("GEMINI_API_KEY_3", ""),
+            localProperties.getProperty("GEMINI_API_KEY_4", "")
+        ).filter { it.isNotBlank() }
+        buildConfigField(
+            "String[]",
+            "GEMINI_API_KEYS",
+            "{${geminiKeys.joinToString(", ") { "\"$it\"" }}}"
+        )
     }
 
     buildTypes {

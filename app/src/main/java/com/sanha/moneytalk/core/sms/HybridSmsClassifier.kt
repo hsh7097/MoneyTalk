@@ -1,10 +1,16 @@
-package com.sanha.moneytalk.core.util
+package com.sanha.moneytalk.core.sms
 
 import android.util.Log
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
 import com.sanha.moneytalk.core.similarity.SmsPatternSimilarityPolicy
+import com.sanha.moneytalk.core.util.DateUtils
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -40,11 +46,11 @@ class HybridSmsClassifier @Inject constructor(
         /** 임베딩 배치 처리 크기 (Google batchEmbedContents 최대값) */
         private const val EMBEDDING_BATCH_SIZE = 100
 
-        /** 배치 임베딩 간 최소 딜레이 (밀리초) — 429 미발생 시 최소값 유지 */
-        private const val RATE_LIMIT_DELAY_MS = 50L
+        /** 임베딩 배치 병렬 동시 실행 수 (API 키 5개 × 키당 2 = 10) */
+        private const val EMBEDDING_CONCURRENCY = 10
 
-        /** LLM 호출 간 최소 딜레이 (밀리초) — 429 미발생 시 최소값 유지 */
-        private const val LLM_RATE_LIMIT_DELAY_MS = 50L
+        /** LLM 병렬 동시 실행 수 (API 키 5개 × 키당 1 = 5, LLM은 임베딩보다 무거움) */
+        private const val LLM_CONCURRENCY = 5
 
         /** 오래된 패턴 판단 기준 (30일, 밀리초) */
         private const val STALE_PATTERN_THRESHOLD_MS = 30L * 24 * 60 * 60 * 1000
@@ -64,7 +70,7 @@ class HybridSmsClassifier @Inject constructor(
             "광고", "[광고]", "(광고)", "무료수신거부", "수신거부",
             "홍보", "이벤트", "혜택안내", "프로모션", "할인쿠폰",
             // 안내/알림 (비결제) - 카드 대금/청구 관련
-            "명세서", "청구서", "이용대금", "결제예정", "결제일",
+            "결제내역", "명세서", "청구서", "이용대금", "결제예정", "결제일",
             "결제금액", // 카드사 결제예정 금액 안내 (예: "01/25결제금액(01/26기준)")
             "카드대금", // 카드 대금 결제/이체 안내
             "결제대금", // 카드 결제대금 안내
@@ -116,10 +122,11 @@ class HybridSmsClassifier @Inject constructor(
      * 벡터 DB와 매칭합니다. 개별 classify()와 달리 API 호출 횟수를 대폭 줄입니다.
      *
      * 흐름:
-     * 1. 사전 필터링: 명백한 비결제 SMS 제외
-     * 2. 배치 임베딩 생성 (50건씩 batchEmbedContents)
-     * 3. 벡터 DB 매칭 (비결제 패턴 → 결제 패턴 순)
-     * 4. 매칭 안 된 SMS 중 결제 가능성 있는 것만 LLM에 전달
+     * 1. 사전 필터링: 20자 미만/100자 초과 + 비결제 키워드 → 조기 제거
+     * 2. Regex: 필터 통과한 SMS에만 정규식 적용
+     * 3. 배치 임베딩 생성 (100건씩 batchEmbedContents)
+     * 4. 벡터 DB 매칭 (비결제 패턴 → 결제 패턴 순)
+     * 5. 매칭 안 된 SMS 중 결제 가능성 있는 것만 LLM에 전달
      *
      * @param smsList SMS 목록 (body, timestamp, address)
      * @return 각 SMS의 분류 결과 (index와 1:1 매핑)
@@ -135,71 +142,75 @@ class HybridSmsClassifier @Inject constructor(
             ClassificationResult(isPayment = false, tier = 0, confidence = 0f)
         }
 
-        // ===== Step 1: Regex 먼저 처리 =====
-        val regexUnresolved = mutableListOf<Int>() // Regex 미통과 인덱스
+        // ===== Step 1: 사전 필터링 (Regex보다 먼저 — 명백한 비결제 SMS 조기 제거) =====
+        val preFilterPassed = mutableListOf<Int>() // 사전 필터 통과 인덱스
         for (i in smsList.indices) {
-            val (body, timestamp, _) = smsList[i]
+            val body = smsList[i].first
+            if (body.length > SmsParser.MAX_SMS_LENGTH || body.length < 20) {
+                // 20자 미만/100자 초과 SMS → 결제 가능성 낮음
+                results[i] = ClassificationResult(isPayment = false, tier = 0, confidence = 0f)
+            } else if (isObviouslyNonPayment(body)) {
+                // 명백한 비결제 키워드 → 즉시 비결제 판정 (Regex도 스킵)
+                results[i] = ClassificationResult(isPayment = false, tier = 0, confidence = 0f)
+            } else {
+                preFilterPassed.add(i)
+            }
+        }
+        val preFilteredCount = smsList.size - preFilterPassed.size
+        Log.d(
+            TAG,
+            "배치 사전 필터링: ${preFilteredCount}건 비결제 제외, ${preFilterPassed.size}건 통과"
+        )
+
+        if (preFilterPassed.isEmpty()) return results.toList()
+
+        // ===== Step 2: Regex 처리 (사전 필터 통과한 SMS만) =====
+        val regexUnresolved = mutableListOf<Int>() // Regex 미통과 인덱스
+        for (idx in preFilterPassed) {
+            val (body, timestamp, _) = smsList[idx]
             val regexResult = classifyWithRegex(body, timestamp)
             if (regexResult != null) {
-                results[i] = regexResult
+                results[idx] = regexResult
             } else {
-                regexUnresolved.add(i)
+                regexUnresolved.add(idx)
             }
         }
         Log.d(
             TAG,
-            "배치 Regex: ${smsList.size - regexUnresolved.size}건 성공, ${regexUnresolved.size}건 미통과"
+            "배치 Regex: ${preFilterPassed.size - regexUnresolved.size}건 성공, ${regexUnresolved.size}건 미통과"
         )
 
         if (regexUnresolved.isEmpty()) return results.toList()
 
-        // ===== Step 2: 사전 필터링 (인증번호, 광고, 장문 등 제외) =====
-        val vectorCandidateIndices = mutableListOf<Int>()
-        for (idx in regexUnresolved) {
-            val body = smsList[idx].first
-            if (body.length > SmsParser.MAX_SMS_LENGTH) {
-                // 100자 초과 장문 SMS → 안내/광고성이므로 비결제 처리 (벡터/LLM 스킵)
-                results[idx] = ClassificationResult(isPayment = false, tier = 0, confidence = 0f)
-            } else if (isObviouslyNonPayment(body)) {
-                // 명백한 비결제 → 즉시 비결제 판정 (벡터 매칭도 스킵)
-                results[idx] = ClassificationResult(isPayment = false, tier = 0, confidence = 0f)
-            } else {
-                vectorCandidateIndices.add(idx)
-            }
-        }
-        Log.d(
-            TAG,
-            "배치 사전 필터링: ${regexUnresolved.size - vectorCandidateIndices.size}건 비결제 제외, ${vectorCandidateIndices.size}건 벡터 분석 대상"
-        )
+        // regexUnresolved가 곧 벡터 후보 (사전 필터 이미 통과)
+        val vectorCandidateIndices = regexUnresolved
 
-        if (vectorCandidateIndices.isEmpty()) return results.toList()
-
-        // ===== Step 3: 배치 임베딩 생성 =====
+        // ===== Step 3: 배치 임베딩 생성 (Regex 미통과 + 사전 필터 통과, 병렬) =====
         val templates =
             vectorCandidateIndices.map { embeddingService.templateizeSms(smsList[it].first) }
-        val allEmbeddings = mutableListOf<List<Float>?>()
 
-        // 100건씩 배치 임베딩 (batchEmbedContents 최대 100)
-        val batchSize = EMBEDDING_BATCH_SIZE
-        val batches = templates.chunked(batchSize)
-        for ((batchIdx, batch) in batches.withIndex()) {
-            val startTime = System.currentTimeMillis()
-            Log.d(TAG, "[batchClassify] 임베딩 배치 ${batchIdx + 1}/${batches.size} 시작 (${batch.size}건)")
-            val embeddings = embeddingService.generateEmbeddings(batch)
-            val elapsed = System.currentTimeMillis() - startTime
-            val successCount = embeddings.count { it != null }
-            Log.d(
-                TAG,
-                "[batchClassify] 임베딩 배치 ${batchIdx + 1}/${batches.size} 완료 (${elapsed}ms, 성공: ${successCount}/${batch.size})"
-            )
-            allEmbeddings.addAll(embeddings)
+        // 100건씩 배치 → Semaphore로 동시 N개 병렬 실행
+        val batches = templates.chunked(EMBEDDING_BATCH_SIZE)
+        val embeddingStartTime = System.currentTimeMillis()
+        Log.d(TAG, "[batchClassify] 임베딩 시작: ${templates.size}건 → ${batches.size}개 배치 (병렬 $EMBEDDING_CONCURRENCY)")
 
-            if (batchIdx < batches.size - 1) {
-                kotlinx.coroutines.delay(RATE_LIMIT_DELAY_MS)
-            }
+        val semaphore = Semaphore(EMBEDDING_CONCURRENCY)
+        val allEmbeddings = coroutineScope {
+            batches.mapIndexed { batchIdx, batch ->
+                async {
+                    semaphore.withPermit {
+                        val startTime = System.currentTimeMillis()
+                        val embeddings = embeddingService.generateEmbeddings(batch)
+                        val elapsed = System.currentTimeMillis() - startTime
+                        Log.d(TAG, "[batchClassify] 임베딩 배치 ${batchIdx + 1}/${batches.size} 완료 (${elapsed}ms, 성공: ${embeddings.count { it != null }}/${batch.size})")
+                        embeddings
+                    }
+                }
+            }.awaitAll().flatten()
         }
 
-        Log.d(TAG, "배치 임베딩 완료: ${allEmbeddings.count { it != null }}/${allEmbeddings.size}건 성공")
+        val embeddingElapsed = System.currentTimeMillis() - embeddingStartTime
+        Log.d(TAG, "배치 임베딩 완료: ${allEmbeddings.count { it != null }}/${allEmbeddings.size}건 성공 (${embeddingElapsed}ms)")
 
         // ===== Step 4: 벡터 DB 매칭 =====
         val nonPaymentPatterns = smsPatternDao.getAllNonPaymentPatterns()
@@ -231,94 +242,137 @@ class HybridSmsClassifier @Inject constructor(
                 }
             }
 
-            // 결제 패턴 매칭
+            // 결제 패턴 매칭 — LLM 트리거(0.80) 이상부터 검색
             if (paymentPatterns.isNotEmpty()) {
                 val bestMatch = VectorSearchEngine.findBestMatch(
                     queryVector = embedding,
                     patterns = paymentPatterns,
-                    minSimilarity = SmsPatternSimilarityPolicy.profile.confirm
+                    minSimilarity = SmsPatternSimilarityPolicy.LLM_TRIGGER_THRESHOLD
                 )
 
                 if (bestMatch != null) {
-                    smsPatternDao.incrementMatchCount(bestMatch.pattern.id)
-
                     if (bestMatch.similarity >= SmsPatternSimilarityPolicy.profile.autoApply) {
-                        // 높은 유사도 → 캐시 재사용
+                        // 높은 유사도(≥0.95) → 캐시 재사용
+                        smsPatternDao.incrementMatchCount(bestMatch.pattern.id)
                         val cached = bestMatch.pattern
-                        val currentAmount = SmsParser.extractAmount(body) ?: cached.parsedAmount
-                        val currentDateTime = SmsParser.extractDateTime(body, timestamp)
+                        val parsed = buildAnalysisFromPattern(
+                            smsBody = body,
+                            smsTimestamp = timestamp,
+                            pattern = cached
+                        )
+                        if (parsed == null) {
+                            llmCandidates.add(originalIdx)
+                            continue
+                        }
 
                         results[originalIdx] = ClassificationResult(
                             isPayment = true,
-                            analysisResult = SmsAnalysisResult(
-                                amount = currentAmount,
-                                storeName = extractStoreNameOrCached(body, cached.parsedStoreName),
-                                category = cached.parsedCategory,
-                                dateTime = currentDateTime,
-                                cardName = cached.parsedCardName
-                            ),
+                            analysisResult = parsed,
+                            tier = 2,
+                            confidence = bestMatch.similarity
+                        )
+                    } else if (bestMatch.similarity >= SmsPatternSimilarityPolicy.profile.confirm) {
+                        // 중간 유사도(0.92~0.95) → 결제 판정은 됐지만 파싱은 캐시 폴백
+                        smsPatternDao.incrementMatchCount(bestMatch.pattern.id)
+                        val parsed = buildAnalysisFromPattern(
+                            smsBody = body,
+                            smsTimestamp = timestamp,
+                            pattern = bestMatch.pattern
+                        )
+                        if (parsed == null) {
+                            llmCandidates.add(originalIdx)
+                            continue
+                        }
+
+                        results[originalIdx] = ClassificationResult(
+                            isPayment = true,
+                            analysisResult = parsed,
                             tier = 2,
                             confidence = bestMatch.similarity
                         )
                     } else {
-                        // 중간 유사도 → 결제 판정은 됐지만 파싱은 캐시 폴백
-                        val fallbackAmount =
-                            SmsParser.extractAmount(body) ?: bestMatch.pattern.parsedAmount
-                        val fallbackDateTime = SmsParser.extractDateTime(body, timestamp)
-
-                        results[originalIdx] = ClassificationResult(
-                            isPayment = true,
-                            analysisResult = SmsAnalysisResult(
-                                amount = fallbackAmount,
-                                storeName = extractStoreNameOrCached(
-                                    body,
-                                    bestMatch.pattern.parsedStoreName
-                                ),
-                                category = bestMatch.pattern.parsedCategory,
-                                dateTime = fallbackDateTime,
-                                cardName = bestMatch.pattern.parsedCardName
-                            ),
-                            tier = 2,
-                            confidence = bestMatch.similarity
-                        )
+                        // 낮은 유사도(0.80~0.92) → 결제 가능성은 있지만 확정 아님 → LLM 트리거
+                        // matchCount 증가하지 않음 — 확정 매칭이 아니므로 통계 오염 방지
+                        Log.d(TAG, "[batchClassify] 벡터 유사도 ${bestMatch.similarity} (0.80~0.92) → LLM 트리거: ${body.take(30)}")
+                        llmCandidates.add(originalIdx)
                     }
                     continue
                 }
             }
 
-            // 벡터 매칭 안 됨 → 결제 가능성 있으면 LLM 후보
+            // 벡터 매칭 안 됨 (0.80 미만) → 기존 키워드 기반 LLM 후보 선별
             if (hasPotentialPaymentIndicators(body)) {
                 llmCandidates.add(originalIdx)
             }
         }
 
-        // ===== Step 5: 결제 가능성 있는 미매칭 SMS에 LLM 호출 =====
+        // ===== Step 5: LLM 호출 (벡터 미매칭 중 결제 가능성 있는 SMS, 병렬) =====
         if (llmCandidates.isNotEmpty()) {
-            Log.d(TAG, "[batchClassify] LLM 후보: ${llmCandidates.size}건")
-            for ((llmIdx, idx) in llmCandidates.withIndex()) {
-                val (body, timestamp, address) = smsList[idx]
-                val startTime = System.currentTimeMillis()
-                Log.d(
-                    TAG,
-                    "[batchClassify] LLM 호출 ${llmIdx + 1}/${llmCandidates.size}: ${body.take(40)}..."
-                )
-                val llmResult = classifyWithLlm(body, timestamp, address)
-                val elapsed = System.currentTimeMillis() - startTime
-                Log.d(
-                    TAG,
-                    "[batchClassify] LLM 완료 ${llmIdx + 1}/${llmCandidates.size} (${elapsed}ms): isPayment=${llmResult?.isPayment}"
-                )
+            Log.d(TAG, "[batchClassify] LLM 후보: ${llmCandidates.size}건 (병렬 $LLM_CONCURRENCY)")
+            val llmSemaphore = Semaphore(LLM_CONCURRENCY)
+            val llmResults = coroutineScope {
+                llmCandidates.mapIndexed { llmIdx, idx ->
+                    val (body, timestamp, address) = smsList[idx]
+                    async {
+                        llmSemaphore.withPermit {
+                            val startTime = System.currentTimeMillis()
+                            Log.d(
+                                TAG,
+                                "[batchClassify] LLM 호출 ${llmIdx + 1}/${llmCandidates.size}: ${body.take(40)}..."
+                            )
+                            val llmResult = classifyWithLlm(body, timestamp, address)
+                            val elapsed = System.currentTimeMillis() - startTime
+                            Log.d(
+                                TAG,
+                                "[batchClassify] LLM 완료 ${llmIdx + 1}/${llmCandidates.size} (${elapsed}ms): isPayment=${llmResult?.isPayment}"
+                            )
+                            Triple(idx, llmResult, Triple(body, timestamp, address))
+                        }
+                    }
+                }.awaitAll()
+            }
+
+            // 결과 적용 + 패턴 학습 (병렬)
+            val learnTargets = mutableListOf<Triple<Int, ClassificationResult, Triple<String, Long, String>>>()
+            for ((idx, llmResult, smsInfo) in llmResults) {
                 if (llmResult != null) {
                     results[idx] = llmResult
+                    if (llmResult.isPayment && llmResult.analysisResult != null) {
+                        learnTargets.add(Triple(idx, llmResult, smsInfo))
+                    }
                 }
-                kotlinx.coroutines.delay(LLM_RATE_LIMIT_DELAY_MS)
+            }
+
+            // 패턴 학습도 병렬 처리
+            if (learnTargets.isNotEmpty()) {
+                coroutineScope {
+                    learnTargets.map { (_, llmResult, smsInfo) ->
+                        val (body, timestamp, address) = smsInfo
+                        async {
+                            llmSemaphore.withPermit {
+                                learnPatternWithLlmRegex(
+                                    smsBody = body,
+                                    smsTimestamp = timestamp,
+                                    senderAddress = address,
+                                    analysis = llmResult.analysisResult!!
+                                )
+                            }
+                        }
+                    }.awaitAll()
+                }
             }
         }
 
-        val paymentCount = results.count { it.isPayment }
-        Log.d(TAG, "=== 배치 분류 완료: ${smsList.size}건 중 결제 ${paymentCount}건 ===")
+        val resultList = results.toList()
+        val paymentCount = resultList.count { it.isPayment }
+        val tier1Count = resultList.count { it.isPayment && it.tier == 1 }
+        val tier2Count = resultList.count { it.isPayment && it.tier == 2 }
+        val tier3Count = resultList.count { it.isPayment && it.tier == 3 }
+        Log.d(TAG, "=== 배치 분류 완료: ${smsList.size}건 중 결제 ${paymentCount}건 " +
+                "(Tier1:$tier1Count, Tier2:$tier2Count, Tier3:$tier3Count) " +
+                "사전필터:${preFilteredCount}건, LLM호출:${llmCandidates.size}건 ===")
 
-        return results.toList()
+        return resultList
     }
 
     /**
@@ -359,32 +413,36 @@ class HybridSmsClassifier @Inject constructor(
 
         Log.d(TAG, "배치 학습 시작: ${templatedItems.size}건")
 
-        // 100건씩 chunking (batchEmbedContents 최대값)
+        // 100건씩 chunking → 병렬 처리
         val chunks = templatedItems.chunked(EMBEDDING_BATCH_SIZE)
-        var learnedCount = 0
+        val learnStartTime = System.currentTimeMillis()
+        Log.d(TAG, "[batchLearn] ${chunks.size}개 배치 병렬 임베딩 시작 (동시 $EMBEDDING_CONCURRENCY)")
 
-        // 순차 처리 + 배치 간 최소 딜레이
-        for ((chunkIdx, chunk) in chunks.withIndex()) {
-            val startTime = System.currentTimeMillis()
-            Log.d(TAG, "[batchLearn] 학습 임베딩 배치 ${chunkIdx + 1}/${chunks.size} 시작 (${chunk.size}건)")
-            val patterns = processChunk(chunk)
-            val elapsed = System.currentTimeMillis() - startTime
-            Log.d(
-                TAG,
-                "[batchLearn] 학습 임베딩 배치 ${chunkIdx + 1}/${chunks.size} 완료 (${elapsed}ms, 패턴: ${patterns.size}건)"
-            )
+        val semaphore = Semaphore(EMBEDDING_CONCURRENCY)
+        val allPatterns = coroutineScope {
+            chunks.mapIndexed { chunkIdx, chunk ->
+                async {
+                    semaphore.withPermit {
+                        val startTime = System.currentTimeMillis()
+                        val patterns = processChunk(chunk)
+                        val elapsed = System.currentTimeMillis() - startTime
+                        Log.d(TAG, "[batchLearn] 학습 배치 ${chunkIdx + 1}/${chunks.size} 완료 (${elapsed}ms, 패턴: ${patterns.size}건)")
+                        patterns
+                    }
+                }
+            }.awaitAll()
+        }
+
+        var learnedCount = 0
+        for (patterns in allPatterns) {
             if (patterns.isNotEmpty()) {
                 smsPatternDao.insertAll(patterns)
                 learnedCount += patterns.size
             }
-
-            // 배치 간 최소 딜레이 (마지막 chunk 제외)
-            if (chunkIdx < chunks.size - 1) {
-                kotlinx.coroutines.delay(RATE_LIMIT_DELAY_MS)
-            }
         }
 
-        Log.d(TAG, "배치 학습 완료: ${learnedCount}건 학습됨")
+        val learnElapsed = System.currentTimeMillis() - learnStartTime
+        Log.d(TAG, "배치 학습 완료: ${learnedCount}건 학습됨 (${learnElapsed}ms)")
     }
 
     /**
@@ -433,6 +491,14 @@ class HybridSmsClassifier @Inject constructor(
 
         val analysis = SmsParser.parseSms(smsBody, smsTimestamp)
         if (analysis.amount <= 0) {
+            return null
+        }
+
+        // Regex 오파싱 방어: 가게명이 기본값("결제")이면 파싱 품질 불충분
+        // → Tier 2/3으로 이관하여 Vector/LLM이 정확한 가게명을 추출하도록 함
+        // 현대카드 등 카드사별 다른 포맷에서 regex가 "성공하되 잘못 파싱"하는 케이스 방어
+        if (analysis.storeName == "결제") {
+            Log.d(TAG, "Regex 오파싱 방어: storeName='결제' → Tier 2/3 이관 [${smsBody.take(40)}]")
             return null
         }
 
@@ -511,18 +577,9 @@ class HybridSmsClassifier @Inject constructor(
             if (bestMatch.similarity >= SmsPatternSimilarityPolicy.profile.autoApply) {
                 Log.d(TAG, "Tier 2: 캐시 재사용 (similarity=${bestMatch.similarity})")
 
-                // 캐시된 결과에서 가게명/카드명 재사용, 금액/날짜는 현재 SMS에서 추출 시도
                 val cachedPattern = bestMatch.pattern
-                val currentAmount = SmsParser.extractAmount(smsBody) ?: cachedPattern.parsedAmount
-                val currentDateTime = SmsParser.extractDateTime(smsBody, smsTimestamp)
-
-                val analysis = SmsAnalysisResult(
-                    amount = currentAmount,
-                    storeName = extractStoreNameOrCached(smsBody, cachedPattern.parsedStoreName),
-                    category = cachedPattern.parsedCategory,
-                    dateTime = currentDateTime,
-                    cardName = cachedPattern.parsedCardName
-                )
+                val analysis = buildAnalysisFromPattern(smsBody, smsTimestamp, cachedPattern)
+                    ?: return null
 
                 return ClassificationResult(
                     isPayment = true,
@@ -540,21 +597,12 @@ class HybridSmsClassifier @Inject constructor(
             }
 
             // LLM도 실패하면 캐시로 폴백
-            val fallbackAmount = SmsParser.extractAmount(smsBody) ?: bestMatch.pattern.parsedAmount
-            val fallbackDateTime = SmsParser.extractDateTime(smsBody, smsTimestamp)
+            val fallbackAnalysis =
+                buildAnalysisFromPattern(smsBody, smsTimestamp, bestMatch.pattern) ?: return null
 
             return ClassificationResult(
                 isPayment = true,
-                analysisResult = SmsAnalysisResult(
-                    amount = fallbackAmount,
-                    storeName = extractStoreNameOrCached(
-                        smsBody,
-                        bestMatch.pattern.parsedStoreName
-                    ),
-                    category = bestMatch.pattern.parsedCategory,
-                    dateTime = fallbackDateTime,
-                    cardName = bestMatch.pattern.parsedCardName
-                ),
+                analysisResult = fallbackAnalysis,
                 tier = 2,
                 confidence = bestMatch.similarity
             )
@@ -654,6 +702,60 @@ class HybridSmsClassifier @Inject constructor(
     }
 
     /**
+     * LLM 결제 결과를 동적 정규식과 함께 패턴 DB에 저장
+     *
+     * 소량 배치(batchClassify)에서도 임베딩↔정규식 매핑이 누적되도록 합니다.
+     */
+    private suspend fun learnPatternWithLlmRegex(
+        smsBody: String,
+        smsTimestamp: Long,
+        senderAddress: String,
+        analysis: SmsAnalysisResult
+    ) {
+        if (analysis.amount <= 0) return
+
+        try {
+            val template = embeddingService.templateizeSms(smsBody)
+
+            // 같은 발신자+템플릿 패턴이 이미 있으면 중복 저장 스킵
+            val isDuplicate = smsPatternDao.getPatternsBySender(senderAddress).any {
+                it.smsTemplate == template && it.isPayment
+            }
+            if (isDuplicate) return
+
+            val embedding = embeddingService.generateEmbedding(template) ?: return
+
+            val regexResult = smsExtractor.generateRegexForSms(
+                smsBody = smsBody,
+                smsTimestamp = smsTimestamp
+            )
+            val hasRegex = regexResult != null &&
+                regexResult.isPayment &&
+                regexResult.amountRegex.isNotBlank() &&
+                regexResult.storeRegex.isNotBlank()
+
+            val pattern = SmsPatternEntity(
+                smsTemplate = template,
+                senderAddress = senderAddress,
+                embedding = embedding,
+                isPayment = true,
+                parsedAmount = analysis.amount,
+                parsedStoreName = analysis.storeName,
+                parsedCardName = analysis.cardName,
+                parsedCategory = analysis.category,
+                amountRegex = if (hasRegex) regexResult?.amountRegex.orEmpty() else "",
+                storeRegex = if (hasRegex) regexResult?.storeRegex.orEmpty() else "",
+                cardRegex = if (hasRegex) regexResult?.cardRegex.orEmpty() else "",
+                parseSource = if (hasRegex) "llm_regex" else "llm",
+                confidence = 0.8f
+            )
+            smsPatternDao.insert(pattern)
+        } catch (e: Exception) {
+            Log.w(TAG, "LLM 정규식 패턴 학습 실패: ${e.message}")
+        }
+    }
+
+    /**
      * 비결제 패턴 학습: LLM이 비결제로 판정한 SMS를 벡터 DB에 등록
      *
      * 다음에 유사한 SMS가 오면 Tier 2에서 바로 비결제로 판정하여
@@ -689,6 +791,48 @@ class HybridSmsClassifier @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "비결제 패턴 학습 실패: ${e.message}", e)
         }
+    }
+
+    /**
+     * 저장된 패턴으로 현재 SMS를 파싱
+     *
+     * 1) 동적 정규식이 있으면 우선 적용
+     * 2) 실패 시 기존 캐시 + SmsParser 폴백
+     */
+    private fun buildAnalysisFromPattern(
+        smsBody: String,
+        smsTimestamp: Long,
+        pattern: SmsPatternEntity
+    ): SmsAnalysisResult? {
+        val regexParsed = if (GeneratedSmsRegexParser.hasUsableRegex(pattern)) {
+            GeneratedSmsRegexParser.parseWithPattern(
+                smsBody = smsBody,
+                smsTimestamp = smsTimestamp,
+                pattern = pattern
+            )
+        } else {
+            null
+        }
+        if (regexParsed != null) return regexParsed
+
+        val amount = SmsParser.extractAmount(smsBody) ?: pattern.parsedAmount
+        if (amount <= 0) return null
+
+        val storeName = extractStoreNameOrCached(smsBody, pattern.parsedStoreName)
+        if (storeName.isBlank()) return null
+
+        val cardFromSms = SmsParser.extractCardName(smsBody)
+        val cardName = if (cardFromSms != "기타") cardFromSms else pattern.parsedCardName.ifBlank { "기타" }
+        val category =
+            pattern.parsedCategory.ifBlank { SmsParser.inferCategory(storeName, smsBody) }
+
+        return SmsAnalysisResult(
+            amount = amount,
+            storeName = storeName,
+            category = category,
+            dateTime = SmsParser.extractDateTime(smsBody, smsTimestamp),
+            cardName = cardName
+        )
     }
 
     /**

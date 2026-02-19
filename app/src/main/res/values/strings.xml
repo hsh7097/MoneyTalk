@@ -367,16 +367,18 @@
     <string name="reward_ad_rewarded">%d회 무료 상담이 충전되었습니다!</string>
 
     <!-- 전체 동기화 해제 (리워드 광고) -->
-    <string name="full_sync_ad_dialog_title">전체 문자 동기화</string>
-    <string name="full_sync_ad_dialog_message">현재 최근 3개월치 문자만 동기화되어 있습니다.\n광고를 시청하면 전체 기간의 문자를 가져올 수 있습니다.</string>
-    <string name="full_sync_ad_watch_button">광고 보고 전체 동기화</string>
+    <string name="full_sync_ad_dialog_title">%1$s 문자 동기화</string>
+    <string name="full_sync_ad_dialog_message">%1$s 문자 데이터를 가져옵니다.\n광고를 시청하면 해당 기간의 문자를 동기화할 수 있습니다.</string>
+    <string name="full_sync_ad_watch_button">광고 보고 %1$s 데이터 가져오기</string>
     <string name="full_sync_ad_later">나중에</string>
-    <string name="full_sync_unlocked_message">전체 동기화가 해제되었습니다. 전체 문자를 가져옵니다.</string>
+    <string name="full_sync_unlocked_message">%1$s 데이터를 가져옵니다.</string>
     <string name="full_sync_already_unlocked">이미 전체 동기화가 해제되어 있습니다.</string>
     <string name="home_sync_full_locked">전체 동기화 (광고 시청 필요)</string>
     <string name="full_sync_cta_title">이전 데이터가 없어요</string>
-    <string name="full_sync_cta_subtitle">최근 3개월 이전 데이터는 광고를 시청하면\n전체 기간을 가져올 수 있어요</string>
-    <string name="full_sync_cta_button">광고 보고 전체 데이터 가져오기</string>
+    <string name="full_sync_cta_subtitle">최근 2개월 이전 데이터는 광고를 시청하면\n해당 기간을 가져올 수 있어요</string>
+    <string name="full_sync_cta_button">광고 보고 %1$s 데이터 가져오기</string>
+    <string name="partial_sync_cta_title">일부 데이터만 표시되고 있어요</string>
+    <string name="partial_sync_cta_subtitle">이 기간의 일부 데이터가 누락되었어요.\n광고를 시청하면 해당 데이터를 가져올 수 있어요</string>
 
     <!-- 강제 업데이트 -->
     <string name="force_update_title">업데이트 필요</string>

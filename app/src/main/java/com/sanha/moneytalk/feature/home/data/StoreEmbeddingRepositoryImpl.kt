@@ -5,8 +5,13 @@ import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
 import com.sanha.moneytalk.core.similarity.CategoryPropagationPolicy
 import com.sanha.moneytalk.core.similarity.StoreNameSimilarityPolicy
-import com.sanha.moneytalk.core.util.SmsEmbeddingService
-import com.sanha.moneytalk.core.util.VectorSearchEngine
+import com.sanha.moneytalk.core.sms.SmsEmbeddingService
+import com.sanha.moneytalk.core.sms.VectorSearchEngine
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -43,6 +48,12 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
 
     companion object {
         private const val TAG = "StoreEmbedding"
+
+        /** 임베딩 배치 병렬 동시 실행 수 (API 키 5개 × 키당 2 = 10) */
+        private const val EMBEDDING_CONCURRENCY = 10
+
+        /** 배치 임베딩 처리 크기 (batchEmbedContents 최대값) */
+        private const val EMBEDDING_BATCH_SIZE = 100
     }
 
     /** 인메모리 캐시 (전체 임베딩) */
@@ -220,12 +231,22 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
             }
 
             try {
+                // 100건씩 청킹 → 병렬 임베딩 생성
+                val chunks = storeNames.chunked(EMBEDDING_BATCH_SIZE)
+                val semaphore = Semaphore(EMBEDDING_CONCURRENCY)
+                val batchEmbeddings = coroutineScope {
+                    chunks.map { chunk ->
+                        async {
+                            semaphore.withPermit {
+                                embeddingService.generateEmbeddings(chunk)
+                            }
+                        }
+                    }.awaitAll()
+                }
+
                 val allEntities = mutableListOf<StoreEmbeddingEntity>()
-
-                // 100건씩 청킹 (batchEmbedContents 최대 100)
-                for (chunk in storeNames.chunked(100)) {
-                    val embeddings = embeddingService.generateEmbeddings(chunk)
-
+                for ((chunkIdx, chunk) in chunks.withIndex()) {
+                    val embeddings = batchEmbeddings[chunkIdx]
                     val entities = chunk.mapIndexedNotNull { index, storeName ->
                         val embedding = embeddings.getOrNull(index) ?: return@mapIndexedNotNull null
                         val category = storeCategories[storeName] ?: return@mapIndexedNotNull null
@@ -361,11 +382,11 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
 
     override suspend fun getLowConfidenceEmbeddings(threshold: Float): List<StoreEmbeddingEntity> {
         Log.e(
-            "sanha",
+            "MT_DEBUG",
             "StoreEmbeddingRepository[getLowConfidenceEmbeddings] : threshold=$threshold 조회 시작"
         )
         val result = storeEmbeddingDao.getLowConfidenceEmbeddings(threshold)
-        Log.e("sanha", "StoreEmbeddingRepository[getLowConfidenceEmbeddings] : ${result.size}건 발견")
+        Log.e("MT_DEBUG", "StoreEmbeddingRepository[getLowConfidenceEmbeddings] : ${result.size}건 발견")
         return result
     }
 }

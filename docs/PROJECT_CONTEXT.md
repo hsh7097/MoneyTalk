@@ -33,7 +33,7 @@
 | AI (채팅/분류) | Gemini 2.5 Pro (Google AI SDK) |
 | AI (SMS 추출) | Gemini 2.5 Flash Lite |
 | AI (요약) | Gemini 2.5 Flash |
-| AI (임베딩) | gemini-embedding-001 (768차원 벡터) |
+| AI (임베딩) | gemini-embedding-001 (3072차원 벡터) |
 | 아키텍처 | MVVM + Clean Architecture |
 | 백업 | Google Drive API |
 
@@ -254,7 +254,7 @@ app/src/main/java/com/sanha/moneytalk/
 | 재무 상담 (채팅) | gemini-2.5-pro | 0.7 | 데이터 기반 조언 생성 |
 | 대화 요약 | gemini-2.5-flash | 0.3 | Rolling Summary 생성 |
 | 카테고리 분류 | gemini-2.5-flash-lite | -- | 미분류 가게명 배치 분류 |
-| 임베딩 생성 | gemini-embedding-001 | -- | 768차원 벡터 (REST API) |
+| 임베딩 생성 | gemini-embedding-001 | -- | 3072차원 벡터 (REST API) |
 
 ---
 

@@ -15,7 +15,8 @@ com.sanha.moneytalk/
 │
 ├── core/                                  # 공통 모듈
 │   ├── database/                          # Room 데이터베이스
-│   │   ├── AppDatabase.kt                 # Room Database 정의 (v5, 10 entities)
+│   │   ├── AppDatabase.kt                 # Room Database 정의 (v6, 10 entities)
+│   │   ├── DatabaseMigrations.kt          # Room 마이그레이션 (v5→v6)
 │   │   ├── converter/
 │   │   │   └── FloatListConverter.kt      # Float 리스트 타입 컨버터
 │   │   ├── dao/                           # Data Access Objects (9개)
@@ -96,14 +97,18 @@ com.sanha.moneytalk/
 │   │               ├── TransactionGroupHeaderCompose.kt # 그룹 헤더
 │   │               └── TransactionGroupHeaderInfo.kt    # 그룹 헤더 Contract
 │   │
-│   └── util/                             # 유틸리티 (19개)
-│       ├── SmsParser.kt                  # SMS 정규식 파싱 (Tier 1)
-│       ├── SmsReader.kt                  # SMS ContentResolver 읽기
-│       ├── HybridSmsClassifier.kt        # SMS 3-tier 분류 엔진
-│       ├── GeminiSmsExtractor.kt         # Gemini LLM SMS 추출 (Tier 3)
-│       ├── SmsBatchProcessor.kt          # SMS 배치 처리기
-│       ├── SmsEmbeddingService.kt        # SMS 임베딩 서비스
-│       ├── VectorSearchEngine.kt         # 벡터 유사도 검색 엔진
+│   ├── sms/                              # SMS 핵심 (9개)
+│   │   ├── SmsParser.kt                  # SMS 정규식 파싱 (Tier 1)
+│   │   ├── SmsReader.kt                  # SMS/MMS/RCS 통합 읽기
+│   │   ├── SmsFilter.kt                  # 발신번호 기반 사전 필터링
+│   │   ├── HybridSmsClassifier.kt        # 증분 동기화용 3-tier 오케스트레이터
+│   │   ├── SmsBatchProcessor.kt          # Full Sync 배치 파이프라인
+│   │   ├── GeminiSmsExtractor.kt         # Gemini LLM 추출 (단건/배치/정규식 생성)
+│   │   ├── GeneratedSmsRegexParser.kt    # LLM 생성 정규식 파서 (폴백 체인)
+│   │   ├── SmsEmbeddingService.kt        # SMS 템플릿화 + 임베딩 생성
+│   │   └── VectorSearchEngine.kt         # 코사인 유사도 검색 엔진
+│   │
+│   └── util/                             # 유틸리티 (12개)
 │       ├── CategoryReferenceProvider.kt  # 카테고리 참조 데이터 제공
 │       ├── StoreNameGrouper.kt           # 가게명 그룹화
 │       ├── StoreAliasManager.kt          # 가게명 별칭 관리

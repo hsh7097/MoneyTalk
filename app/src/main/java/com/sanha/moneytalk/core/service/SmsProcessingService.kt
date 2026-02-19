@@ -7,8 +7,8 @@ import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
-import com.sanha.moneytalk.core.util.HybridSmsClassifier
-import com.sanha.moneytalk.core.util.SmsParser
+import com.sanha.moneytalk.core.sms.HybridSmsClassifier
+import com.sanha.moneytalk.core.sms.SmsParser
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
@@ -23,7 +23,7 @@ import javax.inject.Singleton
  *
  * 처리 흐름:
  * 1. SmsParser.classifySmsType()으로 지출/수입 판별
- * 2. 지출: Regex 파싱 → 카테고리 분류(Tier 1~2) → DB 저장
+ * 2. 지출: Regex 파싱 → 실패 시 batchClassify fallback (Vector/LLM) → DB 저장
  * 3. 수입: 금액/유형/출처 추출 → DB 저장
  * 4. DataRefreshEvent 발행 → UI 자동 갱신
  */
@@ -100,14 +100,30 @@ class SmsProcessingService @Inject constructor(
             return ProcessResult(ProcessResult.ResultType.DUPLICATE)
         }
 
-        // Regex 파싱
+        // Regex 파싱 (Tier 1)
         val result = hybridSmsClassifier.classifyRegexOnly(body, date)
-        if (result == null || !result.isPayment || result.analysisResult == null) {
-            Log.d(TAG, "Regex 파싱 실패: $smsId")
-            return ProcessResult(ProcessResult.ResultType.PARSE_FAILED)
+        val analysis = if (result != null && result.isPayment && result.analysisResult != null) {
+            result.analysisResult
+        } else {
+            // Regex 실패 → batchClassify fallback (Tier 2/3: Vector + LLM)
+            // storeName='결제' 오파싱 방어 등으로 Regex가 null 반환한 경우 대응
+            try {
+                val fallbackResults = hybridSmsClassifier.batchClassify(
+                    listOf(Triple(body, date, address))
+                )
+                val fallback = fallbackResults.firstOrNull()
+                if (fallback != null && fallback.isPayment && fallback.analysisResult != null) {
+                    Log.d(TAG, "Regex 실패 → Hybrid fallback 성공 (Tier ${fallback.tier}): $smsId")
+                    fallback.analysisResult
+                } else {
+                    Log.d(TAG, "Regex 파싱 실패 + Hybrid fallback 실패: $smsId")
+                    return ProcessResult(ProcessResult.ResultType.PARSE_FAILED)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Hybrid fallback 예외 (다음 동기화에서 재처리): ${e.message}")
+                return ProcessResult(ProcessResult.ResultType.PARSE_FAILED)
+            }
         }
-
-        val analysis = result.analysisResult
 
         // 금액 유효성 검증
         if (analysis.amount <= 0) {

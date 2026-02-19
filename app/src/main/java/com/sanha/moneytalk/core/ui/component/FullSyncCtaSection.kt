@@ -18,13 +18,20 @@ import com.sanha.moneytalk.R
 
 /**
  * 전체 동기화 해제 CTA 섹션.
- * 3개월 이전 데이터가 없고 isFullSyncUnlocked=false일 때 표시.
+ *
+ * 2가지 모드:
+ * - isPartial=false (기본): 데이터가 전혀 없을 때 → "이전 데이터가 없어요"
+ * - isPartial=true: 일부 데이터만 있을 때 → "일부 데이터만 표시되고 있어요"
  *
  * @param onRequestFullSync 전체 동기화 해제(광고 다이얼로그) 요청 콜백
+ * @param monthLabel 표시할 월 라벨 (예: "이번달", "2025년 12월")
+ * @param isPartial 부분 데이터 모드 여부
  */
 @Composable
 fun FullSyncCtaSection(
     onRequestFullSync: () -> Unit,
+    monthLabel: String,
+    isPartial: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -34,25 +41,31 @@ fun FullSyncCtaSection(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "📋",
+            text = if (isPartial) "⚠️" else "📋",
             style = MaterialTheme.typography.displayMedium
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = stringResource(R.string.full_sync_cta_title),
+            text = stringResource(
+                if (isPartial) R.string.partial_sync_cta_title
+                else R.string.full_sync_cta_title
+            ),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = stringResource(R.string.full_sync_cta_subtitle),
+            text = stringResource(
+                if (isPartial) R.string.partial_sync_cta_subtitle
+                else R.string.full_sync_cta_subtitle
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedButton(onClick = onRequestFullSync) {
-            Text(stringResource(R.string.full_sync_cta_button))
+            Text(stringResource(R.string.full_sync_cta_button, monthLabel))
         }
     }
 }

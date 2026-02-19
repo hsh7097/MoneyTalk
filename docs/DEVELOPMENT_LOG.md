@@ -4,6 +4,86 @@
 
 ---
 
+## 2026-02-19 - SMS 배치 처리 가드레일 + 그룹핑 최적화
+
+### 작업 내용
+
+#### 1. SmsBatchProcessor 그룹핑 최적화
+- 발신번호 기반 2레벨 그룹핑 도입 (37그룹 → 2~4그룹으로 대폭 감소)
+- 가게명 {STORE} 플레이스홀더 치환 (SmsEmbeddingService.templateizeSms)
+- LLM 배치 호출 병렬화 (async + Semaphore, 직렬 → 병렬)
+- Step1+2 임베딩 통합 (중복 API 호출 제거)
+- 멤버별 가게명 개별 추출 (대표 가게명 복제 방지)
+
+#### 2. 가드레일 3종 (Codex 분석 기반)
+- template_regex 신뢰도 1.0 → 0.85 하향 (미검증 정규식에 높은 신뢰도 부여 방지)
+- 소그룹 병합 시 코사인 유사도 검증 추가 (SMALL_GROUP_MERGE_MIN_SIMILARITY=0.70)
+- RTDB 업로드 품질 게이트 (검증된 소스만 정규식 포함)
+
+#### 3. 신규 파일 및 기능
+- GeneratedSmsRegexParser.kt: LLM 생성 정규식 파서 (group1 캡처 규약, 폴백 체인)
+- GeminiSmsExtractor: 배치 추출 + 정규식 자동 생성
+- SmsPatternEntity: amountRegex/storeRegex/cardRegex/parseSource 필드 추가 (DB v5→v6)
+- DatabaseMigrations.kt: v5→v6 마이그레이션
+
+#### 4. 문서 갱신
+- SMS_PARSING.md 전면 재작성 + RTDB 정규식 다운로드 로드맵 (Section 16)
+- 임베딩 차원 수 768 → 3072 수정 (6개 파일)
+
+### 변경 파일
+- `SmsBatchProcessor.kt` — 2레벨 그룹핑 + LLM 병렬화 + 가드레일 3종
+- `SmsEmbeddingService.kt` — {STORE} 플레이스홀더 + 차원 주석 수정
+- `GeminiSmsExtractor.kt` — 배치 추출 + 정규식 생성
+- `GeneratedSmsRegexParser.kt` — 신규 (LLM 정규식 파서)
+- `DatabaseMigrations.kt` — 신규 (v5→v6)
+- `SmsPatternEntity.kt` — regex 필드 4개 추가
+- `FloatListConverter.kt`, `StoreEmbeddingEntity.kt` — 차원 주석 수정
+- `docs/SMS_PARSING.md`, `CATEGORY_CLASSIFICATION.md`, `PROJECT_CONTEXT.md` — 문서 갱신
+
+---
+
+## 2026-02-19 - SMS 동기화 최적화 + 부분 데이터 CTA
+
+### 작업 내용
+
+#### 1. core/sms 패키지 분리
+- core/util → core/sms로 SMS 핵심 파일 7개 이동 (SmsParser, SmsReader, HybridSmsClassifier, SmsBatchProcessor, VectorSearchEngine, SmsEmbeddingService, GeminiSmsExtractor)
+- SmsFilter.kt 신규 (010/070 발신자 조건부 제외 + 금융 힌트 보존)
+- 참조하는 파일들 import 경로 수정 (SmsProcessingService, StoreNameGrouper, CategoryClassifierServiceImpl 등)
+
+#### 2. SMS 동기화 최적화
+- 초기 동기화 기간 3개월 → 2개월(60일) 축소 (DEFAULT_SYNC_PERIOD_MILLIS)
+- 광고 시청 후 해당 월만 동기화 (syncMonthData + calculateMonthRange)
+- calculateMonthRange에 커스텀 monthStartDay 반영 (DateUtils.getCustomMonthPeriod)
+- SmsReader에 SmsFilter 통합 (SMS/MMS/RCS 모든 채널에 발신자 필터 적용)
+
+#### 3. LLM 트리거 + 관측성
+- SmsPatternSimilarityPolicy에 LLM_TRIGGER_THRESHOLD(0.80) 추가
+- HybridSmsClassifier: 벡터 유사도 0.80~0.92 구간 → LLM 호출 대상 선별
+- HybridSmsClassifier: Regex 오파싱 방어 (storeName='결제' → null → Tier 2/3 이관)
+- 배치 분류 완료 로그에 tier별 카운트 (Tier1/2/3, 사전필터, LLM호출) 추가
+
+#### 4. 부분 데이터 CTA
+- isPagePartiallyCovered() 헬퍼 추가 (Home/HistoryViewModel)
+- FullSyncCtaSection에 isPartial 모드 추가 (⚠️ "일부 데이터만 표시되고 있어요")
+- HomeScreen/HistoryScreen에서 부분 데이터 판단 + CTA 표시
+- 커스텀 monthStartDay로 인해 동기화 경계에 걸린 페이지에 안내 표시
+
+### 변경 파일
+- `core/sms/` — 7개 파일 이동 + SmsFilter 신규
+- `SmsPatternSimilarityPolicy.kt` — LLM_TRIGGER_THRESHOLD 추가
+- `HybridSmsClassifier.kt` — LLM 트리거 + 오파싱 방어 + 관측성 로그
+- `SmsReader.kt` — SmsFilter 통합
+- `HomeViewModel.kt` — 2개월 축소 + 월별 동기화 + isPagePartiallyCovered
+- `HomeScreen.kt` — 부분 데이터 CTA
+- `HistoryViewModel.kt` — isPagePartiallyCovered
+- `HistoryScreen.kt` — 부분 데이터 CTA
+- `FullSyncCtaSection.kt` — isPartial 모드
+- `strings.xml` — partial_sync_cta 문자열
+- `docs/AI_CONTEXT.md`, `AI_HANDOFF.md`, `CHANGELOG.md` — 문서 갱신
+
+---
+
 ## 2026-02-19 - 버그 수정 + UX 개선 + 빈 상태 CTA + 광고 실패 보상
 
 ### 작업 내용
@@ -570,6 +650,7 @@ app/src/main/java/com/sanha/moneytalk/
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|-----------|
+| 2026-02-19 | 1.1.0 | SMS 동기화 최적화 (2개월 축소 + 발신자 필터 + LLM 트리거 + core/sms 분리 + 부분 데이터 CTA) |
 | 2026-02-19 | 1.1.0 | HorizontalPager pageCache + 3개월 동기화 제한 + SMS 100자 필터 보강 |
 | 2026-02-18 | 1.1.0 | ProGuard(R8) 활성화 + Firebase Analytics 트래킹 |
 | 2026-02-18 | 1.1.0 | Firebase RTDB 원격 설정 (API 키 풀링 + 모델명 관리) |

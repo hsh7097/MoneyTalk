@@ -107,6 +107,31 @@
 - 빈 상태 "광고 보고 전체 데이터 가져오기" CTA (FullSyncCtaSection 공용 Composable)
 - 광고 로드/표시 실패 시 보상 처리 (Home/History/Chat onFailed → 앱 이슈 = 유저 책임 아님)
 
+**SMS 동기화 최적화 + 필터링 강화**: ✅ 완료 (2026-02-19)
+- 초기 동기화 3개월 → 2개월 축소 (DEFAULT_SYNC_PERIOD_MILLIS=60일)
+- 광고 시청 후 해당 월만 동기화 (syncMonthData + calculateMonthRange)
+- 010/070 발신자 조건부 제외 (SmsFilter: normalizeAddress + hasFinancialHints + shouldSkipBySender)
+- SMS/MMS/RCS 모든 채널에 발신자 필터 통일 적용
+- LLM 트리거 0.80 정책 (벡터 유사도 0.80~0.92 → LLM 호출, 결제 판정 아님)
+- Regex 오파싱 방어 (storeName='결제' → Tier 2/3 이관)
+- 배치 분류 tier별 관측성 로그 추가
+- core/sms 패키지 분리 (SmsParser, SmsReader, HybridSmsClassifier 등 7개 파일 이동)
+
+**SMS 배치 처리 가드레일 + 그룹핑 최적화**: ✅ 완료 (2026-02-19)
+- SmsBatchProcessor: 발신번호 기반 2레벨 그룹핑 (37그룹 → 2~4그룹)
+- SmsBatchProcessor: LLM 배치 호출 병렬화 (async + Semaphore)
+- SmsBatchProcessor: template_regex 신뢰도 1.0 → 0.85 하향
+- SmsBatchProcessor: 소그룹 병합 시 코사인 유사도 검증 (≥0.70)
+- SmsBatchProcessor: RTDB 업로드 품질 게이트 (검증된 소스만 정규식 포함)
+- SmsBatchProcessor: Step1+2 임베딩 통합 (중복 API 호출 제거)
+- SmsBatchProcessor: 멤버별 가게명 개별 추출 (대표 가게명 복제 방지)
+- SmsEmbeddingService: 가게명 {STORE} 플레이스홀더 치환 추가
+- GeminiSmsExtractor: 배치 추출 + 정규식 자동 생성 기능
+- GeneratedSmsRegexParser: LLM 생성 정규식 파서 신규 추가
+- SmsPatternEntity: amountRegex/storeRegex/cardRegex/parseSource 필드 추가 (DB v5→v6)
+- 비결제 키워드 "결제내역" 추가
+- 임베딩 차원 문서/주석 768 → 3072 수정
+
 ### 대기 중인 작업
 
 - `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지
@@ -152,7 +177,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 ## 5. 주의사항
 
 ### 절대 금지
-- DB 스키마 변경 시 마이그레이션 필수 (현재 v5)
+- DB 스키마 변경 시 마이그레이션 필수 (현재 v6)
 - 임계값 수치 변경 시 [AI_CONTEXT.md](AI_CONTEXT.md) SSOT 먼저 업데이트
 - `!!` non-null assertion 사용 금지
 
@@ -170,6 +195,8 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-19 | SMS 배치 가드레일 + 그룹핑 최적화 + LLM 병렬화 + GeneratedSmsRegexParser 신규 | 완료 |
+| 2026-02-19 | SMS 동기화 최적화 (2개월 축소 + 월별 동기화 + 발신자 필터 + LLM 0.80 트리거 + 오파싱 방어 + core/sms 패키지 분리) | 완료 |
 | 2026-02-19 | 빈 상태 CTA + 광고 실패 보상 + 탭 재클릭 + Auto Backup 수정 + 깜빡임 수정 | 완료 |
 | 2026-02-19 | HorizontalPager pageCache + 3개월 동기화 제한 + 리워드 광고 전체 해제 | 완료 |
 | 2026-02-19 | SMS 100자 초과 필터 HybridSmsClassifier 적용 | 완료 |
@@ -218,7 +245,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 파일 | 설명 |
 |------|------|
-| [`AppDatabase.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/AppDatabase.kt) | Room DB 정의 (v5, 10 entities) |
+| [`AppDatabase.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/AppDatabase.kt) | Room DB 정의 (v6, 10 entities) |
 | [`OwnedCardEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/OwnedCardEntity.kt) | 카드 화이트리스트 Entity |
 | [`SmsExclusionKeywordEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/SmsExclusionKeywordEntity.kt) | SMS 제외 키워드 Entity |
 | [`OwnedCardRepository.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt) | 카드 관리 + CardNameNormalizer 연동 |
@@ -228,9 +255,15 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 파일 | 설명 |
 |------|------|
-| [`HybridSmsClassifier.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/HybridSmsClassifier.kt) | 3-tier SMS 분류 |
-| [`SmsBatchProcessor.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/SmsBatchProcessor.kt) | SMS 배치 처리 |
-| [`VectorSearchEngine.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/VectorSearchEngine.kt) | 순수 벡터 연산 |
+| [`HybridSmsClassifier.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/HybridSmsClassifier.kt) | 3-tier SMS 분류 |
+| [`SmsBatchProcessor.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsBatchProcessor.kt) | SMS 배치 처리 |
+| [`VectorSearchEngine.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/VectorSearchEngine.kt) | 순수 벡터 연산 |
+| [`SmsFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsFilter.kt) | 010/070 발신자 조건부 제외 |
+| [`SmsReader.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsReader.kt) | SMS/MMS/RCS 읽기 |
+| [`SmsParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsParser.kt) | SMS 정규식 파싱 |
+| [`GeminiSmsExtractor.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/GeminiSmsExtractor.kt) | LLM 배치 추출 + 정규식 생성 |
+| [`GeneratedSmsRegexParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/GeneratedSmsRegexParser.kt) | LLM 생성 정규식 파서 |
+| [`SmsEmbeddingService.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsEmbeddingService.kt) | SMS 템플릿화 + 임베딩 생성 |
 | [`CardNameNormalizer.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) | 카드명 정규화 |
 | [`StoreAliasManager.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/StoreAliasManager.kt) | 가게명 별칭 관리 |
 | [`CategoryReferenceProvider.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/CategoryReferenceProvider.kt) | 동적 참조 리스트 |

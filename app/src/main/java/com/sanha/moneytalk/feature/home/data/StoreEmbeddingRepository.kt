@@ -1,7 +1,7 @@
 package com.sanha.moneytalk.feature.home.data
 
 import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
-import com.sanha.moneytalk.core.util.VectorSearchEngine
+import com.sanha.moneytalk.core.sms.VectorSearchEngine
 
 /**
  * 가게명 임베딩 Repository 인터페이스

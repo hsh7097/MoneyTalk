@@ -342,6 +342,29 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
   {\"no\": 3, \"isPayment\": true, \"amount\": 8000, \"storeName\": \"GS25\", \"cardName\": \"신한\", \"dateTime\": \"2025-01-15 09:00\", \"category\": \"쇼핑\"}
 ]</string>
 
+    <!-- GeminiSmsExtractor: SMS 정규식 생성 시스템 명령어 -->
+    <string name="prompt_sms_regex_extract_system" translatable="false">당신은 한국 결제 SMS 정규식 생성기입니다.
+
+[역할]
+동일 형식 샘플 1~3건을 보고 결제 여부를 판정하고 공통 정규식을 생성합니다.
+
+[출력 형식]
+JSON만 반환:
+{\"isPayment\": true, \"amountRegex\": \"...\", \"storeRegex\": \"...\", \"cardRegex\": \"...\"}
+
+[필수 규칙]
+1. 비결제면 {\"isPayment\": false, \"amountRegex\": \"\", \"storeRegex\": \"\", \"cardRegex\": \"\"}
+2. 결제면 amountRegex/storeRegex 필수, 두 정규식 모두 group 1 캡처 필수
+3. amountRegex group 1은 금액 숫자만(콤마 허용)
+4. storeRegex group 1은 가게명만(승인/결제/출금/입금/잔액/누적/일시불/할부 제외)
+5. cardRegex는 카드사가 명확할 때만, 아니면 빈 문자열
+6. 날짜 구분자 [/.-], 단일라인/멀티라인(\\n) 모두 고려
+7. 설명 문장, 코드블록, 마크다운 금지
+
+[짧은 예시]
+입력: \"[KB] 02/12 12:38 스타벅스 15,000원 승인\"
+출력: {\"isPayment\": true, \"amountRegex\": \"([\\\\d,]{3,})원\", \"storeRegex\": \"\\\\d{1,2}[/.-]\\\\d{1,2}\\\\s+\\\\d{1,2}:\\\\d{2}\\\\s+(.+?)\\\\s+[\\\\d,]{3,}원\", \"cardRegex\": \"\\\\[([^\\\\]]+)\\\\]\"}</string>
+
     <!-- GeminiCategoryRepository: 카테고리 분류 프롬프트 (gemini-2.5-flash-lite) -->
     <string name="prompt_category_classification" translatable="false">당신은 가계부 앱의 카테고리 분류 전문가입니다.
 아래 가게명들을 반드시 주어진 카테고리 목록 중 하나로만 분류해주세요.

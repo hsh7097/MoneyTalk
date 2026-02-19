@@ -2,6 +2,13 @@ package com.sanha.moneytalk.core.util
 
 import android.util.Log
 import com.sanha.moneytalk.core.similarity.StoreNameSimilarityPolicy
+import com.sanha.moneytalk.core.sms.SmsEmbeddingService
+import com.sanha.moneytalk.core.sms.VectorSearchEngine
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -33,6 +40,9 @@ class StoreNameGrouper @Inject constructor(
 
         /** 배치 임베딩 한 번에 처리할 최대 개수 (batchEmbedContents 최대 100) */
         private const val EMBEDDING_BATCH_SIZE = 100
+
+        /** 임베딩 배치 병렬 동시 실행 수 (API 키 5개 × 키당 2 = 10) */
+        private const val EMBEDDING_CONCURRENCY = 10
     }
 
     /**
@@ -86,35 +96,38 @@ class StoreNameGrouper @Inject constructor(
     private suspend fun generateBatchEmbeddings(
         storeNames: List<String>
     ): List<Pair<String, List<Float>>> {
-        val results = mutableListOf<Pair<String, List<Float>>>()
         val batches = storeNames.chunked(EMBEDDING_BATCH_SIZE)
+        val startTime = System.currentTimeMillis()
+        Log.d(TAG, "[grouping] 가게명 임베딩 시작: ${storeNames.size}건 → ${batches.size}개 배치 (병렬 $EMBEDDING_CONCURRENCY)")
 
+        val semaphore = Semaphore(EMBEDDING_CONCURRENCY)
+        val batchEmbeddings = coroutineScope {
+            batches.mapIndexed { batchIdx, batch ->
+                async {
+                    semaphore.withPermit {
+                        val batchStart = System.currentTimeMillis()
+                        val embeddings = embeddingService.generateEmbeddings(batch)
+                        val elapsed = System.currentTimeMillis() - batchStart
+                        Log.d(TAG, "[grouping] 임베딩 배치 ${batchIdx + 1}/${batches.size} 완료 (${elapsed}ms, 성공: ${embeddings.count { it != null }}/${batch.size})")
+                        embeddings
+                    }
+                }
+            }.awaitAll()
+        }
+
+        val results = mutableListOf<Pair<String, List<Float>>>()
         for ((batchIdx, batch) in batches.withIndex()) {
-            val startTime = System.currentTimeMillis()
-            Log.d(TAG, "[grouping] 가게명 임베딩 배치 ${batchIdx + 1}/${batches.size} 시작 (${batch.size}건)")
-            val embeddings = embeddingService.generateEmbeddings(batch)
-            val elapsed = System.currentTimeMillis() - startTime
-
-            var batchSuccess = 0
+            val embeddings = batchEmbeddings[batchIdx]
             for ((i, storeName) in batch.withIndex()) {
                 val embedding = embeddings.getOrNull(i)
                 if (embedding != null) {
                     results.add(storeName to embedding)
-                    batchSuccess++
                 }
-            }
-            Log.d(
-                TAG,
-                "[grouping] 가게명 임베딩 배치 ${batchIdx + 1}/${batches.size} 완료 (${elapsed}ms, 성공: ${batchSuccess}/${batch.size})"
-            )
-
-            // 배치 간 최소 딜레이 (마지막 배치 제외)
-            if (batchIdx < batches.size - 1) {
-                kotlinx.coroutines.delay(200)
             }
         }
 
-        Log.d(TAG, "배치 임베딩 생성: ${results.size}/${storeNames.size}건 성공")
+        val elapsed = System.currentTimeMillis() - startTime
+        Log.d(TAG, "배치 임베딩 생성: ${results.size}/${storeNames.size}건 성공 (${elapsed}ms)")
         return results
     }
 

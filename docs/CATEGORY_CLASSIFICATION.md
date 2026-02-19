@@ -98,7 +98,7 @@ MoneyTalk은 SMS에서 추출한 가게명을 기반으로 지출 카테고리�
 | id | Long (PK) | 자동 증가 |
 | storeName | String (UNIQUE INDEX) | 가게명 |
 | category | String | 분류된 카테고리 |
-| embedding | List<Float> -> JSON | 768차원 임베딩 벡터 |
+| embedding | List<Float> -> JSON | 임베딩 벡터 (모델 의존: gemini-embedding-001=3072차원) |
 | source | String | 분류 출처: `gemini`, `user`, `propagated` |
 | confidence | Float | 신뢰도 (0.0~1.0) |
 | matchCount | Int | 매칭 횟수 (사용 빈도 추적) |
