@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms
+package com.sanha.moneytalk.core.sms2
 
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity

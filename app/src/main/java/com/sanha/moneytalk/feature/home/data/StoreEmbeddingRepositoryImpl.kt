@@ -5,8 +5,8 @@ import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
 import com.sanha.moneytalk.core.similarity.CategoryPropagationPolicy
 import com.sanha.moneytalk.core.similarity.StoreNameSimilarityPolicy
-import com.sanha.moneytalk.core.sms.SmsEmbeddingService
-import com.sanha.moneytalk.core.sms.VectorSearchEngine
+import com.sanha.moneytalk.core.sms2.SmsEmbeddingService
+import com.sanha.moneytalk.core.sms2.VectorSearchEngine
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope

@@ -7,8 +7,8 @@ import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
-import com.sanha.moneytalk.core.sms.HybridSmsClassifier
-import com.sanha.moneytalk.core.sms.SmsParser
+import com.sanha.moneytalk.core.sms2.HybridSmsClassifier
+import com.sanha.moneytalk.core.sms2.SmsParser
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository

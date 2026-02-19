@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms
+package com.sanha.moneytalk.core.sms2
 
 import android.util.Log
 import com.sanha.moneytalk.core.model.SmsAnalysisResult

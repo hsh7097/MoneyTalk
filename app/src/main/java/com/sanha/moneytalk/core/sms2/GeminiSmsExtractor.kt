@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms
+package com.sanha.moneytalk.core.sms2
 
 import android.content.Context
 import android.util.Log

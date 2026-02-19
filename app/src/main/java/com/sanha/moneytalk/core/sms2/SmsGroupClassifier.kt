@@ -6,7 +6,6 @@ import com.google.firebase.database.ServerValue
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
-import com.sanha.moneytalk.core.sms.GeminiSmsExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.async

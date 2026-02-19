@@ -4,7 +4,6 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.provider.Telephony
 import android.util.Log
-import com.sanha.moneytalk.core.sms.SmsFilter
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
