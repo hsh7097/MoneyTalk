@@ -43,7 +43,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class PremiumManager @Inject constructor(
-    private val database: FirebaseDatabase,
+    private val database: FirebaseDatabase?,
     private val settingsDataStore: SettingsDataStore
 ) {
     companion object {
@@ -63,6 +63,10 @@ class PremiumManager @Inject constructor(
      * Firebase Realtime Database의 /config 경로를 실시간 감시 시작
      */
     fun startObservingConfig() {
+        if (database == null) {
+            Log.w(TAG, "Firebase 미설정 — 서버 설정 감시 스킵")
+            return
+        }
         val configRef = database.getReference(CONFIG_PATH)
 
         configListener = object : ValueEventListener {
@@ -82,7 +86,7 @@ class PremiumManager @Inject constructor(
             }
         }
 
-        configRef.addValueEventListener(configListener!!)
+        configListener?.let { configRef.addValueEventListener(it) }
         Log.d(TAG, "서버 설정 실시간 감시 시작")
     }
 
@@ -90,6 +94,7 @@ class PremiumManager @Inject constructor(
      * 실시간 감시 중지
      */
     fun stopObservingConfig() {
+        if (database == null) return
         configListener?.let {
             database.getReference(CONFIG_PATH).removeEventListener(it)
             configListener = null
@@ -150,6 +155,11 @@ class PremiumManager @Inject constructor(
      * 서버 설정을 한 번만 가져오기 (Flow 대신 단발성)
      */
     fun fetchConfigOnce(onResult: (PremiumConfig) -> Unit) {
+        if (database == null) {
+            Log.w(TAG, "Firebase 미설정 — 기본 설정 반환")
+            onResult(PremiumConfig())
+            return
+        }
         database.getReference(CONFIG_PATH).get()
             .addOnSuccessListener { snapshot ->
                 val config = parseConfig(snapshot)

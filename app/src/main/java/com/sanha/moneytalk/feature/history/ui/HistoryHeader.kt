@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -194,13 +195,16 @@ fun PeriodSummaryCard(
             }
         }
 
-        // 오른쪽: 지출/수입 요약 (오른쪽 정렬, 라벨 고정 너비)
+        // 오른쪽: 지출/수입 요약 (오른쪽 정렬, 동적 너비)
         Column(
-            horizontalAlignment = Alignment.End
+            horizontalAlignment = Alignment.End,
+            modifier = Modifier.width(IntrinsicSize.Max)
         ) {
             // 지출
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End
             ) {
                 Text(
                     text = stringResource(R.string.home_expense),
@@ -211,7 +215,6 @@ fun PeriodSummaryCard(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    modifier = Modifier.widthIn(min = 120.dp),
                     text = stringResource(R.string.common_won, numberFormat.format(totalExpense)),
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.sp),
                     fontWeight = FontWeight.Bold,
@@ -221,7 +224,9 @@ fun PeriodSummaryCard(
             }
             // 수입 (0원이어도 항상 표시)
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End
             ) {
                 Text(
                     text = stringResource(R.string.home_income),
@@ -232,7 +237,6 @@ fun PeriodSummaryCard(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    modifier = Modifier.widthIn(min = 120.dp),
                     text = stringResource(
                         R.string.common_won,
                         numberFormat.format(totalIncome)

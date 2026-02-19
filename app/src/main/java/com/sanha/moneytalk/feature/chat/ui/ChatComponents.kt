@@ -65,11 +65,15 @@ val guideQuestions = listOf(
     GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_food),
     GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_category),
     GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_compare),
+    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_saving_tip),
     // 지출 조회
     GuideQuestion(R.string.guide_category_expense_search, R.string.guide_q_expense_coupang),
+    GuideQuestion(R.string.guide_category_expense_search, R.string.guide_q_expense_starbucks),
     GuideQuestion(R.string.guide_category_expense_search, R.string.guide_q_expense_delivery),
+    GuideQuestion(R.string.guide_category_expense_search, R.string.guide_q_expense_top_store),
     // 카테고리 관리
     GuideQuestion(R.string.guide_category_manage, R.string.guide_q_manage_coupang),
+    GuideQuestion(R.string.guide_category_manage, R.string.guide_q_manage_baemin),
     GuideQuestion(R.string.guide_category_manage, R.string.guide_q_manage_uncategorized)
 )
 
@@ -113,7 +117,7 @@ fun GuideQuestionsOverlay(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                 )
             ) {
                 Column(
@@ -128,7 +132,7 @@ fun GuideQuestionsOverlay(
                     Text(
                         text = stringResource(R.string.guide_intro),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     if (!hasApiKey) {
@@ -147,7 +151,7 @@ fun GuideQuestionsOverlay(
                             text = "${categoryEmojis[category] ?: "\uD83D\uDCAC"} $category",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(6.dp))
 

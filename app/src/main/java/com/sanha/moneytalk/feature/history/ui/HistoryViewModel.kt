@@ -267,6 +267,11 @@ class HistoryViewModel @Inject constructor(
                         clearAllPageCache()
                         loadCurrentAndAdjacentPages()
                     }
+
+                    DataRefreshEvent.RefreshType.TRANSACTION_ADDED -> {
+                        clearAllPageCache()
+                        loadCurrentAndAdjacentPages()
+                    }
                 }
             }
         }

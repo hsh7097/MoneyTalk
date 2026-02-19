@@ -35,6 +35,9 @@ class DataRefreshEvent @Inject constructor() {
         CATEGORY_UPDATED,
 
         /** 내 카드 설정 변경 (홈/내역 필터 갱신용) */
-        OWNED_CARD_UPDATED
+        OWNED_CARD_UPDATED,
+
+        /** 실시간 SMS 수신으로 지출/수입 추가 */
+        TRANSACTION_ADDED
     }
 }

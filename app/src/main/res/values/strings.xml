@@ -70,12 +70,14 @@
     <string name="guide_category_manage">카테고리 관리</string>
 
     <!-- 가이드 질문 예시 -->
-    <string name="guide_q_expense_coupang">2월에 쿠팡에서 얼마 썼어?</string>
+    <string name="guide_q_expense_coupang">이번 달 쿠팡에서 얼마 썼어?</string>
     <string name="guide_q_expense_starbucks">이번 달 스타벅스 사용 내역 보여줘</string>
     <string name="guide_q_expense_delivery">지난 3개월 배달비 얼마야?</string>
+    <string name="guide_q_expense_top_store">이번 달 가장 많이 쓴 곳은 어디야?</string>
     <string name="guide_q_analysis_food">식비가 수입 대비 적절해?</string>
     <string name="guide_q_analysis_compare">지난 달 대비 지출이 늘었어?</string>
     <string name="guide_q_analysis_category">카테고리별 지출 비율 분석해줘</string>
+    <string name="guide_q_analysis_saving_tip">이번 달 절약할 수 있는 부분이 있을까?</string>
     <string name="guide_q_manage_coupang">쿠팡은 쇼핑으로 분류해줘</string>
     <string name="guide_q_manage_baemin">배달의민족 포함된 건 식비로 바꿔줘</string>
     <string name="guide_q_manage_uncategorized">미분류 항목 보여줘</string>
