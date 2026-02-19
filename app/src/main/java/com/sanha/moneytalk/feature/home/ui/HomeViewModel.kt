@@ -260,6 +260,11 @@ class HomeViewModel @Inject constructor(
                         clearAllPageCache()
                         loadCurrentAndAdjacentPages()
                     }
+
+                    DataRefreshEvent.RefreshType.EXPENSE_ADDED -> {
+                        clearAllPageCache()
+                        loadCurrentAndAdjacentPages()
+                    }
                 }
             }
         }

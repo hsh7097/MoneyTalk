@@ -5,22 +5,29 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
 import android.util.Log
+import com.sanha.moneytalk.core.service.SmsProcessingService
 import com.sanha.moneytalk.core.util.SmsParser
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * 실시간 SMS 수신 BroadcastReceiver
  *
- * goAsync()를 사용하여 onReceive() 이후에도 안전하게 작업을 완료합니다.
+ * SMS 수신 즉시 SmsProcessingService를 통해 DB에 저장하고 알림을 표시합니다.
+ * goAsync() + CoroutineScope로 비동기 작업을 안전하게 수행합니다.
  */
+@AndroidEntryPoint
 class SmsReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "SmsReceiver"
-        const val ACTION_SMS_RECEIVED = "com.sanha.moneytalk.SMS_RECEIVED"
-        const val EXTRA_SMS_BODY = "sms_body"
-        const val EXTRA_SMS_ADDRESS = "sms_address"
-        const val EXTRA_SMS_DATE = "sms_date"
     }
+
+    @Inject
+    lateinit var smsProcessingService: SmsProcessingService
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) {
@@ -32,30 +39,46 @@ class SmsReceiver : BroadcastReceiver() {
         try {
             val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
 
-            for (sms in messages) {
-                val body = sms.messageBody ?: continue
+            // 금융 SMS 필터링
+            data class FinancialSms(val body: String, val address: String, val date: Long)
+
+            val financialSmsList = messages.mapNotNull { sms ->
+                val body = sms.messageBody ?: return@mapNotNull null
                 val address = sms.originatingAddress ?: "Unknown"
                 val date = sms.timestampMillis
 
-                Log.d(TAG, "SMS Received - From: $address, Body: $body")
+                if (SmsParser.isCardPaymentSms(body) || SmsParser.isIncomeSms(body)) {
+                    Log.d(TAG, "금융 SMS 감지 - From: $address")
+                    FinancialSms(body, address, date)
+                } else {
+                    null
+                }
+            }
 
-                // 카드 결제 문자인지 확인
-                if (SmsParser.isCardPaymentSms(body)) {
-                    Log.d(TAG, "Card payment SMS detected!")
+            if (financialSmsList.isEmpty()) {
+                pendingResult.finish()
+                return
+            }
 
-                    // 앱 내부로 브로드캐스트 전송
-                    val smsIntent = Intent(ACTION_SMS_RECEIVED).apply {
-                        setPackage(context.packageName)
-                        putExtra(EXTRA_SMS_BODY, body)
-                        putExtra(EXTRA_SMS_ADDRESS, address)
-                        putExtra(EXTRA_SMS_DATE, date)
+            // 모든 금융 SMS를 비동기로 처리 후 finish
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    for (sms in financialSmsList) {
+                        try {
+                            val result = smsProcessingService.processIncomingSms(
+                                sms.body, sms.address, sms.date
+                            )
+                            Log.d(TAG, "SMS 처리 완료: ${result.type}")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "개별 SMS 처리 실패 (계속): ${e.message}")
+                        }
                     }
-                    context.sendBroadcast(smsIntent)
+                } finally {
+                    pendingResult.finish()
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "SMS 처리 중 오류: ${e.message}", e)
-        } finally {
             pendingResult.finish()
         }
     }
