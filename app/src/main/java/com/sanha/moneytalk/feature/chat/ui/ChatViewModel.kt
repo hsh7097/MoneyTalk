@@ -14,6 +14,7 @@ import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.ActionType
+import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.AnalyticsFilter
 import com.sanha.moneytalk.core.util.AnalyticsMetric
 import com.sanha.moneytalk.core.util.CategoryReferenceProvider
@@ -102,7 +103,8 @@ class ChatViewModel @Inject constructor(
     private val categoryReferenceProvider: CategoryReferenceProvider,
     private val rewardAdManager: RewardAdManager,
     private val premiumManager: PremiumManager,
-    private val analyticsHelper: AnalyticsHelper
+    private val analyticsHelper: AnalyticsHelper,
+    private val dataRefreshEvent: DataRefreshEvent
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -527,6 +529,17 @@ class ChatViewModel @Inject constructor(
                             for (action in queryRequest.actions) {
                                 val result = executeAction(action)
                                 actionResults.add(result)
+                            }
+                            // DB 변경 액션이 성공하면 다른 화면(Home/History)에 알림
+                            val hasDataChange = actionResults.any { it.success && it.affectedCount > 0 }
+                            if (hasDataChange) {
+                                val hasCategoryChange = actionResults.any {
+                                    it.success && it.actionType == ActionType.UPDATE_CATEGORY
+                                }
+                                dataRefreshEvent.emit(
+                                    if (hasCategoryChange) DataRefreshEvent.RefreshType.CATEGORY_UPDATED
+                                    else DataRefreshEvent.RefreshType.TRANSACTION_ADDED
+                                )
                             }
                         }
 
