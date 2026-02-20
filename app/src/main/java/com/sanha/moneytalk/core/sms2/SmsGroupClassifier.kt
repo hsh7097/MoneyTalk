@@ -76,8 +76,8 @@ class SmsGroupClassifier @Inject constructor(
         /** LLM 병렬 동시 실행 수 (API 키 5개 × 키당 1) */
         private const val LLM_CONCURRENCY = 5
 
-        /** regex 생성 샘플 수 (그룹 대표 포함 최대 3건) */
-        private const val REGEX_SAMPLE_SIZE = 3
+        /** regex 생성 샘플 수 (그룹 대표 포함 최대 5건) */
+        private const val REGEX_SAMPLE_SIZE = 5
 
         /** regex 생성 최소 멤버 수 (3건 미만이면 regex 생성 스킵) */
         private const val REGEX_MIN_SAMPLES = 3
@@ -105,6 +105,24 @@ class SmsGroupClassifier @Inject constructor(
     }
 
     // ===== 내부 데이터 =====
+
+    /**
+     * 그룹 처리 결과 — processGroup()의 반환 타입
+     *
+     * 파싱 결과뿐 아니라 생성된 regex 정보도 함께 반환하여,
+     * 메인 그룹의 regex를 예외 그룹 regex 생성 시 참조로 전달할 수 있도록 함.
+     *
+     * @property results 파싱 결과 리스트
+     * @property amountRegex 생성된 금액 정규식 (빈 문자열이면 미생성)
+     * @property storeRegex 생성된 가게명 정규식
+     * @property cardRegex 생성된 카드명 정규식
+     */
+    private data class GroupProcessResult(
+        val results: List<SmsParseResult>,
+        val amountRegex: String = "",
+        val storeRegex: String = "",
+        val cardRegex: String = ""
+    )
 
     /**
      * 벡터 그룹 — 그룹핑 결과를 담는 내부 클래스
@@ -172,12 +190,18 @@ class SmsGroupClassifier @Inject constructor(
      * @property template 메인 케이스의 템플릿 (예: "[KB]{DATE} {STORE} {AMOUNT}원 승인")
      * @property sample 메인 케이스의 원본 SMS 샘플
      * @property isPayment 메인 케이스가 결제인지 여부
+     * @property amountRegex 메인 케이스의 금액 정규식 (regex 생성 성공 시)
+     * @property storeRegex 메인 케이스의 가게명 정규식 (regex 생성 성공 시)
+     * @property cardRegex 메인 케이스의 카드명 정규식 (regex 생성 성공 시)
      */
     private data class MainCaseContext(
         val cardName: String,
         val template: String,
         val sample: String,
-        val isPayment: Boolean
+        val isPayment: Boolean,
+        val amountRegex: String = "",
+        val storeRegex: String = "",
+        val cardRegex: String = ""
     )
 
     /** regex 생성 실패 쿨다운 추적 */
@@ -223,6 +247,23 @@ class SmsGroupClassifier @Inject constructor(
         // [5-1.5] 발신번호 단위로 재집계 → SourceGroup 생성
         val sourceGroups = buildSourceGroups(groups)
         Log.d(TAG, "발신번호 집계: ${groups.size}그룹 → ${sourceGroups.size}발신번호")
+        for (sg in sourceGroups) {
+            Log.d(TAG, "  [${sg.address}] ${sg.totalCount}건 → ${sg.subGroups.size}서브그룹 " +
+                "(${sg.subGroups.joinToString { "${it.members.size}건" }})")
+        }
+
+        // [5-1.7] DB에서 발신번호별 메인 패턴 선조회
+        // 이전 동기화에서 등록된 메인 그룹의 regex를 가져와 예외 그룹 regex 생성 시 참조로 사용
+        val dbMainPatterns = mutableMapOf<String, SmsPatternEntity>()
+        for (sg in sourceGroups) {
+            if (dbMainPatterns.containsKey(sg.address)) continue
+            val mainPattern = smsPatternDao.getMainPatternBySender(sg.address)
+            if (mainPattern != null) {
+                dbMainPatterns[sg.address] = mainPattern
+                Log.d(TAG, "DB 메인 패턴 조회: [${sg.address}] " +
+                    "amount=${mainPattern.amountRegex.take(30)}, store=${mainPattern.storeRegex.take(30)}")
+            }
+        }
 
         // [5-2 ~ 5-4] 발신번호 단위로 처리
         // 각 SourceGroup 내에서: 메인 케이스 먼저 → 예외 케이스에 메인 컨텍스트 전달
@@ -235,7 +276,7 @@ class SmsGroupClassifier @Inject constructor(
                     async(Dispatchers.IO) {
                         semaphore.acquire()
                         try {
-                            processSourceGroup(sourceGroup)
+                            processSourceGroup(sourceGroup, dbMainPatterns[sourceGroup.address])
                         } finally {
                             semaphore.release()
                             val done = processedSources.incrementAndGet()
@@ -286,42 +327,67 @@ class SmsGroupClassifier @Inject constructor(
      * 발신번호 단위 처리: 메인 케이스 먼저 → 예외 케이스에 메인 컨텍스트 전달
      *
      * 처리 순서:
-     * 1. 메인 그룹(가장 큰 서브그룹) → processGroup()으로 LLM 호출
-     * 2. 메인 결과를 MainCaseContext로 저장
+     * 1. 메인 그룹(가장 큰 서브그룹) → processGroup()으로 LLM 호출 (isMainGroup=true)
+     * 2. 메인 결과를 MainCaseContext로 저장 (regex 없으면 DB 메인 패턴 fallback)
      * 3. 예외 그룹들 → processGroup(mainContext)로 LLM 호출
      *    - LLM에 "이 번호의 메인 형식은 [KB] 승인 SMS (카드: KB국민)"를 힌트로 전달
      *
-     * 서브그룹이 1개면 기존과 동일하게 처리.
+     * 서브그룹이 1개면 DB 메인 패턴이 있을 때만 참조 전달.
+     *
+     * @param dbMainPattern DB에서 조회한 이전 동기화의 메인 그룹 패턴 (있으면 regex 참조로 활용)
      */
-    private suspend fun processSourceGroup(sourceGroup: SourceGroup): List<SmsParseResult> {
+    private suspend fun processSourceGroup(
+        sourceGroup: SourceGroup,
+        dbMainPattern: SmsPatternEntity? = null
+    ): List<SmsParseResult> {
         val results = mutableListOf<SmsParseResult>()
 
+        // DB 메인 패턴에서 MainCaseContext 구성 (현재 세션 메인 결과가 없을 때 fallback)
+        val dbMainContext = if (dbMainPattern != null) {
+            MainCaseContext(
+                cardName = dbMainPattern.parsedCardName,
+                template = dbMainPattern.smsTemplate,
+                sample = "",
+                isPayment = true,
+                amountRegex = dbMainPattern.amountRegex,
+                storeRegex = dbMainPattern.storeRegex,
+                cardRegex = dbMainPattern.cardRegex
+            )
+        } else null
+
         if (sourceGroup.subGroups.size == 1) {
-            // 서브그룹 1개 = 메인만 존재 → 기존 처리
-            results.addAll(processGroup(sourceGroup.mainGroup))
+            // 서브그룹 1개 = 메인만 존재
+            // DB 메인 패턴이 있으면 regex 참조로 전달 (같은 번호의 이전 메인 형식)
+            results.addAll(
+                processGroup(sourceGroup.mainGroup, mainContext = dbMainContext, isMainGroup = true).results
+            )
             return results
         }
 
         Log.d(TAG, "발신번호 ${sourceGroup.address}: ${sourceGroup.subGroups.size}서브그룹, " +
-            "메인 ${sourceGroup.mainGroup.members.size}건/${sourceGroup.totalCount}건")
+            "메인 ${sourceGroup.mainGroup.members.size}건/${sourceGroup.totalCount}건" +
+            if (dbMainPattern != null) " (DB 메인 참조)" else "")
 
-        // Step 1: 메인 그룹 먼저 처리
-        val mainResults = processGroup(sourceGroup.mainGroup)
-        results.addAll(mainResults)
+        // Step 1: 메인 그룹 먼저 처리 (isMainGroup=true → DB에 메인 표시)
+        val mainProcessResult = processGroup(sourceGroup.mainGroup, isMainGroup = true)
+        results.addAll(mainProcessResult.results)
 
-        // Step 2: 메인 결과로 컨텍스트 생성
-        val mainContext = if (mainResults.isNotEmpty()) {
+        // Step 2: 메인 결과로 컨텍스트 생성 (regex 참조 포함)
+        val mainContext = if (mainProcessResult.results.isNotEmpty()) {
             MainCaseContext(
-                cardName = mainResults.first().analysis.cardName,
+                cardName = mainProcessResult.results.first().analysis.cardName,
                 template = sourceGroup.mainGroup.representative.template,
                 sample = sourceGroup.mainGroup.representative.input.body
                     .replace("\n", " ")
                     .take(80),
-                isPayment = true
+                isPayment = true,
+                amountRegex = mainProcessResult.amountRegex,
+                storeRegex = mainProcessResult.storeRegex,
+                cardRegex = mainProcessResult.cardRegex
             )
         } else {
-            // 메인이 비결제 → 예외 그룹도 비결제 가능성 높지만 독립 판단
-            MainCaseContext(
+            // 현재 세션 메인 결과 없음 → DB 메인 fallback
+            dbMainContext ?: MainCaseContext(
                 cardName = "",
                 template = sourceGroup.mainGroup.representative.template,
                 sample = sourceGroup.mainGroup.representative.input.body
@@ -331,14 +397,14 @@ class SmsGroupClassifier @Inject constructor(
             )
         }
 
-        // Step 3: 예외 그룹 처리 (메인 컨텍스트 전달)
+        // Step 3: 예외 그룹 처리 (메인 컨텍스트 + 메인 regex 전달)
         for (exceptionGroup in sourceGroup.exceptionGroups) {
             val exResults = processGroup(
                 group = exceptionGroup,
                 mainContext = mainContext,
                 distributionSummary = sourceGroup.buildDistributionSummary()
             )
-            results.addAll(exResults)
+            results.addAll(exResults.results)
         }
 
         return results
@@ -351,18 +417,22 @@ class SmsGroupClassifier @Inject constructor(
      * 1. 그룹 대표 SMS 원본(input.body)을 LLM에 전달하여 결제 정보 추출
      *    - mainContext가 있으면 LLM 프롬프트에 메인 케이스 참조 정보 추가
      * 2. 결제 확인 시: regex 생성 (멤버 ≥3건) 또는 템플릿 폴백 regex
+     *    - mainContext에 메인 regex가 있으면 참조로 전달하여 정확도 향상
      * 3. 패턴 DB에 등록 (향후 같은 형식 SMS는 Step 4에서 매칭)
      * 4. 등록된 regex로 그룹 전체 멤버의 원본 파싱 → SmsParseResult 생성
      *
      * @param group 처리할 벡터 그룹
      * @param mainContext 메인 케이스 참조 정보 (예외 그룹 처리 시 non-null)
      * @param distributionSummary 발신번호 전체 분포도 요약 (예외 그룹 처리 시 non-null)
+     * @param isMainGroup 메인 그룹 여부 (DB 패턴 등록 시 isMainGroup 플래그에 사용)
+     * @return 파싱 결과 + 생성된 regex 정보
      */
     private suspend fun processGroup(
         group: VectorGroup,
         mainContext: MainCaseContext? = null,
-        distributionSummary: String? = null
-    ): List<SmsParseResult> {
+        distributionSummary: String? = null,
+        isMainGroup: Boolean = false
+    ): GroupProcessResult {
         val results = mutableListOf<SmsParseResult>()
         val representative = group.representative
 
@@ -378,13 +448,13 @@ class SmsGroupClassifier @Inject constructor(
             smsMessages = listOf(smsBodyForLlm),
             smsTimestamps = listOf(representative.input.date)
         )
-        val llmResult = llmResults.firstOrNull() ?: return emptyList()
+        val llmResult = llmResults.firstOrNull() ?: return GroupProcessResult(emptyList())
 
         // 비결제 판정 → 비결제 패턴으로 DB 등록 후 종료
         if (!llmResult.isPayment) {
             registerNonPaymentPattern(representative)
             Log.d(TAG, "비결제 확정 (LLM): ${representative.input.body.take(30)}")
-            return emptyList()
+            return GroupProcessResult(emptyList())
         }
 
         // LLM이 추출한 결제 정보
@@ -402,6 +472,18 @@ class SmsGroupClassifier @Inject constructor(
         var cardRegex = ""
         var parseSource = "llm"  // 기본: regex 없는 LLM 결과
 
+        // 메인 그룹의 regex 참조 정보 구성 (예외 그룹일 때)
+        val mainRegexContext = if (mainContext != null &&
+            mainContext.amountRegex.isNotBlank() && mainContext.storeRegex.isNotBlank()
+        ) {
+            GeminiSmsExtractor.MainRegexContext(
+                amountRegex = mainContext.amountRegex,
+                storeRegex = mainContext.storeRegex,
+                cardRegex = mainContext.cardRegex,
+                sampleBody = mainContext.sample
+            )
+        } else null
+
         // 멤버가 충분하고 쿨다운이 아니면 regex 생성 시도
         if (group.members.size >= REGEX_MIN_SAMPLES &&
             !shouldSkipRegexGeneration(representative.template)
@@ -415,7 +497,8 @@ class SmsGroupClassifier @Inject constructor(
 
             val regexResult = smsExtractor.generateRegexForGroup(
                 smsBodies = samples,
-                smsTimestamps = timestamps
+                smsTimestamps = timestamps,
+                mainRegexContext = mainRegexContext
             )
 
             if (regexResult != null && regexResult.isPayment &&
@@ -458,12 +541,14 @@ class SmsGroupClassifier @Inject constructor(
             source = parseSource,
             amountRegex = amountRegex,
             storeRegex = storeRegex,
-            cardRegex = cardRegex
+            cardRegex = cardRegex,
+            isMainGroup = isMainGroup
         )
 
         // --- [5-4] 그룹 전체 멤버 파싱 ---
         if (amountRegex.isNotBlank() && storeRegex.isNotBlank()) {
             // regex가 있으면 멤버 원본(body)에 적용
+            val regexFailedMembers = mutableListOf<EmbeddedSms>()
             for (member in group.members) {
                 val parsed = patternMatcher.parseWithRegex(
                     smsBody = member.input.body,
@@ -471,9 +556,6 @@ class SmsGroupClassifier @Inject constructor(
                     amountRegex = amountRegex,
                     storeRegex = storeRegex,
                     cardRegex = cardRegex,
-                    fallbackAmount = llmAnalysis.amount,
-                    fallbackStoreName = llmAnalysis.storeName,
-                    fallbackCardName = llmAnalysis.cardName,
                     fallbackCategory = llmAnalysis.category
                 )
                 if (parsed != null && parsed.amount > 0) {
@@ -485,6 +567,39 @@ class SmsGroupClassifier @Inject constructor(
                             confidence = 1.0f
                         )
                     )
+                } else {
+                    regexFailedMembers.add(member)
+                }
+            }
+
+            // regex 실패 멤버 → 개별 LLM 호출
+            if (regexFailedMembers.isNotEmpty()) {
+                val failedBodies = regexFailedMembers.map { it.input.body }
+                val failedTimestamps = regexFailedMembers.map { it.input.date }
+                val failedLlmResults = smsExtractor.extractFromSmsBatch(
+                    smsMessages = failedBodies,
+                    smsTimestamps = failedTimestamps
+                )
+                regexFailedMembers.forEachIndexed { index, member ->
+                    val memberResult = failedLlmResults.getOrNull(index)
+                    if (memberResult == null || !memberResult.isPayment) return@forEachIndexed
+                    val parsed = SmsAnalysisResult(
+                        amount = memberResult.amount,
+                        storeName = memberResult.storeName,
+                        category = memberResult.category,
+                        dateTime = memberResult.dateTime,
+                        cardName = memberResult.cardName
+                    )
+                    if (parsed.amount > 0) {
+                        results.add(
+                            SmsParseResult(
+                                input = member.input,
+                                analysis = parsed,
+                                tier = 3,
+                                confidence = 1.0f
+                            )
+                        )
+                    }
                 }
             }
         } else {
@@ -527,7 +642,12 @@ class SmsGroupClassifier @Inject constructor(
             }
         }
 
-        return results
+        return GroupProcessResult(
+            results = results,
+            amountRegex = amountRegex,
+            storeRegex = storeRegex,
+            cardRegex = cardRegex
+        )
     }
 
     /**
@@ -740,12 +860,13 @@ class SmsGroupClassifier @Inject constructor(
         source: String,
         amountRegex: String = "",
         storeRegex: String = "",
-        cardRegex: String = ""
+        cardRegex: String = "",
+        isMainGroup: Boolean = false
     ) {
         try {
             val pattern = SmsPatternEntity(
                 smsTemplate = embedded.template,
-                senderAddress = embedded.input.address,
+                senderAddress = normalizeAddress(embedded.input.address),
                 embedding = embedded.embedding,
                 isPayment = true,
                 parsedAmount = analysis.amount,
@@ -760,7 +881,8 @@ class SmsGroupClassifier @Inject constructor(
                     "llm_regex" -> 1.0f
                     "template_regex" -> 0.85f
                     else -> 0.8f
-                }
+                },
+                isMainGroup = isMainGroup
             )
             smsPatternDao.insert(pattern)
             Log.d(TAG, "패턴 등록: ${analysis.cardName} ${analysis.storeName} ($source)")
@@ -790,7 +912,7 @@ class SmsGroupClassifier @Inject constructor(
         try {
             val pattern = SmsPatternEntity(
                 smsTemplate = embedded.template,
-                senderAddress = embedded.input.address,
+                senderAddress = normalizeAddress(embedded.input.address),
                 embedding = embedded.embedding,
                 isPayment = false,
                 parseSource = "llm"

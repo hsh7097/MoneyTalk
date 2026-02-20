@@ -65,6 +65,21 @@ interface SmsPatternDao {
     @Query("SELECT * FROM sms_patterns WHERE senderAddress = :address")
     suspend fun getPatternsBySender(address: String): List<SmsPatternEntity>
 
+    /**
+     * 발신번호의 메인 그룹 패턴 조회
+     *
+     * regex가 유효한 결제 패턴 중 isMainGroup=true인 것을 반환.
+     * matchCount 내림차순으로 가장 활발한 패턴 1개만 반환.
+     * 다음 동기화에서 예외 그룹 regex 생성 시 메인 regex 참조로 사용.
+     */
+    @Query("""
+        SELECT * FROM sms_patterns
+        WHERE senderAddress = :address AND isMainGroup = 1 AND isPayment = 1
+        AND amountRegex != '' AND storeRegex != ''
+        ORDER BY matchCount DESC LIMIT 1
+    """)
+    suspend fun getMainPatternBySender(address: String): SmsPatternEntity?
+
     /** 전체 패턴 수 조회 */
     @Query("SELECT COUNT(*) FROM sms_patterns")
     suspend fun getPatternCount(): Int

@@ -53,7 +53,7 @@ class GeminiSmsExtractor @Inject constructor(
         private const val REGEX_REPAIR_MAX_RETRIES = 0
 
         /** 그룹 정규식 생성 시 사용할 최대 샘플 수 */
-        private const val REGEX_GROUP_MAX_SAMPLES = 3
+        private const val REGEX_GROUP_MAX_SAMPLES = 5
 
         /** 정규식 채택 최소 성공률 (그룹 샘플 기준) */
         private const val REGEX_MIN_SUCCESS_RATIO = 0.8f
@@ -261,6 +261,24 @@ class GeminiSmsExtractor @Inject constructor(
         val cardRegex: String = ""
     )
 
+    /**
+     * 메인 그룹 정규식 참조 정보
+     *
+     * 예외 그룹 정규식 생성 시, 메인 그룹의 정규식과 원본 샘플을 참조로 전달하여
+     * LLM이 "메인 형식과 어떻게 다른지"에 집중하도록 함.
+     *
+     * @property amountRegex 메인 그룹의 금액 정규식
+     * @property storeRegex 메인 그룹의 가게명 정규식
+     * @property cardRegex 메인 그룹의 카드명 정규식
+     * @property sampleBody 메인 그룹의 원본 SMS 샘플 (1건)
+     */
+    data class MainRegexContext(
+        val amountRegex: String,
+        val storeRegex: String,
+        val cardRegex: String,
+        val sampleBody: String
+    )
+
     private data class RegexValidationResult(
         val isValid: Boolean,
         val reason: String,
@@ -296,9 +314,12 @@ class GeminiSmsExtractor @Inject constructor(
                     ""
                 }
 
-                val prompt = """다음 SMS에서 결제 정보를 추출해주세요:$dateInfo
-$referenceText
-$smsBody"""
+                val prompt = context.getString(
+                    R.string.prompt_sms_extract_user,
+                    dateInfo,
+                    referenceText,
+                    smsBody
+                )
 
                 val startTime = System.currentTimeMillis()
                 Log.d(TAG, "[extractSingle] Gemini 단일 LLM 호출 시작: ${smsBody.take(60)}...")
@@ -339,14 +360,18 @@ $smsBody"""
     /**
      * 같은 그룹 샘플 SMS로 공통 정규식 생성
      *
-     * - 샘플(최대 3건) 전체 기준으로 검증
+     * - 샘플(최대 5건) 전체 기준으로 검증
      * - 실패 시 1회 repair(수선) 재요청
      * - 성공률이 minSuccessRatio 미만이면 채택하지 않음
+     *
+     * @param mainRegexContext 메인 그룹의 정규식 참조 (예외 그룹 처리 시 non-null).
+     *        같은 발신번호의 메인 형식 정규식을 참조하여 정확도를 높임.
      */
     suspend fun generateRegexForGroup(
         smsBodies: List<String>,
         smsTimestamps: List<Long> = emptyList(),
-        minSuccessRatio: Float = REGEX_MIN_SUCCESS_RATIO
+        minSuccessRatio: Float = REGEX_MIN_SUCCESS_RATIO,
+        mainRegexContext: MainRegexContext? = null
     ): LlmRegexResult? = withContext(Dispatchers.IO) {
         try {
             val model = getRegexModel()
@@ -361,11 +386,12 @@ $smsBody"""
             if (samples.isEmpty()) return@withContext null
 
             val startTime = System.currentTimeMillis()
-            Log.d(TAG, "[extractRegex] Gemini 정규식 생성 호출 시작: ${samples.size}건 샘플")
+            Log.d(TAG, "[extractRegex] Gemini 정규식 생성 호출 시작: ${samples.size}건 샘플" +
+                if (mainRegexContext != null) " (메인 regex 참조)" else "")
             val responseText = requestRegexWithTokenFallback(
                 model = model,
-                primaryPrompt = buildRegexPrompt(samples, smsTimestamps),
-                compactPrompt = buildRegexCompactPrompt(samples),
+                primaryPrompt = buildRegexPrompt(samples, smsTimestamps, mainRegexContext),
+                compactPrompt = buildRegexCompactPrompt(samples, mainRegexContext),
                 ultraCompactPrompt = buildRegexUltraCompactPrompt(samples)
             ) ?: return@withContext null
             val elapsed = System.currentTimeMillis() - startTime
@@ -527,7 +553,8 @@ $smsBody"""
 
     private fun buildRegexPrompt(
         samples: List<String>,
-        smsTimestamps: List<Long>
+        smsTimestamps: List<Long>,
+        mainRegexContext: MainRegexContext? = null
     ): String {
         val sampleText = samples.mapIndexed { index, body ->
             val dateInfo = smsTimestamps.getOrNull(index)?.let { ts ->
@@ -536,11 +563,22 @@ $smsBody"""
             "${index + 1}) ${dateInfo}${toCompactRegexSample(body, 180)}"
         }.joinToString("\n")
 
-        return """같은 형식의 결제 SMS 샘플입니다. 공통 정규식을 JSON으로만 반환하세요.
-필드: isPayment, amountRegex, storeRegex, cardRegex
-조건: amountRegex/storeRegex는 group1 캡처 필수.
-샘플:
-$sampleText"""
+        return if (mainRegexContext != null) {
+            val mainSample = toCompactRegexSample(mainRegexContext.sampleBody, 150)
+            val cardRegexLine = if (mainRegexContext.cardRegex.isNotBlank()) {
+                "메인 cardRegex: ${mainRegexContext.cardRegex}"
+            } else ""
+            context.getString(
+                R.string.prompt_sms_regex_with_main_ref,
+                mainSample,
+                mainRegexContext.amountRegex,
+                mainRegexContext.storeRegex,
+                cardRegexLine,
+                sampleText
+            )
+        } else {
+            context.getString(R.string.prompt_sms_regex_generate, sampleText)
+        }
     }
 
     /**
@@ -596,17 +634,25 @@ $sampleText"""
         return message.contains("MAX_TOKENS", ignoreCase = true)
     }
 
-    private fun buildRegexCompactPrompt(samples: List<String>): String {
+    private fun buildRegexCompactPrompt(
+        samples: List<String>,
+        mainRegexContext: MainRegexContext? = null
+    ): String {
         val compactSamples = samples.mapIndexed { index, body ->
             val sliced = toCompactRegexSample(body, 140)
             "${index + 1}: $sliced"
         }.joinToString("\n")
 
-        return """결제 SMS 샘플 공통 정규식 JSON만 반환.
-필드: isPayment, amountRegex, storeRegex, cardRegex
-제약: amountRegex/storeRegex는 group1 필수.
-샘플:
-$compactSamples"""
+        return if (mainRegexContext != null) {
+            context.getString(
+                R.string.prompt_sms_regex_compact_with_main_ref,
+                mainRegexContext.amountRegex,
+                mainRegexContext.storeRegex,
+                compactSamples
+            )
+        } else {
+            context.getString(R.string.prompt_sms_regex_compact, compactSamples)
+        }
     }
 
     private fun buildRegexUltraCompactPrompt(samples: List<String>): String {
@@ -615,10 +661,7 @@ $compactSamples"""
             .minByOrNull { it.length }
             .orEmpty()
 
-        return """JSON만:
-{"isPayment":true/false,"amountRegex":"","storeRegex":"","cardRegex":""}
-규칙: 결제면 amountRegex/storeRegex group1 필수.
-샘플: $shortest"""
+        return context.getString(R.string.prompt_sms_regex_ultra_compact, shortest)
     }
 
     private fun buildRegexRepairPrompt(
@@ -635,23 +678,24 @@ $compactSamples"""
         }.joinToString("\n")
         val previousShort = previousResponse.replace("\n", " ").take(240)
 
-        return """이전 정규식 응답이 검증에 실패했습니다.
-실패 이유: $failureReason, 이전 응답: $previousShort
-다음 샘플 전체를 만족하도록 수정하세요.
-$sampleText
-
-반드시 JSON만 반환하세요."""
+        return context.getString(
+            R.string.prompt_sms_regex_repair,
+            failureReason,
+            previousShort,
+            sampleText
+        )
     }
 
+    /**
+     * 정규식 생성 프롬프트용 샘플 축약
+     *
+     * 줄바꿈만 이스케이프하고 maxLen으로 자름.
+     * 날짜/시간/금액 등을 플레이스홀더로 치환하지 않음 —
+     * LLM이 실제 형식을 보아야 정확한 정규식을 생성할 수 있고,
+     * 검증은 원본 SMS로 수행되므로 일치해야 함.
+     */
     private fun toCompactRegexSample(text: String, maxLen: Int): String {
-        val oneLine = text
-            .replace("\n", "\\n")
-            .replace(Regex("""\d{1,2}[/.-]\d{1,2}"""), "{DATE}")
-            .replace(Regex("""\d{1,2}:\d{2}"""), "{TIME}")
-            .replace(Regex("""\d+\*+\d+"""), "{CARD_NUM}")
-            .replace(Regex("""[\d,]+원"""), "{AMOUNT}원")
-            .replace(Regex("""\b[\d,]{3,}\b"""), "{NUM}")
-
+        val oneLine = text.replace("\n", "\\n")
         return if (oneLine.length > maxLen) oneLine.take(maxLen) else oneLine
     }
 
@@ -814,10 +858,12 @@ $sampleText
                 ""
             }
 
-            val prompt = """다음 ${smsMessages.size}개 SMS에서 각각 결제 정보를 추출해주세요:
-$referenceText
-
-$smsListText"""
+            val prompt = context.getString(
+                R.string.prompt_sms_batch_extract_user,
+                smsMessages.size.toString(),
+                referenceText,
+                smsListText
+            )
 
             Log.d(TAG, "[extractBatch] LLM 배치 추출 요청: ${smsMessages.size}건")
 

@@ -61,7 +61,7 @@ import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
         OwnedCardEntity::class,
         SmsExclusionKeywordEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(FloatListConverter::class)

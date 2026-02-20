@@ -58,6 +58,9 @@ data class SmsPatternEntity(
     /** 신뢰도 점수 (0.0 ~ 1.0) */
     val confidence: Float = 1.0f,
 
+    /** 해당 발신번호의 메인 그룹 패턴 여부 (가장 많은 SMS 형식) */
+    val isMainGroup: Boolean = false,
+
     /** 이 패턴이 매칭된 횟수 */
     val matchCount: Int = 1,
 

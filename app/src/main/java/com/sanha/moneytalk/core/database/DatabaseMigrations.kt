@@ -25,4 +25,17 @@ object DatabaseMigrations {
             )
         }
     }
+
+    /**
+     * v2 -> v3
+     * sms_patterns 테이블에 메인 그룹 식별 컬럼 추가
+     * 같은 발신번호의 메인 형식 패턴을 표시하여, 다음 동기화 시 DB에서 메인 regex 참조 가능
+     */
+    val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE sms_patterns ADD COLUMN isMainGroup INTEGER NOT NULL DEFAULT 0"
+            )
+        }
+    }
 }
