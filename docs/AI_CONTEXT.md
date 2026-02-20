@@ -43,7 +43,7 @@ app/src/main/java/com/sanha/moneytalk/
 │   │       └── transaction/       # card/ (TransactionCard), header/ (GroupHeader)
 │   ├── similarity/        # 유사도 판정 정책 (SimilarityPolicy 구현체)
 │   ├── sms/               # SMS V1 — 실시간 수신 전용 (9개: SmsParser, SmsReader, SmsFilter, HybridSmsClassifier, SmsBatchProcessor, GeminiSmsExtractor, GeneratedSmsRegexParser, SmsEmbeddingService, VectorSearchEngine)
-│   ├── sms2/              # SMS 통합 파이프라인 — 배치 동기화 메인 (10개: SmsSyncCoordinator, SmsReaderV2, SmsIncomeFilter, SmsIncomeParser, SmsPipeline, SmsPipelineModels, SmsPreFilter, SmsTemplateEngine, SmsPatternMatcher, SmsGroupClassifier)
+│   ├── sms2/              # SMS 통합 파이프라인 — 배치 동기화 메인 (12개: SmsSyncCoordinator, SmsReaderV2, SmsIncomeFilter, SmsIncomeParser, SmsPipeline, SmsPipelineModels, SmsPreFilter, SmsTemplateEngine, SmsPatternMatcher, SmsGroupClassifier, RemoteSmsRule, RemoteSmsRuleRepository)
 │   └── util/              # 유틸 (DateUtils, CardNameNormalizer, StoreNameGrouper 등)
 ├── feature/
 │   ├── home/              # 홈 화면 (월간 현황, SMS 동기화)
@@ -174,6 +174,14 @@ SimilarityPolicy (판단 인터페이스)
 | `template_regex` | 같은 그룹 내 다른 SMS의 정규식으로 파싱 | 0.85 |
 | `llm` | LLM 직접 추출 (정규식 없음) | 0.8 |
 | `llm_non_payment` | LLM이 비결제로 판정 | 0.8 |
+| `remote_rule` | RTDB 원격 룰 매칭 → 로컬 승격 | 1.0 |
+
+#### SmsPatternMatcher 원격 룰 매칭 상수 (sms2)
+
+| 상수 | 값 | 용도 | 파일 |
+|------|-----|------|------|
+| `RemoteSmsRule.DEFAULT_MIN_SIMILARITY` | 0.94 | 원격 룰 매칭 최소 유사도 | RemoteSmsRule |
+| `RemoteSmsRuleRepository.CACHE_TTL_MS` | 10분 | 원격 룰 캐시 TTL | RemoteSmsRuleRepository |
 
 ### 3-3. StoreNameSimilarityPolicy (가게명 매칭용)
 
@@ -204,6 +212,7 @@ SimilarityPolicy (판단 인터페이스)
 0.97 ─── 비결제 패턴 캐시 히트 (SmsPatternMatcher.NON_PAYMENT_THRESHOLD / SmsPatternSimilarityPolicy.NON_PAYMENT_CACHE_THRESHOLD)
 0.95 ─── 결제 패턴 캐시 재사용 (SmsPatternSimilarityPolicy.profile.autoApply)
        ─── SMS 벡터 그룹핑 (SmsGroupClassifier.GROUPING_SIMILARITY / SmsPatternSimilarityPolicy.profile.group)
+0.94 ─── 원격 룰 매칭 최소 유사도 (RemoteSmsRule.DEFAULT_MIN_SIMILARITY)
 0.92 ─── 결제 문자 판정 (SmsPatternMatcher.PAYMENT_MATCH_THRESHOLD / SmsPatternSimilarityPolicy.profile.confirm)
        ─── 가게명 → 카테고리 자동 적용 (StoreNameSimilarityPolicy.profile.autoApply)
 0.90 ─── 카테고리 전파 (StoreNameSimilarityPolicy.profile.propagate)

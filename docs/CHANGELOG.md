@@ -5,6 +5,12 @@
 ## [Unreleased]
 
 ### Added (2026-02-20)
+- **RTDB 원격 regex 룰 매칭 시스템**: Step 4에서 로컬 패턴 미매칭 시 2순위로 RTDB 원격 룰 매칭
+  - `RemoteSmsRule.kt`: 원격 룰 데이터 클래스 (embedding, regex 3종, minSimilarity=0.94)
+  - `RemoteSmsRuleRepository.kt`: RTDB 룰 로드 + 메모리 캐시(TTL 10분) + sender별 그룹핑
+  - `SmsPatternMatcher.matchWithRemoteRules()`: 발신번호 필터 → 유사도 매칭 → regex 파싱
+  - `SmsPatternMatcher.promoteToLocalPattern()`: 매칭 성공 시 로컬 DB에 parseSource="remote_rule"로 승격
+- **RTDB 표본 수집 필드 정리**: 불필요 필드 제거 (ServerValue, 통계 필드 등) + embedding/normalizedSenderAddress 추가
 - **DB 메인 그룹 패턴 저장**: `SmsPatternEntity.isMainGroup` 필드 추가 (DB v2→v3)
   - `getMainPatternBySender()` 쿼리로 발신번호별 메인 패턴 조회
   - Step 5 진입 시 DB에서 메인 regex 선조회 → 예외 그룹 regex 생성 시 참조 전달

@@ -4,6 +4,35 @@
 
 ---
 
+## 2026-02-20 - RTDB 원격 regex 룰 매칭 시스템
+
+### 작업 내용
+
+#### 1. 원격 SMS regex 룰 매칭 (Step 4 2순위)
+- `RemoteSmsRule.kt`: RTDB `/sms_regex_rules/v1/{sender}/{ruleId}` 에서 내려받는 정제된 룰 데이터 클래스
+  - embedding, amountRegex, storeRegex, cardRegex, minSimilarity(0.94), enabled, updatedAt
+- `RemoteSmsRuleRepository.kt`: RTDB 룰 로드 + 메모리 캐시(TTL 10분) + sender별 그룹핑
+  - 실패 시 빈 맵 반환 (예외 전파 금지), enabled=true 룰만 로드
+- `SmsPatternMatcher.kt`: `matchWithRemoteRules()` 추가
+  - 동일 발신번호 룰 필터 → 코사인 유사도 ≥ minSimilarity → regex 파싱
+  - 매칭 성공 시 `promoteToLocalPattern()` → 로컬 DB에 parseSource="remote_rule" 승격
+
+#### 2. RTDB 표본 수집 필드 정리
+- `collectSampleToRtdb()` 시그니처 간소화 (isMainGroup, sourceTotalCount, sourceSubGroupCount 제거)
+- `registerPaymentPattern()`, `processGroup()` 시그니처 간소화
+- RTDB 데이터 필드 정리:
+  - 유지: maskedBody, cardName, senderAddress, normalizedSenderAddress, parseSource, embedding, groupMemberCount, regex 3종
+  - 제거: embeddingDim, templateHash, sourceTotalCount, sourceSubGroupCount, isMainGroup, appVersion, count, lastSeen, updatedAt (ServerValue)
+- 각 필드에 인라인 주석 추가
+
+### 변경 파일
+- `RemoteSmsRule.kt` — 신규 (원격 룰 데이터 클래스)
+- `RemoteSmsRuleRepository.kt` — 신규 (RTDB 로드 + 캐시)
+- `SmsPatternMatcher.kt` — 원격 룰 매칭 + 로컬 승격 추가
+- `SmsGroupClassifier.kt` — RTDB 표본 필드 정리 + 시그니처 간소화
+
+---
+
 ## 2026-02-20 - DB 메인 그룹 패턴 저장 + 메인 regex 선조회
 
 ### 작업 내용
@@ -782,6 +811,7 @@ app/src/main/java/com/sanha/moneytalk/
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|-----------|
+| 2026-02-20 | 1.1.0 | RTDB 원격 regex 룰 매칭 시스템 (RemoteSmsRule, RemoteSmsRuleRepository, 로컬 승격) |
 | 2026-02-19 | 1.1.0 | SMS 통합 파이프라인 sms2 패키지 6개 파일 생성 + SmsParser KB 출금 유형 확장 |
 | 2026-02-19 | 1.1.0 | 레거시 FULL_SYNC_UNLOCKED 호환성 수정 (PR #21 리뷰 반영) |
 | 2026-02-19 | 1.1.0 | SMS 동기화 최적화 (2개월 축소 + 발신자 필터 + LLM 트리거 + core/sms 분리 + 부분 데이터 CTA) |
