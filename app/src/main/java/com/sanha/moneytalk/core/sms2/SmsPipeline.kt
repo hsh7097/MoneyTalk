@@ -13,7 +13,7 @@ import javax.inject.Singleton
  * ===== SMS 통합 파이프라인 (메인 오케스트레이터) =====
  *
  * 역할: 전체 파이프라인 단계를 순서대로 호출하는 진입점.
- *       배치 동기화(HomeViewModel)와 실시간 수신(SmsProcessingService) 모두
+ *       배치 동기화(HomeViewModel)와 실시간 수신(SmsReceiver → 증분 동기화) 모두
  *       이 하나의 process() 메소드를 사용.
  *
  * 파이프라인 단계:

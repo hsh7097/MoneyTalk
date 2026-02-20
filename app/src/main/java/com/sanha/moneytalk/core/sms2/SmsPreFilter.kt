@@ -12,7 +12,7 @@ import javax.inject.Singleton
  * 1. 키워드 필터 [isObviouslyNonPayment]: 비결제 키워드 포함 시 제외
  * 2. 구조 필터 [lacksPaymentRequirements]: 길이/숫자/금액 패턴 조건 미충족 시 제외
  *
- * 키워드 목록: 기존 SmsBatchProcessor + HybridSmsClassifier 합집합을
+ * 키워드 목록: 기존 비결제 키워드 합집합을
  * 여기서 단일 관리 (중복 제거).
  *
  * 호출 순서: SmsPipeline.process() → [여기] → SmsPipeline.batchEmbed()

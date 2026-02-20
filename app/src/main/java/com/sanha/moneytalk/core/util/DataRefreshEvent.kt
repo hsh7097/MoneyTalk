@@ -49,6 +49,9 @@ class DataRefreshEvent @Inject constructor() {
         OWNED_CARD_UPDATED,
 
         /** 실시간 SMS 수신으로 지출/수입 추가 */
-        TRANSACTION_ADDED
+        TRANSACTION_ADDED,
+
+        /** SMS 수신 감지 → 증분 동기화 트리거 */
+        SMS_RECEIVED
     }
 }

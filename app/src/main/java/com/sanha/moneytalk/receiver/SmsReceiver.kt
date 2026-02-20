@@ -5,22 +5,20 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
 import android.util.Log
-import com.sanha.moneytalk.core.service.SmsProcessingService
+import com.sanha.moneytalk.core.util.DataRefreshEvent
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
  * 실시간 SMS 수신 BroadcastReceiver
  *
- * SMS 수신 즉시 SmsProcessingService를 통해 DB에 저장합니다.
- * goAsync() + CoroutineScope로 비동기 작업을 안전하게 수행합니다.
+ * SMS 수신 감지 시 DataRefreshEvent.SMS_RECEIVED를 발행하여
+ * HomeViewModel이 증분 동기화(syncIncremental)를 수행하도록 트리거합니다.
  *
- * 금융 SMS 필터링은 SmsProcessingService 내부에서 처리하므로
- * Receiver는 모든 SMS를 Service에 전달합니다.
+ * 실제 파싱/저장은 HomeViewModel → SmsSyncCoordinator 파이프라인에서 처리하므로
+ * Receiver는 이벤트 발행만 담당합니다.
+ *
+ * 앱 미실행 시에는 다음 앱 진입 시 syncIncremental이 자동으로 미처리 SMS를 포함합니다.
  */
 @AndroidEntryPoint
 class SmsReceiver : BroadcastReceiver() {
@@ -30,40 +28,14 @@ class SmsReceiver : BroadcastReceiver() {
     }
 
     @Inject
-    lateinit var smsProcessingService: SmsProcessingService
+    lateinit var dataRefreshEvent: DataRefreshEvent
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) {
             return
         }
 
-        val pendingResult = goAsync()
-
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-            try {
-                val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
-
-                for (sms in messages) {
-                    val body = sms.messageBody ?: continue
-                    val address = sms.originatingAddress ?: "Unknown"
-                    val date = sms.timestampMillis
-
-                    try {
-                        val result = smsProcessingService.processIncomingSms(body, address, date)
-                        if (result.type == SmsProcessingService.ProcessResult.ResultType.EXPENSE_SAVED ||
-                            result.type == SmsProcessingService.ProcessResult.ResultType.INCOME_SAVED
-                        ) {
-                            Log.d(TAG, "SMS 실시간 저장: ${result.type} (${result.storeName} ${result.amount}원)")
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "개별 SMS 처리 실패 (계속): ${e.message}")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "SMS 처리 중 오류: ${e.message}", e)
-            } finally {
-                pendingResult.finish()
-            }
-        }
+        Log.d(TAG, "SMS 수신 감지 → 증분 동기화 트리거")
+        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.SMS_RECEIVED)
     }
 }

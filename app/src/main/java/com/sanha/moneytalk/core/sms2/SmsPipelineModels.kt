@@ -43,7 +43,7 @@ data class SmsInput(
 data class EmbeddedSms(
     /** ★ 원본 포함 (input.body로 접근) */
     val input: SmsInput,
-    /** 템플릿화된 텍스트 (SmsEmbeddingService.templateizeSms 결과) */
+    /** 템플릿화된 텍스트 (SmsTemplateEngine.templateize 결과) */
     val template: String,
     /** 3072차원 임베딩 벡터 (SmsEmbeddingService.generateEmbeddings 결과) */
     val embedding: List<Float>

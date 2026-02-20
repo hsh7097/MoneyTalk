@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.core.sms2
 
-import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
 import kotlin.math.sqrt
 
@@ -52,73 +51,6 @@ object VectorSearchEngine {
 
         val denominator = sqrt(normA) * sqrt(normB)
         return if (denominator == 0f) 0f else dotProduct / denominator
-    }
-
-    /**
-     * 벡터 유사도 검색 결과
-     *
-     * @property pattern 매칭된 SMS 패턴
-     * @property similarity 유사도 점수 (0 ~ 1)
-     */
-    data class SearchResult(
-        val pattern: SmsPatternEntity,
-        val similarity: Float
-    )
-
-    /**
-     * 가장 유사한 패턴 찾기 (Top-K)
-     *
-     * @param queryVector 검색할 벡터
-     * @param patterns DB에 저장된 패턴 목록
-     * @param topK 반환할 최대 개수
-     * @param minSimilarity 최소 유사도 임계값
-     * @return 유사도가 높은 순으로 정렬된 결과 리스트
-     */
-    fun findTopK(
-        queryVector: List<Float>,
-        patterns: List<SmsPatternEntity>,
-        topK: Int = 3,
-        minSimilarity: Float
-    ): List<SearchResult> {
-        return patterns
-            .asSequence()
-            .map { pattern ->
-                SearchResult(
-                    pattern = pattern,
-                    similarity = cosineSimilarity(queryVector, pattern.embedding)
-                )
-            }
-            .filter { it.similarity >= minSimilarity }
-            .sortedByDescending { it.similarity }
-            .take(topK)
-            .toList()
-    }
-
-    /**
-     * 가장 유사한 패턴 1개 찾기
-     *
-     * @param queryVector 검색할 벡터
-     * @param patterns DB에 저장된 패턴 목록
-     * @param minSimilarity 최소 유사도 임계값
-     * @return 가장 유사한 결과 (임계값 이상인 경우만)
-     */
-    fun findBestMatch(
-        queryVector: List<Float>,
-        patterns: List<SmsPatternEntity>,
-        minSimilarity: Float
-    ): SearchResult? {
-        var bestMatch: SearchResult? = null
-
-        for (pattern in patterns) {
-            val similarity = cosineSimilarity(queryVector, pattern.embedding)
-            if (similarity >= minSimilarity) {
-                if (bestMatch == null || similarity > bestMatch.similarity) {
-                    bestMatch = SearchResult(pattern, similarity)
-                }
-            }
-        }
-
-        return bestMatch
     }
 
     // ========================

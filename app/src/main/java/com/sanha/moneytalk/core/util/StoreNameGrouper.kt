@@ -23,12 +23,12 @@ import javax.inject.Singleton
  * - "이마트24강남", "이마트24역삼" → 1개 그룹 (대표: 이마트24강남)
  * - "맥도날드", "버거킹" → 2개 그룹 (유사하지만 다른 가게)
  *
- * 알고리즘: 그리디 클러스터링 (SmsBatchProcessor.groupBySimilarity와 동일 패턴)
+ * 알고리즘: 그리디 클러스터링 (SmsGroupClassifier.groupBySimilarity와 동일 패턴)
  * 1. 각 가게명의 임베딩 벡터 생성 (배치 API)
  * 2. 첫 가게명을 그룹 중심으로, 유사도 ≥ 0.88이면 같은 그룹
  * 3. 각 그룹의 대표만 Gemini에 전송
  *
- * @see SmsBatchProcessor.groupBySimilarity 동일 알고리즘 참고
+ * @see com.sanha.moneytalk.core.sms2.SmsGroupClassifier 동일 알고리즘 참고
  * @see StoreNameSimilarityPolicy 가게명 유사도 정책 (그룹핑 임계값 0.88)
  */
 @Singleton

@@ -29,7 +29,7 @@ class SmsExclusionRepository @Inject constructor(
 
     /**
      * 사용자/채팅 키워드 조회 (캐시 사용)
-     * SmsParser.setUserExcludeKeywords()에 전달할 키워드 Set
+     * SmsSyncCoordinator/SmsIncomeParser에 전달할 제외 키워드 Set
      */
     suspend fun getUserKeywords(): Set<String> {
         return cachedUserKeywords ?: dao.getUserKeywords().toSet().also {

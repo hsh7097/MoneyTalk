@@ -3,7 +3,7 @@ package com.sanha.moneytalk.core.similarity
 /**
  * SMS 패턴 유사도 판정 정책
  *
- * HybridSmsClassifier의 벡터 캐시 매칭 및 SmsGroupClassifier의
+ * SmsPatternMatcher의 벡터 캐시 매칭 및 SmsGroupClassifier의
  * SMS 그룹핑에 사용되는 임계값을 관리합니다.
  *
  * 임계값 매핑 (기존 VectorSearchEngine 상수 → SimilarityProfile):
@@ -12,7 +12,7 @@ package com.sanha.moneytalk.core.similarity
  * - group = 0.95 (SmsGroupClassifier.GROUPING_SIMILARITY) → SMS 패턴 그룹핑
  * - LLM_TRIGGER_THRESHOLD = 0.80 → LLM 요청 대상 선별 (결제 판정 기준이 아님)
  *
- * @see com.sanha.moneytalk.core.sms2.HybridSmsClassifier
+ * @see com.sanha.moneytalk.core.sms2.SmsPatternMatcher
  * @see com.sanha.moneytalk.core.sms2.SmsGroupClassifier
  */
 object SmsPatternSimilarityPolicy : SimilarityPolicy {
@@ -21,7 +21,7 @@ object SmsPatternSimilarityPolicy : SimilarityPolicy {
         autoApply = 0.95f,   // CACHE_REUSE_THRESHOLD: 캐시 파싱 결과 재사용
         confirm = 0.92f,     // PAYMENT_SIMILARITY_THRESHOLD: 결제 문자 판정
         propagate = 0f,      // SMS 패턴은 전파 개념 없음
-        group = 0.95f        // SmsBatchProcessor의 SMS 패턴 그룹핑
+        group = 0.95f        // SmsGroupClassifier의 SMS 패턴 그룹핑
     )
 
     /**

@@ -276,6 +276,10 @@ class HistoryViewModel @Inject constructor(
                         clearAllPageCache()
                         loadCurrentAndAdjacentPages()
                     }
+
+                    DataRefreshEvent.RefreshType.SMS_RECEIVED -> {
+                        // HomeViewModel이 증분 동기화 처리 → TRANSACTION_ADDED로 갱신됨
+                    }
                 }
             }
         }

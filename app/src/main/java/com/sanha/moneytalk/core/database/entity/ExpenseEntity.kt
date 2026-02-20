@@ -11,7 +11,7 @@ import androidx.room.PrimaryKey
  * 하나의 결제 SMS가 하나의 ExpenseEntity로 변환됩니다.
  *
  * 데이터 흐름:
- * SMS 수신 → SmsParser/HybridSmsClassifier 파싱 → ExpenseEntity 생성 → expenses 테이블 저장
+ * SMS 수신 → SmsSyncCoordinator 파이프라인 → ExpenseEntity 생성 → expenses 테이블 저장
  *
  * 중복 방지:
  * smsId (발신번호 + 시간 + 본문해시)로 동일 SMS의 중복 저장을 방지합니다.

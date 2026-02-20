@@ -15,7 +15,7 @@ import javax.inject.Singleton
  * SmsSyncCoordinator에서 SmsPipeline 전달 전에 호출됨.
  * 수입으로 분류된 SMS는 SmsPipeline에 넣지 않고 SyncResult.incomes로 반환.
  *
- * 분류 로직 (SmsParser.classifySmsType에서 이식, core/sms 참조 없음):
+ * 분류 로직:
  * 1. shouldSkip: 빈 SMS, 100자 초과, 제외 키워드 → SKIP
  * 2. 금융기관 키워드 없음 → SKIP
  * 3. 금액 패턴 없음 → SKIP
@@ -33,17 +33,17 @@ import javax.inject.Singleton
 class SmsIncomeFilter @Inject constructor() {
 
     companion object {
-        /** SMS 최대 길이 (SmsParser.MAX_SMS_LENGTH와 동일) */
+        /** SMS 최대 길이 (일반 결제 SMS는 40~100자, 안내/광고성은 100자 이상) */
         private const val MAX_SMS_LENGTH = 100
     }
 
-    // ===== 키워드 정의 (SmsParser에서 이식, 자체 보유) =====
+    // ===== 키워드 정의 =====
 
     /**
      * 금융기관 키워드 (46개)
      *
      * 카드사/은행 식별용. 이 키워드 중 하나라도 포함되어야 금융 SMS.
-     * SmsParser.cardKeywords와 동일한 목록.
+     * 주요 국내 카드사/은행을 포함합니다.
      */
     private val financialKeywords = setOf(
         // KB국민

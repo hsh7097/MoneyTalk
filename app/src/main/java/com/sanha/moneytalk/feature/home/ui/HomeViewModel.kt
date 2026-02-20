@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.feature.home.ui
 
 import android.content.ContentResolver
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.dao.CategorySum
@@ -263,6 +264,12 @@ class HomeViewModel @Inject constructor(
                     DataRefreshEvent.RefreshType.TRANSACTION_ADDED -> {
                         clearAllPageCache()
                         loadCurrentAndAdjacentPages()
+                    }
+
+                    DataRefreshEvent.RefreshType.SMS_RECEIVED -> {
+                        Log.d(TAG, "SMS 수신 이벤트 → 증분 동기화 실행")
+                        val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
+                        syncSmsV2(appContext.contentResolver, range, updateLastSyncTime = true)
                     }
                 }
             }

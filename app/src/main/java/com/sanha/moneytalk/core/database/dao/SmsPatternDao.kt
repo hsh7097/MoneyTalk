@@ -16,12 +16,12 @@ import kotlinx.coroutines.flow.Flow
  * SmsPatternEntity에 대한 CRUD 및 검색 쿼리를 제공합니다.
  *
  * 주요 사용처:
- * - HybridSmsClassifier: 벡터 검색을 위한 패턴 조회/등록
- * - SmsBatchProcessor: 대량 패턴 매칭 및 등록
+ * - SmsPatternMatcher: 벡터 검색을 위한 패턴 조회/등록
+ * - SmsGroupClassifier: 대량 패턴 매칭 및 등록
  * - VectorSearchEngine: 유사도 검색 시 패턴 목록 제공
  *
  * @see SmsPatternEntity
- * @see com.sanha.moneytalk.core.util.HybridSmsClassifier
+ * @see com.sanha.moneytalk.core.sms2.SmsPatternMatcher
  */
 @Dao
 interface SmsPatternDao {
