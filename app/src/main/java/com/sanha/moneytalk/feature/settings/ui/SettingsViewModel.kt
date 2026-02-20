@@ -50,6 +50,7 @@ sealed interface SettingsIntent {
     data object ShowPrivacyDialog : SettingsIntent
     data object ShowExclusionKeywordDialog : SettingsIntent
     data object ShowThemeDialog : SettingsIntent
+    data object ShowMonthlyBudgetDialog : SettingsIntent
 
     // 다이얼로그 닫기
     data object DismissDialog : SettingsIntent
@@ -57,6 +58,7 @@ sealed interface SettingsIntent {
     // 액션
     data class SaveApiKey(val key: String) : SettingsIntent
     data class SaveMonthStartDay(val day: Int) : SettingsIntent
+    data class SaveMonthlyBudget(val amount: Int) : SettingsIntent
     data class SaveThemeMode(val mode: ThemeMode) : SettingsIntent
     data object ClassifyUnclassified : SettingsIntent
     data object DeleteAllData : SettingsIntent
@@ -79,7 +81,8 @@ enum class SettingsDialog {
     APP_INFO,
     PRIVACY,
     EXCLUSION_KEYWORD,
-    THEME
+    THEME,
+    MONTHLY_BUDGET
 }
 
 @Stable
@@ -116,7 +119,9 @@ data class SettingsUiState(
     // 복원 대기 URI
     val pendingRestoreUri: Uri? = null,
     // 복원 파일 선택 트리거
-    val triggerRestoreFilePicker: Boolean = false
+    val triggerRestoreFilePicker: Boolean = false,
+    // 월 예산
+    val monthlyBudget: Int? = null
 )
 
 @HiltViewModel
@@ -154,6 +159,7 @@ class SettingsViewModel @Inject constructor(
         loadExclusionKeywords()
         observeClassificationState()
         loadThemeMode()
+        loadMonthlyBudget()
     }
 
     // ========== Intent 처리 ==========
@@ -170,6 +176,7 @@ class SettingsViewModel @Inject constructor(
             is SettingsIntent.ShowPrivacyDialog -> showDialog(SettingsDialog.PRIVACY)
             is SettingsIntent.ShowExclusionKeywordDialog -> showDialog(SettingsDialog.EXCLUSION_KEYWORD)
             is SettingsIntent.ShowThemeDialog -> showDialog(SettingsDialog.THEME)
+            is SettingsIntent.ShowMonthlyBudgetDialog -> showDialog(SettingsDialog.MONTHLY_BUDGET)
             is SettingsIntent.DismissDialog -> dismissDialog()
 
             is SettingsIntent.SaveApiKey -> {
@@ -185,6 +192,11 @@ class SettingsViewModel @Inject constructor(
             is SettingsIntent.SaveThemeMode -> {
                 dismissDialog()
                 saveThemeMode(intent.mode)
+            }
+
+            is SettingsIntent.SaveMonthlyBudget -> {
+                dismissDialog()
+                saveMonthlyBudget(intent.amount)
             }
 
             is SettingsIntent.ClassifyUnclassified -> classifyUnclassifiedExpenses()
@@ -334,6 +346,53 @@ class SettingsViewModel @Inject constructor(
                         isLoading = false
                     )
                 }
+            }
+        }
+    }
+
+    // ========== 월 예산 관리 ==========
+
+    /** 현재 월의 총 예산 로드 */
+    private fun loadMonthlyBudget() {
+        viewModelScope.launch {
+            try {
+                val yearMonth = java.time.YearMonth.now().toString()
+                val total = withContext(Dispatchers.IO) {
+                    budgetDao.getTotalBudgetByMonth(yearMonth)
+                }
+                _uiState.update { it.copy(monthlyBudget = total) }
+            } catch (_: Exception) {
+                // 무시
+            }
+        }
+    }
+
+    /** 월 예산 저장 (전체 예산으로 단일 "전체" 카테고리에 저장) */
+    private fun saveMonthlyBudget(amount: Int) {
+        viewModelScope.launch {
+            try {
+                val yearMonth = java.time.YearMonth.now().toString()
+                withContext(Dispatchers.IO) {
+                    if (amount > 0) {
+                        budgetDao.deleteAllByMonth(yearMonth)
+                        budgetDao.insert(
+                            com.sanha.moneytalk.core.database.entity.BudgetEntity(
+                                category = "전체",
+                                monthlyLimit = amount,
+                                yearMonth = yearMonth
+                            )
+                        )
+                    } else {
+                        budgetDao.deleteAllByMonth(yearMonth)
+                    }
+                }
+                _uiState.update { it.copy(monthlyBudget = if (amount > 0) amount else null) }
+                snackbarBus.show(
+                    if (amount > 0) "월 예산이 설정되었습니다" else "월 예산이 해제되었습니다"
+                )
+                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
+            } catch (e: Exception) {
+                snackbarBus.show("저장 실패: ${e.message}")
             }
         }
     }
