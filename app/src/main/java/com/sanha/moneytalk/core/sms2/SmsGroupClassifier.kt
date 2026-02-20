@@ -462,10 +462,10 @@ class SmsGroupClassifier @Inject constructor(
         )
 
         // --- [5-4] 그룹 전체 멤버 파싱 ---
-        for (member in group.members) {
-            val parsed = if (amountRegex.isNotBlank() && storeRegex.isNotBlank()) {
-                // regex가 있으면 멤버 원본(body)에 적용
-                patternMatcher.parseWithRegex(
+        if (amountRegex.isNotBlank() && storeRegex.isNotBlank()) {
+            // regex가 있으면 멤버 원본(body)에 적용
+            for (member in group.members) {
+                val parsed = patternMatcher.parseWithRegex(
                     smsBody = member.input.body,
                     smsTimestamp = member.input.date,
                     amountRegex = amountRegex,
@@ -476,20 +476,54 @@ class SmsGroupClassifier @Inject constructor(
                     fallbackCardName = llmAnalysis.cardName,
                     fallbackCategory = llmAnalysis.category
                 )
-            } else {
-                // regex 없으면 LLM 추출값을 그대로 사용 (대표와 동일)
-                llmAnalysis
-            }
-
-            if (parsed != null && parsed.amount > 0) {
-                results.add(
-                    SmsParseResult(
-                        input = member.input,
-                        analysis = parsed,
-                        tier = 3,  // LLM 경로
-                        confidence = 1.0f
+                if (parsed != null && parsed.amount > 0) {
+                    results.add(
+                        SmsParseResult(
+                            input = member.input,
+                            analysis = parsed,
+                            tier = 3,  // LLM 경로
+                            confidence = 1.0f
+                        )
                     )
+                }
+            }
+        } else {
+            // regex 없으면 멤버별 개별 LLM 호출 (대표 결과 복제 방지)
+            val memberBodies = group.members.map { member ->
+                if (mainContext != null && distributionSummary != null) {
+                    buildContextualLlmInput(member.input.body, mainContext, distributionSummary)
+                } else {
+                    member.input.body
+                }
+            }
+            val memberTimestamps = group.members.map { it.input.date }
+            val memberLlmResults = smsExtractor.extractFromSmsBatch(
+                smsMessages = memberBodies,
+                smsTimestamps = memberTimestamps
+            )
+
+            group.members.forEachIndexed { index, member ->
+                val memberResult = memberLlmResults.getOrNull(index)
+                if (memberResult == null || !memberResult.isPayment) return@forEachIndexed
+
+                val parsed = SmsAnalysisResult(
+                    amount = memberResult.amount,
+                    storeName = memberResult.storeName,
+                    category = memberResult.category,
+                    dateTime = memberResult.dateTime,
+                    cardName = memberResult.cardName
                 )
+
+                if (parsed.amount > 0) {
+                    results.add(
+                        SmsParseResult(
+                            input = member.input,
+                            analysis = parsed,
+                            tier = 3,  // LLM 경로
+                            confidence = 1.0f
+                        )
+                    )
+                }
             }
         }
 
