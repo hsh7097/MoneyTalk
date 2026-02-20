@@ -143,7 +143,7 @@
 - 보험 카테고리 키워드 추가 (삼성화, 현대해, 메리츠, DB손해, 한화손해, 흥국화)
 
 **SMS 통합 파이프라인 (sms2) 마이그레이션**: ✅ 완료 (2026-02-19~20)
-- core/sms2/ 패키지에 통합 파이프라인 10개 파일 (6개 골격 + 4개 신규)
+- core/sms2/ 패키지에 통합 파이프라인 11개 파일 (6개 골격 + 4개 신규 + GeminiSmsExtractor 이전)
 - SmsReaderV2.kt: SMS/MMS/RCS 통합 읽기 → List<SmsInput> 직접 반환 (SmsMessage 중간 변환 제거)
 - SmsIncomeParser.kt: 수입 SMS 파싱 (extractIncomeAmount/Type/Source/DateTime)
 - SmsSyncCoordinator.kt: 유일한 외부 진입점 (process → SmsPreFilter → SmsIncomeFilter → SmsPipeline)
@@ -152,6 +152,15 @@
 - syncIncremental() + calculateIncrementalRange() 추가
 - SmsBatchProcessor DI 제거, launchBackgroundHybridClassification() 삭제
 - core/sms (V1)은 SmsProcessingService 실시간 수신 전용으로 유지
+
+**DB 메인 그룹 패턴 저장 + 메인 regex 선조회**: ✅ 완료 (2026-02-20)
+- SmsPatternEntity에 `isMainGroup: Boolean` 필드 추가 (DB v2→v3 마이그레이션)
+- SmsPatternDao에 `getMainPatternBySender()` 쿼리 추가
+- SmsGroupClassifier: Step 5 진입 시 DB에서 발신번호별 메인 패턴 선조회 → dbMainContext 구성
+- 메인 그룹 processGroup() 호출 시 isMainGroup=true → DB에 메인 표시
+- 예외 그룹 regex 생성 시 MainRegexContext로 메인 regex 참조 전달
+- senderAddress normalizeAddress() 적용 (registerPaymentPattern/registerNonPaymentPattern)
+- GeminiSmsExtractor: LLM 프롬프트 개선 (샘플 1~5건, 메인 regex 참조, 프롬프트 XML 이전)
 
 ### 대기 중인 작업
 
@@ -198,7 +207,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 ## 5. 주의사항
 
 ### 절대 금지
-- DB 스키마 변경 시 마이그레이션 필수 (현재 v6)
+- DB 스키마 변경 시 마이그레이션 필수 (현재 AppDatabase v3, sms_patterns v3)
 - 임계값 수치 변경 시 [AI_CONTEXT.md](AI_CONTEXT.md) SSOT 먼저 업데이트
 - `!!` non-null assertion 사용 금지
 
@@ -217,6 +226,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-20 | DB 메인 그룹 패턴 저장 + Step 5 메인 regex 선조회 (isMainGroup, getMainPatternBySender, MainRegexContext) | 완료 |
 | 2026-02-20 | sms2 마이그레이션 완료: SmsReaderV2/SmsIncomeParser/SmsSyncCoordinator/SmsIncomeFilter 신규 + syncSmsV2 오케스트레이터 + syncSmsMessages 삭제 | 완료 |
 | 2026-02-19 | SMS 통합 파이프라인 sms2 패키지 6개 파일 생성 (SmsPipeline, SmsPatternMatcher 등) | 완료 |
 | 2026-02-19 | SmsParser KB 출금 유형 확장 (FBS출금, 공동CMS출) + 보험 카테고리 키워드 | 완료 |

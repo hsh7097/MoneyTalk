@@ -4,6 +4,45 @@
 
 ---
 
+## 2026-02-20 - DB 메인 그룹 패턴 저장 + 메인 regex 선조회
+
+### 작업 내용
+
+#### 1. isMainGroup 시스템 도입
+- `SmsPatternEntity`에 `isMainGroup: Boolean = false` 필드 추가
+- DB v2 → v3 마이그레이션 (ALTER TABLE ADD COLUMN isMainGroup)
+- `SmsPatternDao.getMainPatternBySender()` 쿼리 추가: 발신번호별 메인 패턴 1개 반환
+
+#### 2. SmsGroupClassifier Step 5 메인 패턴 선조회
+- `classifyUnmatched()` [5-1.7]: DB에서 발신번호별 메인 패턴 선조회 → dbMainPatterns Map
+- `processSourceGroup(sourceGroup, dbMainPattern)`: DB 메인 패턴을 dbMainContext로 변환
+  - 서브그룹 1개: DB 메인 있으면 regex 참조로 전달
+  - 서브그룹 2개+: 현재 세션 메인 우선, 없으면 DB fallback
+- `processGroup(isMainGroup=true)`: 메인 그룹 DB 등록 시 isMainGroup 표시
+- `registerPaymentPattern(isMainGroup)`: isMainGroup 파라미터 전달
+
+#### 3. senderAddress 정규화 일관성
+- `registerPaymentPattern()`: `senderAddress = normalizeAddress(embedded.input.address)`
+- `registerNonPaymentPattern()`: 동일하게 normalizeAddress 적용
+- DB 저장 시 정규화된 주소 사용 → `getMainPatternBySender()` 조회 정확도 보장
+
+#### 4. GeminiSmsExtractor LLM 프롬프트 개선
+- 시스템 프롬프트 "1~3건" → "1~5건" 수정 (REGEX_SAMPLE_SIZE=5와 일치)
+- 8개 프롬프트 XML 이전 (string_prompt.xml)
+- MainRegexContext 기반 메인 regex 참조 전달 구조
+
+### 변경 파일
+- `SmsPatternEntity.kt` — isMainGroup 필드 추가
+- `AppDatabase.kt` — version 2 → 3
+- `DatabaseMigrations.kt` — MIGRATION_2_3 추가
+- `DatabaseModule.kt` — 마이그레이션 등록
+- `SmsPatternDao.kt` — getMainPatternBySender() 쿼리
+- `SmsGroupClassifier.kt` — 메인 패턴 선조회 + processSourceGroup/processGroup 시그니처 변경
+- `GeminiSmsExtractor.kt` — 프롬프트 개선 + MainRegexContext
+- `string_prompt.xml` — 8개 프롬프트 XML 이전
+
+---
+
 ## 2026-02-20 - sms2 파이프라인 마이그레이션 완료
 
 ### 작업 내용

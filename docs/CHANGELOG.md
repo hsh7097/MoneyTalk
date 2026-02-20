@@ -5,6 +5,11 @@
 ## [Unreleased]
 
 ### Added (2026-02-20)
+- **DB 메인 그룹 패턴 저장**: `SmsPatternEntity.isMainGroup` 필드 추가 (DB v2→v3)
+  - `getMainPatternBySender()` 쿼리로 발신번호별 메인 패턴 조회
+  - Step 5 진입 시 DB에서 메인 regex 선조회 → 예외 그룹 regex 생성 시 참조 전달
+  - `MainRegexContext`로 메인 regex를 LLM 프롬프트에 포함
+  - `senderAddress` normalizeAddress() 적용 (DB 저장/조회 일관성)
 - **sms2 마이그레이션 완료**: 배치 동기화 경로를 V1(HybridSmsClassifier/SmsBatchProcessor)에서 sms2(SmsSyncCoordinator)로 전면 전환
   - `SmsSyncCoordinator.kt`: 유일한 외부 진입점 (process → SmsPreFilter → SmsIncomeFilter → SmsPipeline)
   - `SmsReaderV2.kt`: SMS/MMS/RCS 통합 읽기 → List\<SmsInput\> 직접 반환 (SmsMessage 중간 변환 제거)

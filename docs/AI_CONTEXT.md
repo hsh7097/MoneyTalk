@@ -98,6 +98,10 @@ app/src/main/java/com/sanha/moneytalk/
 | v4→v5 | expenses/incomes 성능 인덱스 추가 (smsId UNIQUE, dateTime, category, cardName, storeName+dateTime) |
 | v5→v6 | sms_patterns 테이블에 amountRegex, storeRegex, cardRegex, parseSource 컬럼 추가 |
 
+> **sms_patterns 내부 마이그레이션** (DatabaseMigrations.kt):
+> - MIGRATION_1_2: amountRegex, storeRegex, cardRegex 컬럼 추가
+> - MIGRATION_2_3: isMainGroup 컬럼 추가 (메인 그룹 패턴 식별, AppDatabase v3)
+
 ---
 
 ## 3. 유사도 시스템: Vector(연산) → Policy(판단) → Service(행동)
@@ -142,6 +146,7 @@ SimilarityPolicy (판단 인터페이스)
 | `SMALL_GROUP_MERGE_MIN_SIMILARITY` | 0.70 | 소그룹 병합 시 대표 벡터 최소 유사도 | SmsGroupClassifier |
 | `LLM_BATCH_SIZE` | 20 | LLM 배치당 최대 SMS 수 | SmsGroupClassifier |
 | `LLM_CONCURRENCY` | 5 | LLM 병렬 동시 실행 수 | SmsGroupClassifier |
+| `REGEX_SAMPLE_SIZE` | 5 | 정규식 생성 시 사용할 샘플 수 | SmsGroupClassifier |
 | `REGEX_MIN_SAMPLES_FOR_GENERATION` | 3 | 정규식 생성 최소 샘플 수 | SmsGroupClassifier |
 | `REGEX_FAILURE_THRESHOLD` | 2 | 정규식 생성 실패 쿨다운 기준 | SmsGroupClassifier |
 | `RTDB_DEDUP_SIMILARITY` | 0.99 | RTDB 표본 중복 판정 유사도 | SmsGroupClassifier |

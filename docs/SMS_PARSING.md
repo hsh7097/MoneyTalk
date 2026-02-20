@@ -82,31 +82,19 @@ core/sms2/                           ★ sms2 통합 파이프라인
 ├── SmsTemplateEngine.kt             # Step 3: 템플릿화 + Gemini Embedding API
 ├── SmsPatternMatcher.kt             # Step 4: 벡터 매칭 + regex 파싱 (자체 코사인 유사도)
 ├── SmsGroupClassifier.kt            # Step 5: 그룹핑 + LLM + regex 생성 + 패턴 등록
+├── GeminiSmsExtractor.kt            # LLM 추출 (배치 추출 + regex 생성 + MainRegexContext)
 ├── SmsReaderV2.kt                   # SMS/MMS/RCS 통합 읽기 (ContentResolver → List<SmsInput>)
 └── SmsIncomeParser.kt               # 수입 SMS 파싱 (금액/유형/출처/날짜 추출)
 
-core/sms/                            V1 레거시 (SmsProcessingService 실시간용)
-├── SmsReader.kt                     # V1 메시지 읽기 (SmsMessage 반환)
-├── SmsFilter.kt                     # 발신번호 필터 (sms2에서도 SmsReaderV2가 참조)
-├── SmsParser.kt                     # V1 정규식 파싱
-├── SmsEmbeddingService.kt           # V1 임베딩 서비스
-├── VectorSearchEngine.kt            # V1 벡터 검색 엔진
-├── HybridSmsClassifier.kt           # V1 증분 분류기
-├── SmsBatchProcessor.kt             # V1 Full Sync 배치 프로세서
-├── GeminiSmsExtractor.kt            # LLM 추출 (sms2에서도 SmsGroupClassifier가 참조)
-└── GeneratedSmsRegexParser.kt       # V1 생성 정규식 파서
-
 core/database/entity/
-└── SmsPatternEntity.kt              # 벡터 DB 엔티티 (17 필드)
+└── SmsPatternEntity.kt              # 벡터 DB 엔티티 (18 필드, isMainGroup 포함)
 
 core/database/dao/
-└── SmsPatternDao.kt                 # 패턴 DB DAO
+└── SmsPatternDao.kt                 # 패턴 DB DAO (getMainPatternBySender 포함)
 ```
 
-**sms2 ↔ core/sms 참조 관계:**
-- sms2 → core/sms 참조: **GeminiSmsExtractor만** (LLM 호출, SmsGroupClassifier에서)
-- sms2 → core/sms 참조: **SmsFilter.shouldSkipBySender()** (SmsReaderV2에서 발신자 필터)
-- 그 외 sms2는 core/sms를 참조하지 않음 (벡터 연산, regex 파싱 등 자체 구현)
+**V1 레거시 (core/sms/)**: SmsProcessingService 실시간 수신 전용으로 유지.
+sms2에서는 `SmsFilter.shouldSkipBySender()` (SmsReaderV2 발신자 필터)만 참조.
 
 ---
 
@@ -423,7 +411,7 @@ regex 없거나 파싱 실패:
 |------|---|------|
 | `LLM_BATCH_SIZE` | 20 | 한 번에 LLM에 보내는 그룹 수 |
 | `LLM_CONCURRENCY` | 5 | LLM 병렬 동시 실행 수 |
-| `REGEX_SAMPLE_SIZE` | 3 | regex 생성 시 사용할 샘플 수 |
+| `REGEX_SAMPLE_SIZE` | 5 | regex 생성 시 사용할 샘플 수 |
 | `REGEX_MIN_SAMPLES` | 3 | regex 생성 최소 멤버 수 |
 | `GROUPING_SIMILARITY` | 0.95 | 벡터 클러스터링 임계값 |
 | `SMALL_GROUP_MERGE_THRESHOLD` | 5 | 소그룹 병합 기준 멤버 수 |
@@ -439,7 +427,7 @@ classifyUnmatched(unmatchedList)
   │
   ├── [5-1] 그룹핑: groupByAddressThenSimilarity()
   │   ├ Level 1: 발신번호(address) 기준 분류 (O(n), API 없음)
-  │   │   └ +82/하이픈 등 정규화
+  │   │   └ +82/하이픈 등 normalizeAddress() 정규화
   │   ├ Level 2: 같은 발신번호 내 벡터 유사도 ≥ 0.95 그리디 클러스터링
   │   │   └ groupBySimilarityInternal() — 50건마다 yield()
   │   └ Level 3: 소그룹 병합 — mergeSmallGroups()
@@ -448,28 +436,40 @@ classifyUnmatched(unmatchedList)
   ├── [5-1.5] 발신번호 단위 재집계 → SourceGroup
   │   └ 서브그룹을 발신번호별로 묶어서 메인/예외 분리
   │
-  ├── [5-2] 발신번호 단위 처리: processSourceGroup()
-  │   ├ 메인 그룹(최대 서브그룹) 먼저 LLM 호출
-  │   ├ 메인 결과로 MainCaseContext 생성
-  │   └ 예외 그룹들에 메인 컨텍스트 전달하여 LLM 호출
-  │       └ "이 번호의 메인 형식은 KB카드 승인 SMS" → 해외승인도 결제 판정 정확도↑
+  ├── [5-1.7] DB 메인 패턴 선조회 ★ 신규
+  │   └ 각 발신번호별 smsPatternDao.getMainPatternBySender(address)
+  │   └ 이전 동기화에서 isMainGroup=true로 등록된 패턴의 regex 참조
+  │   └ dbMainPatterns Map에 캐시 → processSourceGroup에 전달
   │
-  ├── [5-3] 단일 그룹 처리: processGroup()
+  ├── [5-2] 발신번호 단위 처리: processSourceGroup(sourceGroup, dbMainPattern)
+  │   ├ DB 메인 패턴 → dbMainContext (MainCaseContext) 구성
+  │   ├ 서브그룹 1개: DB 메인 있으면 regex 참조로 전달
+  │   ├ 서브그룹 2개+:
+  │   │   ├ 메인 그룹(최대 서브그룹) 먼저 LLM 호출 (isMainGroup=true)
+  │   │   ├ 메인 결과 → MainCaseContext (현재 세션 우선, 없으면 DB fallback)
+  │   │   └ 예외 그룹들에 메인 컨텍스트 + 분포도 전달하여 LLM 호출
+  │
+  ├── [5-3] 단일 그룹 처리: processGroup(group, mainContext, isMainGroup)
   │   ├ LLM 배치 추출 (smsExtractor.extractFromSmsBatch)
   │   ├ 비결제 → registerNonPaymentPattern() → 종료
   │   ├ 결제 → regex 생성 시도:
-  │   │   ├ 멤버 ≥ 3 + 쿨다운 아님 → smsExtractor.generateRegexForGroup()
+  │   │   ├ mainContext에 regex 있으면 → MainRegexContext 구성 → 참조 전달
+  │   │   ├ 멤버 ≥ 3 + 쿨다운 아님 → smsExtractor.generateRegexForGroup(mainRegexContext)
   │   │   │   ├ 성공 → parseSource = "llm_regex"
   │   │   │   └ 실패 → buildTemplateFallbackRegex()
   │   │   │       ├ 성공 → parseSource = "template_regex"
   │   │   │       └ 실패 → parseSource = "llm"
   │   │   └ 멤버 < 3 → 템플릿 폴백 시도
-  │   ├ registerPaymentPattern() → DB 등록
+  │   ├ registerPaymentPattern(isMainGroup=true/false) → DB 등록
   │   └ collectSampleToRtdb() → RTDB 표본 수집
   │
-  └── [5-4] 그룹 전체 멤버 파싱
-      ├ regex 있으면 → patternMatcher.parseWithRegex(member.body)
-      └ regex 없으면 → LLM 추출값 그대로 사용
+  ├── [5-4] 그룹 전체 멤버 파싱
+  │   ├ regex 있으면 → patternMatcher.parseWithRegex(member.body)
+  │   │   └ 실패 멤버 → 개별 LLM 호출 (폴백)
+  │   └ regex 없으면 → 멤버별 개별 LLM 호출 (대표 결과 복제 방지)
+  │
+  └── [5-5] GroupProcessResult 반환
+      └ results + amountRegex/storeRegex/cardRegex → 호출자가 regex 참조 가능
 ```
 
 ### 발신번호 생태계 분석 (SourceGroup)
@@ -485,6 +485,65 @@ SourceGroup (발신번호: 15881688, 총 85건)
 
 메인 케이스 먼저 처리 → 예외 케이스 LLM에 `[참조 정보]`로 메인 컨텍스트 전달.
 LLM이 전체 그림을 보고 판단 → 오파싱/오분류 감소.
+
+### DB 메인 패턴 선조회 (isMainGroup 시스템) ★
+
+동기화 간 메인 그룹 regex를 재사용하여 LLM 정확도를 높이는 시스템.
+
+**문제**: 같은 세션 내에서만 메인 그룹 regex가 예외 그룹에 전달됨.
+다음 동기화에서는 메인 그룹이 Step 4에서 이미 매칭되어 Step 5에 도달하지 않으므로,
+예외 그룹만 Step 5에 도달했을 때 메인 regex 참조가 없음.
+
+**해결**: `SmsPatternEntity.isMainGroup` 필드로 메인 그룹 패턴을 DB에 표시.
+Step 5 진입 시 `getMainPatternBySender(address)`로 DB에서 선조회.
+
+```
+[첫 동기화]
+  Step 5 → 메인 그룹 LLM → isMainGroup=true로 DB 등록
+  Step 5 → 예외 그룹 → 현재 세션 메인 regex 참조
+
+[다음 동기화]
+  Step 4 → 메인 그룹 SMS: DB 패턴 매칭 (≥0.92) → regex 파싱 성공 (Step 5 안 감)
+  Step 5 → 예외 그룹 SMS만 도달
+    → [5-1.7] DB에서 isMainGroup=true 패턴 조회
+    → dbMainContext 구성 (cardName, template, regex 3종)
+    → 예외 그룹 LLM regex 생성 시 MainRegexContext로 전달
+```
+
+**우선순위**: 현재 세션 메인 결과 > DB 메인 패턴 (DB는 fallback)
+
+**senderAddress 정규화**: `registerPaymentPattern()`/`registerNonPaymentPattern()`에서
+`normalizeAddress()`로 정규화된 주소를 저장하여, 조회 시 정확한 매칭 보장.
+
+### MainRegexContext (메인 regex 참조 전달)
+
+예외 그룹의 regex 생성 시 메인 그룹의 regex를 참조로 전달:
+
+```kotlin
+data class MainRegexContext(
+    val amountRegex: String,  // 메인 그룹의 금액 정규식
+    val storeRegex: String,   // 메인 그룹의 가게명 정규식
+    val cardRegex: String,    // 메인 그룹의 카드명 정규식
+    val sampleBody: String    // 메인 그룹의 SMS 샘플
+)
+```
+
+LLM 프롬프트에 "같은 발신번호의 메인 형식은 이 regex를 사용" 정보를 포함하여,
+변형 SMS에 대해서도 일관된 regex를 생성할 수 있도록 유도.
+
+### GroupProcessResult (regex 반환)
+
+`processGroup()`이 파싱 결과와 함께 생성된 regex를 반환하여
+`processSourceGroup()`에서 메인 → 예외 regex 전달 체인을 구성:
+
+```kotlin
+data class GroupProcessResult(
+    val results: List<SmsParseResult>,
+    val amountRegex: String,   // 예외 그룹에 전달할 금액 regex
+    val storeRegex: String,    // 예외 그룹에 전달할 가게명 regex
+    val cardRegex: String      // 예외 그룹에 전달할 카드명 regex
+)
+```
 
 ### 템플릿 폴백 Regex
 
@@ -531,12 +590,12 @@ Object singleton으로 구현 (DI 불필요).
 ## 12. LLM 추출 — GeminiSmsExtractor
 
 ### 파일 위치
-[`core/sms/GeminiSmsExtractor.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/GeminiSmsExtractor.kt) — **core/sms에 위치** (V1/sms2 공유)
+[`core/sms2/GeminiSmsExtractor.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/GeminiSmsExtractor.kt) — **sms2 패키지에 위치**
 
 ### sms2에서의 사용
 `SmsGroupClassifier`가 Step 5에서 LLM 호출 시 사용:
 - `extractFromSmsBatch(bodies, timestamps)` → 결제 여부 + 정보 추출
-- `generateRegexForGroup(bodies, timestamps)` → regex 생성
+- `generateRegexForGroup(bodies, timestamps, mainRegexContext?)` → regex 생성 + 메인 regex 참조
 
 ### 3종 모델 (Firebase RTDB 원격 관리)
 
@@ -679,7 +738,7 @@ enum class SmsType { PAYMENT, INCOME, SKIP }
 |------|------|------|
 | id | Long (PK) | 자동 증가 ID |
 | smsTemplate | String | 템플릿화된 SMS 본문 ({AMOUNT}, {DATE}, {TIME}, {STORE}, {BALANCE}, {CARD_NUM}) |
-| senderAddress | String | 발신 번호 |
+| senderAddress | String | 발신 번호 **(normalizeAddress로 정규화)** |
 | embedding | List<Float> → JSON | 임베딩 벡터 (3072차원) |
 | isPayment | Boolean | 결제 여부 (true: 결제, false: 비결제) |
 | parsedAmount | Int | 캐시된 결제 금액 |
@@ -691,9 +750,21 @@ enum class SmsType { PAYMENT, INCOME, SKIP }
 | cardRegex | String | LLM 생성 카드사 추출 정규식 (group1 캡처) |
 | parseSource | String | 파싱 소스 |
 | confidence | Float | 신뢰도 (0.0~1.0) |
+| **isMainGroup** | **Boolean** | **해당 발신번호의 메인 그룹 패턴 여부 (v2→v3 추가)** |
 | matchCount | Int | 매칭 횟수 |
 | createdAt | Long | 생성 시간 (밀리초) |
 | lastMatchedAt | Long | 마지막 매칭 시간 (밀리초) |
+
+### getMainPatternBySender() 쿼리
+
+```sql
+SELECT * FROM sms_patterns
+WHERE senderAddress = :address AND isMainGroup = 1 AND isPayment = 1
+AND amountRegex != '' AND storeRegex != ''
+ORDER BY matchCount DESC LIMIT 1
+```
+
+같은 발신번호의 메인 그룹 패턴 중 regex가 있고 가장 활발한(matchCount 최대) 1개를 반환.
 
 ### parseSource 값
 
@@ -787,7 +858,6 @@ sms2가 배치 동기화를 담당하지만, 일부 V1 컴포넌트는 여전히
 | SmsParser | **V1 only** | SmsProcessingService (실시간 파싱) |
 | HybridSmsClassifier | **V1 only** + `cleanupStalePatterns()` | 실시간 + 30일 미사용 패턴 정리 |
 | SmsFilter | **V1+sms2 공유** | 발신자 필터 (shouldSkipBySender) |
-| GeminiSmsExtractor | **V1+sms2 공유** | LLM 추출 (sms2: SmsGroupClassifier에서) |
 | SmsBatchProcessor | **미사용** (삭제 대기) | — |
 | VectorSearchEngine | **V1 only** | HybridSmsClassifier |
 | GeneratedSmsRegexParser | **V1 only** | HybridSmsClassifier |
@@ -795,6 +865,15 @@ sms2가 배치 동기화를 담당하지만, 일부 V1 컴포넌트는 여전히
 
 > SmsProcessingService(실시간 SMS 수신)는 아직 V1 경로를 사용합니다.
 > 향후 sms2로 전환 시 SmsSyncCoordinator.process()를 통해 동일한 파이프라인으로 처리 가능.
+
+---
+
+## 19. DB 마이그레이션 히스토리 (sms_patterns 관련)
+
+| 버전 | 변경 내용 |
+|------|----------|
+| v1→v2 | amountRegex, storeRegex, cardRegex 컬럼 추가 |
+| v2→v3 | isMainGroup 컬럼 추가 (메인 그룹 패턴 식별) |
 
 ---
 
