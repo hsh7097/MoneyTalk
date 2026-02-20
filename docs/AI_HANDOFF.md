@@ -174,6 +174,13 @@
 - `SmsGroupClassifier.kt`: RTDB 표본 수집 필드 정리 (불필요 필드 제거 + 주석 추가 + embedding/normalizedSenderAddress 포함)
 - sms2 파일 수 10→12개 (RemoteSmsRule, RemoteSmsRuleRepository 추가)
 
+**PR #23 코드 리뷰 반영 + UI 버그 수정**: ✅ 완료 (2026-02-21)
+- RemoteSmsRuleRepository: 빈 룰 결과도 TTL 캐시 (cachedRules nullable 전환)
+- SmsPatternMatcher: 파싱 실패 시 차순위 룰 순차 시도 + 중복 승격 방지 (promotedRuleIds)
+- SmsGroupClassifier: RTDB 표본 수집 디버그 로그 강화
+- MainActivity: NavigationBar windowInsets 분리로 하단 탭 64dp 보장 + 탭 전환 시 초기화
+- HistoryFilter: 카테고리 그리드 weight 기반으로 변경 → 큰 글꼴에서 적용 버튼 항상 노출
+
 ### 대기 중인 작업
 
 - `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지
@@ -238,6 +245,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-21 | PR #23 코드 리뷰 반영 (빈 룰 캐싱, 차순위 룰 시도, 중복 승격 방지) + UI 버그 수정 (하단 탭 높이, 탭 전환 초기화, 필터 적용 버튼) | 완료 |
 | 2026-02-20 | LLM 생성 regex 샘플 검증 (validateRegexAgainstSamples, 50%+ 파싱 성공률 기준) | 완료 |
 | 2026-02-20 | RTDB 원격 regex 룰 매칭 시스템 (RemoteSmsRule, RemoteSmsRuleRepository, 로컬 승격, RTDB 표본 필드 정리) | 완료 |
 | 2026-02-20 | DB 메인 그룹 패턴 저장 + Step 5 메인 regex 선조회 (isMainGroup, getMainPatternBySender, MainRegexContext) | 완료 |

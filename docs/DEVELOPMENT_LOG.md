@@ -4,6 +4,36 @@
 
 ---
 
+## 2026-02-21 - UI 버그 수정 + PR 리뷰 반영
+
+### 작업 내용
+
+#### 하단 탭 높이 고정
+- `enableEdgeToEdge()` 환경에서 `NavigationBar`가 내부적으로 시스템 네비게이션 바 insets를 포함하여 실제 콘텐츠 영역이 줄어드는 문제
+- `NavigationBar(windowInsets = WindowInsets(0))` + Column에 `windowInsetsPadding(WindowInsets.navigationBars)` 분리 적용
+
+#### 탭 전환 시 오늘 페이지 + 필터 초기화
+- `!isSelected` 분기에서도 `homeTabReClickEvent`/`historyTabReClickEvent` 발행
+- 다른 탭에서 홈/내역 탭으로 이동 시에도 초기화 동작
+
+#### 필터 BottomSheet 적용 버튼 미노출
+- 큰 글꼴(SP 설정) 환경에서 `LazyVerticalGrid`의 `heightIn(max: 300.dp)` → `weight(1f, fill = false)` 변경
+- 적용 버튼이 항상 하단에 노출되도록 수정
+
+#### PR #23 코드 리뷰 반영 (3건)
+- 빈 룰 결과도 TTL 캐시 (`cachedRules` nullable 전환)
+- 원격 룰 파싱 실패 시 차순위 룰 순차 시도 (유사도 내림차순 정렬)
+- 동일 sync 내 중복 승격 방지 (`promotedRuleIds` Set)
+
+### 변경 파일
+- `MainActivity.kt` — 하단 탭 windowInsets 분리, 탭 전환 초기화
+- `HistoryFilter.kt` — 필터 카테고리 그리드 weight 기반 변경
+- `RemoteSmsRuleRepository.kt` — nullable cache
+- `SmsPatternMatcher.kt` — 차순위 룰 시도, 중복 승격 방지
+- `SmsGroupClassifier.kt` — RTDB 디버그 로그 강화
+
+---
+
 ## 2026-02-20 - LLM 생성 regex 샘플 검증
 
 ### 작업 내용
