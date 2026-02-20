@@ -100,6 +100,9 @@ class SmsGroupClassifier @Inject constructor(
         /** RTDB 표본 중복 판정 유사도 (0.99 = 동일 형식만 스킵) */
         private const val RTDB_DEDUP_SIMILARITY = 0.99f
 
+        /** regex 검증: 샘플 중 이 비율 이상 파싱 성공해야 유효 (50%) */
+        private const val REGEX_VALIDATION_MIN_PASS_RATIO = 0.5f
+
         /** 발신번호 정규화: 하이픈/공백/괄호 제거용 */
         private val ADDRESS_CLEAN_PATTERN = Regex("""[-\s().]""")
     }
@@ -511,12 +514,34 @@ class SmsGroupClassifier @Inject constructor(
             if (regexResult != null && regexResult.isPayment &&
                 regexResult.amountRegex.isNotBlank() && regexResult.storeRegex.isNotBlank()
             ) {
-                amountRegex = regexResult.amountRegex
-                storeRegex = regexResult.storeRegex
-                cardRegex = regexResult.cardRegex
-                parseSource = "llm_regex"
-                clearRegexFailure(representative.template)
-                Log.d(TAG, "regex 생성 성공: amount=${amountRegex.take(40)}, store=${storeRegex.take(40)}")
+                // regex 검증: 샘플 SMS에 실제 적용하여 파싱 성공률 확인
+                val validated = validateRegexAgainstSamples(
+                    amountRegex = regexResult.amountRegex,
+                    storeRegex = regexResult.storeRegex,
+                    cardRegex = regexResult.cardRegex,
+                    samples = samples,
+                    timestamps = timestamps
+                )
+
+                if (validated) {
+                    amountRegex = regexResult.amountRegex
+                    storeRegex = regexResult.storeRegex
+                    cardRegex = regexResult.cardRegex
+                    parseSource = "llm_regex"
+                    clearRegexFailure(representative.template)
+                    Log.d(TAG, "regex 생성+검증 성공: amount=${amountRegex.take(40)}, store=${storeRegex.take(40)}")
+                } else {
+                    Log.w(TAG, "regex 생성 OK but 검증 실패 → 템플릿 폴백 시도")
+                    recordRegexFailure(representative.template)
+
+                    val fallback = buildTemplateFallbackRegex(representative.template)
+                    if (fallback != null) {
+                        amountRegex = fallback.amountRegex
+                        storeRegex = fallback.storeRegex
+                        cardRegex = fallback.cardRegex
+                        parseSource = "template_regex"
+                    }
+                }
             } else {
                 recordRegexFailure(representative.template)
                 Log.w(TAG, "regex 생성 실패 → 템플릿 폴백 시도")
@@ -1045,6 +1070,57 @@ class SmsGroupClassifier @Inject constructor(
         }
 
         return masked
+    }
+
+    // ===== [5-3] regex 검증 =====
+
+    /**
+     * LLM이 생성한 regex를 샘플 SMS에 실제 적용하여 유효성 검증
+     *
+     * 검증 기준:
+     * - 각 샘플에 regex를 적용해 금액/가게명이 추출되는지 확인
+     * - 전체 샘플 중 50% 이상 파싱 성공해야 유효
+     *
+     * LLM hallucination으로 인한 깨진 regex가 DB에 등록되는 것을 방지.
+     *
+     * @param amountRegex LLM이 생성한 금액 정규식
+     * @param storeRegex LLM이 생성한 가게명 정규식
+     * @param cardRegex LLM이 생성한 카드명 정규식
+     * @param samples 검증에 사용할 SMS 본문 리스트
+     * @param timestamps 검증에 사용할 SMS 타임스탬프 리스트
+     * @return 검증 통과 여부
+     */
+    private fun validateRegexAgainstSamples(
+        amountRegex: String,
+        storeRegex: String,
+        cardRegex: String,
+        samples: List<String>,
+        timestamps: List<Long>
+    ): Boolean {
+        if (samples.isEmpty()) return false
+
+        var passCount = 0
+        for (i in samples.indices) {
+            val result = patternMatcher.parseWithRegex(
+                smsBody = samples[i],
+                smsTimestamp = timestamps.getOrElse(i) { 0L },
+                amountRegex = amountRegex,
+                storeRegex = storeRegex,
+                cardRegex = cardRegex
+            )
+            if (result != null && result.amount > 0) {
+                passCount++
+            }
+        }
+
+        val passRatio = passCount.toFloat() / samples.size
+        val passed = passRatio >= REGEX_VALIDATION_MIN_PASS_RATIO
+
+        Log.d(TAG, "regex 검증: ${passCount}/${samples.size} 파싱 성공 " +
+            "(${(passRatio * 100).toInt()}%, 기준 ${(REGEX_VALIDATION_MIN_PASS_RATIO * 100).toInt()}%) " +
+            "→ ${if (passed) "통과" else "실패"}")
+
+        return passed
     }
 
     // ===== [5-3] regex 실패 쿨다운 =====
