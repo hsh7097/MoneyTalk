@@ -188,6 +188,8 @@ class HomeViewModel @Inject constructor(
     private val lastInsightInputHash = AtomicInteger(0)
     /** resume 자동 분류 중복 실행 방지 플래그 */
     private val isResumeClassificationChecking = AtomicBoolean(false)
+    /** syncSmsV2 재진입 방지 플래그 (동시 호출 시 중복 수입 방지) */
+    private val isSyncRunning = AtomicBoolean(false)
 
     init {
         loadSettings()
@@ -690,7 +692,7 @@ class HomeViewModel @Inject constructor(
 
         if (allSmsList.isEmpty()) return emptyList()
 
-        _uiState.update { it.copy(syncProgress = "중복 확인 중...") }
+        _uiState.update { it.copy(syncProgress = "이미 등록된 내역 확인 중...") }
         val existingSmsIds = expenseRepository.getAllSmsIds()
         val existingIncomeSmsIds = incomeRepository.getAllSmsIds().toHashSet()
         val allExistingIds = existingSmsIds + existingIncomeSmsIds
@@ -843,7 +845,7 @@ class HomeViewModel @Inject constructor(
         updateLastSyncTime: Boolean,
         endTime: Long
     ): PostSyncResult {
-        _uiState.update { it.copy(syncProgress = "정리 중...") }
+        _uiState.update { it.copy(syncProgress = "마무리 중...") }
         categoryClassifierService.flushPendingMappings()
         categoryClassifierService.clearCategoryCache()
 
@@ -861,7 +863,7 @@ class HomeViewModel @Inject constructor(
             if (unclassifiedCount > 0) {
                 _uiState.update {
                     it.copy(
-                        syncProgress = "카테고리 분류 중...",
+                        syncProgress = "AI가 카테고리 분류 중...",
                         syncProgressCurrent = 0,
                         syncProgressTotal = unclassifiedCount
                     )
@@ -870,7 +872,7 @@ class HomeViewModel @Inject constructor(
                     onStepProgress = { step, current, total ->
                         _uiState.update {
                             it.copy(
-                                syncProgress = "카테고리 분류 중...\n$step",
+                                syncProgress = "AI가 카테고리 분류 중...\n$step",
                                 syncProgressCurrent = current,
                                 syncProgressTotal = total
                             )
@@ -909,9 +911,14 @@ class HomeViewModel @Inject constructor(
             savedSyncTime
         }
 
+        // 최대 2개월(DEFAULT_SYNC_PERIOD_MILLIS) 이전까지만 조회하도록 clamp
+        val minStartTime = now - DEFAULT_SYNC_PERIOD_MILLIS
+
         val startTime = if (effectiveSyncTime > 0) {
-            effectiveSyncTime
+            // 증분: lastSyncTime이 2개월보다 오래되었으면 2개월 전으로 clamp
+            maxOf(effectiveSyncTime, minStartTime)
         } else {
+            // 초기: 전월 1일 ~ now (2달치)
             val cal = java.util.Calendar.getInstance()
             cal.add(java.util.Calendar.MONTH, -1)
             cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
@@ -954,6 +961,12 @@ class HomeViewModel @Inject constructor(
         targetMonthRange: Pair<Long, Long>,
         updateLastSyncTime: Boolean = true
     ) {
+        // 재진입 방지: 이미 동기화 중이면 무시
+        if (!isSyncRunning.compareAndSet(false, true)) {
+            Log.w(TAG, "syncSmsV2: 이미 동기화 진행 중 → 스킵")
+            return
+        }
+
         analyticsHelper.logClick(AnalyticsEvent.SCREEN_HOME, AnalyticsEvent.CLICK_SYNC_SMS)
         viewModelScope.launch {
             _uiState.update {
@@ -977,6 +990,10 @@ class HomeViewModel @Inject constructor(
                     // Step 1: SMS 읽기 + 중복 제거
                     val smsInputs = readAndFilterSms(contentResolver, targetMonthRange)
                     if (smsInputs.isEmpty()) {
+                        // 새 SMS 없어도 커서(lastSyncTime)는 전진시켜야 다음 동기화에서 같은 범위 재조회 방지
+                        if (updateLastSyncTime) {
+                            settingsDataStore.saveLastSyncTime(targetMonthRange.second)
+                        }
                         return@withContext SyncResult(0, 0, emptyList(), 0)
                     }
 
@@ -1033,7 +1050,6 @@ class HomeViewModel @Inject constructor(
                         errorMessage = resultMessage
                     )
                 }
-                dataRefreshEvent.completeSyncProgress()
             } catch (e: Exception) {
                 categoryClassifierService.clearCategoryCache()
 
@@ -1047,7 +1063,9 @@ class HomeViewModel @Inject constructor(
                         errorMessage = "동기화 실패: ${e.message}"
                     )
                 }
+            } finally {
                 dataRefreshEvent.completeSyncProgress()
+                isSyncRunning.set(false)
             }
         }
     }
