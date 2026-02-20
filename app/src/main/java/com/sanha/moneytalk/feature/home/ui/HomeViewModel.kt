@@ -725,6 +725,7 @@ class HomeViewModel @Inject constructor(
                     syncProgressTotal = total
                 )
             }
+            dataRefreshEvent.updateSyncProgress(step, current, total)
         }
     }
 
@@ -820,13 +821,14 @@ class HomeViewModel @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                android.util.Log.w(TAG, "수입 처리 실패: ${income.id} - ${e.message}")
+                Log.e(TAG, "수입 처리 실패: ${income.id} - ${e.message}")
             }
         }
         if (batch.isNotEmpty()) {
             incomeRepository.insertAll(batch)
         }
 
+        Log.d(TAG, "saveIncomes: ${incomes.size}건 → ${count}건 저장")
         return count
     }
 
@@ -898,10 +900,9 @@ class HomeViewModel @Inject constructor(
         val savedSyncTime = settingsDataStore.getLastSyncTime()
         val now = System.currentTimeMillis()
 
-        // Auto Backup 감지: savedSyncTime > 0 이지만 DB 비어있으면 stale → 리셋
         val dbCount = expenseRepository.getAllSmsIds().size
         val effectiveSyncTime = if (savedSyncTime > 0 && dbCount == 0) {
-            android.util.Log.w(TAG, "Auto Backup 감지: savedSyncTime 있으나 DB 비어있음 → 리셋")
+            Log.w(TAG, "Auto Backup 감지: savedSyncTime 있으나 DB 비어있음 → 리셋")
             settingsDataStore.saveLastSyncTime(0L)
             0L
         } else {
@@ -909,10 +910,8 @@ class HomeViewModel @Inject constructor(
         }
 
         val startTime = if (effectiveSyncTime > 0) {
-            // 증분: 마지막 동기화 시점부터
             effectiveSyncTime
         } else {
-            // 초기: 전월 1일부터 (2달치)
             val cal = java.util.Calendar.getInstance()
             cal.add(java.util.Calendar.MONTH, -1)
             cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
@@ -966,6 +965,7 @@ class HomeViewModel @Inject constructor(
                     syncProgressTotal = 0
                 )
             }
+            dataRefreshEvent.updateSyncProgress("문자 읽는 중...", 0, 0)
 
             try {
                 val result = withContext(Dispatchers.IO) {
@@ -1033,6 +1033,7 @@ class HomeViewModel @Inject constructor(
                         errorMessage = resultMessage
                     )
                 }
+                dataRefreshEvent.completeSyncProgress()
             } catch (e: Exception) {
                 categoryClassifierService.clearCategoryCache()
 
@@ -1046,6 +1047,7 @@ class HomeViewModel @Inject constructor(
                         errorMessage = "동기화 실패: ${e.message}"
                     )
                 }
+                dataRefreshEvent.completeSyncProgress()
             }
         }
     }

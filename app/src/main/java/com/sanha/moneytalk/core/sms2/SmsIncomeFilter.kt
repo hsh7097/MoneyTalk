@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.core.sms2
 
+import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -33,8 +34,9 @@ import javax.inject.Singleton
 class SmsIncomeFilter @Inject constructor() {
 
     companion object {
-        /** SMS 최대 길이 (일반 결제 SMS는 40~100자, 안내/광고성은 100자 이상) */
-        private const val MAX_SMS_LENGTH = 100
+        private const val TAG = "SmsIncomeFilter"
+        /** SMS 최대 길이 (일반 결제 SMS는 40~100자, 안내/광고성은 130자 이상) */
+        private const val MAX_SMS_LENGTH = 130
     }
 
     // ===== 키워드 정의 =====
@@ -107,9 +109,10 @@ class SmsIncomeFilter @Inject constructor() {
      * 최소한의 제외만 수행 (SmsPreFilter가 상세 필터링 담당).
      */
     private val excludeKeywords = listOf(
+        // V1(SmsParser.excludeKeywords)과 동일
         "광고", "홍보", "이벤트", "혜택안내", "포인트 적립",
         "명세서", "청구서", "이용대금",
-        "결제내역", "결제금액", "카드대금", "결제대금", "청구금액",
+        "결제금액", "카드대금", "결제대금", "청구금액",
         "출금 예정", "출금예정", "퇴직"
     )
 
@@ -141,40 +144,42 @@ class SmsIncomeFilter @Inject constructor() {
      * @param body SMS 본문 (SmsInput.body)
      * @return SmsType.PAYMENT, INCOME, or SKIP
      */
-    fun classify(body: String): SmsType {
+    fun classify(body: String): Pair<SmsType, String> {
         // 1. 기본 필터
-        if (body.isBlank()) return SmsType.SKIP
-        if (body.length > MAX_SMS_LENGTH) return SmsType.SKIP
+        if (body.isBlank()) return SmsType.SKIP to "blank"
+        if (body.length > MAX_SMS_LENGTH) return SmsType.SKIP to "tooLong(${body.length})"
 
         val bodyLower = body.lowercase()
 
         // 제외 키워드 (광고, 안내 등)
-        if (excludeKeywords.any { bodyLower.contains(it) }) return SmsType.SKIP
-        if (userExcludeKeywords.any { bodyLower.contains(it) }) return SmsType.SKIP
+        val matchedExclude = excludeKeywords.firstOrNull { bodyLower.contains(it) }
+        if (matchedExclude != null) return SmsType.SKIP to "excludeKw[$matchedExclude]"
+        val matchedUserExclude = userExcludeKeywords.firstOrNull { bodyLower.contains(it) }
+        if (matchedUserExclude != null) return SmsType.SKIP to "userExcludeKw[$matchedUserExclude]"
 
         // 2. 금융기관 키워드
-        if (financialKeywords.none { bodyLower.contains(it) }) return SmsType.SKIP
+        if (financialKeywords.none { bodyLower.contains(it) }) return SmsType.SKIP to "noFinancialKw"
 
         // 3. 금액 패턴
         val hasAmount = AMOUNT_PATTERN_WITH_WON.containsMatchIn(body)
             || AMOUNT_PATTERN_NUMBER_ONLY.containsMatchIn(body)
-        if (!hasAmount) return SmsType.SKIP
+        if (!hasAmount) return SmsType.SKIP to "noAmount"
 
         // 4. 취소 → 수입 (결제 키워드보다 우선)
-        if (cancellationKeywords.any { bodyLower.contains(it) }) return SmsType.INCOME
+        if (cancellationKeywords.any { bodyLower.contains(it) }) return SmsType.INCOME to "cancel"
 
         // 5. 결제 → 지출
-        if (paymentKeywords.any { bodyLower.contains(it) }) return SmsType.PAYMENT
+        if (paymentKeywords.any { bodyLower.contains(it) }) return SmsType.PAYMENT to "paymentKw"
 
         // 6. 수입 제외 키워드 (자동이체 출금 안내 등)
-        if (incomeExcludeKeywords.any { bodyLower.contains(it) }) return SmsType.SKIP
+        if (incomeExcludeKeywords.any { bodyLower.contains(it) }) return SmsType.SKIP to "incomeExclude"
 
         // 7. 수입 키워드
-        if (incomeKeywords.any { bodyLower.contains(it) }) return SmsType.INCOME
+        if (incomeKeywords.any { bodyLower.contains(it) }) return SmsType.INCOME to "incomeKw"
 
         // 8. 금융 키워드 + 금액은 있지만 결제/수입 키워드 없음
         // → SmsPipeline에 넘겨서 벡터/LLM으로 판단하게 함
-        return SmsType.PAYMENT
+        return SmsType.PAYMENT to "fallback"
     }
 
     /**
@@ -191,12 +196,15 @@ class SmsIncomeFilter @Inject constructor() {
         val skipped = mutableListOf<SmsInput>()
 
         for (sms in smsList) {
-            when (classify(sms.body)) {
+            val (type, _) = classify(sms.body)
+            when (type) {
                 SmsType.PAYMENT -> payments.add(sms)
                 SmsType.INCOME -> incomes.add(sms)
                 SmsType.SKIP -> skipped.add(sms)
             }
         }
+
+        Log.d(TAG, "입력: ${smsList.size}건 → 결제: ${payments.size}건, 수입: ${incomes.size}건, 스킵: ${skipped.size}건")
 
         return Triple(payments, incomes, skipped)
     }

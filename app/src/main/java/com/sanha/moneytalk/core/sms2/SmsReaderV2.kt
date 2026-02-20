@@ -75,6 +75,7 @@ class SmsReaderV2 @Inject constructor() {
     ): List<SmsInput> {
         val result = mutableListOf<SmsInput>()
         var senderSkipCount = 0
+        var totalCursorCount = 0
 
         val cursor = contentResolver.query(
             Uri.parse("content://sms/inbox"),
@@ -96,6 +97,7 @@ class SmsReaderV2 @Inject constructor() {
             val dateIndex = it.getColumnIndex(Telephony.Sms.DATE)
 
             while (it.moveToNext()) {
+                totalCursorCount++
                 it.getString(idIndex) ?: continue
                 val address = it.getString(addressIndex) ?: continue
                 val body = it.getString(bodyIndex) ?: continue
@@ -117,7 +119,7 @@ class SmsReaderV2 @Inject constructor() {
             }
         }
 
-        Log.d(TAG, "SMS 읽기: ${result.size}건 (010/070 제외: ${senderSkipCount}건)")
+        Log.d(TAG, "SMS 읽기: cursor ${totalCursorCount}건 → 반환 ${result.size}건 (010/070 제외: ${senderSkipCount}건)")
         return result
     }
 

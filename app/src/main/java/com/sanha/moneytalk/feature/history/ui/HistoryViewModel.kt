@@ -149,7 +149,12 @@ data class HistoryUiState(
     // 월별 동기화 해제 여부
     val syncedMonths: Set<String> = emptySet(),
     val isLegacyFullSyncUnlocked: Boolean = false,
-    val showFullSyncAdDialog: Boolean = false
+    val showFullSyncAdDialog: Boolean = false,
+    // 동기화 진행 다이얼로그
+    val showSyncDialog: Boolean = false,
+    val syncProgress: String = "",
+    val syncProgressCurrent: Int = 0,
+    val syncProgressTotal: Int = 0
 ) {
     /** 현재 선택 월의 페이지 데이터 (하위 호환용) */
     private val currentPageData: HistoryPageData
@@ -208,6 +213,7 @@ class HistoryViewModel @Inject constructor(
     init {
         loadSettings()
         observeDataRefreshEvents()
+        observeSyncProgress()
     }
 
     // ========== 페이지 캐시 관리 ==========
@@ -1075,6 +1081,29 @@ class HistoryViewModel @Inject constructor(
     /** 전체 동기화 광고 다이얼로그 닫기 */
     fun dismissFullSyncAdDialog() {
         _uiState.update { it.copy(showFullSyncAdDialog = false) }
+    }
+
+    /** 동기화 진행 상태 관찰 (HomeViewModel → DataRefreshEvent → HistoryViewModel) */
+    private fun observeSyncProgress() {
+        viewModelScope.launch {
+            var wasActive = false
+            dataRefreshEvent.syncProgress.collect { progress ->
+                _uiState.update {
+                    it.copy(
+                        showSyncDialog = progress.isActive,
+                        syncProgress = progress.step,
+                        syncProgressCurrent = progress.current,
+                        syncProgressTotal = progress.total
+                    )
+                }
+                // 동기화 완료 시 데이터 갱신
+                if (wasActive && !progress.isActive) {
+                    clearAllPageCache()
+                    loadCurrentAndAdjacentPages()
+                }
+                wasActive = progress.isActive
+            }
+        }
     }
 
     /** 월별 동기화 해제 (광고 시청 완료 후 호출) — HomeViewModel에 월별 sync 요청 */

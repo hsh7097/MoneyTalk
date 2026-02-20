@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.core.sms2
 
+import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -12,48 +13,51 @@ import javax.inject.Singleton
  * 1. 키워드 필터 [isObviouslyNonPayment]: 비결제 키워드 포함 시 제외
  * 2. 구조 필터 [lacksPaymentRequirements]: 길이/숫자/금액 패턴 조건 미충족 시 제외
  *
- * 키워드 목록: 기존 비결제 키워드 합집합을
- * 여기서 단일 관리 (중복 제거).
+ * 키워드 목록: V1(SmsParser.excludeKeywords + HybridSmsClassifier.NON_PAYMENT_KEYWORDS)
+ * 합집합을 여기서 단일 관리.
  *
- * 호출 순서: SmsPipeline.process() → [여기] → SmsPipeline.batchEmbed()
+ * 호출 순서: SmsSyncCoordinator.process() → [여기] → SmsIncomeFilter
  */
 @Singleton
 class SmsPreFilter @Inject constructor() {
 
     companion object {
+        private const val TAG = "SmsPreFilter"
+
         /**
          * 비결제 SMS 키워드 (통합)
          *
          * 이 키워드 중 하나라도 SMS 본문에 포함되면 결제 SMS가 아닌 것으로 판단.
          *
-         * 카테고리:
-         * - 인증/보안: 인증번호, OTP, 비밀번호 등
-         * - 해외발신: 국외발신, 국제발신 등
-         * - 광고/마케팅: 광고, 수신거부, 이벤트, 프로모션 등
-         * - 청구/안내: 결제내역, 명세서, 청구서, 결제예정 등 (결제 예고 ≠ 실제 결제)
-         * - 배송: 배송, 택배, 운송장
-         * - 금융광고: 대출, 투자, 분양 등
+         * 출처:
+         * - V1 SmsParser.excludeKeywords
+         * - V1 HybridSmsClassifier.NON_PAYMENT_KEYWORDS
+         * - V2 추가 (광고/안내/금융광고 등)
+         *
+         * 중복 제거: "광고"가 "[광고]","(광고)" 모두 매칭하므로 별도 불필요.
          */
         private val NON_PAYMENT_KEYWORDS = listOf(
             // 인증/보안
-            "인증번호", "인증코드", "authentication", "verification", "code",
+            "인증", "authentication", "verification", "code",
             "OTP", "본인확인", "비밀번호",
             // 해외 발신
             "국외발신", "국제발신", "해외발신",
             // 광고/마케팅
-            "광고", "[광고]", "(광고)", "무료수신거부", "수신거부", "080",
-            "특가", "이벤트", "증정", "당첨", "축하", "최저가", "마감직전",
-            "포인트 적립", "혜택안내", "프로모션", "할인쿠폰", "무료체험",
+            "광고", "무료수신거부", "수신거부", "080",
+            "홍보", "이벤트", "혜택안내", "포인트 적립",
+            "특가", "증정", "당첨", "축하", "최저가", "마감직전",
+            "프로모션", "할인쿠폰", "무료체험",
             // 안내
             "안내문", "점검", "정기점검", "공지사항",
-            "회원님", "고객님", "불편을 드려",
+            "불편을 드려",
             // 청구/안내 (결제 예고 ≠ 실제 결제)
             "결제내역", "명세서", "청구서", "이용대금", "결제예정", "결제일",
             "결제금액", "카드대금", "결제대금", "청구금액",
             "출금예정", "출금 예정", "자동이체", "납부안내", "납입일",
             // 배송
-            "배송", "택배", "운송장",
+            "배송", "택배", "운송장", "주문",
             // 기타
+            "퇴직",
             "설문", "survey", "투표",
             "예약은", "방문때", "접수 완료",
             "보험금", "해외원화결제시", "수수료 발생", "차단신청",
@@ -77,19 +81,22 @@ class SmsPreFilter @Inject constructor() {
         private val AMOUNT_WITH_WON_PATTERN = Regex("[\\d,]+원")
 
         /**
-         * 결제 힌트 키워드
+         * 금융 힌트 키워드
          *
          * 구조 필터(lacksPaymentRequirements)에서 사용.
-         * 이 중 하나라도 있거나 "숫자+원" 패턴이 있어야 결제 가능성 인정.
+         * 이 중 하나라도 있거나 "숫자+원" 패턴이 있어야 금융 SMS 가능성 인정.
+         * 결제(지출)뿐 아니라 입금(수입) 키워드도 포함하여 입금 SMS가 제거되지 않도록 함.
          */
         private val PAYMENT_HINT_KEYWORDS = listOf(
             "승인", "결제", "출금", "이체",
             "원", "USD", "JPY", "EUR",
-            "카드", "체크", "CMS"
+            "카드", "체크", "CMS",
+            // 입금/수입/취소 키워드 (SmsIncomeFilter로 전달되어야 함)
+            "입금", "급여", "월급", "송금", "환급", "정산", "잔액", "취소"
         )
 
-        /** SMS 최대 길이 (100자 초과 = 결제 SMS 가능성 낮음) */
-        private const val MAX_SMS_LENGTH = 100
+        /** SMS 최대 길이 (130자 초과 = 결제 SMS 가능성 낮음) */
+        private const val MAX_SMS_LENGTH = 130
 
         /** SMS 최소 길이 (20자 미만 = 결제 정보 담기 어려움) */
         private const val MIN_SMS_LENGTH = 20
@@ -105,9 +112,21 @@ class SmsPreFilter @Inject constructor() {
      * @return 결제 가능성이 있는 SMS만 (비결제 제거됨)
      */
     fun filter(smsList: List<SmsInput>): List<SmsInput> {
-        return smsList.filter { sms ->
-            !isObviouslyNonPayment(sms.body) && !lacksPaymentRequirements(sms.body)
+        val result = smsList.filter { sms ->
+            val body = sms.body
+
+            // 키워드 필터
+            if (isObviouslyNonPayment(body)) return@filter false
+
+            // 구조 필터
+            if (lacksPaymentRequirements(body)) return@filter false
+
+            true
         }
+
+        Log.d(TAG, "입력: ${smsList.size}건 → 통과: ${result.size}건 (제거: ${smsList.size - result.size}건)")
+
+        return result
     }
 
     /**

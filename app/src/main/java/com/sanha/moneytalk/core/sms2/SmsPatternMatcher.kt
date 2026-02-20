@@ -203,6 +203,17 @@ class SmsPatternMatcher @Inject constructor(
         }
 
         Log.d(TAG, "매칭 결과: ${matched.size}건 성공, ${unmatched.size}건 미매칭")
+
+        // 발신번호별 매칭/미매칭 통계
+        val matchedByAddr = matched.groupBy { it.input.address }
+        val unmatchedByAddr = unmatched.groupBy { it.input.address }
+        val allAddresses = (matchedByAddr.keys + unmatchedByAddr.keys).distinct().sorted()
+        for (addr in allAddresses) {
+            val m = matchedByAddr[addr]?.size ?: 0
+            val u = unmatchedByAddr[addr]?.size ?: 0
+            Log.d(TAG, "  [$addr] 매칭: ${m}건, 미매칭: ${u}건")
+        }
+
         return matched to unmatched
     }
 
@@ -264,9 +275,6 @@ class SmsPatternMatcher @Inject constructor(
                 amountRegex = pattern.amountRegex,
                 storeRegex = pattern.storeRegex,
                 cardRegex = pattern.cardRegex,
-                fallbackAmount = pattern.parsedAmount,
-                fallbackStoreName = pattern.parsedStoreName,
-                fallbackCardName = pattern.parsedCardName,
                 fallbackCategory = pattern.parsedCategory
             )
             if (result != null) return result
@@ -292,18 +300,15 @@ class SmsPatternMatcher @Inject constructor(
      * regex 기반 SMS 파싱
      *
      * amountRegex/storeRegex/cardRegex의 첫 번째 캡처 그룹에서 값 추출.
-     * 각 필드별 검증 후, 부적절한 값은 폴백으로 대체.
+     * regex로 추출 실패 시 null 반환 (다른 SMS의 값을 덮어씌우지 않음).
      *
      * @param smsBody 원본 SMS 본문
      * @param smsTimestamp SMS 수신 시간 (ms)
      * @param amountRegex 금액 추출 정규식 (캡처 그룹 1)
      * @param storeRegex 가게명 추출 정규식 (캡처 그룹 1)
      * @param cardRegex 카드명 추출 정규식 (캡처 그룹 1)
-     * @param fallbackAmount 패턴 캐시 금액 (regex 실패 시)
-     * @param fallbackStoreName 패턴 캐시 가게명 (regex 실패 시)
-     * @param fallbackCardName 패턴 캐시 카드명 (regex 실패 시)
-     * @param fallbackCategory 패턴 캐시 카테고리
-     * @return 파싱 성공 시 SmsAnalysisResult, 금액 0 이하면 null
+     * @param fallbackCategory 카테고리 힌트 (가게명 일치 시에만 사용)
+     * @return 파싱 성공 시 SmsAnalysisResult, 추출 실패 시 null
      */
     fun parseWithRegex(
         smsBody: String,
@@ -311,9 +316,6 @@ class SmsPatternMatcher @Inject constructor(
         amountRegex: String,
         storeRegex: String,
         cardRegex: String = "",
-        fallbackAmount: Int = 0,
-        fallbackStoreName: String = "",
-        fallbackCardName: String = "",
         fallbackCategory: String = ""
     ): SmsAnalysisResult? {
         val amountPattern = compileRegex(amountRegex) ?: return null
@@ -321,39 +323,24 @@ class SmsPatternMatcher @Inject constructor(
         val cardPattern = compileRegex(cardRegex)
 
         // --- 금액 추출 ---
-        val amountFromRegex = extractAmount(amountPattern, smsBody)
-        val amount = amountFromRegex ?: fallbackAmount
+        val amount = extractAmount(amountPattern, smsBody) ?: return null
         if (amount <= 0) return null
 
         // --- 가게명 추출 ---
-        val storeFromRegex = extractGroup1(storePattern, smsBody)
+        val parsedStore = extractGroup1(storePattern, smsBody)
             ?.let(::sanitizeStoreName)
             ?.takeIf(::isValidStoreCandidate)
-        val fallbackStore = sanitizeStoreName(fallbackStoreName)
-        val parsedStore = storeFromRegex
-            ?: fallbackStore.takeIf { it.isNotBlank() }
             ?: return null
 
         // --- 카드명 추출 ---
-        val cardFromRegex = extractGroup1(cardPattern, smsBody)
+        val parsedCard = extractGroup1(cardPattern, smsBody)
             ?.trim()
             ?.takeIf(::isValidCardCandidate)
-            .orEmpty()
-        val parsedCard = when {
-            cardFromRegex.isNotBlank() -> cardFromRegex
-            fallbackCardName.isNotBlank() -> fallbackCardName
-            else -> "기타"
-        }
+            ?: "기타"
 
         // --- 카테고리 ---
-        // 가게명이 폴백과 동일한 경우에만 폴백 카테고리 사용
-        // 가게명이 다르면 미분류 → saveExpenses()에서 4-tier 분류로 위임
-        val category = when {
-            fallbackCategory.isNotBlank() &&
-                fallbackStore.isNotBlank() &&
-                parsedStore.equals(fallbackStore, ignoreCase = true) -> fallbackCategory
-            else -> "미분류"
-        }
+        // 미분류로 설정 → saveExpenses()에서 4-tier 분류로 위임
+        val category = "미분류"
 
         return SmsAnalysisResult(
             amount = amount,
