@@ -37,7 +37,7 @@ class RemoteSmsRuleRepository @Inject constructor(
     }
 
     /** 메모리 캐시: sender별 룰 리스트 */
-    private var cachedRules: Map<String, List<RemoteSmsRule>> = emptyMap()
+    private var cachedRules: Map<String, List<RemoteSmsRule>>? = null
     private var cacheTimestamp: Long = 0L
 
     /**
@@ -46,10 +46,11 @@ class RemoteSmsRuleRepository @Inject constructor(
      * @return sender별 룰 맵 (빈 맵 = 룰 없음 또는 실패)
      */
     suspend fun loadRules(): Map<String, List<RemoteSmsRule>> {
-        // 캐시 TTL 내면 재사용
+        // 캐시 TTL 내면 재사용 (빈 결과도 캐시하여 불필요한 RTDB 호출 방지)
         val now = System.currentTimeMillis()
-        if (cachedRules.isNotEmpty() && (now - cacheTimestamp) < CACHE_TTL_MS) {
-            return cachedRules
+        val cached = cachedRules
+        if (cached != null && (now - cacheTimestamp) < CACHE_TTL_MS) {
+            return cached
         }
 
         val db = database ?: return emptyMap()
@@ -86,14 +87,14 @@ class RemoteSmsRuleRepository @Inject constructor(
      * 캐시가 없으면 빈 리스트 반환.
      */
     fun getRulesForSender(normalizedSender: String): List<RemoteSmsRule> {
-        return cachedRules[normalizedSender].orEmpty()
+        return cachedRules?.get(normalizedSender).orEmpty()
     }
 
     /**
      * 캐시 무효화 (테스트/디버그용)
      */
     fun invalidateCache() {
-        cachedRules = emptyMap()
+        cachedRules = null
         cacheTimestamp = 0L
     }
 
