@@ -16,12 +16,12 @@ import kotlinx.coroutines.flow.Flow
  * SmsPatternEntity에 대한 CRUD 및 검색 쿼리를 제공합니다.
  *
  * 주요 사용처:
- * - HybridSmsClassifier: 벡터 검색을 위한 패턴 조회/등록
- * - SmsBatchProcessor: 대량 패턴 매칭 및 등록
+ * - SmsPatternMatcher: 벡터 검색을 위한 패턴 조회/등록
+ * - SmsGroupClassifier: 대량 패턴 매칭 및 등록
  * - VectorSearchEngine: 유사도 검색 시 패턴 목록 제공
  *
  * @see SmsPatternEntity
- * @see com.sanha.moneytalk.core.util.HybridSmsClassifier
+ * @see com.sanha.moneytalk.core.sms2.SmsPatternMatcher
  */
 @Dao
 interface SmsPatternDao {
@@ -64,6 +64,21 @@ interface SmsPatternDao {
     /** 발신번호로 패턴 조회 (같은 카드사/은행 패턴 그룹핑) */
     @Query("SELECT * FROM sms_patterns WHERE senderAddress = :address")
     suspend fun getPatternsBySender(address: String): List<SmsPatternEntity>
+
+    /**
+     * 발신번호의 메인 그룹 패턴 조회
+     *
+     * regex가 유효한 결제 패턴 중 isMainGroup=true인 것을 반환.
+     * matchCount 내림차순으로 가장 활발한 패턴 1개만 반환.
+     * 다음 동기화에서 예외 그룹 regex 생성 시 메인 regex 참조로 사용.
+     */
+    @Query("""
+        SELECT * FROM sms_patterns
+        WHERE senderAddress = :address AND isMainGroup = 1 AND isPayment = 1
+        AND amountRegex != '' AND storeRegex != ''
+        ORDER BY matchCount DESC LIMIT 1
+    """)
+    suspend fun getMainPatternBySender(address: String): SmsPatternEntity?
 
     /** 전체 패턴 수 조회 */
     @Query("SELECT COUNT(*) FROM sms_patterns")

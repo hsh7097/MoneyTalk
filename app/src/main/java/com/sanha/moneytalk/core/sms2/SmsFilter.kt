@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms
+package com.sanha.moneytalk.core.sms2
 
 /**
  * SMS 발신번호 기반 사전 필터링

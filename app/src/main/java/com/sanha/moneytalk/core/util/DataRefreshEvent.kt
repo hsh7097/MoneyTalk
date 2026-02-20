@@ -1,7 +1,10 @@
 package com.sanha.moneytalk.core.util
 
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -38,6 +41,27 @@ class DataRefreshEvent @Inject constructor() {
         _monthSyncEvent.tryEmit(MonthSyncRequest(year, month))
     }
 
+    /** 동기화 진행 상태 (Home ↔ History 공유) */
+    data class SyncProgress(
+        val isActive: Boolean = false,
+        val step: String = "",
+        val current: Int = 0,
+        val total: Int = 0
+    )
+
+    private val _syncProgress = MutableStateFlow(SyncProgress())
+    val syncProgress: StateFlow<SyncProgress> = _syncProgress.asStateFlow()
+
+    /** 동기화 진행 상태 업데이트 */
+    fun updateSyncProgress(step: String, current: Int, total: Int) {
+        _syncProgress.value = SyncProgress(isActive = true, step = step, current = current, total = total)
+    }
+
+    /** 동기화 완료 */
+    fun completeSyncProgress() {
+        _syncProgress.value = SyncProgress()
+    }
+
     enum class RefreshType {
         /** 전체 데이터 삭제 (설정 초기화) */
         ALL_DATA_DELETED,
@@ -49,6 +73,9 @@ class DataRefreshEvent @Inject constructor() {
         OWNED_CARD_UPDATED,
 
         /** 실시간 SMS 수신으로 지출/수입 추가 */
-        TRANSACTION_ADDED
+        TRANSACTION_ADDED,
+
+        /** SMS 수신 감지 → 증분 동기화 트리거 */
+        SMS_RECEIVED
     }
 }

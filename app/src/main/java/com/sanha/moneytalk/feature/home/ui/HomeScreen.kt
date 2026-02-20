@@ -117,7 +117,7 @@ fun HomeScreen(
     // 앱 시작 시 자동 동기화
     LaunchedEffect(autoSyncOnStart) {
         if (autoSyncOnStart) {
-            viewModel.syncSmsMessages(contentResolver)
+            viewModel.syncIncremental(contentResolver)
             onAutoSyncConsumed()
         }
     }
@@ -219,7 +219,7 @@ fun HomeScreen(
             },
             onIncrementalSync = {
                 onRequestSmsPermission {
-                    viewModel.syncSmsMessages(contentResolver, forceFullSync = false)
+                    viewModel.syncIncremental(contentResolver)
                 }
             },
             onFullSync = {

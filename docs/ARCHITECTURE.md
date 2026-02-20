@@ -97,7 +97,7 @@ com.sanha.moneytalk/
 │   │               ├── TransactionGroupHeaderCompose.kt # 그룹 헤더
 │   │               └── TransactionGroupHeaderInfo.kt    # 그룹 헤더 Contract
 │   │
-│   ├── sms/                              # SMS 핵심 (9개)
+│   ├── sms/                              # SMS V1 - 실시간 수신 전용 (9개)
 │   │   ├── SmsParser.kt                  # SMS 정규식 파싱 (Tier 1)
 │   │   ├── SmsReader.kt                  # SMS/MMS/RCS 통합 읽기
 │   │   ├── SmsFilter.kt                  # 발신번호 기반 사전 필터링
@@ -107,6 +107,18 @@ com.sanha.moneytalk/
 │   │   ├── GeneratedSmsRegexParser.kt    # LLM 생성 정규식 파서 (폴백 체인)
 │   │   ├── SmsEmbeddingService.kt        # SMS 템플릿화 + 임베딩 생성
 │   │   └── VectorSearchEngine.kt         # 코사인 유사도 검색 엔진
+│   │
+│   ├── sms2/                             # SMS 통합 파이프라인 (배치 동기화 메인, 10개)
+│   │   ├── SmsSyncCoordinator.kt        # 유일한 외부 진입점 (process → PreFilter → IncomeFilter → Pipeline)
+│   │   ├── SmsReaderV2.kt               # SMS/MMS/RCS 통합 읽기 → List<SmsInput> 직접 반환
+│   │   ├── SmsIncomeFilter.kt           # PAYMENT/INCOME/SKIP 3분류 (financialKeywords 46개)
+│   │   ├── SmsIncomeParser.kt           # 수입 SMS 파싱 (금액/유형/출처/날짜시간)
+│   │   ├── SmsPipeline.kt               # 오케스트레이터 (Step 2→3→4→5)
+│   │   ├── SmsPipelineModels.kt         # 데이터 클래스 (SmsInput, EmbeddedSms, SmsParseResult, SyncResult)
+│   │   ├── SmsPreFilter.kt              # Step 2: 사전 필터링 (키워드 + 구조)
+│   │   ├── SmsTemplateEngine.kt         # Step 3: 템플릿화 + Gemini Embedding API
+│   │   ├── SmsPatternMatcher.kt         # Step 4: 벡터 매칭 + regex 파싱
+│   │   └── SmsGroupClassifier.kt        # Step 5: 그룹핑 + LLM + regex 생성
 │   │
 │   └── util/                             # 유틸리티 (12개)
 │       ├── CategoryReferenceProvider.kt  # 카테고리 참조 데이터 제공
@@ -226,17 +238,26 @@ com.sanha.moneytalk/
 
 ## 핵심 시스템
 
-### SMS 파싱 (3-tier)
+### SMS 파싱 (sms2 — 2-tier Vector+LLM)
 
+**배치 동기화** (메인 경로 — sms2):
 ```
-SMS 수신 → Tier 1 (Regex) → Tier 2 (Vector 캐시) → Tier 3 (Gemini LLM)
+SMS 읽기 (SmsReaderV2) → SmsSyncCoordinator
+  → SmsPreFilter → SmsIncomeFilter (PAYMENT/INCOME/SKIP)
+  → SmsPipeline: 템플릿+임베딩 → 벡터매칭 → 그룹+LLM
 ```
 
-| Tier | 엔진 | 비용 | 설명 |
-|------|------|------|------|
-| 1 | SmsParser.kt (정규식) | 0 | 로컬 정규식으로 금액, 가게명, 카드사 추출 |
-| 2 | VectorSearchEngine.kt | 0 | 기존 패턴과 벡터 유사도 비교 (캐시 재사용) |
-| 3 | GeminiSmsExtractor.kt | API | Gemini LLM으로 구조화 데이터 추출 |
+| 단계 | 엔진 (sms2) | 비용 | 설명 |
+|------|-------------|------|------|
+| 사전 필터 | SmsPreFilter | 0 | 비결제 SMS 제거 (60+ 키워드) |
+| 수입 분류 | SmsIncomeFilter | 0 | PAYMENT/INCOME/SKIP 키워드 분류 |
+| 벡터 매칭 | SmsPatternMatcher | 0 | 기존 패턴 DB에서 코사인 유사도 매칭 |
+| LLM 추출 | SmsGroupClassifier | API | 그룹핑 → Gemini LLM 배치 추출 → regex 생성 |
+
+**실시간 수신** (V1 유지 — core/sms):
+```
+SmsReceiver → SmsParser (Regex only) → ExpenseEntity
+```
 
 ### 카테고리 분류 (4-tier)
 
@@ -285,17 +306,28 @@ SMS 수신 → Tier 1 (Regex) → Tier 2 (Vector 캐시) → Tier 3 (Gemini LLM)
 
 ## 데이터 흐름
 
-### SMS → 지출 저장
+### SMS → 지출 저장 (배치 동기화 — sms2)
 ```
-SMS 수신 (SmsReceiver)
-  → SmsReader (ContentResolver)
-  → HybridSmsClassifier (3-tier 분류)
-    → Tier 1: SmsParser (정규식)
-    → Tier 2: VectorSearchEngine (벡터 캐시)
-    → Tier 3: GeminiSmsExtractor (LLM)
-  → ExpenseEntity → Room DB
+HomeViewModel.syncSmsV2()
+  → SmsReaderV2.readAllMessagesByDateRange() → List<SmsInput>
+  → 중복 제거 (expenseRepository + incomeRepository smsId)
+  → SmsSyncCoordinator.process()
+    → SmsPreFilter (비결제 제거)
+    → SmsIncomeFilter (PAYMENT/INCOME/SKIP 분류)
+    → SmsPipeline (결제 후보)
+      → SmsTemplateEngine (템플릿화 + 임베딩)
+      → SmsPatternMatcher (벡터 매칭 + regex 파싱)
+      → SmsGroupClassifier (그룹핑 + LLM 추출 + regex 생성)
+  → saveExpenses() / saveIncomes()
   → CategoryClassifierService (4-tier 카테고리 분류)
   → UI 반영
+```
+
+### SMS → 지출 저장 (실시간 수신 — V1)
+```
+SMS 수신 (SmsReceiver)
+  → SmsProcessingService → SmsParser (Regex only)
+  → ExpenseEntity → Room DB
 ```
 
 ### 채팅 질의

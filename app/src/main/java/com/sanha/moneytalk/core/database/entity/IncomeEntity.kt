@@ -12,7 +12,7 @@ import androidx.room.PrimaryKey
  * 수입 유형: 급여, 보너스, 이체, 송금, 환급, 정산, 입금 등
  *
  * 데이터 흐름:
- * - 자동: SMS 수신 → SmsParser.isIncomeSms() → 입금 정보 추출 → IncomeEntity 생성
+ * - 자동: SMS 수신 → SmsIncomeFilter → SmsIncomeParser → IncomeEntity 생성
  * - 수동: 사용자 입력 → IncomeEntity 생성
  *
  * @see com.sanha.moneytalk.core.database.dao.IncomeDao

@@ -4,6 +4,28 @@
 
 ## [Unreleased]
 
+### Added (2026-02-20)
+- **DB 메인 그룹 패턴 저장**: `SmsPatternEntity.isMainGroup` 필드 추가 (DB v2→v3)
+  - `getMainPatternBySender()` 쿼리로 발신번호별 메인 패턴 조회
+  - Step 5 진입 시 DB에서 메인 regex 선조회 → 예외 그룹 regex 생성 시 참조 전달
+  - `MainRegexContext`로 메인 regex를 LLM 프롬프트에 포함
+  - `senderAddress` normalizeAddress() 적용 (DB 저장/조회 일관성)
+- **sms2 마이그레이션 완료**: 배치 동기화 경로를 V1(HybridSmsClassifier/SmsBatchProcessor)에서 sms2(SmsSyncCoordinator)로 전면 전환
+  - `SmsSyncCoordinator.kt`: 유일한 외부 진입점 (process → SmsPreFilter → SmsIncomeFilter → SmsPipeline)
+  - `SmsReaderV2.kt`: SMS/MMS/RCS 통합 읽기 → List\<SmsInput\> 직접 반환 (SmsMessage 중간 변환 제거)
+  - `SmsIncomeFilter.kt`: PAYMENT/INCOME/SKIP 3분류 (financialKeywords 46개)
+  - `SmsIncomeParser.kt`: 수입 SMS 파싱 Object 싱글톤 (금액/유형/출처/날짜시간)
+  - `syncIncremental()` + `calculateIncrementalRange()`: HomeScreen용 증분 동기화 래퍼
+
+### Changed (2026-02-20)
+- **syncSmsV2() 오케스트레이터 전환**: 내부를 5개 private 메소드로 분리 (readAndFilterSms, processSmsPipeline, saveExpenses, saveIncomes, postSyncCleanup)
+- **HomeScreen 호출부 변경**: syncSmsMessages → syncIncremental (2곳)
+
+### Removed (2026-02-20)
+- **syncSmsMessages() 삭제**: HomeViewModel에서 V1 동기화 메소드 전체 제거 (~400줄)
+- **SmsBatchProcessor DI 제거**: HomeViewModel 생성자에서 제거
+- **launchBackgroundHybridClassification() 삭제**: V1 배경 분류 메소드 제거
+
 ### Added (2026-02-19)
 - **GeneratedSmsRegexParser**: LLM 생성 정규식 파서 신규 추가 (group1 캡처 규약, 폴백 체인)
 - **SmsBatchProcessor 발신번호 2레벨 그룹핑**: 37그룹 → 2~4그룹으로 대폭 감소
@@ -47,7 +69,21 @@
 - **홈 새로고침 깜빡임 제거**: refreshData()에서 캐시 클리어 제거 + isLoading 조건부 설정
 - **"오늘 문자만 동기화" 메뉴 제거**: HomeScreen 새로고침 드롭다운에서 삭제
 
+### Added (2026-02-19 후반)
+- **SMS 통합 파이프라인 (core/sms2/)**: 기존 3경로 파편화 SMS 처리를 단일 파이프라인으로 통합 (6개 파일)
+  - `SmsPipeline.kt`: 오케스트레이터 (Step 2→3→4→5)
+  - `SmsPreFilter.kt`: 사전 필터링 (키워드 + 구조)
+  - `SmsTemplateEngine.kt`: 템플릿화 + Gemini Embedding API
+  - `SmsPatternMatcher.kt`: 벡터 매칭 + regex 파싱 (자체 코사인 유사도)
+  - `SmsGroupClassifier.kt`: 그룹핑 + LLM + regex 생성 + 패턴 DB 등록
+  - `SmsPipelineModels.kt`: 데이터 클래스 (SmsInput, EmbeddedSms, SmsParseResult)
+- **SmsParser KB 출금 유형 확장**: FBS출금 (카드/페이 자동이체), 공동CMS출 (보험 CMS) 지원
+- **SmsParser 보험 카테고리 키워드**: 삼성화, 현대해, 메리츠, DB손해, 한화손해, 흥국화 추가
+
 ### Fixed (2026-02-19)
+- **레거시 FULL_SYNC_UNLOCKED 호환성**: 기존 FULL_SYNC_UNLOCKED=true 사용자가 월별 동기화 업데이트 후 CTA가 다시 표시되는 regression 수정
+  - HomeUiState/HistoryUiState에 `isLegacyFullSyncUnlocked` 필드 추가
+  - isMonthSynced()/isPagePartiallyCovered()에서 레거시 전역 해제 상태 체크
 - **Android Auto Backup 복원 감지**: 앱 재설치 시 DataStore lastSyncTime이 복원되어 동기화 범위가 잘못되는 버그 수정
 - **DataStore 백업 제외**: backup_rules.xml, data_extraction_rules.xml에서 DataStore preferences 백업 제외
 - **내역 수입 0원 표시**: HistoryHeader에서 수입이 0일 때 섹션이 사라지는 버그 수정

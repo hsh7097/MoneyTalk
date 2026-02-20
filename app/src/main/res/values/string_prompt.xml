@@ -346,7 +346,7 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
     <string name="prompt_sms_regex_extract_system" translatable="false">당신은 한국 결제 SMS 정규식 생성기입니다.
 
 [역할]
-동일 형식 샘플 1~3건을 보고 결제 여부를 판정하고 공통 정규식을 생성합니다.
+동일 형식 샘플 1~5건을 보고 결제 여부를 판정하고 공통 정규식을 생성합니다.
 
 [출력 형식]
 JSON만 반환:
@@ -364,6 +364,76 @@ JSON만 반환:
 [짧은 예시]
 입력: \"[KB] 02/12 12:38 스타벅스 15,000원 승인\"
 출력: {\"isPayment\": true, \"amountRegex\": \"([\\\\d,]{3,})원\", \"storeRegex\": \"\\\\d{1,2}[/.-]\\\\d{1,2}\\\\s+\\\\d{1,2}:\\\\d{2}\\\\s+(.+?)\\\\s+[\\\\d,]{3,}원\", \"cardRegex\": \"\\\\[([^\\\\]]+)\\\\]\"}</string>
+
+    <!-- GeminiSmsExtractor: 정규식 생성 유저 프롬프트 (메인 참조 있을 때) -->
+    <!-- %1$s = 메인 원본 샘플, %2$s = 메인 amountRegex, %3$s = 메인 storeRegex, %4$s = 메인 cardRegex (있으면), %5$s = 샘플 텍스트 -->
+    <string name="prompt_sms_regex_with_main_ref" translatable="false">[메인 형식 참조]
+같은 발신번호의 메인 형식(가장 많은 SMS)의 정규식입니다.
+아래 샘플은 이 메인 형식의 변형입니다. 메인과의 차이점에 집중하여 정규식을 생성하세요.
+메인 원본: %1$s
+메인 amountRegex: %2$s
+메인 storeRegex: %3$s
+%4$s
+
+같은 형식의 결제 SMS 샘플입니다. 공통 정규식을 JSON으로만 반환하세요.
+필드: isPayment, amountRegex, storeRegex, cardRegex
+조건: amountRegex/storeRegex는 group1 캡처 필수.
+샘플:
+%5$s</string>
+
+    <!-- GeminiSmsExtractor: 정규식 생성 유저 프롬프트 (메인 참조 없을 때) -->
+    <!-- %1$s = 샘플 텍스트 -->
+    <string name="prompt_sms_regex_generate" translatable="false">같은 형식의 결제 SMS 샘플입니다. 공통 정규식을 JSON으로만 반환하세요.
+필드: isPayment, amountRegex, storeRegex, cardRegex
+조건: amountRegex/storeRegex는 group1 캡처 필수.
+샘플:
+%1$s</string>
+
+    <!-- GeminiSmsExtractor: 정규식 생성 축약 프롬프트 (메인 참조 있을 때) -->
+    <!-- %1$s = 메인 amountRegex, %2$s = 메인 storeRegex, %3$s = 샘플 텍스트 -->
+    <string name="prompt_sms_regex_compact_with_main_ref" translatable="false">메인 amountRegex: %1$s, storeRegex: %2$s
+결제 SMS 샘플 공통 정규식 JSON만 반환.
+필드: isPayment, amountRegex, storeRegex, cardRegex
+제약: amountRegex/storeRegex는 group1 필수.
+샘플:
+%3$s</string>
+
+    <!-- GeminiSmsExtractor: 정규식 생성 축약 프롬프트 (메인 참조 없을 때) -->
+    <!-- %1$s = 샘플 텍스트 -->
+    <string name="prompt_sms_regex_compact" translatable="false">결제 SMS 샘플 공통 정규식 JSON만 반환.
+필드: isPayment, amountRegex, storeRegex, cardRegex
+제약: amountRegex/storeRegex는 group1 필수.
+샘플:
+%1$s</string>
+
+    <!-- GeminiSmsExtractor: 정규식 생성 초축약 프롬프트 -->
+    <!-- %1$s = 최단 샘플 1건 -->
+    <string name="prompt_sms_regex_ultra_compact" translatable="false">JSON만:
+{\"isPayment\":true/false,\"amountRegex\":\"\",\"storeRegex\":\"\",\"cardRegex\":\"\"}
+규칙: 결제면 amountRegex/storeRegex group1 필수.
+샘플: %1$s</string>
+
+    <!-- GeminiSmsExtractor: 정규식 수선(repair) 프롬프트 -->
+    <!-- %1$s = 실패 이유, %2$s = 이전 응답 (240자), %3$s = 샘플 텍스트 -->
+    <string name="prompt_sms_regex_repair" translatable="false">이전 정규식 응답이 검증에 실패했습니다.
+실패 이유: %1$s, 이전 응답: %2$s
+다음 샘플 전체를 만족하도록 수정하세요.
+%3$s
+
+반드시 JSON만 반환하세요.</string>
+
+    <!-- GeminiSmsExtractor: SMS 단일 추출 유저 프롬프트 -->
+    <!-- %1$s = SMS 수신 날짜 정보, %2$s = 참조 텍스트, %3$s = SMS 본문 -->
+    <string name="prompt_sms_extract_user" translatable="false">다음 SMS에서 결제 정보를 추출해주세요:%1$s
+%2$s
+%3$s</string>
+
+    <!-- GeminiSmsExtractor: SMS 배치 추출 유저 프롬프트 -->
+    <!-- %1$s = SMS 개수, %2$s = 참조 텍스트, %3$s = SMS 목록 텍스트 -->
+    <string name="prompt_sms_batch_extract_user" translatable="false">다음 %1$s개 SMS에서 각각 결제 정보를 추출해주세요:
+%2$s
+
+%3$s</string>
 
     <!-- GeminiCategoryRepository: 카테고리 분류 프롬프트 (gemini-2.5-flash-lite) -->
     <string name="prompt_category_classification" translatable="false">당신은 가계부 앱의 카테고리 분류 전문가입니다.
