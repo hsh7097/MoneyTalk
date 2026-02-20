@@ -978,13 +978,20 @@ class SmsGroupClassifier @Inject constructor(
         cardRegex: String,
         groupMemberCount: Int
     ) {
-        val db = database ?: return
+        Log.d(TAG, "RTDB 표본 수집 시도: cardName=$cardName, source=$parseSource, db=${database != null}")
+        val db = database ?: run {
+            Log.w(TAG, "RTDB 표본 수집 스킵: FirebaseDatabase가 null")
+            return
+        }
 
         // 유사도 기반 중복 방지
         synchronized(sentSampleEmbeddings) {
             for (sentEmbedding in sentSampleEmbeddings) {
                 val similarity = patternMatcher.cosineSimilarity(embedded.embedding, sentEmbedding)
-                if (similarity >= RTDB_DEDUP_SIMILARITY) return
+                if (similarity >= RTDB_DEDUP_SIMILARITY) {
+                    Log.d(TAG, "RTDB 표본 수집 스킵: 중복 (similarity=$similarity)")
+                    return
+                }
             }
             sentSampleEmbeddings.add(embedded.embedding)
         }
@@ -1007,12 +1014,13 @@ class SmsGroupClassifier @Inject constructor(
             if (storeRegex.isNotBlank()) data["storeRegex"] = storeRegex        // 검증된 가게명 regex
             if (cardRegex.isNotBlank()) data["cardRegex"] = cardRegex           // 검증된 카드명 regex
 
+            Log.d(TAG, "RTDB 표본 수집 전송: path=sms_samples/$sampleKey, fields=${data.keys}")
             ref.updateChildren(data)
                 .addOnSuccessListener {
-                    Log.d(TAG, "RTDB 표본 수집 성공: ${cardName.ifBlank { "UNKNOWN" }} ($parseSource)")
+                    Log.d(TAG, "RTDB 표본 수집 성공: ${cardName.ifBlank { "UNKNOWN" }} ($parseSource) [sms_samples/$sampleKey]")
                 }
                 .addOnFailureListener { e ->
-                    Log.w(TAG, "RTDB 표본 수집 실패 (무시): ${e.message}")
+                    Log.e(TAG, "RTDB 표본 수집 실패: ${e.javaClass.simpleName}: ${e.message} [sms_samples/$sampleKey]")
                 }
         } catch (e: Exception) {
             Log.w(TAG, "RTDB 표본 수집 예외 (무시): ${e.message}")
