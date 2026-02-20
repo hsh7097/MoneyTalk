@@ -391,9 +391,8 @@ matchPatterns(embeddedSmsList)
     └ 카테고리: fallbackCategory
 
 regex 없거나 파싱 실패:
-  → 패턴 캐시값(parsedAmount, parsedStoreName 등)으로 직접 구성
-
-모든 폴백 실패 → null (미매칭 처리)
+  → null (미매칭 처리 → Step 5 LLM으로 위임)
+  ※ 캐시값 폴백 삭제됨 (다른 SMS에 첫 패턴 값이 덮어씌워지는 버그 방지)
 ```
 
 ### 가게명/카드명 검증

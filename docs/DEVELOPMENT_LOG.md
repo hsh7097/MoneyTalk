@@ -4,6 +4,73 @@
 
 ---
 
+## 2026-02-21 - 차트 UX 대폭 개선 + 6개월 평균 + 데이터 동기화
+
+### 작업 내용
+
+#### 누적 추이 차트 UX 개선
+- **범례 디자인 변경**: 체크박스 제거 → 채워진 원(primaryLine, 항상 활성) + 테두리 원(toggleable, 클릭 시 채움/비움 전환)
+- **X축 라벨 개선**: 3개(1,중간,말일) → 5일 간격(1,5,10,15,20,25,31), 30/31 겹침 방지
+- **X축 31일 고정**: `effectiveDays = MAX_DAYS_IN_MONTH(31)` — 2월(28일)에서도 1월(31일) 비교선 정상 표시
+- **Y축 고정**: 토글 상태와 무관하게 모든 곡선 최대값 기준으로 고정
+- **Y축 올림 규칙**: ≤100만→100만, >100만→200만 단위 올림 (가능한 값: 100만,200만,400만,600만,800만,...)
+- **Y축 5등분**: 수평 가이드라인 6개 (0%, 20%, 40%, 60%, 80%, 100%)
+
+#### 6개월 평균 곡선 추가
+- `buildAvgNMonthCumulative(n, ...)` 일반화 (3개월/6개월 공용)
+- 6개월 평균은 지난 6개월 데이터가 **모두** 존재할 때만 표시
+- 3개월 평균도 동일 규칙 적용 (지난 3개월 데이터 모두 존재 시만)
+- 누적 커브 하락 방지: 짧은 월(28/30일)에서 carry-forward 적용 (`getOrNull(day) ?: lastOrNull()`)
+
+#### History/Chat → Home 차트 데이터 동기화
+- `HistoryViewModel`: deleteExpense, deleteIncome, updateExpenseMemo, updateIncomeMemo, updateExpenseCategory 후 `DataRefreshEvent.TRANSACTION_ADDED` 발행
+- `ChatViewModel`: 채팅 액션(UPDATE_CATEGORY 등) 실행 후 `DataRefreshEvent.TRANSACTION_ADDED` 발행
+- `HomeViewModel`에서 이벤트 수신 시 해당 월 차트 데이터 자동 갱신
+
+### 변경 파일 (이전 커밋 포함)
+- `CumulativeChartCompose.kt` — X축 5일간격 라벨, Y축 5등분+고정, effectiveDays/yAxisMax 필드, ceilToNiceValue
+- `CumulativeTrendSection.kt` — 범례 원형 토글, MAX_DAYS_IN_MONTH=31, yAxisMax 토글 독립 계산
+- `SpendingTrendSection.kt` — avgSixMonthPoints 파라미터 추가
+- `HomeViewModel.kt` — buildAvgNMonthCumulative 일반화, 6개월 평균, carry-forward, DataRefreshEvent 수신
+- `HomeScreen.kt` — avgSixMonthPoints 전달
+- `HistoryViewModel.kt` — DataRefreshEvent 발행 추가
+- `ChatViewModel.kt` — DataRefreshEvent 발행 추가
+- `strings.xml` (ko/en) — "지난 3개월 평균" 라벨 변경 + "지난 6개월 평균" 추가
+
+---
+
+## 2026-02-21 - 차트 공통화 + 예산 설정 + SMS 캐시 폴백 버그 수정
+
+### 작업 내용
+
+#### 누적 추이 차트 공통화 (CumulativeTrendSection)
+- `SpendingTrendSection`(홈 전용)에서 도메인 독립적 `CumulativeTrendSection` 추출 → core/ui/component/chart/
+- `SpendingTrendSection`을 얇은 래퍼로 변환 (HomeScreen 호출 코드 변경 없음)
+- `ToggleableLine` @Immutable 데이터 클래스 (토글 가능 곡선 정보)
+
+#### 설정 화면 월 예산 설정
+- "수입/예산 관리" 섹션에 Savings 아이콘 + "월 예산 설정" 아이템 추가
+- `MonthlyBudgetDialog` 다이얼로그 (금액 입력, 0=해제)
+- SettingsViewModel: `loadMonthlyBudget()` / `saveMonthlyBudget()` — BudgetDao 연동
+- 예산 변경 시 `DataRefreshEvent.CATEGORY_UPDATED` → 홈 차트 자동 갱신
+
+#### SMS 캐시 폴백 버그 수정
+- `SmsPatternMatcher.parseWithPatternRegex()`: regex 파싱 실패 시 캐시값(parsedAmount/parsedStoreName) 폴백을 제거하고 null 반환으로 수정
+- 원인: 동일 템플릿에 매칭된 다른 SMS들에 첫 번째 패턴의 가게명/금액이 덮어씌워지는 버그
+- 수정 후: regex 파싱 실패 SMS는 Step 5 LLM으로 위임되어 개별 파싱
+
+### 변경 파일
+- `CumulativeTrendSection.kt` (신규) — 도메인 독립 누적 추이 섹션
+- `SpendingTrendSection.kt` — 얇은 래퍼로 변환
+- `SmsPatternMatcher.kt` — 캐시 폴백 제거
+- `SettingsScreen.kt` — 월 예산 설정 아이템 + 다이얼로그 연결
+- `SettingsViewModel.kt` — 예산 Intent/Dialog/State/로직 추가
+- `SettingsPreferenceDialogs.kt` — MonthlyBudgetDialog 추가
+- `strings.xml` (ko/en) — 예산 관련 문자열 7개 추가
+- `COMPOSABLE_MAP.md` — CumulativeTrendSection 추가
+
+---
+
 ## 2026-02-21 - UI 버그 수정 + PR 리뷰 반영
 
 ### 작업 내용

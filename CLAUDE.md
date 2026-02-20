@@ -86,3 +86,4 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 6. **셀프 리뷰 필수**: 모든 작업 완료 후 변경된 코드를 다시 읽고 셀프 리뷰 수행. 문제 발견 시 즉시 수정한 뒤 작업 완료 보고
 7. **Composable 맵 동기화**: 커밋/푸시 시 Composable 함수의 추가·삭제·변경이 있으면 반드시 `docs/COMPOSABLE_MAP.md`를 갱신한다
 8. **Composable 분리 원칙**: Composable은 기능 단위로 분리한다. 하나의 Composable이 서로 다른 기능(예: 오늘 지출 카드 + 전월 비교 카드)을 포함하면 각각 독립 Composable로 분리하여 관리한다
+9. **기능 단위 파일 분리**: 새로운 기능은 새로운 파일에서 작업한다. 기능 단위를 최대한 분리하여 데이터에 종속되지 않도록 한다. (예: 차트 컴포넌트는 차트 렌더링만 담당하고 도메인 데이터에 의존하지 않음)

@@ -181,6 +181,14 @@
 - MainActivity: NavigationBar windowInsets 분리로 하단 탭 64dp 보장 + 탭 전환 시 초기화
 - HistoryFilter: 카테고리 그리드 weight 기반으로 변경 → 큰 글꼴에서 적용 버튼 항상 노출
 
+**누적 추이 차트 UX 대폭 개선**: ✅ 완료 (2026-02-21)
+- 범례: 체크박스 → 채워진/테두리 원형 토글
+- X축: 5일 간격 라벨(1,5,10,15,20,25,31) + 31일 고정
+- Y축: 토글 무관 고정 + 200만 단위 올림 + 5등분
+- 6개월 평균 곡선 추가 (N개월 전체 데이터 존재 시만 표시)
+- 누적 커브 하락 방지 (짧은 월 carry-forward)
+- History/Chat → Home 차트 DataRefreshEvent 동기화
+
 ### 대기 중인 작업
 
 - `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지
@@ -245,6 +253,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-21 | 차트 UX 개선 (범례 원형 토글, X축 5일 간격 31일 고정, Y축 200만 단위 5등분, 6개월 평균, carry-forward, DataRefreshEvent 동기화) | 완료 |
 | 2026-02-21 | PR #23 코드 리뷰 반영 (빈 룰 캐싱, 차순위 룰 시도, 중복 승격 방지) + UI 버그 수정 (하단 탭 높이, 탭 전환 초기화, 필터 적용 버튼) | 완료 |
 | 2026-02-20 | LLM 생성 regex 샘플 검증 (validateRegexAgainstSamples, 50%+ 파싱 성공률 기준) | 완료 |
 | 2026-02-20 | RTDB 원격 regex 룰 매칭 시스템 (RemoteSmsRule, RemoteSmsRuleRepository, 로컬 승격, RTDB 표본 필드 정리) | 완료 |
