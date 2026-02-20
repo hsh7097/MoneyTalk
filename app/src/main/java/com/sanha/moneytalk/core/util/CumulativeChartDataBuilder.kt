@@ -73,7 +73,7 @@ object CumulativeChartDataBuilder {
             m -= 1
             if (m < 1) { m = 12; y -= 1 }
             val (s, e) = DateUtils.getCustomMonthPeriod(y, m, monthStartDay)
-            val days = ((e - s) / DAY_MS).toInt()
+            val days = ((e - s) / DAY_MS).toInt() + 1
             val exps = getExpensesByDateRange(s, e)
             // n개월 모두 데이터가 있어야 평균 노출 → 하나라도 비면 즉시 빈 리스트 반환
             if (exps.isEmpty()) return emptyList()

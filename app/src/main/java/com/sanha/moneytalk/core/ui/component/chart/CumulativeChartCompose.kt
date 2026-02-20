@@ -287,16 +287,11 @@ private fun DrawScope.drawXAxisLabels(
     }
     val labelY = paddingTop + chartHeight + 16.dp.toPx()
 
-    // 5일 간격 라벨: 1, 5, 10, 15, 20, 25, 말일 (겹침 방지)
-    val labelDays = mutableListOf(1)
-    for (d in 5..daysInMonth step 5) labelDays.add(d)
-    if (labelDays.last() != daysInMonth) {
-        // 말일과 마지막 라벨이 2일 이내면 교체, 아니면 추가
-        if (daysInMonth - labelDays.last() <= 2) {
-            labelDays[labelDays.lastIndex] = daysInMonth
-        } else {
-            labelDays.add(daysInMonth)
-        }
+    // 6등분 라벨: 1일 ~ 말일을 균등 분할 (7개 라벨)
+    // 예: 31일 → 1, 6, 11, 16, 21, 26, 31 / 28일 → 1, 6, 10, 15, 19, 24, 28
+    val divisionCount = 6
+    val labelDays = (0..divisionCount).map { i ->
+        1 + ((daysInMonth - 1) * i.toFloat() / divisionCount).toInt()
     }
 
     labelDays.forEach { day ->

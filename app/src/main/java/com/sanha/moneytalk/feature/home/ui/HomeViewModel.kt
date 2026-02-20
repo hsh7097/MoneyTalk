@@ -464,7 +464,7 @@ class HomeViewModel @Inject constructor(
                 val comparisonLabel = "${dateFormat.format(java.util.Date(lastMonthStart))} ~ ${dateFormat.format(java.util.Date(lastMonthSamePoint))}"
 
                 // ── 누적 지출 차트 데이터 (1회성) ──
-                val daysInMonth = ((monthEnd - monthStart) / (24L * 60 * 60 * 1000)).toInt()
+                val daysInMonth = ((monthEnd - monthStart) / (24L * 60 * 60 * 1000)).toInt() + 1
                 val todayDayIndex = if (now in monthStart..monthEnd) {
                     ((now - monthStart) / (24L * 60 * 60 * 1000)).toInt()
                 } else -1
@@ -473,7 +473,7 @@ class HomeViewModel @Inject constructor(
                 val (lastMonthFullStart, lastMonthFullEnd) = DateUtils.getCustomMonthPeriod(
                     prevYear, prevMonth, state.monthStartDay
                 )
-                val lastMonthDaysInMonth = ((lastMonthFullEnd - lastMonthFullStart) / (24L * 60 * 60 * 1000)).toInt()
+                val lastMonthDaysInMonth = ((lastMonthFullEnd - lastMonthFullStart) / (24L * 60 * 60 * 1000)).toInt() + 1
                 val fullLastMonthExpenses = withContext(Dispatchers.IO) {
                     expenseRepository.getExpensesByDateRangeOnce(lastMonthFullStart, lastMonthFullEnd)
                 }
