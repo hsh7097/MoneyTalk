@@ -36,7 +36,8 @@ import kotlin.math.sqrt
  */
 @Singleton
 class SmsPatternMatcher @Inject constructor(
-    private val smsPatternDao: SmsPatternDao
+    private val smsPatternDao: SmsPatternDao,
+    private val remoteSmsRuleRepository: RemoteSmsRuleRepository
 ) {
 
     companion object {
@@ -124,15 +125,12 @@ class SmsPatternMatcher @Inject constructor(
     /**
      * 임베딩된 SMS 리스트를 기존 패턴 DB와 매칭
      *
-     * 처리 흐름:
-     * 1. DB에서 비결제/결제 패턴 로드 (각각 1회 쿼리)
-     * 2. 각 SMS의 임베딩 벡터와 패턴 벡터의 코사인 유사도 비교
-     *    → 비결제 패턴 우선 확인 (빠른 제외, ≥0.97)
-     *    → 결제 패턴 매칭 (≥0.92)
-     * 3. 매칭 성공: 패턴의 regex로 원본(input.body) 파싱
-     *    → 파싱 성공: SmsParseResult 생성 → matched
-     *    → 파싱 실패: unmatched로 이동 (Step 5에서 재시도)
-     * 4. 매칭 실패: unmatched에 추가 (EmbeddedSms 보존 → Step 5에서 그룹핑)
+     * 매칭 순서:
+     * 1순위: 로컬 비결제 패턴 (≥0.97) → 제외
+     * 1순위: 로컬 결제 패턴 (≥0.92) → regex 파싱
+     * 2순위: 원격 RTDB 룰 매칭 (같은 sender, ≥rule.minSimilarity) → regex 파싱
+     *        매칭 성공 시 로컬 패턴에 승격 저장 (다음부터 로컬 히트)
+     * 미매칭: unmatched → Step 5 (그룹핑+LLM)
      *
      * @param embeddedSmsList Step 3에서 임베딩 완료된 SMS 리스트
      * @return Pair(매칭+파싱 성공 결과, 미매칭 SMS 리스트)
@@ -147,23 +145,29 @@ class SmsPatternMatcher @Inject constructor(
         val nonPaymentPatterns = smsPatternDao.getAllNonPaymentPatterns()
         val paymentPatterns = smsPatternDao.getAllPaymentPatterns()
 
-        Log.d(TAG, "패턴 로드: 결제 ${paymentPatterns.size}건, 비결제 ${nonPaymentPatterns.size}건")
+        // 원격 룰 1회 로드 (캐시 재사용, 실패 시 빈 맵)
+        val remoteRules = remoteSmsRuleRepository.loadRules()
+
+        Log.d(TAG, "패턴 로드: 결제 ${paymentPatterns.size}건, 비결제 ${nonPaymentPatterns.size}건, " +
+            "원격 룰 ${remoteRules.values.sumOf { it.size }}건 (${remoteRules.size}개 발신번호)")
+
+        var remoteMatchCount = 0
+        var remoteFailCount = 0
+        // 동일 sync 내 중복 승격 방지 (ruleId 기준)
+        val promotedRuleIds = mutableSetOf<String>()
 
         for (embedded in embeddedSmsList) {
             // --- [1] 비결제 패턴 우선 확인 (빠른 제외) ---
-            // 유사도 ≥ 0.97이면 비결제 확정 → 결과에서 완전 제외
-            // (matched에도 unmatched에도 넣지 않음 = 파이프라인 결과에서 사라짐)
             val nonPaymentMatch = findBestMatch(
                 embedded.embedding, nonPaymentPatterns, NON_PAYMENT_THRESHOLD
             )
             if (nonPaymentMatch != null) {
                 Log.d(TAG, "비결제 매칭 (${nonPaymentMatch.second}): ${embedded.input.body.take(30)}")
-                // 비결제 패턴 matchCount 갱신
                 smsPatternDao.incrementMatchCount(nonPaymentMatch.first.id)
-                continue  // 다음 SMS로
+                continue
             }
 
-            // --- [2] 결제 패턴 매칭 ---
+            // --- [2] 결제 패턴 매칭 (1순위: 로컬) ---
             val paymentMatch = findBestMatch(
                 embedded.embedding, paymentPatterns, PAYMENT_MATCH_THRESHOLD
             )
@@ -171,7 +175,6 @@ class SmsPatternMatcher @Inject constructor(
             if (paymentMatch != null) {
                 val (pattern, similarity) = paymentMatch
 
-                // regex로 원본(input.body) 파싱 시도
                 val analysis = parseWithPatternRegex(
                     body = embedded.input.body,
                     timestamp = embedded.input.date,
@@ -179,7 +182,6 @@ class SmsPatternMatcher @Inject constructor(
                 )
 
                 if (analysis != null) {
-                    // 파싱 성공 → SmsParseResult 생성
                     matched.add(
                         SmsParseResult(
                             input = embedded.input,
@@ -188,21 +190,30 @@ class SmsPatternMatcher @Inject constructor(
                             confidence = similarity
                         )
                     )
-                    // 패턴 사용 빈도 갱신
                     smsPatternDao.incrementMatchCount(pattern.id)
                     Log.d(TAG, "벡터매칭 성공 ($similarity): ${analysis.storeName} ${analysis.amount}원")
                 } else {
-                    // regex 파싱 실패 → 미매칭으로 전환 (Step 5에서 LLM 재시도)
                     Log.w(TAG, "벡터매칭 OK ($similarity) but 파싱 실패: ${embedded.input.body.take(30)}")
                     unmatched.add(embedded)
                 }
             } else {
-                // --- [3] 미매칭 (<0.92) → Step 5로 ---
-                unmatched.add(embedded)
+                // --- [3] 원격 룰 매칭 (2순위: RTDB) ---
+                val remoteResult = matchWithRemoteRules(embedded, remoteRules, promotedRuleIds)
+                if (remoteResult != null) {
+                    matched.add(remoteResult)
+                    remoteMatchCount++
+                } else {
+                    // --- [4] 미매칭 → Step 5로 ---
+                    unmatched.add(embedded)
+                    if (remoteRules.isNotEmpty()) remoteFailCount++
+                }
             }
         }
 
         Log.d(TAG, "매칭 결과: ${matched.size}건 성공, ${unmatched.size}건 미매칭")
+        if (remoteMatchCount > 0 || remoteFailCount > 0) {
+            Log.d(TAG, "  원격 룰: 성공 ${remoteMatchCount}건, 실패 ${remoteFailCount}건")
+        }
 
         // 발신번호별 매칭/미매칭 통계
         val matchedByAddr = matched.groupBy { it.input.address }
@@ -215,6 +226,120 @@ class SmsPatternMatcher @Inject constructor(
         }
 
         return matched to unmatched
+    }
+
+    // ===== 원격 룰 매칭 =====
+
+    /** 발신번호 정규화 (SmsGroupClassifier와 동일 로직) */
+    private val ADDRESS_CLEAN_PATTERN = Regex("""[-\s().]""")
+
+    private fun normalizeAddress(rawAddress: String): String {
+        var normalized = rawAddress.trim()
+        normalized = ADDRESS_CLEAN_PATTERN.replace(normalized, "")
+        if (normalized.startsWith("+82")) {
+            normalized = "0" + normalized.substring(3)
+        } else if (normalized.startsWith("82") && normalized.length >= 11) {
+            normalized = "0" + normalized.substring(2)
+        }
+        return normalized
+    }
+
+    /**
+     * 원격 RTDB 룰로 SMS 매칭 시도
+     *
+     * 1. 동일 normalized sender의 룰만 필터
+     * 2. 각 룰과 코사인 유사도 비교 → minSimilarity 이상인 룰만 유사도 내림차순 정렬
+     * 3. 상위 룰부터 순차적으로 regex 파싱 시도 (파싱 실패 시 다음 룰)
+     * 4. 파싱 성공 시 로컬 패턴 승격 저장 + SmsParseResult 반환
+     *
+     * @return 매칭+파싱 성공 시 SmsParseResult, 실패 시 null
+     */
+    private suspend fun matchWithRemoteRules(
+        embedded: EmbeddedSms,
+        remoteRules: Map<String, List<RemoteSmsRule>>,
+        promotedRuleIds: MutableSet<String>
+    ): SmsParseResult? {
+        val normalizedSender = normalizeAddress(embedded.input.address)
+        val senderRules = remoteRules[normalizedSender]
+        if (senderRules.isNullOrEmpty()) return null
+
+        // minSimilarity 이상인 룰을 유사도 내림차순으로 정렬
+        val candidates = senderRules.mapNotNull { rule ->
+            val similarity = cosineSimilarity(embedded.embedding, rule.embedding)
+            if (similarity >= rule.minSimilarity) rule to similarity else null
+        }.sortedByDescending { it.second }
+
+        if (candidates.isEmpty()) return null
+
+        // 유사도 높은 순서대로 파싱 시도 — 첫 성공 시 반환
+        for ((rule, similarity) in candidates) {
+            val analysis = parseWithRegex(
+                smsBody = embedded.input.body,
+                smsTimestamp = embedded.input.date,
+                amountRegex = rule.amountRegex,
+                storeRegex = rule.storeRegex,
+                cardRegex = rule.cardRegex
+            )
+
+            if (analysis == null || analysis.amount <= 0) {
+                Log.d(TAG, "원격 룰 매칭 ($similarity) but 파싱 실패: " +
+                    "ruleId=${rule.ruleId}, sender=$normalizedSender")
+                continue
+            }
+
+            Log.d(TAG, "원격 룰 매칭 성공 ($similarity): ruleId=${rule.ruleId}, " +
+                "${analysis.storeName} ${analysis.amount}원 (sender=$normalizedSender)")
+
+            // 로컬 패턴에 승격 저장 (동일 ruleId는 sync당 1회만)
+            if (promotedRuleIds.add(rule.ruleId)) {
+                promoteToLocalPattern(embedded, analysis, rule, similarity)
+            }
+
+            return SmsParseResult(
+                input = embedded.input,
+                analysis = analysis,
+                tier = 2,  // 벡터매칭 tier 유지 (remote 표기는 로그로)
+                confidence = similarity
+            )
+        }
+
+        Log.d(TAG, "원격 룰 ${candidates.size}건 모두 파싱 실패: sender=$normalizedSender")
+        return null
+    }
+
+    /**
+     * 원격 룰 매칭 성공 시 로컬 sms_patterns에 승격 저장
+     *
+     * 다음 동기화부터 로컬 벡터 매칭으로 히트되어 RTDB 조회 없이 처리됨.
+     */
+    private suspend fun promoteToLocalPattern(
+        embedded: EmbeddedSms,
+        analysis: SmsAnalysisResult,
+        rule: RemoteSmsRule,
+        similarity: Float
+    ) {
+        try {
+            val pattern = SmsPatternEntity(
+                smsTemplate = embedded.template,
+                senderAddress = normalizeAddress(embedded.input.address),
+                embedding = embedded.embedding,
+                isPayment = true,
+                parsedAmount = analysis.amount,
+                parsedStoreName = analysis.storeName,
+                parsedCardName = analysis.cardName,
+                parsedCategory = analysis.category,
+                amountRegex = rule.amountRegex,
+                storeRegex = rule.storeRegex,
+                cardRegex = rule.cardRegex,
+                parseSource = "remote_rule",
+                confidence = similarity
+            )
+            smsPatternDao.insert(pattern)
+            Log.d(TAG, "원격 룰 → 로컬 승격: ruleId=${rule.ruleId}, " +
+                "${analysis.cardName} ${analysis.storeName}")
+        } catch (e: Exception) {
+            Log.w(TAG, "로컬 승격 실패 (무시): ${e.message}")
+        }
     }
 
     // ===== regex 파싱 (self-contained) =====

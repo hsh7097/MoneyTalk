@@ -153,6 +153,11 @@
 - SmsBatchProcessor DI 제거, launchBackgroundHybridClassification() 삭제
 - core/sms (V1)은 SmsProcessingService 실시간 수신 전용으로 유지
 
+**LLM 생성 regex 샘플 검증**: ✅ 완료 (2026-02-20)
+- SmsGroupClassifier: regex 생성 후 `validateRegexAgainstSamples()`로 샘플 SMS에 실제 적용 검증
+- 50%+ 파싱 성공 시만 `llm_regex`로 채택, 실패 시 템플릿 폴백 + 쿨다운 기록
+- `REGEX_VALIDATION_MIN_PASS_RATIO = 0.50` 상수 추가
+
 **DB 메인 그룹 패턴 저장 + 메인 regex 선조회**: ✅ 완료 (2026-02-20)
 - SmsPatternEntity에 `isMainGroup: Boolean` 필드 추가 (DB v2→v3 마이그레이션)
 - SmsPatternDao에 `getMainPatternBySender()` 쿼리 추가
@@ -161,6 +166,20 @@
 - 예외 그룹 regex 생성 시 MainRegexContext로 메인 regex 참조 전달
 - senderAddress normalizeAddress() 적용 (registerPaymentPattern/registerNonPaymentPattern)
 - GeminiSmsExtractor: LLM 프롬프트 개선 (샘플 1~5건, 메인 regex 참조, 프롬프트 XML 이전)
+
+**RTDB 원격 regex 룰 매칭 시스템**: ✅ 완료 (2026-02-20)
+- `RemoteSmsRule.kt`: 원격 regex 룰 데이터 클래스 (ruleId, embedding, regex 3종, minSimilarity=0.94)
+- `RemoteSmsRuleRepository.kt`: RTDB 룰 로드 + 메모리 캐시(TTL 10분) + sender별 그룹핑
+- `SmsPatternMatcher.kt`: 로컬 패턴 미매칭 시 2순위 원격 룰 매칭 + 로컬 DB 승격 (parseSource="remote_rule")
+- `SmsGroupClassifier.kt`: RTDB 표본 수집 필드 정리 (불필요 필드 제거 + 주석 추가 + embedding/normalizedSenderAddress 포함)
+- sms2 파일 수 10→12개 (RemoteSmsRule, RemoteSmsRuleRepository 추가)
+
+**PR #23 코드 리뷰 반영 + UI 버그 수정**: ✅ 완료 (2026-02-21)
+- RemoteSmsRuleRepository: 빈 룰 결과도 TTL 캐시 (cachedRules nullable 전환)
+- SmsPatternMatcher: 파싱 실패 시 차순위 룰 순차 시도 + 중복 승격 방지 (promotedRuleIds)
+- SmsGroupClassifier: RTDB 표본 수집 디버그 로그 강화
+- MainActivity: NavigationBar windowInsets 분리로 하단 탭 64dp 보장 + 탭 전환 시 초기화
+- HistoryFilter: 카테고리 그리드 weight 기반으로 변경 → 큰 글꼴에서 적용 버튼 항상 노출
 
 ### 대기 중인 작업
 
@@ -226,6 +245,9 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-21 | PR #23 코드 리뷰 반영 (빈 룰 캐싱, 차순위 룰 시도, 중복 승격 방지) + UI 버그 수정 (하단 탭 높이, 탭 전환 초기화, 필터 적용 버튼) | 완료 |
+| 2026-02-20 | LLM 생성 regex 샘플 검증 (validateRegexAgainstSamples, 50%+ 파싱 성공률 기준) | 완료 |
+| 2026-02-20 | RTDB 원격 regex 룰 매칭 시스템 (RemoteSmsRule, RemoteSmsRuleRepository, 로컬 승격, RTDB 표본 필드 정리) | 완료 |
 | 2026-02-20 | DB 메인 그룹 패턴 저장 + Step 5 메인 regex 선조회 (isMainGroup, getMainPatternBySender, MainRegexContext) | 완료 |
 | 2026-02-20 | sms2 마이그레이션 완료: SmsReaderV2/SmsIncomeParser/SmsSyncCoordinator/SmsIncomeFilter 신규 + syncSmsV2 오케스트레이터 + syncSmsMessages 삭제 | 완료 |
 | 2026-02-19 | SMS 통합 파이프라인 sms2 패키지 6개 파일 생성 (SmsPipeline, SmsPatternMatcher 등) | 완료 |
@@ -281,7 +303,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 파일 | 설명 |
 |------|------|
-| [`AppDatabase.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/AppDatabase.kt) | Room DB 정의 (v6, 10 entities) |
+| [`AppDatabase.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/AppDatabase.kt) | Room DB 정의 (v6, 10 entities, sms_patterns v3) |
 | [`OwnedCardEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/OwnedCardEntity.kt) | 카드 화이트리스트 Entity |
 | [`SmsExclusionKeywordEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/SmsExclusionKeywordEntity.kt) | SMS 제외 키워드 Entity |
 | [`OwnedCardRepository.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt) | 카드 관리 + CardNameNormalizer 연동 |
@@ -318,8 +340,10 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | [`SmsPipelineModels.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipelineModels.kt) | 데이터 클래스 (SmsInput, EmbeddedSms, SmsParseResult, SyncResult) |
 | [`SmsPreFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPreFilter.kt) | Step 2: 사전 필터링 (키워드 + 구조) |
 | [`SmsTemplateEngine.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsTemplateEngine.kt) | Step 3: 템플릿화 + Gemini Embedding API |
-| [`SmsPatternMatcher.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPatternMatcher.kt) | Step 4: 벡터 매칭 + regex 파싱 |
-| [`SmsGroupClassifier.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsGroupClassifier.kt) | Step 5: 그룹핑 + LLM + regex 생성 |
+| [`SmsPatternMatcher.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPatternMatcher.kt) | Step 4: 벡터 매칭 + 원격 룰 매칭 + regex 파싱 |
+| [`SmsGroupClassifier.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsGroupClassifier.kt) | Step 5: 그룹핑 + LLM + regex 생성 + RTDB 표본 수집 |
+| [`RemoteSmsRule.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/RemoteSmsRule.kt) | 원격 SMS regex 룰 데이터 클래스 |
+| [`RemoteSmsRuleRepository.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/RemoteSmsRuleRepository.kt) | 원격 룰 리포지토리 (RTDB + 메모리 캐시) |
 
 ### 유사도 정책
 

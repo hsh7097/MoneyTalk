@@ -4,6 +4,80 @@
 
 ---
 
+## 2026-02-21 - UI 버그 수정 + PR 리뷰 반영
+
+### 작업 내용
+
+#### 하단 탭 높이 고정
+- `enableEdgeToEdge()` 환경에서 `NavigationBar`가 내부적으로 시스템 네비게이션 바 insets를 포함하여 실제 콘텐츠 영역이 줄어드는 문제
+- `NavigationBar(windowInsets = WindowInsets(0))` + Column에 `windowInsetsPadding(WindowInsets.navigationBars)` 분리 적용
+
+#### 탭 전환 시 오늘 페이지 + 필터 초기화
+- `!isSelected` 분기에서도 `homeTabReClickEvent`/`historyTabReClickEvent` 발행
+- 다른 탭에서 홈/내역 탭으로 이동 시에도 초기화 동작
+
+#### 필터 BottomSheet 적용 버튼 미노출
+- 큰 글꼴(SP 설정) 환경에서 `LazyVerticalGrid`의 `heightIn(max: 300.dp)` → `weight(1f, fill = false)` 변경
+- 적용 버튼이 항상 하단에 노출되도록 수정
+
+#### PR #23 코드 리뷰 반영 (3건)
+- 빈 룰 결과도 TTL 캐시 (`cachedRules` nullable 전환)
+- 원격 룰 파싱 실패 시 차순위 룰 순차 시도 (유사도 내림차순 정렬)
+- 동일 sync 내 중복 승격 방지 (`promotedRuleIds` Set)
+
+### 변경 파일
+- `MainActivity.kt` — 하단 탭 windowInsets 분리, 탭 전환 초기화
+- `HistoryFilter.kt` — 필터 카테고리 그리드 weight 기반 변경
+- `RemoteSmsRuleRepository.kt` — nullable cache
+- `SmsPatternMatcher.kt` — 차순위 룰 시도, 중복 승격 방지
+- `SmsGroupClassifier.kt` — RTDB 디버그 로그 강화
+
+---
+
+## 2026-02-20 - LLM 생성 regex 샘플 검증
+
+### 작업 내용
+
+#### LLM regex 자동 검증 (validateRegexAgainstSamples)
+- `SmsGroupClassifier.processGroup()`: regex 생성 성공 후, 샘플 SMS에 실제 적용하여 파싱 성공률 확인
+- 샘플 중 50% 이상(`REGEX_VALIDATION_MIN_PASS_RATIO`) 파싱 성공해야 유효한 regex로 인정
+- 검증 실패 시 `recordRegexFailure()` + 템플릿 폴백으로 전환
+- LLM hallucination으로 인한 깨진 regex가 DB에 저장되는 것 방지
+
+### 변경 파일
+- `SmsGroupClassifier.kt` — `validateRegexAgainstSamples()` 추가, `processGroup()` regex 검증 로직 삽입
+
+---
+
+## 2026-02-20 - RTDB 원격 regex 룰 매칭 시스템
+
+### 작업 내용
+
+#### 1. 원격 SMS regex 룰 매칭 (Step 4 2순위)
+- `RemoteSmsRule.kt`: RTDB `/sms_regex_rules/v1/{sender}/{ruleId}` 에서 내려받는 정제된 룰 데이터 클래스
+  - embedding, amountRegex, storeRegex, cardRegex, minSimilarity(0.94), enabled, updatedAt
+- `RemoteSmsRuleRepository.kt`: RTDB 룰 로드 + 메모리 캐시(TTL 10분) + sender별 그룹핑
+  - 실패 시 빈 맵 반환 (예외 전파 금지), enabled=true 룰만 로드
+- `SmsPatternMatcher.kt`: `matchWithRemoteRules()` 추가
+  - 동일 발신번호 룰 필터 → 코사인 유사도 ≥ minSimilarity → regex 파싱
+  - 매칭 성공 시 `promoteToLocalPattern()` → 로컬 DB에 parseSource="remote_rule" 승격
+
+#### 2. RTDB 표본 수집 필드 정리
+- `collectSampleToRtdb()` 시그니처 간소화 (isMainGroup, sourceTotalCount, sourceSubGroupCount 제거)
+- `registerPaymentPattern()`, `processGroup()` 시그니처 간소화
+- RTDB 데이터 필드 정리:
+  - 유지: maskedBody, cardName, senderAddress, normalizedSenderAddress, parseSource, embedding, groupMemberCount, regex 3종
+  - 제거: embeddingDim, templateHash, sourceTotalCount, sourceSubGroupCount, isMainGroup, appVersion, count, lastSeen, updatedAt (ServerValue)
+- 각 필드에 인라인 주석 추가
+
+### 변경 파일
+- `RemoteSmsRule.kt` — 신규 (원격 룰 데이터 클래스)
+- `RemoteSmsRuleRepository.kt` — 신규 (RTDB 로드 + 캐시)
+- `SmsPatternMatcher.kt` — 원격 룰 매칭 + 로컬 승격 추가
+- `SmsGroupClassifier.kt` — RTDB 표본 필드 정리 + 시그니처 간소화
+
+---
+
 ## 2026-02-20 - DB 메인 그룹 패턴 저장 + 메인 regex 선조회
 
 ### 작업 내용
@@ -782,6 +856,7 @@ app/src/main/java/com/sanha/moneytalk/
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|-----------|
+| 2026-02-20 | 1.1.0 | RTDB 원격 regex 룰 매칭 시스템 (RemoteSmsRule, RemoteSmsRuleRepository, 로컬 승격) |
 | 2026-02-19 | 1.1.0 | SMS 통합 파이프라인 sms2 패키지 6개 파일 생성 + SmsParser KB 출금 유형 확장 |
 | 2026-02-19 | 1.1.0 | 레거시 FULL_SYNC_UNLOCKED 호환성 수정 (PR #21 리뷰 반영) |
 | 2026-02-19 | 1.1.0 | SMS 동기화 최적화 (2개월 축소 + 발신자 필터 + LLM 트리거 + core/sms 분리 + 부분 데이터 CTA) |

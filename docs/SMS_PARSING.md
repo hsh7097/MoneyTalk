@@ -80,11 +80,13 @@ core/sms2/                           ★ sms2 통합 파이프라인
 ├── SmsPreFilter.kt                  # Step 0: 비결제 키워드+구조 필터
 ├── SmsIncomeFilter.kt               # Step 1: 결제/수입/스킵 분류
 ├── SmsTemplateEngine.kt             # Step 3: 템플릿화 + Gemini Embedding API
-├── SmsPatternMatcher.kt             # Step 4: 벡터 매칭 + regex 파싱 (자체 코사인 유사도)
-├── SmsGroupClassifier.kt            # Step 5: 그룹핑 + LLM + regex 생성 + 패턴 등록
+├── SmsPatternMatcher.kt             # Step 4: 벡터 매칭 + 원격 룰 매칭 + regex 파싱 (자체 코사인 유사도)
+├── SmsGroupClassifier.kt            # Step 5: 그룹핑 + LLM + regex 생성 + 패턴 등록 + RTDB 표본 수집
 ├── GeminiSmsExtractor.kt            # LLM 추출 (배치 추출 + regex 생성 + MainRegexContext)
 ├── SmsReaderV2.kt                   # SMS/MMS/RCS 통합 읽기 (ContentResolver → List<SmsInput>)
-└── SmsIncomeParser.kt               # 수입 SMS 파싱 (금액/유형/출처/날짜 추출)
+├── SmsIncomeParser.kt               # 수입 SMS 파싱 (금액/유형/출처/날짜 추출)
+├── RemoteSmsRule.kt                 # 원격 SMS regex 룰 데이터 클래스 (RTDB → 로컬 매칭)
+└── RemoteSmsRuleRepository.kt       # 원격 룰 리포지토리 (RTDB 로드 + 메모리 캐시 + TTL)
 
 core/database/entity/
 └── SmsPatternEntity.kt              # 벡터 DB 엔티티 (18 필드, isMainGroup 포함)
@@ -360,13 +362,19 @@ RandomAccess 체크로 ArrayList boxing/unboxing 오버헤드 제거.
 matchPatterns(embeddedSmsList)
   │
   ├── DB 패턴 로드 (비결제 + 결제, 각 1회 쿼리)
+  ├── 원격 룰 로드 (RemoteSmsRuleRepository.loadRules(), 캐시 재사용)
   │
   ├── 각 SMS에 대해:
   │   ├─ [1] 비결제 패턴 우선 확인 (≥0.97) → 제외 (matched에도 unmatched에도 안 넣음)
   │   ├─ [2] 결제 패턴 매칭 (≥0.92) → parseWithPatternRegex()
   │   │   ├ 파싱 성공 → SmsParseResult(tier=2) → matched
   │   │   └ 파싱 실패 → unmatched (Step 5로)
-  │   └─ [3] 미매칭 (<0.92) → unmatched
+  │   ├─ [3] 원격 룰 매칭 ★ 신규 2순위
+  │   │   ├ 동일 발신번호 룰 필터 → 코사인 유사도 ≥ rule.minSimilarity(기본 0.94)
+  │   │   ├ regex 파싱 성공 → SmsParseResult(tier=2) → matched
+  │   │   ├ 로컬 패턴 DB에 승격(promoteToLocalPattern, parseSource="remote_rule")
+  │   │   └ 파싱 실패 → unmatched
+  │   └─ [4] 미매칭 (<0.92, 원격 룰도 없음) → unmatched
   │
   └── 반환: (matched, unmatched)
 ```
@@ -398,6 +406,63 @@ regex 없거나 파싱 실패:
 ### Regex 캐시
 `ConcurrentHashMap<String, Regex>` — 같은 정규식 문자열의 재컴파일 방지
 
+### 원격 룰 매칭 — RemoteSmsRule + RemoteSmsRuleRepository ★
+
+로컬 DB 패턴 미매칭 시 **2순위**로 RTDB 원격 룰을 사용하여 매칭합니다.
+
+#### 전체 파이프라인
+
+```
+[Step 5 LLM 처리]
+  → collectSampleToRtdb() → /sms_samples/{sender}_{hash}/
+    (PII 마스킹된 SMS + 임베딩 + regex + 카드명 + 발신번호)
+
+[관리자 수동 처리] ← 아직 미자동화
+  → sms_samples에서 임베딩 유사도 98%+ 그룹핑
+  → 검증된 regex를 /sms_regex_rules/v1/{sender}/{ruleId}/ 에 배포
+
+[다음 동기화 시 Step 4]
+  → RemoteSmsRuleRepository.loadRules() — RTDB에서 전체 룰 로드
+  → matchWithRemoteRules() — 발신번호 필터 + 유사도 ≥ 0.94 + regex 파싱
+  → promoteToLocalPattern() — 로컬 DB에 parseSource="remote_rule"로 승격
+  → 이후 동기화에서는 로컬 패턴으로 매칭 (RTDB 호출 불필요)
+```
+
+#### RemoteSmsRule 데이터 클래스
+
+```kotlin
+data class RemoteSmsRule(
+    val ruleId: String,                    // RTDB 룰 고유 ID
+    val normalizedSenderAddress: String,   // 정규화된 발신번호
+    val embedding: List<Float>,            // 3072차원 임베딩 벡터
+    val amountRegex: String,               // 금액 추출 정규식
+    val storeRegex: String,                // 가게명 추출 정규식
+    val cardRegex: String = "",            // 카드명 추출 정규식 (선택)
+    val minSimilarity: Float = 0.94f,      // 최소 유사도 임계값
+    val enabled: Boolean = true,           // 활성화 여부
+    val updatedAt: Long = 0L               // 마지막 업데이트 시각
+)
+```
+
+#### RemoteSmsRuleRepository
+
+| 속성 | 값 | 설명 |
+|------|---|------|
+| RTDB 경로 | `sms_regex_rules/v1` | sender별 룰 그룹핑 |
+| 캐시 TTL | 10분 | 동기화 중 반복 네트워크 호출 방지 |
+| 안정성 | RTDB 실패 시 빈 맵 반환 | 예외 전파 금지, main thread 블로킹 없음 |
+| 필터링 | `enabled=true` 룰만 로드 | 비활성 룰 자동 제외 |
+
+#### promoteToLocalPattern() — 원격 룰 로컬 승격
+
+원격 룰 매칭 성공 시 로컬 `SmsPatternEntity`로 승격하여 다음 동기화부터 RTDB 없이 매칭:
+
+```kotlin
+parseSource = "remote_rule"
+confidence = 1.0f
+isMainGroup = false
+```
+
 ---
 
 ## 10. 그룹 분류 + LLM — SmsGroupClassifier
@@ -418,6 +483,7 @@ regex 없거나 파싱 실패:
 | `SMALL_GROUP_MERGE_MIN_SIMILARITY` | 0.70 | 소그룹 병합 최소 유사도 |
 | `REGEX_FAILURE_THRESHOLD` | 2 | regex 실패 쿨다운 기준 |
 | `REGEX_FAILURE_COOLDOWN_MS` | 30분 | regex 실패 쿨다운 시간 |
+| `REGEX_VALIDATION_MIN_PASS_RATIO` | 0.50 | regex 검증 최소 파싱 성공률 |
 | `RTDB_DEDUP_SIMILARITY` | 0.99 | RTDB 표본 중복 판정 |
 
 ### classifyUnmatched() 전체 흐름
@@ -455,8 +521,10 @@ classifyUnmatched(unmatchedList)
   │   ├ 결제 → regex 생성 시도:
   │   │   ├ mainContext에 regex 있으면 → MainRegexContext 구성 → 참조 전달
   │   │   ├ 멤버 ≥ 3 + 쿨다운 아님 → smsExtractor.generateRegexForGroup(mainRegexContext)
-  │   │   │   ├ 성공 → parseSource = "llm_regex"
-  │   │   │   └ 실패 → buildTemplateFallbackRegex()
+  │   │   │   ├ 생성 성공 → validateRegexAgainstSamples() ★ 샘플 검증
+  │   │   │   │   ├ 검증 통과 (50%+ 파싱 성공) → parseSource = "llm_regex"
+  │   │   │   │   └ 검증 실패 → buildTemplateFallbackRegex()
+  │   │   │   └ 생성 실패 → buildTemplateFallbackRegex()
   │   │   │       ├ 성공 → parseSource = "template_regex"
   │   │   │       └ 실패 → parseSource = "llm"
   │   │   └ 멤버 < 3 → 템플릿 폴백 시도
@@ -773,6 +841,7 @@ ORDER BY matchCount DESC LIMIT 1
 | `llm` | LLM 추출 (regex 생성 실패) | 0.8 | SmsGroupClassifier.registerPaymentPattern() |
 | `llm_regex` | LLM + regex 생성 성공 | 1.0 | SmsGroupClassifier.registerPaymentPattern() |
 | `template_regex` | LLM 실패 + 템플릿 폴백 regex | 0.85 | SmsGroupClassifier.registerPaymentPattern() |
+| `remote_rule` | RTDB 원격 룰 매칭 → 로컬 승격 | 1.0 | SmsPatternMatcher.promoteToLocalPattern() |
 
 ---
 
@@ -815,16 +884,17 @@ ORDER BY matchCount DESC LIMIT 1
 
 ```
 sms_samples/
-  └── {senderAddress}_{templateHashCode}/
-      ├── maskedBody: String     # PII 마스킹된 SMS 본문
-      ├── cardName: String       # 카드사명
-      ├── senderAddress: String  # 발신번호
-      ├── parseSource: String    # 파싱 소스
-      ├── amountRegex: String?   # 금액 추출 정규식 (llm_regex만)
-      ├── storeRegex: String?    # 가게명 추출 정규식 (llm_regex만)
-      ├── cardRegex: String?     # 카드사 추출 정규식 (llm_regex만)
-      ├── count: ServerValue.increment(1)  # 수집 횟수
-      └── lastSeen: ServerValue.TIMESTAMP  # 마지막 수집 시간
+  └── {normalizedSenderAddress}_{templateHashCode}/
+      ├── maskedBody: String                # PII 마스킹된 SMS 본문 (regex 작성/검증용)
+      ├── cardName: String                  # 카드사명 (발신번호 내 카드 식별)
+      ├── senderAddress: String             # 원본 발신번호 (표본 추적용)
+      ├── normalizedSenderAddress: String   # 정규화된 발신번호 (룰 그룹핑 키)
+      ├── parseSource: String               # 파싱 소스 (llm_regex만 regex 신뢰 가능)
+      ├── embedding: List<Float>            # 3072차원 임베딩 (코사인 유사도 매칭 핵심)
+      ├── groupMemberCount: Int             # 관측 SMS 수 (신뢰도 판단)
+      ├── amountRegex: String?              # 검증된 금액 regex (llm_regex인 경우)
+      ├── storeRegex: String?               # 검증된 가게명 regex
+      └── cardRegex: String?                # 검증된 카드명 regex
 ```
 
 ### 중복 방지

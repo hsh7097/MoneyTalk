@@ -2,7 +2,7 @@ package com.sanha.moneytalk.core.sms2
 
 import android.util.Log
 import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ServerValue
+
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
@@ -99,6 +99,9 @@ class SmsGroupClassifier @Inject constructor(
 
         /** RTDB 표본 중복 판정 유사도 (0.99 = 동일 형식만 스킵) */
         private const val RTDB_DEDUP_SIMILARITY = 0.99f
+
+        /** regex 검증: 샘플 중 이 비율 이상 파싱 성공해야 유효 (50%) */
+        private const val REGEX_VALIDATION_MIN_PASS_RATIO = 0.5f
 
         /** 발신번호 정규화: 하이픈/공백/괄호 제거용 */
         private val ADDRESS_CLEAN_PATTERN = Regex("""[-\s().]""")
@@ -359,7 +362,11 @@ class SmsGroupClassifier @Inject constructor(
             // 서브그룹 1개 = 메인만 존재
             // DB 메인 패턴이 있으면 regex 참조로 전달 (같은 번호의 이전 메인 형식)
             results.addAll(
-                processGroup(sourceGroup.mainGroup, mainContext = dbMainContext, isMainGroup = true).results
+                processGroup(
+                    sourceGroup.mainGroup,
+                    mainContext = dbMainContext,
+                    isMainGroup = true
+                ).results
             )
             return results
         }
@@ -369,7 +376,10 @@ class SmsGroupClassifier @Inject constructor(
             if (dbMainPattern != null) " (DB 메인 참조)" else "")
 
         // Step 1: 메인 그룹 먼저 처리 (isMainGroup=true → DB에 메인 표시)
-        val mainProcessResult = processGroup(sourceGroup.mainGroup, isMainGroup = true)
+        val mainProcessResult = processGroup(
+            sourceGroup.mainGroup,
+            isMainGroup = true
+        )
         results.addAll(mainProcessResult.results)
 
         // Step 2: 메인 결과로 컨텍스트 생성 (regex 참조 포함)
@@ -504,12 +514,34 @@ class SmsGroupClassifier @Inject constructor(
             if (regexResult != null && regexResult.isPayment &&
                 regexResult.amountRegex.isNotBlank() && regexResult.storeRegex.isNotBlank()
             ) {
-                amountRegex = regexResult.amountRegex
-                storeRegex = regexResult.storeRegex
-                cardRegex = regexResult.cardRegex
-                parseSource = "llm_regex"
-                clearRegexFailure(representative.template)
-                Log.d(TAG, "regex 생성 성공: amount=${amountRegex.take(40)}, store=${storeRegex.take(40)}")
+                // regex 검증: 샘플 SMS에 실제 적용하여 파싱 성공률 확인
+                val validated = validateRegexAgainstSamples(
+                    amountRegex = regexResult.amountRegex,
+                    storeRegex = regexResult.storeRegex,
+                    cardRegex = regexResult.cardRegex,
+                    samples = samples,
+                    timestamps = timestamps
+                )
+
+                if (validated) {
+                    amountRegex = regexResult.amountRegex
+                    storeRegex = regexResult.storeRegex
+                    cardRegex = regexResult.cardRegex
+                    parseSource = "llm_regex"
+                    clearRegexFailure(representative.template)
+                    Log.d(TAG, "regex 생성+검증 성공: amount=${amountRegex.take(40)}, store=${storeRegex.take(40)}")
+                } else {
+                    Log.w(TAG, "regex 생성 OK but 검증 실패 → 템플릿 폴백 시도")
+                    recordRegexFailure(representative.template)
+
+                    val fallback = buildTemplateFallbackRegex(representative.template)
+                    if (fallback != null) {
+                        amountRegex = fallback.amountRegex
+                        storeRegex = fallback.storeRegex
+                        cardRegex = fallback.cardRegex
+                        parseSource = "template_regex"
+                    }
+                }
             } else {
                 recordRegexFailure(representative.template)
                 Log.w(TAG, "regex 생성 실패 → 템플릿 폴백 시도")
@@ -542,7 +574,8 @@ class SmsGroupClassifier @Inject constructor(
             amountRegex = amountRegex,
             storeRegex = storeRegex,
             cardRegex = cardRegex,
-            isMainGroup = isMainGroup
+            isMainGroup = isMainGroup,
+            groupMemberCount = group.members.size
         )
 
         // --- [5-4] 그룹 전체 멤버 파싱 ---
@@ -861,7 +894,8 @@ class SmsGroupClassifier @Inject constructor(
         amountRegex: String = "",
         storeRegex: String = "",
         cardRegex: String = "",
-        isMainGroup: Boolean = false
+        isMainGroup: Boolean = false,
+        groupMemberCount: Int = 1
     ) {
         try {
             val pattern = SmsPatternEntity(
@@ -895,7 +929,8 @@ class SmsGroupClassifier @Inject constructor(
                 parseSource = source,
                 amountRegex = if (hasVerifiedRegex) amountRegex else "",
                 storeRegex = if (hasVerifiedRegex) storeRegex else "",
-                cardRegex = if (hasVerifiedRegex) cardRegex else ""
+                cardRegex = if (hasVerifiedRegex) cardRegex else "",
+                groupMemberCount = groupMemberCount
             )
         } catch (e: Exception) {
             Log.e(TAG, "패턴 등록 실패: ${e.message}")
@@ -928,9 +963,11 @@ class SmsGroupClassifier @Inject constructor(
     /**
      * RTDB에 마스킹된 SMS 샘플 수집 (비동기, 실패해도 무시)
      *
-     * 목적: 향후 정규식 주입/개선용 표본 축적
+     * 목적: 향후 원격 regex 룰 배포용 표본 축적
      * 중복 방지: 기존 전송 표본과 유사도 ≥ 0.99면 스킵
      * PII 마스킹: 숫자→*, 가게명→*, 날짜→*
+     *
+     * RTDB 경로: /sms_samples/{sampleKey}
      */
     private fun collectSampleToRtdb(
         embedded: EmbeddedSms,
@@ -938,42 +975,52 @@ class SmsGroupClassifier @Inject constructor(
         parseSource: String,
         amountRegex: String,
         storeRegex: String,
-        cardRegex: String
+        cardRegex: String,
+        groupMemberCount: Int
     ) {
-        val db = database ?: return
+        Log.d(TAG, "RTDB 표본 수집 시도: cardName=$cardName, source=$parseSource, db=${database != null}")
+        val db = database ?: run {
+            Log.w(TAG, "RTDB 표본 수집 스킵: FirebaseDatabase가 null")
+            return
+        }
 
         // 유사도 기반 중복 방지
         synchronized(sentSampleEmbeddings) {
             for (sentEmbedding in sentSampleEmbeddings) {
                 val similarity = patternMatcher.cosineSimilarity(embedded.embedding, sentEmbedding)
-                if (similarity >= RTDB_DEDUP_SIMILARITY) return
+                if (similarity >= RTDB_DEDUP_SIMILARITY) {
+                    Log.d(TAG, "RTDB 표본 수집 스킵: 중복 (similarity=$similarity)")
+                    return
+                }
             }
             sentSampleEmbeddings.add(embedded.embedding)
         }
 
         try {
             val maskedBody = maskSmsBody(embedded.input.body)
-            val sampleKey = "${embedded.input.address}_${embedded.template.hashCode().toUInt()}"
+            val sampleKey = "${normalizeAddress(embedded.input.address)}_${embedded.template.hashCode().toUInt()}"
 
             val ref = db.getReference("sms_samples").child(sampleKey)
             val data = mutableMapOf<String, Any>(
-                "maskedBody" to maskedBody,
-                "cardName" to cardName,
-                "senderAddress" to embedded.input.address,
-                "parseSource" to parseSource,
-                "count" to ServerValue.increment(1),
-                "lastSeen" to ServerValue.TIMESTAMP
+                "maskedBody" to maskedBody,                                     // PII 마스킹된 원본 (regex 작성/검증용)
+                "cardName" to cardName.ifBlank { "UNKNOWN" },                   // 카드명 (발신번호 내 카드 식별)
+                "senderAddress" to embedded.input.address,                      // 원본 발신번호 (표본 추적용)
+                "normalizedSenderAddress" to normalizeAddress(embedded.input.address), // 룰 그룹핑 키 (/sms_regex_rules/v1/{sender}/)
+                "parseSource" to parseSource,                                   // 파싱 소스 (llm_regex만 regex 신뢰 가능)
+                "embedding" to embedded.embedding,                              // 3072차원 임베딩 (코사인 유사도 매칭 핵심)
+                "groupMemberCount" to groupMemberCount                          // 이 패턴의 관측 SMS 수 (신뢰도 판단)
             )
-            if (amountRegex.isNotBlank()) data["amountRegex"] = amountRegex
-            if (storeRegex.isNotBlank()) data["storeRegex"] = storeRegex
-            if (cardRegex.isNotBlank()) data["cardRegex"] = cardRegex
+            if (amountRegex.isNotBlank()) data["amountRegex"] = amountRegex     // 검증된 금액 regex (llm_regex인 경우)
+            if (storeRegex.isNotBlank()) data["storeRegex"] = storeRegex        // 검증된 가게명 regex
+            if (cardRegex.isNotBlank()) data["cardRegex"] = cardRegex           // 검증된 카드명 regex
 
+            Log.d(TAG, "RTDB 표본 수집 전송: path=sms_samples/$sampleKey, fields=${data.keys}")
             ref.updateChildren(data)
                 .addOnSuccessListener {
-                    Log.d(TAG, "RTDB 표본 수집 성공: $cardName ($parseSource)")
+                    Log.d(TAG, "RTDB 표본 수집 성공: ${cardName.ifBlank { "UNKNOWN" }} ($parseSource) [sms_samples/$sampleKey]")
                 }
                 .addOnFailureListener { e ->
-                    Log.w(TAG, "RTDB 표본 수집 실패 (무시): ${e.message}")
+                    Log.e(TAG, "RTDB 표본 수집 실패: ${e.javaClass.simpleName}: ${e.message} [sms_samples/$sampleKey]")
                 }
         } catch (e: Exception) {
             Log.w(TAG, "RTDB 표본 수집 예외 (무시): ${e.message}")
@@ -1031,6 +1078,57 @@ class SmsGroupClassifier @Inject constructor(
         }
 
         return masked
+    }
+
+    // ===== [5-3] regex 검증 =====
+
+    /**
+     * LLM이 생성한 regex를 샘플 SMS에 실제 적용하여 유효성 검증
+     *
+     * 검증 기준:
+     * - 각 샘플에 regex를 적용해 금액/가게명이 추출되는지 확인
+     * - 전체 샘플 중 50% 이상 파싱 성공해야 유효
+     *
+     * LLM hallucination으로 인한 깨진 regex가 DB에 등록되는 것을 방지.
+     *
+     * @param amountRegex LLM이 생성한 금액 정규식
+     * @param storeRegex LLM이 생성한 가게명 정규식
+     * @param cardRegex LLM이 생성한 카드명 정규식
+     * @param samples 검증에 사용할 SMS 본문 리스트
+     * @param timestamps 검증에 사용할 SMS 타임스탬프 리스트
+     * @return 검증 통과 여부
+     */
+    private fun validateRegexAgainstSamples(
+        amountRegex: String,
+        storeRegex: String,
+        cardRegex: String,
+        samples: List<String>,
+        timestamps: List<Long>
+    ): Boolean {
+        if (samples.isEmpty()) return false
+
+        var passCount = 0
+        for (i in samples.indices) {
+            val result = patternMatcher.parseWithRegex(
+                smsBody = samples[i],
+                smsTimestamp = timestamps.getOrElse(i) { 0L },
+                amountRegex = amountRegex,
+                storeRegex = storeRegex,
+                cardRegex = cardRegex
+            )
+            if (result != null && result.amount > 0) {
+                passCount++
+            }
+        }
+
+        val passRatio = passCount.toFloat() / samples.size
+        val passed = passRatio >= REGEX_VALIDATION_MIN_PASS_RATIO
+
+        Log.d(TAG, "regex 검증: ${passCount}/${samples.size} 파싱 성공 " +
+            "(${(passRatio * 100).toInt()}%, 기준 ${(REGEX_VALIDATION_MIN_PASS_RATIO * 100).toInt()}%) " +
+            "→ ${if (passed) "통과" else "실패"}")
+
+        return passed
     }
 
     // ===== [5-3] regex 실패 쿨다운 =====

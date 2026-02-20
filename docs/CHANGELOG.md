@@ -4,7 +4,23 @@
 
 ## [Unreleased]
 
+### Added (2026-02-21)
+- **RTDB 표본 수집 디버그 로그 강화**: collectSampleToRtdb 진입/스킵/전송/성공/실패 상세 로그 추가
+
+### Fixed (2026-02-21)
+- **하단 탭 높이**: edge-to-edge 환경에서 NavigationBar windowInsets 분리로 64dp 보장
+- **탭 전환 시 초기화**: 다른 탭에서 홈/내역 탭 이동 시 오늘 페이지 + 필터 초기화
+- **필터 적용 버튼 미노출**: 큰 글꼴 환경에서 카테고리 그리드 weight 기반으로 변경하여 적용 버튼 항상 노출
+- **PR #23 코드 리뷰 반영**: 빈 룰 캐싱, 파싱 실패 시 차순위 룰 시도, 중복 승격 방지
+
 ### Added (2026-02-20)
+- **LLM 생성 regex 샘플 검증**: `validateRegexAgainstSamples()` — regex 생성 후 샘플 SMS에 실제 적용하여 50%+ 파싱 성공 시만 채택, 실패 시 템플릿 폴백
+- **RTDB 원격 regex 룰 매칭 시스템**: Step 4에서 로컬 패턴 미매칭 시 2순위로 RTDB 원격 룰 매칭
+  - `RemoteSmsRule.kt`: 원격 룰 데이터 클래스 (embedding, regex 3종, minSimilarity=0.94)
+  - `RemoteSmsRuleRepository.kt`: RTDB 룰 로드 + 메모리 캐시(TTL 10분) + sender별 그룹핑
+  - `SmsPatternMatcher.matchWithRemoteRules()`: 발신번호 필터 → 유사도 매칭 → regex 파싱
+  - `SmsPatternMatcher.promoteToLocalPattern()`: 매칭 성공 시 로컬 DB에 parseSource="remote_rule"로 승격
+- **RTDB 표본 수집 필드 정리**: 불필요 필드 제거 (ServerValue, 통계 필드 등) + embedding/normalizedSenderAddress 추가
 - **DB 메인 그룹 패턴 저장**: `SmsPatternEntity.isMainGroup` 필드 추가 (DB v2→v3)
   - `getMainPatternBySender()` 쿼리로 발신번호별 메인 패턴 조회
   - Step 5 진입 시 DB에서 메인 regex 선조회 → 예외 그룹 regex 생성 시 참조 전달

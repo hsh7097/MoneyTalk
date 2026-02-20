@@ -13,10 +13,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -257,7 +260,10 @@ fun MoneyTalkApp(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (showBottomBar) {
-                Column {
+                Column(
+                    modifier = Modifier
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                ) {
                     HorizontalDivider(
                         thickness = 1.dp,
                         color = MaterialTheme.colorScheme.outlineVariant
@@ -265,7 +271,8 @@ fun MoneyTalkApp(
                     NavigationBar(
                         modifier = Modifier.height(64.dp),
                         containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 0.dp
+                        tonalElevation = 0.dp,
+                        windowInsets = WindowInsets(0)
                     ) {
                         bottomNavItems.forEach { item ->
                             val title = stringResource(item.titleRes)
@@ -274,6 +281,7 @@ fun MoneyTalkApp(
                                 selected = isSelected,
                                 onClick = {
                                     if (!isSelected) {
+                                        // 다른 탭에서 이동 → 네비게이션 + 오늘 페이지/필터 초기화
                                         navController.navigate(item.route) {
                                             popUpTo(Screen.Home.route) {
                                                 saveState = true
@@ -281,11 +289,17 @@ fun MoneyTalkApp(
                                             launchSingleTop = true
                                             restoreState = true
                                         }
+                                        // 탭 전환 시에도 오늘 페이지 + 필터 초기화
+                                        if (item.route == Screen.Home.route) {
+                                            homeTabReClickEvent.tryEmit(Unit)
+                                        } else if (item.route.startsWith("history")) {
+                                            historyTabReClickEvent.tryEmit(Unit)
+                                        }
                                     } else if (item.route == Screen.Home.route) {
                                         // 홈 탭 재클릭 → 오늘 페이지로 이동
                                         homeTabReClickEvent.tryEmit(Unit)
                                     } else if (item.route.startsWith("history")) {
-                                        // 내역 탭 재클릭 → 오늘 페이지로 이동
+                                        // 내역 탭 재클릭 → 오늘 페이지로 이동 + 필터 초기화
                                         historyTabReClickEvent.tryEmit(Unit)
                                     }
                                 },
