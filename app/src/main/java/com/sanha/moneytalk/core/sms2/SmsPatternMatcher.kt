@@ -405,19 +405,10 @@ class SmsPatternMatcher @Inject constructor(
             if (result != null) return result
         }
 
-        // regex 없거나 파싱 실패 → 패턴 캐시값으로 직접 구성
-        // 카테고리는 미분류로 설정 → saveExpenses()에서 4-tier 분류로 위임
-        if (pattern.parsedAmount > 0 && pattern.parsedStoreName.isNotBlank()) {
-            return SmsAnalysisResult(
-                amount = pattern.parsedAmount,
-                storeName = pattern.parsedStoreName,
-                category = "미분류",
-                dateTime = extractDateTime(body, timestamp),
-                cardName = pattern.parsedCardName.ifBlank { "기타" }
-            )
-        }
-
-        // 모든 폴백 실패
+        // regex 없거나 파싱 실패 → 미매칭 처리 (Step 5 LLM으로 위임)
+        // ※ 캐시값(parsedAmount/StoreName)을 폴백으로 사용하면
+        //    다른 SMS에 첫 번째 패턴의 가게명/금액이 덮어씌워지는 버그 발생
+        Log.d(TAG, "regex 파싱 실패 → 미매칭: ${body.take(30)}")
         return null
     }
 
