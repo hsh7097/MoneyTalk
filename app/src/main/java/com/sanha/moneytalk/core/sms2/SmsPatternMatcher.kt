@@ -273,11 +273,12 @@ class SmsPatternMatcher @Inject constructor(
         }
 
         // regex 없거나 파싱 실패 → 패턴 캐시값으로 직접 구성
+        // 카테고리는 미분류로 설정 → saveExpenses()에서 4-tier 분류로 위임
         if (pattern.parsedAmount > 0 && pattern.parsedStoreName.isNotBlank()) {
             return SmsAnalysisResult(
                 amount = pattern.parsedAmount,
                 storeName = pattern.parsedStoreName,
-                category = pattern.parsedCategory.ifBlank { "기타" },
+                category = "미분류",
                 dateTime = extractDateTime(body, timestamp),
                 cardName = pattern.parsedCardName.ifBlank { "기타" }
             )
@@ -345,11 +346,13 @@ class SmsPatternMatcher @Inject constructor(
         }
 
         // --- 카테고리 ---
+        // 가게명이 폴백과 동일한 경우에만 폴백 카테고리 사용
+        // 가게명이 다르면 미분류 → saveExpenses()에서 4-tier 분류로 위임
         val category = when {
             fallbackCategory.isNotBlank() &&
                 fallbackStore.isNotBlank() &&
                 parsedStore.equals(fallbackStore, ignoreCase = true) -> fallbackCategory
-            else -> fallbackCategory.ifBlank { "기타" }
+            else -> "미분류"
         }
 
         return SmsAnalysisResult(
