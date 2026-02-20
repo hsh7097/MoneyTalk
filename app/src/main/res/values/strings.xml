@@ -114,6 +114,12 @@
     <string name="home_recent_expense">최근 지출</string>
     <string name="home_today_transactions">오늘 내역</string>
     <string name="home_no_today_transactions">오늘은 아직 내역이 없어요</string>
+    <string name="home_spending_trend">지출 추이</string>
+    <string name="home_trend_last_month">지난달</string>
+    <string name="home_trend_avg_three_month">지난 3개월 평균</string>
+    <string name="home_trend_avg_six_month">지난 6개월 평균</string>
+    <string name="home_trend_budget">예산</string>
+    <string name="home_trend_this_month">이번 달</string>
     <string name="home_empty_expense_title">아직 지출 내역이 없어요</string>
     <string name="home_empty_expense_subtitle">문자를 동기화해서 지출을 추가해보세요</string>
     <string name="home_sync_dialog_title">지출 내역 읽는 중</string>
@@ -205,6 +211,13 @@
     <string name="settings_month_start_custom">매월 %d일부터</string>
     <string name="settings_category_budget_title">카테고리별 예산</string>
     <string name="settings_category_budget_subtitle">카테고리별 한도를 설정하세요</string>
+    <string name="settings_monthly_budget_title">월 예산 설정</string>
+    <string name="settings_monthly_budget_subtitle_empty">월 지출 한도를 설정하세요</string>
+    <string name="settings_monthly_budget_subtitle_set">월 %s원</string>
+    <string name="dialog_monthly_budget_title">월 예산 설정</string>
+    <string name="dialog_monthly_budget_message">매월 지출 한도를 입력하세요. 차트에서 예산 대비 지출을 확인할 수 있습니다.</string>
+    <string name="dialog_monthly_budget_label">월 예산</string>
+    <string name="dialog_monthly_budget_hint">0을 입력하면 예산을 해제합니다</string>
 
     <string name="settings_section_ai">AI 설정</string>
     <string name="settings_api_key_title">Gemini API 키</string>
