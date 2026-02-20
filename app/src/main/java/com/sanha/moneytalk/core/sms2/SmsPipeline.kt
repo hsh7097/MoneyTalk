@@ -99,7 +99,7 @@ class SmsPipeline @Inject constructor(
             Log.d(TAG, "사전 필터링 스킵 (SmsSyncCoordinator에서 처리됨)")
             smsList
         } else {
-            onProgress?.invoke("사전 필터링", 0, smsList.size)
+            onProgress?.invoke("문자 분류 준비 중...", 0, smsList.size)
             val result = preFilter.filter(smsList)
             Log.d(TAG, "필터링: ${smsList.size}건 → ${result.size}건 (${smsList.size - result.size}건 제외)")
             result
@@ -108,20 +108,20 @@ class SmsPipeline @Inject constructor(
         if (filtered.isEmpty()) return emptyList()
 
         // Step 3: 전체 임베딩 — 100건씩 배치, Semaphore(10)로 병렬 제한
-        onProgress?.invoke("임베딩 생성", 0, filtered.size)
+        onProgress?.invoke("문자 패턴 분석 중...", 0, filtered.size)
         val embedded = batchEmbed(filtered)
         Log.d(TAG, "임베딩: ${filtered.size}건 → ${embedded.size}건 성공")
 
         if (embedded.isEmpty()) return emptyList()
 
         // Step 4: 벡터 매칭 — DB 기존 패턴과 유사도 비교
-        onProgress?.invoke("패턴 매칭", 0, embedded.size)
+        onProgress?.invoke("이전 내역과 비교 중...", 0, embedded.size)
         val (vectorResults, unmatched) = patternMatcher.matchPatterns(embedded)
         Log.d(TAG, "벡터매칭: ${embedded.size}건 → 매칭 ${vectorResults.size}건, 미매칭 ${unmatched.size}건")
 
         // Step 5: 미매칭분 그룹핑 + LLM
         val llmResults = if (unmatched.isNotEmpty()) {
-            onProgress?.invoke("LLM 분석", vectorResults.size, embedded.size)
+            onProgress?.invoke("AI가 결제 내역 분석 중...", vectorResults.size, embedded.size)
             groupClassifier.classifyUnmatched(unmatched, onProgress)
         } else {
             emptyList()

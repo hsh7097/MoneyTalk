@@ -240,7 +240,7 @@ class SmsGroupClassifier @Inject constructor(
         val results = mutableListOf<SmsParseResult>()
 
         // [5-1] 그룹핑 (Level 1~3: 발신번호 → 벡터 유사도 → 소그룹 병합)
-        onProgress?.invoke("그룹핑", 0, unmatchedList.size)
+        onProgress?.invoke("비슷한 문자 묶는 중...", 0, unmatchedList.size)
         val groups = groupByAddressThenSimilarity(unmatchedList)
         Log.d(TAG, "그룹핑 완료: ${unmatchedList.size}건 → ${groups.size}그룹")
 
@@ -280,7 +280,7 @@ class SmsGroupClassifier @Inject constructor(
                         } finally {
                             semaphore.release()
                             val done = processedSources.incrementAndGet()
-                            onProgress?.invoke("LLM 분석", done, sourceGroups.size)
+                            onProgress?.invoke("AI가 결제 내역 분석 중...", done, sourceGroups.size)
                         }
                     }
                 }.awaitAll()

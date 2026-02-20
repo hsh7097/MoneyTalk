@@ -291,7 +291,7 @@ class CategoryClassifierServiceImpl @Inject constructor(
 
         // ===== [1/6] 미분류 항목 조회 =====
         val step1Start = System.currentTimeMillis()
-        onStepProgress?.invoke("미분류 항목 조회 중...", 0, 0)
+        onStepProgress?.invoke("분류할 항목 확인 중...", 0, 0)
         val unclassifiedExpenses = expenseRepository.getExpensesByCategoryOnce("미분류")
         val step1Elapsed = System.currentTimeMillis() - step1Start
         Log.e("MT_DEBUG", "CategoryClassifier[1/6 DB조회] : ${unclassifiedExpenses.size}건 (${step1Elapsed}ms)")
@@ -324,14 +324,14 @@ class CategoryClassifierServiceImpl @Inject constructor(
 
         // ===== [2/6] 로컬 룰 사전 분류 =====
         val step2Start = System.currentTimeMillis()
-        onStepProgress?.invoke("로컬 룰 분류 중...", 0, storeNames.size)
+        onStepProgress?.invoke("기본 규칙으로 분류 중...", 0, storeNames.size)
         val (ruleClassified, storeNamesForGemini) = preClassifyByRules(storeNames)
         val step2Elapsed = System.currentTimeMillis() - step2Start
         Log.e("MT_DEBUG", "CategoryClassifier[2/6 로컬룰] : ${ruleClassified.size}건 분류, ${storeNamesForGemini.size}건 남음 (${step2Elapsed}ms)")
 
         // ===== [3/6] 시맨틱 그룹핑 (임베딩 + 클러스터링) =====
         val step3Start = System.currentTimeMillis()
-        onStepProgress?.invoke("유사 가게 그룹핑 중...", 0, storeNamesForGemini.size)
+        onStepProgress?.invoke("비슷한 가게 묶는 중...", 0, storeNamesForGemini.size)
         val groups = try {
             storeNameGrouper.groupStoreNames(storeNamesForGemini)
         } catch (e: Exception) {
@@ -358,7 +358,7 @@ class CategoryClassifierServiceImpl @Inject constructor(
         val classifications: Map<String, String>
         val step4Elapsed: Long
         if (representatives.isNotEmpty()) {
-            onStepProgress?.invoke("AI 분류 중...", 0, representatives.size)
+            onStepProgress?.invoke("AI가 분류하는 중...", 0, representatives.size)
             val batchCount = (representatives.size + 49) / 50 // BATCH_SIZE=50 기준
             Log.e(
                 "MT_DEBUG",
@@ -429,7 +429,7 @@ class CategoryClassifierServiceImpl @Inject constructor(
                 expenseRepository.updateCategoryByStoreName(store, newCategory)
             }
             if (idx % 10 == 0) {
-                onStepProgress?.invoke("지출 업데이트 중...", idx, storeNamesToUpdate.size)
+                onStepProgress?.invoke("분류 결과 적용 중...", idx, storeNamesToUpdate.size)
             }
         }
         val step6Elapsed = System.currentTimeMillis() - step6Start
