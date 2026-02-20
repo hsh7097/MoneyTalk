@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added (2026-02-20)
+- **LLM 생성 regex 샘플 검증**: `validateRegexAgainstSamples()` — regex 생성 후 샘플 SMS에 실제 적용하여 50%+ 파싱 성공 시만 채택, 실패 시 템플릿 폴백
 - **RTDB 원격 regex 룰 매칭 시스템**: Step 4에서 로컬 패턴 미매칭 시 2순위로 RTDB 원격 룰 매칭
   - `RemoteSmsRule.kt`: 원격 룰 데이터 클래스 (embedding, regex 3종, minSimilarity=0.94)
   - `RemoteSmsRuleRepository.kt`: RTDB 룰 로드 + 메모리 캐시(TTL 10분) + sender별 그룹핑

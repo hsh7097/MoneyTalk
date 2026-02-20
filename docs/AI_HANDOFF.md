@@ -153,6 +153,11 @@
 - SmsBatchProcessor DI 제거, launchBackgroundHybridClassification() 삭제
 - core/sms (V1)은 SmsProcessingService 실시간 수신 전용으로 유지
 
+**LLM 생성 regex 샘플 검증**: ✅ 완료 (2026-02-20)
+- SmsGroupClassifier: regex 생성 후 `validateRegexAgainstSamples()`로 샘플 SMS에 실제 적용 검증
+- 50%+ 파싱 성공 시만 `llm_regex`로 채택, 실패 시 템플릿 폴백 + 쿨다운 기록
+- `REGEX_VALIDATION_MIN_PASS_RATIO = 0.50` 상수 추가
+
 **DB 메인 그룹 패턴 저장 + 메인 regex 선조회**: ✅ 완료 (2026-02-20)
 - SmsPatternEntity에 `isMainGroup: Boolean` 필드 추가 (DB v2→v3 마이그레이션)
 - SmsPatternDao에 `getMainPatternBySender()` 쿼리 추가
@@ -233,6 +238,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-20 | LLM 생성 regex 샘플 검증 (validateRegexAgainstSamples, 50%+ 파싱 성공률 기준) | 완료 |
 | 2026-02-20 | RTDB 원격 regex 룰 매칭 시스템 (RemoteSmsRule, RemoteSmsRuleRepository, 로컬 승격, RTDB 표본 필드 정리) | 완료 |
 | 2026-02-20 | DB 메인 그룹 패턴 저장 + Step 5 메인 regex 선조회 (isMainGroup, getMainPatternBySender, MainRegexContext) | 완료 |
 | 2026-02-20 | sms2 마이그레이션 완료: SmsReaderV2/SmsIncomeParser/SmsSyncCoordinator/SmsIncomeFilter 신규 + syncSmsV2 오케스트레이터 + syncSmsMessages 삭제 | 완료 |

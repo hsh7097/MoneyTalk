@@ -4,6 +4,21 @@
 
 ---
 
+## 2026-02-20 - LLM 생성 regex 샘플 검증
+
+### 작업 내용
+
+#### LLM regex 자동 검증 (validateRegexAgainstSamples)
+- `SmsGroupClassifier.processGroup()`: regex 생성 성공 후, 샘플 SMS에 실제 적용하여 파싱 성공률 확인
+- 샘플 중 50% 이상(`REGEX_VALIDATION_MIN_PASS_RATIO`) 파싱 성공해야 유효한 regex로 인정
+- 검증 실패 시 `recordRegexFailure()` + 템플릿 폴백으로 전환
+- LLM hallucination으로 인한 깨진 regex가 DB에 저장되는 것 방지
+
+### 변경 파일
+- `SmsGroupClassifier.kt` — `validateRegexAgainstSamples()` 추가, `processGroup()` regex 검증 로직 삽입
+
+---
+
 ## 2026-02-20 - RTDB 원격 regex 룰 매칭 시스템
 
 ### 작업 내용

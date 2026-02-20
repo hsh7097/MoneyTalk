@@ -483,6 +483,7 @@ isMainGroup = false
 | `SMALL_GROUP_MERGE_MIN_SIMILARITY` | 0.70 | 소그룹 병합 최소 유사도 |
 | `REGEX_FAILURE_THRESHOLD` | 2 | regex 실패 쿨다운 기준 |
 | `REGEX_FAILURE_COOLDOWN_MS` | 30분 | regex 실패 쿨다운 시간 |
+| `REGEX_VALIDATION_MIN_PASS_RATIO` | 0.50 | regex 검증 최소 파싱 성공률 |
 | `RTDB_DEDUP_SIMILARITY` | 0.99 | RTDB 표본 중복 판정 |
 
 ### classifyUnmatched() 전체 흐름
@@ -520,8 +521,10 @@ classifyUnmatched(unmatchedList)
   │   ├ 결제 → regex 생성 시도:
   │   │   ├ mainContext에 regex 있으면 → MainRegexContext 구성 → 참조 전달
   │   │   ├ 멤버 ≥ 3 + 쿨다운 아님 → smsExtractor.generateRegexForGroup(mainRegexContext)
-  │   │   │   ├ 성공 → parseSource = "llm_regex"
-  │   │   │   └ 실패 → buildTemplateFallbackRegex()
+  │   │   │   ├ 생성 성공 → validateRegexAgainstSamples() ★ 샘플 검증
+  │   │   │   │   ├ 검증 통과 (50%+ 파싱 성공) → parseSource = "llm_regex"
+  │   │   │   │   └ 검증 실패 → buildTemplateFallbackRegex()
+  │   │   │   └ 생성 실패 → buildTemplateFallbackRegex()
   │   │   │       ├ 성공 → parseSource = "template_regex"
   │   │   │       └ 실패 → parseSource = "llm"
   │   │   └ 멤버 < 3 → 템플릿 폴백 시도

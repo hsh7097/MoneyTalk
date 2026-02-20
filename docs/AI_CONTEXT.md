@@ -222,6 +222,7 @@ SimilarityPolicy (판단 인터페이스)
        ─── LLM 고정 confidence
 0.70 ─── 소그룹 병합 최소 유사도 (SmsGroupClassifier.SMALL_GROUP_MERGE_MIN_SIMILARITY)
 0.60 ─── confidence 차단 임계값 (CategoryPropagationPolicy.MIN_PROPAGATION_CONFIDENCE)
+0.50 ─── regex 검증 최소 파싱 성공률 (SmsGroupClassifier.REGEX_VALIDATION_MIN_PASS_RATIO)
 0.00 ─── 매칭 없음
 ```
 
