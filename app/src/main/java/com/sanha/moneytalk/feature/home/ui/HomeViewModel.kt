@@ -710,6 +710,16 @@ class HomeViewModel @Inject constructor(
 
     /** 화면이 다시 표시될 때 데이터 새로고침 (LaunchedEffect에서 호출) */
     fun refreshData() {
+        // resume 시 silent 증분 동기화 (새 SMS가 있으면 자동 추가)
+        if (!_uiState.value.isSyncing) {
+            viewModelScope.launch {
+                val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
+                syncSmsV2(
+                    appContext.contentResolver, range,
+                    updateLastSyncTime = true, silent = true
+                )
+            }
+        }
         // 캐시를 지우지 않고 재로드 → 기존 데이터 유지하면서 갱신 (깜빡임 방지)
         loadCurrentAndAdjacentPages()
         // resume 시 미분류 항목이 있고 분류가 진행 중이 아니면 자동 분류 시작
