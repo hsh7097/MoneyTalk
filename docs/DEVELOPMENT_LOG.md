@@ -10,8 +10,10 @@
 
 #### 누적 추이 차트 UX 개선
 - **범례 디자인 변경**: 체크박스 제거 → 채워진 원(primaryLine, 항상 활성) + 테두리 원(toggleable, 클릭 시 채움/비움 전환)
-- **X축 라벨 개선**: 3개(1,중간,말일) → 5일 간격(1,5,10,15,20,25,31), 30/31 겹침 방지
-- **X축 31일 고정**: `effectiveDays = MAX_DAYS_IN_MONTH(31)` — 2월(28일)에서도 1월(31일) 비교선 정상 표시
+- **X축 6등분 균등 분할**: 실제 말일 기준 6등분 (31일→1,6,11,16,21,26,31 / 28일→1,6,10,15,19,24,28)
+- **X축 스트레칭**: 각 곡선이 자기 포인트 수 기준으로 전체 폭 채움
+- **0원 시작점**: 모든 곡선의 첫 포인트를 0원으로 추가 (그래프가 항상 0에서 시작)
+- **daysInMonth 계산 수정**: `(monthEnd-monthStart)/DAY_MS` → +1 보정 (endTime 23:59:59 정수 나눗셈 문제)
 - **Y축 고정**: 토글 상태와 무관하게 모든 곡선 최대값 기준으로 고정
 - **Y축 올림 규칙**: ≤100만→100만, >100만→200만 단위 올림 (가능한 값: 100만,200만,400만,600만,800만,...)
 - **Y축 5등분**: 수평 가이드라인 6개 (0%, 20%, 40%, 60%, 80%, 100%)
@@ -53,6 +55,13 @@
 - `MonthlyBudgetDialog` 다이얼로그 (금액 입력, 0=해제)
 - SettingsViewModel: `loadMonthlyBudget()` / `saveMonthlyBudget()` — BudgetDao 연동
 - 예산 변경 시 `DataRefreshEvent.CATEGORY_UPDATED` → 홈 차트 자동 갱신
+
+#### 차트 추가 수정 (후속 커밋)
+- X축 라벨: 5일 간격 고정 → 6등분 균등 분할로 변경
+- daysInMonth 계산 +1 보정 (endTime 23:59:59.999 정수 나눗셈 문제)
+- 0원 시작점: buildDailyCumulative/buildBudgetCumulativePoints 첫 포인트 0L 추가
+- todayDayIndex +1 보정 (points[0]=0원 시작점이므로)
+- PR #24 리뷰: onCategorySelected 핸들러 복원 (카테고리 탭 → History 네비게이션)
 
 #### SMS 캐시 폴백 버그 수정
 - `SmsPatternMatcher.parseWithPatternRegex()`: regex 파싱 실패 시 캐시값(parsedAmount/parsedStoreName) 폴백을 제거하고 null 반환으로 수정
