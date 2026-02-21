@@ -219,6 +219,16 @@
     <string name="dialog_monthly_budget_label">월 예산</string>
     <string name="dialog_monthly_budget_hint">0을 입력하면 예산을 해제합니다</string>
 
+    <!-- Budget BottomSheet -->
+    <string name="budget_sheet_title">예산 설정</string>
+    <string name="budget_total_label">전체 예산</string>
+    <string name="budget_total_hint">전체 월 예산을 입력하세요</string>
+    <string name="budget_category_header">카테고리별 예산</string>
+    <string name="budget_category_reset">초기화</string>
+    <string name="budget_saved">예산이 저장되었습니다</string>
+    <string name="budget_subtitle_total_and_category">월 %s원 + %d개 카테고리</string>
+    <string name="budget_subtitle_category_only">%d개 카테고리 예산 설정</string>
+
     <string name="settings_section_ai">AI 설정</string>
     <string name="settings_api_key_title">Gemini API 키</string>
     <string name="settings_api_key_set">설정됨: %s</string>
@@ -398,4 +408,9 @@
     <string name="force_update_message">새 버전이 출시되었습니다.\n최신 버전(%1$s)으로 업데이트해야 앱을 사용할 수 있습니다.\n\n현재 버전: %2$s</string>
     <string name="force_update_button">업데이트</string>
     <string name="force_update_exit">종료</string>
+
+    <!-- 카테고리 상세 -->
+    <string name="action_back">뒤로가기</string>
+    <string name="category_detail_spending_trend">%s 지출 추이</string>
+    <string name="category_detail_empty">이 달에는 %s 지출이 없습니다</string>
 </resources>
