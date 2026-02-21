@@ -993,9 +993,14 @@ class HomeViewModel @Inject constructor(
         // 최대 2개월(DEFAULT_SYNC_PERIOD_MILLIS) 이전까지만 조회하도록 clamp
         val minStartTime = now - DEFAULT_SYNC_PERIOD_MILLIS
 
+        // SMS date와 동기화 시각 사이의 지연(네트워크, ContentProvider 기록 등)에 의한
+        // 누락을 방지하기 위해 lastSyncTime에서 5분 마진을 빼서 조회.
+        // 중복 SMS는 readAndFilterSms에서 smsId 기반으로 자동 제거됨.
+        val OVERLAP_MARGIN_MILLIS = 5L * 60 * 1000 // 5분
+
         val startTime = if (effectiveSyncTime > 0) {
-            // 증분: lastSyncTime이 2개월보다 오래되었으면 2개월 전으로 clamp
-            maxOf(effectiveSyncTime, minStartTime)
+            // 증분: lastSyncTime - 마진, 2개월보다 오래되었으면 2개월 전으로 clamp
+            maxOf(effectiveSyncTime - OVERLAP_MARGIN_MILLIS, minStartTime)
         } else {
             // 초기: 전월 1일 ~ now (2달치)
             val cal = java.util.Calendar.getInstance()
