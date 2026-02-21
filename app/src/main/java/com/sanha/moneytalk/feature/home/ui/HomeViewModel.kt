@@ -221,9 +221,16 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /** 현재 월 ± PAGE_CACHE_RANGE 밖의 캐시 정리 */
+    /** 현재 월 ± PAGE_CACHE_RANGE 밖의 캐시 + Job 정리 */
     private fun evictDistantCache(year: Int, month: Int) {
         val currentTotal = year * 12 + month
+        // 범위 밖 Job 취소
+        val evictKeys = pageLoadJobs.keys.filter { key ->
+            kotlin.math.abs(key.year * 12 + key.month - currentTotal) > PAGE_CACHE_RANGE
+        }
+        evictKeys.forEach { key ->
+            pageLoadJobs.remove(key)?.cancel()
+        }
         _uiState.update { state ->
             val filtered = state.pageCache.filter { (key, _) ->
                 val keyTotal = key.year * 12 + key.month
