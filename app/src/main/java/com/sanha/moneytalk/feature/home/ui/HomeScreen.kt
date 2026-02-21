@@ -236,7 +236,11 @@ fun HomeScreen(
                     viewModel.showFullSyncAdDialog()
                 }
             },
-            onCategorySelected = { /* 카테고리 상세 페이지 미구현 — 액션 없음 */ },
+            onCategorySelected = { category ->
+                if (category != null) {
+                    onNavigateToHistory(category)
+                }
+            },
             onExpenseSelected = { expense -> selectedExpense = expense },
             coroutineScope = coroutineScope
         )
