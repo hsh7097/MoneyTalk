@@ -79,6 +79,7 @@ import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
+import com.sanha.moneytalk.feature.history.ui.IncomeDetailDialog
 import com.sanha.moneytalk.core.ui.component.chart.DonutChartCompose
 import com.sanha.moneytalk.core.ui.component.chart.DonutSlice
 import com.sanha.moneytalk.feature.home.ui.component.SpendingTrendSection
@@ -112,8 +113,9 @@ fun HomeScreen(
     val contentResolver = context.contentResolver
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // 선택된 지출 항목 (상세보기용)
+    // 선택된 지출/수입 항목 (상세보기용)
     var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
+    var selectedIncome by remember { mutableStateOf<IncomeEntity?>(null) }
 
     // 앱 시작 시 자동 동기화
     LaunchedEffect(autoSyncOnStart) {
@@ -258,6 +260,7 @@ fun HomeScreen(
                 }
             },
             onExpenseSelected = { expense -> selectedExpense = expense },
+            onIncomeSelected = { income -> selectedIncome = income },
             coroutineScope = coroutineScope
         )
     } // HorizontalPager
@@ -282,6 +285,22 @@ fun HomeScreen(
             onMemoChange = { memo ->
                 viewModel.updateExpenseMemo(expense.id, memo)
                 selectedExpense = null
+            }
+        )
+    }
+
+    // 수입 상세 다이얼로그
+    selectedIncome?.let { income ->
+        IncomeDetailDialog(
+            income = income,
+            onDismiss = { selectedIncome = null },
+            onDelete = {
+                viewModel.deleteIncome(income)
+                selectedIncome = null
+            },
+            onMemoChange = { memo ->
+                viewModel.updateIncomeMemo(income.id, memo)
+                selectedIncome = null
             }
         )
     }
@@ -491,6 +510,7 @@ fun HomePageContent(
     onFullSync: () -> Unit,
     onCategorySelected: (String?) -> Unit,
     onExpenseSelected: (ExpenseEntity) -> Unit,
+    onIncomeSelected: (IncomeEntity) -> Unit,
     coroutineScope: kotlinx.coroutines.CoroutineScope
 ) {
     val listState = rememberLazyListState()
@@ -650,7 +670,7 @@ fun HomePageContent(
                                 )
                                 is TodayItem.Income -> TransactionCardCompose(
                                     info = IncomeTransactionCardInfo(item.income),
-                                    onClick = { }
+                                    onClick = { onIncomeSelected(item.income) }
                                 )
                             }
                         }
