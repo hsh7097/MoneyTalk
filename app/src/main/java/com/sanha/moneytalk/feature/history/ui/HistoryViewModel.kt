@@ -542,6 +542,7 @@ class HistoryViewModel @Inject constructor(
                 withContext(Dispatchers.IO) { expenseRepository.delete(expense) }
                 clearAllPageCache()
                 loadCurrentAndAdjacentPages()
+                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
             }
@@ -556,6 +557,7 @@ class HistoryViewModel @Inject constructor(
                 snackbarBus.show("수입이 삭제되었습니다")
                 clearAllPageCache()
                 loadCurrentAndAdjacentPages()
+                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "수입 삭제 실패: ${e.message}") }
             }
@@ -582,6 +584,7 @@ class HistoryViewModel @Inject constructor(
                 }
                 clearAllPageCache()
                 loadCurrentAndAdjacentPages()
+                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "카테고리 변경 실패: ${e.message}") }
             }
@@ -702,6 +705,7 @@ class HistoryViewModel @Inject constructor(
                 snackbarBus.show("메모가 저장되었습니다")
                 clearAllPageCache()
                 loadCurrentAndAdjacentPages()
+                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "메모 저장 실패: ${e.message}") }
             }
@@ -718,6 +722,7 @@ class HistoryViewModel @Inject constructor(
                 snackbarBus.show("메모가 저장되었습니다")
                 clearAllPageCache()
                 loadCurrentAndAdjacentPages()
+                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "메모 저장 실패: ${e.message}") }
             }

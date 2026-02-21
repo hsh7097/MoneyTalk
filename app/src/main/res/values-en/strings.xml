@@ -153,6 +153,13 @@
     <string name="settings_month_start_custom">%dth of each month</string>
     <string name="settings_category_budget_title">Category Budgets</string>
     <string name="settings_category_budget_subtitle">Set limits for each category</string>
+    <string name="settings_monthly_budget_title">Monthly Budget</string>
+    <string name="settings_monthly_budget_subtitle_empty">Set your monthly spending limit</string>
+    <string name="settings_monthly_budget_subtitle_set">₩%s / month</string>
+    <string name="dialog_monthly_budget_title">Monthly Budget</string>
+    <string name="dialog_monthly_budget_message">Enter your monthly spending limit. You can track spending vs budget on the chart.</string>
+    <string name="dialog_monthly_budget_label">Monthly Budget</string>
+    <string name="dialog_monthly_budget_hint">Enter 0 to remove the budget</string>
 
     <string name="settings_section_ai">AI Settings</string>
     <string name="settings_api_key_title">Gemini API Key</string>

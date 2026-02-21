@@ -222,3 +222,61 @@ fun MonthStartDayDialog(
         }
     )
 }
+
+/** 월 예산 설정 다이얼로그. 월 지출 한도 입력 */
+@Composable
+fun MonthlyBudgetDialog(
+    initialAmount: Int = 0,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var amountText by remember {
+        mutableStateOf(if (initialAmount > 0) initialAmount.toString() else "")
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.dialog_monthly_budget_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.dialog_monthly_budget_message),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = amountText,
+                    onValueChange = { input ->
+                        amountText = input.filter { it.isDigit() }
+                    },
+                    label = { Text(stringResource(R.string.dialog_monthly_budget_label)) },
+                    suffix = { Text(stringResource(R.string.common_suffix_won)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.dialog_monthly_budget_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val amount = amountText.toIntOrNull() ?: 0
+                    onConfirm(amount)
+                }
+            ) {
+                Text(stringResource(R.string.common_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        }
+    )
+}

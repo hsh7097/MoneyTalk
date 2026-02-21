@@ -2,7 +2,7 @@
 
 > 각 화면의 Composable 계층 구조를 트리로 정리한 문서
 > 함수 참조 클릭 시 IDE에서 해당 파일로 이동 가능
-> **최종 갱신**: 2026-02-19
+> **최종 갱신**: 2026-02-21
 
 ---
 
@@ -32,6 +32,9 @@ MoneyTalkApp                         ← 앱 최상위 Scaffold + BottomNav + �
 ```
 HomeScreen                           ← 홈 탭 메인 화면
 ├── MonthlyOverviewSection           ← 월간 수입/지출 현황 + 월 네비게이션
+├── SpendingTrendSection             ← 누적 지출 추이 (홈 전용 래퍼)
+│   └── CumulativeTrendSection       ← 누적 추이 섹션 (도메인 독립, 원형 토글+차트+범례)
+│       └── CumulativeChartCompose   ← 누적 곡선 차트 (도메인 독립, Canvas)
 ├── CategoryExpenseSection           ← 카테고리별 지출 (도넛 차트 + 리스트)
 │   ├── DonutChartCompose            ← 도넛 차트 (3+ 카테고리, Canvas)
 │   └── CategoryIcon                 ← 카테고리 이모지 아이콘 (공통)
@@ -52,6 +55,9 @@ HomeScreen                           ← 홈 탭 메인 화면
 |------|------|------|
 | HomeScreen | 홈 탭 메인 화면 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 | MonthlyOverviewSection | 월간 수입/지출 현황 + 월 네비게이션 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
+| SpendingTrendSection | 누적 지출 추이 (홈 전용 래퍼) | [SpendingTrendSectionKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/component/SpendingTrendSection.kt) |
+| CumulativeTrendSection | 누적 추이 섹션 (도메인 독립, 원형 토글+차트+범례) | [CumulativeTrendSectionKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/chart/CumulativeTrendSection.kt) |
+| CumulativeChartCompose | 누적 곡선 차트 (도메인 독립, Canvas) | [CumulativeChartComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/chart/CumulativeChartCompose.kt) |
 | CategoryExpenseSection | 카테고리별 지출 비율 그래프 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 | AiInsightCard | Gemini AI 소비 분석 요약 카드 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 | TodayAndComparisonSection | 오늘 지출 + 전월 대비 래퍼 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
@@ -203,6 +209,8 @@ SettingsScreen                       ← 설정 탭 메인 화면
 | TransactionGroupHeaderCompose | 날짜/가게/금액 그룹 헤더 | 내역(목록) | [TransactionGroupHeaderComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/header/TransactionGroupHeaderCompose.kt) |
 | SegmentedTabRowCompose | 세그먼트 스타일 탭 Row | 내역(FilterTabRow) | [SegmentedTabRowComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/tab/SegmentedTabRowCompose.kt) |
 | CategoryIcon | 카테고리 이모지 아이콘 (원형 배경) | 홈, 거래 카드 | [CategoryIconKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/CategoryIcon.kt) |
+| CumulativeTrendSection | 누적 추이 섹션 (원형 토글+차트+범례) | 홈(SpendingTrendSection) | [CumulativeTrendSectionKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/chart/CumulativeTrendSection.kt) |
+| CumulativeChartCompose | 누적 곡선 차트 (Canvas 렌더러) | CumulativeTrendSection 내부 | [CumulativeChartComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/chart/CumulativeChartCompose.kt) |
 | DonutChartCompose | 도넛 차트 (Canvas drawArc + 범례) | 홈(CategoryExpenseSection) | [DonutChartComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/chart/DonutChartCompose.kt) |
 | ExpenseDetailDialog | 지출 상세/수정/삭제 다이얼로그 | 홈, 내역 | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
 | CategorySelectDialog | 카테고리 변경 (3열 그리드) | ExpenseDetailDialog 내부 | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |

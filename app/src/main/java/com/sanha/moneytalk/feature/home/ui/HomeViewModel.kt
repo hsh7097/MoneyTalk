@@ -15,6 +15,7 @@ import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
+import com.sanha.moneytalk.core.util.CumulativeChartDataBuilder
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.sms2.SmsIncomeParser
@@ -61,7 +62,21 @@ data class HomePageData(
     val lastMonthExpense: Int = 0,
     val comparisonPeriodLabel: String = "",
     val periodLabel: String = "",
-    val aiInsight: String = ""
+    val aiInsight: String = "",
+    /** 이번 달 일별 누적 지출 (index = dayOffset, value = 누적 금액) */
+    val dailyCumulativeExpenses: List<Long> = emptyList(),
+    /** 전월 일별 누적 지출 */
+    val lastMonthDailyCumulative: List<Long> = emptyList(),
+    /** 지난 3개월 평균 일별 누적 지출 */
+    val avgThreeMonthDailyCumulative: List<Long> = emptyList(),
+    /** 지난 6개월 평균 일별 누적 지출 */
+    val avgSixMonthDailyCumulative: List<Long> = emptyList(),
+    /** 월간 총 예산 (null = 미설정) */
+    val monthlyBudget: Int? = null,
+    /** 해당 월의 총 일수 */
+    val daysInMonth: Int = 30,
+    /** 오늘이 해당 월의 몇번째 날인지 (0-based, -1이면 과거 월) */
+    val todayDayIndex: Int = -1
 )
 
 /**
@@ -136,6 +151,7 @@ class HomeViewModel @Inject constructor(
     private val analyticsHelper: AnalyticsHelper,
     private val rewardAdManager: com.sanha.moneytalk.core.ad.RewardAdManager,
     private val smsSyncCoordinator: SmsSyncCoordinator,
+    private val budgetDao: com.sanha.moneytalk.core.database.dao.BudgetDao,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
 
@@ -447,6 +463,59 @@ class HomeViewModel @Inject constructor(
                 val dateFormat = java.text.SimpleDateFormat("M/d", java.util.Locale.KOREA)
                 val comparisonLabel = "${dateFormat.format(java.util.Date(lastMonthStart))} ~ ${dateFormat.format(java.util.Date(lastMonthSamePoint))}"
 
+                // ── 누적 지출 차트 데이터 (1회성) ──
+                val daysInMonth = ((monthEnd - monthStart) / (24L * 60 * 60 * 1000)).toInt() + 1
+                // +1: points[0]=0원 시작점이므로 1일=index1, 2일=index2, ...
+                val todayDayIndex = if (now in monthStart..monthEnd) {
+                    ((now - monthStart) / (24L * 60 * 60 * 1000)).toInt() + 1
+                } else -1
+
+                // 전월 일별 누적 (filteredLastMonthExpenses 재사용)
+                val (lastMonthFullStart, lastMonthFullEnd) = DateUtils.getCustomMonthPeriod(
+                    prevYear, prevMonth, state.monthStartDay
+                )
+                val lastMonthDaysInMonth = ((lastMonthFullEnd - lastMonthFullStart) / (24L * 60 * 60 * 1000)).toInt() + 1
+                val fullLastMonthExpenses = withContext(Dispatchers.IO) {
+                    expenseRepository.getExpensesByDateRangeOnce(lastMonthFullStart, lastMonthFullEnd)
+                }
+                val filteredFullLastMonthExpenses = if (exclusionKeywords.isEmpty()) {
+                    fullLastMonthExpenses
+                } else {
+                    fullLastMonthExpenses.filter { expense ->
+                        val smsLower = expense.originalSms.lowercase()
+                        exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                    }
+                }
+                val lastMonthCumulative = CumulativeChartDataBuilder.buildDailyCumulative(
+                    filteredFullLastMonthExpenses, lastMonthFullStart, lastMonthDaysInMonth
+                )
+
+                // 지난 3개월 / 6개월 평균 (IO에서 1회 로드)
+                // exclusionKeywords 필터링을 포함한 데이터 로드 람다
+                val loadFilteredExpenses: suspend (Long, Long) -> List<ExpenseEntity> = { s, e ->
+                    val raw = expenseRepository.getExpensesByDateRangeOnce(s, e)
+                    if (exclusionKeywords.isEmpty()) raw
+                    else raw.filter { ex ->
+                        exclusionKeywords.none { kw -> ex.originalSms.lowercase().contains(kw) }
+                    }
+                }
+                val avgThreeMonthCumulative = withContext(Dispatchers.IO) {
+                    CumulativeChartDataBuilder.buildAvgNMonthCumulative(
+                        3, year, month, state.monthStartDay, daysInMonth, loadFilteredExpenses
+                    )
+                }
+                val avgSixMonthCumulative = withContext(Dispatchers.IO) {
+                    CumulativeChartDataBuilder.buildAvgNMonthCumulative(
+                        6, year, month, state.monthStartDay, daysInMonth, loadFilteredExpenses
+                    )
+                }
+
+                // 예산 로드
+                val yearMonth = String.format("%04d-%02d", year, month)
+                val monthlyBudgetValue = withContext(Dispatchers.IO) {
+                    budgetDao.getTotalBudgetByMonth(yearMonth)
+                }
+
                 // 1회성 데이터를 먼저 캐시에 저장 (Flow 수집 전)
                 // 기존 캐시가 있으면 isLoading 유지 (깜빡임 방지)
                 val existingData = _uiState.value.pageCache[key]
@@ -459,7 +528,13 @@ class HomeViewModel @Inject constructor(
                     todayExpenses = filteredTodayExpenses.sortedByDescending { e -> e.dateTime },
                     todayIncomes = filteredTodayIncomes.sortedByDescending { e -> e.dateTime },
                     lastMonthExpense = filteredLastMonthExpense,
-                    comparisonPeriodLabel = comparisonLabel
+                    comparisonPeriodLabel = comparisonLabel,
+                    lastMonthDailyCumulative = lastMonthCumulative,
+                    avgThreeMonthDailyCumulative = avgThreeMonthCumulative,
+                    avgSixMonthDailyCumulative = avgSixMonthCumulative,
+                    monthlyBudget = monthlyBudgetValue,
+                    daysInMonth = daysInMonth,
+                    todayDayIndex = todayDayIndex
                 ))
 
                 // 지출 내역은 Flow로 실시간 감지 (Room DB 변경 시 자동 업데이트)
@@ -494,13 +569,17 @@ class HomeViewModel @Inject constructor(
                             }
                             .sortedByDescending { it.total }
 
+                        // 이번 달 일별 누적 지출 계산
+                        val dailyCumulative = CumulativeChartDataBuilder.buildDailyCumulative(expenses, monthStart, daysInMonth)
+
                         // 현재 캐시의 1회성 데이터를 유지하면서 지출 데이터 업데이트
                         val current = _uiState.value.pageCache[key] ?: HomePageData()
                         updatePageCache(key, current.copy(
                             isLoading = false,
                             monthlyExpense = totalExpense,
                             categoryExpenses = categories,
-                            recentExpenses = expenses.sortedByDescending { e -> e.dateTime }
+                            recentExpenses = expenses.sortedByDescending { e -> e.dateTime },
+                            dailyCumulativeExpenses = dailyCumulative
                         ))
 
                         // AI 인사이트 생성 (현재 선택 월의 첫 emit에서만)
@@ -1428,6 +1507,8 @@ class HomeViewModel @Inject constructor(
             }
         }
     }
+
+    // buildDailyCumulative, buildAvgNMonthCumulative → CumulativeChartDataBuilder로 이동
 
     fun hasGeminiApiKey(callback: (Boolean) -> Unit) {
         viewModelScope.launch {

@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -198,8 +199,15 @@ fun SettingsScreen(
                 }
             }
 
-            // 기간 설정
+            // 기간/예산 설정
             item {
+                val budgetText = uiState.monthlyBudget?.let { budget ->
+                    stringResource(
+                        R.string.settings_monthly_budget_subtitle_set,
+                        java.text.NumberFormat.getNumberInstance(java.util.Locale.KOREA).format(budget)
+                    )
+                } ?: stringResource(R.string.settings_monthly_budget_subtitle_empty)
+
                 SettingsSectionCompose(title = stringResource(R.string.settings_section_budget)) {
                     SettingsItemCompose(
                         info = object : SettingsItemInfo {
@@ -215,6 +223,15 @@ fun SettingsScreen(
                             }
                         },
                         onClick = { viewModel.onIntent(SettingsIntent.ShowMonthStartDayDialog) }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = Icons.Default.Savings
+                            override val title = stringResource(R.string.settings_monthly_budget_title)
+                            override val subtitle = budgetText
+                        },
+                        onClick = { viewModel.onIntent(SettingsIntent.ShowMonthlyBudgetDialog) }
                     )
                 }
             }
@@ -626,6 +643,14 @@ fun SettingsScreen(
                         )
                     )
                 }
+            )
+        }
+
+        SettingsDialog.MONTHLY_BUDGET -> {
+            MonthlyBudgetDialog(
+                initialAmount = uiState.monthlyBudget ?: 0,
+                onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) },
+                onConfirm = { amount -> viewModel.onIntent(SettingsIntent.SaveMonthlyBudget(amount)) }
             )
         }
 

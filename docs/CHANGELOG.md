@@ -6,8 +6,25 @@
 
 ### Added (2026-02-21)
 - **RTDB 표본 수집 디버그 로그 강화**: collectSampleToRtdb 진입/스킵/전송/성공/실패 상세 로그 추가
+- **누적 추이 차트 공통화 + UX 개선**: `CumulativeTrendSection` 도메인 독립 컴포넌트 추출 (core/ui/component/chart/)
+  - `SpendingTrendSection`을 얇은 래퍼로 변환 (HomeScreen 호출 코드 변경 없음)
+  - 범례 디자인 변경: 체크박스 제거 → 채워진 원(활성)/테두리 원(비활성) 클릭 토글
+  - X축 라벨 6등분 균등 분할 (실제 월 말일 기준, 스트레칭 위치 매칭)
+  - Y축 고정: 토글 상태 무관하게 모든 곡선 최대값 기준 200만 단위 올림 + 5등분 표시
+  - 6개월 평균 곡선 추가 (지난 6개월 데이터 모두 존재 시만 표시)
+  - 3개월/6개월 평균 데이터 검증 강화 (N개월 모두 데이터 있어야 표시)
+  - 누적 커브 하락 방지: 짧은 월(28/30일) carry-forward 적용
+- **History/Chat → Home 차트 데이터 동기화**: DataRefreshEvent를 통한 실시간 반영
+  - HistoryViewModel: 지출 삭제/메모 수정/카테고리 변경 시 이벤트 발행
+  - ChatViewModel: 채팅 액션 실행 후 이벤트 발행
+- **설정 화면 월 예산 설정**: 수입/예산 관리 섹션에 월 예산 입력 아이템 + 다이얼로그 추가
+  - BudgetEntity("전체" 카테고리)에 현재 월 기준으로 저장, 홈 차트 예산 곡선에 자동 반영
 
 ### Fixed (2026-02-21)
+- **누적 차트 0원 시작점**: 모든 곡선의 첫 포인트를 0원으로 추가하여 그래프가 항상 0에서 시작
+- **daysInMonth 계산 오류**: `(monthEnd - monthStart) / DAY_MS` 정수 나눗셈 시 1일 부족 → +1 보정
+- **PR #24 리뷰 반영**: `onCategorySelected` 핸들러 복원 (카테고리 탭 → History 네비게이션 회귀 수정)
+- **SMS 캐시 폴백 버그**: `parseWithPatternRegex()` regex 파싱 실패 시 캐시값 폴백 제거 → null 반환. 동일 템플릿 매칭 시 첫 패턴의 가게명/금액이 모든 SMS에 덮어씌워지는 버그 해결
 - **하단 탭 높이**: edge-to-edge 환경에서 NavigationBar windowInsets 분리로 64dp 보장
 - **탭 전환 시 초기화**: 다른 탭에서 홈/내역 탭 이동 시 오늘 페이지 + 필터 초기화
 - **필터 적용 버튼 미노출**: 큰 글꼴 환경에서 카테고리 그리드 weight 기반으로 변경하여 적용 버튼 항상 노출

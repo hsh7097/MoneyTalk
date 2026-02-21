@@ -81,6 +81,8 @@ import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.chart.DonutChartCompose
 import com.sanha.moneytalk.core.ui.component.chart.DonutSlice
+import com.sanha.moneytalk.feature.home.ui.component.SpendingTrendSection
+import com.sanha.moneytalk.feature.home.ui.model.HomeSpendingTrendInfo
 import com.sanha.moneytalk.core.ui.component.FullSyncCtaSection
 import com.sanha.moneytalk.core.ui.component.getCategoryChartColor
 import com.sanha.moneytalk.core.ui.component.MonthKey
@@ -523,6 +525,16 @@ fun HomePageContent(
                     onFullSync = onFullSync,
                     isSyncing = isSyncing
                 )
+            }
+
+            // 누적 지출 추이 차트 (월간 현황 바로 아래)
+            if (pageData.dailyCumulativeExpenses.isNotEmpty()) {
+                item {
+                    val trendInfo = HomeSpendingTrendInfo.from(pageData)
+                    if (trendInfo != null) {
+                        SpendingTrendSection(info = trendInfo)
+                    }
+                }
             }
 
             // 데이터 0건 + 현재 월 아님 + 전체 동기화 미해제 → 빈 CTA 표시
