@@ -138,9 +138,9 @@ fun CumulativeChartCompose(
         }
 
         // ── 오늘 위치 마커 (primaryLine 스트레칭 기준) ──
-        if (data.todayDayIndex in 0 until data.daysInMonth) {
-            val primaryPoints = data.lines.firstOrNull()?.points?.size ?: data.daysInMonth
-            val todayRatio = data.todayDayIndex.toFloat() / (primaryPoints - 1).coerceAtLeast(1)
+        val primaryPointCount = data.lines.firstOrNull()?.points?.size ?: 0
+        if (data.todayDayIndex in 0 until primaryPointCount) {
+            val todayRatio = data.todayDayIndex.toFloat() / (primaryPointCount - 1).coerceAtLeast(1)
             val todayX = paddingStart + todayRatio * chartWidth
 
             // 세로 점선
@@ -294,9 +294,10 @@ private fun DrawScope.drawXAxisLabels(
         1 + ((daysInMonth - 1) * i.toFloat() / divisionCount).toInt()
     }
 
+    // points: index 0=0원시작, 1=1일, ..., daysInMonth=말일 (총 daysInMonth+1개)
+    // 곡선 xStep = chartWidth / daysInMonth → day번째 포인트의 x = day * xStep
     labelDays.forEach { day ->
-        // day를 0~1 비율로 변환하여 스트레칭 위치 계산
-        val ratio = (day - 1).toFloat() / (daysInMonth - 1).coerceAtLeast(1)
+        val ratio = day.toFloat() / daysInMonth.coerceAtLeast(1)
         drawContext.canvas.nativeCanvas.drawText(
             "$day",
             paddingStart + ratio * chartWidth,

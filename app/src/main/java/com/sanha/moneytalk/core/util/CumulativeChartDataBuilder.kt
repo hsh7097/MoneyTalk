@@ -32,7 +32,8 @@ object CumulativeChartDataBuilder {
             ((it.dateTime - monthStart) / DAY_MS).toInt().coerceIn(0, daysInMonth - 1)
         }.mapValues { (_, items) -> items.sumOf { it.amount.toLong() } }
 
-        val result = mutableListOf<Long>()
+        // 첫 포인트는 0원 (월 시작 시점) → 그래프가 0에서 시작
+        val result = mutableListOf(0L)
         var cumulative = 0L
         for (day in 0 until daysInMonth) {
             cumulative += dailyMap[day] ?: 0L
@@ -81,7 +82,8 @@ object CumulativeChartDataBuilder {
         }
         if (cumulatives.isEmpty()) return emptyList()
         // 짧은 월은 마지막 누적값을 carry forward하여 평균 계산 시 하락 방지
-        return (0 until daysInMonth).map { day ->
+        // 0..daysInMonth = daysInMonth+1개 (0원 시작점 포함)
+        return (0..daysInMonth).map { day ->
             val values = cumulatives.map { monthData ->
                 monthData.getOrNull(day) ?: monthData.lastOrNull() ?: 0L
             }
@@ -102,7 +104,8 @@ object CumulativeChartDataBuilder {
     fun buildBudgetCumulativePoints(monthlyBudget: Int, daysInMonth: Int): List<Long> {
         if (daysInMonth <= 0) return emptyList()
         val dailyBudget = monthlyBudget.toLong()
-        return (0 until daysInMonth).map { day ->
+        // 첫 포인트 0원 + 일별 균등 분배 누적
+        return listOf(0L) + (0 until daysInMonth).map { day ->
             dailyBudget * (day + 1) / daysInMonth
         }
     }
