@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+### Added (2026-02-21 후반)
+- **카테고리 상세 화면 (CategoryDetailActivity)**: 카테고리별 월간 지출 추이 차트 + 거래 리스트
+  - 홈 카테고리 리스트에서 클릭 → Intent 기반 신규 Activity 진입
+  - CumulativeTrendSection 재사용 (당월 vs 전월 비교 곡선)
+  - 다크 모드 완전 지원 (차트 배경 surfaceVariant 기반)
+- **Budget BottomSheet**: 전체 + 카테고리별(18개) 예산 일괄 설정 BottomSheet
+  - TotalBudgetInput, CategoryBudgetHeader (초기화 버튼), CategoryBudgetRow (% 자동 표시)
+  - 전체/카테고리 독립 설정 가능, 100dp 상단 마진 + 고정 하단 저장 버튼
+  - SettingsViewModel: SaveBudgets Intent + saveBudgets() 일괄 저장
+  - BudgetDao: getBudgetsByMonthOnce suspend 함수 추가
+
+### Changed (2026-02-21 후반)
+- **HistoryFilter BottomSheet 개선**: 100dp 상단 마진 + 고정 하단 적용 버튼 + LazyVerticalGrid→FlowRow
+- **SMS 증분 동기화 5분 오버랩**: lastSyncTime - 5분 마진으로 경계 SMS 누락 방지
+
 ### Added (2026-02-21)
 - **RTDB 표본 수집 디버그 로그 강화**: collectSampleToRtdb 진입/스킵/전송/성공/실패 상세 로그 추가
 - **누적 추이 차트 공통화 + UX 개선**: `CumulativeTrendSection` 도메인 독립 컴포넌트 추출 (core/ui/component/chart/)

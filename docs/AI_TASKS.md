@@ -132,24 +132,24 @@
 
 ---
 
-## 카테고리별 예산 관리 🔲 대기
+## 카테고리별 예산 관리 🔄 진행 중
 
 > 카테고리별 월 예산을 설정하고, 사용 현황을 한눈에 파악할 수 있는 기능.
 > 홈 화면, 카테고리 상세 페이지, AI 채팅에서 예산 정보를 통합 노출.
 > 참고: 편한가계부의 "예산추가" 화면 (카테고리 선택 + 금액 입력)
 
-### 1. 예산 데이터 모델 (Room DB) 🔲
-- [ ] `BudgetEntity` 생성 (categoryName, monthlyAmount, yearMonth)
-- [ ] `BudgetDao` CRUD 쿼리 (upsert, delete, getByMonth, getByCategory)
-- [ ] Room DB 마이그레이션 (v5 → v6)
-- [ ] `BudgetRepository` 인터페이스 + 구현체
+### 1. 예산 데이터 모델 (Room DB) ✅ 완료 (기존 구현 활용)
+- [x] `BudgetEntity` 이미 존재 (category PK, monthlyLimit, yearMonth)
+- [x] `BudgetDao` CRUD 쿼리 (insert, deleteAllByMonth, getBudgetsByMonth, getBudgetsByMonthOnce)
+- [x] Room DB 마이그레이션 불필요 (기존 스키마 활용)
+- [ ] `BudgetRepository` 인터페이스 + 구현체 (현재 DAO 직접 사용)
 
-### 2. 예산 설정 UI 🔲
-- [ ] 예산 설정 진입점: 설정(Settings) 또는 홈 화면 예산 카드에서 "설정" 버튼
-- [ ] 카테고리 선택 그리드 (기존 Category enum 18개 기반, 이모지 + 이름)
-- [ ] 금액 입력 (숫자 키패드, 천 단위 콤마 포매팅)
-- [ ] 저장/삭제 기능
-- [ ] 전체 카테고리 예산 목록 화면 (설정된 예산 리스트 + 미설정 카테고리 표시)
+### 2. 예산 설정 UI ✅ 완료 (2026-02-21)
+- [x] 예산 설정 진입점: Settings "월 예산 설정" 아이템 → BudgetBottomSheet
+- [x] 카테고리 선택 그리드 (Category.parentEntries 18개, 이모지 + 이름)
+- [x] 금액 입력 (숫자 키패드, 천 단위 포매팅)
+- [x] 저장 기능 (전체 + 카테고리별 일괄 저장)
+- [x] 카테고리 초기화 버튼 (헤더 우측)
 
 ### 3. 홈 화면 예산 연동 🔲
 - [ ] 도넛 차트 또는 카테고리 리스트에서 예산 대비 사용률 표시

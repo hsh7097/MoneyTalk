@@ -1,7 +1,7 @@
 # MoneyTalk 앱 엔트리 포인트 맵
 
 > 코드 기준 앱 시작 지점과 주요 화면 진입 흐름 정리
-> 마지막 확인: 2026-02-15
+> 마지막 확인: 2026-02-21
 
 ## 1. 엔트리 포인트
 
@@ -61,3 +61,12 @@
 | 출발 | 도착 | 파라미터 | 설명 |
 |------|------|---------|------|
 | Home (카테고리 클릭) | History | `category={카테고리명}` | 해당 카테고리 필터가 적용된 내역 화면으로 이동 |
+| Home (카테고리 롱클릭) | CategoryDetail | `category={카테고리명}` | 카테고리별 월별 지출 추이 상세 화면 |
+
+## 6. NavGraph 외부 Activity
+
+NavGraph에 포함되지 않고 `Intent`로 직접 시작하는 Activity:
+
+| Activity | 경로 | 진입 방식 | 설명 |
+|----------|------|----------|------|
+| `CategoryDetailActivity` | [`CategoryDetailActivity.kt`](../app/src/main/java/com/sanha/moneytalk/feature/categorydetail/CategoryDetailActivity.kt) | `HomeScreen` 카테고리 롱클릭 → `Intent(EXTRA_CATEGORY)` | 카테고리별 월별 지출 추이 차트 + 월별 리스트 |
