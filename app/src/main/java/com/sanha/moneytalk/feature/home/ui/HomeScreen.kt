@@ -106,8 +106,7 @@ fun HomeScreen(
     onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
     autoSyncOnStart: Boolean = false,
     onAutoSyncConsumed: () -> Unit = {},
-    homeTabReClickEvent: kotlinx.coroutines.flow.SharedFlow<Unit>? = null,
-    onNavigateToHistory: (category: String) -> Unit = {}
+    homeTabReClickEvent: kotlinx.coroutines.flow.SharedFlow<Unit>? = null
 ) {
     val context = LocalContext.current
     val contentResolver = context.contentResolver
@@ -238,7 +237,24 @@ fun HomeScreen(
             },
             onCategorySelected = { category ->
                 if (category != null) {
-                    onNavigateToHistory(category)
+                    val intent = android.content.Intent(
+                        context,
+                        com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity::class.java
+                    ).apply {
+                        putExtra(
+                            com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_CATEGORY,
+                            category
+                        )
+                        putExtra(
+                            com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_YEAR,
+                            uiState.selectedYear
+                        )
+                        putExtra(
+                            com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_MONTH,
+                            uiState.selectedMonth
+                        )
+                    }
+                    context.startActivity(intent)
                 }
             },
             onExpenseSelected = { expense -> selectedExpense = expense },
