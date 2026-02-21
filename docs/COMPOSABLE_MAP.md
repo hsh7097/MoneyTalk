@@ -168,6 +168,12 @@ SettingsScreen                       ← 설정 탭 메인 화면
 ├── SettingsSectionCompose("앱 정보")
 │   └── SettingsItemCompose × 2      ← 버전/개인정보
 │
+├── [BottomSheet]
+│   └── BudgetBottomSheet            ← 전체+카테고리별 예산 설정
+│       ├── TotalBudgetInput         ← 전체 예산 입력 (OutlinedTextField)
+│       ├── CategoryBudgetHeader     ← 카테고리별 예산 헤더 + 초기화
+│       └── CategoryBudgetRow        ← 카테고리 예산 입력 행 (% 자동 표시)
+│
 ├── [다이얼로그 — 환경 설정]
 │   ├── ThemeModeDialog              ← 시스템/라이트/다크 선택
 │   ├── ApiKeySettingDialog          ← Gemini API 키 입력
@@ -188,6 +194,10 @@ SettingsScreen                       ← 설정 탭 메인 화면
 | 함수 | 설명 | 참조 |
 |------|------|------|
 | SettingsScreen | 설정 탭 메인 화면 | [SettingsScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsScreen.kt) |
+| BudgetBottomSheet | 전체+카테고리별 예산 설정 BottomSheet | [BudgetBottomSheetKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/BudgetBottomSheet.kt) |
+| TotalBudgetInput | 전체 예산 입력 영역 | [BudgetBottomSheetKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/BudgetBottomSheet.kt) |
+| CategoryBudgetHeader | 카테고리별 예산 헤더 + 초기화 | [BudgetBottomSheetKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/BudgetBottomSheet.kt) |
+| CategoryBudgetRow | 카테고리 예산 행 (이모지+입력+%) | [BudgetBottomSheetKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/BudgetBottomSheet.kt) |
 | ThemeModeDialog | 시스템/라이트/다크 모드 선택 | [SettingsPreferenceDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsPreferenceDialogs.kt) |
 | ApiKeySettingDialog | Gemini API 키 입력/저장 | [SettingsPreferenceDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsPreferenceDialogs.kt) |
 | MonthStartDayDialog | 정산 시작일 (1~31일) 선택 | [SettingsPreferenceDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsPreferenceDialogs.kt) |

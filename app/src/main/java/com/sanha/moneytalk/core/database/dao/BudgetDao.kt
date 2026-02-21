@@ -33,6 +33,10 @@ interface BudgetDao {
     @Query("SELECT * FROM budgets WHERE yearMonth = :yearMonth")
     fun getBudgetsByMonth(yearMonth: String): Flow<List<BudgetEntity>>
 
+    /** 1회성 월별 예산 조회 (suspend, Flow 아님) */
+    @Query("SELECT * FROM budgets WHERE yearMonth = :yearMonth")
+    suspend fun getBudgetsByMonthOnce(yearMonth: String): List<BudgetEntity>
+
     @Query("SELECT * FROM budgets WHERE category = :category AND yearMonth = :yearMonth")
     suspend fun getBudgetByCategory(category: String, yearMonth: String): BudgetEntity?
 

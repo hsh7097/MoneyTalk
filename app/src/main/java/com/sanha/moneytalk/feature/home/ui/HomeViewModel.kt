@@ -221,9 +221,16 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /** 현재 월 ± PAGE_CACHE_RANGE 밖의 캐시 정리 */
+    /** 현재 월 ± PAGE_CACHE_RANGE 밖의 캐시 + Job 정리 */
     private fun evictDistantCache(year: Int, month: Int) {
         val currentTotal = year * 12 + month
+        // 범위 밖 Job 취소
+        val evictKeys = pageLoadJobs.keys.filter { key ->
+            kotlin.math.abs(key.year * 12 + key.month - currentTotal) > PAGE_CACHE_RANGE
+        }
+        evictKeys.forEach { key ->
+            pageLoadJobs.remove(key)?.cancel()
+        }
         _uiState.update { state ->
             val filtered = state.pageCache.filter { (key, _) ->
                 val keyTotal = key.year * 12 + key.month
@@ -285,9 +292,12 @@ class HomeViewModel @Inject constructor(
                     }
 
                     DataRefreshEvent.RefreshType.SMS_RECEIVED -> {
-                        Log.d(TAG, "SMS 수신 이벤트 → 증분 동기화 실행")
+                        Log.d(TAG, "SMS 수신 이벤트 → 증분 동기화 실행 (silent)")
                         val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
-                        syncSmsV2(appContext.contentResolver, range, updateLastSyncTime = true)
+                        syncSmsV2(
+                            appContext.contentResolver, range,
+                            updateLastSyncTime = true, silent = true
+                        )
                     }
                 }
             }
@@ -510,10 +520,10 @@ class HomeViewModel @Inject constructor(
                     )
                 }
 
-                // 예산 로드
+                // 예산 로드 ("전체" 카테고리만 — 카테고리별 예산 합산이 아닌 전체 예산)
                 val yearMonth = String.format("%04d-%02d", year, month)
                 val monthlyBudgetValue = withContext(Dispatchers.IO) {
-                    budgetDao.getTotalBudgetByMonth(yearMonth)
+                    budgetDao.getBudgetByCategory("전체", yearMonth)?.monthlyLimit
                 }
 
                 // 1회성 데이터를 먼저 캐시에 저장 (Flow 수집 전)
@@ -544,7 +554,7 @@ class HomeViewModel @Inject constructor(
                     (_uiState.value.selectedYear == year && _uiState.value.selectedMonth == month)
 
                 expenseRepository.getExpensesByDateRange(monthStart, monthEnd)
-                    .catch { e ->
+                    .catch { _ ->
                         updatePageCache(key, (_uiState.value.pageCache[key] ?: HomePageData())
                             .copy(isLoading = false))
                     }
@@ -993,9 +1003,14 @@ class HomeViewModel @Inject constructor(
         // 최대 2개월(DEFAULT_SYNC_PERIOD_MILLIS) 이전까지만 조회하도록 clamp
         val minStartTime = now - DEFAULT_SYNC_PERIOD_MILLIS
 
+        // SMS date와 동기화 시각 사이의 지연(네트워크, ContentProvider 기록 등)에 의한
+        // 누락을 방지하기 위해 lastSyncTime에서 5분 마진을 빼서 조회.
+        // 중복 SMS는 readAndFilterSms에서 smsId 기반으로 자동 제거됨.
+        val OVERLAP_MARGIN_MILLIS = 5L * 60 * 1000 // 5분
+
         val startTime = if (effectiveSyncTime > 0) {
-            // 증분: lastSyncTime이 2개월보다 오래되었으면 2개월 전으로 clamp
-            maxOf(effectiveSyncTime, minStartTime)
+            // 증분: lastSyncTime - 마진, 2개월보다 오래되었으면 2개월 전으로 clamp
+            maxOf(effectiveSyncTime - OVERLAP_MARGIN_MILLIS, minStartTime)
         } else {
             // 초기: 전월 1일 ~ now (2달치)
             val cal = java.util.Calendar.getInstance()
@@ -1038,7 +1053,8 @@ class HomeViewModel @Inject constructor(
     fun syncSmsV2(
         contentResolver: ContentResolver,
         targetMonthRange: Pair<Long, Long>,
-        updateLastSyncTime: Boolean = true
+        updateLastSyncTime: Boolean = true,
+        silent: Boolean = false
     ) {
         // 재진입 방지: 이미 동기화 중이면 무시
         if (!isSyncRunning.compareAndSet(false, true)) {
@@ -1048,16 +1064,20 @@ class HomeViewModel @Inject constructor(
 
         analyticsHelper.logClick(AnalyticsEvent.SCREEN_HOME, AnalyticsEvent.CLICK_SYNC_SMS)
         viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    isSyncing = true,
-                    showSyncDialog = true,
-                    syncProgress = "문자 읽는 중...",
-                    syncProgressCurrent = 0,
-                    syncProgressTotal = 0
-                )
+            if (!silent) {
+                _uiState.update {
+                    it.copy(
+                        isSyncing = true,
+                        showSyncDialog = true,
+                        syncProgress = "문자 읽는 중...",
+                        syncProgressCurrent = 0,
+                        syncProgressTotal = 0
+                    )
+                }
+                dataRefreshEvent.updateSyncProgress("문자 읽는 중...", 0, 0)
+            } else {
+                _uiState.update { it.copy(isSyncing = true) }
             }
-            dataRefreshEvent.updateSyncProgress("문자 읽는 중...", 0, 0)
 
             try {
                 val result = withContext(Dispatchers.IO) {
@@ -1119,31 +1139,46 @@ class HomeViewModel @Inject constructor(
                     else -> "새로운 내역이 없습니다"
                 }
 
-                _uiState.update {
-                    it.copy(
-                        isSyncing = false,
-                        showSyncDialog = false,
-                        syncProgress = "",
-                        syncProgressCurrent = 0,
-                        syncProgressTotal = 0,
-                        errorMessage = resultMessage
-                    )
+                if (silent) {
+                    _uiState.update { it.copy(isSyncing = false) }
+                    // 실시간 SMS 수신: 새 데이터가 있을 때만 snackbar로 알림
+                    if (result.expenseCount > 0 || result.incomeCount > 0) {
+                        snackbarBus.show(resultMessage)
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isSyncing = false,
+                            showSyncDialog = false,
+                            syncProgress = "",
+                            syncProgressCurrent = 0,
+                            syncProgressTotal = 0,
+                            errorMessage = resultMessage
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 categoryClassifierService.clearCategoryCache()
 
-                _uiState.update {
-                    it.copy(
-                        isSyncing = false,
-                        showSyncDialog = false,
-                        syncProgress = "",
-                        syncProgressCurrent = 0,
-                        syncProgressTotal = 0,
-                        errorMessage = "동기화 실패: ${e.message}"
-                    )
+                if (silent) {
+                    _uiState.update { it.copy(isSyncing = false) }
+                    Log.w(TAG, "실시간 SMS 동기화 실패: ${e.message}")
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isSyncing = false,
+                            showSyncDialog = false,
+                            syncProgress = "",
+                            syncProgressCurrent = 0,
+                            syncProgressTotal = 0,
+                            errorMessage = "동기화 실패: ${e.message}"
+                        )
+                    }
                 }
             } finally {
-                dataRefreshEvent.completeSyncProgress()
+                if (!silent) {
+                    dataRefreshEvent.completeSyncProgress()
+                }
                 isSyncRunning.set(false)
             }
         }
@@ -1559,6 +1594,33 @@ class HomeViewModel @Inject constructor(
             try {
                 withContext(Dispatchers.IO) {
                     expenseRepository.updateMemo(expenseId, memo?.ifBlank { null })
+                }
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "메모 저장 실패: ${e.message}") }
+            }
+        }
+    }
+
+    fun deleteIncome(income: IncomeEntity) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { incomeRepository.delete(income) }
+                _uiState.update { it.copy(errorMessage = "수입이 삭제되었습니다") }
+                clearAllPageCache()
+                loadCurrentAndAdjacentPages()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "수입 삭제 실패: ${e.message}") }
+            }
+        }
+    }
+
+    fun updateIncomeMemo(incomeId: Long, memo: String?) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    incomeRepository.updateMemo(incomeId, memo?.ifBlank { null })
                 }
                 clearAllPageCache()
                 loadCurrentAndAdjacentPages()

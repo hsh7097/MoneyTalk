@@ -43,14 +43,7 @@ fun NavGraph(
                 onRequestSmsPermission = onRequestSmsPermission,
                 autoSyncOnStart = autoSyncOnStart,
                 onAutoSyncConsumed = onAutoSyncConsumed,
-                homeTabReClickEvent = homeTabReClickEvent,
-                onNavigateToHistory = { category ->
-                    navController.navigate(Screen.History.createRoute(category)) {
-                        popUpTo(Screen.Home.route) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = false
-                    }
-                }
+                homeTabReClickEvent = homeTabReClickEvent
             )
         }
 

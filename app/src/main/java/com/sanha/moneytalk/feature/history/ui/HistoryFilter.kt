@@ -4,20 +4,22 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -31,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -51,10 +54,12 @@ private fun isFilterDefault(
         && category == null
 
 /**
- * 필터 BottomSheet
- * 정렬 / 거래 유형 / 카테고리 선택 후 적용
+ * 필터 BottomSheet.
+ *
+ * 정렬 / 거래 유형 / 카테고리 선택 후 적용.
+ * 상단 100dp 마진 유지 (배경 항상 노출), 적용 버튼 하단 고정, 그 위 스크롤.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun FilterBottomSheet(
     currentSortOrder: SortOrder,
@@ -71,6 +76,7 @@ fun FilterBottomSheet(
     var tempCategory by remember { mutableStateOf(currentCategory) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val maxSheetHeight = LocalConfiguration.current.screenHeightDp.dp - 100.dp
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -80,164 +86,175 @@ fun FilterBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp)
+                .heightIn(max = maxSheetHeight)
         ) {
-            // 제목 + 초기화
-            Row(
+            // 스크롤 영역
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 20.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
             ) {
-                Text(
-                    text = stringResource(R.string.history_filter_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                if (!isFilterDefault(tempSortOrder, tempShowExpenses, tempShowIncomes, tempCategory)) {
+                // 제목 + 초기화
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = stringResource(R.string.history_filter_reset),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
+                        text = stringResource(R.string.history_filter_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (!isFilterDefault(tempSortOrder, tempShowExpenses, tempShowIncomes, tempCategory)) {
+                        Text(
+                            text = stringResource(R.string.history_filter_reset),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    tempSortOrder = SortOrder.DATE_DESC
+                                    tempShowExpenses = true
+                                    tempShowIncomes = true
+                                    tempCategory = null
+                                }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                // ── 정렬 ──
+                Text(
+                    text = stringResource(R.string.history_filter_sort),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val sortOptions = listOf(
+                        SortOrder.DATE_DESC to stringResource(R.string.history_sort_date),
+                        SortOrder.AMOUNT_DESC to stringResource(R.string.history_sort_amount_short),
+                        SortOrder.STORE_FREQ to stringResource(R.string.history_sort_store)
+                    )
+                    sortOptions.forEach { (order, label) ->
+                        FilterChipButton(
+                            label = label,
+                            isActive = tempSortOrder == order,
+                            onClick = { tempSortOrder = order }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // ── 거래 유형 ──
+                Text(
+                    text = stringResource(R.string.history_filter_type),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // 지출 체크박스 (수입이 꺼져 있으면 해제 불가)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .clickable {
-                                tempSortOrder = SortOrder.DATE_DESC
-                                tempShowExpenses = true
-                                tempShowIncomes = true
-                                tempCategory = null
+                                if (tempShowExpenses && !tempShowIncomes) return@clickable
+                                tempShowExpenses = !tempShowExpenses
                             }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                            .padding(vertical = 4.dp, horizontal = 4.dp)
+                    ) {
+                        Checkbox(
+                            checked = tempShowExpenses,
+                            onCheckedChange = {
+                                if (!it && !tempShowIncomes) return@Checkbox
+                                tempShowExpenses = it
+                            }
+                        )
+                        Text(
+                            text = stringResource(R.string.home_expense),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    // 수입 체크박스 (지출이 꺼져 있으면 해제 불가)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                if (tempShowIncomes && !tempShowExpenses) return@clickable
+                                tempShowIncomes = !tempShowIncomes
+                            }
+                            .padding(vertical = 4.dp, horizontal = 4.dp)
+                    ) {
+                        Checkbox(
+                            checked = tempShowIncomes,
+                            onCheckedChange = {
+                                if (!it && !tempShowExpenses) return@Checkbox
+                                tempShowIncomes = it
+                            }
+                        )
+                        Text(
+                            text = stringResource(R.string.home_income),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
-            }
 
-            // ── 정렬 ──
-            Text(
-                text = stringResource(R.string.history_filter_sort),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                val sortOptions = listOf(
-                    SortOrder.DATE_DESC to stringResource(R.string.history_sort_date),
-                    SortOrder.AMOUNT_DESC to stringResource(R.string.history_sort_amount_short),
-                    SortOrder.STORE_FREQ to stringResource(R.string.history_sort_store)
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // ── 카테고리 ──
+                Text(
+                    text = stringResource(R.string.history_filter_category),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
-                sortOptions.forEach { (order, label) ->
-                    FilterChipButton(
-                        label = label,
-                        isActive = tempSortOrder == order,
-                        onClick = { tempSortOrder = order }
-                    )
-                }
-            }
 
-            Spacer(modifier = Modifier.height(20.dp))
+                // FlowRow 기반 카테고리 그리드 (LazyVerticalGrid 대신 — 스크롤 부모와 호환)
+                val categories = Category.parentEntries
+                val allItems = listOf<Pair<String, String?>>(
+                    "\uD83D\uDCCB" to null // "전체" 옵션
+                ) + categories.map { it.emoji to it.displayName }
 
-            // ── 거래 유형 ──
-            Text(
-                text = stringResource(R.string.history_filter_type),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // 지출 체크박스 (수입이 꺼져 있으면 해제 불가)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            if (tempShowExpenses && !tempShowIncomes) return@clickable
-                            tempShowExpenses = !tempShowExpenses
-                        }
-                        .padding(vertical = 4.dp, horizontal = 4.dp)
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    maxItemsInEachRow = 3
                 ) {
-                    Checkbox(
-                        checked = tempShowExpenses,
-                        onCheckedChange = {
-                            if (!it && !tempShowIncomes) return@Checkbox
-                            tempShowExpenses = it
+                    allItems.forEach { (emoji, categoryName) ->
+                        FilterCategoryGridItem(
+                            emoji = emoji,
+                            label = categoryName ?: stringResource(R.string.common_all),
+                            isSelected = tempCategory == categoryName,
+                            onClick = { tempCategory = categoryName },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    // 마지막 행 남은 공간 채우기 (3열 그리드 맞춤)
+                    val remainder = allItems.size % 3
+                    if (remainder != 0) {
+                        repeat(3 - remainder) {
+                            Spacer(modifier = Modifier.weight(1f))
                         }
-                    )
-                    Text(
-                        text = stringResource(R.string.home_expense),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    }
                 }
-                // 수입 체크박스 (지출이 꺼져 있으면 해제 불가)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            if (tempShowIncomes && !tempShowExpenses) return@clickable
-                            tempShowIncomes = !tempShowIncomes
-                        }
-                        .padding(vertical = 4.dp, horizontal = 4.dp)
-                ) {
-                    Checkbox(
-                        checked = tempShowIncomes,
-                        onCheckedChange = {
-                            if (!it && !tempShowExpenses) return@Checkbox
-                            tempShowIncomes = it
-                        }
-                    )
-                    Text(
-                        text = stringResource(R.string.home_income),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // ── 카테고리 ──
-            Text(
-                text = stringResource(R.string.history_filter_category),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            val categories = Category.parentEntries
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = false),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // "전체" 옵션
-                item {
-                    FilterCategoryGridItem(
-                        emoji = "\uD83D\uDCCB",
-                        label = stringResource(R.string.common_all),
-                        isSelected = tempCategory == null,
-                        onClick = { tempCategory = null }
-                    )
-                }
-                items(categories) { category ->
-                    FilterCategoryGridItem(
-                        emoji = category.emoji,
-                        label = category.displayName,
-                        isSelected = category.displayName == tempCategory,
-                        onClick = { tempCategory = category.displayName }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // 적용 버튼
+            // 고정 적용 버튼
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Button(
                 onClick = {
                     onApply(
@@ -249,6 +266,7 @@ fun FilterBottomSheet(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
                     .height(48.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -270,10 +288,11 @@ internal fun FilterCategoryGridItem(
     emoji: String,
     label: String,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(
                 if (isSelected) MaterialTheme.colorScheme.primaryContainer

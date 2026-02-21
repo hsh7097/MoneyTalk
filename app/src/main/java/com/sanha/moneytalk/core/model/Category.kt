@@ -59,8 +59,8 @@ enum class Category(
         val classifiableEntries: List<Category>
             get() = entries.filter { it != UNCLASSIFIED }
 
-        /** 대 카테고리만 (UI 필터 드롭다운 등에서 사용) */
+        /** 대 카테고리만 (UI 필터·예산 등에서 사용, AI분류중 제외) */
         val parentEntries: List<Category>
-            get() = entries.filter { it.isParent }
+            get() = entries.filter { it.isParent && it != UNCLASSIFIED }
     }
 }

@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-20
+> **최종 갱신**: 2026-02-21
 
 ---
 
@@ -191,6 +191,22 @@
 - History/Chat → Home 차트 DataRefreshEvent 동기화
 - PR #24 리뷰: onCategorySelected 핸들러 복원
 
+**카테고리 상세 화면 (CategoryDetailActivity)**: ✅ 완료 (2026-02-21)
+- 신규 Activity: 카테고리별 월간 지출 추이 차트 + 거래 내역 리스트
+- 홈 카테고리 리스트에서 클릭 시 진입 (Intent 기반, NavGraph 외부)
+- CumulativeTrendSection 재사용 (당월 vs 전월 비교 곡선)
+- 다크 모드 완전 지원 (차트 색상 surfaceVariant 기반)
+
+**Budget BottomSheet**: ✅ 완료 (2026-02-21)
+- BudgetBottomSheet.kt 신규: 전체 예산 + 카테고리별(18개) 예산 일괄 설정
+- 전체/카테고리 독립 설정 가능, % 자동 계산 표시
+- HistoryFilter.kt: 동일 패턴 적용 (100dp 상단 마진 + 고정 하단 버튼 + FlowRow)
+- SettingsViewModel: SaveBudgets Intent + saveBudgets() 일괄 저장
+- BudgetDao: getBudgetsByMonthOnce suspend 함수 추가
+
+**SMS 증분 동기화 5분 오버랩**: ✅ 완료 (2026-02-21)
+- 증분 동기화 시 lastSyncTime - 5분 오버랩으로 경계 SMS 누락 방지
+
 ### 대기 중인 작업
 
 - `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지
@@ -255,6 +271,9 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-21 | Budget BottomSheet (전체+카테고리별 예산 일괄 설정) + HistoryFilter BottomSheet 개선 (100dp 마진, 고정 하단 버튼) | 완료 |
+| 2026-02-21 | 카테고리 상세 화면 (CategoryDetailActivity) — 월간 추이 차트 + 거래 리스트 + 다크 모드 | 완료 |
+| 2026-02-21 | SMS 증분 동기화 5분 오버랩 + 다크 모드 차트 색상 수정 | 완료 |
 | 2026-02-21 | 차트 UX 개선 (범례 원형 토글, X축 5일 간격 31일 고정, Y축 200만 단위 5등분, 6개월 평균, carry-forward, DataRefreshEvent 동기화) | 완료 |
 | 2026-02-21 | PR #23 코드 리뷰 반영 (빈 룰 캐싱, 차순위 룰 시도, 중복 승격 방지) + UI 버그 수정 (하단 탭 높이, 탭 전환 초기화, 필터 적용 버튼) | 완료 |
 | 2026-02-20 | LLM 생성 regex 샘플 검증 (validateRegexAgainstSamples, 50%+ 파싱 성공률 기준) | 완료 |

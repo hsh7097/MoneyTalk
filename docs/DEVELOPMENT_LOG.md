@@ -4,6 +4,62 @@
 
 ---
 
+## 2026-02-21 - 카테고리 상세 화면 + Budget BottomSheet + HistoryFilter 개선
+
+### 작업 내용
+
+#### 카테고리 상세 화면 (CategoryDetailActivity)
+- 홈 카테고리 리스트에서 클릭 → 신규 Activity로 진입 (Intent 기반, NavGraph 외부)
+- 상단 TopAppBar: 카테고리 이모지 + 이름 + 뒤로가기
+- CumulativeTrendSection 재사용: 당월 지출 vs 전월 지출 비교 곡선
+- 하단 거래 리스트: TransactionCardCompose 재사용
+- 빈 상태 처리 (지출 없을 때 안내 메시지)
+- 다크 모드 완전 지원 (차트 배경 surfaceVariant 기반)
+
+#### Budget BottomSheet (전체+카테고리별 예산 설정)
+- `BudgetBottomSheet.kt` 신규 — ModalBottomSheet 기반
+  - TotalBudgetInput: 전체 예산 입력 (OutlinedTextField)
+  - CategoryBudgetHeader: "카테고리별 예산" 헤더 + 우측 초기화 버튼
+  - CategoryBudgetRow: 카테고리별 예산 입력 + % 자동 표시 (전체 예산 대비)
+- 전체/카테고리 독립 설정 가능 (전체만, 카테고리만, 둘 다)
+- 하단 저장 버튼 고정 + 위 영역 스크롤 (LazyColumn weight)
+- 상단 100dp 마진 유지 (heightIn(max = screenHeight - 100.dp))
+
+#### SettingsViewModel 수정
+- ShowBudgetBottomSheet, SaveBudgets Intent 추가
+- loadMonthlyBudget(): 전체 + 카테고리별 예산 동시 로드 (getBudgetsByMonthOnce)
+- saveBudgets(): deleteAllByMonth → 전체/카테고리 일괄 insert
+
+#### HistoryFilter BottomSheet 개선
+- 동일 100dp 상단 마진 패턴 적용
+- LazyVerticalGrid → FlowRow 변경 (스크롤 부모 호환)
+- 고정 하단 적용 버튼 + HorizontalDivider
+
+#### 기타
+- BudgetDao: `getBudgetsByMonthOnce` suspend 함수 추가
+- strings.xml: 예산/카테고리 상세 관련 문자열 15개 추가
+- 누적 차트 다크 모드 색상 수정 (CumulativeChartCompose, CumulativeTrendSection)
+- SMS 증분 동기화 5분 오버랩 (경계 SMS 누락 방지)
+- HomeScreen: 불필요한 onNavigateToHistory 파라미터 제거
+
+### 변경 파일
+- `feature/categorydetail/` — 신규 디렉토리 (Activity + ViewModel)
+- `feature/settings/ui/BudgetBottomSheet.kt` — 신규
+- `feature/settings/ui/SettingsViewModel.kt` — 예산 Intent/로직 추가
+- `feature/settings/ui/SettingsScreen.kt` — BudgetBottomSheet 연결
+- `feature/history/ui/HistoryFilter.kt` — BottomSheet 개선
+- `feature/home/ui/HomeScreen.kt` — CategoryDetail 진입 + 파라미터 정리
+- `feature/home/ui/HomeViewModel.kt` — 5분 오버랩
+- `navigation/NavGraph.kt` — onNavigateToHistory 파라미터 제거
+- `core/database/dao/BudgetDao.kt` — getBudgetsByMonthOnce 추가
+- `core/ui/component/chart/CumulativeChartCompose.kt` — 다크 모드 색상
+- `core/ui/component/chart/CumulativeTrendSection.kt` — 다크 모드 색상
+- `AndroidManifest.xml` — CategoryDetailActivity 등록
+- `strings.xml` — 예산+카테고리 상세 문자열
+- `docs/COMPOSABLE_MAP.md` — BudgetBottomSheet 관련 5개 추가
+
+---
+
 ## 2026-02-21 - 차트 UX 대폭 개선 + 6개월 평균 + 데이터 동기화
 
 ### 작업 내용

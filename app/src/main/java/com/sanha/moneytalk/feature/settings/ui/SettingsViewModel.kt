@@ -51,6 +51,7 @@ sealed interface SettingsIntent {
     data object ShowExclusionKeywordDialog : SettingsIntent
     data object ShowThemeDialog : SettingsIntent
     data object ShowMonthlyBudgetDialog : SettingsIntent
+    data object ShowBudgetBottomSheet : SettingsIntent
 
     // 다이얼로그 닫기
     data object DismissDialog : SettingsIntent
@@ -59,6 +60,10 @@ sealed interface SettingsIntent {
     data class SaveApiKey(val key: String) : SettingsIntent
     data class SaveMonthStartDay(val day: Int) : SettingsIntent
     data class SaveMonthlyBudget(val amount: Int) : SettingsIntent
+    data class SaveBudgets(
+        val totalBudget: Int?,
+        val categoryBudgets: Map<String, Int>
+    ) : SettingsIntent
     data class SaveThemeMode(val mode: ThemeMode) : SettingsIntent
     data object ClassifyUnclassified : SettingsIntent
     data object DeleteAllData : SettingsIntent
@@ -82,7 +87,8 @@ enum class SettingsDialog {
     PRIVACY,
     EXCLUSION_KEYWORD,
     THEME,
-    MONTHLY_BUDGET
+    MONTHLY_BUDGET,
+    BUDGET_BOTTOM_SHEET
 }
 
 @Stable
@@ -121,7 +127,9 @@ data class SettingsUiState(
     // 복원 파일 선택 트리거
     val triggerRestoreFilePicker: Boolean = false,
     // 월 예산
-    val monthlyBudget: Int? = null
+    val monthlyBudget: Int? = null,
+    // 카테고리별 예산 (category displayName → monthlyLimit)
+    val categoryBudgets: Map<String, Int> = emptyMap()
 )
 
 @HiltViewModel
@@ -177,6 +185,7 @@ class SettingsViewModel @Inject constructor(
             is SettingsIntent.ShowExclusionKeywordDialog -> showDialog(SettingsDialog.EXCLUSION_KEYWORD)
             is SettingsIntent.ShowThemeDialog -> showDialog(SettingsDialog.THEME)
             is SettingsIntent.ShowMonthlyBudgetDialog -> showDialog(SettingsDialog.MONTHLY_BUDGET)
+            is SettingsIntent.ShowBudgetBottomSheet -> showDialog(SettingsDialog.BUDGET_BOTTOM_SHEET)
             is SettingsIntent.DismissDialog -> dismissDialog()
 
             is SettingsIntent.SaveApiKey -> {
@@ -197,6 +206,11 @@ class SettingsViewModel @Inject constructor(
             is SettingsIntent.SaveMonthlyBudget -> {
                 dismissDialog()
                 saveMonthlyBudget(intent.amount)
+            }
+
+            is SettingsIntent.SaveBudgets -> {
+                dismissDialog()
+                saveBudgets(intent.totalBudget, intent.categoryBudgets)
             }
 
             is SettingsIntent.ClassifyUnclassified -> classifyUnclassifiedExpenses()
@@ -352,22 +366,33 @@ class SettingsViewModel @Inject constructor(
 
     // ========== 월 예산 관리 ==========
 
-    /** 현재 월의 총 예산 로드 */
+    /** 현재 월의 전체 + 카테고리별 예산 로드 */
     private fun loadMonthlyBudget() {
         viewModelScope.launch {
             try {
                 val yearMonth = java.time.YearMonth.now().toString()
-                val total = withContext(Dispatchers.IO) {
-                    budgetDao.getTotalBudgetByMonth(yearMonth)
+                val budgets = withContext(Dispatchers.IO) {
+                    budgetDao.getBudgetsByMonthOnce(yearMonth)
                 }
-                _uiState.update { it.copy(monthlyBudget = total) }
+                val totalBudget = budgets
+                    .find { it.category == "전체" }
+                    ?.monthlyLimit
+                val categoryBudgets = budgets
+                    .filter { it.category != "전체" }
+                    .associate { it.category to it.monthlyLimit }
+                _uiState.update {
+                    it.copy(
+                        monthlyBudget = totalBudget,
+                        categoryBudgets = categoryBudgets
+                    )
+                }
             } catch (_: Exception) {
                 // 무시
             }
         }
     }
 
-    /** 월 예산 저장 (전체 예산으로 단일 "전체" 카테고리에 저장) */
+    /** 월 예산 저장 (전체 예산으로 단일 "전체" 카테고리에 저장) — 레거시 호환 */
     private fun saveMonthlyBudget(amount: Int) {
         viewModelScope.launch {
             try {
@@ -386,10 +411,62 @@ class SettingsViewModel @Inject constructor(
                         budgetDao.deleteAllByMonth(yearMonth)
                     }
                 }
-                _uiState.update { it.copy(monthlyBudget = if (amount > 0) amount else null) }
+                _uiState.update {
+                    it.copy(
+                        monthlyBudget = if (amount > 0) amount else null,
+                        categoryBudgets = emptyMap()
+                    )
+                }
                 snackbarBus.show(
                     if (amount > 0) "월 예산이 설정되었습니다" else "월 예산이 해제되었습니다"
                 )
+                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
+            } catch (e: Exception) {
+                snackbarBus.show("저장 실패: ${e.message}")
+            }
+        }
+    }
+
+    /** 전체 + 카테고리별 예산 일괄 저장 (BudgetBottomSheet에서 호출) */
+    private fun saveBudgets(totalBudget: Int?, categoryBudgets: Map<String, Int>) {
+        viewModelScope.launch {
+            try {
+                val yearMonth = java.time.YearMonth.now().toString()
+                withContext(Dispatchers.IO) {
+                    budgetDao.deleteAllByMonth(yearMonth)
+
+                    // 전체 예산 저장
+                    if (totalBudget != null && totalBudget > 0) {
+                        budgetDao.insert(
+                            com.sanha.moneytalk.core.database.entity.BudgetEntity(
+                                category = "전체",
+                                monthlyLimit = totalBudget,
+                                yearMonth = yearMonth
+                            )
+                        )
+                    }
+
+                    // 카테고리별 예산 저장
+                    categoryBudgets.forEach { (category, amount) ->
+                        if (amount > 0) {
+                            budgetDao.insert(
+                                com.sanha.moneytalk.core.database.entity.BudgetEntity(
+                                    category = category,
+                                    monthlyLimit = amount,
+                                    yearMonth = yearMonth
+                                )
+                            )
+                        }
+                    }
+                }
+
+                _uiState.update {
+                    it.copy(
+                        monthlyBudget = totalBudget?.takeIf { b -> b > 0 },
+                        categoryBudgets = categoryBudgets.filterValues { v -> v > 0 }
+                    )
+                }
+                snackbarBus.show("예산이 저장되었습니다")
                 dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
             } catch (e: Exception) {
                 snackbarBus.show("저장 실패: ${e.message}")
