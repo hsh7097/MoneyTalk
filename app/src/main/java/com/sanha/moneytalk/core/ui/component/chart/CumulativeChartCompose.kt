@@ -9,8 +9,10 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -83,6 +85,8 @@ fun CumulativeChartCompose(
     modifier: Modifier = Modifier
 ) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
+    val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+    val labelColorArgb = remember(labelColor) { labelColor.toArgb() }
 
     // Y축 최대값: yAxisMax가 설정되면 사용, 아니면 lines 기반 자동 계산
     val yAxisCeil = remember(data) {
@@ -116,12 +120,14 @@ fun CumulativeChartCompose(
 
         // ── 배경 가이드라인 (수평 점선) ──
         drawHorizontalGuides(
-            paddingStart, paddingTop, chartWidth, chartHeight, yAxisCeil, numberFormat
+            paddingStart, paddingTop, chartWidth, chartHeight, yAxisCeil, numberFormat,
+            labelColorArgb
         )
 
         // ── X축 라벨 (해당 월 말일 기준, 스트레칭 위치) ──
         drawXAxisLabels(
-            paddingStart, paddingTop, chartHeight, chartWidth, data.daysInMonth
+            paddingStart, paddingTop, chartHeight, chartWidth, data.daysInMonth,
+            labelColorArgb
         )
 
         // ── 각 곡선 렌더링 (각 곡선이 전체 폭을 스트레칭) ──
@@ -235,10 +241,11 @@ private fun DrawScope.drawHorizontalGuides(
     chartWidth: Float,
     chartHeight: Float,
     yAxisCeil: Long,
-    numberFormat: NumberFormat
+    numberFormat: NumberFormat,
+    labelColorArgb: Int
 ) {
     val textPaint = android.graphics.Paint().apply {
-        color = android.graphics.Color.GRAY
+        color = labelColorArgb
         textSize = 10.dp.toPx()
         isAntiAlias = true
     }
@@ -277,10 +284,11 @@ private fun DrawScope.drawXAxisLabels(
     paddingTop: Float,
     chartHeight: Float,
     chartWidth: Float,
-    daysInMonth: Int
+    daysInMonth: Int,
+    labelColorArgb: Int
 ) {
     val textPaint = android.graphics.Paint().apply {
-        color = android.graphics.Color.GRAY
+        color = labelColorArgb
         textSize = 10.dp.toPx()
         textAlign = android.graphics.Paint.Align.CENTER
         isAntiAlias = true
