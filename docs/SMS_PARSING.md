@@ -731,6 +731,7 @@ syncSmsV2(contentResolver, targetMonthRange, updateLastSyncTime)
 | HomeScreen (버튼) | `syncIncremental(cr)` | 증분 동기화 (lastSyncTime~now) |
 | HomeScreen (자동) | `syncIncremental(cr)` | 자동 증분 동기화 |
 | HomeViewModel (월별) | `syncSmsV2(cr, monthRange, false)` | 광고 시청 후 월별 동기화 |
+| HomeViewModel (resume) | `syncSmsV2(cr, range, true, silent=true)` | 앱 재진입 시 silent 증분 동기화 |
 
 `syncIncremental()`은 `calculateIncrementalRange()`로 시작~종료 시간을 계산한 뒤 `syncSmsV2()`를 호출합니다.
 

@@ -4,6 +4,27 @@
 
 ---
 
+## 2026-02-22 - 데이터 삭제 시 광고 동기화 초기화 + resume 시 silent 동기화
+
+### 작업 내용
+
+#### 데이터 삭제 시 광고 시청 기록 초기화
+- `SettingsDataStore.clearSyncedMonths()` 신규: SYNCED_MONTHS + FULL_SYNC_UNLOCKED 동시 제거
+- `SettingsViewModel.deleteAllData()`에서 clearSyncedMonths() 호출
+- 데이터 삭제 후 광고를 다시 시청하면 전체/월별 재동기화 가능
+
+#### 앱 재진입(resume) 시 silent 증분 동기화
+- `HomeViewModel.refreshData()`에서 isSyncing이 false일 때 silent syncSmsV2 자동 호출
+- calculateIncrementalRange() 기반으로 lastSyncTime부터 현재까지 증분 동기화
+- PR 리뷰 반영: silent 모드 애널리틱스 이벤트 스킵 + SMS 권한 체크 추가
+
+### 변경 파일
+- `core/datastore/SettingsDataStore.kt` — clearSyncedMonths() 추가
+- `feature/settings/ui/SettingsViewModel.kt` — deleteAllData()에서 호출
+- `feature/home/ui/HomeViewModel.kt` — refreshData()에 silent 증분 동기화 + 권한 체크
+
+---
+
 ## 2026-02-21 - 카테고리 상세 화면 + Budget BottomSheet + HistoryFilter 개선
 
 ### 작업 내용

@@ -236,4 +236,12 @@ class SettingsDataStore @Inject constructor(
     suspend fun isFullSyncUnlocked(): Boolean {
         return context.dataStore.data.first()[FULL_SYNC_UNLOCKED] ?: false
     }
+
+    /** 광고 시청으로 해제된 월별 동기화 + 레거시 전역 플래그 초기화 */
+    suspend fun clearSyncedMonths() {
+        context.dataStore.edit { preferences ->
+            preferences.remove(SYNCED_MONTHS)
+            preferences.remove(FULL_SYNC_UNLOCKED)
+        }
+    }
 }
