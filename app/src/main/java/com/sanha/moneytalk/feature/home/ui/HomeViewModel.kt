@@ -76,6 +76,8 @@ data class HomePageData(
     val avgSixMonthDailyCumulative: List<Long> = emptyList(),
     /** 월간 총 예산 (null = 미설정) */
     val monthlyBudget: Int? = null,
+    /** 카테고리별 월 예산 (key=카테고리명, value=월예산) */
+    val categoryBudgets: Map<String, Int> = emptyMap(),
     /** 해당 월의 총 일수 */
     val daysInMonth: Int = 30,
     /** 오늘이 해당 월의 몇번째 날인지 (0-based, -1이면 과거 월) */
@@ -523,11 +525,15 @@ class HomeViewModel @Inject constructor(
                     )
                 }
 
-                // 예산 로드 ("전체" 카테고리만 — 카테고리별 예산 합산이 아닌 전체 예산)
+                // 예산 로드 (전체 + 카테고리별 예산을 일괄 조회)
                 val yearMonth = String.format("%04d-%02d", year, month)
-                val monthlyBudgetValue = withContext(Dispatchers.IO) {
-                    budgetDao.getBudgetByCategory("전체", yearMonth)?.monthlyLimit
+                val allBudgets = withContext(Dispatchers.IO) {
+                    budgetDao.getBudgetsByMonthOnce(yearMonth)
                 }
+                val monthlyBudgetValue = allBudgets.find { it.category == "전체" }?.monthlyLimit
+                val categoryBudgetsMap = allBudgets
+                    .filter { it.category != "전체" }
+                    .associate { it.category to it.monthlyLimit }
 
                 // 1회성 데이터를 먼저 캐시에 저장 (Flow 수집 전)
                 // 기존 캐시가 있으면 isLoading 유지 (깜빡임 방지)
@@ -546,6 +552,7 @@ class HomeViewModel @Inject constructor(
                     avgThreeMonthDailyCumulative = avgThreeMonthCumulative,
                     avgSixMonthDailyCumulative = avgSixMonthCumulative,
                     monthlyBudget = monthlyBudgetValue,
+                    categoryBudgets = categoryBudgetsMap,
                     daysInMonth = daysInMonth,
                     todayDayIndex = todayDayIndex
                 ))

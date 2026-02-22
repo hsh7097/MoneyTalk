@@ -141,7 +141,10 @@ data class DataAction(
     val newStoreName: String? = null,   // 변경할 가게명 (가게명 수정 시)
 
     @SerializedName("newAmount")
-    val newAmount: Int? = null          // 변경할 금액 (금액 수정 시)
+    val newAmount: Int? = null,         // 변경할 금액 (금액 수정 시)
+
+    @SerializedName("category")
+    val category: String? = null        // 예산 설정 대상 카테고리 (set_budget 시)
 )
 
 enum class QueryType {
@@ -194,7 +197,10 @@ enum class QueryType {
     SMS_EXCLUSION_LIST,         // SMS 제외 키워드 목록
 
     @SerializedName("analytics")
-    ANALYTICS                   // 복합 조건 분석 (필터+그룹+집계를 앱에서 계산)
+    ANALYTICS,                  // 복합 조건 분석 (필터+그룹+집계를 앱에서 계산)
+
+    @SerializedName("budget_status")
+    BUDGET_STATUS               // 예산 현황 조회 (카테고리별 예산 한도, 사용 금액, 잔여 금액)
 }
 
 enum class ActionType {
@@ -232,7 +238,10 @@ enum class ActionType {
     ADD_SMS_EXCLUSION,          // SMS 제외 키워드 추가 (searchKeyword 필수)
 
     @SerializedName("remove_sms_exclusion")
-    REMOVE_SMS_EXCLUSION        // SMS 제외 키워드 삭제 (searchKeyword 필수)
+    REMOVE_SMS_EXCLUSION,       // SMS 제외 키워드 삭제 (searchKeyword 필수)
+
+    @SerializedName("set_budget")
+    SET_BUDGET                  // 예산 설정/변경 (category, amount 필수)
 }
 
 /**

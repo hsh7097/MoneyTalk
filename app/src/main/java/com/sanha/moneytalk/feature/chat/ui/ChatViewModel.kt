@@ -104,7 +104,8 @@ class ChatViewModel @Inject constructor(
     private val rewardAdManager: RewardAdManager,
     private val premiumManager: PremiumManager,
     private val analyticsHelper: AnalyticsHelper,
-    private val dataRefreshEvent: DataRefreshEvent
+    private val dataRefreshEvent: DataRefreshEvent,
+    private val budgetDao: com.sanha.moneytalk.core.database.dao.BudgetDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -975,7 +976,61 @@ class ChatViewModel @Inject constructor(
             QueryType.ANALYTICS -> {
                 executeAnalytics(query, startTimestamp, endTimestamp)
             }
+
+            QueryType.BUDGET_STATUS -> {
+                executeBudgetStatusQuery(startTimestamp, endTimestamp)
+            }
         }
+    }
+
+    /**
+     * BUDGET_STATUS 쿼리 실행: 카테고리별 예산 한도, 사용 금액, 잔여 금액 조회
+     */
+    private suspend fun executeBudgetStatusQuery(
+        startTimestamp: Long,
+        endTimestamp: Long
+    ): QueryResult {
+        // startTimestamp로부터 yearMonth 도출
+        val cal = Calendar.getInstance().apply { timeInMillis = startTimestamp }
+        val yearMonth = String.format(
+            "%04d-%02d",
+            cal.get(Calendar.YEAR),
+            cal.get(Calendar.MONTH) + 1
+        )
+
+        val budgets = budgetDao.getBudgetsByMonthOnce(yearMonth)
+        if (budgets.isEmpty()) {
+            return QueryResult(
+                queryType = QueryType.BUDGET_STATUS,
+                data = "설정된 예산이 없습니다. AI 채팅에서 \"식비 예산 20만원 설정해줘\"처럼 말하면 예산을 설정할 수 있습니다."
+            )
+        }
+
+        val sb = StringBuilder("예산 현황 ($yearMonth):\n")
+        for (budget in budgets) {
+            val spent = if (budget.category == "전체") {
+                expenseRepository.getTotalExpenseByDateRange(startTimestamp, endTimestamp)
+            } else {
+                val cat = com.sanha.moneytalk.core.model.Category.fromDisplayName(budget.category)
+                val categoryNames = cat.displayNamesIncludingSub
+                expenseRepository.getTotalExpenseByCategoriesAndDateRange(
+                    categoryNames, startTimestamp, endTimestamp
+                )
+            }
+            val remaining = budget.monthlyLimit - spent
+            val status = if (remaining >= 0) "남음" else "초과"
+            val absRemaining = kotlin.math.abs(remaining)
+            sb.appendLine(
+                "- ${budget.category}: 예산 ${numberFormat.format(budget.monthlyLimit)}원, " +
+                    "사용 ${numberFormat.format(spent)}원, " +
+                    "${numberFormat.format(absRemaining)}원 $status"
+            )
+        }
+
+        return QueryResult(
+            queryType = QueryType.BUDGET_STATUS,
+            data = sb.toString().trimEnd()
+        )
     }
 
     /**
@@ -1744,6 +1799,39 @@ class ChatViewModel @Inject constructor(
                         message = if (deleted > 0) "\"$keyword\" 키워드를 SMS 제외 목록에서 삭제했습니다."
                         else "\"$keyword\" 키워드를 찾을 수 없거나 기본 키워드라 삭제할 수 없습니다.",
                         affectedCount = deleted
+                    )
+                }
+            }
+
+            ActionType.SET_BUDGET -> {
+                val targetCategory = action.category ?: action.newCategory
+                val amount = action.amount
+                if (targetCategory.isNullOrBlank() || amount == null) {
+                    ActionResult(
+                        actionType = ActionType.SET_BUDGET,
+                        success = false,
+                        message = "카테고리 또는 금액이 지정되지 않았습니다."
+                    )
+                } else {
+                    val cal = Calendar.getInstance()
+                    val yearMonth = String.format(
+                        "%04d-%02d",
+                        cal.get(Calendar.YEAR),
+                        cal.get(Calendar.MONTH) + 1
+                    )
+                    budgetDao.insert(
+                        com.sanha.moneytalk.core.database.entity.BudgetEntity(
+                            category = targetCategory,
+                            monthlyLimit = amount,
+                            yearMonth = yearMonth
+                        )
+                    )
+                    dataRefreshEvent.emit()
+                    ActionResult(
+                        actionType = ActionType.SET_BUDGET,
+                        success = true,
+                        message = "'$targetCategory' 카테고리의 월 예산을 ${numberFormat.format(amount)}원으로 설정했습니다.",
+                        affectedCount = 1
                     )
                 }
             }
