@@ -213,9 +213,15 @@
 - HomeViewModel.refreshData(): SMS 권한 확인 후 silent syncSmsV2 자동 호출
 - silent 모드: 애널리틱스 이벤트 스킵 + 진행 UI 미표시
 
+**예산 관리 확장 (홈 UI + AI 채팅 연동)**: ✅ 완료 (2026-02-22)
+- 홈 카테고리 리스트: 예산 대비 사용률 프로그레스바 + 잔여/초과 표시 + 초과 시 빨간색 강조
+- AI 채팅 예산 조회: QueryType.BUDGET_STATUS + executeBudgetStatusQuery()
+- AI 채팅 예산 설정: ActionType.SET_BUDGET + DataAction.category + executeSetBudget()
+- 프롬프트 갱신: budget_status 쿼리 + set_budget 액션 + 분석 규칙 + 패턴 예시
+
 ### 대기 중인 작업
 
-- `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지
+- `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지 (이미 머지됨 — 정리 필요)
 - GitHub Pages 설정 (Settings → Pages → `/docs` 디렉토리) — 개인정보처리방침 URL 활성화용
 - Google Play Console 알파 트랙 AAB 업로드 + SMS 권한 선언 양식 제출
 
@@ -277,6 +283,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-22 | 예산 관리 확장 — 홈 카테고리 예산 UI + AI 채팅 예산 조회(BUDGET_STATUS)/설정(SET_BUDGET) | 완료 |
 | 2026-02-22 | 데이터 삭제 시 광고 시청 기록 초기화 (clearSyncedMonths) + resume 시 silent 증분 동기화 (권한 체크 + 애널리틱스 스킵) | 완료 |
 | 2026-02-21 | Budget BottomSheet (전체+카테고리별 예산 일괄 설정) + HistoryFilter BottomSheet 개선 (100dp 마진, 고정 하단 버튼) | 완료 |
 | 2026-02-21 | 카테고리 상세 화면 (CategoryDetailActivity) — 월간 추이 차트 + 거래 리스트 + 다크 모드 | 완료 |

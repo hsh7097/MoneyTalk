@@ -4,6 +4,39 @@
 
 ---
 
+## 2026-02-22 - 예산 관리 기능 확장 (홈 UI + AI 채팅 연동)
+
+### 작업 내용
+
+#### 홈 카테고리 리스트 예산 표시
+- `HomePageData`에 `categoryBudgets: Map<String, Int>` 필드 추가
+- `loadPageData()`에서 `getBudgetsByMonthOnce()` 일괄 조회로 변경 (전체+카테고리별)
+- `CategoryExpenseSection`에서 예산 설정 카테고리: "₩120,000 / ₩200,000" + "₩80,000 남음" 표시
+- 예산 초과 시: 빨간색 프로그레스바 + "₩20,000 초과" 텍스트
+- 예산 미설정 카테고리: 기존 전체 지출 대비 비율(%) 유지
+
+#### AI 채팅 예산 조회 (BUDGET_STATUS)
+- `QueryType.BUDGET_STATUS` 추가 + `executeBudgetStatusQuery()` 구현
+- 카테고리별 예산/사용/잔여 금액을 문자열로 생성하여 Gemini에 전달
+- `BudgetDao`를 `ChatViewModel`에 Hilt 주입
+
+#### AI 채팅 예산 설정 (SET_BUDGET)
+- `ActionType.SET_BUDGET` + `DataAction.category` 필드 추가
+- 현재 월 기준으로 `BudgetEntity` insert (OnConflictStrategy.REPLACE)
+- 설정 후 `DataRefreshEvent.emit()`으로 홈 화면 자동 갱신
+
+#### 프롬프트 갱신
+- `string_prompt.xml`: 쿼리/액션 타입 목록, 파라미터, 분석 규칙, 패턴 예시 모두 갱신
+
+### 변경 파일
+- `core/util/DataQueryParser.kt` — QueryType.BUDGET_STATUS, ActionType.SET_BUDGET, DataAction.category
+- `feature/home/ui/HomeViewModel.kt` — HomePageData.categoryBudgets, loadPageData 일괄 조회
+- `feature/home/ui/HomeScreen.kt` — CategoryExpenseSection 예산 UI
+- `feature/chat/ui/ChatViewModel.kt` — BudgetDao 주입, executeBudgetStatusQuery, SET_BUDGET 액션
+- `res/values/string_prompt.xml` — 예산 관련 프롬프트
+
+---
+
 ## 2026-02-22 - 데이터 삭제 시 광고 동기화 초기화 + resume 시 silent 동기화
 
 ### 작업 내용

@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Added (2026-02-22)
+- **홈 카테고리 리스트 예산 표시**: 예산 설정 카테고리에 "사용액 / 예산액" + 잔여/초과 텍스트 + 예산 대비 프로그레스바 표시
+  - 예산 초과 시 빨간색 프로그레스바 + 초과 금액 강조
+  - 예산 미설정 카테고리는 기존 전체 지출 대비 비율(%) 유지
+- **AI 채팅 예산 조회 (BUDGET_STATUS)**: "예산 현황", "예산 얼마 남았어?" 등 자연어 예산 조회 지원
+- **AI 채팅 예산 설정 (SET_BUDGET)**: "식비 예산 20만원 설정해줘" 등 자연어 예산 설정/변경 지원
+
 ### Fixed (2026-02-22)
 - **데이터 삭제 시 광고 시청 기록 초기화**: `SettingsDataStore.clearSyncedMonths()` 추가로 SYNCED_MONTHS + FULL_SYNC_UNLOCKED 동시 제거
 - **앱 재진입(resume) 시 silent 증분 동기화**: `HomeViewModel.refreshData()`에서 `syncSmsV2(silent=true)` 호출로 백그라운드 중 수신된 SMS 자동 반영
