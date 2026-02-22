@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-21
+> **최종 갱신**: 2026-02-22
 
 ---
 
@@ -207,6 +207,12 @@
 **SMS 증분 동기화 5분 오버랩**: ✅ 완료 (2026-02-21)
 - 증분 동기화 시 lastSyncTime - 5분 오버랩으로 경계 SMS 누락 방지
 
+**데이터 삭제 시 광고 동기화 초기화 + resume silent 동기화**: ✅ 완료 (2026-02-22)
+- SettingsDataStore.clearSyncedMonths(): SYNCED_MONTHS + FULL_SYNC_UNLOCKED 동시 초기화
+- deleteAllData() 연동 (SettingsViewModel)
+- HomeViewModel.refreshData(): SMS 권한 확인 후 silent syncSmsV2 자동 호출
+- silent 모드: 애널리틱스 이벤트 스킵 + 진행 UI 미표시
+
 ### 대기 중인 작업
 
 - `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지
@@ -271,6 +277,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-22 | 데이터 삭제 시 광고 시청 기록 초기화 (clearSyncedMonths) + resume 시 silent 증분 동기화 (권한 체크 + 애널리틱스 스킵) | 완료 |
 | 2026-02-21 | Budget BottomSheet (전체+카테고리별 예산 일괄 설정) + HistoryFilter BottomSheet 개선 (100dp 마진, 고정 하단 버튼) | 완료 |
 | 2026-02-21 | 카테고리 상세 화면 (CategoryDetailActivity) — 월간 추이 차트 + 거래 리스트 + 다크 모드 | 완료 |
 | 2026-02-21 | SMS 증분 동기화 5분 오버랩 + 다크 모드 차트 색상 수정 | 완료 |

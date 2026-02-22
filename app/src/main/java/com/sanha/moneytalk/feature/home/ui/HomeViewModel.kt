@@ -1,7 +1,10 @@
 package com.sanha.moneytalk.feature.home.ui
 
+import android.Manifest
 import android.content.ContentResolver
+import android.content.pm.PackageManager
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.dao.CategorySum
@@ -711,7 +714,10 @@ class HomeViewModel @Inject constructor(
     /** 화면이 다시 표시될 때 데이터 새로고침 (LaunchedEffect에서 호출) */
     fun refreshData() {
         // resume 시 silent 증분 동기화 (새 SMS가 있으면 자동 추가)
-        if (!_uiState.value.isSyncing) {
+        val hasSmsPermission = ContextCompat.checkSelfPermission(
+            appContext, Manifest.permission.READ_SMS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (hasSmsPermission && !_uiState.value.isSyncing) {
             viewModelScope.launch {
                 val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
                 syncSmsV2(
@@ -1072,7 +1078,9 @@ class HomeViewModel @Inject constructor(
             return
         }
 
-        analyticsHelper.logClick(AnalyticsEvent.SCREEN_HOME, AnalyticsEvent.CLICK_SYNC_SMS)
+        if (!silent) {
+            analyticsHelper.logClick(AnalyticsEvent.SCREEN_HOME, AnalyticsEvent.CLICK_SYNC_SMS)
+        }
         viewModelScope.launch {
             if (!silent) {
                 _uiState.update {

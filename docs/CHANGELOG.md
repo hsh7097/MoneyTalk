@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Fixed (2026-02-22)
+- **데이터 삭제 시 광고 시청 기록 초기화**: `SettingsDataStore.clearSyncedMonths()` 추가로 SYNCED_MONTHS + FULL_SYNC_UNLOCKED 동시 제거
+- **앱 재진입(resume) 시 silent 증분 동기화**: `HomeViewModel.refreshData()`에서 `syncSmsV2(silent=true)` 호출로 백그라운드 중 수신된 SMS 자동 반영
+  - silent 모드: 애널리틱스 이벤트 스킵 + SMS 권한 체크 포함
+
 ### Added (2026-02-21 후반)
 - **카테고리 상세 화면 (CategoryDetailActivity)**: 카테고리별 월간 지출 추이 차트 + 거래 리스트
   - 홈 카테고리 리스트에서 클릭 → Intent 기반 신규 Activity 진입
