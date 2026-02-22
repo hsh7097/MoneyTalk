@@ -1001,17 +1001,18 @@ fun CategoryExpenseSection(
                 val category = Category.fromDisplayName(item.category)
                 val chartColor = getCategoryChartColor(category)
                 val budget = categoryBudgets[item.category]
-                val hasBudget = budget != null && budget > 0
-                val isOverBudget = hasBudget && item.total > budget!!
+                val budgetAmount = budget ?: 0
+                val hasBudget = budget != null && budgetAmount > 0
+                val isOverBudget = hasBudget && item.total > budgetAmount
 
                 // 예산 설정 시: 예산 대비 사용률, 미설정 시: 전체 지출 대비 비율
                 val percentage = if (hasBudget) {
-                    (item.total.toFloat() / budget!! * 100).toInt()
+                    (item.total.toFloat() / budgetAmount * 100).toInt()
                 } else if (totalExpense > 0) {
                     (item.total.toFloat() / totalExpense * 100).toInt()
                 } else 0
                 val progress = if (hasBudget) {
-                    (item.total.toFloat() / budget!!).coerceAtMost(1f)
+                    (item.total.toFloat() / budgetAmount).coerceAtMost(1f)
                 } else if (totalExpense > 0) {
                     item.total.toFloat() / totalExpense
                 } else 0f
@@ -1053,16 +1054,16 @@ fun CategoryExpenseSection(
                             if (hasBudget) {
                                 // 예산 설정된 카테고리: 사용액 / 예산액
                                 Text(
-                                    text = "₩${numberFormat.format(item.total)} / ₩${numberFormat.format(budget!!)}",
+                                    text = "₩${numberFormat.format(item.total)} / ₩${numberFormat.format(budgetAmount)}",
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isOverBudget) Color(0xFFE53935) else MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     text = if (isOverBudget) {
-                                        "₩${numberFormat.format(item.total - budget)} 초과"
+                                        "₩${numberFormat.format(item.total - budgetAmount)} 초과"
                                     } else {
-                                        "₩${numberFormat.format(budget - item.total)} 남음"
+                                        "₩${numberFormat.format(budgetAmount - item.total)} 남음"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = if (isOverBudget) Color(0xFFE53935).copy(alpha = 0.7f)

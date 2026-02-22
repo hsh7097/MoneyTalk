@@ -5,9 +5,12 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.ad.RewardAdManager
+import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
+import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import kotlin.math.abs
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
@@ -105,7 +108,7 @@ class ChatViewModel @Inject constructor(
     private val premiumManager: PremiumManager,
     private val analyticsHelper: AnalyticsHelper,
     private val dataRefreshEvent: DataRefreshEvent,
-    private val budgetDao: com.sanha.moneytalk.core.database.dao.BudgetDao
+    private val budgetDao: BudgetDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -1011,7 +1014,7 @@ class ChatViewModel @Inject constructor(
             val spent = if (budget.category == "전체") {
                 expenseRepository.getTotalExpenseByDateRange(startTimestamp, endTimestamp)
             } else {
-                val cat = com.sanha.moneytalk.core.model.Category.fromDisplayName(budget.category)
+                val cat = Category.fromDisplayName(budget.category)
                 val categoryNames = cat.displayNamesIncludingSub
                 expenseRepository.getTotalExpenseByCategoriesAndDateRange(
                     categoryNames, startTimestamp, endTimestamp
@@ -1019,11 +1022,11 @@ class ChatViewModel @Inject constructor(
             }
             val remaining = budget.monthlyLimit - spent
             val status = if (remaining >= 0) "남음" else "초과"
-            val absRemaining = kotlin.math.abs(remaining)
+            val absRemaining = abs(remaining)
             sb.appendLine(
                 "- ${budget.category}: 예산 ${numberFormat.format(budget.monthlyLimit)}원, " +
                     "사용 ${numberFormat.format(spent)}원, " +
-                    "${numberFormat.format(absRemaining)}원 $status"
+                    "${numberFormat.format(absRemaining.toLong())}원 $status"
             )
         }
 
@@ -1820,7 +1823,7 @@ class ChatViewModel @Inject constructor(
                         cal.get(Calendar.MONTH) + 1
                     )
                     budgetDao.insert(
-                        com.sanha.moneytalk.core.database.entity.BudgetEntity(
+                        BudgetEntity(
                             category = targetCategory,
                             monthlyLimit = amount,
                             yearMonth = yearMonth
