@@ -298,6 +298,20 @@ object DateUtils {
     }
 
     /**
+     * 현재 커스텀 기간에 해당하는 실효 (year, month) 반환.
+     *
+     * monthStartDay=1이면 달력 기준 현재 월,
+     * monthStartDay>1이면 getCurrentCustomMonthPeriod()의 종료 timestamp에서 추출.
+     * 예: monthStartDay=21, today=23 → (2026, 3) (2월 21~3월 20 기간)
+     */
+    fun getEffectiveCurrentMonth(monthStartDay: Int): Pair<Int, Int> {
+        if (monthStartDay <= 1) return Pair(getCurrentYear(), getCurrentMonth())
+        val (_, endTs) = getCurrentCustomMonthPeriod(monthStartDay)
+        val cal = Calendar.getInstance().apply { timeInMillis = endTs }
+        return Pair(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1)
+    }
+
+    /**
      * 커스텀 월 기간 표시 문자열
      * @param year 기준 연도
      * @param month 기준 월

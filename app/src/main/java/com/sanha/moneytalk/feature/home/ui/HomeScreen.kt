@@ -57,6 +57,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -148,7 +149,7 @@ fun HomeScreen(
     }
     val pagerState = rememberPagerState(
         initialPage = initialPage,
-        pageCount = { MonthPagerUtils.TOTAL_PAGE_COUNT }
+        pageCount = { MonthPagerUtils.getPageCount(uiState.monthStartDay) }
     )
     val coroutineScope = rememberCoroutineScope()
 
@@ -169,13 +170,12 @@ fun HomeScreen(
         viewModel.setMonth(year, month)
     }
 
-    // 홈 탭 재클릭 → 오늘(현재 월) 페이지로 이동
+    // 홈 탭 재클릭 → 오늘(현재 커스텀 월) 페이지로 이동
+    val currentMonthStartDay by rememberUpdatedState(uiState.monthStartDay)
     LaunchedEffect(homeTabReClickEvent) {
         homeTabReClickEvent?.collect {
-            val todayPage = MonthPagerUtils.yearMonthToPage(
-                DateUtils.getCurrentYear(),
-                DateUtils.getCurrentMonth()
-            )
+            val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(currentMonthStartDay)
+            val todayPage = MonthPagerUtils.yearMonthToPage(effYear, effMonth)
             if (pagerState.currentPage != todayPage) {
                 pagerState.animateScrollToPage(todayPage)
             }
@@ -215,7 +215,7 @@ fun HomeScreen(
             onNextMonth = {
                 coroutineScope.launch {
                     val target = pagerState.currentPage + 1
-                    if (!MonthPagerUtils.isFutureMonth(target)) {
+                    if (!MonthPagerUtils.isFutureMonth(target, uiState.monthStartDay)) {
                         pagerState.animateScrollToPage(target)
                     }
                 }
@@ -449,8 +449,9 @@ fun HomeScreen(
     // 전체 동기화 해제 광고 다이얼로그
     if (uiState.showFullSyncAdDialog) {
         val activity = context as? android.app.Activity
-        val isCurrentMonthForDialog = uiState.selectedYear == DateUtils.getCurrentYear() &&
-                uiState.selectedMonth == DateUtils.getCurrentMonth()
+        val (effYearDialog, effMonthDialog) = DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+        val isCurrentMonthForDialog = uiState.selectedYear == effYearDialog &&
+                uiState.selectedMonth == effMonthDialog
         val dialogMonthLabel = if (isCurrentMonthForDialog) "이번달" else "${uiState.selectedMonth}월"
         AlertDialog(
             onDismissRequest = { viewModel.dismissFullSyncAdDialog() },
@@ -574,7 +575,8 @@ fun HomePageContent(
             }
 
             // 데이터 0건 + 현재 월 아님 + 전체 동기화 미해제 → 빈 CTA 표시
-            val isCurrentMonth = year == DateUtils.getCurrentYear() && month == DateUtils.getCurrentMonth()
+            val (effYearCta, effMonthCta) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
+            val isCurrentMonth = year == effYearCta && month == effMonthCta
             val hasNoData = !pageData.isLoading &&
                     pageData.monthlyExpense == 0 && pageData.monthlyIncome == 0
             val showEmptyCta = hasNoData && !isCurrentMonth && !isMonthSynced
@@ -767,8 +769,8 @@ fun MonthlyOverviewSection(
             }
 
             Row {
-                val isCurrentMonth = year >= DateUtils.getCurrentYear() &&
-                    month >= DateUtils.getCurrentMonth()
+                val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
+                val isCurrentMonth = year >= effYear && month >= effMonth
                 IconButton(
                     onClick = onNextMonth,
                     enabled = !isCurrentMonth

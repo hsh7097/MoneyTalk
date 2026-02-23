@@ -175,8 +175,8 @@ fun PeriodSummaryCard(
                 )
             }
 
-            val isCurrentMonth = year >= DateUtils.getCurrentYear() &&
-                month >= DateUtils.getCurrentMonth()
+            val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
+            val isCurrentMonth = year >= effYear && month >= effMonth
             IconButton(
                 onClick = onNextMonth,
                 modifier = Modifier.size(28.dp),
