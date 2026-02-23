@@ -253,6 +253,24 @@ class HomeViewModel @Inject constructor(
         _uiState.update { it.copy(pageCache = emptyMap()) }
     }
 
+    /**
+     * 현재 + 인접 페이지 데이터 새로고침 (캐시를 비우지 않고 덮어쓰기).
+     * 백그라운드 데이터 변경 시 스크롤 위치를 유지하면서 데이터만 갱신.
+     */
+    private fun refreshCurrentPages() {
+        val state = _uiState.value
+        val year = state.selectedYear
+        val month = state.selectedMonth
+
+        loadPageData(year, month, forceReload = true)
+        val (prevY, prevM) = MonthPagerUtils.adjacentMonth(year, month, -1)
+        loadPageData(prevY, prevM, forceReload = true)
+        val (nextY, nextM) = MonthPagerUtils.adjacentMonth(year, month, +1)
+        if (!MonthPagerUtils.isFutureYearMonth(nextY, nextM, state.monthStartDay)) {
+            loadPageData(nextY, nextM, forceReload = true)
+        }
+    }
+
     /** 현재 + 인접 월 데이터 로드 (공통 진입점) */
     private fun loadCurrentAndAdjacentPages() {
         val state = _uiState.value
@@ -288,13 +306,11 @@ class HomeViewModel @Inject constructor(
 
                     DataRefreshEvent.RefreshType.CATEGORY_UPDATED,
                     DataRefreshEvent.RefreshType.OWNED_CARD_UPDATED -> {
-                        clearAllPageCache()
-                        loadCurrentAndAdjacentPages()
+                        refreshCurrentPages()
                     }
 
                     DataRefreshEvent.RefreshType.TRANSACTION_ADDED -> {
-                        clearAllPageCache()
-                        loadCurrentAndAdjacentPages()
+                        refreshCurrentPages()
                     }
 
                     DataRefreshEvent.RefreshType.SMS_RECEIVED -> {
@@ -383,16 +399,23 @@ class HomeViewModel @Inject constructor(
      * @param month 대상 월
      * @param withInsight true면 AI 인사이트도 생성 (현재 월에서만 사용)
      */
-    private fun loadPageData(year: Int, month: Int, withInsight: Boolean = false) {
+    private fun loadPageData(
+        year: Int,
+        month: Int,
+        withInsight: Boolean = false,
+        forceReload: Boolean = false
+    ) {
         val key = MonthKey(year, month)
-        // 이미 로드 완료된 캐시가 있으면 스킵 (스와이프 시 불필요한 재로드 방지)
-        val existing = _uiState.value.pageCache[key]
-        if (existing != null && !existing.isLoading) return
+        if (!forceReload) {
+            // 이미 로드 완료된 캐시가 있으면 스킵 (스와이프 시 불필요한 재로드 방지)
+            val existing = _uiState.value.pageCache[key]
+            if (existing != null && !existing.isLoading) return
+        }
 
         pageLoadJobs[key]?.cancel()
         pageLoadJobs[key] = viewModelScope.launch {
-            // 캐시에 없으면 로딩 상태로 초기화
-            if (_uiState.value.pageCache[key] == null) {
+            // forceReload가 아니고 캐시에 없으면 로딩 상태로 초기화
+            if (!forceReload && _uiState.value.pageCache[key] == null) {
                 updatePageCache(key, HomePageData(isLoading = true))
             }
 
@@ -1150,9 +1173,8 @@ class HomeViewModel @Inject constructor(
                     }
                 }
 
-                // 데이터 새로고침
-                clearAllPageCache()
-                loadCurrentAndAdjacentPages()
+                // 데이터 새로고침 (스크롤 위치 유지)
+                refreshCurrentPages()
 
                 val resultMessage = when {
                     result.expenseCount > 0 && result.incomeCount > 0 ->
@@ -1242,8 +1264,7 @@ class HomeViewModel @Inject constructor(
                     )
                 }
 
-                clearAllPageCache()
-                loadCurrentAndAdjacentPages()
+                refreshCurrentPages()
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(isRefreshing = false, errorMessage = e.message)
@@ -1426,8 +1447,7 @@ class HomeViewModel @Inject constructor(
 
             if (phase1Count > 0) {
                 withContext(Dispatchers.Main) {
-                    clearAllPageCache()
-                    loadCurrentAndAdjacentPages()
+                    refreshCurrentPages()
                     _uiState.update { it.copy(errorMessage = "${phase1Count}건의 카테고리가 정리되었습니다") }
                 }
             }
@@ -1457,8 +1477,7 @@ class HomeViewModel @Inject constructor(
                         "카테고리 정리가 완료되었습니다"
                     }
                     withContext(Dispatchers.Main) {
-                        clearAllPageCache()
-                        loadCurrentAndAdjacentPages()
+                        refreshCurrentPages()
                         _uiState.update { it.copy(errorMessage = message) }
                     }
                 }
