@@ -6,8 +6,8 @@ argument-hint: "[커밋 메시지] (선택)"
 
 # Safe Commit 스킬
 
-> **규칙 SSOT**: [docs/GIT_CONVENTION.md](../../../docs/GIT_CONVENTION.md)
-> 커밋 메시지 형식, 브랜치 전략, 분리 커밋 기준은 모두 위 문서를 따른다.
+> **규칙 SSOT**: 프로젝트에 `docs/GIT_CONVENTION.md`가 있으면 해당 문서를 따른다.
+> 없으면 이 스킬의 기본 규칙을 따른다.
 
 커밋 요청 시 아래 절차를 **반드시 순서대로** 수행한다.
 
@@ -31,7 +31,7 @@ git status
 git diff --stat
 ```
 
-- 변경 파일을 **목적별로 그룹핑**한다 (GIT_CONVENTION.md 섹션 3 참조)
+- 변경 파일을 **목적별로 그룹핑**한다
 - 서로 다른 목적(기능/버그수정/문서/Lint 등)은 **별도 커밋으로 분리**
 
 ---
@@ -42,6 +42,7 @@ git diff --stat
 
 - 불필요한 코드 (디버깅 로그, 주석 처리된 코드)
 - 잘못된 로직 (조건 분기 오류, off-by-one)
+- thread-safety 이슈 (불필요한 `withContext`, race condition)
 - import 누락/미사용
 - 기존 코드 스타일과의 불일치
 
@@ -67,8 +68,9 @@ EOF
 
 - `git add -A` 사용 금지 → 파일 명시적 지정
 - 민감 파일(.env, credentials) 포함 여부 확인
-- Composable 변경 시 `docs/COMPOSABLE_MAP.md` 갱신 여부 확인
-- 커밋 메시지 타입은 한글 (기능/수정/개선/리팩토링/문서/스타일/테스트/설정/기타)
+- 커밋 메시지 타입: 프로젝트 GIT_CONVENTION.md가 있으면 따르고, 없으면 아래 기본값 사용
+  - 한글: 기능/수정/개선/리팩토링/문서/스타일/테스트/설정/기타
+  - 영문: feat/fix/refactor/docs/chore/style/test
 
 ---
 
