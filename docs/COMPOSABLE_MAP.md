@@ -2,28 +2,45 @@
 
 > 각 화면의 Composable 계층 구조를 트리로 정리한 문서
 > 함수 참조 클릭 시 IDE에서 해당 파일로 이동 가능
-> **최종 갱신**: 2026-02-21
+> **최종 갱신**: 2026-02-24
 
 ---
 
-## 앱 루트
+## IntroActivity (LAUNCHER)
 
 ```
-ForceUpdateDialog                    ← 강제 업데이트 다이얼로그 (닫기 불가)
+IntroActivity                        ← 앱 초기 진입 (스플래시 + 권한 + RTDB + 강제 업데이트)
+├── SplashScreen                     ← 로고 페이드인 애니메이션
+├── PermissionScreen                 ← SMS 권한 설명 + 동의/비동의
+├── ForceUpdateDialog                ← 강제 업데이트 다이얼로그 (닫기 불가)
+└── [NAVIGATING 배경]               ← RTDB 대기 중 그라데이션 배경
+```
+
+| 함수 | 설명 | 참조 |
+|------|------|------|
+| SplashScreen | 로고 페이드인 후 다음 단계로 전환 | [SplashScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/splash/ui/SplashScreen.kt) |
+| PermissionScreen | SMS 권한 설명 카드 UI | [PermissionScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/intro/ui/PermissionScreen.kt) |
+| ForceUpdateDialog | 강제 업데이트 다이얼로그 (업데이트/종료) | [ForceUpdateDialogKt](../app/src/main/java/com/sanha/moneytalk/core/ui/ForceUpdateDialog.kt) |
+
+---
+
+## 앱 루트 (MainActivity)
+
+```
+ForceUpdateDialog                    ← 강제 업데이트 다이얼로그 (앱 사용 중 RTDB 변경 시)
 MoneyTalkApp                         ← 앱 최상위 Scaffold + BottomNav + 전역 스낵바
-├── NavGraph                         ← 화면 라우팅 (스플래시 → 홈/내역/채팅/설정)
+├── NavGraph                         ← 화면 라우팅 (홈/내역/채팅/설정)
 ├── BackPressHandler                 ← 채팅방 뒤로가기 처리
 └── MoneyTalkTheme                   ← 라이트/다크 테마 적용
 ```
 
 | 함수 | 설명 | 참조 |
 |------|------|------|
-| ForceUpdateDialog | 강제 업데이트 다이얼로그 (닫기 불가, 업데이트/종료) | [MainActivityKt](../app/src/main/java/com/sanha/moneytalk/MainActivity.kt) |
+| ForceUpdateDialog | 강제 업데이트 다이얼로그 (닫기 불가, 업데이트/종료) | [ForceUpdateDialogKt](../app/src/main/java/com/sanha/moneytalk/core/ui/ForceUpdateDialog.kt) |
 | MoneyTalkApp | Scaffold + BottomNav + 전역 스낵바 | [MainActivityKt](../app/src/main/java/com/sanha/moneytalk/MainActivity.kt) |
 | BackPressHandler | 채팅방 뒤로가기 처리 | [MainActivityKt](../app/src/main/java/com/sanha/moneytalk/MainActivity.kt) |
 | NavGraph | 화면 라우팅 정의 | [NavGraphKt](../app/src/main/java/com/sanha/moneytalk/navigation/NavGraph.kt) |
 | MoneyTalkTheme | 라이트/다크 테마 적용 | [ThemeKt](../app/src/main/java/com/sanha/moneytalk/core/theme/Theme.kt) |
-| SplashScreen | 로고 페이드인 후 홈으로 전환 | [SplashScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/splash/ui/SplashScreen.kt) |
 
 ---
 
@@ -44,6 +61,7 @@ HomeScreen                           ← 홈 탭 메인 화면
 │   └── MonthComparisonCard          ← 전월 동일 기간 대비 차이
 ├── TransactionCardCompose           ← 오늘 거래 카드 (공통)
 │   └── CategoryIcon                 ← 카테고리 이모지 아이콘 (공통)
+├── ImportDataCtaSection             ← 데이터 가져오기 CTA (현재월, 권한 없거나 데이터 없음)
 ├── EmptyExpenseSection              ← 지출 없을 때 빈 상태
 ├── FullSyncCtaSection              ← 전체 동기화 해제 CTA (공통)
 ├── ExpenseDetailDialog              ← 지출 상세/수정/삭제 다이얼로그 (공통)
@@ -63,6 +81,7 @@ HomeScreen                           ← 홈 탭 메인 화면
 | TodayAndComparisonSection | 오늘 지출 + 전월 대비 래퍼 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 | TodayExpenseCard | 오늘 총 지출 금액/건수 카드 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 | MonthComparisonCard | 전월 동일 기간 대비 차이 카드 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
+| ImportDataCtaSection | 데이터 가져오기 CTA (현재월, SMS 권한/데이터 없음) | [ImportDataCtaSectionKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/component/ImportDataCtaSection.kt) |
 | EmptyExpenseSection | 지출 없을 때 빈 상태 표시 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 | FullSyncCtaSection | 전체 동기화 해제 CTA (3개월 이전 빈 페이지) | [FullSyncCtaSectionKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/FullSyncCtaSection.kt) |
 
@@ -80,6 +99,7 @@ HistoryScreen                        ← 내역 탭 메인 화면
 │
 ├── [목록 모드]
 │   └── TransactionListView          ← 통합 거래 목록 (순수 렌더링)
+│       ├── ImportDataCtaSection     ← 데이터 가져오기 CTA (현재월, 빈 상태)
 │       ├── TransactionGroupHeaderCompose ← 날짜/가게/금액 그룹 헤더 (공통)
 │       ├── TransactionCardCompose   ← 지출/수입 거래 카드 (공통)
 │       │   └── CategoryIcon         ← 카테고리 이모지 아이콘 (공통)
