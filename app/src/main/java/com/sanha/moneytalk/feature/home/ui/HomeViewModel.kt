@@ -331,15 +331,8 @@ class HomeViewModel @Inject constructor(
                 .distinctUntilChanged()
                 .collect { monthStartDay ->
                     if (isFirstEmit) {
-                        // 최초: 현재 월 기준으로 selectedYear/selectedMonth 설정
-                        val (year, month) = withContext(Dispatchers.IO) {
-                            val (_, endTs) = DateUtils.getCurrentCustomMonthPeriod(monthStartDay)
-                            val calendar = java.util.Calendar.getInstance().apply { timeInMillis = endTs }
-                            Pair(
-                                calendar.get(java.util.Calendar.YEAR),
-                                calendar.get(java.util.Calendar.MONTH) + 1
-                            )
-                        }
+                        // 최초: 커스텀 시작일 기준 실효 월로 selectedYear/selectedMonth 설정
+                        val (year, month) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
                         _uiState.update {
                             it.copy(
                                 monthStartDay = monthStartDay,
@@ -1281,8 +1274,8 @@ class HomeViewModel @Inject constructor(
 
             // 현재 보고 있는 월의 범위 계산
             val monthRange = calculateMonthRange(state.selectedYear, state.selectedMonth)
-            val isCurrentMonth = state.selectedYear == DateUtils.getCurrentYear() &&
-                    state.selectedMonth == DateUtils.getCurrentMonth()
+            val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(state.monthStartDay)
+            val isCurrentMonth = state.selectedYear == effYear && state.selectedMonth == effMonth
             val monthLabel = if (isCurrentMonth) "이번달" else "${state.selectedMonth}월"
             snackbarBus.show("${monthLabel} 데이터를 가져옵니다.")
 

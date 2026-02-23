@@ -1134,8 +1134,8 @@ class HistoryViewModel @Inject constructor(
             val yearMonth = String.format("%04d-%02d", state.selectedYear, state.selectedMonth)
             settingsDataStore.addSyncedMonth(yearMonth)
             _uiState.update { it.copy(showFullSyncAdDialog = false) }
-            val isCurrentMonth = state.selectedYear == DateUtils.getCurrentYear() &&
-                    state.selectedMonth == DateUtils.getCurrentMonth()
+            val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(state.monthStartDay)
+            val isCurrentMonth = state.selectedYear == effYear && state.selectedMonth == effMonth
             val monthLabel = if (isCurrentMonth) "이번달" else "${state.selectedMonth}월"
             snackbarBus.show(context.getString(R.string.full_sync_unlocked_message, monthLabel))
 

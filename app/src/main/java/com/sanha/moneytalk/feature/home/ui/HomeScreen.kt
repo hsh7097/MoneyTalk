@@ -447,8 +447,9 @@ fun HomeScreen(
     // 전체 동기화 해제 광고 다이얼로그
     if (uiState.showFullSyncAdDialog) {
         val activity = context as? android.app.Activity
-        val isCurrentMonthForDialog = uiState.selectedYear == DateUtils.getCurrentYear() &&
-                uiState.selectedMonth == DateUtils.getCurrentMonth()
+        val (effYearDialog, effMonthDialog) = DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+        val isCurrentMonthForDialog = uiState.selectedYear == effYearDialog &&
+                uiState.selectedMonth == effMonthDialog
         val dialogMonthLabel = if (isCurrentMonthForDialog) "이번달" else "${uiState.selectedMonth}월"
         AlertDialog(
             onDismissRequest = { viewModel.dismissFullSyncAdDialog() },
@@ -572,7 +573,8 @@ fun HomePageContent(
             }
 
             // 데이터 0건 + 현재 월 아님 + 전체 동기화 미해제 → 빈 CTA 표시
-            val isCurrentMonth = year == DateUtils.getCurrentYear() && month == DateUtils.getCurrentMonth()
+            val (effYearCta, effMonthCta) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
+            val isCurrentMonth = year == effYearCta && month == effMonthCta
             val hasNoData = !pageData.isLoading &&
                     pageData.monthlyExpense == 0 && pageData.monthlyIncome == 0
             val showEmptyCta = hasNoData && !isCurrentMonth && !isMonthSynced

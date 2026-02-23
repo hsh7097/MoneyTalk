@@ -97,6 +97,16 @@ fun HistoryScreen(
     )
     val coroutineScope = rememberCoroutineScope()
 
+    // ViewModel의 선택 월이 외부 요인(예: DataStore 설정 로드)으로 변경되면 Pager 위치도 동기화
+    LaunchedEffect(uiState.selectedYear, uiState.selectedMonth) {
+        val selectedPage = MonthPagerUtils.yearMonthToPage(
+            uiState.selectedYear, uiState.selectedMonth
+        )
+        if (pagerState.currentPage != selectedPage) {
+            pagerState.scrollToPage(selectedPage)
+        }
+    }
+
     // 페이지 변경 시 ViewModel에 월 변경 통지
     LaunchedEffect(pagerState.currentPage) {
         val (year, month) = MonthPagerUtils.pageToYearMonth(pagerState.currentPage)
@@ -197,9 +207,9 @@ fun HistoryScreen(
             val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
                 ?: HistoryPageData()
 
-            // CTA 판별용: 현재 월 여부
-            val isCurrentMonth = pageYear == com.sanha.moneytalk.core.util.DateUtils.getCurrentYear() &&
-                    pageMonth == com.sanha.moneytalk.core.util.DateUtils.getCurrentMonth()
+            // CTA 판별용: 현재 실효 월 여부
+            val (effYearCta, effMonthCta) = com.sanha.moneytalk.core.util.DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+            val isCurrentMonth = pageYear == effYearCta && pageMonth == effMonthCta
             val pageMonthLabel = if (isCurrentMonth) "이번달" else "${pageMonth}월"
 
             when {
@@ -353,8 +363,9 @@ fun HistoryScreen(
     if (uiState.showFullSyncAdDialog) {
         val context = LocalContext.current
         val activity = context as? android.app.Activity
-        val isCurrentMonthForDialog = uiState.selectedYear == com.sanha.moneytalk.core.util.DateUtils.getCurrentYear() &&
-                uiState.selectedMonth == com.sanha.moneytalk.core.util.DateUtils.getCurrentMonth()
+        val (effYearDialog, effMonthDialog) = com.sanha.moneytalk.core.util.DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+        val isCurrentMonthForDialog = uiState.selectedYear == effYearDialog &&
+                uiState.selectedMonth == effMonthDialog
         val dialogMonthLabel = if (isCurrentMonthForDialog) "이번달" else "${uiState.selectedMonth}월"
         AlertDialog(
             onDismissRequest = { viewModel.dismissFullSyncAdDialog() },
