@@ -25,6 +25,14 @@
 - 현재 월 기준으로 `BudgetEntity` insert (OnConflictStrategy.REPLACE)
 - 설정 후 `DataRefreshEvent.emit()`으로 홈 화면 자동 갱신
 
+#### PR 리뷰 반영 (Codex P1)
+- `SET_BUDGET` 액션에서 `dataRefreshEvent.emit()` 기본값 `ALL_DATA_DELETED` → `TRANSACTION_ADDED`로 변경
+  - 기존: `HomeViewModel.observeDataRefreshEvents()`에서 `loadSettings()` 호출 → 중복 collector 누적 위험
+  - 수정: `TRANSACTION_ADDED`로 `clearAllPageCache()` + `loadCurrentAndAdjacentPages()`만 실행
+- `executeBudgetStatusQuery()`에서 다중 월 예산 처리 추가
+  - 기존: `startTimestamp`의 단일 yearMonth로만 예산 조회 → 기간이 여러 달에 걸치면 첫 달만 비교
+  - 수정: `startTimestamp`~`endTimestamp` 범위의 모든 월을 순회, 각 월별 예산/지출 독립 비교
+
 #### 프롬프트 갱신
 - `string_prompt.xml`: 쿼리/액션 타입 목록, 파라미터, 분석 규칙, 패턴 예시 모두 갱신
 

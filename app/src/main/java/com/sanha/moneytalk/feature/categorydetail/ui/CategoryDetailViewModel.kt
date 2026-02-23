@@ -152,7 +152,7 @@ class CategoryDetailViewModel @Inject constructor(
         val (prevY, prevM) = MonthPagerUtils.adjacentMonth(year, month, -1)
         loadPageData(prevY, prevM)
         val (nextY, nextM) = MonthPagerUtils.adjacentMonth(year, month, +1)
-        if (!MonthPagerUtils.isFutureYearMonth(nextY, nextM)) {
+        if (!MonthPagerUtils.isFutureYearMonth(nextY, nextM, state.monthStartDay)) {
             loadPageData(nextY, nextM)
         }
         evictDistantCache(year, month)
