@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,7 +31,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -56,6 +54,7 @@ import com.sanha.moneytalk.core.firebase.ForceUpdateState
 import com.sanha.moneytalk.core.theme.MoneyTalkTheme
 import com.sanha.moneytalk.core.theme.ThemeMode
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
+import com.sanha.moneytalk.core.ui.ForceUpdateDialog
 import com.sanha.moneytalk.core.util.toDpTextUnit
 import com.sanha.moneytalk.navigation.NavGraph
 import com.sanha.moneytalk.navigation.Screen
@@ -76,21 +75,14 @@ class MainActivity : ComponentActivity() {
     lateinit var analyticsHelper: AnalyticsHelper
 
     private var pendingSyncAction: (() -> Unit)? = null
-    private var permissionChecked = mutableStateOf(false)
-    private var permissionGranted = mutableStateOf(false)
     private var shouldAutoSync = mutableStateOf(false)
 
     private val smsPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val allGranted = permissions.entries.all { it.value }
-        permissionGranted.value = allGranted
-        permissionChecked.value = true
-
         if (allGranted) {
             Toast.makeText(this, getString(R.string.permission_sms_granted), Toast.LENGTH_SHORT).show()
-            // 앱 시작 시 권한 획득 후 자동 동기화 플래그 설정
-            shouldAutoSync.value = true
             pendingSyncAction?.invoke()
         } else {
             Toast.makeText(this, getString(R.string.permission_sms_denied), Toast.LENGTH_LONG).show()
@@ -102,8 +94,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // 앱 시작 시 권한 체크
-        checkInitialPermissions()
+        // IntroActivity에서 권한 요청 완료 → 현재 권한 상태만 확인
+        val hasSmsPermission = SMS_PERMISSIONS.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+        if (hasSmsPermission) {
+            shouldAutoSync.value = true
+        }
 
         setContent {
             val themeModeStr by settingsDataStore.themeModeFlow.collectAsStateWithLifecycle(initialValue = "SYSTEM")
@@ -114,7 +111,7 @@ class MainActivity : ComponentActivity() {
             }
 
             MoneyTalkTheme(themeMode = themeMode) {
-                // 강제 업데이트 체크
+                // 강제 업데이트 체크 (앱 사용 중 RTDB 변경 시 실시간 대응)
                 val forceUpdateState by forceUpdateChecker.forceUpdateRequired
                     .collectAsStateWithLifecycle(initialValue = ForceUpdateState.NotRequired)
 
@@ -133,8 +130,6 @@ class MainActivity : ComponentActivity() {
                 }
 
                 MoneyTalkApp(
-                    permissionChecked = permissionChecked.value,
-                    permissionGranted = permissionGranted.value,
                     shouldAutoSync = shouldAutoSync.value,
                     onAutoSyncConsumed = { shouldAutoSync.value = false },
                     onRequestSmsPermission = { onGranted ->
@@ -148,34 +143,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun checkInitialPermissions() {
-        val permissions = arrayOf(
-            Manifest.permission.READ_SMS,
-            Manifest.permission.RECEIVE_SMS
-        )
-
-        val allGranted = permissions.all {
-            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-        }
-
-        if (allGranted) {
-            permissionGranted.value = true
-            permissionChecked.value = true
-            // 이미 권한이 있으면 자동 동기화 실행
-            shouldAutoSync.value = true
-        } else {
-            // 앱 시작 시 권한 요청
-            smsPermissionLauncher.launch(permissions)
-        }
-    }
-
     private fun checkAndRequestSmsPermission(onGranted: () -> Unit) {
-        val permissions = arrayOf(
-            Manifest.permission.READ_SMS,
-            Manifest.permission.RECEIVE_SMS
-        )
-
-        val allGranted = permissions.all {
+        val allGranted = SMS_PERMISSIONS.all {
             ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
         }
 
@@ -183,16 +152,21 @@ class MainActivity : ComponentActivity() {
             onGranted()
         } else {
             pendingSyncAction = onGranted
-            smsPermissionLauncher.launch(permissions)
+            smsPermissionLauncher.launch(SMS_PERMISSIONS)
         }
+    }
+
+    companion object {
+        private val SMS_PERMISSIONS = arrayOf(
+            Manifest.permission.READ_SMS,
+            Manifest.permission.RECEIVE_SMS
+        )
     }
 }
 
 /** 앱 루트 Composable. Scaffold + BottomNavigation + NavGraph + 전역 스낵바를 구성 */
 @Composable
 fun MoneyTalkApp(
-    permissionChecked: Boolean,
-    permissionGranted: Boolean,
     shouldAutoSync: Boolean,
     onAutoSyncConsumed: () -> Unit,
     onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
@@ -203,9 +177,6 @@ fun MoneyTalkApp(
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-
-    // 스플래시 화면에서는 하단 네비게이션 숨김
-    val showBottomBar = currentRoute != Screen.Splash.route
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -244,105 +215,88 @@ fun MoneyTalkApp(
         onExitApp = onExitApp
     )
 
-    // 권한 체크 중일 때 로딩 표시
-    if (!permissionChecked) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
-        ) {
-            // 권한 요청 중 로딩 화면 (선택적)
-        }
-        return
-    }
-
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            if (showBottomBar) {
-                Column(
-                    modifier = Modifier
-                        .windowInsetsPadding(WindowInsets.navigationBars)
+            Column(
+                modifier = Modifier
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+            ) {
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+                NavigationBar(
+                    modifier = Modifier.height(64.dp),
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 0.dp,
+                    windowInsets = WindowInsets(0)
                 ) {
-                    HorizontalDivider(
-                        thickness = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
-                    NavigationBar(
-                        modifier = Modifier.height(64.dp),
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 0.dp,
-                        windowInsets = WindowInsets(0)
-                    ) {
-                        bottomNavItems.forEach { item ->
-                            val title = stringResource(item.titleRes)
-                            val isSelected = currentRoute?.startsWith(item.route.substringBefore("?")) == true
-                            NavigationBarItem(
-                                selected = isSelected,
-                                onClick = {
-                                    if (!isSelected) {
-                                        // 다른 탭에서 이동 → 네비게이션 + 오늘 페이지/필터 초기화
-                                        navController.navigate(item.route) {
-                                            popUpTo(Screen.Home.route) {
-                                                saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
+                    bottomNavItems.forEach { item ->
+                        val title = stringResource(item.titleRes)
+                        val isSelected = currentRoute?.startsWith(item.route.substringBefore("?")) == true
+                        NavigationBarItem(
+                            selected = isSelected,
+                            onClick = {
+                                if (!isSelected) {
+                                    navController.navigate(item.route) {
+                                        popUpTo(Screen.Home.route) {
+                                            saveState = true
                                         }
-                                        // 탭 전환 시에도 오늘 페이지 + 필터 초기화
-                                        if (item.route == Screen.Home.route) {
-                                            homeTabReClickEvent.tryEmit(Unit)
-                                        } else if (item.route.startsWith("history")) {
-                                            historyTabReClickEvent.tryEmit(Unit)
-                                        }
-                                    } else if (item.route == Screen.Home.route) {
-                                        // 홈 탭 재클릭 → 오늘 페이지로 이동
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                    if (item.route == Screen.Home.route) {
                                         homeTabReClickEvent.tryEmit(Unit)
                                     } else if (item.route.startsWith("history")) {
-                                        // 내역 탭 재클릭 → 오늘 페이지로 이동 + 필터 초기화
                                         historyTabReClickEvent.tryEmit(Unit)
                                     }
-                                },
-                                icon = {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(top = 4.dp),
-                                        contentAlignment = androidx.compose.ui.Alignment.Center
+                                } else if (item.route == Screen.Home.route) {
+                                    homeTabReClickEvent.tryEmit(Unit)
+                                } else if (item.route.startsWith("history")) {
+                                    historyTabReClickEvent.tryEmit(Unit)
+                                }
+                            },
+                            icon = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(top = 4.dp),
+                                    contentAlignment = androidx.compose.ui.Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
                                     ) {
-                                        Column(
-                                            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
-                                        ) {
-                                            Icon(
-                                                imageVector = if (isSelected) {
-                                                    item.selectedIcon
-                                                } else {
-                                                    item.unselectedIcon
-                                                },
-                                                contentDescription = title,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                            Text(
-                                                text = title,
-                                                fontSize = 12.dp.toDpTextUnit
-                                            )
-                                        }
+                                        Icon(
+                                            imageVector = if (isSelected) {
+                                                item.selectedIcon
+                                            } else {
+                                                item.unselectedIcon
+                                            },
+                                            contentDescription = title,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            text = title,
+                                            fontSize = 12.dp.toDpTextUnit
+                                        )
                                     }
-                                },
-                                label = null,
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.onSurface,
-                                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                    unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(
-                                        alpha = 0.5f
-                                    ),
-                                    unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(
-                                        alpha = 0.5f
-                                    ),
-                                    indicatorColor = MaterialTheme.colorScheme.surface
-                                )
+                                }
+                            },
+                            label = null,
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.onSurface,
+                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(
+                                    alpha = 0.5f
+                                ),
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(
+                                    alpha = 0.5f
+                                ),
+                                indicatorColor = MaterialTheme.colorScheme.surface
                             )
-                        }
+                        )
                     }
                 }
             }
@@ -375,7 +329,7 @@ fun BackPressHandler(
     val context = LocalContext.current
     var backPressedTime by remember { mutableStateOf(0L) }
 
-    BackHandler(enabled = currentRoute != Screen.Splash.route) {
+    BackHandler {
         when (currentRoute) {
             Screen.Home.route -> {
                 // 홈화면에서는 두 번 눌러 종료
@@ -399,48 +353,4 @@ fun BackPressHandler(
             }
         }
     }
-}
-
-/** 강제 업데이트 다이얼로그. 닫기 불가 — 업데이트 또는 종료만 가능 */
-@Composable
-fun ForceUpdateDialog(
-    state: ForceUpdateState.Required,
-    onUpdate: () -> Unit,
-    onExit: () -> Unit
-) {
-    val message = if (state.message.isNotBlank()) {
-        state.message
-    } else {
-        stringResource(
-            R.string.force_update_message,
-            state.requiredVersion,
-            state.currentVersion
-        )
-    }
-
-    AlertDialog(
-        onDismissRequest = { /* 닫기 차단 — 강제 업데이트 */ },
-        title = {
-            Text(
-                text = stringResource(R.string.force_update_title),
-                style = MaterialTheme.typography.headlineSmall
-            )
-        },
-        text = {
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onUpdate) {
-                Text(stringResource(R.string.force_update_button))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onExit) {
-                Text(stringResource(R.string.force_update_exit))
-            }
-        }
-    )
 }
