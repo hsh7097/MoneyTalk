@@ -606,6 +606,7 @@ fun HomePageContent(
                 item {
                     CategoryExpenseSection(
                         categoryExpenses = pageData.categoryExpenses,
+                        categoryBudgets = pageData.categoryBudgets,
                         selectedCategory = selectedCategory,
                         onCategorySelected = onCategorySelected
                     )
@@ -881,6 +882,7 @@ fun MonthlyOverviewSection(
 @Composable
 fun CategoryExpenseSection(
     categoryExpenses: List<CategorySum>,
+    categoryBudgets: Map<String, Int> = emptyMap(),
     selectedCategory: String? = null,
     onCategorySelected: (String?) -> Unit = {}
 ) {
@@ -998,12 +1000,23 @@ fun CategoryExpenseSection(
             displayList.forEach { item ->
                 val category = Category.fromDisplayName(item.category)
                 val chartColor = getCategoryChartColor(category)
-                val percentage = if (totalExpense > 0) {
+                val budget = categoryBudgets[item.category]
+                val budgetAmount = budget ?: 0
+                val hasBudget = budget != null && budgetAmount > 0
+                val isOverBudget = hasBudget && item.total > budgetAmount
+
+                // 예산 설정 시: 예산 대비 사용률, 미설정 시: 전체 지출 대비 비율
+                val percentage = if (hasBudget) {
+                    (item.total.toFloat() / budgetAmount * 100).toInt()
+                } else if (totalExpense > 0) {
                     (item.total.toFloat() / totalExpense * 100).toInt()
                 } else 0
-                val progress = if (totalExpense > 0) {
+                val progress = if (hasBudget) {
+                    (item.total.toFloat() / budgetAmount).coerceAtMost(1f)
+                } else if (totalExpense > 0) {
                     item.total.toFloat() / totalExpense
                 } else 0f
+                val progressColor = if (isOverBudget) Color(0xFFE53935) else chartColor
                 val isSelected = selectedCategory == item.category
 
                 Column(
@@ -1038,23 +1051,44 @@ fun CategoryExpenseSection(
                         Column(
                             horizontalAlignment = Alignment.End
                         ) {
-                            Text(
-                                text = "₩${numberFormat.format(item.total)}",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "${percentage}%",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
+                            if (hasBudget) {
+                                // 예산 설정된 카테고리: 사용액 / 예산액
+                                Text(
+                                    text = "₩${numberFormat.format(item.total)} / ₩${numberFormat.format(budgetAmount)}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isOverBudget) Color(0xFFE53935) else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (isOverBudget) {
+                                        "₩${numberFormat.format(item.total - budgetAmount)} 초과"
+                                    } else {
+                                        "₩${numberFormat.format(budgetAmount - item.total)} 남음"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isOverBudget) Color(0xFFE53935).copy(alpha = 0.7f)
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            } else {
+                                // 예산 미설정: 기존 방식
+                                Text(
+                                    text = "₩${numberFormat.format(item.total)}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "${percentage}%",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    // 프로그레스 바 (카테고리별 고유 색상 — 도넛 차트와 동기화)
+                    // 프로그레스 바 (예산 초과 시 빨간색, 아니면 카테고리 고유 색상)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1067,7 +1101,7 @@ fun CategoryExpenseSection(
                                 .fillMaxWidth(progress)
                                 .height(8.dp)
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(chartColor)
+                                .background(progressColor)
                         )
                     }
                 }
