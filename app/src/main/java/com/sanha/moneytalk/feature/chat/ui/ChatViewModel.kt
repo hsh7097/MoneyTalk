@@ -993,40 +993,71 @@ class ChatViewModel @Inject constructor(
         startTimestamp: Long,
         endTimestamp: Long
     ): QueryResult {
-        // startTimestamp로부터 yearMonth 도출
-        val cal = Calendar.getInstance().apply { timeInMillis = startTimestamp }
-        val yearMonth = String.format(
-            "%04d-%02d",
-            cal.get(Calendar.YEAR),
-            cal.get(Calendar.MONTH) + 1
-        )
+        // 기간에 포함된 모든 yearMonth 목록 생성
+        val startCal = Calendar.getInstance().apply { timeInMillis = startTimestamp }
+        val endCal = Calendar.getInstance().apply { timeInMillis = endTimestamp }
 
-        val budgets = budgetDao.getBudgetsByMonthOnce(yearMonth)
-        if (budgets.isEmpty()) {
+        val yearMonths = mutableListOf<String>()
+        val iterCal = Calendar.getInstance().apply {
+            set(Calendar.YEAR, startCal.get(Calendar.YEAR))
+            set(Calendar.MONTH, startCal.get(Calendar.MONTH))
+            set(Calendar.DAY_OF_MONTH, 1)
+        }
+        while (iterCal.get(Calendar.YEAR) < endCal.get(Calendar.YEAR) ||
+            (iterCal.get(Calendar.YEAR) == endCal.get(Calendar.YEAR) &&
+                iterCal.get(Calendar.MONTH) <= endCal.get(Calendar.MONTH))
+        ) {
+            yearMonths.add(
+                String.format(
+                    "%04d-%02d",
+                    iterCal.get(Calendar.YEAR),
+                    iterCal.get(Calendar.MONTH) + 1
+                )
+            )
+            iterCal.add(Calendar.MONTH, 1)
+        }
+
+        val sb = StringBuilder()
+        var hasBudgets = false
+
+        for (yearMonth in yearMonths) {
+            val budgets = budgetDao.getBudgetsByMonthOnce(yearMonth)
+            if (budgets.isEmpty()) continue
+            hasBudgets = true
+
+            // 해당 월의 지출 조회 범위: 요청 범위와 월 범위의 교집합
+            val ym = yearMonth.split("-")
+            val year = ym[0].toInt()
+            val month = ym[1].toInt()
+            val monthStart = maxOf(startTimestamp, DateUtils.getMonthStartTimestamp(year, month))
+            val monthEnd = minOf(endTimestamp, DateUtils.getMonthEndTimestamp(year, month))
+
+            sb.appendLine("예산 현황 ($yearMonth):")
+            for (budget in budgets) {
+                val spent = if (budget.category == "전체") {
+                    expenseRepository.getTotalExpenseByDateRange(monthStart, monthEnd)
+                } else {
+                    val cat = Category.fromDisplayName(budget.category)
+                    val categoryNames = cat.displayNamesIncludingSub
+                    expenseRepository.getTotalExpenseByCategoriesAndDateRange(
+                        categoryNames, monthStart, monthEnd
+                    )
+                }
+                val remaining = budget.monthlyLimit - spent
+                val status = if (remaining >= 0) "남음" else "초과"
+                val absRemaining = abs(remaining)
+                sb.appendLine(
+                    "- ${budget.category}: 예산 ${numberFormat.format(budget.monthlyLimit)}원, " +
+                        "사용 ${numberFormat.format(spent)}원, " +
+                        "${numberFormat.format(absRemaining.toLong())}원 $status"
+                )
+            }
+        }
+
+        if (!hasBudgets) {
             return QueryResult(
                 queryType = QueryType.BUDGET_STATUS,
                 data = "설정된 예산이 없습니다. AI 채팅에서 \"식비 예산 20만원 설정해줘\"처럼 말하면 예산을 설정할 수 있습니다."
-            )
-        }
-
-        val sb = StringBuilder("예산 현황 ($yearMonth):\n")
-        for (budget in budgets) {
-            val spent = if (budget.category == "전체") {
-                expenseRepository.getTotalExpenseByDateRange(startTimestamp, endTimestamp)
-            } else {
-                val cat = Category.fromDisplayName(budget.category)
-                val categoryNames = cat.displayNamesIncludingSub
-                expenseRepository.getTotalExpenseByCategoriesAndDateRange(
-                    categoryNames, startTimestamp, endTimestamp
-                )
-            }
-            val remaining = budget.monthlyLimit - spent
-            val status = if (remaining >= 0) "남음" else "초과"
-            val absRemaining = abs(remaining)
-            sb.appendLine(
-                "- ${budget.category}: 예산 ${numberFormat.format(budget.monthlyLimit)}원, " +
-                    "사용 ${numberFormat.format(spent)}원, " +
-                    "${numberFormat.format(absRemaining.toLong())}원 $status"
             )
         }
 
@@ -1829,7 +1860,7 @@ class ChatViewModel @Inject constructor(
                             yearMonth = yearMonth
                         )
                     )
-                    dataRefreshEvent.emit()
+                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
                     ActionResult(
                         actionType = ActionType.SET_BUDGET,
                         success = true,
