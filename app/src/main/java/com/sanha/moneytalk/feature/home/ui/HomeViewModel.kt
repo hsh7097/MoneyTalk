@@ -2,6 +2,7 @@ package com.sanha.moneytalk.feature.home.ui
 
 import android.Manifest
 import android.content.ContentResolver
+import com.sanha.moneytalk.R
 import android.content.pm.PackageManager
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -316,6 +317,13 @@ class HomeViewModel @Inject constructor(
                     monthRange,
                     updateLastSyncTime = false
                 )
+            }
+        }
+        // History 탭에서 증분 동기화 요청 수신 (replay=1 → 소비 후 캐시 리셋)
+        viewModelScope.launch {
+            dataRefreshEvent.incrementalSyncEvent.collect {
+                dataRefreshEvent.consumeIncrementalSync()
+                syncIncremental(appContext.contentResolver)
             }
         }
     }
@@ -1172,6 +1180,11 @@ class HomeViewModel @Inject constructor(
                             syncProgressTotal = 0,
                             errorMessage = resultMessage
                         )
+                    }
+                    // 수동 동기화(silent=false): 데이터 없으면 스낵바로 알림
+                    // ImportDataCta, FullSyncCta, syncMonthData 등 모든 수동 경로에 적용
+                    if (result.expenseCount == 0 && result.incomeCount == 0) {
+                        snackbarBus.show(appContext.getString(R.string.sync_no_data))
                     }
                 }
             } catch (e: Exception) {

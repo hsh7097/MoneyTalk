@@ -41,6 +41,27 @@ class DataRefreshEvent @Inject constructor() {
         _monthSyncEvent.tryEmit(MonthSyncRequest(year, month))
     }
 
+    /**
+     * 증분 동기화 요청 이벤트 (History → Home 연동).
+     *
+     * replay=1: HomeViewModel이 아직 구독 전이어도 이벤트가 유지됨.
+     * Home이 startDestination이므로 대부분 즉시 처리되지만,
+     * 프로세스 재시작 등 극단적 케이스에서의 소실을 방지.
+     */
+    private val _incrementalSyncEvent = MutableSharedFlow<Unit>(replay = 1)
+    val incrementalSyncEvent = _incrementalSyncEvent.asSharedFlow()
+
+    /** 증분 동기화 요청 발행 (전월 1일부터) */
+    fun requestIncrementalSync() {
+        _incrementalSyncEvent.tryEmit(Unit)
+    }
+
+    /** replay 캐시 소비 — 이벤트 처리 후 stale replay 방지 */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun consumeIncrementalSync() {
+        _incrementalSyncEvent.resetReplayCache()
+    }
+
     /** 동기화 진행 상태 (Home ↔ History 공유) */
     data class SyncProgress(
         val isActive: Boolean = false,

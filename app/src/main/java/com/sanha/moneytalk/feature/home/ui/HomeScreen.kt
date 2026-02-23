@@ -83,6 +83,7 @@ import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.feature.history.ui.IncomeDetailDialog
 import com.sanha.moneytalk.core.ui.component.chart.DonutChartCompose
 import com.sanha.moneytalk.core.ui.component.chart.DonutSlice
+import com.sanha.moneytalk.feature.home.ui.component.ImportDataCtaSection
 import com.sanha.moneytalk.feature.home.ui.component.SpendingTrendSection
 import com.sanha.moneytalk.feature.home.ui.model.HomeSpendingTrendInfo
 import com.sanha.moneytalk.core.ui.component.FullSyncCtaSection
@@ -96,6 +97,9 @@ import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionC
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.util.DateUtils
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
@@ -114,6 +118,14 @@ fun HomeScreen(
     val contentResolver = context.contentResolver
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // SMS 권한 상태 (resume 시 갱신)
+    var hasSmsPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
+                    PackageManager.PERMISSION_GRANTED
+        )
+    }
+
     // 선택된 지출/수입 항목 (상세보기용)
     var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
     var selectedIncome by remember { mutableStateOf<IncomeEntity?>(null) }
@@ -126,12 +138,15 @@ fun HomeScreen(
         }
     }
 
-    // 화면 재진입(resume) 시 데이터 새로고침 (AI 인사이트 포함)
+    // 화면 재진입(resume) 시 데이터 새로고침 + 권한 상태 갱신
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshData()
+                hasSmsPermission = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.READ_SMS
+                ) == PackageManager.PERMISSION_GRANTED
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -206,6 +221,7 @@ fun HomeScreen(
             isSyncing = uiState.isSyncing,
             isMonthSynced = viewModel.isMonthSynced(pageYear, pageMonth),
             isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
+            hasSmsPermission = hasSmsPermission,
             selectedCategory = uiState.selectedCategory,
             onPreviousMonth = {
                 coroutineScope.launch {
@@ -226,13 +242,15 @@ fun HomeScreen(
                 }
             },
             onFullSync = {
-                if (viewModel.isMonthSynced(pageYear, pageMonth)) {
-                    // 이미 해제됨 → 현재 보고 있는 월만 동기화
+                val (effY, effM) = DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+                val isPageCurrentMonth = pageYear == effY && pageMonth == effM
+                if (viewModel.isMonthSynced(pageYear, pageMonth) || isPageCurrentMonth) {
+                    // 이미 해제됨 또는 현재월 → 광고 없이 바로 동기화
                     onRequestSmsPermission {
                         viewModel.syncMonthData(contentResolver, pageYear, pageMonth)
                     }
                 } else {
-                    // 미해제 → 광고 다이얼로그 표시
+                    // 과거 월 미해제 → 광고 다이얼로그 표시
                     viewModel.preloadFullSyncAd()
                     viewModel.showFullSyncAdDialog()
                 }
@@ -504,6 +522,7 @@ fun HomePageContent(
     isSyncing: Boolean,
     isMonthSynced: Boolean,
     isPartiallyCovered: Boolean,
+    hasSmsPermission: Boolean,
     selectedCategory: String?,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
@@ -574,16 +593,29 @@ fun HomePageContent(
                 }
             }
 
-            // 데이터 0건 + 현재 월 아님 + 전체 동기화 미해제 → 빈 CTA 표시
+            // CTA 표시 조건 계산
             val (effYearCta, effMonthCta) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
             val isCurrentMonth = year == effYearCta && month == effMonthCta
             val hasNoData = !pageData.isLoading &&
                     pageData.monthlyExpense == 0 && pageData.monthlyIncome == 0
+
+            // 데이터 가져오기 CTA: 현재월 + 권한 없거나 데이터 없음
+            val showImportCta = isCurrentMonth && (!hasSmsPermission || hasNoData)
+            // 기존 전체 동기화 CTA: 과거 월 + 데이터 없음 + 미해제
             val showEmptyCta = hasNoData && !isCurrentMonth && !isMonthSynced
             // 데이터 있지만 부분 커버 + 해당 월 미동기화 → 부분 CTA 표시
             val showPartialCta = !hasNoData && isPartiallyCovered && !isMonthSynced
             // 월 라벨: 현재 월이면 "이번달", 아니면 "M월"
             val ctaMonthLabel = if (isCurrentMonth) "이번달" else "${month}월"
+
+            // 현재월 데이터 가져오기 CTA (권한 없거나 데이터 없을 때)
+            if (showImportCta) {
+                item {
+                    ImportDataCtaSection(
+                        onImportData = onIncrementalSync
+                    )
+                }
+            }
 
             if (showEmptyCta) {
                 item {

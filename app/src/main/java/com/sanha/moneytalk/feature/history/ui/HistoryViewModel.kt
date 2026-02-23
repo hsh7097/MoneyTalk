@@ -1127,6 +1127,11 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
+    /** 증분 동기화 요청 — HomeViewModel에 위임 (전월 1일부터 동기화) */
+    fun requestIncrementalSync() {
+        dataRefreshEvent.requestIncrementalSync()
+    }
+
     /** 월별 동기화 해제 (광고 시청 완료 후 호출) — HomeViewModel에 월별 sync 요청 */
     fun unlockFullSync() {
         viewModelScope.launch {
