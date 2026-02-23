@@ -57,6 +57,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -148,7 +149,7 @@ fun HomeScreen(
     }
     val pagerState = rememberPagerState(
         initialPage = initialPage,
-        pageCount = { MonthPagerUtils.TOTAL_PAGE_COUNT }
+        pageCount = { MonthPagerUtils.getPageCount(uiState.monthStartDay) }
     )
     val coroutineScope = rememberCoroutineScope()
 
@@ -170,9 +171,10 @@ fun HomeScreen(
     }
 
     // 홈 탭 재클릭 → 오늘(현재 커스텀 월) 페이지로 이동
+    val currentMonthStartDay by rememberUpdatedState(uiState.monthStartDay)
     LaunchedEffect(homeTabReClickEvent) {
         homeTabReClickEvent?.collect {
-            val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+            val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(currentMonthStartDay)
             val todayPage = MonthPagerUtils.yearMonthToPage(effYear, effMonth)
             if (pagerState.currentPage != todayPage) {
                 pagerState.animateScrollToPage(todayPage)

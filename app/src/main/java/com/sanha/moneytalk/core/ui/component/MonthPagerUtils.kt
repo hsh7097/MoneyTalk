@@ -20,8 +20,16 @@ object MonthPagerUtils {
     /** 현재 월이 매핑되는 페이지 인덱스 (= 과거 방향 여유: 50년) */
     const val INITIAL_PAGE = 600
 
-    /** 총 페이지 수: +2는 커스텀 시작일로 인해 실효 월이 달력 월+1이 될 수 있는 경우 대응 */
-    const val TOTAL_PAGE_COUNT = INITIAL_PAGE + 2
+    /**
+     * monthStartDay에 따른 동적 페이지 수 계산.
+     * 실효 현재 월이 마지막 접근 가능한 페이지가 되도록 한다.
+     * - monthStartDay=1: 달력 월 = 실효 월 → INITIAL_PAGE + 1
+     * - monthStartDay > 오늘: 실효 월 = 달력 월+1 → INITIAL_PAGE + 2
+     */
+    fun getPageCount(monthStartDay: Int = 1): Int {
+        val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
+        return yearMonthToPage(effYear, effMonth) + 1
+    }
 
     // 앱 프로세스 시작 시 기준 월 (세션 중 고정)
     private val BASE_YEAR = DateUtils.getCurrentYear()
