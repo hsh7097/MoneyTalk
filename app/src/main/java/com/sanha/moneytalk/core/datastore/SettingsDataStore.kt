@@ -37,6 +37,7 @@ class SettingsDataStore @Inject constructor(
         private val REWARD_CHAT_REMAINING = intPreferencesKey("reward_chat_remaining")
         private val FULL_SYNC_UNLOCKED = booleanPreferencesKey("full_sync_unlocked")
         private val SYNCED_MONTHS = stringSetPreferencesKey("synced_months")
+        private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     }
 
     // API 키 저장
@@ -235,6 +236,20 @@ class SettingsDataStore @Inject constructor(
     @Deprecated("월별 동기화로 전환. isMonthSynced 사용")
     suspend fun isFullSyncUnlocked(): Boolean {
         return context.dataStore.data.first()[FULL_SYNC_UNLOCKED] ?: false
+    }
+
+    // ===== 온보딩 완료 여부 =====
+
+    /** 온보딩(권한 설명 화면) 완료 여부 Flow (기본값: false) */
+    val onboardingCompletedFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[ONBOARDING_COMPLETED] ?: false
+    }
+
+    /** 온보딩 완료 상태 저장 */
+    suspend fun setOnboardingCompleted(completed: Boolean = true) {
+        context.dataStore.edit { preferences ->
+            preferences[ONBOARDING_COMPLETED] = completed
+        }
     }
 
     /** 광고 시청으로 해제된 월별 동기화 + 레거시 전역 플래그 초기화 */

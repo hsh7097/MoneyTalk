@@ -57,6 +57,14 @@ import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCom
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.compose.runtime.DisposableEffect
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.sanha.moneytalk.feature.home.ui.component.ImportDataCtaSection
 import kotlinx.coroutines.launch
 
 /**
@@ -67,6 +75,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel(),
+    onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
     filterCategory: String? = null,
     historyTabReClickEvent: kotlinx.coroutines.flow.SharedFlow<Unit>? = null
 ) {
@@ -84,9 +93,34 @@ fun HistoryScreen(
         }
     }
 
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
     var showAddDialog by remember { mutableStateOf(false) }
+
+    // SMS 권한 상태 (resume 시 갱신)
+    var hasSmsPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
+                    PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    // 화면 재진입(resume) 시 권한 상태 갱신
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasSmsPermission = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.READ_SMS
+                ) == PackageManager.PERMISSION_GRANTED
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     // HorizontalPager — Virtual Infinite Pager
     val initialPage = remember {
@@ -225,8 +259,23 @@ fun HistoryScreen(
                         isCurrentMonth = isCurrentMonth,
                         isMonthSynced = viewModel.isMonthSynced(pageYear, pageMonth),
                         isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
+                        hasSmsPermission = hasSmsPermission,
                         monthLabel = pageMonthLabel,
-                        onRequestFullSync = { viewModel.showFullSyncAdDialog() },
+                        onImportData = {
+                            onRequestSmsPermission {
+                                viewModel.requestIncrementalSync()
+                            }
+                        },
+                        onRequestFullSync = {
+                            if (isCurrentMonth) {
+                                // 현재월 → 광고 없이 바로 동기화
+                                onRequestSmsPermission {
+                                    viewModel.requestIncrementalSync()
+                                }
+                            } else {
+                                viewModel.showFullSyncAdDialog()
+                            }
+                        },
                         scrollResetKey = Triple(
                             uiState.selectedCategory,
                             uiState.sortOrder,
@@ -363,7 +412,6 @@ fun HistoryScreen(
 
     // 전체 동기화 해제 광고 다이얼로그
     if (uiState.showFullSyncAdDialog) {
-        val context = LocalContext.current
         val activity = context as? android.app.Activity
         val (effYearDialog, effMonthDialog) = com.sanha.moneytalk.core.util.DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
         val isCurrentMonthForDialog = uiState.selectedYear == effYearDialog &&
@@ -421,7 +469,9 @@ fun TransactionListView(
     isCurrentMonth: Boolean = true,
     isMonthSynced: Boolean = false,
     isPartiallyCovered: Boolean = false,
+    hasSmsPermission: Boolean = true,
     monthLabel: String = "이번달",
+    onImportData: () -> Unit = {},
     onRequestFullSync: () -> Unit = {},
     scrollResetKey: Any? = null,
     onIntent: (HistoryIntent) -> Unit
@@ -452,13 +502,19 @@ fun TransactionListView(
     }
 
     if (items.isEmpty()) {
-        // 데이터 0건 + 현재 월 아님 + 전체 동기화 미해제 + 필터 없음 → CTA 표시
+        // 데이터 가져오기 CTA: 현재월 + 필터 없음 (items.isEmpty → 데이터 없음 확정)
+        val showImportCta = isCurrentMonth && !hasActiveFilter
+        // 전체 동기화 CTA: 과거 월 + 미해제 + 필터 없음
         val showFullSyncCta = !isCurrentMonth && !isMonthSynced && !hasActiveFilter
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            if (showFullSyncCta) {
+            if (showImportCta) {
+                ImportDataCtaSection(
+                    onImportData = onImportData
+                )
+            } else if (showFullSyncCta) {
                 com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
                     onRequestFullSync = onRequestFullSync,
                     monthLabel = monthLabel
@@ -494,6 +550,15 @@ fun TransactionListView(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // 현재월 + 권한 없음 → 데이터 가져오기 CTA (데이터 있어도 표시)
+            if (isCurrentMonth && !hasSmsPermission) {
+                item(key = "import_cta") {
+                    ImportDataCtaSection(
+                        onImportData = onImportData
+                    )
+                }
+            }
+
             // 부분 데이터 안내 CTA (데이터 있지만 일부 기간 누락)
             if (isPartiallyCovered && !isMonthSynced) {
                 item(key = "partial_cta") {
