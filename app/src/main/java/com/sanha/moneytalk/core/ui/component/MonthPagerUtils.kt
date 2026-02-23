@@ -20,8 +20,8 @@ object MonthPagerUtils {
     /** 현재 월이 매핑되는 페이지 인덱스 (= 과거 방향 여유: 50년) */
     const val INITIAL_PAGE = 600
 
-    /** 총 페이지 수: 현재 월이 마지막 페이지 (미래 월 원천 차단) */
-    const val TOTAL_PAGE_COUNT = INITIAL_PAGE + 1
+    /** 총 페이지 수: +2는 커스텀 시작일로 인해 실효 월이 달력 월+1이 될 수 있는 경우 대응 */
+    const val TOTAL_PAGE_COUNT = INITIAL_PAGE + 2
 
     // 앱 프로세스 시작 시 기준 월 (세션 중 고정)
     private val BASE_YEAR = DateUtils.getCurrentYear()
@@ -52,23 +52,21 @@ object MonthPagerUtils {
 
     /**
      * 현재 월 이후 페이지인지 확인 (미래 월 차단용).
-     * [DateUtils.getCurrentYear]/[DateUtils.getCurrentMonth]를 실시간 호출하여
-     * 자정 넘김에도 정확히 동작한다.
+     * @param monthStartDay 커스텀 시작일 (1이면 달력 기준, >1이면 실효 월 기준)
      */
-    fun isFutureMonth(page: Int): Boolean {
+    fun isFutureMonth(page: Int, monthStartDay: Int = 1): Boolean {
         val (year, month) = pageToYearMonth(page)
-        return isFutureYearMonth(year, month)
+        return isFutureYearMonth(year, month, monthStartDay)
     }
 
     /**
      * (year, month)가 미래 월인지 확인.
-     * [DateUtils.getCurrentYear]/[DateUtils.getCurrentMonth]를 실시간 호출하여
-     * 자정 넘김에도 정확히 동작한다.
+     * @param monthStartDay 커스텀 시작일. >1이면 [DateUtils.getEffectiveCurrentMonth]로
+     *   실효 현재 월을 계산하여 판단.
      */
-    fun isFutureYearMonth(year: Int, month: Int): Boolean {
-        val currentYear = DateUtils.getCurrentYear()
-        val currentMonth = DateUtils.getCurrentMonth()
-        return year > currentYear || (year == currentYear && month > currentMonth)
+    fun isFutureYearMonth(year: Int, month: Int, monthStartDay: Int = 1): Boolean {
+        val (effectiveYear, effectiveMonth) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
+        return year > effectiveYear || (year == effectiveYear && month > effectiveMonth)
     }
 
     /**

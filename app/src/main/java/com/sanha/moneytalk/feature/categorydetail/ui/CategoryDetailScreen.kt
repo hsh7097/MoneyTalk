@@ -156,7 +156,7 @@ fun CategoryDetailScreen(
                 onNextMonth = {
                     coroutineScope.launch {
                         val target = pagerState.currentPage + 1
-                        if (!MonthPagerUtils.isFutureMonth(target)) {
+                        if (!MonthPagerUtils.isFutureMonth(target, uiState.monthStartDay)) {
                             pagerState.animateScrollToPage(target)
                         }
                     }
@@ -327,8 +327,8 @@ private fun MonthNavigationHeader(
             }
         }
 
-        val isCurrentMonth = year >= DateUtils.getCurrentYear() &&
-            month >= DateUtils.getCurrentMonth()
+        val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
+        val isCurrentMonth = year >= effYear && month >= effMonth
         IconButton(
             onClick = onNextMonth,
             enabled = !isCurrentMonth

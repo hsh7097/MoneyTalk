@@ -169,13 +169,11 @@ fun HomeScreen(
         viewModel.setMonth(year, month)
     }
 
-    // 홈 탭 재클릭 → 오늘(현재 월) 페이지로 이동
+    // 홈 탭 재클릭 → 오늘(현재 커스텀 월) 페이지로 이동
     LaunchedEffect(homeTabReClickEvent) {
         homeTabReClickEvent?.collect {
-            val todayPage = MonthPagerUtils.yearMonthToPage(
-                DateUtils.getCurrentYear(),
-                DateUtils.getCurrentMonth()
-            )
+            val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+            val todayPage = MonthPagerUtils.yearMonthToPage(effYear, effMonth)
             if (pagerState.currentPage != todayPage) {
                 pagerState.animateScrollToPage(todayPage)
             }
@@ -215,7 +213,7 @@ fun HomeScreen(
             onNextMonth = {
                 coroutineScope.launch {
                     val target = pagerState.currentPage + 1
-                    if (!MonthPagerUtils.isFutureMonth(target)) {
+                    if (!MonthPagerUtils.isFutureMonth(target, uiState.monthStartDay)) {
                         pagerState.animateScrollToPage(target)
                     }
                 }
@@ -767,8 +765,8 @@ fun MonthlyOverviewSection(
             }
 
             Row {
-                val isCurrentMonth = year >= DateUtils.getCurrentYear() &&
-                    month >= DateUtils.getCurrentMonth()
+                val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
+                val isCurrentMonth = year >= effYear && month >= effMonth
                 IconButton(
                     onClick = onNextMonth,
                     enabled = !isCurrentMonth

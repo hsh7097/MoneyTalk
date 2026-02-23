@@ -262,7 +262,7 @@ class HomeViewModel @Inject constructor(
         val (prevY, prevM) = MonthPagerUtils.adjacentMonth(year, month, -1)
         loadPageData(prevY, prevM)
         val (nextY, nextM) = MonthPagerUtils.adjacentMonth(year, month, +1)
-        if (!MonthPagerUtils.isFutureYearMonth(nextY, nextM)) {
+        if (!MonthPagerUtils.isFutureYearMonth(nextY, nextM, state.monthStartDay)) {
             loadPageData(nextY, nextM)
         }
         evictDistantCache(year, month)
@@ -691,12 +691,11 @@ class HomeViewModel @Inject constructor(
         loadCurrentAndAdjacentPages()
     }
 
-    /** 다음 월로 이동 (현재 월 이후로는 이동 불가) */
+    /** 다음 월로 이동 (현재 실효 월 이후로는 이동 불가) */
     fun nextMonth() {
         val state = _uiState.value
-        val currentYear = DateUtils.getCurrentYear()
-        val currentMonth = DateUtils.getCurrentMonth()
-        if (state.selectedYear >= currentYear && state.selectedMonth >= currentMonth) return
+        val (effectiveYear, effectiveMonth) = DateUtils.getEffectiveCurrentMonth(state.monthStartDay)
+        if (state.selectedYear >= effectiveYear && state.selectedMonth >= effectiveMonth) return
 
         var newYear = state.selectedYear
         var newMonth = state.selectedMonth + 1

@@ -103,14 +103,14 @@ fun HistoryScreen(
         viewModel.setMonth(year, month)
     }
 
-    // 내역 탭 재클릭 → 오늘(현재 월) 페이지로 이동 + 필터 초기화
+    // 내역 탭 재클릭 → 오늘(현재 커스텀 월) 페이지로 이동 + 필터 초기화
     LaunchedEffect(historyTabReClickEvent) {
         historyTabReClickEvent?.collect {
             viewModel.resetFilters()
-            val todayPage = MonthPagerUtils.yearMonthToPage(
-                com.sanha.moneytalk.core.util.DateUtils.getCurrentYear(),
-                com.sanha.moneytalk.core.util.DateUtils.getCurrentMonth()
+            val (effYear, effMonth) = com.sanha.moneytalk.core.util.DateUtils.getEffectiveCurrentMonth(
+                uiState.monthStartDay
             )
+            val todayPage = MonthPagerUtils.yearMonthToPage(effYear, effMonth)
             if (pagerState.currentPage != todayPage) {
                 pagerState.animateScrollToPage(todayPage)
             }
@@ -153,7 +153,7 @@ fun HistoryScreen(
                 onNextMonth = {
                     coroutineScope.launch {
                         val target = pagerState.currentPage + 1
-                        if (!MonthPagerUtils.isFutureMonth(target)) {
+                        if (!MonthPagerUtils.isFutureMonth(target, uiState.monthStartDay)) {
                             pagerState.animateScrollToPage(target)
                         }
                     }
