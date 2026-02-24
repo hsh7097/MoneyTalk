@@ -1,7 +1,7 @@
 # AI_TASKS.md - 작업 목록 및 완료 기준
 
 > 작업 진행 상황 추적 문서
-> **최종 갱신**: 2026-02-22
+> **최종 갱신**: 2026-02-24
 
 ---
 
@@ -78,6 +78,21 @@
 ### 2-D. 채팅에서 카테고리 설정 시 자동 추가 ✅
 - [x] ChatViewModel에 CategoryReferenceProvider 생성자 주입
 - [x] UPDATE_CATEGORY / UPDATE_CATEGORY_BY_STORE / UPDATE_CATEGORY_BY_KEYWORD 성공 시 `invalidateCache()` 호출
+- [x] 빌드 성공 확인
+
+---
+
+## 홈 화면 Phase1 리디자인 + 디자인 시스템 ✅ 완료 (2026-02-24)
+
+> 디자인 시스템 정립 + 홈 Hero 카드 리디자인 + Vico 차트 도입 + 다크 테마 복원.
+> DESIGN_PLAN.md 계획서 기반 Phase1 실행.
+
+- [x] 디자인 시스템 정립 (Color 4색 팔레트 + Typography 9단계 + Dimens 여백 체계)
+- [x] MonthlyOverviewSection Hero 카드 리디자인 (큰 숫자 강조 + 전월 비교 뱃지)
+- [x] SpendingTrendInfo Contract 확장 (totalAmountText, comparisonText, isOverBudget)
+- [x] Vico 라이브러리 도입 — 금융앱 스타일 누적 차트 (VicoCumulativeChart)
+- [x] 다크 테마 Green/Orange 기반 복원
+- [x] COMPOSABLE_MAP 동기화
 - [x] 빌드 성공 확인
 
 ---

@@ -1,12 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- API 31+ 백업 규칙 -->
+<!-- 재설치 시 Room DB + DataStore 불일치 방지를 위해 전체 제외 -->
 <data-extraction-rules>
     <cloud-backup>
         <!-- DataStore preferences 백업 제외 (lastSyncTime 복원 방지) -->
         <exclude domain="file" path="datastore/settings.preferences_pb" />
+        <!-- Room DB 백업 제외 (DataStore와 정합성 불일치 방지) -->
+        <exclude domain="database" path="moneytalk.db" />
+        <exclude domain="database" path="moneytalk.db-shm" />
+        <exclude domain="database" path="moneytalk.db-wal" />
     </cloud-backup>
     <device-transfer>
-        <!-- 기기 이전 시에도 DataStore 제외 -->
+        <!-- 기기 이전 시에도 전체 제외 -->
         <exclude domain="file" path="datastore/settings.preferences_pb" />
+        <exclude domain="database" path="moneytalk.db" />
+        <exclude domain="database" path="moneytalk.db-shm" />
+        <exclude domain="database" path="moneytalk.db-wal" />
     </device-transfer>
 </data-extraction-rules>
