@@ -852,28 +852,35 @@ class HomeViewModel @Inject constructor(
     /**
      * sms2 파이프라인 실행 (SmsSyncCoordinator.process)
      *
+     * @param silent true면 dataRefreshEvent에 진행 상태를 전파하지 않음
+     *               (History 탭에서 불필요한 동기화 다이얼로그 방지)
      * @return SmsSyncCoordinator의 SyncResult (expenses + incomes + stats)
      */
     private suspend fun processSmsPipeline(
-        smsInputs: List<SmsInput>
+        smsInputs: List<SmsInput>,
+        silent: Boolean = false
     ): com.sanha.moneytalk.core.sms2.SyncResult {
-        _uiState.update {
-            it.copy(
-                syncProgress = "내역 분석 중...",
-                syncProgressTotal = smsInputs.size
-            )
+        if (!silent) {
+            _uiState.update {
+                it.copy(
+                    syncProgress = "내역 분석 중...",
+                    syncProgressTotal = smsInputs.size
+                )
+            }
         }
         categoryClassifierService.initCategoryCache()
 
         return smsSyncCoordinator.process(smsInputs) { step, current, total ->
-            _uiState.update {
-                it.copy(
-                    syncProgress = step,
-                    syncProgressCurrent = current,
-                    syncProgressTotal = total
-                )
+            if (!silent) {
+                _uiState.update {
+                    it.copy(
+                        syncProgress = step,
+                        syncProgressCurrent = current,
+                        syncProgressTotal = total
+                    )
+                }
+                dataRefreshEvent.updateSyncProgress(step, current, total)
             }
-            dataRefreshEvent.updateSyncProgress(step, current, total)
         }
     }
 
@@ -1174,7 +1181,7 @@ class HomeViewModel @Inject constructor(
                     }
 
                     // Step 2: sms2 파이프라인 실행
-                    val syncResult = processSmsPipeline(smsInputs)
+                    val syncResult = processSmsPipeline(smsInputs, silent)
 
                     // Step 3: DB 저장
                     val expenseCount = saveExpenses(syncResult.expenses)
