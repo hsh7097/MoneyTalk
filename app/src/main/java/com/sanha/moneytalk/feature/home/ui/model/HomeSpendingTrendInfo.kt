@@ -11,6 +11,8 @@ import com.sanha.moneytalk.core.ui.component.chart.SpendingTrendInfo
 import com.sanha.moneytalk.core.ui.component.chart.ToggleableLine
 import com.sanha.moneytalk.core.util.CumulativeChartDataBuilder
 import com.sanha.moneytalk.feature.home.ui.HomePageData
+import java.text.NumberFormat
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -163,7 +165,9 @@ data class HomeSpendingTrendInfo(
             }
 
             val diff = current - lastMonth
-            val percentage = ((abs(diff).toDouble() / lastMonth) * 100).roundToInt()
+            val absDiff = abs(diff)
+            val percentage = ((absDiff.toDouble() / lastMonth) * 100).roundToInt()
+            val formattedAmount = NumberFormat.getNumberInstance(Locale.KOREA).format(absDiff)
 
             return when {
                 percentage < 3 -> Pair(
@@ -171,11 +175,11 @@ data class HomeSpendingTrendInfo(
                     null
                 )
                 diff > 0 -> Pair(
-                    stringResource(R.string.home_trend_comparison_more, percentage),
+                    stringResource(R.string.home_trend_comparison_more, formattedAmount, percentage),
                     true
                 )
                 else -> Pair(
-                    stringResource(R.string.home_trend_comparison_less, percentage),
+                    stringResource(R.string.home_trend_comparison_less, formattedAmount, percentage),
                     false
                 )
             }
