@@ -65,7 +65,10 @@ HomeScreen                           ← 홈 탭 메인 화면
 ├── EmptyExpenseSection              ← 지출 없을 때 빈 상태
 ├── ExpenseDetailDialog              ← 지출 상세/수정/삭제 다이얼로그 (공통)
 │   └── CategorySelectDialog         ← 카테고리 변경 다이얼로그 (공통)
-└── [AlertDialog]                    ← 분류 확인/진행률/SMS 동기화 다이얼로그
+├── [AlertDialog]                    ← 분류 확인/진행률 다이얼로그
+├── [AlertDialog: SMS 동기화]        ← SMS 동기화 진행 (Stepper UI + dismiss 가능)
+│   └── SyncStepIndicator            ← 5단계 파이프라인 진행 인디케이터 (private)
+└── [AlertDialog: AI 성과 요약]      ← Phase 1 완료 후 엔진 부트스트랩 결과 표시
 ```
 
 | 함수 | 설명 | 참조 |
@@ -79,6 +82,7 @@ HomeScreen                           ← 홈 탭 메인 화면
 | AiInsightCard | Gemini AI 소비 분석 요약 카드 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 | ImportDataCtaSection | 데이터 가져오기 CTA (현재월, SMS 권한/데이터 없음) | [ImportDataCtaSectionKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/component/ImportDataCtaSection.kt) |
 | EmptyExpenseSection | 지출 없을 때 빈 상태 표시 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
+| SyncStepIndicator | SMS 동기화 5단계 진행 인디케이터 (private) | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 
 ---
 

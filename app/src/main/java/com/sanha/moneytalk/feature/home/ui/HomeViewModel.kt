@@ -121,6 +121,21 @@ data class HomeUiState(
     val syncProgress: String = "",
     val syncProgressCurrent: Int = 0,
     val syncProgressTotal: Int = 0,
+    /** 현재 동기화 단계 인덱스 (Stepper UI용, 0~4) */
+    val syncStepIndex: Int = 0,
+    /** 동기화 다이얼로그가 사용자에 의해 dismiss되었는지 여부 */
+    val syncDialogDismissed: Boolean = false,
+    // AI 성과 요약 카드 관련
+    /** Phase 1 완료 후 AI 성과 요약 표시 여부 */
+    val showEngineSummary: Boolean = false,
+    /** 분석된 총 SMS 건수 */
+    val engineSummaryTotalSms: Int = 0,
+    /** 생성된 패턴 수 */
+    val engineSummaryPatterns: Int = 0,
+    /** 지출 건수 */
+    val engineSummaryExpenses: Int = 0,
+    /** 수입 건수 */
+    val engineSummaryIncomes: Int = 0,
     // 월별 동기화 해제 관련
     val syncedMonths: Set<String> = emptySet(),
     val isLegacyFullSyncUnlocked: Boolean = false,
@@ -178,6 +193,9 @@ class HomeViewModel @Inject constructor(
 
         /** 페이지 캐시 최대 허용 범위 (현재 월 ± 이 값) */
         private const val PAGE_CACHE_RANGE = 2
+
+        /** Phase 1 우선 처리 기간 (14일, 밀리초) — 최초 진입 시 최근 14일 먼저 처리 */
+        private const val PHASE1_PERIOD_MILLIS = 14L * 24 * 60 * 60 * 1000
 
         /**
          * 동적 진행률 업데이트 간격 계산
@@ -741,20 +759,26 @@ class HomeViewModel @Inject constructor(
 
     /** 화면이 다시 표시될 때 데이터 새로고침 (LaunchedEffect에서 호출) */
     fun refreshData() {
-        // onCreate(첫 진입): 다이얼로그 표시 (silent=false)
-        // onResume(복귀): 백그라운드 동기화 (silent=true)
         val hasSmsPermission = ContextCompat.checkSelfPermission(
             appContext, Manifest.permission.READ_SMS
         ) == PackageManager.PERMISSION_GRANTED
+
         if (hasSmsPermission && !_uiState.value.isSyncing) {
-            val silent = !isFirstLaunch
+            val firstLaunch = isFirstLaunch
             isFirstLaunch = false
-            viewModelScope.launch {
-                val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
-                syncSmsV2(
-                    appContext.contentResolver, range,
-                    updateLastSyncTime = true, silent = silent
-                )
+
+            if (firstLaunch) {
+                // 최초 진입: Phase 1/2 분리 동기화
+                launchTwoPhaseSync()
+            } else {
+                // onResume 복귀: 기존 silent 증분 동기화
+                viewModelScope.launch {
+                    val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
+                    syncSmsV2(
+                        appContext.contentResolver, range,
+                        updateLastSyncTime = true, silent = true
+                    )
+                }
             }
         } else {
             isFirstLaunch = false
@@ -763,6 +787,185 @@ class HomeViewModel @Inject constructor(
         loadCurrentAndAdjacentPages()
         // resume 시 미분류 항목이 있고 분류가 진행 중이 아니면 자동 분류 시작
         tryResumeClassification()
+    }
+
+    /**
+     * Phase 1/2 분리 동기화 (최초 진입 전용)
+     *
+     * Phase 1: 최근 14일 우선 처리 (다이얼로그 표시, 빠른 결과)
+     *   → 패턴 DB 학습 (엔진 부트스트랩)
+     *   → 완료 후 홈 화면 즉시 갱신 + AI 성과 요약 카드
+     *
+     * Phase 2: 나머지 기간 백그라운드 처리 (silent)
+     *   → Phase 1에서 학습한 패턴 재사용 → LLM 호출 최소화
+     *   → 완료 시 snackbar로 알림
+     */
+    private fun launchTwoPhaseSync() {
+        if (!isSyncRunning.compareAndSet(false, true)) {
+            Log.w(TAG, "launchTwoPhaseSync: 이미 동기화 진행 중 → 스킵")
+            return
+        }
+
+        analyticsHelper.logClick(AnalyticsEvent.SCREEN_HOME, AnalyticsEvent.CLICK_SYNC_SMS)
+
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val fullRange = withContext(Dispatchers.IO) { calculateIncrementalRange() }
+            val isInitialSync = withContext(Dispatchers.IO) { settingsDataStore.getLastSyncTime() == 0L }
+
+            // 초기 동기화가 아니면 (이미 데이터 있음) 단일 Phase로 진행
+            if (!isInitialSync) {
+                _uiState.update {
+                    it.copy(
+                        isSyncing = true,
+                        showSyncDialog = true,
+                        syncDialogDismissed = false,
+                        syncProgress = "문자 읽는 중...",
+                        syncProgressCurrent = 0,
+                        syncProgressTotal = 0,
+                        syncStepIndex = 0
+                    )
+                }
+                dataRefreshEvent.updateSyncProgress("문자 읽는 중...", 0, 0)
+
+                try {
+                    val result = withContext(Dispatchers.IO) {
+                        syncSmsV2Internal(appContext.contentResolver, fullRange, updateLastSyncTime = true, silent = false)
+                    }
+                    handleSyncResult(result, silent = false)
+                } catch (e: Exception) {
+                    handleSyncError(e, silent = false)
+                } finally {
+                    dataRefreshEvent.completeSyncProgress()
+                    isSyncRunning.set(false)
+                }
+                return@launch
+            }
+
+            // ===== 초기 동기화: Phase 1/2 분리 =====
+            val phase1Start = now - PHASE1_PERIOD_MILLIS
+            val phase1Range = Pair(phase1Start, now)
+            // Phase 2 범위: fullRange.first ~ phase1Start (Phase 1 이전 기간)
+            val hasPhase2 = fullRange.first < phase1Start
+            val phase2Range = Pair(fullRange.first, phase1Start)
+
+            // Phase 1: 최근 14일 (다이얼로그 표시)
+            _uiState.update {
+                it.copy(
+                    isSyncing = true,
+                    showSyncDialog = true,
+                    syncDialogDismissed = false,
+                    syncProgress = "문자 읽는 중...",
+                    syncProgressCurrent = 0,
+                    syncProgressTotal = 0,
+                    syncStepIndex = 0
+                )
+            }
+            dataRefreshEvent.updateSyncProgress("문자 읽는 중...", 0, 0)
+
+            try {
+                Log.d(TAG, "=== Phase 1 시작: 최근 14일 ===")
+                val phase1Result = withContext(Dispatchers.IO) {
+                    syncSmsV2Internal(
+                        appContext.contentResolver, phase1Range,
+                        updateLastSyncTime = false, // Phase 2가 남아있으므로 저장 안 함
+                        silent = false
+                    )
+                }
+
+                // Phase 1 완료 → 다이얼로그 닫기 + 홈 갱신
+                refreshCurrentPages()
+
+                val hasData = phase1Result.expenseCount > 0 || phase1Result.incomeCount > 0
+                val dialogWasDismissed = _uiState.value.syncDialogDismissed
+
+                // AI 성과 요약 카드 표시 (데이터가 있고 다이얼로그가 아직 열려있었을 때)
+                if (hasData && !dialogWasDismissed) {
+                    _uiState.update {
+                        it.copy(
+                            showSyncDialog = false,
+                            showEngineSummary = true,
+                            engineSummaryTotalSms = phase1Result.stats.totalInput,
+                            engineSummaryPatterns = phase1Result.stats.vectorMatchCount + phase1Result.stats.newPatternsCreated,
+                            engineSummaryExpenses = phase1Result.expenseCount,
+                            engineSummaryIncomes = phase1Result.incomeCount
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            showSyncDialog = false,
+                            syncProgress = "",
+                            syncProgressCurrent = 0,
+                            syncProgressTotal = 0,
+                            syncStepIndex = 0
+                        )
+                    }
+                    if (hasData) {
+                        val msg = buildResultMessage(phase1Result.expenseCount, phase1Result.incomeCount)
+                        snackbarBus.show(msg)
+                    }
+                }
+
+                dataRefreshEvent.completeSyncProgress()
+                Log.d(TAG, "=== Phase 1 완료: 지출 ${phase1Result.expenseCount}건, 수입 ${phase1Result.incomeCount}건 ===")
+
+                // Phase 2: 나머지 기간 (백그라운드 silent)
+                if (hasPhase2) {
+                    Log.d(TAG, "=== Phase 2 시작: 나머지 기간 (백그라운드) ===")
+                    try {
+                        val phase2Result = withContext(Dispatchers.IO) {
+                            syncSmsV2Internal(
+                                appContext.contentResolver, phase2Range,
+                                updateLastSyncTime = true, // 전체 완료 → lastSyncTime 갱신
+                                silent = true
+                            )
+                        }
+                        // Phase 2 카드 자동 등록
+                        if (phase2Result.detectedCardNames.isNotEmpty()) {
+                            viewModelScope.launch(Dispatchers.IO) {
+                                try {
+                                    ownedCardRepository.registerCardsFromSync(phase2Result.detectedCardNames)
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Phase 2 카드 자동 등록 실패: ${e.message}")
+                                }
+                            }
+                        }
+                        refreshCurrentPages()
+                        if (phase2Result.expenseCount > 0 || phase2Result.incomeCount > 0) {
+                            val msg = buildResultMessage(phase2Result.expenseCount, phase2Result.incomeCount)
+                            snackbarBus.show("나머지 기간 처리 완료: $msg")
+                        }
+                        Log.d(TAG, "=== Phase 2 완료: 지출 ${phase2Result.expenseCount}건, 수입 ${phase2Result.incomeCount}건 ===")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Phase 2 실패 (다음 동기화에서 재시도): ${e.message}")
+                    }
+                } else {
+                    // Phase 2 불필요 → lastSyncTime 저장
+                    withContext(Dispatchers.IO) {
+                        settingsDataStore.saveLastSyncTime(now)
+                    }
+                }
+
+                _uiState.update { it.copy(isSyncing = false) }
+            } catch (e: Exception) {
+                handleSyncError(e, silent = false)
+                dataRefreshEvent.completeSyncProgress()
+            } finally {
+                isSyncRunning.set(false)
+            }
+        }
+    }
+
+    /** 결과 메시지 빌드 헬퍼 */
+    private fun buildResultMessage(expenseCount: Int, incomeCount: Int): String = when {
+        expenseCount > 0 && incomeCount > 0 ->
+            "${expenseCount}건의 지출, ${incomeCount}건의 수입이 추가되었습니다"
+        expenseCount > 0 ->
+            "${expenseCount}건의 새 지출이 추가되었습니다"
+        incomeCount > 0 ->
+            "${incomeCount}건의 새 수입이 추가되었습니다"
+        else -> "새로운 내역이 없습니다"
     }
 
     /**
@@ -807,7 +1010,9 @@ class HomeViewModel @Inject constructor(
         val expenseCount: Int,
         val incomeCount: Int,
         val detectedCardNames: List<String>,
-        val classifiedCount: Int
+        val classifiedCount: Int,
+        /** 파이프라인 엔진 통계 (Phase 1 요약 카드용) */
+        val stats: com.sanha.moneytalk.core.sms2.SyncStats = com.sanha.moneytalk.core.sms2.SyncStats()
     )
 
     /**
@@ -862,10 +1067,11 @@ class HomeViewModel @Inject constructor(
         }
         categoryClassifierService.initCategoryCache()
 
-        return smsSyncCoordinator.process(smsInputs) { step, current, total ->
+        return smsSyncCoordinator.process(smsInputs) { stepIndex, step, current, total ->
             if (!silent) {
                 _uiState.update {
                     it.copy(
+                        syncStepIndex = stepIndex,
                         syncProgress = step,
                         syncProgressCurrent = current,
                         syncProgressTotal = total
@@ -886,7 +1092,7 @@ class HomeViewModel @Inject constructor(
     ): Int {
         if (expenses.isEmpty()) return 0
 
-        _uiState.update { it.copy(syncProgress = "지출 저장 중...") }
+        _uiState.update { it.copy(syncStepIndex = com.sanha.moneytalk.core.sms2.SmsPipeline.STEP_SAVE, syncProgress = "지출 저장 중...") }
         val batch = mutableListOf<ExpenseEntity>()
 
         for (parsed in expenses) {
@@ -1114,11 +1320,57 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
+     * SMS 동기화 내부 실행 (순수 suspend 함수)
+     *
+     * isSyncRunning, viewModelScope.launch 관리 없이 순수 로직만 실행.
+     * Phase 1/2 분리 시 재사용 가능.
+     *
+     * @return SyncResult (지출/수입 건수, 카드명, 분류 건수, 엔진 통계)
+     */
+    private suspend fun syncSmsV2Internal(
+        contentResolver: ContentResolver,
+        targetMonthRange: Pair<Long, Long>,
+        updateLastSyncTime: Boolean,
+        silent: Boolean
+    ): SyncResult {
+        // 제외 키워드 설정
+        val userExcludeKeywords = smsExclusionRepository.getUserKeywords()
+        smsSyncCoordinator.setUserExcludeKeywords(userExcludeKeywords)
+        SmsIncomeParser.setUserExcludeKeywords(userExcludeKeywords)
+
+        // Step 1: SMS 읽기 + 중복 제거
+        val smsInputs = readAndFilterSms(contentResolver, targetMonthRange)
+        if (smsInputs.isEmpty()) {
+            if (updateLastSyncTime) {
+                settingsDataStore.saveLastSyncTime(targetMonthRange.second)
+            }
+            return SyncResult(0, 0, emptyList(), 0)
+        }
+
+        // Step 2: sms2 파이프라인 실행
+        val syncResult = processSmsPipeline(smsInputs, silent)
+
+        // Step 3: DB 저장
+        val expenseCount = saveExpenses(syncResult.expenses)
+        val incomeCount = saveIncomes(syncResult.incomes)
+
+        // Step 4: 후처리 (카테고리 분류, 패턴 정리, lastSyncTime 갱신)
+        val cleanup = postSyncCleanup(updateLastSyncTime, targetMonthRange.second)
+
+        return SyncResult(
+            expenseCount = expenseCount,
+            incomeCount = incomeCount,
+            detectedCardNames = cleanup.cardNames,
+            classifiedCount = cleanup.classifiedCount,
+            stats = syncResult.stats
+        )
+    }
+
+    /**
      * SMS 동기화 (sms2 파이프라인)
      *
-     * 모든 배치 동기화의 단일 진입점.
-     * 내부적으로 readAndFilterSms → processSmsPipeline → saveExpenses →
-     * saveIncomes → postSyncCleanup 순서로 실행.
+     * 기존 호출부(syncIncremental, unlockFullSync 등) 호환 유지.
+     * 내부적으로 syncSmsV2Internal()을 호출.
      *
      * @param contentResolver SMS 읽기용 ContentResolver
      * @param targetMonthRange 동기화 대상 기간 (startMillis, endMillis)
@@ -1145,9 +1397,11 @@ class HomeViewModel @Inject constructor(
                     it.copy(
                         isSyncing = true,
                         showSyncDialog = true,
+                        syncDialogDismissed = false,
                         syncProgress = "문자 읽는 중...",
                         syncProgressCurrent = 0,
-                        syncProgressTotal = 0
+                        syncProgressTotal = 0,
+                        syncStepIndex = 0
                     )
                 }
                 dataRefreshEvent.updateSyncProgress("문자 읽는 중...", 0, 0)
@@ -1157,104 +1411,12 @@ class HomeViewModel @Inject constructor(
 
             try {
                 val result = withContext(Dispatchers.IO) {
-                    // 제외 키워드 설정
-                    val userExcludeKeywords = smsExclusionRepository.getUserKeywords()
-                    smsSyncCoordinator.setUserExcludeKeywords(userExcludeKeywords)
-                    SmsIncomeParser.setUserExcludeKeywords(userExcludeKeywords)
-
-                    // Step 1: SMS 읽기 + 중복 제거
-                    val smsInputs = readAndFilterSms(contentResolver, targetMonthRange)
-                    if (smsInputs.isEmpty()) {
-                        // 새 SMS 없어도 커서(lastSyncTime)는 전진시켜야 다음 동기화에서 같은 범위 재조회 방지
-                        if (updateLastSyncTime) {
-                            settingsDataStore.saveLastSyncTime(targetMonthRange.second)
-                        }
-                        return@withContext SyncResult(0, 0, emptyList(), 0)
-                    }
-
-                    // Step 2: sms2 파이프라인 실행
-                    val syncResult = processSmsPipeline(smsInputs, silent)
-
-                    // Step 3: DB 저장
-                    val expenseCount = saveExpenses(syncResult.expenses)
-                    val incomeCount = saveIncomes(syncResult.incomes)
-
-                    // Step 4: 후처리 (카테고리 분류, 패턴 정리, lastSyncTime 갱신)
-                    val cleanup = postSyncCleanup(updateLastSyncTime, targetMonthRange.second)
-
-                    SyncResult(
-                        expenseCount = expenseCount,
-                        incomeCount = incomeCount,
-                        detectedCardNames = cleanup.cardNames,
-                        classifiedCount = cleanup.classifiedCount
-                    )
+                    syncSmsV2Internal(contentResolver, targetMonthRange, updateLastSyncTime, silent)
                 }
 
-                // 카드 자동 등록 (백그라운드)
-                if (result.detectedCardNames.isNotEmpty()) {
-                    viewModelScope.launch(Dispatchers.IO) {
-                        try {
-                            ownedCardRepository.registerCardsFromSync(result.detectedCardNames)
-                        } catch (e: Exception) {
-                            android.util.Log.w(TAG, "카드 자동 등록 실패: ${e.message}")
-                        }
-                    }
-                }
-
-                // 데이터 새로고침 (스크롤 위치 유지)
-                refreshCurrentPages()
-
-                val resultMessage = when {
-                    result.expenseCount > 0 && result.incomeCount > 0 ->
-                        "${result.expenseCount}건의 지출, ${result.incomeCount}건의 수입이 추가되었습니다"
-                    result.expenseCount > 0 ->
-                        "${result.expenseCount}건의 새 지출이 추가되었습니다"
-                    result.incomeCount > 0 ->
-                        "${result.incomeCount}건의 새 수입이 추가되었습니다"
-                    else -> "새로운 내역이 없습니다"
-                }
-
-                if (silent) {
-                    _uiState.update { it.copy(isSyncing = false) }
-                    // 실시간 SMS 수신: 새 데이터가 있을 때만 snackbar로 알림
-                    if (result.expenseCount > 0 || result.incomeCount > 0) {
-                        snackbarBus.show(resultMessage)
-                    }
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            isSyncing = false,
-                            showSyncDialog = false,
-                            syncProgress = "",
-                            syncProgressCurrent = 0,
-                            syncProgressTotal = 0,
-                            errorMessage = resultMessage
-                        )
-                    }
-                    // 수동 동기화(silent=false): 데이터 없으면 스낵바로 알림
-                    // ImportDataCta, FullSyncCta, syncMonthData 등 모든 수동 경로에 적용
-                    if (result.expenseCount == 0 && result.incomeCount == 0) {
-                        snackbarBus.show(appContext.getString(R.string.sync_no_data))
-                    }
-                }
+                handleSyncResult(result, silent)
             } catch (e: Exception) {
-                categoryClassifierService.clearCategoryCache()
-
-                if (silent) {
-                    _uiState.update { it.copy(isSyncing = false) }
-                    Log.w(TAG, "실시간 SMS 동기화 실패: ${e.message}")
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            isSyncing = false,
-                            showSyncDialog = false,
-                            syncProgress = "",
-                            syncProgressCurrent = 0,
-                            syncProgressTotal = 0,
-                            errorMessage = "동기화 실패: ${e.message}"
-                        )
-                    }
-                }
+                handleSyncError(e, silent)
             } finally {
                 if (!silent) {
                     dataRefreshEvent.completeSyncProgress()
@@ -1262,6 +1424,89 @@ class HomeViewModel @Inject constructor(
                 isSyncRunning.set(false)
             }
         }
+    }
+
+    /** 동기화 결과 처리 (UI 상태 업데이트 + snackbar) */
+    private suspend fun handleSyncResult(result: SyncResult, silent: Boolean) {
+        // 카드 자동 등록 (백그라운드)
+        if (result.detectedCardNames.isNotEmpty()) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    ownedCardRepository.registerCardsFromSync(result.detectedCardNames)
+                } catch (e: Exception) {
+                    android.util.Log.w(TAG, "카드 자동 등록 실패: ${e.message}")
+                }
+            }
+        }
+
+        // 데이터 새로고침 (스크롤 위치 유지)
+        refreshCurrentPages()
+
+        val resultMessage = buildResultMessage(result.expenseCount, result.incomeCount)
+
+        if (silent || _uiState.value.syncDialogDismissed) {
+            _uiState.update { it.copy(isSyncing = false) }
+            if (result.expenseCount > 0 || result.incomeCount > 0) {
+                snackbarBus.show(resultMessage)
+            }
+        } else {
+            _uiState.update {
+                it.copy(
+                    isSyncing = false,
+                    showSyncDialog = false,
+                    syncProgress = "",
+                    syncProgressCurrent = 0,
+                    syncProgressTotal = 0,
+                    syncStepIndex = 0,
+                    errorMessage = resultMessage
+                )
+            }
+            if (result.expenseCount == 0 && result.incomeCount == 0) {
+                snackbarBus.show(appContext.getString(R.string.sync_no_data))
+            }
+        }
+    }
+
+    /** 동기화 에러 처리 */
+    private fun handleSyncError(e: Exception, silent: Boolean) {
+        categoryClassifierService.clearCategoryCache()
+
+        if (silent || _uiState.value.syncDialogDismissed) {
+            _uiState.update { it.copy(isSyncing = false) }
+            Log.w(TAG, "SMS 동기화 실패: ${e.message}")
+        } else {
+            _uiState.update {
+                it.copy(
+                    isSyncing = false,
+                    showSyncDialog = false,
+                    syncProgress = "",
+                    syncProgressCurrent = 0,
+                    syncProgressTotal = 0,
+                    syncStepIndex = 0,
+                    errorMessage = "동기화 실패: ${e.message}"
+                )
+            }
+        }
+    }
+
+    /**
+     * 동기화 다이얼로그 dismiss (백그라운드에서 계속)
+     *
+     * 다이얼로그만 닫고 동기화는 계속 진행.
+     * 완료 시 snackbar로 결과 표시.
+     */
+    fun dismissSyncDialog() {
+        _uiState.update {
+            it.copy(
+                showSyncDialog = false,
+                syncDialogDismissed = true
+            )
+        }
+    }
+
+    /** AI 성과 요약 카드 dismiss */
+    fun dismissEngineSummary() {
+        _uiState.update { it.copy(showEngineSummary = false) }
     }
 
     /**

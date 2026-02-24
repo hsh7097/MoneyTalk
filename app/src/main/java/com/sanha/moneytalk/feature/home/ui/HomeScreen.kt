@@ -392,20 +392,20 @@ fun HomeScreen(
         )
     }
 
-    // SMS 동기화 진행 다이얼로그
+    // SMS 동기화 진행 다이얼로그 (Stepper UI + 스킵 가능)
     if (uiState.showSyncDialog) {
         AlertDialog(
-            onDismissRequest = { /* 진행 중에는 닫기 불가 */ },
+            onDismissRequest = { viewModel.dismissSyncDialog() },
             title = { Text(stringResource(R.string.home_sync_dialog_title)) },
             text = {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // 로딩 스피너
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(48.dp),
-                        strokeWidth = 4.dp
+                    // Stepper 인디케이터 (5단계)
+                    SyncStepIndicator(
+                        currentStep = uiState.syncStepIndex,
+                        totalSteps = com.sanha.moneytalk.core.sms2.SmsPipeline.TOTAL_STEPS
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -447,7 +447,62 @@ fun HomeScreen(
                     )
                 }
             },
-            confirmButton = { }
+            confirmButton = { },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissSyncDialog() }) {
+                    Text("백그라운드에서 계속")
+                }
+            }
+        )
+    }
+
+    // AI 성과 요약 카드 (Phase 1 완료 후)
+    if (uiState.showEngineSummary) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissEngineSummary() },
+            title = {
+                Text(
+                    text = "✨ AI 엔진 준비 완료",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (uiState.engineSummaryTotalSms > 0) {
+                        Text(
+                            text = "\uD83D\uDCE9 최근 14일간 문자 ${uiState.engineSummaryTotalSms}건 분석",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    if (uiState.engineSummaryPatterns > 0) {
+                        Text(
+                            text = "\uD83C\uDFAF 카드 패턴 ${uiState.engineSummaryPatterns}개 학습 완료",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    val parts = mutableListOf<String>()
+                    if (uiState.engineSummaryExpenses > 0) parts.add("지출 ${uiState.engineSummaryExpenses}건")
+                    if (uiState.engineSummaryIncomes > 0) parts.add("수입 ${uiState.engineSummaryIncomes}건")
+                    if (parts.isNotEmpty()) {
+                        Text(
+                            text = "\uD83D\uDCB0 ${parts.joinToString(" · ")} 등록",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "나머지 기간은 백그라운드에서\n자동으로 처리합니다",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissEngineSummary() }) {
+                    Text("확인")
+                }
+            }
         )
     }
 
@@ -1161,4 +1216,77 @@ fun AiInsightCard(
 sealed interface TodayItem {
     data class Expense(val expense: ExpenseEntity) : TodayItem
     data class Income(val income: IncomeEntity) : TodayItem
+}
+
+/**
+ * 동기화 단계 인디케이터 (5-step dot indicator)
+ *
+ * 현재 단계를 시각적으로 표시:
+ * - 완료: Primary 색상 채움
+ * - 현재: Primary 색상 + 크기 확대
+ * - 미완료: Surface 색상 (비활성)
+ */
+@Composable
+private fun SyncStepIndicator(
+    currentStep: Int,
+    totalSteps: Int,
+    modifier: Modifier = Modifier
+) {
+    val stepLabels = remember {
+        listOf("분류", "분석", "비교", "AI", "저장")
+    }
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        for (i in 0 until totalSteps) {
+            val isCompleted = i < currentStep
+            val isCurrent = i == currentStep
+            val dotSize = if (isCurrent) 12.dp else 8.dp
+            val dotColor = when {
+                isCompleted || isCurrent -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(dotSize)
+                        .background(color = dotColor, shape = CircleShape)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = stepLabels.getOrElse(i) { "" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isCompleted || isCurrent) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    },
+                    fontSize = 9.sp
+                )
+            }
+
+            // 단계 사이 연결선
+            if (i < totalSteps - 1) {
+                Box(
+                    modifier = Modifier
+                        .width(16.dp)
+                        .height(2.dp)
+                        .background(
+                            color = if (i < currentStep) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            }
+                        )
+                )
+            }
+        }
+    }
 }
