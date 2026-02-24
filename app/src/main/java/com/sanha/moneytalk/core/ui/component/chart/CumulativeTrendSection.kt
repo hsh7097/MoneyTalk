@@ -82,6 +82,15 @@ fun CumulativeTrendSection(
         }.map { it.line }
     }
 
+    // Y축 최대값: 토글 상태와 무관하게 모든 곡선의 최대값 기준 고정
+    val yAxisMax = remember(info.primaryLine, info.toggleableLines) {
+        val allMax = maxOf(
+            info.primaryLine.points.maxOrNull() ?: 0L,
+            info.toggleableLines.maxOfOrNull { it.line.points.maxOrNull() ?: 0L } ?: 0L
+        )
+        ceilToNiceValue(allMax)
+    }
+
     Column(modifier = modifier.fillMaxWidth()) {
         // 타이틀
         Text(
@@ -122,6 +131,7 @@ fun CumulativeTrendSection(
             comparisonLines = activeComparisonLines,
             daysInMonth = info.daysInMonth,
             todayDayIndex = info.todayDayIndex,
+            yAxisMax = yAxisMax,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(200.dp)

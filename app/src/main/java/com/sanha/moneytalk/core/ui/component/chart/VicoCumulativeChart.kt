@@ -14,8 +14,13 @@ import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStartAxis
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLine
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
+import com.patrykandpatrick.vico.compose.cartesian.rememberVicoScrollState
+import com.patrykandpatrick.vico.compose.cartesian.rememberVicoZoomState
 import com.patrykandpatrick.vico.compose.common.fill
+import com.patrykandpatrick.vico.core.cartesian.Zoom
+import com.patrykandpatrick.vico.core.cartesian.data.AxisValueOverrider
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
+import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianValueFormatter
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
 import com.patrykandpatrick.vico.core.cartesian.layer.LineCartesianLayer
@@ -31,6 +36,7 @@ import com.patrykandpatrick.vico.core.cartesian.layer.LineCartesianLayer
  * @param comparisonLines 토글 활성화된 비교 곡선 리스트
  * @param daysInMonth 해당 월 총 일수
  * @param todayDayIndex 오늘이 해당 월의 몇번째 날인지 (0-based, -1이면 과거 월)
+ * @param yAxisMax Y축 최대값 (토글 상태와 무관하게 고정된 값, 호출부에서 계산)
  * @param modifier 외부 Modifier
  */
 @Composable
@@ -39,12 +45,16 @@ fun VicoCumulativeChart(
     comparisonLines: List<CumulativeChartLine>,
     daysInMonth: Int,
     todayDayIndex: Int,
+    yAxisMax: Long,
     modifier: Modifier = Modifier
 ) {
     val modelProducer = remember { CartesianChartModelProducer() }
 
+    // X축 최대값: 전체 월 일수 기준 고정 (데이터 변동과 무관하게 축 범위 일정)
+    val xAxisMax = (daysInMonth - 1).coerceAtLeast(1)
+
     // 데이터 변경 시 모델 업데이트
-    LaunchedEffect(primaryLine, comparisonLines) {
+    LaunchedEffect(primaryLine, comparisonLines, daysInMonth, todayDayIndex) {
         modelProducer.runTransaction {
             lineSeries {
                 // 메인 곡선: 실선일 때 오늘까지만 표시
@@ -119,10 +129,25 @@ fun VicoCumulativeChart(
     val guidelineColor = onSurfaceColor.copy(alpha = 0.08f)
     val labelColor = onSurfaceColor.copy(alpha = 0.45f)
 
+    // 스크롤/줌 비활성화 — 차트 전체를 화면 폭에 맞춤
+    val scrollState = rememberVicoScrollState(scrollEnabled = false)
+    val zoomState = rememberVicoZoomState(
+        zoomEnabled = false,
+        initialZoom = Zoom.Content,
+    )
+
     CartesianChartHost(
         chart = rememberCartesianChart(
             rememberLineCartesianLayer(
                 lineProvider = lineProvider,
+                axisValueOverrider = remember(yAxisMax, xAxisMax) {
+                    AxisValueOverrider.fixed(
+                        minX = 0.0,
+                        maxX = xAxisMax.toDouble(),
+                        minY = 0.0,
+                        maxY = yAxisMax.toDouble(),
+                    )
+                },
             ),
             startAxis = rememberStartAxis(
                 label = rememberAxisLabelComponent(
@@ -144,9 +169,17 @@ fun VicoCumulativeChart(
                 guideline = null,
                 line = null,
                 valueFormatter = bottomValueFormatter,
+                itemPlacer = remember {
+                    HorizontalAxis.ItemPlacer.default(
+                        spacing = 5,
+                        addExtremeLabelPadding = true,
+                    )
+                },
             ),
         ),
         modelProducer = modelProducer,
+        scrollState = scrollState,
+        zoomState = zoomState,
         modifier = modifier,
     )
 }
