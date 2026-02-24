@@ -27,6 +27,25 @@
     <string name="splash_logo_description">척척 가계부 Logo</string>
     <string name="splash_tagline">Smart Money Manager</string>
 
+    <!-- Onboarding -->
+    <string name="onboarding_title_1">Auto Expense Tracking via SMS</string>
+    <string name="onboarding_desc_1">Reads your card payment texts\nand records expenses automatically</string>
+    <string name="onboarding_feature_1_1">✓  Auto-detect card payment SMS</string>
+    <string name="onboarding_feature_1_2">✓  Extract amount, merchant &amp; card info</string>
+    <string name="onboarding_feature_1_3">✓  Income messages auto-classified too</string>
+    <string name="onboarding_title_2">AI Categorizes &amp; Analyzes For You</string>
+    <string name="onboarding_desc_2">No manual input needed\nAI organizes categories for you</string>
+    <string name="onboarding_feature_2_1">✓  18 categories, auto-classified</string>
+    <string name="onboarding_feature_2_2">✓  Ask "How much on coffee?" in plain language</string>
+    <string name="onboarding_feature_2_3">✓  Spending pattern analysis &amp; tailored advice</string>
+    <string name="onboarding_title_3">Your Data Stays on Your Phone</string>
+    <string name="onboarding_desc_3">All data is processed on-device only\nNothing is sent externally</string>
+    <string name="onboarding_feature_3_1">✓  No server uploads, stored locally</string>
+    <string name="onboarding_feature_3_2">✓  Google Drive backup to your account only</string>
+    <string name="onboarding_feature_3_3">✓  Delete all data anytime</string>
+    <string name="onboarding_start">Get Started</string>
+    <string name="onboarding_skip">Skip</string>
+
     <!-- Chat Screen -->
     <string name="chat_title">AI Financial Advisor</string>
     <string name="chat_subtitle_with_api">Chat with Gemini</string>

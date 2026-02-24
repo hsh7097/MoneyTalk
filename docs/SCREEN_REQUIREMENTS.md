@@ -21,7 +21,7 @@
 
 ## 1. 인트로
 
-**파일**: `feature/intro/ui/IntroActivity.kt`, `feature/splash/ui/SplashScreen.kt`, `feature/intro/ui/PermissionScreen.kt`
+**파일**: `feature/intro/ui/IntroActivity.kt`, `feature/splash/ui/SplashScreen.kt`, `feature/intro/ui/OnboardingScreen.kt`, `feature/intro/ui/PermissionScreen.kt`
 
 ### 1.1 스플래시
 
@@ -30,9 +30,25 @@
 | 애니메이션 | 지갑 아이콘 + 앱명 + 태그라인, scale/alpha 500ms + 1.5s 딜레이 |
 | 배경 | Primary 그라데이션 (PrimaryLight → Primary → PrimaryDark) |
 | 전환 | 총 2초 후 자동 전환 |
-| 분기 | onboardingCompleted → 바로 MainActivity / 아니면 → Permission |
+| 분기 | onboardingCompleted → 바로 MainActivity / 아니면 → Onboarding |
 
-### 1.2 권한 요청
+### 1.2 온보딩 인트로
+
+| 항목 | 스펙 |
+|------|------|
+| UI | 3페이지 HorizontalPager (전체 화면 스와이프) |
+| 배경 | Primary 그라데이션 (스플래시와 동일) |
+| 페이지 구성 | 이모지(72sp) + 제목(26sp Bold) + 설명(15sp) + feature bullets 3줄 (반투명 카드) |
+| 페이지 1 | 💳 문자만으로 자동 가계부 — SMS 자동 인식, 금액·가맹점 추출, 수입 분류 |
+| 페이지 2 | 🤖 AI 분류·분석 — 18개 카테고리, 자연어 조회, 소비 패턴 분석 |
+| 페이지 3 | 🔒 로컬 데이터 보호 — 서버 전송 없음, Google Drive 백업, 전체 삭제 가능 |
+| 인디케이터 | 3개 dot (하단 고정, 활성/비활성 색상 애니메이션) |
+| 건너뛰기 | 상단 우측 TextButton, 마지막 페이지에서 fade out |
+| 시작하기 | 마지막 페이지에서만 AnimatedVisibility로 노출 (fadeIn + slideInVertically) |
+| 전환 | 시작하기/건너뛰기 → PermissionScreen |
+| 재진입 | onboardingCompleted=true이면 스킵 (기존 사용자 영향 없음) |
+
+### 1.3 권한 요청
 
 | 항목 | 스펙 |
 |------|------|
@@ -41,7 +57,7 @@
 | 버튼 | "동의함" / "동의안함" (둘 다 진행 가능) |
 | 완료 후 | onboardingCompleted=true → RTDB 설정 로드 (3초 타임아웃) → MainActivity |
 
-### 1.3 강제 업데이트
+### 1.4 강제 업데이트
 
 | 항목 | 스펙 |
 |------|------|

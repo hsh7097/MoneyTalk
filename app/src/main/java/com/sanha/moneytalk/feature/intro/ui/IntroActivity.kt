@@ -60,7 +60,7 @@ class IntroActivity : ComponentActivity() {
     lateinit var premiumManager: PremiumManager
 
     /** 상태 머신 */
-    private enum class IntroState { SPLASH, PERMISSION, NAVIGATING, FORCE_UPDATE }
+    private enum class IntroState { SPLASH, ONBOARDING, PERMISSION, NAVIGATING, FORCE_UPDATE }
 
     private var introState by mutableStateOf(IntroState.SPLASH)
     private var forceUpdateState by mutableStateOf<ForceUpdateState>(ForceUpdateState.NotRequired)
@@ -102,6 +102,12 @@ class IntroActivity : ComponentActivity() {
                 when (introState) {
                     IntroState.SPLASH -> {
                         SplashScreen(onSplashFinished = { onSplashFinished() })
+                    }
+
+                    IntroState.ONBOARDING -> {
+                        OnboardingScreen(
+                            onOnboardingFinished = { introState = IntroState.PERMISSION }
+                        )
                     }
 
                     IntroState.PERMISSION -> {
@@ -152,7 +158,7 @@ class IntroActivity : ComponentActivity() {
             if (completed) {
                 waitForConfigAndNavigate()
             } else {
-                introState = IntroState.PERMISSION
+                introState = IntroState.ONBOARDING
             }
         }
     }
