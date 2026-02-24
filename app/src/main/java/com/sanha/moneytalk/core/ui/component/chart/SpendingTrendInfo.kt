@@ -10,7 +10,7 @@ package com.sanha.moneytalk.core.ui.component.chart
  * @see CumulativeTrendSection
  */
 interface SpendingTrendInfo {
-    /** 섹션 제목 (예: "지출 추이", "식비 추이") */
+    /** 섹션 제목 (예: "이번 달 누적 지출", "식비 추이") */
     val title: String
 
     /** 항상 표시되는 메인 곡선 (이번 달 누적) */
@@ -24,4 +24,20 @@ interface SpendingTrendInfo {
 
     /** 오늘이 해당 월의 몇번째 날인지 (0-based, -1이면 과거 월) */
     val todayDayIndex: Int
+
+    /** 이번 달 현재 누적 금액 */
+    val currentAmount: Long
+        get() = 0L
+
+    /** 전월 동일 기간 누적 금액 (비교용) */
+    val lastMonthAmount: Long
+        get() = 0L
+
+    /** 비교 문구 (예: "지난달 대비 12% 더 쓰고 있어요") */
+    val comparisonText: String
+        get() = ""
+
+    /** true=초과(빨강), false=절약(초록), null=비교 불가 */
+    val isOverSpending: Boolean?
+        get() = null
 }

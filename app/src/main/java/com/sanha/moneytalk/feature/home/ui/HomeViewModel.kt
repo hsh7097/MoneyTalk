@@ -1036,6 +1036,7 @@ class HomeViewModel @Inject constructor(
     private suspend fun calculateIncrementalRange(): Pair<Long, Long> {
         val savedSyncTime = settingsDataStore.getLastSyncTime()
         val now = System.currentTimeMillis()
+        val monthStartDay = _uiState.value.monthStartDay
 
         val dbCount = expenseRepository.getAllSmsIds().size
         val effectiveSyncTime = if (savedSyncTime > 0 && dbCount == 0) {
@@ -1046,8 +1047,14 @@ class HomeViewModel @Inject constructor(
             savedSyncTime
         }
 
-        // 최대 2개월(DEFAULT_SYNC_PERIOD_MILLIS) 이전까지만 조회하도록 clamp
-        val minStartTime = now - DEFAULT_SYNC_PERIOD_MILLIS
+        // monthStartDay > 1이면 커스텀 월이 달을 걸치므로 추가 마진 필요
+        // 예: monthStartDay=19 → 커스텀 "1월"은 12/19~1/18, 18일 추가 필요
+        val extraDaysMillis = if (monthStartDay > 1) {
+            (monthStartDay - 1).toLong() * 24 * 60 * 60 * 1000
+        } else 0L
+
+        // 최대 동기화 범위: 기본 60일 + 커스텀 월 마진
+        val minStartTime = now - DEFAULT_SYNC_PERIOD_MILLIS - extraDaysMillis
 
         // SMS date와 동기화 시각 사이의 지연(네트워크, ContentProvider 기록 등)에 의한
         // 누락을 방지하기 위해 lastSyncTime에서 5분 마진을 빼서 조회.
@@ -1055,13 +1062,24 @@ class HomeViewModel @Inject constructor(
         val OVERLAP_MARGIN_MILLIS = 5L * 60 * 1000 // 5분
 
         val startTime = if (effectiveSyncTime > 0) {
-            // 증분: lastSyncTime - 마진, 2개월보다 오래되었으면 2개월 전으로 clamp
+            // 증분: lastSyncTime - 마진, clamp 범위도 커스텀 월 마진 반영
             maxOf(effectiveSyncTime - OVERLAP_MARGIN_MILLIS, minStartTime)
         } else {
-            // 초기: 전월 1일 ~ now (2달치)
+            // 초기: 커스텀 월 2개 분량 커버
             val cal = java.util.Calendar.getInstance()
-            cal.add(java.util.Calendar.MONTH, -1)
-            cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
+            if (monthStartDay > 1) {
+                // monthStartDay > 1: 2달 전 monthStartDay부터
+                // 예: now=2/24, monthStartDay=19 → 12/19부터 (커스텀 "1월" 전체 커버)
+                cal.add(java.util.Calendar.MONTH, -2)
+                cal.set(
+                    java.util.Calendar.DAY_OF_MONTH,
+                    monthStartDay.coerceAtMost(cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH))
+                )
+            } else {
+                // monthStartDay=1: 전월 1일부터
+                cal.add(java.util.Calendar.MONTH, -1)
+                cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
+            }
             cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
             cal.set(java.util.Calendar.MINUTE, 0)
             cal.set(java.util.Calendar.SECOND, 0)

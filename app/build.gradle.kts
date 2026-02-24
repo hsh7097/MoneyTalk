@@ -156,6 +156,9 @@ dependencies {
     // Lottie
     implementation(libs.lottie.compose)
 
+    // Vico Chart
+    implementation(libs.vico.compose.m3)
+
     // Google Play Services & Drive
     implementation(libs.play.services.auth)
     implementation(libs.google.api.client.android)

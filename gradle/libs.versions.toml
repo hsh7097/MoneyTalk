@@ -24,6 +24,7 @@ lottie = "6.3.0"
 firebaseBom = "33.7.0"
 googleServices = "4.4.2"
 firebaseCrashlytics = "3.0.3"
+vico = "2.0.0-alpha.28"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -97,6 +98,9 @@ firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashly
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics-ktx" }
 firebase-database = { group = "com.google.firebase", name = "firebase-database-ktx" }
 firebase-config = { group = "com.google.firebase", name = "firebase-config-ktx" }
+
+# Vico Chart
+vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vico" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

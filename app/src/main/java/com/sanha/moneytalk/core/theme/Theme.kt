@@ -30,10 +30,20 @@ enum class ThemeMode {
 // ============================================================================
 @Immutable
 data class MoneyTalkExtendedColors(
-    val income: Color,          // 수입 금액
-    val expense: Color,         // 지출 금액
-    val calendarSunday: Color,  // 달력 일요일
-    val calendarSaturday: Color // 달력 토요일
+    val income: Color,              // 수입 금액
+    val expense: Color,             // 지출 금액
+    val calendarSunday: Color,      // 달력 일요일
+    val calendarSaturday: Color,    // 달력 토요일
+    // Navy 계열 확장
+    val navyDark: Color,            // #1B2838 — 주요 강조
+    val navyMedium: Color,          // #2C3E50 — 카드 헤더, 섹션 제목
+    val navyTint: Color,            // #E8EDF2 — 카드 배경 틴트
+    // Gray Scale 확장
+    val textPrimary: Color,         // gray900 — 1차 텍스트
+    val textSecondary: Color,       // gray600 — 2차 텍스트
+    val textTertiary: Color,        // gray400 — 3차 텍스트, 힌트
+    val divider: Color,             // gray200 — 구분선
+    val cardBackground: Color       // gray100 — 보조 카드 배경
 )
 
 // CompositionLocal로 하위 Composable에 전달
@@ -42,7 +52,15 @@ val LocalMoneyTalkColors = staticCompositionLocalOf {
         income = Color.Unspecified,
         expense = Color.Unspecified,
         calendarSunday = Color.Unspecified,
-        calendarSaturday = Color.Unspecified
+        calendarSaturday = Color.Unspecified,
+        navyDark = Color.Unspecified,
+        navyMedium = Color.Unspecified,
+        navyTint = Color.Unspecified,
+        textPrimary = Color.Unspecified,
+        textSecondary = Color.Unspecified,
+        textTertiary = Color.Unspecified,
+        divider = Color.Unspecified,
+        cardBackground = Color.Unspecified
     )
 }
 
@@ -52,58 +70,80 @@ val MaterialTheme.moneyTalkColors: MoneyTalkExtendedColors
     @ReadOnlyComposable
     get() = LocalMoneyTalkColors.current
 
+// MaterialTheme 확장 프로퍼티 — 숫자 Typography
+val MaterialTheme.moneyTalkTypography: MoneyTalkNumberTypography
+    @Composable
+    @ReadOnlyComposable
+    get() = LocalMoneyTalkNumberTypography.current
+
 // ============================================================================
 // 라이트/다크 확장 색상 정의
 // ============================================================================
 
 // 라이트 테마 확장 색상
 private val LightExtendedColors = MoneyTalkExtendedColors(
-    income = IncomeLight,              // #137FEC 파란색 — 라이트 테마 수입 (SVG 기준)
-    expense = ExpenseColor,            // #EF4444 빨간색 — 지출 (SVG 기준, 라이트/다크 공용)
-    calendarSunday = CalendarSunday,   // #EF4444 일요일 (빨간 계열, SVG 기준)
-    calendarSaturday = CalendarSaturday // #137FEC 토요일 (파란 계열, SVG 기준)
+    income = IncomeLight,              // #137FEC 파란색
+    expense = ExpenseColor,            // #EF4444 빨간색
+    calendarSunday = CalendarSunday,   // #EF4444
+    calendarSaturday = CalendarSaturday, // #137FEC
+    navyDark = NavyDark,              // #1B2838
+    navyMedium = NavyMedium,          // #2C3E50
+    navyTint = NavyTint,              // #E8EDF2
+    textPrimary = Gray900,            // #111827
+    textSecondary = Gray600,          // #6B7280
+    textTertiary = Gray400,           // #9CA3AF
+    divider = Gray200,                // #E5E7EB
+    cardBackground = Gray100          // #F3F4F6
 )
 
-// 다크 테마 확장 색상
+// 다크 테마 확장 색상 (Green/Orange 기반 복원)
 private val DarkExtendedColors = MoneyTalkExtendedColors(
-    income = IncomeDark,               // #3AC977 초록색 — 다크 테마 수입
-    expense = ExpenseColor,            // #EF4444 빨간색 — 지출 (SVG 기준, 라이트/다크 공용)
-    calendarSunday = CalendarSunday,   // #EF4444 일요일 (빨간 계열, SVG 기준)
-    calendarSaturday = CalendarSaturday // #137FEC 토요일 (파란 계열, SVG 기준)
+    income = IncomeDark,               // #3AC977 초록색
+    expense = ExpenseColor,            // #EF4444 빨간색
+    calendarSunday = CalendarSunday,   // #EF4444
+    calendarSaturday = CalendarSaturday, // #137FEC
+    navyDark = Color(0xFFA5D6A7),     // 다크에서 Green 200 (강조, 가독성)
+    navyMedium = Color(0xFF81C784),   // 다크에서 Green 300 (카드 헤더)
+    navyTint = Color(0xFF2D3239),     // 다크에서 어두운 Tint (유지)
+    textPrimary = Color(0xFFECECEC),  // 다크 메인 텍스트
+    textSecondary = Grey400,          // #6B7684
+    textTertiary = Color(0xFF4A5568), // 다크 3차 텍스트
+    divider = Color(0xFF3A3F47),      // 다크 구분선
+    cardBackground = Color(0xFF2D3239) // 다크 보조 카드 배경
 )
 
 // ============================================================================
 // Material 3 Color Scheme
 // ============================================================================
 
-// 다크 테마 — 어두운 배경, 밝은 텍스트
+// 다크 테마 — 어두운 배경, 밝은 텍스트 (Green/Orange 기반 복원)
 private val DarkColorScheme = darkColorScheme(
-    primary = PrimaryLight,              // Green 500
+    primary = DarkPrimary,               // Green 500 (#4CAF50)
     onPrimary = OnPrimary,               // White
-    primaryContainer = PrimaryDark,      // Green 900
-    onPrimaryContainer = PrimaryContainer, // Green 100
+    primaryContainer = DarkPrimaryContainer, // Green 900 (#1B5E20)
+    onPrimaryContainer = DarkOnPrimaryContainer, // Green 100 (#C8E6C9)
 
     secondary = SecondaryLight,          // Blue 400
     onSecondary = OnSecondary,           // White
     secondaryContainer = SecondaryDark,  // Blue 900
     onSecondaryContainer = SecondaryContainer, // Blue 100
 
-    tertiary = TertiaryLight,            // Orange 300
+    tertiary = DarkTertiary,             // Orange 300 (#FFB74D)
     onTertiary = OnTertiary,             // White
-    tertiaryContainer = TertiaryDark,    // Orange 700
-    onTertiaryContainer = TertiaryContainer, // Orange 100
+    tertiaryContainer = DarkTertiaryContainer, // Orange 700 (#F57C00)
+    onTertiaryContainer = DarkOnTertiaryContainer, // Orange 100 (#FFE0B2)
 
     error = ErrorLight,                  // Red 400
     onError = OnError,                   // White
     errorContainer = ErrorDark,          // Red 900
     onErrorContainer = ErrorContainer,   // Red 100
 
-    background = BackgroundDark,         // #121212
+    background = BackgroundDark,         // #171A1E
     onBackground = OnBackgroundDark,     // Grey 300
 
-    surface = SurfaceDark,               // #1E1E1E
+    surface = SurfaceDark,               // #252A30
     onSurface = OnSurfaceDark,           // Grey 300
-    surfaceVariant = SurfaceVariantDark, // #2D2D2D
+    surfaceVariant = SurfaceVariantDark, // #2D3239
     onSurfaceVariant = Grey400,          // Grey 400
 
     outline = OutlineDark,               // Grey 800
@@ -112,36 +152,36 @@ private val DarkColorScheme = darkColorScheme(
 
 // 라이트 테마 — 밝은 배경, 어두운 텍스트
 private val LightColorScheme = lightColorScheme(
-    primary = Primary,                   // Green 800
+    primary = Primary,                   // Navy Dark (#1B2838)
     onPrimary = OnPrimary,               // White
-    primaryContainer = PrimaryContainer, // Green 100
-    onPrimaryContainer = OnPrimaryContainer, // Green 900
+    primaryContainer = PrimaryContainer, // Navy Tint (#E8EDF2)
+    onPrimaryContainer = OnPrimaryContainer, // Navy Dark
 
     secondary = Secondary,               // Blue 700
     onSecondary = OnSecondary,           // White
     secondaryContainer = SecondaryContainer, // Blue 100
     onSecondaryContainer = OnSecondaryContainer, // Blue 900
 
-    tertiary = Tertiary,                 // Orange 500
+    tertiary = Tertiary,                 // Navy Medium (#2C3E50)
     onTertiary = OnTertiary,             // White
-    tertiaryContainer = TertiaryContainer, // Orange 100
-    onTertiaryContainer = OnTertiaryContainer, // Orange 900
+    tertiaryContainer = TertiaryContainer, // Navy Tint (#E8EDF2)
+    onTertiaryContainer = OnTertiaryContainer, // Navy Dark
 
-    error = Error,                       // Red 700
+    error = Error,                       // Red (#EF4444)
     onError = OnError,                   // White
     errorContainer = ErrorContainer,     // Red 100
     onErrorContainer = OnErrorContainer, // Red 900
 
-    background = Background,             // Grey 50
-    onBackground = OnBackground,         // Grey 900
+    background = Background,             // gray50 (#F9FAFB)
+    onBackground = OnBackground,         // gray900 (#111827)
 
     surface = Surface,                   // White
-    onSurface = OnSurface,               // Grey 900
-    surfaceVariant = SurfaceVariant,     // Grey 100
-    onSurfaceVariant = OnSurfaceVariant, // Grey 600
+    onSurface = OnSurface,               // gray900
+    surfaceVariant = SurfaceVariant,     // gray100 (#F3F4F6)
+    onSurfaceVariant = OnSurfaceVariant, // gray600 (#6B7280)
 
-    outline = Outline,                   // Grey 400
-    outlineVariant = OutlineVariant      // Grey 300
+    outline = Outline,                   // gray200 (#E5E7EB)
+    outlineVariant = OutlineVariant      // gray100 (#F3F4F6)
 )
 
 // ============================================================================
@@ -175,7 +215,8 @@ fun MoneyTalkTheme(
     }
 
     CompositionLocalProvider(
-        LocalMoneyTalkColors provides extendedColors
+        LocalMoneyTalkColors provides extendedColors,
+        LocalMoneyTalkNumberTypography provides NumberTypography
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
