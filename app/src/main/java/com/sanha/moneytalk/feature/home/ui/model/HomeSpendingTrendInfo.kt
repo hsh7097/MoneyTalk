@@ -121,13 +121,17 @@ data class HomeSpendingTrendInfo(
             // 이번 달 현재 누적 금액
             val currentAmt = pageData.dailyCumulativeExpenses.lastOrNull() ?: 0L
 
-            // 전월 동일 기간 누적 금액
+            // 전월 비교 누적 금액
             val todayIdx = pageData.todayDayIndex
-            val lastMonthAmt = if (todayIdx >= 0 && pageData.lastMonthDailyCumulative.isNotEmpty()) {
+            val lastMonthAmt = if (pageData.lastMonthDailyCumulative.isEmpty()) {
+                0L
+            } else if (todayIdx >= 0) {
+                // 현재 월: 오늘 기준 동일 시점의 전월 누적
                 val clampedIdx = todayIdx.coerceAtMost(pageData.lastMonthDailyCumulative.size - 1)
                 pageData.lastMonthDailyCumulative[clampedIdx]
             } else {
-                0L
+                // 과거 월: 해당 월 완료 상태이므로 전월 최종 누적으로 비교
+                pageData.lastMonthDailyCumulative.last()
             }
 
             // 비교 문구 생성
