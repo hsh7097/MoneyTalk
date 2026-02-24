@@ -372,6 +372,10 @@ class HomeViewModel @Inject constructor(
                         _uiState.update {
                             it.copy(monthStartDay = monthStartDay)
                         }
+                        // 월 시작일 변경 시 기존 syncedMonths 무효화
+                        // (기존 "2025-12" 레코드는 이전 monthStartDay 기준이므로 stale)
+                        // 레거시 FULL_SYNC_UNLOCKED는 보존 (monthStartDay와 무관한 전역 플래그)
+                        settingsDataStore.resetSyncedMonths()
                     }
                     clearAllPageCache()
                     loadCurrentAndAdjacentPages()

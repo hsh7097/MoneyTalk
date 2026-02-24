@@ -252,6 +252,13 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
+    /** 월별 동기화 기록만 초기화 (레거시 전역 플래그는 유지) */
+    suspend fun resetSyncedMonths() {
+        context.dataStore.edit { preferences ->
+            preferences.remove(SYNCED_MONTHS)
+        }
+    }
+
     /** 광고 시청으로 해제된 월별 동기화 + 레거시 전역 플래그 초기화 */
     suspend fun clearSyncedMonths() {
         context.dataStore.edit { preferences ->
