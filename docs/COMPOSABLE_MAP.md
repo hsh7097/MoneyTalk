@@ -56,14 +56,10 @@ HomeScreen                           ← 홈 탭 메인 화면
 │   ├── DonutChartCompose            ← 도넛 차트 (3+ 카테고리, Canvas)
 │   └── CategoryIcon                 ← 카테고리 이모지 아이콘 (공통)
 ├── AiInsightCard                    ← Gemini AI 소비 분석 요약
-├── TodayAndComparisonSection        ← 오늘 지출 + 전월 대비 래퍼
-│   ├── TodayExpenseCard             ← 오늘 총 지출 금액/건수
-│   └── MonthComparisonCard          ← 전월 동일 기간 대비 차이
-├── TransactionCardCompose           ← 오늘 거래 카드 (공통)
+├── TransactionCardCompose           ← 오늘 거래 카드 (공통, 헤더에 오늘 지출 요약 포함)
 │   └── CategoryIcon                 ← 카테고리 이모지 아이콘 (공통)
 ├── ImportDataCtaSection             ← 데이터 가져오기 CTA (현재월, 권한 없거나 데이터 없음)
 ├── EmptyExpenseSection              ← 지출 없을 때 빈 상태
-├── FullSyncCtaSection              ← 전체 동기화 해제 CTA (공통)
 ├── ExpenseDetailDialog              ← 지출 상세/수정/삭제 다이얼로그 (공통)
 │   └── CategorySelectDialog         ← 카테고리 변경 다이얼로그 (공통)
 └── [AlertDialog]                    ← 분류 확인/진행률/SMS 동기화 다이얼로그
@@ -78,12 +74,8 @@ HomeScreen                           ← 홈 탭 메인 화면
 | CumulativeChartCompose | 누적 곡선 차트 (도메인 독립, Canvas) | [CumulativeChartComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/chart/CumulativeChartCompose.kt) |
 | CategoryExpenseSection | 카테고리별 지출 비율 그래프 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 | AiInsightCard | Gemini AI 소비 분석 요약 카드 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
-| TodayAndComparisonSection | 오늘 지출 + 전월 대비 래퍼 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
-| TodayExpenseCard | 오늘 총 지출 금액/건수 카드 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
-| MonthComparisonCard | 전월 동일 기간 대비 차이 카드 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 | ImportDataCtaSection | 데이터 가져오기 CTA (현재월, SMS 권한/데이터 없음) | [ImportDataCtaSectionKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/component/ImportDataCtaSection.kt) |
 | EmptyExpenseSection | 지출 없을 때 빈 상태 표시 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
-| FullSyncCtaSection | 전체 동기화 해제 CTA (3개월 이전 빈 페이지) | [FullSyncCtaSectionKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/FullSyncCtaSection.kt) |
 
 ---
 

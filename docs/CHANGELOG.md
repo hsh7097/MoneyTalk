@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### Changed (2026-02-24)
+- **홈 UI 간소화**: TodayAndComparisonSection(오늘지출+전월비교 카드) 제거 → 오늘 지출을 "오늘 내역" 헤더에 인라인 표시
+- **FullSyncCtaSection 홈 제거**: 빈 데이터/부분 데이터 CTA를 홈에서 제거 (HistoryScreen에서 유지)
+- **비교문구 형식 변경**: "지난달 대비 12% 더 쓰고 있어요" → "지난달 대비 ₩50,000(12%) 더 쓰고 있어요"
+
+### Fixed (2026-02-24)
+- **Vico 차트 가로 스크롤 제거**: AxisValueOverrider.fixed(maxX) + Zoom.Content으로 한 화면에 전체 표시
+- **X축 라벨 미표시 수정**: ItemPlacer spacing=5, addExtremeLabelPadding=true 적용
+- **차트 동기화 후 미갱신**: LaunchedEffect keys에 daysInMonth, todayDayIndex 추가
+- **Y축 토글 시 변동**: yAxisMax를 전체 toggleableLines 기준으로 고정 계산
+- **1월 CTA 잘못 표시**: isMonthSynced → isPagePartiallyCovered 전환
+
 ### Added (2026-02-24)
 - **디자인 시스템 정립**: Color 4색 팔레트(Navy/Gray/Red/Blue-Green) + Typography 9단계 스케일 + Dimens 여백 체계 신규 파일
 - **홈 화면 Hero 카드 리디자인**: MonthlyOverviewSection 큰 숫자 강조(30sp Bold) + 전월 비교 뱃지(increase/decrease 색상 분기)

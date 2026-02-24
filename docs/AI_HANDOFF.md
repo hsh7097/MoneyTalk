@@ -227,6 +227,17 @@
 - 다크 테마 Green/Orange 기반으로 복원
 - DESIGN_PLAN.md 리디자인 계획서 작성
 
+**Vico 차트 수정 + 홈 UI 간소화**: ✅ 완료 (2026-02-24)
+- Vico 차트 가로 스크롤 제거 (Zoom.Content + AxisValueOverrider.fixed maxX)
+- X축 라벨 표시 수정 (ItemPlacer spacing=5, addExtremeLabelPadding=true)
+- 동기화 후 차트 업데이트 안되는 이슈 수정 (LaunchedEffect keys에 daysInMonth, todayDayIndex 추가)
+- Y축 토글 무관 고정 (yAxisMax를 전체 toggleableLines 기준으로 CumulativeTrendSection에서 계산)
+- 1월 CTA 잘못 표시 수정 (isMonthSynced → isPagePartiallyCovered 전환)
+- TodayAndComparisonSection 제거 → 오늘 지출 정보를 "오늘 내역" 헤더에 통합
+- FullSyncCtaSection 홈에서 제거 (HistoryScreen에서는 유지)
+- buildComparisonText 형식 변경: "N% 더 쓰고 있어요" → "₩금액(N%) 더 쓰고 있어요"
+- Auto Backup 복원 규칙 수정 (backup_rules.xml, data_extraction_rules.xml)
+
 ### 대기 중인 작업
 
 - `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지 (이미 머지됨 — 정리 필요)
@@ -291,6 +302,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-24 | Vico 차트 수정(스크롤/X축/Y축/동기화) + 홈 UI 간소화(TodayAndComparisonSection·FullSyncCtaSection 제거, 비교문구 가격+% 형식) | 완료 |
 | 2026-02-24 | 홈 화면 Phase1 리디자인 — 디자인 시스템(Color/Type/Dimens) + Hero 카드 + Vico 차트 + 다크 테마 복원 | 완료 |
 | 2026-02-22 | 예산 관리 확장 — 홈 카테고리 예산 UI + AI 채팅 예산 조회(BUDGET_STATUS)/설정(SET_BUDGET) | 완료 |
 | 2026-02-22 | 데이터 삭제 시 광고 시청 기록 초기화 (clearSyncedMonths) + resume 시 silent 증분 동기화 (권한 체크 + 애널리틱스 스킵) | 완료 |
