@@ -111,5 +111,6 @@ val DarkOnTertiaryContainer = Color(0xFFFFE0B2) // Orange 100 — Dark 테마 on
 
 // ==================== Dark 테마 전용 Grey ====================
 // Theme.kt에서 DarkColorScheme 매핑에 사용
-val Grey400 = Color(0xFF6B7684)               // Dark 테마 onSurfaceVariant
-val Grey700 = Color(0xFF3A3F47)               // Dark 테마 outlineVariant
+// Gray400(0xFF9CA3AF)과 혼동 방지를 위해 DarkGrey 접두사 사용
+val DarkGrey400 = Color(0xFF6B7684)           // Dark 테마 onSurfaceVariant
+val DarkGrey700 = Color(0xFF3A3F47)           // Dark 테마 outlineVariant

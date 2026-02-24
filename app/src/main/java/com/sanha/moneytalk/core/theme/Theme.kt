@@ -106,7 +106,7 @@ private val DarkExtendedColors = MoneyTalkExtendedColors(
     navyMedium = Color(0xFF81C784),   // 다크에서 Green 300 (카드 헤더)
     navyTint = Color(0xFF2D3239),     // 다크에서 어두운 Tint (유지)
     textPrimary = Color(0xFFECECEC),  // 다크 메인 텍스트
-    textSecondary = Grey400,          // #6B7684
+    textSecondary = DarkGrey400,          // #6B7684
     textTertiary = Color(0xFF4A5568), // 다크 3차 텍스트
     divider = Color(0xFF3A3F47),      // 다크 구분선
     cardBackground = Color(0xFF2D3239) // 다크 보조 카드 배경
@@ -144,10 +144,10 @@ private val DarkColorScheme = darkColorScheme(
     surface = SurfaceDark,               // #252A30
     onSurface = OnSurfaceDark,           // Grey 300
     surfaceVariant = SurfaceVariantDark, // #2D3239
-    onSurfaceVariant = Grey400,          // Grey 400
+    onSurfaceVariant = DarkGrey400,          // Grey 400
 
     outline = OutlineDark,               // Grey 800
-    outlineVariant = Grey700             // Grey 700
+    outlineVariant = DarkGrey700             // Grey 700
 )
 
 // 라이트 테마 — 밝은 배경, 어두운 텍스트

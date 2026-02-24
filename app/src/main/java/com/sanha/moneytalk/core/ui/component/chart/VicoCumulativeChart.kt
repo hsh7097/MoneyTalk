@@ -82,6 +82,9 @@ fun VicoCumulativeChart(
     )
 
     // 비교 곡선 스타일들
+    // TODO: comparisonLines 크기가 토글로 변할 때 rememberLine 호출 수가 달라짐.
+    //  현재는 Vico가 modelProducer 업데이트로 전체 재렌더링하므로 실질적 문제 없으나,
+    //  향후 안정성을 위해 고정 개수 생성 + alpha 제어 방식으로 전환 검토.
     val comparisonVicoLines = comparisonLines.map { line ->
         rememberLine(
             fill = remember(line.color) {

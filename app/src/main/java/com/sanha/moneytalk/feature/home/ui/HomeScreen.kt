@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.feature.home.ui
 
-import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -60,7 +59,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -76,7 +77,6 @@ import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.feature.history.ui.IncomeDetailDialog
-// DonutChartCompose → 수평 바 차트로 대체됨 (DESIGN_PLAN Phase 3)
 import com.sanha.moneytalk.feature.home.ui.component.ImportDataCtaSection
 import com.sanha.moneytalk.feature.home.ui.component.SpendingTrendSection
 import com.sanha.moneytalk.feature.home.ui.model.HomeSpendingTrendInfo
@@ -277,7 +277,6 @@ fun HomeScreen(
 
     // 지출 상세 다이얼로그 (공통 컴포넌트 사용)
     selectedExpense?.let { expense ->
-        Log.e("MT_DEBUG", "HomeScreen[selectedExpense] : ${expense.storeName}, ${expense.amount}원")
         ExpenseDetailDialog(
             expense = expense,
             onDismiss = { selectedExpense = null },
@@ -819,7 +818,7 @@ fun MonthlyOverviewSection(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
                 .background(
-                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                    brush = Brush.verticalGradient(
                         colors = listOf(
                             MaterialTheme.colorScheme.primary,
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
@@ -959,9 +958,9 @@ fun CategoryExpenseSection(
                     item.total.toFloat() / totalExpense
                 } else 0f
 
-                // 1위만 primary, 나머지 gray — 예산 초과 시 빨간색
+                // 1위만 primary, 나머지 gray — 예산 초과 시 error 색상
                 val barColor = when {
-                    isOverBudget -> Color(0xFFE53935)
+                    isOverBudget -> MaterialTheme.colorScheme.error
                     isFirst && !hasBudget -> MaterialTheme.colorScheme.primary
                     else -> getCategoryChartColor(category)
                 }
@@ -1006,7 +1005,7 @@ fun CategoryExpenseSection(
                                     text = "₩${numberFormat.format(item.total)} / ₩${numberFormat.format(budgetAmount)}",
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isOverBudget) Color(0xFFE53935) else MaterialTheme.colorScheme.onSurface
+                                    color = if (isOverBudget) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     text = if (isOverBudget) {
@@ -1015,7 +1014,7 @@ fun CategoryExpenseSection(
                                         "₩${numberFormat.format(budgetAmount - item.total)} 남음"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (isOverBudget) Color(0xFFE53935).copy(alpha = 0.7f)
+                                    color = if (isOverBudget) MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
                                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                                 )
                             }
@@ -1109,7 +1108,7 @@ fun TodayExpenseCard(
         ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = androidx.compose.foundation.BorderStroke(
+        border = BorderStroke(
             1.dp, MaterialTheme.colorScheme.outline
         )
     ) {
@@ -1173,7 +1172,7 @@ fun MonthComparisonCard(
         ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = androidx.compose.foundation.BorderStroke(
+        border = BorderStroke(
             1.dp, MaterialTheme.colorScheme.outline
         )
     ) {
