@@ -212,6 +212,8 @@ class HomeViewModel @Inject constructor(
     private val isResumeClassificationChecking = AtomicBoolean(false)
     /** syncSmsV2 재진입 방지 플래그 (동시 호출 시 중복 수입 방지) */
     private val isSyncRunning = AtomicBoolean(false)
+    /** 최초 진입(onCreate) 여부 — 첫 refreshData 호출 시 다이얼로그 표시용 */
+    private var isFirstLaunch = true
 
     init {
         loadSettings()
@@ -743,18 +745,23 @@ class HomeViewModel @Inject constructor(
 
     /** 화면이 다시 표시될 때 데이터 새로고침 (LaunchedEffect에서 호출) */
     fun refreshData() {
-        // resume 시 silent 증분 동기화 (새 SMS가 있으면 자동 추가)
+        // onCreate(첫 진입): 다이얼로그 표시 (silent=false)
+        // onResume(복귀): 백그라운드 동기화 (silent=true)
         val hasSmsPermission = ContextCompat.checkSelfPermission(
             appContext, Manifest.permission.READ_SMS
         ) == PackageManager.PERMISSION_GRANTED
         if (hasSmsPermission && !_uiState.value.isSyncing) {
+            val silent = !isFirstLaunch
+            isFirstLaunch = false
             viewModelScope.launch {
                 val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
                 syncSmsV2(
                     appContext.contentResolver, range,
-                    updateLastSyncTime = true, silent = true
+                    updateLastSyncTime = true, silent = silent
                 )
             }
+        } else {
+            isFirstLaunch = false
         }
         // 캐시를 지우지 않고 재로드 → 기존 데이터 유지하면서 갱신 (깜빡임 방지)
         loadCurrentAndAdjacentPages()
