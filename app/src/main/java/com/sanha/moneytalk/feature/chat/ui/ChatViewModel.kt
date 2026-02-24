@@ -1020,10 +1020,14 @@ class ChatViewModel @Inject constructor(
         val sb = StringBuilder()
         var hasBudgets = false
 
-        for (yearMonth in yearMonths) {
-            val budgets = budgetDao.getBudgetsByMonthOnce(yearMonth)
-            if (budgets.isEmpty()) continue
+        // 예산은 "default"로 모든 월 공통 적용
+        val budgets = budgetDao.getBudgetsByMonthOnce("default")
+        if (budgets.isNotEmpty()) {
             hasBudgets = true
+        }
+
+        for (yearMonth in yearMonths) {
+            if (!hasBudgets) break
 
             // 해당 월의 지출 조회 범위: 요청 범위와 월 범위의 교집합
             val ym = yearMonth.split("-")
@@ -1847,17 +1851,11 @@ class ChatViewModel @Inject constructor(
                         message = "카테고리 또는 금액이 지정되지 않았습니다."
                     )
                 } else {
-                    val cal = Calendar.getInstance()
-                    val yearMonth = String.format(
-                        "%04d-%02d",
-                        cal.get(Calendar.YEAR),
-                        cal.get(Calendar.MONTH) + 1
-                    )
                     budgetDao.insert(
                         BudgetEntity(
                             category = targetCategory,
                             monthlyLimit = amount,
-                            yearMonth = yearMonth
+                            yearMonth = "default"
                         )
                     )
                     dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)

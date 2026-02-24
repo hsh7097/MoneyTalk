@@ -303,6 +303,8 @@ class HomeViewModel @Inject constructor(
                         // 진행 중인 백그라운드 분류 작업 즉시 취소
                         classificationState.cancelIfRunning()
                         clearAllPageCache()
+                        // 데이터 초기화 후 홈 복귀 시 다이얼로그 표시되도록 첫 진입 상태로 리셋
+                        isFirstLaunch = true
                         loadSettings()
                     }
 
@@ -403,12 +405,10 @@ class HomeViewModel @Inject constructor(
      * 해당 월의 수입, 지출, 카테고리별 합계, 오늘 내역을 조회하여 pageCache에 저장.
      * @param year 대상 연도
      * @param month 대상 월
-     * @param withInsight true면 AI 인사이트도 생성 (현재 월에서만 사용)
      */
     private fun loadPageData(
         year: Int,
         month: Int,
-        withInsight: Boolean = false,
         forceReload: Boolean = false
     ) {
         val key = MonthKey(year, month)
@@ -555,10 +555,10 @@ class HomeViewModel @Inject constructor(
                     )
                 }
 
-                // 예산 로드 (전체 + 카테고리별 예산을 일괄 조회)
-                val yearMonth = String.format("%04d-%02d", year, month)
+                // 예산 로드 (전체 + 카테고리별 예산을 일괄 조회, "default"로 모든 월 공통)
                 val allBudgets = withContext(Dispatchers.IO) {
-                    budgetDao.getBudgetsByMonthOnce(yearMonth)
+                    budgetDao.migrateToDefault()
+                    budgetDao.getBudgetsByMonthOnce("default")
                 }
                 val monthlyBudgetValue = allBudgets.find { it.category == "전체" }?.monthlyLimit
                 val categoryBudgetsMap = allBudgets
@@ -589,9 +589,6 @@ class HomeViewModel @Inject constructor(
 
                 // 지출 내역은 Flow로 실시간 감지 (Room DB 변경 시 자동 업데이트)
                 var insightLoaded = false
-                // 현재 선택 월인 경우에만 AI 인사이트 생성
-                val shouldLoadInsight = withInsight ||
-                    (_uiState.value.selectedYear == year && _uiState.value.selectedMonth == month)
 
                 expenseRepository.getExpensesByDateRange(monthStart, monthEnd)
                     .catch { _ ->
@@ -632,8 +629,8 @@ class HomeViewModel @Inject constructor(
                             dailyCumulativeExpenses = dailyCumulative
                         ))
 
-                        // AI 인사이트 생성 (현재 선택 월의 첫 emit에서만)
-                        if (shouldLoadInsight && !insightLoaded) {
+                        // AI 인사이트 생성 (데이터가 있는 모든 월에서 첫 emit 시)
+                        if (!insightLoaded && totalExpense > 0) {
                             insightLoaded = true
                             val top3 = categories.take(3)
                             val lastMonthByCategory = filteredLastMonthExpenses
@@ -690,14 +687,9 @@ class HomeViewModel @Inject constructor(
                     lastMonthTopCategories = lastMonthTopCategories
                 )
                 if (insight != null) {
-                    // 응답 도착 시 해당 월이 아직 선택 중인지 확인
-                    val currentState = _uiState.value
-                    if (currentState.selectedYear == monthKey.year &&
-                        currentState.selectedMonth == monthKey.month
-                    ) {
-                        val current = currentState.pageCache[monthKey] ?: return@launch
-                        updatePageCache(monthKey, current.copy(aiInsight = insight))
-                    }
+                    // 해당 월의 캐시가 아직 존재하면 인사이트 저장
+                    val current = _uiState.value.pageCache[monthKey] ?: return@launch
+                    updatePageCache(monthKey, current.copy(aiInsight = insight))
                 }
             } catch (e: Exception) {
                 android.util.Log.w("HomeViewModel", "AI 인사이트 생성 실패 (무시): ${e.message}")

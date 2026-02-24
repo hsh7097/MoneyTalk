@@ -108,6 +108,7 @@ data class HistoryPageData(
     val incomes: List<IncomeEntity> = emptyList(),
     val monthlyTotal: Int = 0,
     val dailyTotals: Map<String, Int> = emptyMap(),
+    val dailyIncomeTotals: Map<String, Int> = emptyMap(),
     val monthlyIncomeTotal: Int = 0,
     val transactionListItems: List<TransactionListItem> = emptyList()
 )
@@ -387,11 +388,18 @@ class HistoryViewModel @Inject constructor(
             val sortedIncomes = filteredIncomes.sortedByDescending { inc -> inc.dateTime }
             val incomeTotal = filteredIncomes.sumOf { it.amount }
 
+            // 날짜별 수입 합계 (달력 셀 표시용)
+            val incomeDateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
+            val dailyIncomeMap = filteredIncomes
+                .groupBy { incomeDateFormat.format(java.util.Date(it.dateTime)) }
+                .mapValues { (_, incomes) -> incomes.sumOf { it.amount } }
+
             // 수입 데이터를 먼저 캐시에 반영
             val currentData = _uiState.value.pageCache[key] ?: HistoryPageData()
             updatePageCache(key, currentData.copy(
                 incomes = sortedIncomes,
-                monthlyIncomeTotal = incomeTotal
+                monthlyIncomeTotal = incomeTotal,
+                dailyIncomeTotals = dailyIncomeMap
             ))
 
             val expenseFlow = if (categoriesForFilter != null) {

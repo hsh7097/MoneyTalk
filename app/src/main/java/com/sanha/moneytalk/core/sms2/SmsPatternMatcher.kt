@@ -400,7 +400,8 @@ class SmsPatternMatcher @Inject constructor(
                 amountRegex = pattern.amountRegex,
                 storeRegex = pattern.storeRegex,
                 cardRegex = pattern.cardRegex,
-                fallbackCategory = pattern.parsedCategory
+                fallbackCategory = pattern.parsedCategory,
+                fallbackCardName = pattern.parsedCardName.ifBlank { "기타" }
             )
             if (result != null) return result
         }
@@ -432,7 +433,8 @@ class SmsPatternMatcher @Inject constructor(
         amountRegex: String,
         storeRegex: String,
         cardRegex: String = "",
-        fallbackCategory: String = ""
+        fallbackCategory: String = "",
+        fallbackCardName: String = "기타"
     ): SmsAnalysisResult? {
         val amountPattern = compileRegex(amountRegex) ?: return null
         val storePattern = compileRegex(storeRegex) ?: return null
@@ -449,10 +451,11 @@ class SmsPatternMatcher @Inject constructor(
             ?: return null
 
         // --- 카드명 추출 ---
+        // cardRegex 실패 시 패턴/LLM에서 추출된 카드명을 fallback으로 사용
         val parsedCard = extractGroup1(cardPattern, smsBody)
             ?.trim()
             ?.takeIf(::isValidCardCandidate)
-            ?: "기타"
+            ?: fallbackCardName
 
         // --- 카테고리 ---
         // 미분류로 설정 → saveExpenses()에서 4-tier 분류로 위임

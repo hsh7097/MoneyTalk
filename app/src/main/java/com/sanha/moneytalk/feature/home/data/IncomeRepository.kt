@@ -36,6 +36,14 @@ class IncomeRepository @Inject constructor(
     suspend fun getTotalIncomeByDateRange(startTime: Long, endTime: Long): Int =
         incomeDao.getTotalIncomeByDateRange(startTime, endTime) ?: 0
 
+    /** 날짜별 수입 합계 (달력 셀 표시용) */
+    suspend fun getDailyTotals(startTime: Long, endTime: Long): Map<String, Int> =
+        incomeDao.getDailyTotals(startTime, endTime).associate { it.date to it.total }
+
+    /** 월별 수입 합계 (6개월 바 차트용) */
+    suspend fun getMonthlyTotals(): Map<String, Int> =
+        incomeDao.getMonthlyTotals().associate { it.month to it.total }
+
     /** 기간별 수입 일회성 조회 (채팅 쿼리용) */
     suspend fun getIncomesByDateRangeOnce(startTime: Long, endTime: Long): List<IncomeEntity> =
         incomeDao.getIncomesByDateRangeOnce(startTime, endTime)

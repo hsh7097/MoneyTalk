@@ -216,7 +216,8 @@ private fun CategoryDetailPageContent(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // 월 네비게이션 헤더
         item(key = "month_header") {

@@ -48,4 +48,8 @@ interface BudgetDao {
 
     @Query("DELETE FROM budgets")
     suspend fun deleteAll()
+
+    /** 기존 월별 yearMonth 값을 "default"로 일괄 마이그레이션 (1회성) */
+    @Query("UPDATE budgets SET yearMonth = 'default' WHERE yearMonth != 'default'")
+    suspend fun migrateToDefault()
 }

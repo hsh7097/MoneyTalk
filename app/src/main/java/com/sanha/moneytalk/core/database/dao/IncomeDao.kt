@@ -60,6 +60,14 @@ interface IncomeDao {
     @Query("SELECT SUM(amount) FROM incomes WHERE dateTime BETWEEN :startTime AND :endTime")
     suspend fun getTotalIncomeByDateRange(startTime: Long, endTime: Long): Int?
 
+    /** 날짜별 수입 합계 (달력 셀 표시용) - ExpenseDao.getDailyTotals()와 동일 패턴 */
+    @Query("SELECT date(dateTime/1000, 'unixepoch', 'localtime') as date, SUM(amount) as total FROM incomes WHERE dateTime BETWEEN :startTime AND :endTime GROUP BY date ORDER BY date DESC")
+    suspend fun getDailyTotals(startTime: Long, endTime: Long): List<DailySum>
+
+    /** 월별 수입 합계 (6개월 바 차트용) */
+    @Query("SELECT strftime('%Y-%m', dateTime/1000, 'unixepoch', 'localtime') as month, SUM(amount) as total FROM incomes GROUP BY month ORDER BY month DESC")
+    suspend fun getMonthlyTotals(): List<MonthlySum>
+
     @Query("SELECT * FROM incomes WHERE dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
     fun getIncomesByDateRange(startTime: Long, endTime: Long): Flow<List<IncomeEntity>>
 

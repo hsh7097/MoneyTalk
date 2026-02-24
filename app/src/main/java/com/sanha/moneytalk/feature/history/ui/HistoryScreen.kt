@@ -291,6 +291,7 @@ fun HistoryScreen(
                         month = pageMonth,
                         monthStartDay = uiState.monthStartDay,
                         dailyTotals = pageData.dailyTotals,
+                        dailyIncomeTotals = pageData.dailyIncomeTotals,
                         expenses = pageData.expenses,
                         onDelete = { viewModel.deleteExpense(it) },
                         onCategoryChange = { expense, newCategory ->

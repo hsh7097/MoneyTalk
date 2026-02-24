@@ -60,6 +60,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | [docs/QUICK_START.md](docs/QUICK_START.md) | 빠른 시작 가이드 | 환경 설정 시 |
 | [docs/APP_MAP.md](docs/APP_MAP.md) | 앱 진입점/네비게이션 맵 | 라우팅 파악 시 |
 | [docs/MONETIZATION.md](docs/MONETIZATION.md) | 과금 전략, 요금제, 광고, API 비용 구조 | 과금/수익화 관련 작업 시 |
+| [docs/SCREEN_REQUIREMENTS.md](docs/SCREEN_REQUIREMENTS.md) | 화면별 요구사항 명세 (기능+구현 상세) | **모든 UI 작업 전 필수** |
 
 ---
 

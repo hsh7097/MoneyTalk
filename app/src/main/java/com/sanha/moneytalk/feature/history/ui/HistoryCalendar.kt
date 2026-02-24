@@ -72,7 +72,8 @@ fun BillingCycleCalendarView(
     year: Int,
     month: Int,
     monthStartDay: Int,
-    dailyTotals: Map<String, Int>, // "yyyy-MM-dd" -> amount
+    dailyTotals: Map<String, Int>, // "yyyy-MM-dd" -> expense amount
+    dailyIncomeTotals: Map<String, Int> = emptyMap(), // "yyyy-MM-dd" -> income amount
     expenses: List<ExpenseEntity> = emptyList(),
     onDelete: (ExpenseEntity) -> Unit = {},
     onCategoryChange: (ExpenseEntity, String) -> Unit = { _, _ -> },
@@ -99,11 +100,20 @@ fun BillingCycleCalendarView(
         calendarDays.chunked(7)
     }
 
-    // 주별 합계 계산
+    // 주별 지출 합계 계산
     val weeklyTotals = remember(weeks, dailyTotals) {
         weeks.map { week ->
             week.filter { it.isCurrentPeriod }.sumOf { day ->
                 dailyTotals[day.dateString] ?: 0
+            }
+        }
+    }
+
+    // 주별 수입 합계 계산
+    val weeklyIncomeTotals = remember(weeks, dailyIncomeTotals) {
+        weeks.map { week ->
+            week.filter { it.isCurrentPeriod }.sumOf { day ->
+                dailyIncomeTotals[day.dateString] ?: 0
             }
         }
     }
@@ -201,6 +211,7 @@ fun BillingCycleCalendarView(
         LazyColumn {
             weeks.forEachIndexed { weekIndex, week ->
                 val weekTotal = weeklyTotals.getOrNull(weekIndex) ?: 0
+                val weekIncomeTotal = weeklyIncomeTotals.getOrNull(weekIndex) ?: 0
 
                 item {
                     Column {
@@ -213,17 +224,32 @@ fun BillingCycleCalendarView(
                             )
                         }
 
-                        // 주간 합계 (오른쪽 정렬)
-                        if (weekTotal > 0) {
-                            Text(
-                                text = "-${numberFormat.format(weekTotal)}",
+                        // 주간 합계 (오른쪽 정렬, 수입+지출)
+                        if (weekTotal > 0 || weekIncomeTotal > 0) {
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(end = 4.dp, top = 4.dp, bottom = 2.dp),
-                                textAlign = TextAlign.End,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                if (weekIncomeTotal > 0) {
+                                    Text(
+                                        text = "+${numberFormat.format(weekIncomeTotal)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.moneyTalkColors.income
+                                    )
+                                    if (weekTotal > 0) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+                                }
+                                if (weekTotal > 0) {
+                                    Text(
+                                        text = "-${numberFormat.format(weekTotal)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
                         } else {
                             Spacer(modifier = Modifier.height(18.dp))
                         }
@@ -235,6 +261,7 @@ fun BillingCycleCalendarView(
                                 CalendarDayCell(
                                     calendarDay = calendarDay,
                                     dayTotal = dailyTotals[calendarDay.dateString] ?: 0,
+                                    dayIncome = dailyIncomeTotals[calendarDay.dateString] ?: 0,
                                     isSelected = selectedDateString == calendarDay.dateString,
                                     onClick = {
                                         if (calendarDay.isCurrentPeriod && !calendarDay.isFuture) {
@@ -285,7 +312,7 @@ fun BillingCycleCalendarView(
                     TransactionCardCompose(
                         info = ExpenseTransactionCardInfo(expense),
                         onClick = { selectedExpense = expense },
-                        modifier = Modifier.padding(horizontal = 8.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
             } else if (selectedDateString != null && selectedDayExpenses.isEmpty()) {
@@ -340,12 +367,13 @@ fun BillingCycleCalendarView(
 
 /**
  * 달력 날짜 셀
- * 날짜 숫자 + 일별 지출 금액 표시
+ * 날짜 숫자 + 일별 수입(초록)/지출(빨강) 금액 표시
  */
 @Composable
 fun CalendarDayCell(
     calendarDay: CalendarDay,
     dayTotal: Int,
+    dayIncome: Int = 0,
     isSelected: Boolean = false,
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -399,7 +427,18 @@ fun CalendarDayCell(
                 )
             }
 
-            // 일별 지출 (미래 날짜는 표시 안함)
+            // 일별 수입 (있을 때만 표시, 미래 날짜는 표시 안함)
+            if (dayIncome > 0 && !calendarDay.isFuture && calendarDay.isCurrentPeriod) {
+                Text(
+                    text = "+${numberFormat.format(dayIncome)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 9.sp,
+                    color = MaterialTheme.moneyTalkColors.income,
+                    maxLines = 1
+                )
+            }
+
+            // 일별 지출 (있을 때만 표시, 미래 날짜는 표시 안함)
             if (dayTotal > 0 && !calendarDay.isFuture && calendarDay.isCurrentPeriod) {
                 Text(
                     text = "-${numberFormat.format(dayTotal)}",

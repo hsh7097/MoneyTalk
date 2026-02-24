@@ -952,6 +952,8 @@ fun CategoryExpenseSection(
                 val budgetAmount = budget ?: 0
                 val hasBudget = budget != null && budgetAmount > 0
                 val isOverBudget = hasBudget && item.total > budgetAmount
+                val budgetRatio = if (hasBudget) item.total.toFloat() / budgetAmount else 0f
+                val isWarningBudget = hasBudget && budgetRatio in 0.9f..1f
                 val isSelected = selectedCategory == item.category
                 val isFirst = index == 0
 
@@ -967,9 +969,11 @@ fun CategoryExpenseSection(
                     item.total.toFloat() / totalExpense
                 } else 0f
 
-                // 1위만 primary, 나머지 gray — 예산 초과 시 error 색상
+                // 예산 상태별 색상: 초과(빨강), 경고(주황), 기본
+                val warningColor = MaterialTheme.moneyTalkColors.calendarSunday
                 val barColor = when {
                     isOverBudget -> MaterialTheme.colorScheme.error
+                    isWarningBudget -> warningColor
                     isFirst && !hasBudget -> MaterialTheme.colorScheme.primary
                     else -> getCategoryChartColor(category)
                 }
@@ -1019,12 +1023,17 @@ fun CategoryExpenseSection(
                                 Text(
                                     text = if (isOverBudget) {
                                         "₩${numberFormat.format(item.total - budgetAmount)} 초과"
+                                    } else if (isWarningBudget) {
+                                        "₩${numberFormat.format(budgetAmount - item.total)} 남음 ⚠️"
                                     } else {
                                         "₩${numberFormat.format(budgetAmount - item.total)} 남음"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (isOverBudget) MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
-                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    color = when {
+                                        isOverBudget -> MaterialTheme.colorScheme.error
+                                        isWarningBudget -> warningColor
+                                        else -> MaterialTheme.moneyTalkColors.income
+                                    }
                                 )
                             }
                         } else {
