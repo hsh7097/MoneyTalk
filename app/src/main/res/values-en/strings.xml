@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">MoneyTalk</string>
+    <string name="app_name">척척 가계부</string>
 
     <!-- Common -->
     <string name="common_close">Close</string>
@@ -24,7 +24,7 @@
     <string name="error_general">An error occurred: %s</string>
 
     <!-- Splash Screen -->
-    <string name="splash_logo_description">MoneyTalk Logo</string>
+    <string name="splash_logo_description">척척 가계부 Logo</string>
     <string name="splash_tagline">Smart Money Manager</string>
 
     <!-- Chat Screen -->
@@ -59,7 +59,7 @@
 
     <!-- Guide Questions -->
     <string name="guide_welcome">Hello!</string>
-    <string name="guide_intro">I\'m MoneyTalk, your AI financial advisor.\nTap a question below to get started!</string>
+    <string name="guide_intro">I\'m your AI financial advisor.\nTap a question below to get started!</string>
     <string name="guide_api_key_required">* Please set up API key first</string>
 
     <!-- Guide Question Categories -->
@@ -193,7 +193,7 @@
 
     <!-- Privacy Policy Dialog -->
     <string name="privacy_title">Privacy Policy</string>
-    <string name="privacy_intro">MoneyTalk values and protects your privacy.</string>
+    <string name="privacy_intro">척척 가계부 values and protects your privacy.</string>
     <string name="privacy_section_collect">1. Information Collected</string>
     <string name="privacy_collect_detail">\u0020\u0020• SMS messages (for payment parsing)\n\u0020\u0020• Monthly income and budget settings\n\u0020\u0020• Google account email (when using Drive backup)</string>
     <string name="privacy_section_usage">2. Purpose of Use</string>
