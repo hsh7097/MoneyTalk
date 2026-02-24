@@ -72,6 +72,7 @@ import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
+import com.sanha.moneytalk.core.ui.component.FullSyncCtaSection
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.feature.history.ui.IncomeDetailDialog
 import com.sanha.moneytalk.feature.home.ui.component.ImportDataCtaSection
@@ -208,6 +209,8 @@ fun HomeScreen(
             year = pageYear,
             month = pageMonth,
             monthStartDay = uiState.monthStartDay,
+            isMonthSynced = viewModel.isMonthSynced(pageYear, pageMonth),
+            isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
             hasSmsPermission = hasSmsPermission,
             selectedCategory = uiState.selectedCategory,
             onPreviousMonth = {
@@ -226,6 +229,18 @@ fun HomeScreen(
             onIncrementalSync = {
                 onRequestSmsPermission {
                     viewModel.syncIncremental(contentResolver)
+                }
+            },
+            onFullSync = {
+                val (effY, effM) = DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+                val isPageCurrentMonth = pageYear == effY && pageMonth == effM
+                if (viewModel.isMonthSynced(pageYear, pageMonth) || isPageCurrentMonth) {
+                    onRequestSmsPermission {
+                        viewModel.syncMonthData(contentResolver, pageYear, pageMonth)
+                    }
+                } else {
+                    viewModel.preloadFullSyncAd()
+                    viewModel.showFullSyncAdDialog()
                 }
             },
             onCategorySelected = { category ->
@@ -491,11 +506,14 @@ fun HomePageContent(
     year: Int,
     month: Int,
     monthStartDay: Int,
+    isMonthSynced: Boolean,
+    isPartiallyCovered: Boolean,
     hasSmsPermission: Boolean,
     selectedCategory: String?,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onIncrementalSync: () -> Unit,
+    onFullSync: () -> Unit,
     onCategorySelected: (String?) -> Unit,
     onExpenseSelected: (ExpenseEntity) -> Unit,
     onIncomeSelected: (IncomeEntity) -> Unit,
@@ -566,9 +584,18 @@ fun HomePageContent(
                 }
             }
 
-            // 과거 월 + 데이터 없음 → 빈 상태
-            if (hasNoData && !isCurrentMonth) {
-                item { EmptyExpenseSection() }
+            // 과거 월 전체 동기화 CTA (광고 시청 → 데이터 가져오기)
+            val ctaMonthLabel = if (isCurrentMonth) "이번달" else "${month}월"
+            val showEmptyCta = hasNoData && !isCurrentMonth && !isMonthSynced
+            val showPartialCta = !hasNoData && !isCurrentMonth && isPartiallyCovered && !isMonthSynced
+
+            if (showEmptyCta) {
+                item {
+                    FullSyncCtaSection(
+                        onRequestFullSync = onFullSync,
+                        monthLabel = ctaMonthLabel
+                    )
+                }
             }
 
             // ━━━ BLOCK 2: Spending Trend (누적 추이 차트) ━━━
@@ -578,6 +605,17 @@ fun HomePageContent(
                     if (trendInfo != null) {
                         SpendingTrendSection(info = trendInfo)
                     }
+                }
+            }
+
+            // 부분 데이터 안내 CTA (데이터 있지만 해당 월 미동기화)
+            if (showPartialCta) {
+                item {
+                    FullSyncCtaSection(
+                        onRequestFullSync = onFullSync,
+                        monthLabel = ctaMonthLabel,
+                        isPartial = true
+                    )
                 }
             }
 
