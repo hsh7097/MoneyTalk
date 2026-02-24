@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### Added (2026-02-24)
+- **디자인 시스템 정립**: Color 4색 팔레트(Navy/Gray/Red/Blue-Green) + Typography 9단계 스케일 + Dimens 여백 체계 신규 파일
+- **홈 화면 Hero 카드 리디자인**: MonthlyOverviewSection 큰 숫자 강조(30sp Bold) + 전월 비교 뱃지(increase/decrease 색상 분기)
+- **Vico 차트 도입**: VicoCumulativeChart 신규 — 금융앱 스타일 누적 차트로 기존 Canvas 차트 교체
+- **SpendingTrendInfo Contract 확장**: totalAmountText, comparisonText, isOverBudget 필드 추가
+- **다크 테마 복원**: Green/Orange 기반 다크 팔레트 전면 재정의
+- **DESIGN_PLAN.md**: UI/UX 리디자인 계획서 (Phase1~3 로드맵)
+
 ### Added (2026-02-22)
 - **홈 카테고리 리스트 예산 표시**: 예산 설정 카테고리에 "사용액 / 예산액" + 잔여/초과 텍스트 + 예산 대비 프로그레스바 표시
   - 예산 초과 시 빨간색 프로그레스바 + 초과 금액 강조

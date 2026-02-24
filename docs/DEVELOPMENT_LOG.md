@@ -4,6 +4,54 @@
 
 ---
 
+## 2026-02-24 - 홈 화면 Phase1 리디자인 + 디자인 시스템 + Vico 차트
+
+### 작업 내용
+
+#### 디자인 시스템 정립
+- Color.kt: 4색 체계(Navy Primary + Gray Neutral + Red Expense + Blue/Green Income) + 다크 테마 Green/Orange 기반 복원
+- Type.kt: Typography 스케일 9단계 정의 (displayLarge~labelSmall, SuitVariable 폰트 적용)
+- Dimens.kt: 여백 체계 신규 파일 (spacing 4/8/12/16/20/24/32dp, radius 8/12/16dp, cardElevation 0/1/2dp)
+- Theme.kt: lightColorScheme/darkColorScheme 전면 재정의, 다크 테마 surface/background 대비 강화
+
+#### MonthlyOverviewSection Hero 카드 리디자인
+- 기존 단순 Column → 배경 카드 + 큰 숫자 강조(headlineLarge 30sp Bold) + 전월 비교 뱃지(increase/decrease 색상 분기)
+- SpendingTrendInfo Contract 확장: totalAmountText, comparisonText, isOverBudget 필드 추가
+- HomeSpendingTrendInfo Mapper: 전월 비교 금액/퍼센트 계산 + 초과/감소 문구 생성
+
+#### Vico 차트 도입
+- `VicoCumulativeChart.kt` 신규: Vico CartesianChartHost 기반 누적 차트 (금융앱 스타일)
+- 기존 Canvas CumulativeChartCompose → VicoCumulativeChart 전환 (CumulativeTrendSection에서 호출)
+- Vico 라이브러리 의존성 추가 (libs.versions.toml + build.gradle.kts)
+
+#### HomeScreen 구조 개선
+- 과도한 Column 중첩 정리, CategoryExpenseSection/AiInsightSection 등 하위 Composable 활용
+- MonthlyOverviewSection 상단 배치 + 차트 간격 조정
+
+#### DESIGN_PLAN.md 리디자인 계획서
+- GPT/Gemini/Claude 진단 종합 → 4색 체계 + Typography + 여백 규칙 정의
+- Phase1(Hero+차트) / Phase2(전체 화면) / Phase3(마이크로) 로드맵 수립
+
+### 변경 파일
+- `core/theme/Color.kt` — 4색 팔레트 전면 재정의
+- `core/theme/Type.kt` — Typography 9단계 스케일
+- `core/theme/Dimens.kt` — 신규 (여백 체계)
+- `core/theme/Theme.kt` — lightColorScheme/darkColorScheme 재정의
+- `core/ui/component/chart/CumulativeTrendSection.kt` — VicoCumulativeChart 연결
+- `core/ui/component/chart/SpendingTrendInfo.kt` — Contract 확장 (3개 필드)
+- `core/ui/component/chart/VicoCumulativeChart.kt` — 신규 (Vico 기반 차트)
+- `feature/home/ui/HomeScreen.kt` — Hero 카드 리디자인 + 구조 개선
+- `feature/home/ui/HomeViewModel.kt` — SpendingTrendInfo 매핑 확장
+- `feature/home/ui/component/SpendingTrendSection.kt` — 차트 연결 변경
+- `feature/home/ui/model/HomeSpendingTrendInfo.kt` — 전월 비교 계산 로직
+- `app/build.gradle.kts` — Vico 의존성 추가
+- `gradle/libs.versions.toml` — Vico 버전 정의
+- `res/values/strings.xml` — 비교 문구 문자열 5개 추가
+- `docs/COMPOSABLE_MAP.md` — VicoCumulativeChart 추가
+- `docs/DESIGN_PLAN.md` — 신규 (리디자인 계획서)
+
+---
+
 ## 2026-02-22 - 예산 관리 기능 확장 (홈 UI + AI 채팅 연동)
 
 ### 작업 내용

@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-22
+> **최종 갱신**: 2026-02-24
 
 ---
 
@@ -219,6 +219,14 @@
 - AI 채팅 예산 설정: ActionType.SET_BUDGET + DataAction.category + executeSetBudget()
 - 프롬프트 갱신: budget_status 쿼리 + set_budget 액션 + 분석 규칙 + 패턴 예시
 
+**홈 화면 Phase1 리디자인 + 디자인 시스템**: ✅ 완료 (2026-02-24)
+- 디자인 시스템 정립 (Color 팔레트 4색 체계, Typography 스케일 9단계, Dimens 여백 체계)
+- MonthlyOverviewSection Hero 카드 리디자인 (큰 숫자 강조, 전월 비교 뱃지)
+- Vico 라이브러리 도입 — 누적 차트를 금융앱 스타일로 교체 (VicoCumulativeChart)
+- SpendingTrendInfo Contract 확장 (금액, 비교문구, 초과여부 필드)
+- 다크 테마 Green/Orange 기반으로 복원
+- DESIGN_PLAN.md 리디자인 계획서 작성
+
 ### 대기 중인 작업
 
 - `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지 (이미 머지됨 — 정리 필요)
@@ -283,6 +291,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-24 | 홈 화면 Phase1 리디자인 — 디자인 시스템(Color/Type/Dimens) + Hero 카드 + Vico 차트 + 다크 테마 복원 | 완료 |
 | 2026-02-22 | 예산 관리 확장 — 홈 카테고리 예산 UI + AI 채팅 예산 조회(BUDGET_STATUS)/설정(SET_BUDGET) | 완료 |
 | 2026-02-22 | 데이터 삭제 시 광고 시청 기록 초기화 (clearSyncedMonths) + resume 시 silent 증분 동기화 (권한 체크 + 애널리틱스 스킵) | 완료 |
 | 2026-02-21 | Budget BottomSheet (전체+카테고리별 예산 일괄 설정) + HistoryFilter BottomSheet 개선 (100dp 마진, 고정 하단 버튼) | 완료 |
