@@ -34,6 +34,7 @@ import com.patrykandpatrick.vico.core.cartesian.layer.LineCartesianLayer
  *
  * @param primaryLine 메인 곡선 (이번 달 누적)
  * @param comparisonLines 토글 활성화된 비교 곡선 리스트
+ * @param comparisonAlphas 각 비교 곡선의 알파값 (0f=투명, 1f=불투명). 토글 애니메이션용
  * @param daysInMonth 해당 월 총 일수
  * @param todayDayIndex 오늘이 해당 월의 몇번째 날인지 (0-based, -1이면 과거 월)
  * @param yAxisMax Y축 최대값 (토글 상태와 무관하게 고정된 값, 호출부에서 계산)
@@ -43,6 +44,7 @@ import com.patrykandpatrick.vico.core.cartesian.layer.LineCartesianLayer
 fun VicoCumulativeChart(
     primaryLine: CumulativeChartLine,
     comparisonLines: List<CumulativeChartLine>,
+    comparisonAlphas: List<Float> = emptyList(),
     daysInMonth: Int,
     todayDayIndex: Int,
     yAxisMax: Long,
@@ -91,14 +93,13 @@ fun VicoCumulativeChart(
         },
     )
 
-    // 비교 곡선 스타일들
-    // TODO: comparisonLines 크기가 토글로 변할 때 rememberLine 호출 수가 달라짐.
-    //  현재는 Vico가 modelProducer 업데이트로 전체 재렌더링하므로 실질적 문제 없으나,
-    //  향후 안정성을 위해 고정 개수 생성 + alpha 제어 방식으로 전환 검토.
-    val comparisonVicoLines = comparisonLines.map { line ->
+    // 비교 곡선 스타일들 (호출부에서 시리즈 개수를 고정하므로 rememberLine 호출 수 안정)
+    val comparisonVicoLines = comparisonLines.mapIndexed { index, line ->
+        val alpha = comparisonAlphas.getOrElse(index) { 1f }
+        val lineColor = line.color.copy(alpha = alpha)
         rememberLine(
-            fill = remember(line.color) {
-                LineCartesianLayer.LineFill.single(fill(line.color))
+            fill = remember(lineColor) {
+                LineCartesianLayer.LineFill.single(fill(lineColor))
             },
             areaFill = null,
         )

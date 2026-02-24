@@ -18,10 +18,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -73,13 +77,40 @@ fun CumulativeTrendSection(
         info.toggleableLines.map { mutableStateOf(it.initialChecked) }
     }
 
-    // 토글 활성화된 비교 곡선 필터링
-    val activeComparisonLines = remember(
+    // 각 비교 곡선의 알파 애니메이션 (OFF: 데이터→0 후 페이드아웃, ON: 즉시 표시 후 데이터 상승)
+    val lineAlphas = remember(info.toggleableLines.size) {
+        info.toggleableLines.map { Animatable(if (it.initialChecked) 1f else 0f) }
+    }
+
+    toggleStates.forEachIndexed { index, state ->
+        LaunchedEffect(state.value) {
+            if (index >= lineAlphas.size) return@LaunchedEffect
+            if (state.value) {
+                // Toggle ON: 즉시 보이게 → Vico가 0→실제값 애니메이션
+                lineAlphas[index].snapTo(1f)
+            } else {
+                // Toggle OFF: Vico가 실제값→0 애니메이션 완료 대기 → 페이드아웃
+                delay(350L)
+                lineAlphas[index].animateTo(0f, tween(150))
+            }
+        }
+    }
+
+    // 모든 비교 곡선 유지 (비활성 곡선은 데이터 0 → Vico가 y=0으로 애니메이션)
+    // 시리즈 개수를 일정하게 유지하여 Vico diff 애니메이션이 동작하도록 함
+    val allComparisonLines = remember(
         info.toggleableLines, toggleStates.map { it.value }
     ) {
-        info.toggleableLines.filterIndexed { index, _ ->
-            index < toggleStates.size && toggleStates[index].value
-        }.map { it.line }
+        info.toggleableLines.mapIndexed { index, toggleableLine ->
+            val isActive = index < toggleStates.size && toggleStates[index].value
+            if (isActive) {
+                toggleableLine.line
+            } else {
+                toggleableLine.line.copy(
+                    points = List(toggleableLine.line.points.size) { 0L }
+                )
+            }
+        }
     }
 
     // Y축 최대값: 토글 상태와 무관하게 모든 곡선의 최대값 기준 고정
@@ -128,7 +159,8 @@ fun CumulativeTrendSection(
         // Vico 차트
         VicoCumulativeChart(
             primaryLine = info.primaryLine,
-            comparisonLines = activeComparisonLines,
+            comparisonLines = allComparisonLines,
+            comparisonAlphas = lineAlphas.map { it.value },
             daysInMonth = info.daysInMonth,
             todayDayIndex = info.todayDayIndex,
             yAxisMax = yAxisMax,
