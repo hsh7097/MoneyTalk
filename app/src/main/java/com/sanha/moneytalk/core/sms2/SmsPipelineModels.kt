@@ -108,5 +108,11 @@ data class SyncStats(
     val totalInput: Int = 0,
     val paymentCandidates: Int = 0,
     val incomeCandidates: Int = 0,
-    val skipped: Int = 0
+    val skipped: Int = 0,
+    /** Step 4에서 벡터 매칭 성공 건수 (기존 패턴 재사용) */
+    val vectorMatchCount: Int = 0,
+    /** Step 5에서 LLM 처리 건수 (신규 패턴 생성) */
+    val llmProcessCount: Int = 0,
+    /** 새로 생성된 패턴 DB 수 (vectorMatchCount + llmProcessCount 합산 가능) */
+    val newPatternsCreated: Int = 0
 )

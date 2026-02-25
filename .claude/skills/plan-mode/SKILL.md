@@ -1,0 +1,1 @@
+/Users/sanha/Documents/Android/ClaudeGuide/skills/plan-mode/SKILL.md

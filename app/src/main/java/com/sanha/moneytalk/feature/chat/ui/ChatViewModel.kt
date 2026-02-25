@@ -5,9 +5,12 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.ad.RewardAdManager
+import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
+import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import kotlin.math.abs
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
@@ -104,7 +107,8 @@ class ChatViewModel @Inject constructor(
     private val rewardAdManager: RewardAdManager,
     private val premiumManager: PremiumManager,
     private val analyticsHelper: AnalyticsHelper,
-    private val dataRefreshEvent: DataRefreshEvent
+    private val dataRefreshEvent: DataRefreshEvent,
+    private val budgetDao: BudgetDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -975,7 +979,96 @@ class ChatViewModel @Inject constructor(
             QueryType.ANALYTICS -> {
                 executeAnalytics(query, startTimestamp, endTimestamp)
             }
+
+            QueryType.BUDGET_STATUS -> {
+                executeBudgetStatusQuery(startTimestamp, endTimestamp)
+            }
         }
+    }
+
+    /**
+     * BUDGET_STATUS 쿼리 실행: 카테고리별 예산 한도, 사용 금액, 잔여 금액 조회
+     */
+    private suspend fun executeBudgetStatusQuery(
+        startTimestamp: Long,
+        endTimestamp: Long
+    ): QueryResult {
+        // 기간에 포함된 모든 yearMonth 목록 생성
+        val startCal = Calendar.getInstance().apply { timeInMillis = startTimestamp }
+        val endCal = Calendar.getInstance().apply { timeInMillis = endTimestamp }
+
+        val yearMonths = mutableListOf<String>()
+        val iterCal = Calendar.getInstance().apply {
+            set(Calendar.YEAR, startCal.get(Calendar.YEAR))
+            set(Calendar.MONTH, startCal.get(Calendar.MONTH))
+            set(Calendar.DAY_OF_MONTH, 1)
+        }
+        while (iterCal.get(Calendar.YEAR) < endCal.get(Calendar.YEAR) ||
+            (iterCal.get(Calendar.YEAR) == endCal.get(Calendar.YEAR) &&
+                iterCal.get(Calendar.MONTH) <= endCal.get(Calendar.MONTH))
+        ) {
+            yearMonths.add(
+                String.format(
+                    "%04d-%02d",
+                    iterCal.get(Calendar.YEAR),
+                    iterCal.get(Calendar.MONTH) + 1
+                )
+            )
+            iterCal.add(Calendar.MONTH, 1)
+        }
+
+        val sb = StringBuilder()
+        var hasBudgets = false
+
+        // 예산은 "default"로 모든 월 공통 적용
+        val budgets = budgetDao.getBudgetsByMonthOnce("default")
+        if (budgets.isNotEmpty()) {
+            hasBudgets = true
+        }
+
+        for (yearMonth in yearMonths) {
+            if (!hasBudgets) break
+
+            // 해당 월의 지출 조회 범위: 요청 범위와 월 범위의 교집합
+            val ym = yearMonth.split("-")
+            val year = ym[0].toInt()
+            val month = ym[1].toInt()
+            val monthStart = maxOf(startTimestamp, DateUtils.getMonthStartTimestamp(year, month))
+            val monthEnd = minOf(endTimestamp, DateUtils.getMonthEndTimestamp(year, month))
+
+            sb.appendLine("예산 현황 ($yearMonth):")
+            for (budget in budgets) {
+                val spent = if (budget.category == "전체") {
+                    expenseRepository.getTotalExpenseByDateRange(monthStart, monthEnd)
+                } else {
+                    val cat = Category.fromDisplayName(budget.category)
+                    val categoryNames = cat.displayNamesIncludingSub
+                    expenseRepository.getTotalExpenseByCategoriesAndDateRange(
+                        categoryNames, monthStart, monthEnd
+                    )
+                }
+                val remaining = budget.monthlyLimit - spent
+                val status = if (remaining >= 0) "남음" else "초과"
+                val absRemaining = abs(remaining)
+                sb.appendLine(
+                    "- ${budget.category}: 예산 ${numberFormat.format(budget.monthlyLimit)}원, " +
+                        "사용 ${numberFormat.format(spent)}원, " +
+                        "${numberFormat.format(absRemaining.toLong())}원 $status"
+                )
+            }
+        }
+
+        if (!hasBudgets) {
+            return QueryResult(
+                queryType = QueryType.BUDGET_STATUS,
+                data = "설정된 예산이 없습니다. AI 채팅에서 \"식비 예산 20만원 설정해줘\"처럼 말하면 예산을 설정할 수 있습니다."
+            )
+        }
+
+        return QueryResult(
+            queryType = QueryType.BUDGET_STATUS,
+            data = sb.toString().trimEnd()
+        )
     }
 
     /**
@@ -1744,6 +1837,33 @@ class ChatViewModel @Inject constructor(
                         message = if (deleted > 0) "\"$keyword\" 키워드를 SMS 제외 목록에서 삭제했습니다."
                         else "\"$keyword\" 키워드를 찾을 수 없거나 기본 키워드라 삭제할 수 없습니다.",
                         affectedCount = deleted
+                    )
+                }
+            }
+
+            ActionType.SET_BUDGET -> {
+                val targetCategory = action.category ?: action.newCategory
+                val amount = action.amount
+                if (targetCategory.isNullOrBlank() || amount == null) {
+                    ActionResult(
+                        actionType = ActionType.SET_BUDGET,
+                        success = false,
+                        message = "카테고리 또는 금액이 지정되지 않았습니다."
+                    )
+                } else {
+                    budgetDao.insert(
+                        BudgetEntity(
+                            category = targetCategory,
+                            monthlyLimit = amount,
+                            yearMonth = "default"
+                        )
+                    )
+                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+                    ActionResult(
+                        actionType = ActionType.SET_BUDGET,
+                        success = true,
+                        message = "'$targetCategory' 카테고리의 월 예산을 ${numberFormat.format(amount)}원으로 설정했습니다.",
+                        affectedCount = 1
                     )
                 }
             }

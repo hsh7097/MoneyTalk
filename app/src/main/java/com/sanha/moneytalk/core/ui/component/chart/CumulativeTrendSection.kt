@@ -18,16 +18,24 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.sanha.moneytalk.core.theme.moneyTalkColors
+import com.sanha.moneytalk.core.theme.moneyTalkTypography
+import java.text.NumberFormat
+import java.util.Locale
 
 /**
  * 토글 가능한 곡선 정보.
@@ -44,26 +52,162 @@ data class ToggleableLine(
 )
 
 /**
- * 도메인 독립적 누적 추이 섹션.
- *
- * 고정 곡선(항상 표시) + 토글 가능 곡선(원형 토글) + 차트 + 범례를 조합.
- * Canvas 렌더링은 [CumulativeChartCompose]에 위임.
+ * 금융앱 스타일 누적 추이 섹션 (Vico 차트).
  *
  * 레이아웃 구조:
- * - 제목
- * - 차트 (CumulativeChartCompose)
- * - 범례 행 (primaryLine: 채워진 원 / toggleableLines: 테두리 원 ↔ 채워진 원 토글)
+ * - 타이틀 (예: "이번 달 누적 지출")
+ * - 큰 금액 (₩1,240,000)
+ * - 비교 문구 (지난달 대비 12% 더 쓰고 있어요)
+ * - Vico 차트
+ * - 범례 행 (토글 가능)
  *
- * 사용 예:
- * - 홈: 전체 지출 누적 (primaryLine) + 전월/3개월평균/예산 (toggleableLines)
- * - 카테고리: 카테고리별 누적 (primaryLine) + 전월 해당 카테고리 (toggleableLines)
- *
- * @param title 섹션 제목 (예: "지출 추이", "식비 추이")
- * @param primaryLine 항상 표시되는 메인 곡선 (이번 달 누적)
- * @param toggleableLines 토글 가능한 비교 곡선 리스트
- * @param daysInMonth 해당 월 총 일수
- * @param todayDayIndex 오늘이 해당 월의 몇번째 날인지 (0-based, -1이면 과거 월)
+ * @param info 차트 데이터 Contract ([SpendingTrendInfo] 구현체)
  * @param modifier 외부 Modifier
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun CumulativeTrendSection(
+    info: SpendingTrendInfo,
+    modifier: Modifier = Modifier
+) {
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
+
+    // 각 토글 곡선의 체크 상태 관리
+    val toggleStates = remember(info.toggleableLines.size) {
+        info.toggleableLines.map { mutableStateOf(it.initialChecked) }
+    }
+
+    // 각 비교 곡선의 알파 애니메이션 (OFF: 데이터→0 후 페이드아웃, ON: 즉시 표시 후 데이터 상승)
+    val lineAlphas = remember(info.toggleableLines.size) {
+        info.toggleableLines.map { Animatable(if (it.initialChecked) 1f else 0f) }
+    }
+
+    toggleStates.forEachIndexed { index, state ->
+        LaunchedEffect(state.value) {
+            if (index >= lineAlphas.size) return@LaunchedEffect
+            if (state.value) {
+                // Toggle ON: 즉시 보이게 → Vico가 0→실제값 애니메이션
+                lineAlphas[index].snapTo(1f)
+            } else {
+                // Toggle OFF: Vico가 실제값→0 애니메이션 완료 대기 → 페이드아웃
+                delay(350L)
+                lineAlphas[index].animateTo(0f, tween(150))
+            }
+        }
+    }
+
+    // 모든 비교 곡선 유지 (비활성 곡선은 데이터 0 → Vico가 y=0으로 애니메이션)
+    // 시리즈 개수를 일정하게 유지하여 Vico diff 애니메이션이 동작하도록 함
+    val allComparisonLines = remember(
+        info.toggleableLines, toggleStates.map { it.value }
+    ) {
+        info.toggleableLines.mapIndexed { index, toggleableLine ->
+            val isActive = index < toggleStates.size && toggleStates[index].value
+            if (isActive) {
+                toggleableLine.line
+            } else {
+                toggleableLine.line.copy(
+                    points = List(toggleableLine.line.points.size) { 0L }
+                )
+            }
+        }
+    }
+
+    // Y축 최대값: 토글 상태와 무관하게 모든 곡선의 최대값 기준 고정
+    val yAxisMax = remember(info.primaryLine, info.toggleableLines) {
+        val allMax = maxOf(
+            info.primaryLine.points.maxOrNull() ?: 0L,
+            info.toggleableLines.maxOfOrNull { it.line.points.maxOrNull() ?: 0L } ?: 0L
+        )
+        ceilToNiceValue(allMax)
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        // 타이틀
+        Text(
+            text = info.title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.moneyTalkColors.textSecondary
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // 큰 금액
+        Text(
+            text = "₩${numberFormat.format(info.currentAmount)}",
+            style = MaterialTheme.moneyTalkTypography.numberLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        // 비교 문구
+        if (info.comparisonText.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(2.dp))
+            val comparisonColor = when (info.isOverSpending) {
+                true -> MaterialTheme.colorScheme.error
+                false -> MaterialTheme.moneyTalkColors.income
+                null -> MaterialTheme.moneyTalkColors.textTertiary
+            }
+            Text(
+                text = info.comparisonText,
+                style = MaterialTheme.typography.bodySmall,
+                color = comparisonColor
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Vico 차트
+        VicoCumulativeChart(
+            primaryLine = info.primaryLine,
+            comparisonLines = allComparisonLines,
+            comparisonAlphas = lineAlphas.map { it.value },
+            daysInMonth = info.daysInMonth,
+            todayDayIndex = info.todayDayIndex,
+            yAxisMax = yAxisMax,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 범례 행: primaryLine(채워진 원) + toggleableLines(테두리/채워진 원 토글)
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            // 메인 곡선 (항상 표시, 채워진 큰 원)
+            LegendItem(
+                color = info.primaryLine.color,
+                label = info.primaryLine.label,
+                filled = true,
+                toggleable = false
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // 토글 가능 곡선 (테두리 원 ↔ 채워진 원)
+            info.toggleableLines.forEachIndexed { index, toggleable ->
+                if (index < toggleStates.size) {
+                    val isChecked = toggleStates[index].value
+                    LegendItem(
+                        color = toggleable.line.color,
+                        label = toggleable.line.label,
+                        filled = isChecked,
+                        toggleable = true,
+                        onClick = { toggleStates[index].value = !toggleStates[index].value }
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 하위 호환용 오버로드 (개별 파라미터 버전).
+ *
+ * CategoryDetail 등 기존 호출부를 위해 Canvas 기반 차트를 유지.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -121,18 +265,17 @@ fun CumulativeTrendSection(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // 차트
+        // Canvas 기반 차트 (하위 호환)
         CumulativeChartCompose(data = chartData)
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // 범례 행: primaryLine(채워진 원) + toggleableLines(테두리/채워진 원 토글)
+        // 범례 행
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // 메인 곡선 (항상 표시, 채워진 큰 원)
             LegendItem(
                 color = primaryLine.color,
                 label = primaryLine.label,
@@ -141,7 +284,6 @@ fun CumulativeTrendSection(
             )
             Spacer(modifier = Modifier.width(12.dp))
 
-            // 토글 가능 곡선 (테두리 원 ↔ 채워진 원)
             toggleableLines.forEachIndexed { index, toggleable ->
                 if (index < toggleStates.size) {
                     val isChecked = toggleStates[index].value

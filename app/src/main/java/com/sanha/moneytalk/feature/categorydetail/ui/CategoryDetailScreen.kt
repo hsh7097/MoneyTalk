@@ -79,7 +79,7 @@ fun CategoryDetailScreen(
     }
     val pagerState = rememberPagerState(
         initialPage = initialPage,
-        pageCount = { MonthPagerUtils.TOTAL_PAGE_COUNT }
+        pageCount = { MonthPagerUtils.getPageCount(uiState.monthStartDay) }
     )
     val coroutineScope = rememberCoroutineScope()
 
@@ -156,7 +156,7 @@ fun CategoryDetailScreen(
                 onNextMonth = {
                     coroutineScope.launch {
                         val target = pagerState.currentPage + 1
-                        if (!MonthPagerUtils.isFutureMonth(target)) {
+                        if (!MonthPagerUtils.isFutureMonth(target, uiState.monthStartDay)) {
                             pagerState.animateScrollToPage(target)
                         }
                     }
@@ -216,7 +216,8 @@ private fun CategoryDetailPageContent(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // 월 네비게이션 헤더
         item(key = "month_header") {
@@ -327,8 +328,8 @@ private fun MonthNavigationHeader(
             }
         }
 
-        val isCurrentMonth = year >= DateUtils.getCurrentYear() &&
-            month >= DateUtils.getCurrentMonth()
+        val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
+        val isCurrentMonth = year >= effYear && month >= effMonth
         IconButton(
             onClick = onNextMonth,
             enabled = !isCurrentMonth

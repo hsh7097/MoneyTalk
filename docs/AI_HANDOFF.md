@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-22
+> **최종 갱신**: 2026-02-24
 
 ---
 
@@ -213,9 +213,34 @@
 - HomeViewModel.refreshData(): SMS 권한 확인 후 silent syncSmsV2 자동 호출
 - silent 모드: 애널리틱스 이벤트 스킵 + 진행 UI 미표시
 
+**예산 관리 확장 (홈 UI + AI 채팅 연동)**: ✅ 완료 (2026-02-22)
+- 홈 카테고리 리스트: 예산 대비 사용률 프로그레스바 + 잔여/초과 표시 + 초과 시 빨간색 강조
+- AI 채팅 예산 조회: QueryType.BUDGET_STATUS + executeBudgetStatusQuery()
+- AI 채팅 예산 설정: ActionType.SET_BUDGET + DataAction.category + executeSetBudget()
+- 프롬프트 갱신: budget_status 쿼리 + set_budget 액션 + 분석 규칙 + 패턴 예시
+
+**홈 화면 Phase1 리디자인 + 디자인 시스템**: ✅ 완료 (2026-02-24)
+- 디자인 시스템 정립 (Color 팔레트 4색 체계, Typography 스케일 9단계, Dimens 여백 체계)
+- MonthlyOverviewSection Hero 카드 리디자인 (큰 숫자 강조, 전월 비교 뱃지)
+- Vico 라이브러리 도입 — 누적 차트를 금융앱 스타일로 교체 (VicoCumulativeChart)
+- SpendingTrendInfo Contract 확장 (금액, 비교문구, 초과여부 필드)
+- 다크 테마 Green/Orange 기반으로 복원
+- DESIGN_PLAN.md 리디자인 계획서 작성
+
+**Vico 차트 수정 + 홈 UI 간소화**: ✅ 완료 (2026-02-24)
+- Vico 차트 가로 스크롤 제거 (Zoom.Content + AxisValueOverrider.fixed maxX)
+- X축 라벨 표시 수정 (ItemPlacer spacing=5, addExtremeLabelPadding=true)
+- 동기화 후 차트 업데이트 안되는 이슈 수정 (LaunchedEffect keys에 daysInMonth, todayDayIndex 추가)
+- Y축 토글 무관 고정 (yAxisMax를 전체 toggleableLines 기준으로 CumulativeTrendSection에서 계산)
+- 1월 CTA 잘못 표시 수정 (isMonthSynced → isPagePartiallyCovered 전환)
+- TodayAndComparisonSection 제거 → 오늘 지출 정보를 "오늘 내역" 헤더에 통합
+- FullSyncCtaSection 홈에서 제거 (HistoryScreen에서는 유지)
+- buildComparisonText 형식 변경: "N% 더 쓰고 있어요" → "₩금액(N%) 더 쓰고 있어요"
+- Auto Backup 복원 규칙 수정 (backup_rules.xml, data_extraction_rules.xml)
+
 ### 대기 중인 작업
 
-- `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지
+- `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지 (이미 머지됨 — 정리 필요)
 - GitHub Pages 설정 (Settings → Pages → `/docs` 디렉토리) — 개인정보처리방침 URL 활성화용
 - Google Play Console 알파 트랙 AAB 업로드 + SMS 권한 선언 양식 제출
 
@@ -277,6 +302,9 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-24 | Vico 차트 수정(스크롤/X축/Y축/동기화) + 홈 UI 간소화(TodayAndComparisonSection·FullSyncCtaSection 제거, 비교문구 가격+% 형식) | 완료 |
+| 2026-02-24 | 홈 화면 Phase1 리디자인 — 디자인 시스템(Color/Type/Dimens) + Hero 카드 + Vico 차트 + 다크 테마 복원 | 완료 |
+| 2026-02-22 | 예산 관리 확장 — 홈 카테고리 예산 UI + AI 채팅 예산 조회(BUDGET_STATUS)/설정(SET_BUDGET) | 완료 |
 | 2026-02-22 | 데이터 삭제 시 광고 시청 기록 초기화 (clearSyncedMonths) + resume 시 silent 증분 동기화 (권한 체크 + 애널리틱스 스킵) | 완료 |
 | 2026-02-21 | Budget BottomSheet (전체+카테고리별 예산 일괄 설정) + HistoryFilter BottomSheet 개선 (100dp 마진, 고정 하단 버튼) | 완료 |
 | 2026-02-21 | 카테고리 상세 화면 (CategoryDetailActivity) — 월간 추이 차트 + 거래 리스트 + 다크 모드 | 완료 |

@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -107,6 +108,7 @@ data class HistoryPageData(
     val incomes: List<IncomeEntity> = emptyList(),
     val monthlyTotal: Int = 0,
     val dailyTotals: Map<String, Int> = emptyMap(),
+    val dailyIncomeTotals: Map<String, Int> = emptyMap(),
     val monthlyIncomeTotal: Int = 0,
     val transactionListItems: List<TransactionListItem> = emptyList()
 )
@@ -254,7 +256,7 @@ class HistoryViewModel @Inject constructor(
         val (prevY, prevM) = MonthPagerUtils.adjacentMonth(year, month, -1)
         loadPageData(prevY, prevM)
         val (nextY, nextM) = MonthPagerUtils.adjacentMonth(year, month, +1)
-        if (!MonthPagerUtils.isFutureYearMonth(nextY, nextM)) {
+        if (!MonthPagerUtils.isFutureYearMonth(nextY, nextM, state.monthStartDay)) {
             loadPageData(nextY, nextM)
         }
         evictDistantCache(year, month)
@@ -296,12 +298,28 @@ class HistoryViewModel @Inject constructor(
      * 월 시작일이 변경되면 자동으로 지출 내역을 다시 로드합니다.
      */
     private fun loadSettings() {
+        var isFirstEmit = true
         viewModelScope.launch {
-            settingsDataStore.monthStartDayFlow.collect { startDay ->
-                _uiState.update { it.copy(monthStartDay = startDay) }
-                clearAllPageCache()
-                loadCurrentAndAdjacentPages()
-            }
+            settingsDataStore.monthStartDayFlow
+                .distinctUntilChanged()
+                .collect { startDay ->
+                    if (isFirstEmit) {
+                        // 최초: 커스텀 시작일 기준 실효 월로 selectedYear/selectedMonth 설정
+                        val (year, month) = DateUtils.getEffectiveCurrentMonth(startDay)
+                        _uiState.update {
+                            it.copy(
+                                monthStartDay = startDay,
+                                selectedYear = year,
+                                selectedMonth = month
+                            )
+                        }
+                        isFirstEmit = false
+                    } else {
+                        _uiState.update { it.copy(monthStartDay = startDay) }
+                    }
+                    clearAllPageCache()
+                    loadCurrentAndAdjacentPages()
+                }
         }
         viewModelScope.launch {
             settingsDataStore.syncedMonthsFlow.collect { months ->
@@ -370,11 +388,18 @@ class HistoryViewModel @Inject constructor(
             val sortedIncomes = filteredIncomes.sortedByDescending { inc -> inc.dateTime }
             val incomeTotal = filteredIncomes.sumOf { it.amount }
 
+            // 날짜별 수입 합계 (달력 셀 표시용)
+            val incomeDateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
+            val dailyIncomeMap = filteredIncomes
+                .groupBy { incomeDateFormat.format(java.util.Date(it.dateTime)) }
+                .mapValues { (_, incomes) -> incomes.sumOf { it.amount } }
+
             // 수입 데이터를 먼저 캐시에 반영
             val currentData = _uiState.value.pageCache[key] ?: HistoryPageData()
             updatePageCache(key, currentData.copy(
                 incomes = sortedIncomes,
-                monthlyIncomeTotal = incomeTotal
+                monthlyIncomeTotal = incomeTotal,
+                dailyIncomeTotals = dailyIncomeMap
             ))
 
             val expenseFlow = if (categoriesForFilter != null) {
@@ -511,12 +536,11 @@ class HistoryViewModel @Inject constructor(
         setMonth(newYear, newMonth)
     }
 
-    /** 다음 월로 이동 (현재 월 이후로는 이동 불가) */
+    /** 다음 월로 이동 (현재 실효 월 이후로는 이동 불가) */
     fun nextMonth() {
         val state = _uiState.value
-        val currentYear = DateUtils.getCurrentYear()
-        val currentMonth = DateUtils.getCurrentMonth()
-        if (state.selectedYear >= currentYear && state.selectedMonth >= currentMonth) return
+        val (effectiveYear, effectiveMonth) = DateUtils.getEffectiveCurrentMonth(state.monthStartDay)
+        if (state.selectedYear >= effectiveYear && state.selectedMonth >= effectiveMonth) return
 
         var newYear = state.selectedYear
         var newMonth = state.selectedMonth + 1
@@ -1111,6 +1135,11 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
+    /** 증분 동기화 요청 — HomeViewModel에 위임 (전월 1일부터 동기화) */
+    fun requestIncrementalSync() {
+        dataRefreshEvent.requestIncrementalSync()
+    }
+
     /** 월별 동기화 해제 (광고 시청 완료 후 호출) — HomeViewModel에 월별 sync 요청 */
     fun unlockFullSync() {
         viewModelScope.launch {
@@ -1118,8 +1147,8 @@ class HistoryViewModel @Inject constructor(
             val yearMonth = String.format("%04d-%02d", state.selectedYear, state.selectedMonth)
             settingsDataStore.addSyncedMonth(yearMonth)
             _uiState.update { it.copy(showFullSyncAdDialog = false) }
-            val isCurrentMonth = state.selectedYear == DateUtils.getCurrentYear() &&
-                    state.selectedMonth == DateUtils.getCurrentMonth()
+            val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(state.monthStartDay)
+            val isCurrentMonth = state.selectedYear == effYear && state.selectedMonth == effMonth
             val monthLabel = if (isCurrentMonth) "이번달" else "${state.selectedMonth}월"
             snackbarBus.show(context.getString(R.string.full_sync_unlocked_message, monthLabel))
 

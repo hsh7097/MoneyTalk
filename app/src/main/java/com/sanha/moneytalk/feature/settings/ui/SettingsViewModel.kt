@@ -366,13 +366,14 @@ class SettingsViewModel @Inject constructor(
 
     // ========== 월 예산 관리 ==========
 
-    /** 현재 월의 전체 + 카테고리별 예산 로드 */
+    /** 전체 + 카테고리별 예산 로드 (모든 월 공통 "default") */
     private fun loadMonthlyBudget() {
         viewModelScope.launch {
             try {
-                val yearMonth = java.time.YearMonth.now().toString()
                 val budgets = withContext(Dispatchers.IO) {
-                    budgetDao.getBudgetsByMonthOnce(yearMonth)
+                    // 기존 월별 yearMonth("2026-02" 등)를 "default"로 마이그레이션
+                    budgetDao.migrateToDefault()
+                    budgetDao.getBudgetsByMonthOnce("default")
                 }
                 val totalBudget = budgets
                     .find { it.category == "전체" }
@@ -392,23 +393,22 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /** 월 예산 저장 (전체 예산으로 단일 "전체" 카테고리에 저장) — 레거시 호환 */
+    /** 월 예산 저장 (전체 예산으로 단일 "전체" 카테고리에 저장) — 모든 월 공통 */
     private fun saveMonthlyBudget(amount: Int) {
         viewModelScope.launch {
             try {
-                val yearMonth = java.time.YearMonth.now().toString()
                 withContext(Dispatchers.IO) {
                     if (amount > 0) {
-                        budgetDao.deleteAllByMonth(yearMonth)
+                        budgetDao.deleteAllByMonth("default")
                         budgetDao.insert(
                             com.sanha.moneytalk.core.database.entity.BudgetEntity(
                                 category = "전체",
                                 monthlyLimit = amount,
-                                yearMonth = yearMonth
+                                yearMonth = "default"
                             )
                         )
                     } else {
-                        budgetDao.deleteAllByMonth(yearMonth)
+                        budgetDao.deleteAllByMonth("default")
                     }
                 }
                 _uiState.update {
@@ -427,13 +427,12 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /** 전체 + 카테고리별 예산 일괄 저장 (BudgetBottomSheet에서 호출) */
+    /** 전체 + 카테고리별 예산 일괄 저장 (BudgetBottomSheet에서 호출, 모든 월 공통) */
     private fun saveBudgets(totalBudget: Int?, categoryBudgets: Map<String, Int>) {
         viewModelScope.launch {
             try {
-                val yearMonth = java.time.YearMonth.now().toString()
                 withContext(Dispatchers.IO) {
-                    budgetDao.deleteAllByMonth(yearMonth)
+                    budgetDao.deleteAllByMonth("default")
 
                     // 전체 예산 저장
                     if (totalBudget != null && totalBudget > 0) {
@@ -441,7 +440,7 @@ class SettingsViewModel @Inject constructor(
                             com.sanha.moneytalk.core.database.entity.BudgetEntity(
                                 category = "전체",
                                 monthlyLimit = totalBudget,
-                                yearMonth = yearMonth
+                                yearMonth = "default"
                             )
                         )
                     }
@@ -453,7 +452,7 @@ class SettingsViewModel @Inject constructor(
                                 com.sanha.moneytalk.core.database.entity.BudgetEntity(
                                     category = category,
                                     monthlyLimit = amount,
-                                    yearMonth = yearMonth
+                                    yearMonth = "default"
                                 )
                             )
                         }

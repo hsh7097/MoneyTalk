@@ -1,0 +1,1 @@
+/Users/sanha/Documents/Android/ClaudeGuide/skills/bi-writing/SKILL.md

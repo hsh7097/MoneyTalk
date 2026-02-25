@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">MoneyTalk</string>
+    <string name="app_name">척척 가계부</string>
 
     <!-- Common -->
     <string name="common_close">Close</string>
@@ -24,8 +24,27 @@
     <string name="error_general">An error occurred: %s</string>
 
     <!-- Splash Screen -->
-    <string name="splash_logo_description">MoneyTalk Logo</string>
+    <string name="splash_logo_description">척척 가계부 Logo</string>
     <string name="splash_tagline">Smart Money Manager</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_title_1">Auto Expense Tracking via SMS</string>
+    <string name="onboarding_desc_1">Reads your card payment texts\nand records expenses automatically</string>
+    <string name="onboarding_feature_1_1">✓  Auto-detect card payment SMS</string>
+    <string name="onboarding_feature_1_2">✓  Extract amount, merchant &amp; card info</string>
+    <string name="onboarding_feature_1_3">✓  Income messages auto-classified too</string>
+    <string name="onboarding_title_2">AI Categorizes &amp; Analyzes For You</string>
+    <string name="onboarding_desc_2">No manual input needed\nAI organizes categories for you</string>
+    <string name="onboarding_feature_2_1">✓  18 categories, auto-classified</string>
+    <string name="onboarding_feature_2_2">✓  Ask "How much on coffee?" in plain language</string>
+    <string name="onboarding_feature_2_3">✓  Spending pattern analysis &amp; tailored advice</string>
+    <string name="onboarding_title_3">Your Data Stays on Your Phone</string>
+    <string name="onboarding_desc_3">All data is processed on-device only\nNothing is sent externally</string>
+    <string name="onboarding_feature_3_1">✓  No server uploads, stored locally</string>
+    <string name="onboarding_feature_3_2">✓  Google Drive backup to your account only</string>
+    <string name="onboarding_feature_3_3">✓  Delete all data anytime</string>
+    <string name="onboarding_start">Get Started</string>
+    <string name="onboarding_skip">Skip</string>
 
     <!-- Chat Screen -->
     <string name="chat_title">AI Financial Advisor</string>
@@ -59,7 +78,7 @@
 
     <!-- Guide Questions -->
     <string name="guide_welcome">Hello!</string>
-    <string name="guide_intro">I\'m MoneyTalk, your AI financial advisor.\nTap a question below to get started!</string>
+    <string name="guide_intro">I\'m your AI financial advisor.\nTap a question below to get started!</string>
     <string name="guide_api_key_required">* Please set up API key first</string>
 
     <!-- Guide Question Categories -->
@@ -193,7 +212,7 @@
 
     <!-- Privacy Policy Dialog -->
     <string name="privacy_title">Privacy Policy</string>
-    <string name="privacy_intro">MoneyTalk values and protects your privacy.</string>
+    <string name="privacy_intro">척척 가계부 values and protects your privacy.</string>
     <string name="privacy_section_collect">1. Information Collected</string>
     <string name="privacy_collect_detail">\u0020\u0020• SMS messages (for payment parsing)\n\u0020\u0020• Monthly income and budget settings\n\u0020\u0020• Google account email (when using Drive backup)</string>
     <string name="privacy_section_usage">2. Purpose of Use</string>
@@ -295,6 +314,25 @@
     <string name="home_income_badge">Income %s won</string>
     <string name="home_no_today_transactions">No transactions yet today</string>
     <string name="home_sync_dialog_title">Reading expense history</string>
+    <string name="sync_dialog_dismiss">Continue in background</string>
+    <string name="sync_in_progress_button">Syncing…</string>
+    <string name="sync_in_progress_note">Processing data in the background</string>
+    <string-array name="sync_step_labels">
+        <item>Filter</item>
+        <item>Analyze</item>
+        <item>Match</item>
+        <item>AI</item>
+        <item>Save</item>
+    </string-array>
+
+    <!-- Engine Summary -->
+    <string name="engine_summary_title">✨ AI Engine Ready</string>
+    <string name="engine_summary_sms_analyzed">\uD83D\uDCE9 Analyzed %d messages from last 14 days</string>
+    <string name="engine_summary_patterns_learned">\uD83C\uDFAF %d card patterns learned</string>
+    <string name="engine_summary_expense_count">%d expenses</string>
+    <string name="engine_summary_income_count">%d incomes</string>
+    <string name="engine_summary_registered">\uD83D\uDCB0 %s added</string>
+    <string name="engine_summary_background_note">Remaining period will be\nprocessed in the background</string>
     <string name="home_this_month_expense">This Month Expense</string>
     <string name="home_today_count">%d items</string>
     <string name="home_insight_diff_more">vs Last Month +₩%s</string>

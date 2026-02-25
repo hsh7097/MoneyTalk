@@ -589,7 +589,8 @@ class SmsGroupClassifier @Inject constructor(
                     amountRegex = amountRegex,
                     storeRegex = storeRegex,
                     cardRegex = cardRegex,
-                    fallbackCategory = llmAnalysis.category
+                    fallbackCategory = llmAnalysis.category,
+                    fallbackCardName = llmAnalysis.cardName.ifBlank { "기타" }
                 )
                 if (parsed != null && parsed.amount > 0) {
                     results.add(

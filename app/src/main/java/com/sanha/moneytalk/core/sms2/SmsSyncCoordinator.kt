@@ -77,7 +77,7 @@ class SmsSyncCoordinator @Inject constructor(
      */
     suspend fun process(
         smsList: List<SmsInput>,
-        onProgress: ((step: String, current: Int, total: Int) -> Unit)? = null
+        onProgress: ((stepIndex: Int, step: String, current: Int, total: Int) -> Unit)? = null
     ): SyncResult {
         if (smsList.isEmpty()) {
             return SyncResult(
@@ -91,7 +91,7 @@ class SmsSyncCoordinator @Inject constructor(
 
         // Step 0: 사전 필터링 (광고, 인증번호, 배송 알림 등 비결제 SMS 제거)
         // SmsPipeline 진입 전에 여기서 처리 → 불필요한 분류/임베딩 방지
-        onProgress?.invoke("문자 분류 준비 중...", 0, smsList.size)
+        onProgress?.invoke(SmsPipeline.STEP_FILTER, "문자 분류 준비 중...", 0, smsList.size)
         val filtered = preFilter.filter(smsList)
         Log.d(TAG, "사전 필터링: ${smsList.size}건 → ${filtered.size}건 (${smsList.size - filtered.size}건 제외)")
 
@@ -104,16 +104,16 @@ class SmsSyncCoordinator @Inject constructor(
         }
 
         // Step 1: 수입/결제 분류 (필터 통과한 SMS만 대상)
-        onProgress?.invoke("결제 문자 찾는 중...", 0, filtered.size)
+        onProgress?.invoke(SmsPipeline.STEP_FILTER, "결제 문자 찾는 중...", 0, filtered.size)
         val (paymentCandidates, incomeCandidates, skipped) = incomeFilter.classifyAll(filtered)
 
         Log.d(TAG, "분류: 결제 ${paymentCandidates.size}건, 수입 ${incomeCandidates.size}건, 스킵 ${skipped.size}건")
 
         // Step 2: 결제 후보를 SmsPipeline에 전달 (사전 필터링 스킵)
-        val expenses = if (paymentCandidates.isNotEmpty()) {
+        val pipelineResult = if (paymentCandidates.isNotEmpty()) {
             pipeline.process(paymentCandidates, onProgress, skipPreFilter = true)
         } else {
-            emptyList()
+            SmsPipeline.PipelineResult(emptyList(), 0, 0)
         }
 
         val preFilterSkipped = smsList.size - filtered.size
@@ -121,13 +121,16 @@ class SmsSyncCoordinator @Inject constructor(
             totalInput = smsList.size,
             paymentCandidates = paymentCandidates.size,
             incomeCandidates = incomeCandidates.size,
-            skipped = skipped.size + preFilterSkipped
+            skipped = skipped.size + preFilterSkipped,
+            vectorMatchCount = pipelineResult.vectorMatchCount,
+            llmProcessCount = pipelineResult.llmProcessCount,
+            newPatternsCreated = pipelineResult.llmProcessCount
         )
 
-        Log.d(TAG, "=== 완료: 입력 ${smsList.size}건 → 지출 ${expenses.size}건 + 수입 ${incomeCandidates.size}건 ===")
+        Log.d(TAG, "=== 완료: 입력 ${smsList.size}건 → 지출 ${pipelineResult.results.size}건 + 수입 ${incomeCandidates.size}건 ===")
 
         return SyncResult(
-            expenses = expenses,
+            expenses = pipelineResult.results,
             incomes = incomeCandidates,
             stats = stats
         )

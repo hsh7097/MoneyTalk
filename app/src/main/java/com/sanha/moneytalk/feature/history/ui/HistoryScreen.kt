@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +57,14 @@ import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCom
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.compose.runtime.DisposableEffect
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.sanha.moneytalk.feature.home.ui.component.ImportDataCtaSection
 import kotlinx.coroutines.launch
 
 /**
@@ -66,6 +75,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel(),
+    onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
     filterCategory: String? = null,
     historyTabReClickEvent: kotlinx.coroutines.flow.SharedFlow<Unit>? = null
 ) {
@@ -83,9 +93,34 @@ fun HistoryScreen(
         }
     }
 
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
     var showAddDialog by remember { mutableStateOf(false) }
+
+    // SMS 권한 상태 (resume 시 갱신)
+    var hasSmsPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
+                    PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    // 화면 재진입(resume) 시 권한 상태 갱신
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasSmsPermission = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.READ_SMS
+                ) == PackageManager.PERMISSION_GRANTED
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     // HorizontalPager — Virtual Infinite Pager
     val initialPage = remember {
@@ -93,9 +128,19 @@ fun HistoryScreen(
     }
     val pagerState = rememberPagerState(
         initialPage = initialPage,
-        pageCount = { MonthPagerUtils.TOTAL_PAGE_COUNT }
+        pageCount = { MonthPagerUtils.getPageCount(uiState.monthStartDay) }
     )
     val coroutineScope = rememberCoroutineScope()
+
+    // ViewModel의 선택 월이 외부 요인(예: DataStore 설정 로드)으로 변경되면 Pager 위치도 동기화
+    LaunchedEffect(uiState.selectedYear, uiState.selectedMonth) {
+        val selectedPage = MonthPagerUtils.yearMonthToPage(
+            uiState.selectedYear, uiState.selectedMonth
+        )
+        if (pagerState.currentPage != selectedPage) {
+            pagerState.scrollToPage(selectedPage)
+        }
+    }
 
     // 페이지 변경 시 ViewModel에 월 변경 통지
     LaunchedEffect(pagerState.currentPage) {
@@ -103,14 +148,15 @@ fun HistoryScreen(
         viewModel.setMonth(year, month)
     }
 
-    // 내역 탭 재클릭 → 오늘(현재 월) 페이지로 이동 + 필터 초기화
+    // 내역 탭 재클릭 → 오늘(현재 커스텀 월) 페이지로 이동 + 필터 초기화
+    val currentMonthStartDay by rememberUpdatedState(uiState.monthStartDay)
     LaunchedEffect(historyTabReClickEvent) {
         historyTabReClickEvent?.collect {
             viewModel.resetFilters()
-            val todayPage = MonthPagerUtils.yearMonthToPage(
-                com.sanha.moneytalk.core.util.DateUtils.getCurrentYear(),
-                com.sanha.moneytalk.core.util.DateUtils.getCurrentMonth()
+            val (effYear, effMonth) = com.sanha.moneytalk.core.util.DateUtils.getEffectiveCurrentMonth(
+                currentMonthStartDay
             )
+            val todayPage = MonthPagerUtils.yearMonthToPage(effYear, effMonth)
             if (pagerState.currentPage != todayPage) {
                 pagerState.animateScrollToPage(todayPage)
             }
@@ -153,7 +199,7 @@ fun HistoryScreen(
                 onNextMonth = {
                     coroutineScope.launch {
                         val target = pagerState.currentPage + 1
-                        if (!MonthPagerUtils.isFutureMonth(target)) {
+                        if (!MonthPagerUtils.isFutureMonth(target, uiState.monthStartDay)) {
                             pagerState.animateScrollToPage(target)
                         }
                     }
@@ -197,9 +243,9 @@ fun HistoryScreen(
             val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
                 ?: HistoryPageData()
 
-            // CTA 판별용: 현재 월 여부
-            val isCurrentMonth = pageYear == com.sanha.moneytalk.core.util.DateUtils.getCurrentYear() &&
-                    pageMonth == com.sanha.moneytalk.core.util.DateUtils.getCurrentMonth()
+            // CTA 판별용: 현재 실효 월 여부
+            val (effYearCta, effMonthCta) = com.sanha.moneytalk.core.util.DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+            val isCurrentMonth = pageYear == effYearCta && pageMonth == effMonthCta
             val pageMonthLabel = if (isCurrentMonth) "이번달" else "${pageMonth}월"
 
             when {
@@ -213,8 +259,23 @@ fun HistoryScreen(
                         isCurrentMonth = isCurrentMonth,
                         isMonthSynced = viewModel.isMonthSynced(pageYear, pageMonth),
                         isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
+                        hasSmsPermission = hasSmsPermission,
                         monthLabel = pageMonthLabel,
-                        onRequestFullSync = { viewModel.showFullSyncAdDialog() },
+                        onImportData = {
+                            onRequestSmsPermission {
+                                viewModel.requestIncrementalSync()
+                            }
+                        },
+                        onRequestFullSync = {
+                            if (isCurrentMonth) {
+                                // 현재월 → 광고 없이 바로 동기화
+                                onRequestSmsPermission {
+                                    viewModel.requestIncrementalSync()
+                                }
+                            } else {
+                                viewModel.showFullSyncAdDialog()
+                            }
+                        },
                         scrollResetKey = Triple(
                             uiState.selectedCategory,
                             uiState.sortOrder,
@@ -230,6 +291,7 @@ fun HistoryScreen(
                         month = pageMonth,
                         monthStartDay = uiState.monthStartDay,
                         dailyTotals = pageData.dailyTotals,
+                        dailyIncomeTotals = pageData.dailyIncomeTotals,
                         expenses = pageData.expenses,
                         onDelete = { viewModel.deleteExpense(it) },
                         onCategoryChange = { expense, newCategory ->
@@ -351,10 +413,10 @@ fun HistoryScreen(
 
     // 전체 동기화 해제 광고 다이얼로그
     if (uiState.showFullSyncAdDialog) {
-        val context = LocalContext.current
         val activity = context as? android.app.Activity
-        val isCurrentMonthForDialog = uiState.selectedYear == com.sanha.moneytalk.core.util.DateUtils.getCurrentYear() &&
-                uiState.selectedMonth == com.sanha.moneytalk.core.util.DateUtils.getCurrentMonth()
+        val (effYearDialog, effMonthDialog) = com.sanha.moneytalk.core.util.DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+        val isCurrentMonthForDialog = uiState.selectedYear == effYearDialog &&
+                uiState.selectedMonth == effMonthDialog
         val dialogMonthLabel = if (isCurrentMonthForDialog) "이번달" else "${uiState.selectedMonth}월"
         AlertDialog(
             onDismissRequest = { viewModel.dismissFullSyncAdDialog() },
@@ -408,7 +470,9 @@ fun TransactionListView(
     isCurrentMonth: Boolean = true,
     isMonthSynced: Boolean = false,
     isPartiallyCovered: Boolean = false,
+    hasSmsPermission: Boolean = true,
     monthLabel: String = "이번달",
+    onImportData: () -> Unit = {},
     onRequestFullSync: () -> Unit = {},
     scrollResetKey: Any? = null,
     onIntent: (HistoryIntent) -> Unit
@@ -439,13 +503,19 @@ fun TransactionListView(
     }
 
     if (items.isEmpty()) {
-        // 데이터 0건 + 현재 월 아님 + 전체 동기화 미해제 + 필터 없음 → CTA 표시
+        // 데이터 가져오기 CTA: 현재월 + 필터 없음 (items.isEmpty → 데이터 없음 확정)
+        val showImportCta = isCurrentMonth && !hasActiveFilter
+        // 전체 동기화 CTA: 과거 월 + 미해제 + 필터 없음
         val showFullSyncCta = !isCurrentMonth && !isMonthSynced && !hasActiveFilter
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            if (showFullSyncCta) {
+            if (showImportCta) {
+                ImportDataCtaSection(
+                    onImportData = onImportData
+                )
+            } else if (showFullSyncCta) {
                 com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
                     onRequestFullSync = onRequestFullSync,
                     monthLabel = monthLabel
@@ -481,6 +551,15 @@ fun TransactionListView(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // 현재월 + 권한 없음 → 데이터 가져오기 CTA (데이터 있어도 표시)
+            if (isCurrentMonth && !hasSmsPermission) {
+                item(key = "import_cta") {
+                    ImportDataCtaSection(
+                        onImportData = onImportData
+                    )
+                }
+            }
+
             // 부분 데이터 안내 CTA (데이터 있지만 일부 기간 누락)
             if (isPartiallyCovered && !isMonthSynced) {
                 item(key = "partial_cta") {

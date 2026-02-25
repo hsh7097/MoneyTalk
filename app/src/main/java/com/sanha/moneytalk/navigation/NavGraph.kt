@@ -10,34 +10,22 @@ import com.sanha.moneytalk.feature.chat.ui.ChatScreen
 import com.sanha.moneytalk.feature.history.ui.HistoryScreen
 import com.sanha.moneytalk.feature.home.ui.HomeScreen
 import com.sanha.moneytalk.feature.settings.ui.SettingsScreen
-import com.sanha.moneytalk.feature.splash.ui.SplashScreen
 import kotlinx.coroutines.flow.SharedFlow
 
-/** 앱 전체 네비게이션 그래프. 스플래시, 홈, 내역, 채팅, 설정 화면 간 라우팅 정의 */
+/** 앱 전체 네비게이션 그래프. 홈, 내역, 채팅, 설정 화면 간 라우팅 정의 */
 @Composable
 fun NavGraph(
     navController: NavHostController,
     onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
     autoSyncOnStart: Boolean = false,
     onAutoSyncConsumed: () -> Unit = {},
-    showSplash: Boolean = true,
     homeTabReClickEvent: SharedFlow<Unit>? = null,
     historyTabReClickEvent: SharedFlow<Unit>? = null
 ) {
     NavHost(
         navController = navController,
-        startDestination = if (showSplash) Screen.Splash.route else Screen.Home.route
+        startDestination = Screen.Home.route
     ) {
-        composable(Screen.Splash.route) {
-            SplashScreen(
-                onSplashFinished = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Splash.route) { inclusive = true }
-                    }
-                }
-            )
-        }
-
         composable(Screen.Home.route) {
             HomeScreen(
                 onRequestSmsPermission = onRequestSmsPermission,
@@ -59,6 +47,7 @@ fun NavGraph(
         ) { backStackEntry ->
             val category = backStackEntry.arguments?.getString("category")
             HistoryScreen(
+                onRequestSmsPermission = onRequestSmsPermission,
                 filterCategory = category,
                 historyTabReClickEvent = historyTabReClickEvent
             )

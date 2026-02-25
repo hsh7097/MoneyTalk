@@ -23,11 +23,7 @@ fun SpendingTrendSection(
     if (info.primaryLine.points.isEmpty()) return
 
     CumulativeTrendSection(
-        title = info.title,
-        primaryLine = info.primaryLine,
-        toggleableLines = info.toggleableLines,
-        daysInMonth = info.daysInMonth,
-        todayDayIndex = info.todayDayIndex,
+        info = info,
         modifier = modifier
     )
 }

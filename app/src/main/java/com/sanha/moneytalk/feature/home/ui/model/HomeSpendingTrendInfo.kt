@@ -11,6 +11,10 @@ import com.sanha.moneytalk.core.ui.component.chart.SpendingTrendInfo
 import com.sanha.moneytalk.core.ui.component.chart.ToggleableLine
 import com.sanha.moneytalk.core.util.CumulativeChartDataBuilder
 import com.sanha.moneytalk.feature.home.ui.HomePageData
+import java.text.NumberFormat
+import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * 홈 화면의 누적 추이 데이터 Mapper.
@@ -24,7 +28,11 @@ data class HomeSpendingTrendInfo(
     override val primaryLine: CumulativeChartLine,
     override val toggleableLines: List<ToggleableLine>,
     override val daysInMonth: Int,
-    override val todayDayIndex: Int
+    override val todayDayIndex: Int,
+    override val currentAmount: Long,
+    override val lastMonthAmount: Long,
+    override val comparisonText: String,
+    override val isOverSpending: Boolean?
 ) : SpendingTrendInfo {
 
     companion object {
@@ -110,13 +118,75 @@ data class HomeSpendingTrendInfo(
                 }
             }
 
+            // 이번 달 현재 누적 금액
+            val currentAmt = pageData.dailyCumulativeExpenses.lastOrNull() ?: 0L
+
+            // 전월 비교 누적 금액
+            val todayIdx = pageData.todayDayIndex
+            val lastMonthAmt = if (pageData.lastMonthDailyCumulative.isEmpty()) {
+                0L
+            } else if (todayIdx >= 0) {
+                // 현재 월: 오늘 기준 동일 시점의 전월 누적
+                val clampedIdx = todayIdx.coerceAtMost(pageData.lastMonthDailyCumulative.size - 1)
+                pageData.lastMonthDailyCumulative[clampedIdx]
+            } else {
+                // 과거 월: 해당 월 완료 상태이므로 전월 최종 누적으로 비교
+                pageData.lastMonthDailyCumulative.last()
+            }
+
+            // 비교 문구 생성
+            val (compText, overSpending) = buildComparisonText(
+                currentAmt, lastMonthAmt,
+                hasLastMonthData = pageData.lastMonthDailyCumulative.isNotEmpty()
+            )
+
             return HomeSpendingTrendInfo(
-                title = stringResource(R.string.home_spending_trend),
+                title = stringResource(R.string.home_cumulative_spending),
                 primaryLine = primaryLine,
                 toggleableLines = toggleableLines,
                 daysInMonth = pageData.daysInMonth,
-                todayDayIndex = pageData.todayDayIndex
+                todayDayIndex = pageData.todayDayIndex,
+                currentAmount = currentAmt,
+                lastMonthAmount = lastMonthAmt,
+                comparisonText = compText,
+                isOverSpending = overSpending
             )
+        }
+
+        /**
+         * 비교 텍스트와 초과 여부를 계산한다.
+         *
+         * @return Pair(비교 문구, 초과 여부: true=초과, false=절약, null=비교 불가)
+         */
+        @Composable
+        private fun buildComparisonText(
+            current: Long,
+            lastMonth: Long,
+            hasLastMonthData: Boolean
+        ): Pair<String, Boolean?> {
+            if (!hasLastMonthData || lastMonth <= 0L) {
+                return Pair(stringResource(R.string.home_trend_comparison_no_data), null)
+            }
+
+            val diff = current - lastMonth
+            val absDiff = abs(diff)
+            val percentage = ((absDiff.toDouble() / lastMonth) * 100).roundToInt()
+            val formattedAmount = NumberFormat.getNumberInstance(Locale.KOREA).format(absDiff)
+
+            return when {
+                percentage < 3 -> Pair(
+                    stringResource(R.string.home_trend_comparison_same),
+                    null
+                )
+                diff > 0 -> Pair(
+                    stringResource(R.string.home_trend_comparison_more, formattedAmount, percentage),
+                    true
+                )
+                else -> Pair(
+                    stringResource(R.string.home_trend_comparison_less, formattedAmount, percentage),
+                    false
+                )
+            }
         }
     }
 }

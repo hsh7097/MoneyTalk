@@ -272,3 +272,8 @@ data class MonthlySum(
     val month: String,
     val total: Int
 )
+
+data class CardExpenseSum(
+    val cardName: String,
+    val total: Int
+)

@@ -1,7 +1,7 @@
 package com.sanha.moneytalk.feature.home.ui
 
-import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -12,8 +12,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,15 +27,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.SmallFloatingActionButton
@@ -57,6 +51,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -64,8 +59,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -78,13 +75,12 @@ import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
+import com.sanha.moneytalk.core.ui.component.FullSyncCtaSection
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.feature.history.ui.IncomeDetailDialog
-import com.sanha.moneytalk.core.ui.component.chart.DonutChartCompose
-import com.sanha.moneytalk.core.ui.component.chart.DonutSlice
+import com.sanha.moneytalk.feature.home.ui.component.ImportDataCtaSection
 import com.sanha.moneytalk.feature.home.ui.component.SpendingTrendSection
 import com.sanha.moneytalk.feature.home.ui.model.HomeSpendingTrendInfo
-import com.sanha.moneytalk.core.ui.component.FullSyncCtaSection
 import com.sanha.moneytalk.core.ui.component.getCategoryChartColor
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
@@ -93,8 +89,12 @@ import androidx.compose.foundation.pager.rememberPagerState
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
+import com.sanha.moneytalk.core.sms2.SmsPipeline
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.util.DateUtils
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
@@ -113,6 +113,14 @@ fun HomeScreen(
     val contentResolver = context.contentResolver
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // SMS 권한 상태 (resume 시 갱신)
+    var hasSmsPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
+                    PackageManager.PERMISSION_GRANTED
+        )
+    }
+
     // 선택된 지출/수입 항목 (상세보기용)
     var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
     var selectedIncome by remember { mutableStateOf<IncomeEntity?>(null) }
@@ -125,12 +133,15 @@ fun HomeScreen(
         }
     }
 
-    // 화면 재진입(resume) 시 데이터 새로고침 (AI 인사이트 포함)
+    // 화면 재진입(resume) 시 데이터 새로고침 + 권한 상태 갱신
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshData()
+                hasSmsPermission = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.READ_SMS
+                ) == PackageManager.PERMISSION_GRANTED
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -148,7 +159,7 @@ fun HomeScreen(
     }
     val pagerState = rememberPagerState(
         initialPage = initialPage,
-        pageCount = { MonthPagerUtils.TOTAL_PAGE_COUNT }
+        pageCount = { MonthPagerUtils.getPageCount(uiState.monthStartDay) }
     )
     val coroutineScope = rememberCoroutineScope()
 
@@ -169,13 +180,12 @@ fun HomeScreen(
         viewModel.setMonth(year, month)
     }
 
-    // 홈 탭 재클릭 → 오늘(현재 월) 페이지로 이동
+    // 홈 탭 재클릭 → 오늘(현재 커스텀 월) 페이지로 이동
+    val currentMonthStartDay by rememberUpdatedState(uiState.monthStartDay)
     LaunchedEffect(homeTabReClickEvent) {
         homeTabReClickEvent?.collect {
-            val todayPage = MonthPagerUtils.yearMonthToPage(
-                DateUtils.getCurrentYear(),
-                DateUtils.getCurrentMonth()
-            )
+            val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(currentMonthStartDay)
+            val todayPage = MonthPagerUtils.yearMonthToPage(effYear, effMonth)
             if (pagerState.currentPage != todayPage) {
                 pagerState.animateScrollToPage(todayPage)
             }
@@ -203,10 +213,11 @@ fun HomeScreen(
             year = pageYear,
             month = pageMonth,
             monthStartDay = uiState.monthStartDay,
-            isSyncing = uiState.isSyncing,
             isMonthSynced = viewModel.isMonthSynced(pageYear, pageMonth),
             isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
+            hasSmsPermission = hasSmsPermission,
             selectedCategory = uiState.selectedCategory,
+            isSyncing = uiState.isSyncing,
             onPreviousMonth = {
                 coroutineScope.launch {
                     pagerState.animateScrollToPage(pagerState.currentPage - 1)
@@ -215,7 +226,7 @@ fun HomeScreen(
             onNextMonth = {
                 coroutineScope.launch {
                     val target = pagerState.currentPage + 1
-                    if (!MonthPagerUtils.isFutureMonth(target)) {
+                    if (!MonthPagerUtils.isFutureMonth(target, uiState.monthStartDay)) {
                         pagerState.animateScrollToPage(target)
                     }
                 }
@@ -226,13 +237,13 @@ fun HomeScreen(
                 }
             },
             onFullSync = {
-                if (viewModel.isMonthSynced(pageYear, pageMonth)) {
-                    // 이미 해제됨 → 현재 보고 있는 월만 동기화
+                val (effY, effM) = DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+                val isPageCurrentMonth = pageYear == effY && pageMonth == effM
+                if (viewModel.isMonthSynced(pageYear, pageMonth) || isPageCurrentMonth) {
                     onRequestSmsPermission {
                         viewModel.syncMonthData(contentResolver, pageYear, pageMonth)
                     }
                 } else {
-                    // 미해제 → 광고 다이얼로그 표시
                     viewModel.preloadFullSyncAd()
                     viewModel.showFullSyncAdDialog()
                 }
@@ -267,7 +278,6 @@ fun HomeScreen(
 
     // 지출 상세 다이얼로그 (공통 컴포넌트 사용)
     selectedExpense?.let { expense ->
-        Log.e("MT_DEBUG", "HomeScreen[selectedExpense] : ${expense.storeName}, ${expense.amount}원")
         ExpenseDetailDialog(
             expense = expense,
             onDismiss = { selectedExpense = null },
@@ -387,20 +397,21 @@ fun HomeScreen(
         )
     }
 
-    // SMS 동기화 진행 다이얼로그
+    // SMS 동기화 진행 다이얼로그 (Stepper UI + 스킵 가능)
     if (uiState.showSyncDialog) {
         AlertDialog(
-            onDismissRequest = { /* 진행 중에는 닫기 불가 */ },
+            onDismissRequest = { viewModel.dismissSyncDialog() },
+            properties = DialogProperties(dismissOnClickOutside = false),
             title = { Text(stringResource(R.string.home_sync_dialog_title)) },
             text = {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // 로딩 스피너
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(48.dp),
-                        strokeWidth = 4.dp
+                    // Stepper 인디케이터 (5단계)
+                    SyncStepIndicator(
+                        currentStep = uiState.syncStepIndex,
+                        totalSteps = SmsPipeline.TOTAL_STEPS
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -442,15 +453,75 @@ fun HomeScreen(
                     )
                 }
             },
-            confirmButton = { }
+            confirmButton = { },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissSyncDialog() }) {
+                    Text(stringResource(R.string.sync_dialog_dismiss))
+                }
+            }
+        )
+    }
+
+    // AI 성과 요약 카드 (초기 동기화 완료 후)
+    if (uiState.showEngineSummary) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissEngineSummary() },
+            title = {
+                Text(
+                    text = stringResource(R.string.engine_summary_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (uiState.engineSummaryTotalSms > 0) {
+                        Text(
+                            text = stringResource(R.string.engine_summary_sms_analyzed, uiState.engineSummaryTotalSms),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    if (uiState.engineSummaryPatterns > 0) {
+                        Text(
+                            text = stringResource(R.string.engine_summary_patterns_learned, uiState.engineSummaryPatterns),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    val parts = mutableListOf<String>()
+                    if (uiState.engineSummaryExpenses > 0) {
+                        parts.add(stringResource(R.string.engine_summary_expense_count, uiState.engineSummaryExpenses))
+                    }
+                    if (uiState.engineSummaryIncomes > 0) {
+                        parts.add(stringResource(R.string.engine_summary_income_count, uiState.engineSummaryIncomes))
+                    }
+                    if (parts.isNotEmpty()) {
+                        Text(
+                            text = stringResource(R.string.engine_summary_registered, parts.joinToString(" · ")),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.engine_summary_background_note),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissEngineSummary() }) {
+                    Text(stringResource(R.string.common_confirm))
+                }
+            }
         )
     }
 
     // 전체 동기화 해제 광고 다이얼로그
     if (uiState.showFullSyncAdDialog) {
         val activity = context as? android.app.Activity
-        val isCurrentMonthForDialog = uiState.selectedYear == DateUtils.getCurrentYear() &&
-                uiState.selectedMonth == DateUtils.getCurrentMonth()
+        val (effYearDialog, effMonthDialog) = DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+        val isCurrentMonthForDialog = uiState.selectedYear == effYearDialog &&
+                uiState.selectedMonth == effMonthDialog
         val dialogMonthLabel = if (isCurrentMonthForDialog) "이번달" else "${uiState.selectedMonth}월"
         AlertDialog(
             onDismissRequest = { viewModel.dismissFullSyncAdDialog() },
@@ -500,10 +571,11 @@ fun HomePageContent(
     year: Int,
     month: Int,
     monthStartDay: Int,
-    isSyncing: Boolean,
     isMonthSynced: Boolean,
     isPartiallyCovered: Boolean,
+    hasSmsPermission: Boolean,
     selectedCategory: String?,
+    isSyncing: Boolean,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onIncrementalSync: () -> Unit,
@@ -544,9 +616,9 @@ fun HomePageContent(
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
             contentPadding = PaddingValues(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 월간 현황
+            // ━━━ BLOCK 1: Hero Summary ━━━
             item {
                 MonthlyOverviewSection(
                     year = year,
@@ -556,14 +628,45 @@ fun HomePageContent(
                     income = pageData.monthlyIncome,
                     expense = pageData.monthlyExpense,
                     onPreviousMonth = onPreviousMonth,
-                    onNextMonth = onNextMonth,
-                    onIncrementalSync = onIncrementalSync,
-                    onFullSync = onFullSync,
-                    isSyncing = isSyncing
+                    onNextMonth = onNextMonth
                 )
             }
 
-            // 누적 지출 추이 차트 (월간 현황 바로 아래)
+            // CTA 표시 조건 계산
+            val (effYearCta, effMonthCta) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
+            val isCurrentMonth = year == effYearCta && month == effMonthCta
+            val hasNoData = !pageData.isLoading &&
+                    pageData.monthlyExpense == 0 && pageData.monthlyIncome == 0
+
+            // 데이터 가져오기 CTA: 현재월 + 권한 없거나 데이터 없음
+            val showImportCta = isCurrentMonth && (!hasSmsPermission || hasNoData)
+
+            // 현재월 데이터 가져오기 CTA (권한 없거나 데이터 없을 때)
+            if (showImportCta) {
+                item {
+                    ImportDataCtaSection(
+                        onImportData = onIncrementalSync,
+                        isSyncing = isSyncing
+                    )
+                }
+            }
+
+            // 과거 월 전체 동기화 CTA (광고 시청 → 데이터 가져오기)
+            val ctaMonthLabel = if (isCurrentMonth) "이번달" else "${month}월"
+            val showEmptyCta = hasNoData && !isCurrentMonth && !isMonthSynced
+            val showPartialCta = !hasNoData && !isCurrentMonth && isPartiallyCovered && !isMonthSynced
+
+            if (showEmptyCta) {
+                item {
+                    FullSyncCtaSection(
+                        onRequestFullSync = onFullSync,
+                        monthLabel = ctaMonthLabel,
+                        isSyncing = isSyncing
+                    )
+                }
+            }
+
+            // ━━━ BLOCK 2: Spending Trend (누적 추이 차트) ━━━
             if (pageData.dailyCumulativeExpenses.isNotEmpty()) {
                 item {
                     val trendInfo = HomeSpendingTrendInfo.from(pageData)
@@ -573,106 +676,104 @@ fun HomePageContent(
                 }
             }
 
-            // 데이터 0건 + 현재 월 아님 + 전체 동기화 미해제 → 빈 CTA 표시
-            val isCurrentMonth = year == DateUtils.getCurrentYear() && month == DateUtils.getCurrentMonth()
-            val hasNoData = !pageData.isLoading &&
-                    pageData.monthlyExpense == 0 && pageData.monthlyIncome == 0
-            val showEmptyCta = hasNoData && !isCurrentMonth && !isMonthSynced
-            // 데이터 있지만 부분 커버 + 해당 월 미동기화 → 부분 CTA 표시
-            val showPartialCta = !hasNoData && isPartiallyCovered && !isMonthSynced
-            // 월 라벨: 현재 월이면 "이번달", 아니면 "M월"
-            val ctaMonthLabel = if (isCurrentMonth) "이번달" else "${month}월"
-
-            if (showEmptyCta) {
+            // 부분 데이터 안내 CTA (데이터 있지만 해당 월 미동기화)
+            if (showPartialCta) {
                 item {
                     FullSyncCtaSection(
                         onRequestFullSync = onFullSync,
-                        monthLabel = ctaMonthLabel
+                        monthLabel = ctaMonthLabel,
+                        isPartial = true,
+                        isSyncing = isSyncing
                     )
                 }
-            } else {
-                // 부분 데이터 안내 CTA
-                if (showPartialCta) {
-                    item {
-                        FullSyncCtaSection(
-                            onRequestFullSync = onFullSync,
-                            monthLabel = ctaMonthLabel,
-                            isPartial = true
-                        )
-                    }
-                }
+            }
 
-                // 카테고리별 지출
+            // ━━━ BLOCK 3: Category + AI Insight ━━━
+            item {
+                CategoryExpenseSection(
+                    categoryExpenses = pageData.categoryExpenses,
+                    categoryBudgets = pageData.categoryBudgets,
+                    selectedCategory = selectedCategory,
+                    onCategorySelected = onCategorySelected
+                )
+            }
+
+            // AI 인사이트 (카테고리 바로 아래)
+            if (pageData.aiInsight.isNotBlank()) {
                 item {
-                    CategoryExpenseSection(
-                        categoryExpenses = pageData.categoryExpenses,
-                        selectedCategory = selectedCategory,
-                        onCategorySelected = onCategorySelected
+                    AiInsightCard(
+                        insight = pageData.aiInsight,
+                        monthlyExpense = pageData.monthlyExpense,
+                        lastMonthExpense = pageData.lastMonthExpense
                     )
                 }
+            }
 
-                // AI 인사이트
-                if (pageData.aiInsight.isNotBlank()) {
-                    item {
-                        AiInsightCard(
-                            insight = pageData.aiInsight,
-                            monthlyExpense = pageData.monthlyExpense,
-                            lastMonthExpense = pageData.lastMonthExpense
-                        )
-                    }
-                }
-
-                // 오늘의 지출 + 전월 대비 (당월에서만 표시)
-                if (isCurrentMonth) {
-                    item {
-                        TodayAndComparisonSection(
-                            todayExpense = pageData.todayExpense,
-                            todayExpenseCount = pageData.todayExpenseCount,
-                            monthlyExpense = pageData.monthlyExpense,
-                            lastMonthExpense = pageData.lastMonthExpense,
-                            comparisonPeriodLabel = pageData.comparisonPeriodLabel
-                        )
-                    }
-
-                    // 오늘 내역 (지출 + 수입 시간순 통합)
-                    item {
+            // ━━━ BLOCK 4: Recent Transactions (오늘 내역 + 오늘 지출 요약) ━━━
+            if (isCurrentMonth) {
+                item {
+                    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
                             text = stringResource(R.string.home_today_transactions),
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 6.dp)
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "₩${numberFormat.format(pageData.todayExpense)}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (pageData.todayExpenseCount > 0) {
+                                Text(
+                                    text = stringResource(R.string.home_today_count, pageData.todayExpenseCount),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (todayTransactions.isEmpty()) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.home_no_today_transactions),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 16.dp)
                         )
                     }
-
-                    if (todayTransactions.isEmpty()) {
-                        item {
-                            Text(
-                                text = stringResource(R.string.home_no_today_transactions),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                modifier = Modifier.padding(vertical = 16.dp)
-                            )
-                        }
-                    } else {
-                        items(
-                            count = todayTransactions.size,
-                            key = { index ->
-                                when (val item = todayTransactions[index]) {
-                                    is TodayItem.Expense -> "expense_${item.expense.id}"
-                                    is TodayItem.Income -> "income_${item.income.id}"
-                                }
-                            }
-                        ) { index ->
+                } else {
+                    items(
+                        count = todayTransactions.size,
+                        key = { index ->
                             when (val item = todayTransactions[index]) {
-                                is TodayItem.Expense -> TransactionCardCompose(
-                                    info = ExpenseTransactionCardInfo(item.expense),
-                                    onClick = { onExpenseSelected(item.expense) }
-                                )
-                                is TodayItem.Income -> TransactionCardCompose(
-                                    info = IncomeTransactionCardInfo(item.income),
-                                    onClick = { onIncomeSelected(item.income) }
-                                )
+                                is TodayItem.Expense -> "expense_${item.expense.id}"
+                                is TodayItem.Income -> "income_${item.income.id}"
                             }
+                        }
+                    ) { index ->
+                        when (val item = todayTransactions[index]) {
+                            is TodayItem.Expense -> TransactionCardCompose(
+                                info = ExpenseTransactionCardInfo(item.expense),
+                                onClick = { onExpenseSelected(item.expense) }
+                            )
+                            is TodayItem.Income -> TransactionCardCompose(
+                                info = IncomeTransactionCardInfo(item.income),
+                                onClick = { onIncomeSelected(item.income) }
+                            )
                         }
                     }
                 }
@@ -712,7 +813,7 @@ fun HomePageContent(
     } // Box
 }
 
-/** 월간 수입/지출 현황 섹션. 월 네비게이션, 총 수입·지출 금액, 월별 잔액을 표시 */
+/** 월간 현황 히어로 섹션. 월 네비게이션(큰 화살표, 중앙 정렬) + Navy 카드 안에 총 지출/수입 뱃지 */
 @Composable
 fun MonthlyOverviewSection(
     year: Int,
@@ -722,36 +823,40 @@ fun MonthlyOverviewSection(
     income: Int,
     expense: Int,
     onPreviousMonth: () -> Unit,
-    onNextMonth: () -> Unit,
-    onIncrementalSync: () -> Unit,
-    onFullSync: () -> Unit,
-    isSyncing: Boolean
+    onNextMonth: () -> Unit
 ) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
-    var showSyncMenu by remember { mutableStateOf(false) }
+    val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
+    val isCurrentMonth = year > effYear || (year == effYear && month >= effMonth)
 
     Column(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 월 선택기
+        // 월 네비게이션 — 큰 화살표 + 중앙 정렬
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onPreviousMonth) {
+            IconButton(
+                onClick = onPreviousMonth,
+                modifier = Modifier.size(48.dp)
+            ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                    contentDescription = stringResource(R.string.home_previous_month)
+                    contentDescription = stringResource(R.string.home_previous_month),
+                    modifier = Modifier.size(32.dp)
                 )
             }
 
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 16.dp)
             ) {
                 Text(
                     text = DateUtils.formatCustomYearMonth(year, month, monthStartDay),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
@@ -759,134 +864,98 @@ fun MonthlyOverviewSection(
                     Text(
                         text = periodLabel,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
                 }
             }
 
-            Row {
-                val isCurrentMonth = year >= DateUtils.getCurrentYear() &&
-                    month >= DateUtils.getCurrentMonth()
-                IconButton(
-                    onClick = onNextMonth,
-                    enabled = !isCurrentMonth
+            IconButton(
+                onClick = onNextMonth,
+                enabled = !isCurrentMonth,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = stringResource(R.string.home_next_month),
+                    modifier = Modifier.size(32.dp),
+                    tint = if (isCurrentMonth) {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Hero 카드: Navy 그라데이션 배경 + 총 지출 + 수입 뱃지
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                        )
+                    )
+                )
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = stringResource(R.string.home_this_month_expense),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.7f)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "₩${numberFormat.format(expense)}",
+                    style = MaterialTheme.typography.displayLarge,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                // 수입 뱃지
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = stringResource(R.string.home_next_month),
-                        tint = if (isCurrentMonth) {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        }
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(
+                                color = Color.White.copy(alpha = 0.5f),
+                                shape = CircleShape
+                            )
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.home_income_badge, numberFormat.format(income)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.7f)
                     )
                 }
-
-                // 동기화 버튼 + 드롭다운 메뉴
-                Box {
-                    IconButton(
-                        onClick = { showSyncMenu = true },
-                        enabled = !isSyncing
-                    ) {
-                        if (isSyncing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = stringResource(R.string.home_sync)
-                            )
-                        }
-                    }
-
-                    DropdownMenu(
-                        expanded = showSyncMenu,
-                        onDismissRequest = { showSyncMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.home_sync_new_only)) },
-                            onClick = {
-                                showSyncMenu = false
-                                onIncrementalSync()
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.Refresh, contentDescription = null)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.home_sync_full)) },
-                            onClick = {
-                                showSyncMenu = false
-                                onFullSync()
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.MoreVert, contentDescription = null)
-                            }
-                        )
-                    }
-                }
             }
         }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // 이번 달 지출 (중앙 대형 표시)
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = stringResource(R.string.home_this_month_expense),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "₩${numberFormat.format(expense)}",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            // 수입 뱃지
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .background(
-                            color = MaterialTheme.moneyTalkColors.income,
-                            shape = CircleShape
-                        )
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = stringResource(R.string.home_income_badge, numberFormat.format(income)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
     }
 }
 
-/** 카테고리별 지출 비율 섹션. 상위 카테고리 막대 그래프 + 전체 목록을 표시 */
+/** 카테고리별 지출 비율 섹션. 수평 바 차트로 각 카테고리 비율을 표시 */
 @Composable
 fun CategoryExpenseSection(
     categoryExpenses: List<CategorySum>,
+    categoryBudgets: Map<String, Int> = emptyMap(),
     selectedCategory: String? = null,
     onCategorySelected: (String?) -> Unit = {}
 ) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
     var showAll by remember { mutableStateOf(false) }
-    val othersLabel = stringResource(R.string.home_chart_others_label)
 
     // 금액 내림차순 정렬 ("AI 분류 중" 항목은 항상 마지막에 배치)
     val mergedExpenses = remember(categoryExpenses) {
@@ -907,49 +976,9 @@ fun CategoryExpenseSection(
         mergedExpenses.sumOf { it.total }
     }
 
-    // TOP 3 또는 전체 표시
+    // TOP 5 또는 전체 표시
     val displayList = remember(mergedExpenses, showAll) {
-        if (showAll) mergedExpenses else mergedExpenses.take(3)
-    }
-
-    // 도넛 차트용 슬라이스 데이터 — showAll 상태에 따라 도넛도 연동
-    // 기본: TOP3 + "그 외" 4조각 (범례와 정합), 전체보기: 전체 카테고리
-    val chartSlices = remember(mergedExpenses, totalExpense, showAll) {
-        if (showAll || mergedExpenses.size <= 3) {
-            // 전체 카테고리 도넛
-            mergedExpenses.map { item ->
-                val category = Category.fromDisplayName(item.category)
-                DonutSlice(
-                    category = category,
-                    amount = item.total,
-                    percentage = if (totalExpense > 0) item.total.toFloat() / totalExpense else 0f,
-                    color = getCategoryChartColor(category)
-                )
-            }
-        } else {
-            // TOP3 + "그 외" 합산 = 4조각
-            val top3 = mergedExpenses.take(3).map { item ->
-                val category = Category.fromDisplayName(item.category)
-                DonutSlice(
-                    category = category,
-                    amount = item.total,
-                    percentage = if (totalExpense > 0) item.total.toFloat() / totalExpense else 0f,
-                    color = getCategoryChartColor(category)
-                )
-            }
-            val othersTotal = mergedExpenses.drop(3).sumOf { it.total }
-            if (othersTotal > 0) {
-                top3 + DonutSlice(
-                    category = Category.ETC,
-                    amount = othersTotal,
-                    percentage = if (totalExpense > 0) othersTotal.toFloat() / totalExpense else 0f,
-                    color = Color(0xFFBDBDBD),
-                    displayLabel = othersLabel
-                )
-            } else {
-                top3
-            }
-        }
+        if (showAll) mergedExpenses else mergedExpenses.take(5)
     }
 
     Column(
@@ -966,7 +995,7 @@ fun CategoryExpenseSection(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
-            if (mergedExpenses.size > 3) {
+            if (mergedExpenses.size > 5) {
                 Text(
                     text = if (showAll) stringResource(R.string.home_view_collapse)
                     else stringResource(R.string.home_view_all),
@@ -977,7 +1006,7 @@ fun CategoryExpenseSection(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         if (displayList.isEmpty()) {
             Text(
@@ -986,25 +1015,37 @@ fun CategoryExpenseSection(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
         } else {
-            // 카테고리가 있으면 도넛 차트 표시
-            if (mergedExpenses.isNotEmpty()) {
-                DonutChartCompose(
-                    slices = chartSlices,
-                    totalAmount = totalExpense
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            displayList.forEach { item ->
+            displayList.forEachIndexed { index, item ->
                 val category = Category.fromDisplayName(item.category)
-                val chartColor = getCategoryChartColor(category)
-                val percentage = if (totalExpense > 0) {
+                val budget = categoryBudgets[item.category]
+                val budgetAmount = budget ?: 0
+                val hasBudget = budget != null && budgetAmount > 0
+                val isOverBudget = hasBudget && item.total > budgetAmount
+                val budgetRatio = if (hasBudget) item.total.toFloat() / budgetAmount else 0f
+                val isWarningBudget = hasBudget && budgetRatio in 0.9f..1f
+                val isSelected = selectedCategory == item.category
+                val isFirst = index == 0
+
+                val percentage = if (hasBudget) {
+                    (item.total.toFloat() / budgetAmount * 100).toInt()
+                } else if (totalExpense > 0) {
                     (item.total.toFloat() / totalExpense * 100).toInt()
                 } else 0
-                val progress = if (totalExpense > 0) {
+
+                val progress = if (hasBudget) {
+                    (item.total.toFloat() / budgetAmount).coerceAtMost(1f)
+                } else if (totalExpense > 0) {
                     item.total.toFloat() / totalExpense
                 } else 0f
-                val isSelected = selectedCategory == item.category
+
+                // 예산 상태별 색상: 초과(빨강), 경고(주황), 기본
+                val warningColor = MaterialTheme.moneyTalkColors.calendarSunday
+                val barColor = when {
+                    isOverBudget -> MaterialTheme.colorScheme.error
+                    isWarningBudget -> warningColor
+                    isFirst && !hasBudget -> MaterialTheme.colorScheme.primary
+                    else -> getCategoryChartColor(category)
+                }
 
                 Column(
                     modifier = Modifier
@@ -1013,61 +1054,93 @@ fun CategoryExpenseSection(
                             if (isSelected) onCategorySelected(null)
                             else onCategorySelected(item.category)
                         }
-                        .padding(vertical = 4.dp)
+                        .padding(vertical = 6.dp)
                 ) {
-                    // 카테고리명 + 금액/퍼센트
+                    // 상단: 아이콘 + 이름 | 금액 + 퍼센트
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // 왼쪽: 원형 아이콘 + 카테고리명
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(
-                                text = category.emoji,
+                            CategoryIcon(
+                                category = category,
+                                containerSize = 40.dp,
                                 fontSize = 20.sp
                             )
                             Text(
                                 text = category.displayName,
                                 style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                            )
-                        }
-                        Column(
-                            horizontalAlignment = Alignment.End
-                        ) {
-                            Text(
-                                text = "₩${numberFormat.format(item.total)}",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            Text(
-                                text = "${percentage}%",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
+                        }
+
+                        // 오른쪽: 금액 + 퍼센트 (한 줄)
+                        if (hasBudget) {
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "₩${numberFormat.format(item.total)} / ₩${numberFormat.format(budgetAmount)}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isOverBudget) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (isOverBudget) {
+                                        "₩${numberFormat.format(item.total - budgetAmount)} 초과"
+                                    } else if (isWarningBudget) {
+                                        "₩${numberFormat.format(budgetAmount - item.total)} 남음 ⚠️"
+                                    } else {
+                                        "₩${numberFormat.format(budgetAmount - item.total)} 남음"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = when {
+                                        isOverBudget -> MaterialTheme.colorScheme.error
+                                        isWarningBudget -> warningColor
+                                        else -> MaterialTheme.moneyTalkColors.income
+                                    }
+                                )
+                            }
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "₩${numberFormat.format(item.total)}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "${percentage}%",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // 프로그레스 바 (카테고리별 고유 색상 — 도넛 차트와 동기화)
+                    // 수평 바 차트
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(8.dp)
                             .clip(RoundedCornerShape(4.dp))
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(progress)
                                 .height(8.dp)
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(chartColor)
+                                .background(barColor)
                         )
                     }
                 }
@@ -1076,144 +1149,6 @@ fun CategoryExpenseSection(
     }
 }
 
-
-/** 오늘의 지출 카드와 전월 대비 카드를 가로 2분할 배치하는 래퍼 섹션 */
-@Composable
-fun TodayAndComparisonSection(
-    todayExpense: Int,
-    todayExpenseCount: Int,
-    monthlyExpense: Int,
-    lastMonthExpense: Int,
-    comparisonPeriodLabel: String
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        TodayExpenseCard(
-            todayExpense = todayExpense,
-            todayExpenseCount = todayExpenseCount,
-            modifier = Modifier.weight(1f).fillMaxHeight()
-        )
-        MonthComparisonCard(
-            monthlyExpense = monthlyExpense,
-            lastMonthExpense = lastMonthExpense,
-            comparisonPeriodLabel = comparisonPeriodLabel,
-            modifier = Modifier.weight(1f).fillMaxHeight()
-        )
-    }
-}
-
-/** 오늘의 지출 카드. 오늘 총 지출 금액과 건수를 표시 */
-@Composable
-fun TodayExpenseCard(
-    todayExpense: Int,
-    todayExpenseCount: Int,
-    modifier: Modifier = Modifier
-) {
-    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
-
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = stringResource(R.string.home_today_expense),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "₩${numberFormat.format(todayExpense)}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = if (todayExpenseCount > 0) stringResource(R.string.home_today_count, todayExpenseCount) else " ",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-            )
-        }
-    }
-}
-
-/** 전월 대비 카드. 이번 달과 지난달 동일 기간의 지출 차이를 표시 */
-@Composable
-fun MonthComparisonCard(
-    monthlyExpense: Int,
-    lastMonthExpense: Int,
-    comparisonPeriodLabel: String,
-    modifier: Modifier = Modifier
-) {
-    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
-    val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-
-    val diff = monthlyExpense - lastMonthExpense
-    val comparisonValue = when {
-        lastMonthExpense == 0 -> "-"
-        diff > 0 -> "+₩${numberFormat.format(diff)}"
-        diff < 0 -> "-₩${numberFormat.format(-diff)}"
-        else -> "₩0"
-    }
-    val comparisonSub = when {
-        lastMonthExpense == 0 -> stringResource(R.string.home_vs_last_month_no_data)
-        diff > 0 -> stringResource(R.string.home_vs_last_month_more, numberFormat.format(diff))
-        diff < 0 -> stringResource(R.string.home_vs_last_month_less, numberFormat.format(-diff))
-        else -> stringResource(R.string.home_vs_last_month_same)
-    }
-    val comparisonValueColor = when {
-        lastMonthExpense == 0 -> MaterialTheme.colorScheme.onSurface
-        diff > 0 -> MaterialTheme.colorScheme.error
-        diff < 0 -> MaterialTheme.moneyTalkColors.income
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.home_vs_last_month),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = labelColor
-                )
-                if (comparisonPeriodLabel.isNotBlank()) {
-                    Text(
-                        text = "($comparisonPeriodLabel)",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = labelColor.copy(alpha = 0.7f)
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = comparisonValue,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = comparisonValueColor
-            )
-            Text(
-                text = comparisonSub,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-            )
-        }
-    }
-}
 
 /** 지출 내역이 없을 때 표시하는 빈 상태 섹션 */
 @Composable
@@ -1254,11 +1189,12 @@ fun AiInsightCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            containerColor = MaterialTheme.colorScheme.primaryContainer
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = insight,
                 style = MaterialTheme.typography.bodyMedium,
@@ -1268,9 +1204,9 @@ fun AiInsightCard(
             if (lastMonthExpense > 0 && diff != 0) {
                 Spacer(modifier = Modifier.height(8.dp))
                 HorizontalDivider(
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = if (diff > 0) {
                         stringResource(R.string.home_insight_diff_more, numberFormat.format(diff))
@@ -1294,4 +1230,78 @@ fun AiInsightCard(
 sealed interface TodayItem {
     data class Expense(val expense: ExpenseEntity) : TodayItem
     data class Income(val income: IncomeEntity) : TodayItem
+}
+
+/**
+ * 동기화 단계 인디케이터 (5-step dot indicator)
+ *
+ * 현재 단계를 시각적으로 표시:
+ * - 완료: Primary 색상 채움
+ * - 현재: Primary 색상 + 크기 확대 (애니메이션)
+ * - 미완료: Surface 색상 (비활성)
+ */
+@Composable
+private fun SyncStepIndicator(
+    currentStep: Int,
+    totalSteps: Int,
+    modifier: Modifier = Modifier
+) {
+    val stepLabels = stringArrayResource(R.array.sync_step_labels)
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        for (i in 0 until totalSteps) {
+            val isCompleted = i < currentStep
+            val isCurrent = i == currentStep
+            val animatedDotSize by animateDpAsState(
+                targetValue = if (isCurrent) 12.dp else 8.dp,
+                label = "dotSize"
+            )
+            val dotColor = when {
+                isCompleted || isCurrent -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(animatedDotSize)
+                        .background(color = dotColor, shape = CircleShape)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = stepLabels.getOrElse(i) { "" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isCompleted || isCurrent) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    },
+                    fontSize = 9.sp
+                )
+            }
+
+            // 단계 사이 연결선
+            if (i < totalSteps - 1) {
+                Box(
+                    modifier = Modifier
+                        .width(16.dp)
+                        .height(2.dp)
+                        .background(
+                            color = if (i < currentStep) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            }
+                        )
+                )
+            }
+        }
+    }
 }
