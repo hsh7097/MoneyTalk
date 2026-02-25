@@ -315,7 +315,8 @@
     <string name="home_no_today_transactions">No transactions yet today</string>
     <string name="home_sync_dialog_title">Reading expense history</string>
     <string name="sync_dialog_dismiss">Continue in background</string>
-    <string name="sync_phase2_complete">Remaining period done: %s</string>
+    <string name="sync_in_progress_button">Syncing…</string>
+    <string name="sync_in_progress_note">Processing data in the background</string>
     <string-array name="sync_step_labels">
         <item>Filter</item>
         <item>Analyze</item>

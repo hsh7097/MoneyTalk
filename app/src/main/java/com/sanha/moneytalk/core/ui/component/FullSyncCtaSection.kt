@@ -1,10 +1,14 @@
 package com.sanha.moneytalk.core.ui.component
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -26,12 +30,14 @@ import com.sanha.moneytalk.R
  * @param onRequestFullSync 전체 동기화 해제(광고 다이얼로그) 요청 콜백
  * @param monthLabel 표시할 월 라벨 (예: "이번달", "2025년 12월")
  * @param isPartial 부분 데이터 모드 여부
+ * @param isSyncing 동기화 진행 중 여부 (true 시 버튼 비활성화 + 진행중 표시)
  */
 @Composable
 fun FullSyncCtaSection(
     onRequestFullSync: () -> Unit,
     monthLabel: String,
     isPartial: Boolean = false,
+    isSyncing: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -64,8 +70,22 @@ fun FullSyncCtaSection(
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(16.dp))
-        OutlinedButton(onClick = onRequestFullSync) {
-            Text(stringResource(R.string.full_sync_cta_button, monthLabel))
+        OutlinedButton(
+            onClick = onRequestFullSync,
+            enabled = !isSyncing
+        ) {
+            if (isSyncing) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.sync_in_progress_button))
+                }
+            } else {
+                Text(stringResource(R.string.full_sync_cta_button, monthLabel))
+            }
         }
     }
 }

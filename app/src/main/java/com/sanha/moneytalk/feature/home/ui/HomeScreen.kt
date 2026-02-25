@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -216,6 +217,7 @@ fun HomeScreen(
             isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
             hasSmsPermission = hasSmsPermission,
             selectedCategory = uiState.selectedCategory,
+            isSyncing = uiState.isSyncing,
             onPreviousMonth = {
                 coroutineScope.launch {
                     pagerState.animateScrollToPage(pagerState.currentPage - 1)
@@ -399,6 +401,7 @@ fun HomeScreen(
     if (uiState.showSyncDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissSyncDialog() },
+            properties = DialogProperties(dismissOnClickOutside = false),
             title = { Text(stringResource(R.string.home_sync_dialog_title)) },
             text = {
                 Column(
@@ -459,7 +462,7 @@ fun HomeScreen(
         )
     }
 
-    // AI 성과 요약 카드 (Phase 1 완료 후)
+    // AI 성과 요약 카드 (초기 동기화 완료 후)
     if (uiState.showEngineSummary) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissEngineSummary() },
@@ -572,6 +575,7 @@ fun HomePageContent(
     isPartiallyCovered: Boolean,
     hasSmsPermission: Boolean,
     selectedCategory: String?,
+    isSyncing: Boolean,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onIncrementalSync: () -> Unit,
@@ -641,7 +645,8 @@ fun HomePageContent(
             if (showImportCta) {
                 item {
                     ImportDataCtaSection(
-                        onImportData = onIncrementalSync
+                        onImportData = onIncrementalSync,
+                        isSyncing = isSyncing
                     )
                 }
             }
@@ -655,7 +660,8 @@ fun HomePageContent(
                 item {
                     FullSyncCtaSection(
                         onRequestFullSync = onFullSync,
-                        monthLabel = ctaMonthLabel
+                        monthLabel = ctaMonthLabel,
+                        isSyncing = isSyncing
                     )
                 }
             }
@@ -676,7 +682,8 @@ fun HomePageContent(
                     FullSyncCtaSection(
                         onRequestFullSync = onFullSync,
                         monthLabel = ctaMonthLabel,
-                        isPartial = true
+                        isPartial = true,
+                        isSyncing = isSyncing
                     )
                 }
             }

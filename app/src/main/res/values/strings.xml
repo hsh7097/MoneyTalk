@@ -143,7 +143,8 @@
     <string name="sync_no_data">데이터가 없습니다</string>
     <string name="home_sync_dialog_title">지출 내역 읽는 중</string>
     <string name="sync_dialog_dismiss">백그라운드에서 계속</string>
-    <string name="sync_phase2_complete">나머지 기간 처리 완료: %s</string>
+    <string name="sync_in_progress_button">동기화 진행 중…</string>
+    <string name="sync_in_progress_note">백그라운드에서 데이터를 처리하고 있어요</string>
     <string-array name="sync_step_labels">
         <item>분류</item>
         <item>분석</item>

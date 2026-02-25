@@ -1,13 +1,17 @@
 package com.sanha.moneytalk.feature.home.ui.component
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,10 +31,12 @@ import com.sanha.moneytalk.R
  * 클릭 시 SMS 권한 요청 → 전월 1일부터 증분 동기화 수행.
  *
  * @param onImportData 데이터 가져오기 콜백 (권한 요청 + 증분 동기화)
+ * @param isSyncing 동기화 진행 중 여부 (true 시 버튼 비활성화 + 진행중 표시)
  */
 @Composable
 fun ImportDataCtaSection(
     onImportData: () -> Unit,
+    isSyncing: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -61,19 +67,39 @@ fun ImportDataCtaSection(
         Spacer(modifier = Modifier.height(24.dp))
         Button(
             onClick = onImportData,
+            enabled = !isSyncing,
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary
             )
         ) {
-            Text(
-                text = stringResource(R.string.home_import_data_button),
-                fontWeight = FontWeight.Bold
-            )
+            if (isSyncing) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.sync_in_progress_button),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else {
+                Text(
+                    text = stringResource(R.string.home_import_data_button),
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = stringResource(R.string.home_import_data_note),
+            text = if (isSyncing) {
+                stringResource(R.string.sync_in_progress_note)
+            } else {
+                stringResource(R.string.home_import_data_note)
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
             textAlign = TextAlign.Center
