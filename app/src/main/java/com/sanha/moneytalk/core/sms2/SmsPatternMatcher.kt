@@ -384,6 +384,17 @@ class SmsPatternMatcher @Inject constructor(
         "web발신", "국외발신", "국제발신", "해외발신", "광고", "안내", "알림"
     )
 
+    /**
+     * SMS 본문에서 은행/카드사 태그 추출 패턴
+     *
+     * [KB], [신한카드] 등 대괄호 안의 은행/카드사 식별자.
+     * cardRegex 실패 시 fallbackCardName 전에 시도하는 중간 폴백.
+     * [Web발신], [국외발신] 등 비은행 태그는 제외.
+     */
+    private val BANK_TAG_PATTERN = Regex(
+        """\[(KB|신한카드|신한|우리|하나|삼성카드|삼성|현대카드|현대|롯데카드|롯데|IBK|NH|농협|BC|카카오뱅크|토스뱅크|토스|SC|씨티|수협|대구|부산|광주|전북|경남|제주)\]"""
+    )
+
     /** 날짜/시간 추출 패턴 (MM/DD HH:mm 등) */
     private val DATE_PATTERN = Regex("""(\d{1,2})[/.-](\d{1,2})""")
     private val TIME_PATTERN = Regex("""(\d{1,2}):(\d{2})""")
@@ -465,10 +476,13 @@ class SmsPatternMatcher @Inject constructor(
             ?: return null
 
         // --- 카드명 추출 ---
-        // cardRegex 실패 시 패턴/LLM에서 추출된 카드명을 fallback으로 사용
+        // cardRegex 실패 시: 은행 태그([KB] 등) → fallbackCardName 순으로 폴백
+        // 은행 태그 중간 폴백: 출금 SMS 등에서 cardRegex가 수취인(신한카드)을
+        // 잘못 캡처하거나 빈 경우, [KB] 태그에서 정확한 은행명을 추출
         val parsedCard = extractGroup1(cardPattern, smsBody)
             ?.trim()
             ?.takeIf(::isValidCardCandidate)
+            ?: extractBankTagFromBody(smsBody)
             ?: fallbackCardName
 
         // --- 카테고리 ---
@@ -567,6 +581,21 @@ class SmsPatternMatcher @Inject constructor(
         val lower = trimmed.lowercase()
         if (CARD_INVALID_KEYWORDS.any { lower.contains(it) }) return false
         return true
+    }
+
+    /**
+     * SMS 본문에서 은행/카드사 태그 추출
+     *
+     * [KB], [신한카드] 등 대괄호 안의 은행/카드사 식별자를 추출.
+     * 은행 출금 SMS 등에서 cardRegex가 수취인명을 잘못 캡처하거나
+     * 빈 경우, 발신 은행 태그에서 정확한 식별자를 추출하는 중간 폴백.
+     *
+     * @param smsBody 원본 SMS 본문
+     * @return 은행/카드사 식별자 (예: "KB", "신한카드") 또는 null
+     */
+    private fun extractBankTagFromBody(smsBody: String): String? {
+        val match = BANK_TAG_PATTERN.find(smsBody) ?: return null
+        return match.groupValues[1].takeIf { it.isNotBlank() }
     }
 
     /**
