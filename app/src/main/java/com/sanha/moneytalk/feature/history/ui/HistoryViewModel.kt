@@ -201,6 +201,9 @@ class HistoryViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(HistoryUiState())
     val uiState: StateFlow<HistoryUiState> = _uiState.asStateFlow()
 
+    /** History 탭에서 시작된 동기화인지 추적 (다이얼로그 중복 방지용) */
+    private var _historySyncActive = false
+
     /** 페이지별 로드 Job 관리 (월별 독립 취소) */
     private val pageLoadJobs = mutableMapOf<MonthKey, Job>()
 
@@ -1119,7 +1122,8 @@ class HistoryViewModel @Inject constructor(
             dataRefreshEvent.syncProgress.collect { progress ->
                 _uiState.update {
                     it.copy(
-                        showSyncDialog = progress.isActive,
+                        // History에서 시작된 동기화일 때만 다이얼로그 표시
+                        showSyncDialog = progress.isActive && _historySyncActive,
                         syncProgress = progress.step,
                         syncProgressCurrent = progress.current,
                         syncProgressTotal = progress.total
@@ -1127,6 +1131,7 @@ class HistoryViewModel @Inject constructor(
                 }
                 // 동기화 완료 시 데이터 갱신
                 if (wasActive && !progress.isActive) {
+                    _historySyncActive = false
                     clearAllPageCache()
                     loadCurrentAndAdjacentPages()
                 }
@@ -1137,23 +1142,21 @@ class HistoryViewModel @Inject constructor(
 
     /** 증분 동기화 요청 — HomeViewModel에 위임 (전월 1일부터 동기화) */
     fun requestIncrementalSync() {
+        _historySyncActive = true
         dataRefreshEvent.requestIncrementalSync()
     }
 
-    /** 월별 동기화 해제 (광고 시청 완료 후 호출) — HomeViewModel에 월별 sync 요청 */
+    /** 월별 동기화 해제 — HomeViewModel에 월별 sync 요청 (synced 마킹은 동기화 완료 후 HomeViewModel에서 처리) */
     fun unlockFullSync() {
-        viewModelScope.launch {
-            val state = _uiState.value
-            val yearMonth = String.format("%04d-%02d", state.selectedYear, state.selectedMonth)
-            settingsDataStore.addSyncedMonth(yearMonth)
-            _uiState.update { it.copy(showFullSyncAdDialog = false) }
-            val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(state.monthStartDay)
-            val isCurrentMonth = state.selectedYear == effYear && state.selectedMonth == effMonth
-            val monthLabel = if (isCurrentMonth) "이번달" else "${state.selectedMonth}월"
-            snackbarBus.show(context.getString(R.string.full_sync_unlocked_message, monthLabel))
+        val state = _uiState.value
+        _uiState.update { it.copy(showFullSyncAdDialog = false) }
+        val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(state.monthStartDay)
+        val isCurrentMonth = state.selectedYear == effYear && state.selectedMonth == effMonth
+        val monthLabel = if (isCurrentMonth) "이번달" else "${state.selectedMonth}월"
+        snackbarBus.show(context.getString(R.string.full_sync_unlocked_message, monthLabel))
 
-            // HomeViewModel에 해당 달 SMS 동기화 요청
-            dataRefreshEvent.requestMonthSync(state.selectedYear, state.selectedMonth)
-        }
+        // HomeViewModel에 해당 달 SMS 동기화 요청 (synced 마킹은 HomeViewModel에서 동기화 성공 후 처리)
+        _historySyncActive = true
+        dataRefreshEvent.requestMonthSync(state.selectedYear, state.selectedMonth)
     }
 }

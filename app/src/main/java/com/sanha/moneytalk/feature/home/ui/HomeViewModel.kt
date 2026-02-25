@@ -235,6 +235,8 @@ class HomeViewModel @Inject constructor(
     init {
         loadSettings()
         observeDataRefreshEvents()
+        // 리워드 광고 미리 로드 (전체 동기화 해제용)
+        rewardAdManager.preloadAd()
     }
 
     // ========== 페이지 캐시 관리 ==========
@@ -349,10 +351,15 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             dataRefreshEvent.monthSyncEvent.collect { request ->
                 val monthRange = calculateMonthRange(request.year, request.month)
+                val yearMonth = String.format("%04d-%02d", request.year, request.month)
                 syncSmsV2(
                     appContext.contentResolver,
                     monthRange,
-                    updateLastSyncTime = false
+                    updateLastSyncTime = false,
+                    onSyncComplete = {
+                        // 동기화 성공 후에만 synced 마킹
+                        settingsDataStore.addSyncedMonth(yearMonth)
+                    }
                 )
             }
         }
@@ -1305,7 +1312,8 @@ class HomeViewModel @Inject constructor(
         contentResolver: ContentResolver,
         targetMonthRange: Pair<Long, Long>,
         updateLastSyncTime: Boolean = true,
-        silent: Boolean = false
+        silent: Boolean = false,
+        onSyncComplete: (suspend () -> Unit)? = null
     ) {
         // 재진입 방지: 이미 동기화 중이면 무시
         if (!isSyncRunning.compareAndSet(false, true)) {
@@ -1340,6 +1348,7 @@ class HomeViewModel @Inject constructor(
                 }
 
                 handleSyncResult(result, silent)
+                onSyncComplete?.invoke()
             } catch (e: Exception) {
                 handleSyncError(e, silent)
             } finally {
@@ -1483,8 +1492,9 @@ class HomeViewModel @Inject constructor(
 
     // ========== 전체 동기화 해제 (리워드 광고) ==========
 
-    /** 전체 동기화 광고 다이얼로그 표시 */
+    /** 전체 동기화 광고 다이얼로그 표시 (광고 미로드 시 프리로드도 함께 실행) */
     fun showFullSyncAdDialog() {
+        rewardAdManager.preloadAd()
         _uiState.update { it.copy(showFullSyncAdDialog = true) }
     }
 
@@ -1498,25 +1508,26 @@ class HomeViewModel @Inject constructor(
      * 현재 보고 있는 달의 SMS만 가져오고, 해당 월을 syncedMonths에 기록.
      */
     fun unlockFullSync(contentResolver: ContentResolver) {
-        viewModelScope.launch {
-            val state = _uiState.value
-            val yearMonth = String.format("%04d-%02d", state.selectedYear, state.selectedMonth)
-            settingsDataStore.addSyncedMonth(yearMonth)
-            _uiState.update { it.copy(showFullSyncAdDialog = false) }
+        val state = _uiState.value
+        val yearMonth = String.format("%04d-%02d", state.selectedYear, state.selectedMonth)
+        _uiState.update { it.copy(showFullSyncAdDialog = false) }
 
-            // 현재 보고 있는 월의 범위 계산
-            val monthRange = calculateMonthRange(state.selectedYear, state.selectedMonth)
-            val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(state.monthStartDay)
-            val isCurrentMonth = state.selectedYear == effYear && state.selectedMonth == effMonth
-            val monthLabel = if (isCurrentMonth) "이번달" else "${state.selectedMonth}월"
-            snackbarBus.show("${monthLabel} 데이터를 가져옵니다.")
+        // 현재 보고 있는 월의 범위 계산
+        val monthRange = calculateMonthRange(state.selectedYear, state.selectedMonth)
+        val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(state.monthStartDay)
+        val isCurrentMonth = state.selectedYear == effYear && state.selectedMonth == effMonth
+        val monthLabel = if (isCurrentMonth) "이번달" else "${state.selectedMonth}월"
+        snackbarBus.show("${monthLabel} 데이터를 가져옵니다.")
 
-            syncSmsV2(
-                contentResolver,
-                monthRange,
-                updateLastSyncTime = false
-            )
-        }
+        syncSmsV2(
+            contentResolver,
+            monthRange,
+            updateLastSyncTime = false,
+            onSyncComplete = {
+                // 동기화 성공 후에만 synced 마킹
+                settingsDataStore.addSyncedMonth(yearMonth)
+            }
+        )
     }
 
     /** 해당 월이 이미 동기화(광고 시청) 되었는지 확인 */
