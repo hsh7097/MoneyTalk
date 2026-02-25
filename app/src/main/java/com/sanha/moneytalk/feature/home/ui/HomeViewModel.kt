@@ -779,9 +779,11 @@ class HomeViewModel @Inject constructor(
                     )
                 }
             }
-        } else {
+        } else if (!hasSmsPermission) {
+            // 권한 없음 → firstLaunch 리셋 (권한 획득 후 다시 시도)
             isFirstLaunch = false
         }
+        // isSyncing=true일 때는 isFirstLaunch 유지 → 동기화 완료 후 다음 resume에서 재시도
         // 캐시를 지우지 않고 재로드 → 기존 데이터 유지하면서 갱신 (깜빡임 방지)
         loadCurrentAndAdjacentPages()
         // resume 시 미분류 항목이 있고 분류가 진행 중이 아니면 자동 분류 시작
@@ -805,23 +807,22 @@ class HomeViewModel @Inject constructor(
         analyticsHelper.logClick(AnalyticsEvent.SCREEN_HOME, AnalyticsEvent.CLICK_SYNC_SMS)
 
         viewModelScope.launch {
-            val fullRange = withContext(Dispatchers.IO) { calculateIncrementalRange() }
-            val isInitialSync = withContext(Dispatchers.IO) { settingsDataStore.getLastSyncTime() == 0L }
-
-            _uiState.update {
-                it.copy(
-                    isSyncing = true,
-                    showSyncDialog = true,
-                    syncDialogDismissed = false,
-                    syncProgress = "문자 읽는 중...",
-                    syncProgressCurrent = 0,
-                    syncProgressTotal = 0,
-                    syncStepIndex = 0
-                )
-            }
-            dataRefreshEvent.updateSyncProgress("문자 읽는 중...", 0, 0)
-
             try {
+                val fullRange = withContext(Dispatchers.IO) { calculateIncrementalRange() }
+                val isInitialSync = withContext(Dispatchers.IO) { settingsDataStore.getLastSyncTime() == 0L }
+
+                _uiState.update {
+                    it.copy(
+                        isSyncing = true,
+                        showSyncDialog = true,
+                        syncDialogDismissed = false,
+                        syncProgress = "문자 읽는 중...",
+                        syncProgressCurrent = 0,
+                        syncProgressTotal = 0,
+                        syncStepIndex = 0
+                    )
+                }
+                dataRefreshEvent.updateSyncProgress("문자 읽는 중...", 0, 0)
                 val result = withContext(Dispatchers.IO) {
                     syncSmsV2Internal(appContext.contentResolver, fullRange, updateLastSyncTime = true, silent = false)
                 }
