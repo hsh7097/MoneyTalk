@@ -60,7 +60,7 @@ class SmsPatternMatcher @Inject constructor(
      * 코사인 유사도 = (A·B) / (|A| × |B|)
      * 범위: -1 ~ 1 (1에 가까울수록 유사)
      *
-     * 3072차원 벡터 간 연산 — O(n) 시간복잡도
+     * 768차원 벡터 간 연산 — O(n) 시간복잡도
      * RandomAccess 체크로 ArrayList 등에서 boxing/unboxing 최적화
      *
      * @param vectorA 첫 번째 벡터

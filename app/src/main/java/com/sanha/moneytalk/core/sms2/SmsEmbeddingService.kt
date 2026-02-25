@@ -36,6 +36,9 @@ class SmsEmbeddingService @Inject constructor(
 
         /** 초기 재시도 대기 시간 (ms) - 지수 백오프: 2s, 4s */
         private const val INITIAL_RETRY_DELAY_MS = 2000L
+
+        /** 임베딩 출력 차원 수 (Matryoshka: 3072 → 768 축소, 품질 손실 0.26%) */
+        const val EMBEDDING_DIMENSION = 768
     }
 
     private val client = OkHttpClient.Builder()
@@ -49,7 +52,7 @@ class SmsEmbeddingService @Inject constructor(
      * 단일 텍스트의 임베딩 벡터 생성
      *
      * @param text 임베딩할 텍스트
-     * @return 임베딩 벡터 (차원 수는 모델 의존: gemini-embedding-001=3072), 실패 시 null
+     * @return 임베딩 벡터 (768차원, outputDimensionality 지정), 실패 시 null
      */
     suspend fun generateEmbedding(text: String): List<Float>? = withContext(Dispatchers.IO) {
         try {
@@ -67,6 +70,7 @@ class SmsEmbeddingService @Inject constructor(
                 add("content", JsonObject().apply {
                     add("parts", gson.toJsonTree(listOf(mapOf("text" to text))))
                 })
+                addProperty("outputDimensionality", EMBEDDING_DIMENSION)
             }
 
             val request = Request.Builder()
@@ -128,7 +132,8 @@ class SmsEmbeddingService @Inject constructor(
                         "model" to "models/$embeddingModel",
                         "content" to mapOf(
                             "parts" to listOf(mapOf("text" to text))
-                        )
+                        ),
+                        "outputDimensionality" to EMBEDDING_DIMENSION
                     )
                 }
 

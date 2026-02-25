@@ -53,7 +53,7 @@ class GeminiSmsExtractor @Inject constructor(
         private const val REGEX_REPAIR_MAX_RETRIES = 0
 
         /** 그룹 정규식 생성 시 사용할 최대 샘플 수 */
-        private const val REGEX_GROUP_MAX_SAMPLES = 5
+        private const val REGEX_GROUP_MAX_SAMPLES = 10
 
         /** 정규식 채택 최소 성공률 (그룹 샘플 기준) */
         private const val REGEX_MIN_SUCCESS_RATIO = 0.8f
@@ -842,7 +842,6 @@ class GeminiSmsExtractor @Inject constructor(
                 Log.e(TAG, "API 키가 설정되지 않음")
                 return@withContext smsMessages.map { null }
             }
-
             // 번호를 매겨서 프롬프트 구성 (수신 날짜 포함)
             val smsListText = smsMessages.mapIndexed { idx, body ->
                 val dateInfo = smsTimestamps.getOrNull(idx)?.let { ts ->

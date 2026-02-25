@@ -27,7 +27,7 @@ import javax.inject.Singleton
  * │   SmsTemplateEngine.templateize() → 템플릿화                │
  * │   SmsTemplateEngine.batchEmbed() → 벡터 생성                │
  * │   Semaphore(10)으로 병렬 제한                               │
- * │   결과: List<EmbeddedSms> (원본 + 템플릿 + 3072차원 벡터)    │
+ * │   결과: List<EmbeddedSms> (원본 + 템플릿 + 768차원 벡터)     │
  * │                                                            │
  * │ Step 4: SmsPatternMatcher.matchPatterns()                  │
  * │   DB 기존 패턴과 벡터 유사도 비교                            │

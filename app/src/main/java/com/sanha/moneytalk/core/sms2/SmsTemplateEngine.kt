@@ -21,7 +21,7 @@ import javax.inject.Singleton
  * 1. SMS 원본을 플레이스홀더 템플릿으로 변환 (templateize)
  *    예: "[KB]02/05 스타벅스 11,940원 승인" → "[KB]{DATE} {STORE} {AMOUNT}원 승인"
  *
- * 2. 템플릿을 Gemini Embedding API에 보내 3072차원 벡터 생성 (embed)
+ * 2. 템플릿을 Gemini Embedding API에 보내 768차원 벡터 생성 (embed)
  *
  * 템플릿화 이유:
  * - 같은 카드사/같은 형식의 SMS는 가게명/금액만 다름
@@ -234,7 +234,8 @@ class SmsTemplateEngine @Inject constructor(
                         "model" to "models/$embeddingModel",
                         "content" to mapOf(
                             "parts" to listOf(mapOf("text" to text))
-                        )
+                        ),
+                        "outputDimensionality" to SmsEmbeddingService.EMBEDDING_DIMENSION
                     )
                 }
 
