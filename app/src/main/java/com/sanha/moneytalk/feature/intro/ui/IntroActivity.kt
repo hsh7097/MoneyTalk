@@ -21,6 +21,7 @@ import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.MainActivity
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.firebase.ForceUpdateChecker
 import com.sanha.moneytalk.core.firebase.ForceUpdateState
 import com.sanha.moneytalk.core.firebase.PremiumConfig
 import com.sanha.moneytalk.core.firebase.PremiumManager
@@ -215,8 +216,8 @@ class IntroActivity : ComponentActivity() {
         val config = withTimeoutOrNull(3000L) {
             premiumManager.premiumConfig.first { it != PremiumConfig() }
         }
-        // 강제 업데이트 체크
-        if (config != null && BuildConfig.VERSION_CODE < config.minVersionCode) {
+        // 강제 업데이트 체크 (버전명 비교)
+        if (config != null && ForceUpdateChecker.compareVersionNames(BuildConfig.VERSION_NAME, config.minVersionName) < 0) {
             forceUpdateState = ForceUpdateState.Required(
                 currentVersion = BuildConfig.VERSION_NAME,
                 requiredVersion = config.minVersionName,
