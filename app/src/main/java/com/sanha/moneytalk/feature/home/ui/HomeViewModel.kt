@@ -25,7 +25,9 @@ import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.sms2.SmsIncomeParser
 import com.sanha.moneytalk.core.sms2.SmsInput
 import com.sanha.moneytalk.core.sms2.SmsReaderV2
+import com.sanha.moneytalk.core.sms2.SmsPipeline
 import com.sanha.moneytalk.core.sms2.SmsSyncCoordinator
+import com.sanha.moneytalk.core.sms2.SyncStats
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
@@ -876,6 +878,17 @@ class HomeViewModel @Inject constructor(
                 // Phase 1 완료 → 다이얼로그 닫기 + 홈 갱신
                 refreshCurrentPages()
 
+                // Phase 1 카드 자동 등록
+                if (phase1Result.detectedCardNames.isNotEmpty()) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        try {
+                            ownedCardRepository.registerCardsFromSync(phase1Result.detectedCardNames)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Phase 1 카드 자동 등록 실패: ${e.message}")
+                        }
+                    }
+                }
+
                 val hasData = phase1Result.expenseCount > 0 || phase1Result.incomeCount > 0
                 val dialogWasDismissed = _uiState.value.syncDialogDismissed
 
@@ -917,7 +930,7 @@ class HomeViewModel @Inject constructor(
                         val phase2Result = withContext(Dispatchers.IO) {
                             syncSmsV2Internal(
                                 appContext.contentResolver, phase2Range,
-                                updateLastSyncTime = true, // 전체 완료 → lastSyncTime 갱신
+                                updateLastSyncTime = false, // now로 별도 저장
                                 silent = true
                             )
                         }
@@ -934,17 +947,18 @@ class HomeViewModel @Inject constructor(
                         refreshCurrentPages()
                         if (phase2Result.expenseCount > 0 || phase2Result.incomeCount > 0) {
                             val msg = buildResultMessage(phase2Result.expenseCount, phase2Result.incomeCount)
-                            snackbarBus.show("나머지 기간 처리 완료: $msg")
+                            snackbarBus.show(appContext.getString(R.string.sync_phase2_complete, msg))
                         }
                         Log.d(TAG, "=== Phase 2 완료: 지출 ${phase2Result.expenseCount}건, 수입 ${phase2Result.incomeCount}건 ===")
                     } catch (e: Exception) {
                         Log.w(TAG, "Phase 2 실패 (다음 동기화에서 재시도): ${e.message}")
                     }
-                } else {
-                    // Phase 2 불필요 → lastSyncTime 저장
-                    withContext(Dispatchers.IO) {
-                        settingsDataStore.saveLastSyncTime(now)
-                    }
+                }
+
+                // 전체 완료 → lastSyncTime을 now 시점으로 저장
+                // (Phase 2 범위는 ~phase1Start까지이므로, phase1Start~now 구간이 누락되지 않도록)
+                withContext(Dispatchers.IO) {
+                    settingsDataStore.saveLastSyncTime(now)
                 }
 
                 _uiState.update { it.copy(isSyncing = false) }
@@ -1012,7 +1026,7 @@ class HomeViewModel @Inject constructor(
         val detectedCardNames: List<String>,
         val classifiedCount: Int,
         /** 파이프라인 엔진 통계 (Phase 1 요약 카드용) */
-        val stats: com.sanha.moneytalk.core.sms2.SyncStats = com.sanha.moneytalk.core.sms2.SyncStats()
+        val stats: SyncStats = SyncStats()
     )
 
     /**
@@ -1092,7 +1106,7 @@ class HomeViewModel @Inject constructor(
     ): Int {
         if (expenses.isEmpty()) return 0
 
-        _uiState.update { it.copy(syncStepIndex = com.sanha.moneytalk.core.sms2.SmsPipeline.STEP_SAVE, syncProgress = "지출 저장 중...") }
+        _uiState.update { it.copy(syncStepIndex = SmsPipeline.STEP_SAVE, syncProgress = "지출 저장 중...") }
         val batch = mutableListOf<ExpenseEntity>()
 
         for (parsed in expenses) {

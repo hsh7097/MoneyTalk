@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.feature.home.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -60,6 +61,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -86,6 +88,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
+import com.sanha.moneytalk.core.sms2.SmsPipeline
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.util.DateUtils
 import android.Manifest
@@ -405,7 +408,7 @@ fun HomeScreen(
                     // Stepper 인디케이터 (5단계)
                     SyncStepIndicator(
                         currentStep = uiState.syncStepIndex,
-                        totalSteps = com.sanha.moneytalk.core.sms2.SmsPipeline.TOTAL_STEPS
+                        totalSteps = SmsPipeline.TOTAL_STEPS
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -450,7 +453,7 @@ fun HomeScreen(
             confirmButton = { },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissSyncDialog() }) {
-                    Text("백그라운드에서 계속")
+                    Text(stringResource(R.string.sync_dialog_dismiss))
                 }
             }
         )
@@ -462,7 +465,7 @@ fun HomeScreen(
             onDismissRequest = { viewModel.dismissEngineSummary() },
             title = {
                 Text(
-                    text = "✨ AI 엔진 준비 완료",
+                    text = stringResource(R.string.engine_summary_title),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -471,28 +474,32 @@ fun HomeScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (uiState.engineSummaryTotalSms > 0) {
                         Text(
-                            text = "\uD83D\uDCE9 최근 14일간 문자 ${uiState.engineSummaryTotalSms}건 분석",
+                            text = stringResource(R.string.engine_summary_sms_analyzed, uiState.engineSummaryTotalSms),
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
                     if (uiState.engineSummaryPatterns > 0) {
                         Text(
-                            text = "\uD83C\uDFAF 카드 패턴 ${uiState.engineSummaryPatterns}개 학습 완료",
+                            text = stringResource(R.string.engine_summary_patterns_learned, uiState.engineSummaryPatterns),
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
                     val parts = mutableListOf<String>()
-                    if (uiState.engineSummaryExpenses > 0) parts.add("지출 ${uiState.engineSummaryExpenses}건")
-                    if (uiState.engineSummaryIncomes > 0) parts.add("수입 ${uiState.engineSummaryIncomes}건")
+                    if (uiState.engineSummaryExpenses > 0) {
+                        parts.add(stringResource(R.string.engine_summary_expense_count, uiState.engineSummaryExpenses))
+                    }
+                    if (uiState.engineSummaryIncomes > 0) {
+                        parts.add(stringResource(R.string.engine_summary_income_count, uiState.engineSummaryIncomes))
+                    }
                     if (parts.isNotEmpty()) {
                         Text(
-                            text = "\uD83D\uDCB0 ${parts.joinToString(" · ")} 등록",
+                            text = stringResource(R.string.engine_summary_registered, parts.joinToString(" · ")),
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "나머지 기간은 백그라운드에서\n자동으로 처리합니다",
+                        text = stringResource(R.string.engine_summary_background_note),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -500,7 +507,7 @@ fun HomeScreen(
             },
             confirmButton = {
                 TextButton(onClick = { viewModel.dismissEngineSummary() }) {
-                    Text("확인")
+                    Text(stringResource(R.string.common_confirm))
                 }
             }
         )
@@ -1223,7 +1230,7 @@ sealed interface TodayItem {
  *
  * 현재 단계를 시각적으로 표시:
  * - 완료: Primary 색상 채움
- * - 현재: Primary 색상 + 크기 확대
+ * - 현재: Primary 색상 + 크기 확대 (애니메이션)
  * - 미완료: Surface 색상 (비활성)
  */
 @Composable
@@ -1232,9 +1239,7 @@ private fun SyncStepIndicator(
     totalSteps: Int,
     modifier: Modifier = Modifier
 ) {
-    val stepLabels = remember {
-        listOf("분류", "분석", "비교", "AI", "저장")
-    }
+    val stepLabels = stringArrayResource(R.array.sync_step_labels)
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -1244,7 +1249,10 @@ private fun SyncStepIndicator(
         for (i in 0 until totalSteps) {
             val isCompleted = i < currentStep
             val isCurrent = i == currentStep
-            val dotSize = if (isCurrent) 12.dp else 8.dp
+            val animatedDotSize by animateDpAsState(
+                targetValue = if (isCurrent) 12.dp else 8.dp,
+                label = "dotSize"
+            )
             val dotColor = when {
                 isCompleted || isCurrent -> MaterialTheme.colorScheme.primary
                 else -> MaterialTheme.colorScheme.surfaceVariant
@@ -1256,7 +1264,7 @@ private fun SyncStepIndicator(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(dotSize)
+                        .size(animatedDotSize)
                         .background(color = dotColor, shape = CircleShape)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
