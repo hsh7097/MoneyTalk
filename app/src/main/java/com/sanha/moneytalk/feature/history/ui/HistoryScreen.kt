@@ -64,6 +64,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.feature.home.ui.component.ImportDataCtaSection
 import kotlinx.coroutines.launch
 
@@ -227,10 +228,12 @@ fun HistoryScreen(
             )
         }
 
+        val isBannerAdEnabled = viewModel.rewardAdManager.isRewardAdEnabled()
+
         // 콘텐츠 — HorizontalPager로 월별 페이징
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.weight(1f),
             beyondViewportPageCount = 1,
             key = { it },
             userScrollEnabled = !uiState.isSearchMode
@@ -261,6 +264,7 @@ fun HistoryScreen(
                         isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
                         hasSmsPermission = hasSmsPermission,
                         monthLabel = pageMonthLabel,
+                        isAdEnabled = isBannerAdEnabled,
                         onImportData = {
                             onRequestSmsPermission {
                                 viewModel.requestIncrementalSync()
@@ -268,9 +272,14 @@ fun HistoryScreen(
                         },
                         onRequestFullSync = {
                             if (isCurrentMonth) {
-                                // 현재월 → 광고 없이 바로 동기화
+                                // 현재월 → 바로 증분 동기화
                                 onRequestSmsPermission {
                                     viewModel.requestIncrementalSync()
+                                }
+                            } else if (!isBannerAdEnabled) {
+                                // 광고 비활성 → 광고 없이 바로 전체 동기화 해제
+                                onRequestSmsPermission {
+                                    viewModel.unlockFullSync()
                                 }
                             } else {
                                 viewModel.showFullSyncAdDialog()
@@ -301,6 +310,11 @@ fun HistoryScreen(
                     )
                 }
             }
+        }
+
+        // 배너 광고 (RTDB reward_ad_enabled 연동)
+        if (isBannerAdEnabled) {
+            BannerAdCompose()
         }
     }
 
@@ -472,6 +486,7 @@ fun TransactionListView(
     isPartiallyCovered: Boolean = false,
     hasSmsPermission: Boolean = true,
     monthLabel: String = "이번달",
+    isAdEnabled: Boolean = true,
     onImportData: () -> Unit = {},
     onRequestFullSync: () -> Unit = {},
     scrollResetKey: Any? = null,
@@ -518,7 +533,8 @@ fun TransactionListView(
             } else if (showFullSyncCta) {
                 com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
                     onRequestFullSync = onRequestFullSync,
-                    monthLabel = monthLabel
+                    monthLabel = monthLabel,
+                    isAdEnabled = isAdEnabled
                 )
             } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -566,7 +582,8 @@ fun TransactionListView(
                     com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
                         onRequestFullSync = onRequestFullSync,
                         monthLabel = monthLabel,
-                        isPartial = true
+                        isPartial = true,
+                        isAdEnabled = isAdEnabled
                     )
                 }
             }

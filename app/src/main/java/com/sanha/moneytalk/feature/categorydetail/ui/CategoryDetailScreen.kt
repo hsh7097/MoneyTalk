@@ -46,6 +46,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
@@ -129,10 +130,12 @@ fun CategoryDetailScreen(
             )
         )
 
+        val isBannerAdEnabled = viewModel.isBannerAdEnabled()
+
         // HorizontalPager: 각 페이지 = 월별 콘텐츠
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.weight(1f),
             beyondViewportPageCount = 1,
             key = { it }
         ) { page ->
@@ -163,6 +166,11 @@ fun CategoryDetailScreen(
                 },
                 onExpenseSelected = { expense -> selectedExpense = expense }
             )
+        }
+
+        // 배너 광고 (RTDB reward_ad_enabled 연동)
+        if (isBannerAdEnabled) {
+            BannerAdCompose()
         }
     }
 

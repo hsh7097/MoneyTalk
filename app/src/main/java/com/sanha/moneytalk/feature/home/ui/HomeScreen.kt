@@ -75,6 +75,7 @@ import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
+import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.FullSyncCtaSection
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.feature.history.ui.IncomeDetailDialog
@@ -192,89 +193,107 @@ fun HomeScreen(
         }
     }
 
-    HorizontalPager(
-        state = pagerState,
+    val isBannerAdEnabled = viewModel.adManager.isRewardAdEnabled()
+
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        beyondViewportPageCount = 1,
-        key = { it }
-    ) { page ->
-        // 이 페이지의 (year, month) 계산
-        val (pageYear, pageMonth) = remember(page) {
-            MonthPagerUtils.pageToYearMonth(page)
-        }
-        // pageCache에서 이 페이지의 데이터 읽기 (없으면 기본값)
-        val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
-            ?: HomePageData()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.weight(1f),
+            beyondViewportPageCount = 1,
+            key = { it }
+        ) { page ->
+            // 이 페이지의 (year, month) 계산
+            val (pageYear, pageMonth) = remember(page) {
+                MonthPagerUtils.pageToYearMonth(page)
+            }
+            // pageCache에서 이 페이지의 데이터 읽기 (없으면 기본값)
+            val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
+                ?: HomePageData()
 
-        HomePageContent(
-            pageData = pageData,
-            year = pageYear,
-            month = pageMonth,
-            monthStartDay = uiState.monthStartDay,
-            isMonthSynced = viewModel.isMonthSynced(pageYear, pageMonth),
-            isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
-            hasSmsPermission = hasSmsPermission,
-            selectedCategory = uiState.selectedCategory,
-            isSyncing = uiState.isSyncing,
-            onPreviousMonth = {
-                coroutineScope.launch {
-                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                }
-            },
-            onNextMonth = {
-                coroutineScope.launch {
-                    val target = pagerState.currentPage + 1
-                    if (!MonthPagerUtils.isFutureMonth(target, uiState.monthStartDay)) {
-                        pagerState.animateScrollToPage(target)
+            HomePageContent(
+                pageData = pageData,
+                year = pageYear,
+                month = pageMonth,
+                monthStartDay = uiState.monthStartDay,
+                isMonthSynced = viewModel.isMonthSynced(pageYear, pageMonth),
+                isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
+                hasSmsPermission = hasSmsPermission,
+                selectedCategory = uiState.selectedCategory,
+                isSyncing = uiState.isSyncing,
+                isAdEnabled = isBannerAdEnabled,
+                onPreviousMonth = {
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(pagerState.currentPage - 1)
                     }
-                }
-            },
-            onIncrementalSync = {
-                onRequestSmsPermission {
-                    viewModel.syncIncremental(contentResolver)
-                }
-            },
-            onFullSync = {
-                val (effY, effM) = DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
-                val isPageCurrentMonth = pageYear == effY && pageMonth == effM
-                if (viewModel.isMonthSynced(pageYear, pageMonth) || isPageCurrentMonth) {
+                },
+                onNextMonth = {
+                    coroutineScope.launch {
+                        val target = pagerState.currentPage + 1
+                        if (!MonthPagerUtils.isFutureMonth(target, uiState.monthStartDay)) {
+                            pagerState.animateScrollToPage(target)
+                        }
+                    }
+                },
+                onIncrementalSync = {
                     onRequestSmsPermission {
-                        viewModel.syncMonthData(contentResolver, pageYear, pageMonth)
+                        viewModel.syncIncremental(contentResolver)
                     }
-                } else {
-                    viewModel.preloadFullSyncAd()
-                    viewModel.showFullSyncAdDialog()
-                }
-            },
-            onCategorySelected = { category ->
-                if (category != null) {
-                    val intent = android.content.Intent(
-                        context,
-                        com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity::class.java
-                    ).apply {
-                        putExtra(
-                            com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_CATEGORY,
-                            category
-                        )
-                        putExtra(
-                            com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_YEAR,
-                            uiState.selectedYear
-                        )
-                        putExtra(
-                            com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_MONTH,
-                            uiState.selectedMonth
-                        )
+                },
+                onFullSync = {
+                    val (effY, effM) = DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+                    val isPageCurrentMonth = pageYear == effY && pageMonth == effM
+                    if (viewModel.isMonthSynced(pageYear, pageMonth) || isPageCurrentMonth) {
+                        // 이미 동기화됨 / 현재월 → 바로 동기화
+                        onRequestSmsPermission {
+                            viewModel.syncMonthData(contentResolver, pageYear, pageMonth)
+                        }
+                    } else if (!isBannerAdEnabled) {
+                        // 광고 비활성 → 광고 없이 바로 전체 동기화 해제
+                        onRequestSmsPermission {
+                            viewModel.unlockFullSync(contentResolver)
+                        }
+                    } else {
+                        viewModel.preloadFullSyncAd()
+                        viewModel.showFullSyncAdDialog()
                     }
-                    context.startActivity(intent)
-                }
-            },
-            onExpenseSelected = { expense -> selectedExpense = expense },
-            onIncomeSelected = { income -> selectedIncome = income },
-            coroutineScope = coroutineScope
-        )
-    } // HorizontalPager
+                },
+                onCategorySelected = { category ->
+                    if (category != null) {
+                        val intent = android.content.Intent(
+                            context,
+                            com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity::class.java
+                        ).apply {
+                            putExtra(
+                                com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_CATEGORY,
+                                category
+                            )
+                            putExtra(
+                                com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_YEAR,
+                                uiState.selectedYear
+                            )
+                            putExtra(
+                                com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_MONTH,
+                                uiState.selectedMonth
+                            )
+                        }
+                        context.startActivity(intent)
+                    }
+                },
+                onExpenseSelected = { expense -> selectedExpense = expense },
+                onIncomeSelected = { income -> selectedIncome = income },
+                coroutineScope = coroutineScope
+            )
+        } // HorizontalPager
+
+        // 배너 광고 (RTDB reward_ad_enabled 연동)
+        if (isBannerAdEnabled) {
+            BannerAdCompose()
+        }
+    } // Column
 
     // 지출 상세 다이얼로그 (공통 컴포넌트 사용)
     selectedExpense?.let { expense ->
@@ -576,6 +595,7 @@ fun HomePageContent(
     hasSmsPermission: Boolean,
     selectedCategory: String?,
     isSyncing: Boolean,
+    isAdEnabled: Boolean,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onIncrementalSync: () -> Unit,
@@ -661,7 +681,8 @@ fun HomePageContent(
                     FullSyncCtaSection(
                         onRequestFullSync = onFullSync,
                         monthLabel = ctaMonthLabel,
-                        isSyncing = isSyncing
+                        isSyncing = isSyncing,
+                        isAdEnabled = isAdEnabled
                     )
                 }
             }
@@ -683,7 +704,8 @@ fun HomePageContent(
                         onRequestFullSync = onFullSync,
                         monthLabel = ctaMonthLabel,
                         isPartial = true,
-                        isSyncing = isSyncing
+                        isSyncing = isSyncing,
+                        isAdEnabled = isAdEnabled
                     )
                 }
             }

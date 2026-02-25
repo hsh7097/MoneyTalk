@@ -466,9 +466,12 @@
     <string name="home_sync_full_locked">전체 동기화 (광고 시청 필요)</string>
     <string name="full_sync_cta_title">이전 데이터가 없어요</string>
     <string name="full_sync_cta_subtitle">최근 2개월 이전 데이터는 광고를 시청하면\n해당 기간을 가져올 수 있어요</string>
+    <string name="full_sync_cta_subtitle_no_ad">버튼을 누르면 해당 기간의\n문자 데이터를 가져올 수 있어요</string>
     <string name="full_sync_cta_button">광고 보고 %1$s 데이터 가져오기</string>
+    <string name="full_sync_cta_button_no_ad">%1$s 데이터 가져오기</string>
     <string name="partial_sync_cta_title">일부 데이터만 표시되고 있어요</string>
     <string name="partial_sync_cta_subtitle">이 기간의 일부 데이터가 누락되었어요.\n광고를 시청하면 해당 데이터를 가져올 수 있어요</string>
+    <string name="partial_sync_cta_subtitle_no_ad">이 기간의 일부 데이터가 누락되었어요.\n버튼을 누르면 해당 데이터를 가져올 수 있어요</string>
 
     <!-- 강제 업데이트 -->
     <string name="force_update_title">업데이트 필요</string>
