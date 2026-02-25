@@ -11,12 +11,13 @@ import javax.inject.Singleton
 /**
  * 강제 업데이트 판정기
  *
- * Firebase Realtime Database의 min_version_code와 앱의 VERSION_CODE를 비교하여
+ * Firebase Realtime Database의 min_version_name과 앱의 VERSION_NAME을 비교하여
  * 강제 업데이트가 필요한지 판단합니다.
  *
  * ## 판정 기준
- * - 앱 VERSION_CODE < 서버 min_version_code → 강제 업데이트 필요
- * - 기본값 min_version_code=1 이므로, 서버 미설정 시 업데이트 불필요
+ * - 앱 VERSION_NAME < 서버 min_version_name → 강제 업데이트 필요
+ * - 기본값 min_version_name="1.0.0" 이므로, 서버 미설정 시 업데이트 불필요
+ * - 버전명 비교: "1.2.3" 형식을 major.minor.patch 숫자로 분리하여 순차 비교
  */
 @Singleton
 class ForceUpdateChecker @Inject constructor(
@@ -24,6 +25,22 @@ class ForceUpdateChecker @Inject constructor(
 ) {
     companion object {
         private const val TAG = "ForceUpdateChecker"
+
+        /**
+         * 버전명 비교 (semantic versioning)
+         * @return 음수: v1 < v2, 0: 동일, 양수: v1 > v2
+         */
+        fun compareVersionNames(v1: String, v2: String): Int {
+            val parts1 = v1.split(".").map { it.toIntOrNull() ?: 0 }
+            val parts2 = v2.split(".").map { it.toIntOrNull() ?: 0 }
+            val maxLen = maxOf(parts1.size, parts2.size)
+            for (i in 0 until maxLen) {
+                val p1 = parts1.getOrElse(i) { 0 }
+                val p2 = parts2.getOrElse(i) { 0 }
+                if (p1 != p2) return p1 - p2
+            }
+            return 0
+        }
     }
 
     /**
@@ -32,11 +49,11 @@ class ForceUpdateChecker @Inject constructor(
      */
     val forceUpdateRequired: Flow<ForceUpdateState> = premiumManager.premiumConfig
         .map { config ->
-            val currentVersionCode = BuildConfig.VERSION_CODE
-            if (currentVersionCode < config.minVersionCode) {
-                Log.w(TAG, "강제 업데이트 필요: currentVersionCode=$currentVersionCode < minVersionCode=${config.minVersionCode}")
+            val currentVersionName = BuildConfig.VERSION_NAME
+            if (compareVersionNames(currentVersionName, config.minVersionName) < 0) {
+                Log.w(TAG, "강제 업데이트 필요: currentVersion=$currentVersionName < minVersion=${config.minVersionName}")
                 ForceUpdateState.Required(
-                    currentVersion = BuildConfig.VERSION_NAME,
+                    currentVersion = currentVersionName,
                     requiredVersion = config.minVersionName,
                     message = config.forceUpdateMessage
                 )

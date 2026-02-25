@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.feature.home.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,6 +62,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -72,6 +75,7 @@ import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
+import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.FullSyncCtaSection
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.feature.history.ui.IncomeDetailDialog
@@ -86,6 +90,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
+import com.sanha.moneytalk.core.sms2.SmsPipeline
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.util.DateUtils
 import android.Manifest
@@ -188,88 +193,107 @@ fun HomeScreen(
         }
     }
 
-    HorizontalPager(
-        state = pagerState,
+    val isBannerAdEnabled = viewModel.adManager.isRewardAdEnabled()
+
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        beyondViewportPageCount = 1,
-        key = { it }
-    ) { page ->
-        // 이 페이지의 (year, month) 계산
-        val (pageYear, pageMonth) = remember(page) {
-            MonthPagerUtils.pageToYearMonth(page)
-        }
-        // pageCache에서 이 페이지의 데이터 읽기 (없으면 기본값)
-        val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
-            ?: HomePageData()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.weight(1f),
+            beyondViewportPageCount = 1,
+            key = { it }
+        ) { page ->
+            // 이 페이지의 (year, month) 계산
+            val (pageYear, pageMonth) = remember(page) {
+                MonthPagerUtils.pageToYearMonth(page)
+            }
+            // pageCache에서 이 페이지의 데이터 읽기 (없으면 기본값)
+            val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
+                ?: HomePageData()
 
-        HomePageContent(
-            pageData = pageData,
-            year = pageYear,
-            month = pageMonth,
-            monthStartDay = uiState.monthStartDay,
-            isMonthSynced = viewModel.isMonthSynced(pageYear, pageMonth),
-            isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
-            hasSmsPermission = hasSmsPermission,
-            selectedCategory = uiState.selectedCategory,
-            onPreviousMonth = {
-                coroutineScope.launch {
-                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                }
-            },
-            onNextMonth = {
-                coroutineScope.launch {
-                    val target = pagerState.currentPage + 1
-                    if (!MonthPagerUtils.isFutureMonth(target, uiState.monthStartDay)) {
-                        pagerState.animateScrollToPage(target)
+            HomePageContent(
+                pageData = pageData,
+                year = pageYear,
+                month = pageMonth,
+                monthStartDay = uiState.monthStartDay,
+                isMonthSynced = viewModel.isMonthSynced(pageYear, pageMonth),
+                isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
+                hasSmsPermission = hasSmsPermission,
+                selectedCategory = uiState.selectedCategory,
+                isSyncing = uiState.isSyncing,
+                isAdEnabled = isBannerAdEnabled,
+                onPreviousMonth = {
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(pagerState.currentPage - 1)
                     }
-                }
-            },
-            onIncrementalSync = {
-                onRequestSmsPermission {
-                    viewModel.syncIncremental(contentResolver)
-                }
-            },
-            onFullSync = {
-                val (effY, effM) = DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
-                val isPageCurrentMonth = pageYear == effY && pageMonth == effM
-                if (viewModel.isMonthSynced(pageYear, pageMonth) || isPageCurrentMonth) {
+                },
+                onNextMonth = {
+                    coroutineScope.launch {
+                        val target = pagerState.currentPage + 1
+                        if (!MonthPagerUtils.isFutureMonth(target, uiState.monthStartDay)) {
+                            pagerState.animateScrollToPage(target)
+                        }
+                    }
+                },
+                onIncrementalSync = {
                     onRequestSmsPermission {
-                        viewModel.syncMonthData(contentResolver, pageYear, pageMonth)
+                        viewModel.syncIncremental(contentResolver)
                     }
-                } else {
-                    viewModel.preloadFullSyncAd()
-                    viewModel.showFullSyncAdDialog()
-                }
-            },
-            onCategorySelected = { category ->
-                if (category != null) {
-                    val intent = android.content.Intent(
-                        context,
-                        com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity::class.java
-                    ).apply {
-                        putExtra(
-                            com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_CATEGORY,
-                            category
-                        )
-                        putExtra(
-                            com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_YEAR,
-                            uiState.selectedYear
-                        )
-                        putExtra(
-                            com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_MONTH,
-                            uiState.selectedMonth
-                        )
+                },
+                onFullSync = {
+                    val (effY, effM) = DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+                    val isPageCurrentMonth = pageYear == effY && pageMonth == effM
+                    if (viewModel.isMonthSynced(pageYear, pageMonth) || isPageCurrentMonth) {
+                        // 이미 동기화됨 / 현재월 → 바로 동기화
+                        onRequestSmsPermission {
+                            viewModel.syncMonthData(contentResolver, pageYear, pageMonth)
+                        }
+                    } else if (!isBannerAdEnabled) {
+                        // 광고 비활성 → 광고 없이 바로 전체 동기화 해제
+                        onRequestSmsPermission {
+                            viewModel.unlockFullSync(contentResolver)
+                        }
+                    } else {
+                        viewModel.preloadFullSyncAd()
+                        viewModel.showFullSyncAdDialog()
                     }
-                    context.startActivity(intent)
-                }
-            },
-            onExpenseSelected = { expense -> selectedExpense = expense },
-            onIncomeSelected = { income -> selectedIncome = income },
-            coroutineScope = coroutineScope
-        )
-    } // HorizontalPager
+                },
+                onCategorySelected = { category ->
+                    if (category != null) {
+                        val intent = android.content.Intent(
+                            context,
+                            com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity::class.java
+                        ).apply {
+                            putExtra(
+                                com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_CATEGORY,
+                                category
+                            )
+                            putExtra(
+                                com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_YEAR,
+                                uiState.selectedYear
+                            )
+                            putExtra(
+                                com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_MONTH,
+                                uiState.selectedMonth
+                            )
+                        }
+                        context.startActivity(intent)
+                    }
+                },
+                onExpenseSelected = { expense -> selectedExpense = expense },
+                onIncomeSelected = { income -> selectedIncome = income },
+                coroutineScope = coroutineScope
+            )
+        } // HorizontalPager
+
+        // 배너 광고 (RTDB reward_ad_enabled 연동)
+        if (isBannerAdEnabled) {
+            BannerAdCompose()
+        }
+    } // Column
 
     // 지출 상세 다이얼로그 (공통 컴포넌트 사용)
     selectedExpense?.let { expense ->
@@ -392,20 +416,21 @@ fun HomeScreen(
         )
     }
 
-    // SMS 동기화 진행 다이얼로그
+    // SMS 동기화 진행 다이얼로그 (Stepper UI + 스킵 가능)
     if (uiState.showSyncDialog) {
         AlertDialog(
-            onDismissRequest = { /* 진행 중에는 닫기 불가 */ },
+            onDismissRequest = { viewModel.dismissSyncDialog() },
+            properties = DialogProperties(dismissOnClickOutside = false),
             title = { Text(stringResource(R.string.home_sync_dialog_title)) },
             text = {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // 로딩 스피너
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(48.dp),
-                        strokeWidth = 4.dp
+                    // Stepper 인디케이터 (5단계)
+                    SyncStepIndicator(
+                        currentStep = uiState.syncStepIndex,
+                        totalSteps = SmsPipeline.TOTAL_STEPS
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -447,7 +472,66 @@ fun HomeScreen(
                     )
                 }
             },
-            confirmButton = { }
+            confirmButton = { },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissSyncDialog() }) {
+                    Text(stringResource(R.string.sync_dialog_dismiss))
+                }
+            }
+        )
+    }
+
+    // AI 성과 요약 카드 (초기 동기화 완료 후)
+    if (uiState.showEngineSummary) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissEngineSummary() },
+            title = {
+                Text(
+                    text = stringResource(R.string.engine_summary_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (uiState.engineSummaryTotalSms > 0) {
+                        Text(
+                            text = stringResource(R.string.engine_summary_sms_analyzed, uiState.engineSummaryTotalSms),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    if (uiState.engineSummaryPatterns > 0) {
+                        Text(
+                            text = stringResource(R.string.engine_summary_patterns_learned, uiState.engineSummaryPatterns),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    val parts = mutableListOf<String>()
+                    if (uiState.engineSummaryExpenses > 0) {
+                        parts.add(stringResource(R.string.engine_summary_expense_count, uiState.engineSummaryExpenses))
+                    }
+                    if (uiState.engineSummaryIncomes > 0) {
+                        parts.add(stringResource(R.string.engine_summary_income_count, uiState.engineSummaryIncomes))
+                    }
+                    if (parts.isNotEmpty()) {
+                        Text(
+                            text = stringResource(R.string.engine_summary_registered, parts.joinToString(" · ")),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.engine_summary_background_note),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissEngineSummary() }) {
+                    Text(stringResource(R.string.common_confirm))
+                }
+            }
         )
     }
 
@@ -510,6 +594,8 @@ fun HomePageContent(
     isPartiallyCovered: Boolean,
     hasSmsPermission: Boolean,
     selectedCategory: String?,
+    isSyncing: Boolean,
+    isAdEnabled: Boolean,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onIncrementalSync: () -> Unit,
@@ -579,7 +665,8 @@ fun HomePageContent(
             if (showImportCta) {
                 item {
                     ImportDataCtaSection(
-                        onImportData = onIncrementalSync
+                        onImportData = onIncrementalSync,
+                        isSyncing = isSyncing
                     )
                 }
             }
@@ -593,7 +680,9 @@ fun HomePageContent(
                 item {
                     FullSyncCtaSection(
                         onRequestFullSync = onFullSync,
-                        monthLabel = ctaMonthLabel
+                        monthLabel = ctaMonthLabel,
+                        isSyncing = isSyncing,
+                        isAdEnabled = isAdEnabled
                     )
                 }
             }
@@ -614,7 +703,9 @@ fun HomePageContent(
                     FullSyncCtaSection(
                         onRequestFullSync = onFullSync,
                         monthLabel = ctaMonthLabel,
-                        isPartial = true
+                        isPartial = true,
+                        isSyncing = isSyncing,
+                        isAdEnabled = isAdEnabled
                     )
                 }
             }
@@ -1161,4 +1252,78 @@ fun AiInsightCard(
 sealed interface TodayItem {
     data class Expense(val expense: ExpenseEntity) : TodayItem
     data class Income(val income: IncomeEntity) : TodayItem
+}
+
+/**
+ * 동기화 단계 인디케이터 (5-step dot indicator)
+ *
+ * 현재 단계를 시각적으로 표시:
+ * - 완료: Primary 색상 채움
+ * - 현재: Primary 색상 + 크기 확대 (애니메이션)
+ * - 미완료: Surface 색상 (비활성)
+ */
+@Composable
+private fun SyncStepIndicator(
+    currentStep: Int,
+    totalSteps: Int,
+    modifier: Modifier = Modifier
+) {
+    val stepLabels = stringArrayResource(R.array.sync_step_labels)
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        for (i in 0 until totalSteps) {
+            val isCompleted = i < currentStep
+            val isCurrent = i == currentStep
+            val animatedDotSize by animateDpAsState(
+                targetValue = if (isCurrent) 12.dp else 8.dp,
+                label = "dotSize"
+            )
+            val dotColor = when {
+                isCompleted || isCurrent -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(animatedDotSize)
+                        .background(color = dotColor, shape = CircleShape)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = stepLabels.getOrElse(i) { "" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isCompleted || isCurrent) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    },
+                    fontSize = 9.sp
+                )
+            }
+
+            // 단계 사이 연결선
+            if (i < totalSteps - 1) {
+                Box(
+                    modifier = Modifier
+                        .width(16.dp)
+                        .height(2.dp)
+                        .background(
+                            color = if (i < currentStep) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            }
+                        )
+                )
+            }
+        }
+    }
 }

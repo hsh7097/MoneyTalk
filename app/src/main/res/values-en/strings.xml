@@ -314,6 +314,25 @@
     <string name="home_income_badge">Income %s won</string>
     <string name="home_no_today_transactions">No transactions yet today</string>
     <string name="home_sync_dialog_title">Reading expense history</string>
+    <string name="sync_dialog_dismiss">Continue in background</string>
+    <string name="sync_in_progress_button">Syncing…</string>
+    <string name="sync_in_progress_note">Processing data in the background</string>
+    <string-array name="sync_step_labels">
+        <item>Filter</item>
+        <item>Analyze</item>
+        <item>Match</item>
+        <item>AI</item>
+        <item>Save</item>
+    </string-array>
+
+    <!-- Engine Summary -->
+    <string name="engine_summary_title">✨ AI Engine Ready</string>
+    <string name="engine_summary_sms_analyzed">\uD83D\uDCE9 Analyzed %d messages from last 14 days</string>
+    <string name="engine_summary_patterns_learned">\uD83C\uDFAF %d card patterns learned</string>
+    <string name="engine_summary_expense_count">%d expenses</string>
+    <string name="engine_summary_income_count">%d incomes</string>
+    <string name="engine_summary_registered">\uD83D\uDCB0 %s added</string>
+    <string name="engine_summary_background_note">Remaining period will be\nprocessed in the background</string>
     <string name="home_this_month_expense">This Month Expense</string>
     <string name="home_today_count">%d items</string>
     <string name="home_insight_diff_more">vs Last Month +₩%s</string>

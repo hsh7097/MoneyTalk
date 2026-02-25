@@ -71,7 +71,30 @@ class SmsPipeline @Inject constructor(
 
         /** 임베딩 병렬 동시 실행 수 (API 키 5개 × 키당 2) */
         private const val EMBEDDING_CONCURRENCY = 10
+
+        // ===== 파이프라인 단계 인덱스 (Stepper UI용) =====
+        /** Step 0: 문자 분류 (PreFilter + IncomeFilter) */
+        const val STEP_FILTER = 0
+        /** Step 1: 패턴 분석 (임베딩) */
+        const val STEP_EMBED = 1
+        /** Step 2: 이전 내역 비교 (벡터 매칭) */
+        const val STEP_MATCH = 2
+        /** Step 3: AI 분석 (LLM) */
+        const val STEP_LLM = 3
+        /** Step 4: 저장 */
+        const val STEP_SAVE = 4
+        /** 총 단계 수 */
+        const val TOTAL_STEPS = 5
     }
+
+    /**
+     * 파이프라인 결과 (결제 결과 + 엔진 통계)
+     */
+    data class PipelineResult(
+        val results: List<SmsParseResult>,
+        val vectorMatchCount: Int,
+        val llmProcessCount: Int
+    )
 
     /**
      * SMS 통합 파이프라인 실행
@@ -80,16 +103,16 @@ class SmsPipeline @Inject constructor(
      * 내부에서 Step 2→3→4→5 순서대로 처리.
      *
      * @param smsList 처리할 SMS 목록 (호출자가 SmsInput으로 변환하여 전달)
-     * @param onProgress 진행률 콜백 (UI 표시용, 선택)
+     * @param onProgress 진행률 콜백 (stepIndex, stepName, current, total)
      * @param skipPreFilter true면 사전 필터링 스킵 (SmsSyncCoordinator에서 이미 수행한 경우)
-     * @return 결제로 확인되고 파싱 성공한 결과 리스트
+     * @return PipelineResult (결제 결과 + 벡터/LLM 카운트)
      */
     suspend fun process(
         smsList: List<SmsInput>,
-        onProgress: ((step: String, current: Int, total: Int) -> Unit)? = null,
+        onProgress: ((stepIndex: Int, step: String, current: Int, total: Int) -> Unit)? = null,
         skipPreFilter: Boolean = false
-    ): List<SmsParseResult> {
-        if (smsList.isEmpty()) return emptyList()
+    ): PipelineResult {
+        if (smsList.isEmpty()) return PipelineResult(emptyList(), 0, 0)
 
         Log.d(TAG, "=== 파이프라인 시작: ${smsList.size}건 ===")
 
@@ -99,30 +122,32 @@ class SmsPipeline @Inject constructor(
             Log.d(TAG, "사전 필터링 스킵 (SmsSyncCoordinator에서 처리됨)")
             smsList
         } else {
-            onProgress?.invoke("문자 분류 준비 중...", 0, smsList.size)
+            onProgress?.invoke(STEP_FILTER, "문자 분류 준비 중...", 0, smsList.size)
             val result = preFilter.filter(smsList)
             Log.d(TAG, "필터링: ${smsList.size}건 → ${result.size}건 (${smsList.size - result.size}건 제외)")
             result
         }
 
-        if (filtered.isEmpty()) return emptyList()
+        if (filtered.isEmpty()) return PipelineResult(emptyList(), 0, 0)
 
         // Step 3: 전체 임베딩 — 100건씩 배치, Semaphore(10)로 병렬 제한
-        onProgress?.invoke("문자 패턴 분석 중...", 0, filtered.size)
+        onProgress?.invoke(STEP_EMBED, "문자 패턴 분석 중...", 0, filtered.size)
         val embedded = batchEmbed(filtered)
         Log.d(TAG, "임베딩: ${filtered.size}건 → ${embedded.size}건 성공")
 
-        if (embedded.isEmpty()) return emptyList()
+        if (embedded.isEmpty()) return PipelineResult(emptyList(), 0, 0)
 
         // Step 4: 벡터 매칭 — DB 기존 패턴과 유사도 비교
-        onProgress?.invoke("이전 내역과 비교 중...", 0, embedded.size)
+        onProgress?.invoke(STEP_MATCH, "이전 내역과 비교 중...", 0, embedded.size)
         val (vectorResults, unmatched) = patternMatcher.matchPatterns(embedded)
         Log.d(TAG, "벡터매칭: ${embedded.size}건 → 매칭 ${vectorResults.size}건, 미매칭 ${unmatched.size}건")
 
         // Step 5: 미매칭분 그룹핑 + LLM
         val llmResults = if (unmatched.isNotEmpty()) {
-            onProgress?.invoke("AI가 결제 내역 분석 중...", vectorResults.size, embedded.size)
-            groupClassifier.classifyUnmatched(unmatched, onProgress)
+            onProgress?.invoke(STEP_LLM, "AI가 결제 내역 분석 중...", vectorResults.size, embedded.size)
+            groupClassifier.classifyUnmatched(unmatched) { step, current, total ->
+                onProgress?.invoke(STEP_LLM, step, current, total)
+            }
         } else {
             emptyList()
         }
@@ -130,7 +155,11 @@ class SmsPipeline @Inject constructor(
 
         val total = vectorResults + llmResults
         Log.d(TAG, "=== 파이프라인 완료: ${smsList.size}건 입력 → ${total.size}건 결제 확인 ===")
-        return total
+        return PipelineResult(
+            results = total,
+            vectorMatchCount = vectorResults.size,
+            llmProcessCount = llmResults.size
+        )
     }
 
     /**

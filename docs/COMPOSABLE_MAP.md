@@ -2,7 +2,7 @@
 
 > 각 화면의 Composable 계층 구조를 트리로 정리한 문서
 > 함수 참조 클릭 시 IDE에서 해당 파일로 이동 가능
-> **최종 갱신**: 2026-02-25
+> **최종 갱신**: 2026-02-26
 
 ---
 
@@ -65,7 +65,11 @@ HomeScreen                           ← 홈 탭 메인 화면
 ├── EmptyExpenseSection              ← 지출 없을 때 빈 상태
 ├── ExpenseDetailDialog              ← 지출 상세/수정/삭제 다이얼로그 (공통)
 │   └── CategorySelectDialog         ← 카테고리 변경 다이얼로그 (공통)
-└── [AlertDialog]                    ← 분류 확인/진행률/SMS 동기화 다이얼로그
+├── [AlertDialog]                    ← 분류 확인/진행률 다이얼로그
+├── [AlertDialog: SMS 동기화]        ← SMS 동기화 진행 (Stepper UI + dismiss 가능)
+│   └── SyncStepIndicator            ← 5단계 파이프라인 진행 인디케이터 (private)
+├── [AlertDialog: AI 성과 요약]      ← 초기 동기화 완료 후 엔진 부트스트랩 결과 표시
+└── BannerAdCompose                  ← 하단 고정 배너 광고 (RTDB reward_ad_enabled 연동, 공통)
 ```
 
 | 함수 | 설명 | 참조 |
@@ -79,6 +83,7 @@ HomeScreen                           ← 홈 탭 메인 화면
 | AiInsightCard | Gemini AI 소비 분석 요약 카드 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 | ImportDataCtaSection | 데이터 가져오기 CTA (현재월, SMS 권한/데이터 없음) | [ImportDataCtaSectionKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/component/ImportDataCtaSection.kt) |
 | EmptyExpenseSection | 지출 없을 때 빈 상태 표시 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
+| SyncStepIndicator | SMS 동기화 5단계 진행 인디케이터 (private) | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 
 ---
 
@@ -111,7 +116,8 @@ HistoryScreen                        ← 내역 탭 메인 화면
 ├── ExpenseDetailDialog              ← 지출 상세/수정/삭제 (공통)
 │   └── CategorySelectDialog         ← 카테고리 변경 (공통)
 ├── IncomeDetailDialog               ← 수입 상세 + 원본 SMS 표시
-└── AddExpenseDialog                 ← 수동 지출 추가
+├── AddExpenseDialog                 ← 수동 지출 추가
+└── BannerAdCompose                  ← 하단 고정 배너 광고 (RTDB reward_ad_enabled 연동, 공통)
 ```
 
 | 함수 | 설명 | 참조 |
@@ -226,7 +232,30 @@ SettingsScreen                       ← 설정 탭 메인 화면
 
 ---
 
-## 5. 공통 컴포넌트
+## 5. 카테고리 상세 화면 (CategoryDetailScreen)
+
+```
+CategoryDetailScreen                 ← 카테고리 상세 (Activity, 홈에서 카테고리 탭 시 진입)
+├── TopAppBar                        ← 뒤로가기 + 카테고리 이모지 + 이름
+├── HorizontalPager                  ← 월별 페이징
+│   └── CategoryDetailPageContent    ← 월별 콘텐츠
+│       ├── MonthNavigationHeader    ← 월 네비게이션 (좌우 화살표)
+│       ├── SpendingTrendSection     ← 누적 지출 추이 (카테고리 전용)
+│       ├── TransactionGroupHeaderCompose ← 날짜 그룹 헤더 (공통)
+│       └── TransactionCardCompose   ← 거래 카드 (공통)
+├── ExpenseDetailDialog              ← 지출 상세/수정/삭제 (공통)
+└── BannerAdCompose                  ← 하단 고정 배너 광고 (RTDB reward_ad_enabled 연동, 공통)
+```
+
+| 함수 | 설명 | 참조 |
+|------|------|------|
+| CategoryDetailScreen | 카테고리 상세 메인 화면 | [CategoryDetailScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/categorydetail/ui/CategoryDetailScreen.kt) |
+| CategoryDetailPageContent | 월별 콘텐츠 (차트 + 거래 목록) | [CategoryDetailScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/categorydetail/ui/CategoryDetailScreen.kt) |
+| MonthNavigationHeader | 월 네비게이션 헤더 | [CategoryDetailScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/categorydetail/ui/CategoryDetailScreen.kt) |
+
+---
+
+## 6. 공통 컴포넌트
 
 | 함수 | 설명 | 사용 화면 | 참조 |
 |------|------|----------|------|
@@ -244,6 +273,7 @@ SettingsScreen                       ← 설정 탭 메인 화면
 | CategoryPickerDialog | 카테고리 선택 (하위 호환) | AddExpenseDialog 내부 | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
 | SettingsSectionCompose | 설정 섹션 (타이틀 + Card) | 설정 | [SettingsSectionComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsSectionCompose.kt) |
 | SettingsItemCompose | 설정 아이템 (아이콘 + 텍스트) | 설정 | [SettingsItemComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsItemCompose.kt) |
+| BannerAdCompose | 하단 고정 배너 광고 (AdMob, RTDB 연동) | 홈, 내역, 카테고리 상세 | [BannerAdComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/BannerAdCompose.kt) |
 | MonthPagerUtils | HorizontalPager 페이지↔월 변환 유틸 | 홈, 내역 | [MonthPagerUtilsKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/MonthPagerUtils.kt) |
 
 ---

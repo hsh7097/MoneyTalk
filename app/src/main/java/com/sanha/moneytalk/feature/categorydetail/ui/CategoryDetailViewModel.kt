@@ -68,6 +68,7 @@ class CategoryDetailViewModel @Inject constructor(
     private val smsExclusionRepository: SmsExclusionRepository,
     private val categoryClassifierService: CategoryClassifierService,
     private val budgetDao: BudgetDao,
+    private val premiumManager: com.sanha.moneytalk.core.firebase.PremiumManager,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -76,6 +77,9 @@ class CategoryDetailViewModel @Inject constructor(
         /** 페이지 캐시 최대 허용 범위 (현재 월 ± 이 값) */
         private const val PAGE_CACHE_RANGE = 2
     }
+
+    /** 배너 광고 노출 여부 (RTDB reward_ad_enabled 연동) */
+    fun isBannerAdEnabled(): Boolean = premiumManager.premiumConfig.value.rewardAdEnabled
 
     // Intent extras (SavedStateHandle로 주입)
     private val categoryDisplayName: String =

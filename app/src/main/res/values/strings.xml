@@ -142,6 +142,25 @@
     <string name="home_import_data_note">권한 동의 없이도 수동 입력이 가능해요</string>
     <string name="sync_no_data">데이터가 없습니다</string>
     <string name="home_sync_dialog_title">지출 내역 읽는 중</string>
+    <string name="sync_dialog_dismiss">백그라운드에서 계속</string>
+    <string name="sync_in_progress_button">동기화 진행 중…</string>
+    <string name="sync_in_progress_note">백그라운드에서 데이터를 처리하고 있어요</string>
+    <string-array name="sync_step_labels">
+        <item>분류</item>
+        <item>분석</item>
+        <item>비교</item>
+        <item>AI</item>
+        <item>저장</item>
+    </string-array>
+
+    <!-- AI 성과 요약 -->
+    <string name="engine_summary_title">✨ AI 엔진 준비 완료</string>
+    <string name="engine_summary_sms_analyzed">\uD83D\uDCE9 최근 14일간 문자 %d건 분석</string>
+    <string name="engine_summary_patterns_learned">\uD83C\uDFAF 카드 패턴 %d개 학습 완료</string>
+    <string name="engine_summary_expense_count">지출 %d건</string>
+    <string name="engine_summary_income_count">수입 %d건</string>
+    <string name="engine_summary_registered">\uD83D\uDCB0 %s 등록</string>
+    <string name="engine_summary_background_note">나머지 기간은 백그라운드에서\n자동으로 처리합니다</string>
 
     <!-- 음성 입력 (STT) -->
     <string name="stt_start">음성 입력 시작</string>
@@ -447,9 +466,12 @@
     <string name="home_sync_full_locked">전체 동기화 (광고 시청 필요)</string>
     <string name="full_sync_cta_title">이전 데이터가 없어요</string>
     <string name="full_sync_cta_subtitle">최근 2개월 이전 데이터는 광고를 시청하면\n해당 기간을 가져올 수 있어요</string>
+    <string name="full_sync_cta_subtitle_no_ad">버튼을 누르면 해당 기간의\n문자 데이터를 가져올 수 있어요</string>
     <string name="full_sync_cta_button">광고 보고 %1$s 데이터 가져오기</string>
+    <string name="full_sync_cta_button_no_ad">%1$s 데이터 가져오기</string>
     <string name="partial_sync_cta_title">일부 데이터만 표시되고 있어요</string>
     <string name="partial_sync_cta_subtitle">이 기간의 일부 데이터가 누락되었어요.\n광고를 시청하면 해당 데이터를 가져올 수 있어요</string>
+    <string name="partial_sync_cta_subtitle_no_ad">이 기간의 일부 데이터가 누락되었어요.\n버튼을 누르면 해당 데이터를 가져올 수 있어요</string>
 
     <!-- 강제 업데이트 -->
     <string name="force_update_title">업데이트 필요</string>
