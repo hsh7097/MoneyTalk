@@ -11,17 +11,27 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -31,18 +41,26 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -51,14 +69,19 @@ import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.firebase.ForceUpdateChecker
 import com.sanha.moneytalk.core.firebase.ForceUpdateState
+import com.sanha.moneytalk.core.sms2.SmsPipeline
 import com.sanha.moneytalk.core.theme.MoneyTalkTheme
 import com.sanha.moneytalk.core.theme.ThemeMode
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.ForceUpdateDialog
+import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.util.toDpTextUnit
 import com.sanha.moneytalk.navigation.NavGraph
 import com.sanha.moneytalk.navigation.Screen
 import com.sanha.moneytalk.navigation.bottomNavItems
+import androidx.activity.viewModels
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -74,8 +97,11 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var analyticsHelper: AnalyticsHelper
 
-    private var pendingSyncAction: (() -> Unit)? = null
-    private var shouldAutoSync = mutableStateOf(false)
+    /** Activity-scoped MainViewModel (동기화/권한/광고 통합 관리) */
+    private val mainViewModel: MainViewModel by viewModels()
+
+    /** SMS 권한 요청 후 콜백 (권한 획득 시 호출) */
+    private var pendingPermissionCallback: (() -> Unit)? = null
 
     private val smsPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -83,24 +109,23 @@ class MainActivity : ComponentActivity() {
         val allGranted = permissions.entries.all { it.value }
         if (allGranted) {
             Toast.makeText(this, getString(R.string.permission_sms_granted), Toast.LENGTH_SHORT).show()
-            pendingSyncAction?.invoke()
+            pendingPermissionCallback?.invoke()
         } else {
             Toast.makeText(this, getString(R.string.permission_sms_denied), Toast.LENGTH_LONG).show()
         }
-        pendingSyncAction = null
+        pendingPermissionCallback = null
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // IntroActivity에서 권한 요청 완료 → 현재 권한 상태만 확인
-        val hasSmsPermission = SMS_PERMISSIONS.all {
-            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-        }
-        if (hasSmsPermission) {
-            shouldAutoSync.value = true
-        }
+        // Activity 라이프사이클에서 직접 resume 핸들링 (Compose 의존 X)
+        lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onResume(owner: LifecycleOwner) {
+                mainViewModel.onAppResume()
+            }
+        })
 
         setContent {
             val themeModeStr by settingsDataStore.themeModeFlow.collectAsStateWithLifecycle(initialValue = "SYSTEM")
@@ -130,8 +155,6 @@ class MainActivity : ComponentActivity() {
                 }
 
                 MoneyTalkApp(
-                    shouldAutoSync = shouldAutoSync.value,
-                    onAutoSyncConsumed = { shouldAutoSync.value = false },
                     onRequestSmsPermission = { onGranted ->
                         checkAndRequestSmsPermission(onGranted)
                     },
@@ -151,7 +174,7 @@ class MainActivity : ComponentActivity() {
         if (allGranted) {
             onGranted()
         } else {
-            pendingSyncAction = onGranted
+            pendingPermissionCallback = onGranted
             smsPermissionLauncher.launch(SMS_PERMISSIONS)
         }
     }
@@ -164,11 +187,15 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** 앱 루트 Composable. Scaffold + BottomNavigation + NavGraph + 전역 스낵바를 구성 */
+/**
+ * 앱 루트 Composable.
+ * Scaffold + BottomNavigation + NavGraph + 전역 스낵바 + Activity 레벨 동기화 다이얼로그를 구성.
+ *
+ * MainViewModel(Activity-scoped)을 통해 SMS 동기화, 권한, 광고 상태를 관리하고,
+ * 동기화 다이얼로그를 Activity 레벨에서 표시하여 탭 이동과 무관하게 진행 상태를 확인 가능.
+ */
 @Composable
 fun MoneyTalkApp(
-    shouldAutoSync: Boolean,
-    onAutoSyncConsumed: () -> Unit,
     onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
     onExitApp: () -> Unit,
     snackbarBus: AppSnackbarBus,
@@ -180,9 +207,10 @@ fun MoneyTalkApp(
 
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // 탭 재클릭 → 오늘 페이지로 이동 이벤트
-    val homeTabReClickEvent = remember { kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
-    val historyTabReClickEvent = remember { kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+    // Activity-scoped MainViewModel (동기화/권한/광고 통합 관리)
+    // ON_RESUME 라이프사이클은 MainActivity.onCreate()에서 직접 관리
+    val mainViewModel: MainViewModel = hiltViewModel()
+    val mainUiState by mainViewModel.uiState.collectAsStateWithLifecycle()
 
     // App-wide snackbar (toast-like): collect one-off events at the root
     LaunchedEffect(snackbarBus) {
@@ -214,6 +242,169 @@ fun MoneyTalkApp(
         currentRoute = currentRoute,
         onExitApp = onExitApp
     )
+
+    // ===== Activity 레벨 다이얼로그 (탭 이동과 무관하게 표시) =====
+
+    // SMS 동기화 진행 다이얼로그 (Stepper UI + 스킵 가능)
+    if (mainUiState.showSyncDialog) {
+        AlertDialog(
+            onDismissRequest = { mainViewModel.dismissSyncDialog() },
+            properties = DialogProperties(dismissOnClickOutside = false),
+            title = { Text(stringResource(R.string.home_sync_dialog_title)) },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    SyncStepIndicator(
+                        currentStep = mainUiState.syncStepIndex,
+                        totalSteps = SmsPipeline.TOTAL_STEPS
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (mainUiState.syncProgressTotal > 0) {
+                        val progress =
+                            mainUiState.syncProgressCurrent.toFloat() / mainUiState.syncProgressTotal.toFloat()
+                        LinearProgressIndicator(
+                            progress = { progress.coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .padding(horizontal = 8.dp),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "${mainUiState.syncProgressCurrent} / ${mainUiState.syncProgressTotal}건",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    } else {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .padding(horizontal = 8.dp),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    Text(
+                        text = mainUiState.syncProgress,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = { },
+            dismissButton = {
+                TextButton(onClick = { mainViewModel.dismissSyncDialog() }) {
+                    Text(stringResource(R.string.sync_dialog_dismiss))
+                }
+            }
+        )
+    }
+
+    // AI 성과 요약 카드 (초기 동기화 완료 후)
+    if (mainUiState.showEngineSummary) {
+        AlertDialog(
+            onDismissRequest = { mainViewModel.dismissEngineSummary() },
+            title = {
+                Text(
+                    text = stringResource(R.string.engine_summary_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (mainUiState.engineSummaryTotalSms > 0) {
+                        Text(
+                            text = stringResource(R.string.engine_summary_sms_analyzed, mainUiState.engineSummaryTotalSms),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    if (mainUiState.engineSummaryPatterns > 0) {
+                        Text(
+                            text = stringResource(R.string.engine_summary_patterns_learned, mainUiState.engineSummaryPatterns),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    val parts = mutableListOf<String>()
+                    if (mainUiState.engineSummaryExpenses > 0) {
+                        parts.add(stringResource(R.string.engine_summary_expense_count, mainUiState.engineSummaryExpenses))
+                    }
+                    if (mainUiState.engineSummaryIncomes > 0) {
+                        parts.add(stringResource(R.string.engine_summary_income_count, mainUiState.engineSummaryIncomes))
+                    }
+                    if (parts.isNotEmpty()) {
+                        Text(
+                            text = stringResource(R.string.engine_summary_registered, parts.joinToString(" · ")),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.engine_summary_background_note),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { mainViewModel.dismissEngineSummary() }) {
+                    Text(stringResource(R.string.common_confirm))
+                }
+            }
+        )
+    }
+
+    // 전체 동기화 해제 광고 다이얼로그
+    if (mainUiState.showFullSyncAdDialog) {
+        val context = LocalContext.current
+        val activity = context as? android.app.Activity
+        val adYear = mainUiState.fullSyncAdYear
+        val adMonth = mainUiState.fullSyncAdMonth
+        val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(mainUiState.monthStartDay)
+        val isCurrentMonth = adYear == effYear && adMonth == effMonth
+        val monthLabel = if (isCurrentMonth) "이번달" else "${adMonth}월"
+        AlertDialog(
+            onDismissRequest = { mainViewModel.dismissFullSyncAdDialog() },
+            title = { Text(stringResource(R.string.full_sync_ad_dialog_title, monthLabel)) },
+            text = { Text(stringResource(R.string.full_sync_ad_dialog_message, monthLabel)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (activity != null) {
+                            mainViewModel.dismissFullSyncAdDialog()
+                            mainViewModel.adManager.showAd(
+                                activity = activity,
+                                onRewarded = {
+                                    onRequestSmsPermission {
+                                        mainViewModel.unlockFullSync(adYear, adMonth)
+                                    }
+                                },
+                                onFailed = {
+                                    onRequestSmsPermission {
+                                        mainViewModel.unlockFullSync(adYear, adMonth)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.full_sync_ad_watch_button, monthLabel))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mainViewModel.dismissFullSyncAdDialog() }) {
+                    Text(stringResource(R.string.full_sync_ad_later))
+                }
+            }
+        )
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -248,14 +439,14 @@ fun MoneyTalkApp(
                                         restoreState = true
                                     }
                                     if (item.route == Screen.Home.route) {
-                                        homeTabReClickEvent.tryEmit(Unit)
+                                        mainViewModel.homeTabReClickEvent.tryEmit(Unit)
                                     } else if (item.route.startsWith("history")) {
-                                        historyTabReClickEvent.tryEmit(Unit)
+                                        mainViewModel.historyTabReClickEvent.tryEmit(Unit)
                                     }
                                 } else if (item.route == Screen.Home.route) {
-                                    homeTabReClickEvent.tryEmit(Unit)
+                                    mainViewModel.homeTabReClickEvent.tryEmit(Unit)
                                 } else if (item.route.startsWith("history")) {
-                                    historyTabReClickEvent.tryEmit(Unit)
+                                    mainViewModel.historyTabReClickEvent.tryEmit(Unit)
                                 }
                             },
                             icon = {
@@ -263,10 +454,10 @@ fun MoneyTalkApp(
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .padding(top = 4.dp),
-                                    contentAlignment = androidx.compose.ui.Alignment.Center
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     Column(
-                                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+                                        horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
                                         Icon(
                                             imageVector = if (isSelected) {
@@ -310,10 +501,8 @@ fun MoneyTalkApp(
             NavGraph(
                 navController = navController,
                 onRequestSmsPermission = onRequestSmsPermission,
-                autoSyncOnStart = shouldAutoSync,
-                onAutoSyncConsumed = onAutoSyncConsumed,
-                homeTabReClickEvent = homeTabReClickEvent,
-                historyTabReClickEvent = historyTabReClickEvent
+                homeTabReClickEvent = mainViewModel.homeTabReClickEvent,
+                historyTabReClickEvent = mainViewModel.historyTabReClickEvent
             )
         }
     }
@@ -350,6 +539,73 @@ fun BackPressHandler(
                     }
                     launchSingleTop = true
                 }
+            }
+        }
+    }
+}
+
+/** 동기화 진행 단계 인디케이터 (5단계 Stepper) */
+@Composable
+private fun SyncStepIndicator(
+    currentStep: Int,
+    totalSteps: Int,
+    modifier: Modifier = Modifier
+) {
+    val stepLabels = stringArrayResource(R.array.sync_step_labels)
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        for (i in 0 until totalSteps) {
+            val isCompleted = i < currentStep
+            val isCurrent = i == currentStep
+            val animatedDotSize by animateDpAsState(
+                targetValue = if (isCurrent) 12.dp else 8.dp,
+                label = "dotSize"
+            )
+            val dotColor = when {
+                isCompleted || isCurrent -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(animatedDotSize)
+                        .background(color = dotColor, shape = CircleShape)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = stepLabels.getOrElse(i) { "" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isCompleted || isCurrent) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    },
+                    fontSize = 9.sp
+                )
+            }
+
+            // 단계 사이 연결선
+            if (i < totalSteps - 1) {
+                Box(
+                    modifier = Modifier
+                        .width(16.dp)
+                        .height(2.dp)
+                        .background(
+                            color = if (i < currentStep) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            }
+                        )
+                )
             }
         }
     }

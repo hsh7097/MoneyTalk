@@ -1,33 +1,17 @@
 package com.sanha.moneytalk.feature.home.ui
 
-import android.Manifest
-import android.content.ContentResolver
-import com.sanha.moneytalk.R
-import android.content.pm.PackageManager
-import android.util.Log
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
-import com.sanha.moneytalk.core.firebase.AnalyticsEvent
-import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.model.Category
-import com.sanha.moneytalk.core.ui.AppSnackbarBus
-import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import com.sanha.moneytalk.core.util.CumulativeChartDataBuilder
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
-import com.sanha.moneytalk.core.sms2.SmsIncomeParser
-import com.sanha.moneytalk.core.sms2.SmsInput
-import com.sanha.moneytalk.core.sms2.SmsReaderV2
-import com.sanha.moneytalk.core.sms2.SmsPipeline
-import com.sanha.moneytalk.core.sms2.SmsSyncCoordinator
-import com.sanha.moneytalk.core.sms2.SyncStats
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
@@ -45,8 +29,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.coroutineContext
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
@@ -98,7 +80,6 @@ data class HomePageData(
  * @property selectedMonth 현재 선택된 월
  * @property monthStartDay 월 시작일 (1~28, 사용자 설정)
  * @property errorMessage 에러 메시지 (null이면 에러 없음)
- * @property isSyncing SMS 동기화 진행 중 여부
  */
 @Stable
 data class HomeUiState(
@@ -108,7 +89,6 @@ data class HomeUiState(
     val selectedMonth: Int = DateUtils.getCurrentMonth(),
     val monthStartDay: Int = 1,
     val errorMessage: String? = null,
-    val isSyncing: Boolean = false,
     // 카테고리 필터 (null이면 전체 표시)
     val selectedCategory: String? = null,
     // 카테고리 분류 관련
@@ -117,44 +97,19 @@ data class HomeUiState(
     val isClassifying: Boolean = false,
     val classifyProgress: String = "",
     val classifyProgressCurrent: Int = 0,
-    val classifyProgressTotal: Int = 0,
-    // SMS 동기화 진행 관련
-    val showSyncDialog: Boolean = false,
-    val syncProgress: String = "",
-    val syncProgressCurrent: Int = 0,
-    val syncProgressTotal: Int = 0,
-    /** 현재 동기화 단계 인덱스 (Stepper UI용, 0~4) */
-    val syncStepIndex: Int = 0,
-    /** 동기화 다이얼로그가 사용자에 의해 dismiss되었는지 여부 */
-    val syncDialogDismissed: Boolean = false,
-    // AI 성과 요약 카드 관련
-    /** 초기 동기화 완료 후 AI 성과 요약 표시 여부 */
-    val showEngineSummary: Boolean = false,
-    /** 분석된 총 SMS 건수 */
-    val engineSummaryTotalSms: Int = 0,
-    /** 생성된 패턴 수 */
-    val engineSummaryPatterns: Int = 0,
-    /** 지출 건수 */
-    val engineSummaryExpenses: Int = 0,
-    /** 수입 건수 */
-    val engineSummaryIncomes: Int = 0,
-    // 월별 동기화 해제 관련
-    val syncedMonths: Set<String> = emptySet(),
-    val isLegacyFullSyncUnlocked: Boolean = false,
-    val showFullSyncAdDialog: Boolean = false
+    val classifyProgressTotal: Int = 0
 )
 
 /**
  * 홈 화면 ViewModel
  *
  * 홈 화면의 월간 지출 현황, 카테고리별 지출, 최근 지출 내역을 관리합니다.
- * SMS 동기화 기능을 통해 카드 결제 문자에서 자동으로 지출 내역을 추출합니다.
+ * SMS 동기화는 Activity-scoped MainViewModel에서 처리합니다.
  *
  * 주요 기능:
  * - 월별 수입/지출/잔여 예산 표시 (페이지별 독립 캐시)
  * - 카테고리별 지출 합계 표시
- * - 최근 지출 내역 목록 표시
- * - SMS 동기화 (증분/전체)
+ * - AI 인사이트 생성
  * - Pull-to-Refresh 지원
  * - 카테고리 수동 변경
  */
@@ -163,80 +118,38 @@ class HomeViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val categoryClassifierService: CategoryClassifierService,
-    private val smsReaderV2: SmsReaderV2,
     private val settingsDataStore: SettingsDataStore,
     private val dataRefreshEvent: DataRefreshEvent,
-    private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
     private val geminiRepository: GeminiRepository,
-    private val snackbarBus: AppSnackbarBus,
-    private val classificationState: ClassificationState,
-    private val analyticsHelper: AnalyticsHelper,
-    private val rewardAdManager: com.sanha.moneytalk.core.ad.RewardAdManager,
-    private val smsSyncCoordinator: SmsSyncCoordinator,
-    private val budgetDao: com.sanha.moneytalk.core.database.dao.BudgetDao,
-    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
+    private val budgetDao: com.sanha.moneytalk.core.database.dao.BudgetDao
 ) : ViewModel() {
 
     companion object {
         private const val TAG = "HomeViewModel"
 
-        /** DB 배치 삽입 크기 */
-        private const val DB_BATCH_INSERT_SIZE = 100
-
         /** 기본 조회 기간 (1년, 밀리초) */
         private const val ONE_YEAR_MILLIS = 365L * 24 * 60 * 60 * 1000
-
-        /** 초기 동기화 제한 기간 (2개월, 밀리초) — 전체 동기화 미해제 시 적용 */
-        private const val DEFAULT_SYNC_PERIOD_MILLIS = 60L * 24 * 60 * 60 * 1000
 
         /** 카테고리 분류 최대 반복 횟수 */
         private const val MAX_CLASSIFICATION_ROUNDS = 3
 
         /** 페이지 캐시 최대 허용 범위 (현재 월 ± 이 값) */
         private const val PAGE_CACHE_RANGE = 2
-
-        /**
-         * 동적 진행률 업데이트 간격 계산
-         *
-         * SMS 건수에 따라 UI 업데이트 빈도를 조절합니다.
-         * 2만 건 기준으로 50건마다 업데이트하면 400회 recomposition이 발생하지만,
-         * 200건마다 업데이트하면 100회로 줄어들어 UI 부하가 75% 감소합니다.
-         *
-         * @param totalCount 전체 SMS 건수
-         * @return 업데이트 간격 (건)
-         */
-        private fun calculateProgressInterval(totalCount: Int): Int = when {
-            totalCount >= 10000 -> 500    // 1만+ → 500건마다 (~20~40회 업데이트)
-            totalCount >= 5000 -> 200     // 5천+ → 200건마다 (~25~50회 업데이트)
-            totalCount >= 1000 -> 100     // 1천+ → 100건마다 (~10~50회 업데이트)
-            else -> 50                     // 1천 미만 → 50건마다 (기존과 동일)
-        }
     }
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
-
-    /** 광고 매니저 접근 (HomeScreen에서 Activity 기반 광고 표시에 필요) */
-    val adManager: com.sanha.moneytalk.core.ad.RewardAdManager get() = rewardAdManager
 
     /** 페이지별 로드 Job 관리 (월별 독립 취소) */
     private val pageLoadJobs = mutableMapOf<MonthKey, Job>()
 
     /** 마지막 AI 인사이트 생성 시 사용된 입력 데이터 해시 (동일 데이터 재생성 방지) */
     private val lastInsightInputHash = AtomicInteger(0)
-    /** resume 자동 분류 중복 실행 방지 플래그 */
-    private val isResumeClassificationChecking = AtomicBoolean(false)
-    /** syncSmsV2 재진입 방지 플래그 (동시 호출 시 중복 수입 방지) */
-    private val isSyncRunning = AtomicBoolean(false)
-    /** 최초 진입(onCreate) 여부 — 첫 refreshData 호출 시 다이얼로그 표시용 */
-    private var isFirstLaunch = true
 
     init {
         loadSettings()
         observeDataRefreshEvents()
-        // 리워드 광고 미리 로드 (전체 동기화 해제용)
-        rewardAdManager.preloadAd()
     }
 
     // ========== 페이지 캐시 관리 ==========
@@ -319,11 +232,7 @@ class HomeViewModel @Inject constructor(
             dataRefreshEvent.refreshEvent.collect { event ->
                 when (event) {
                     DataRefreshEvent.RefreshType.ALL_DATA_DELETED -> {
-                        // 진행 중인 백그라운드 분류 작업 즉시 취소
-                        classificationState.cancelIfRunning()
                         clearAllPageCache()
-                        // 데이터 초기화 후 홈 복귀 시 다이얼로그 표시되도록 첫 진입 상태로 리셋
-                        isFirstLaunch = true
                         loadSettings()
                     }
 
@@ -336,38 +245,8 @@ class HomeViewModel @Inject constructor(
                         refreshCurrentPages()
                     }
 
-                    DataRefreshEvent.RefreshType.SMS_RECEIVED -> {
-                        Log.d(TAG, "SMS 수신 이벤트 → 증분 동기화 실행 (silent)")
-                        val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
-                        syncSmsV2(
-                            appContext.contentResolver, range,
-                            updateLastSyncTime = true, silent = true
-                        )
-                    }
+                    else -> { /* SMS_RECEIVED 등은 MainViewModel에서 처리 */ }
                 }
-            }
-        }
-        // History 탭에서 광고 시청 후 해당 달 SMS 동기화 요청 수신
-        viewModelScope.launch {
-            dataRefreshEvent.monthSyncEvent.collect { request ->
-                val monthRange = calculateMonthRange(request.year, request.month)
-                val yearMonth = String.format("%04d-%02d", request.year, request.month)
-                syncSmsV2(
-                    appContext.contentResolver,
-                    monthRange,
-                    updateLastSyncTime = false,
-                    onSyncComplete = {
-                        // 동기화 성공 후에만 synced 마킹
-                        settingsDataStore.addSyncedMonth(yearMonth)
-                    }
-                )
-            }
-        }
-        // History 탭에서 증분 동기화 요청 수신 (replay=1 → 소비 후 캐시 리셋)
-        viewModelScope.launch {
-            dataRefreshEvent.incrementalSyncEvent.collect {
-                dataRefreshEvent.consumeIncrementalSync()
-                syncIncremental(appContext.contentResolver)
             }
         }
     }
@@ -406,19 +285,6 @@ class HomeViewModel @Inject constructor(
                     clearAllPageCache()
                     loadCurrentAndAdjacentPages()
                 }
-        }
-        // 월별 동기화 해제 상태 로드
-        viewModelScope.launch {
-            settingsDataStore.syncedMonthsFlow.collect { months ->
-                _uiState.update { it.copy(syncedMonths = months) }
-            }
-        }
-        // 레거시 전역 동기화 해제 상태 (FULL_SYNC_UNLOCKED=true 마이그레이션 호환)
-        @Suppress("DEPRECATION")
-        viewModelScope.launch {
-            settingsDataStore.fullSyncUnlockedFlow.collect { unlocked ->
-                _uiState.update { it.copy(isLegacyFullSyncUnlocked = unlocked) }
-            }
         }
     }
 
@@ -763,686 +629,6 @@ class HomeViewModel @Inject constructor(
         loadCurrentAndAdjacentPages()
     }
 
-    /** 화면이 다시 표시될 때 데이터 새로고침 (LaunchedEffect에서 호출) */
-    fun refreshData() {
-        val hasSmsPermission = ContextCompat.checkSelfPermission(
-            appContext, Manifest.permission.READ_SMS
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (hasSmsPermission && !_uiState.value.isSyncing) {
-            val firstLaunch = isFirstLaunch
-            isFirstLaunch = false
-
-            if (firstLaunch) {
-                // 최초 진입: 동기화 (다이얼로그 표시)
-                launchSync()
-            } else {
-                // onResume 복귀: 기존 silent 증분 동기화
-                viewModelScope.launch {
-                    val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
-                    syncSmsV2(
-                        appContext.contentResolver, range,
-                        updateLastSyncTime = true, silent = true
-                    )
-                }
-            }
-        } else if (!hasSmsPermission) {
-            // 권한 없음 → firstLaunch 리셋 (권한 획득 후 다시 시도)
-            isFirstLaunch = false
-        }
-        // isSyncing=true일 때는 isFirstLaunch 유지 → 동기화 완료 후 다음 resume에서 재시도
-        // 캐시를 지우지 않고 재로드 → 기존 데이터 유지하면서 갱신 (깜빡임 방지)
-        loadCurrentAndAdjacentPages()
-        // resume 시 미분류 항목이 있고 분류가 진행 중이 아니면 자동 분류 시작
-        tryResumeClassification()
-    }
-
-    /**
-     * SMS 동기화 (초기/증분 공통)
-     *
-     * 초기 동기화: fullRange(전월 1일~현재) 전체를 한 번에 처리 + 완료 후 AI 성과 요약
-     * 증분 동기화: lastSyncTime 이후 ~ 현재까지 처리
-     *
-     * lastSyncTime은 동기화 완료 시점에 저장 → 앱 종료 시 데이터 유실 방지
-     */
-    private fun launchSync() {
-        if (!isSyncRunning.compareAndSet(false, true)) {
-            Log.w(TAG, "launchSync: 이미 동기화 진행 중 → 스킵")
-            return
-        }
-
-        analyticsHelper.logClick(AnalyticsEvent.SCREEN_HOME, AnalyticsEvent.CLICK_SYNC_SMS)
-
-        viewModelScope.launch {
-            try {
-                val fullRange = withContext(Dispatchers.IO) { calculateIncrementalRange() }
-                val isInitialSync = withContext(Dispatchers.IO) { settingsDataStore.getLastSyncTime() == 0L }
-
-                _uiState.update {
-                    it.copy(
-                        isSyncing = true,
-                        showSyncDialog = true,
-                        syncDialogDismissed = false,
-                        syncProgress = "문자 읽는 중...",
-                        syncProgressCurrent = 0,
-                        syncProgressTotal = 0,
-                        syncStepIndex = 0
-                    )
-                }
-                dataRefreshEvent.updateSyncProgress("문자 읽는 중...", 0, 0)
-                val result = withContext(Dispatchers.IO) {
-                    syncSmsV2Internal(appContext.contentResolver, fullRange, updateLastSyncTime = true, silent = false)
-                }
-
-                if (isInitialSync) {
-                    // 초기 동기화 완료 → 카드 자동 등록 + 홈 갱신 + AI 성과 요약
-                    if (result.detectedCardNames.isNotEmpty()) {
-                        viewModelScope.launch(Dispatchers.IO) {
-                            try {
-                                ownedCardRepository.registerCardsFromSync(result.detectedCardNames)
-                            } catch (e: Exception) {
-                                Log.w(TAG, "카드 자동 등록 실패: ${e.message}")
-                            }
-                        }
-                    }
-                    refreshCurrentPages()
-
-                    val hasData = result.expenseCount > 0 || result.incomeCount > 0
-                    val dialogWasDismissed = _uiState.value.syncDialogDismissed
-
-                    if (hasData && !dialogWasDismissed) {
-                        _uiState.update {
-                            it.copy(
-                                isSyncing = false,
-                                showSyncDialog = false,
-                                showEngineSummary = true,
-                                engineSummaryTotalSms = result.stats.totalInput,
-                                engineSummaryPatterns = result.stats.vectorMatchCount + result.stats.newPatternsCreated,
-                                engineSummaryExpenses = result.expenseCount,
-                                engineSummaryIncomes = result.incomeCount
-                            )
-                        }
-                    } else {
-                        _uiState.update {
-                            it.copy(
-                                isSyncing = false,
-                                showSyncDialog = false,
-                                syncProgress = "",
-                                syncProgressCurrent = 0,
-                                syncProgressTotal = 0,
-                                syncStepIndex = 0
-                            )
-                        }
-                        if (hasData) {
-                            snackbarBus.show(buildResultMessage(result.expenseCount, result.incomeCount))
-                        }
-                    }
-                } else {
-                    // 증분 동기화 → 기존 핸들러 사용
-                    handleSyncResult(result, silent = false)
-                }
-            } catch (e: Exception) {
-                handleSyncError(e, silent = false)
-            } finally {
-                dataRefreshEvent.completeSyncProgress()
-                isSyncRunning.set(false)
-            }
-        }
-    }
-
-    /** 결과 메시지 빌드 헬퍼 */
-    private fun buildResultMessage(expenseCount: Int, incomeCount: Int): String = when {
-        expenseCount > 0 && incomeCount > 0 ->
-            "${expenseCount}건의 지출, ${incomeCount}건의 수입이 추가되었습니다"
-        expenseCount > 0 ->
-            "${expenseCount}건의 새 지출이 추가되었습니다"
-        incomeCount > 0 ->
-            "${incomeCount}건의 새 수입이 추가되었습니다"
-        else -> "새로운 내역이 없습니다"
-    }
-
-    /**
-     * resume 시 미분류 항목 자동 분류 시도
-     * 조건: (1) 분류 미진행 (2) Gemini API 키 존재 (3) 미분류 항목 존재
-     */
-    private fun tryResumeClassification() {
-        if (classificationState.isRunning.value) return
-        if (!isResumeClassificationChecking.compareAndSet(false, true)) return
-
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val hasApiKey = geminiRepository.hasApiKey()
-                if (!hasApiKey) return@launch
-
-                val unclassifiedCount = categoryClassifierService.getUnclassifiedCount()
-                if (unclassifiedCount == 0) return@launch
-                if (classificationState.isRunning.value) return@launch
-
-                android.util.Log.e("MT_DEBUG", "HomeViewModel[tryResumeClassification] : Resume 시 미분류 ${unclassifiedCount}건 발견 → 자동 분류 시작")
-                withContext(Dispatchers.Main) {
-                    if (!classificationState.isRunning.value) {
-                        launchBackgroundCategoryClassification()
-                    }
-                }
-            } finally {
-                isResumeClassificationChecking.set(false)
-            }
-        }
-    }
-
-    // ===== SMS 동기화 (sms2 파이프라인) =====
-
-    /** 동기화 후처리 결과 */
-    private data class PostSyncResult(
-        val cardNames: List<String>,
-        val classifiedCount: Int
-    )
-
-    /** 동기화 최종 결과 */
-    private data class SyncResult(
-        val expenseCount: Int,
-        val incomeCount: Int,
-        val detectedCardNames: List<String>,
-        val classifiedCount: Int,
-        /** 파이프라인 엔진 통계 (초기 동기화 요약 카드용) */
-        val stats: SyncStats = SyncStats()
-    )
-
-    /**
-     * SMS 읽기 + 중복 제거
-     *
-     * SmsReaderV2가 직접 SmsInput을 반환하므로 별도 변환 불필요.
-     *
-     * @return 신규 SMS의 SmsInput 리스트 (중복 제거 완료). 없으면 빈 리스트.
-     */
-    private suspend fun readAndFilterSms(
-        contentResolver: ContentResolver,
-        targetMonthRange: Pair<Long, Long>
-    ): List<SmsInput> {
-        val allSmsList = smsReaderV2.readAllMessagesByDateRange(
-            contentResolver,
-            targetMonthRange.first,
-            targetMonthRange.second
-        )
-        android.util.Log.d(TAG, "SMS 읽기: ${allSmsList.size}건")
-
-        if (allSmsList.isEmpty()) return emptyList()
-
-        _uiState.update { it.copy(syncProgress = "이미 등록된 내역 확인 중...") }
-        val existingSmsIds = expenseRepository.getAllSmsIds()
-        val existingIncomeSmsIds = incomeRepository.getAllSmsIds().toHashSet()
-        val allExistingIds = existingSmsIds + existingIncomeSmsIds
-
-        val newSmsList = allSmsList.filter { it.id !in allExistingIds }
-        android.util.Log.d(TAG, "중복 제거: ${allSmsList.size}건 → ${newSmsList.size}건")
-
-        return newSmsList
-    }
-
-    /**
-     * sms2 파이프라인 실행 (SmsSyncCoordinator.process)
-     *
-     * @param silent true면 dataRefreshEvent에 진행 상태를 전파하지 않음
-     *               (History 탭에서 불필요한 동기화 다이얼로그 방지)
-     * @return SmsSyncCoordinator의 SyncResult (expenses + incomes + stats)
-     */
-    private suspend fun processSmsPipeline(
-        smsInputs: List<SmsInput>,
-        silent: Boolean = false
-    ): com.sanha.moneytalk.core.sms2.SyncResult {
-        if (!silent) {
-            _uiState.update {
-                it.copy(
-                    syncProgress = "내역 분석 중...",
-                    syncProgressTotal = smsInputs.size
-                )
-            }
-        }
-        categoryClassifierService.initCategoryCache()
-
-        return smsSyncCoordinator.process(smsInputs) { stepIndex, step, current, total ->
-            if (!silent) {
-                _uiState.update {
-                    it.copy(
-                        syncStepIndex = stepIndex,
-                        syncProgress = step,
-                        syncProgressCurrent = current,
-                        syncProgressTotal = total
-                    )
-                }
-                dataRefreshEvent.updateSyncProgress(step, current, total)
-            }
-        }
-    }
-
-    /**
-     * 지출 파싱 결과를 ExpenseEntity로 변환하여 DB에 배치 저장
-     *
-     * @return 저장된 지출 건수
-     */
-    private suspend fun saveExpenses(
-        expenses: List<com.sanha.moneytalk.core.sms2.SmsParseResult>
-    ): Int {
-        if (expenses.isEmpty()) return 0
-
-        _uiState.update { it.copy(syncStepIndex = SmsPipeline.STEP_SAVE, syncProgress = "지출 저장 중...") }
-        val batch = mutableListOf<ExpenseEntity>()
-
-        for (parsed in expenses) {
-            val category = if (parsed.analysis.category.isNotBlank() &&
-                parsed.analysis.category != "미분류" &&
-                parsed.analysis.category != "기타"
-            ) {
-                parsed.analysis.category
-            } else {
-                categoryClassifierService.getCategory(
-                    storeName = parsed.analysis.storeName,
-                    originalSms = parsed.input.body
-                )
-            }
-
-            batch.add(
-                ExpenseEntity(
-                    amount = parsed.analysis.amount,
-                    storeName = parsed.analysis.storeName,
-                    category = category,
-                    cardName = parsed.analysis.cardName,
-                    dateTime = DateUtils.parseDateTime(parsed.analysis.dateTime),
-                    originalSms = parsed.input.body,
-                    smsId = parsed.input.id
-                )
-            )
-
-            if (batch.size >= DB_BATCH_INSERT_SIZE) {
-                expenseRepository.insertAll(batch)
-                batch.clear()
-            }
-        }
-        if (batch.isNotEmpty()) {
-            expenseRepository.insertAll(batch)
-        }
-
-        return expenses.size
-    }
-
-    /**
-     * 수입 SMS를 SmsIncomeParser로 파싱하여 DB에 배치 저장
-     *
-     * @return 저장된 수입 건수
-     */
-    private suspend fun saveIncomes(
-        incomes: List<SmsInput>
-    ): Int {
-        if (incomes.isEmpty()) return 0
-
-        _uiState.update { it.copy(syncProgress = "수입 처리 중...") }
-        val batch = mutableListOf<IncomeEntity>()
-        var count = 0
-
-        for (income in incomes) {
-            try {
-                val amount = SmsIncomeParser.extractIncomeAmount(income.body)
-                val incomeType = SmsIncomeParser.extractIncomeType(income.body)
-                val source = SmsIncomeParser.extractIncomeSource(income.body)
-                val dateTime = SmsIncomeParser.extractDateTime(income.body, income.date)
-
-                if (amount > 0) {
-                    batch.add(
-                        IncomeEntity(
-                            smsId = income.id,
-                            amount = amount,
-                            type = incomeType,
-                            source = source,
-                            description = if (source.isNotBlank()) "${source}에서 $incomeType" else incomeType,
-                            isRecurring = incomeType == "급여",
-                            dateTime = DateUtils.parseDateTime(dateTime),
-                            originalSms = income.body
-                        )
-                    )
-                    count++
-
-                    if (batch.size >= DB_BATCH_INSERT_SIZE) {
-                        incomeRepository.insertAll(batch)
-                        batch.clear()
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "수입 처리 실패: ${income.id} - ${e.message}")
-            }
-        }
-        if (batch.isNotEmpty()) {
-            incomeRepository.insertAll(batch)
-        }
-
-        Log.d(TAG, "saveIncomes: ${incomes.size}건 → ${count}건 저장")
-        return count
-    }
-
-    /**
-     * 동기화 후처리 (카테고리 캐시 정리, 패턴 정리, lastSyncTime 갱신, 카테고리 분류)
-     *
-     * @param updateLastSyncTime true면 lastSyncTime을 endTime으로 갱신 (증분 동기화)
-     * @param endTime 동기화 종료 시각 (targetMonthRange.second)
-     * @return PostSyncResult (카드명 목록, 분류 건수)
-     */
-    private suspend fun postSyncCleanup(
-        updateLastSyncTime: Boolean,
-        endTime: Long
-    ): PostSyncResult {
-        _uiState.update { it.copy(syncProgress = "마무리 중...") }
-        categoryClassifierService.flushPendingMappings()
-        categoryClassifierService.clearCategoryCache()
-
-        if (updateLastSyncTime) {
-            settingsDataStore.saveLastSyncTime(endTime)
-        }
-
-        val allCardNames = expenseRepository.getAllCardNamesWithDuplicates()
-
-        // 카테고리 분류 (Gemini)
-        var classifiedCount = 0
-        val hasGeminiKey = geminiRepository.hasApiKey()
-        if (hasGeminiKey) {
-            val unclassifiedCount = categoryClassifierService.getUnclassifiedCount()
-            if (unclassifiedCount > 0) {
-                _uiState.update {
-                    it.copy(
-                        syncProgress = "AI가 카테고리 분류 중...",
-                        syncProgressCurrent = 0,
-                        syncProgressTotal = unclassifiedCount
-                    )
-                }
-                classifiedCount = categoryClassifierService.classifyUnclassifiedExpenses(
-                    onStepProgress = { step, current, total ->
-                        _uiState.update {
-                            it.copy(
-                                syncProgress = "AI가 카테고리 분류 중...\n$step",
-                                syncProgressCurrent = current,
-                                syncProgressTotal = total
-                            )
-                        }
-                    },
-                    maxStoreCount = 50
-                )
-            }
-        }
-
-        return PostSyncResult(
-            cardNames = allCardNames,
-            classifiedCount = classifiedCount
-        )
-    }
-
-    /**
-     * 증분 동기화용 시간 범위 계산
-     *
-     * - lastSyncTime이 있으면: lastSyncTime ~ now (증분)
-     * - lastSyncTime이 없으면 (초기): 전월 1일 ~ now (2달치)
-     *   예) 오늘이 2월 10일이면 1월 1일 ~ 2월 10일
-     *
-     * Auto Backup 감지: savedSyncTime > 0 이지만 DB 비어있으면 초기 상태로 리셋.
-     */
-    private suspend fun calculateIncrementalRange(): Pair<Long, Long> {
-        val savedSyncTime = settingsDataStore.getLastSyncTime()
-        val now = System.currentTimeMillis()
-        val monthStartDay = _uiState.value.monthStartDay
-
-        val dbCount = expenseRepository.getAllSmsIds().size
-        val effectiveSyncTime = if (savedSyncTime > 0 && dbCount == 0) {
-            Log.w(TAG, "Auto Backup 감지: savedSyncTime 있으나 DB 비어있음 → 리셋")
-            settingsDataStore.saveLastSyncTime(0L)
-            0L
-        } else {
-            savedSyncTime
-        }
-
-        // monthStartDay > 1이면 커스텀 월이 달을 걸치므로 추가 마진 필요
-        // 예: monthStartDay=19 → 커스텀 "1월"은 12/19~1/18, 18일 추가 필요
-        val extraDaysMillis = if (monthStartDay > 1) {
-            (monthStartDay - 1).toLong() * 24 * 60 * 60 * 1000
-        } else 0L
-
-        // 최대 동기화 범위: 기본 60일 + 커스텀 월 마진
-        val minStartTime = now - DEFAULT_SYNC_PERIOD_MILLIS - extraDaysMillis
-
-        // SMS date와 동기화 시각 사이의 지연(네트워크, ContentProvider 기록 등)에 의한
-        // 누락을 방지하기 위해 lastSyncTime에서 5분 마진을 빼서 조회.
-        // 중복 SMS는 readAndFilterSms에서 smsId 기반으로 자동 제거됨.
-        val OVERLAP_MARGIN_MILLIS = 5L * 60 * 1000 // 5분
-
-        val startTime = if (effectiveSyncTime > 0) {
-            // 증분: lastSyncTime - 마진, clamp 범위도 커스텀 월 마진 반영
-            maxOf(effectiveSyncTime - OVERLAP_MARGIN_MILLIS, minStartTime)
-        } else {
-            // 초기: 커스텀 월 2개 분량 커버
-            val cal = java.util.Calendar.getInstance()
-            if (monthStartDay > 1) {
-                // monthStartDay > 1: 2달 전 monthStartDay부터
-                // 예: now=2/24, monthStartDay=19 → 12/19부터 (커스텀 "1월" 전체 커버)
-                cal.add(java.util.Calendar.MONTH, -2)
-                cal.set(
-                    java.util.Calendar.DAY_OF_MONTH,
-                    monthStartDay.coerceAtMost(cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH))
-                )
-            } else {
-                // monthStartDay=1: 전월 1일부터
-                cal.add(java.util.Calendar.MONTH, -1)
-                cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
-            }
-            cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
-            cal.set(java.util.Calendar.MINUTE, 0)
-            cal.set(java.util.Calendar.SECOND, 0)
-            cal.set(java.util.Calendar.MILLISECOND, 0)
-            cal.timeInMillis
-        }
-
-        return Pair(startTime, now)
-    }
-
-    /**
-     * 증분 동기화 (앱 시작, 동기화 버튼)
-     *
-     * lastSyncTime 기반으로 범위를 자동 계산하여 syncSmsV2 호출.
-     * HomeScreen에서 직접 호출하는 간편 래퍼.
-     */
-    fun syncIncremental(contentResolver: ContentResolver) {
-        viewModelScope.launch {
-            val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
-            syncSmsV2(contentResolver, range, updateLastSyncTime = true)
-        }
-    }
-
-    /**
-     * SMS 동기화 내부 실행 (순수 suspend 함수)
-     *
-     * isSyncRunning, viewModelScope.launch 관리 없이 순수 로직만 실행.
-     *
-     * @return SyncResult (지출/수입 건수, 카드명, 분류 건수, 엔진 통계)
-     */
-    private suspend fun syncSmsV2Internal(
-        contentResolver: ContentResolver,
-        targetMonthRange: Pair<Long, Long>,
-        updateLastSyncTime: Boolean,
-        silent: Boolean
-    ): SyncResult {
-        // 제외 키워드 설정
-        val userExcludeKeywords = smsExclusionRepository.getUserKeywords()
-        smsSyncCoordinator.setUserExcludeKeywords(userExcludeKeywords)
-        SmsIncomeParser.setUserExcludeKeywords(userExcludeKeywords)
-
-        // Step 1: SMS 읽기 + 중복 제거
-        val smsInputs = readAndFilterSms(contentResolver, targetMonthRange)
-        if (smsInputs.isEmpty()) {
-            if (updateLastSyncTime) {
-                settingsDataStore.saveLastSyncTime(targetMonthRange.second)
-            }
-            return SyncResult(0, 0, emptyList(), 0)
-        }
-
-        // Step 2: sms2 파이프라인 실행
-        val syncResult = processSmsPipeline(smsInputs, silent)
-
-        // Step 3: DB 저장
-        val expenseCount = saveExpenses(syncResult.expenses)
-        val incomeCount = saveIncomes(syncResult.incomes)
-
-        // Step 4: 후처리 (카테고리 분류, 패턴 정리, lastSyncTime 갱신)
-        val cleanup = postSyncCleanup(updateLastSyncTime, targetMonthRange.second)
-
-        return SyncResult(
-            expenseCount = expenseCount,
-            incomeCount = incomeCount,
-            detectedCardNames = cleanup.cardNames,
-            classifiedCount = cleanup.classifiedCount,
-            stats = syncResult.stats
-        )
-    }
-
-    /**
-     * SMS 동기화 (sms2 파이프라인)
-     *
-     * 기존 호출부(syncIncremental, unlockFullSync 등) 호환 유지.
-     * 내부적으로 syncSmsV2Internal()을 호출.
-     *
-     * @param contentResolver SMS 읽기용 ContentResolver
-     * @param targetMonthRange 동기화 대상 기간 (startMillis, endMillis)
-     * @param updateLastSyncTime true면 동기화 후 lastSyncTime 갱신 (증분=true, 월별=false)
-     */
-    fun syncSmsV2(
-        contentResolver: ContentResolver,
-        targetMonthRange: Pair<Long, Long>,
-        updateLastSyncTime: Boolean = true,
-        silent: Boolean = false,
-        onSyncComplete: (suspend () -> Unit)? = null
-    ) {
-        // 재진입 방지: 이미 동기화 중이면 무시
-        if (!isSyncRunning.compareAndSet(false, true)) {
-            Log.w(TAG, "syncSmsV2: 이미 동기화 진행 중 → 스킵")
-            return
-        }
-
-        if (!silent) {
-            analyticsHelper.logClick(AnalyticsEvent.SCREEN_HOME, AnalyticsEvent.CLICK_SYNC_SMS)
-        }
-        viewModelScope.launch {
-            if (!silent) {
-                _uiState.update {
-                    it.copy(
-                        isSyncing = true,
-                        showSyncDialog = true,
-                        syncDialogDismissed = false,
-                        syncProgress = "문자 읽는 중...",
-                        syncProgressCurrent = 0,
-                        syncProgressTotal = 0,
-                        syncStepIndex = 0
-                    )
-                }
-                dataRefreshEvent.updateSyncProgress("문자 읽는 중...", 0, 0)
-            } else {
-                _uiState.update { it.copy(isSyncing = true) }
-            }
-
-            try {
-                val result = withContext(Dispatchers.IO) {
-                    syncSmsV2Internal(contentResolver, targetMonthRange, updateLastSyncTime, silent)
-                }
-
-                handleSyncResult(result, silent)
-                onSyncComplete?.invoke()
-            } catch (e: Exception) {
-                handleSyncError(e, silent)
-            } finally {
-                if (!silent) {
-                    dataRefreshEvent.completeSyncProgress()
-                }
-                isSyncRunning.set(false)
-            }
-        }
-    }
-
-    /** 동기화 결과 처리 (UI 상태 업데이트 + snackbar) */
-    private suspend fun handleSyncResult(result: SyncResult, silent: Boolean) {
-        // 카드 자동 등록 (백그라운드)
-        if (result.detectedCardNames.isNotEmpty()) {
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    ownedCardRepository.registerCardsFromSync(result.detectedCardNames)
-                } catch (e: Exception) {
-                    android.util.Log.w(TAG, "카드 자동 등록 실패: ${e.message}")
-                }
-            }
-        }
-
-        // 데이터 새로고침 (스크롤 위치 유지)
-        refreshCurrentPages()
-
-        val resultMessage = buildResultMessage(result.expenseCount, result.incomeCount)
-
-        if (silent || _uiState.value.syncDialogDismissed) {
-            _uiState.update { it.copy(isSyncing = false) }
-            if (result.expenseCount > 0 || result.incomeCount > 0) {
-                snackbarBus.show(resultMessage)
-            }
-        } else {
-            _uiState.update {
-                it.copy(
-                    isSyncing = false,
-                    showSyncDialog = false,
-                    syncProgress = "",
-                    syncProgressCurrent = 0,
-                    syncProgressTotal = 0,
-                    syncStepIndex = 0,
-                    errorMessage = resultMessage
-                )
-            }
-            if (result.expenseCount == 0 && result.incomeCount == 0) {
-                snackbarBus.show(appContext.getString(R.string.sync_no_data))
-            }
-        }
-    }
-
-    /** 동기화 에러 처리 */
-    private fun handleSyncError(e: Exception, silent: Boolean) {
-        categoryClassifierService.clearCategoryCache()
-
-        if (silent || _uiState.value.syncDialogDismissed) {
-            _uiState.update { it.copy(isSyncing = false) }
-            Log.w(TAG, "SMS 동기화 실패: ${e.message}")
-        } else {
-            _uiState.update {
-                it.copy(
-                    isSyncing = false,
-                    showSyncDialog = false,
-                    syncProgress = "",
-                    syncProgressCurrent = 0,
-                    syncProgressTotal = 0,
-                    syncStepIndex = 0,
-                    errorMessage = "동기화 실패: ${e.message}"
-                )
-            }
-        }
-    }
-
-    /**
-     * 동기화 다이얼로그 dismiss (백그라운드에서 계속)
-     *
-     * 다이얼로그만 닫고 동기화는 계속 진행.
-     * 완료 시 snackbar로 결과 표시.
-     */
-    fun dismissSyncDialog() {
-        _uiState.update {
-            it.copy(
-                showSyncDialog = false,
-                syncDialogDismissed = true
-            )
-        }
-    }
-
-    /** AI 성과 요약 카드 dismiss */
-    fun dismissEngineSummary() {
-        _uiState.update { it.copy(showEngineSummary = false) }
-    }
-
     /**
      * Pull-to-Refresh 및 외부에서 호출 가능한 데이터 새로고침
      */
@@ -1490,99 +676,6 @@ class HomeViewModel @Inject constructor(
         _uiState.update { it.copy(errorMessage = null) }
     }
 
-    // ========== 전체 동기화 해제 (리워드 광고) ==========
-
-    /** 전체 동기화 광고 다이얼로그 표시 (광고 미로드 시 프리로드도 함께 실행) */
-    fun showFullSyncAdDialog() {
-        rewardAdManager.preloadAd()
-        _uiState.update { it.copy(showFullSyncAdDialog = true) }
-    }
-
-    /** 전체 동기화 광고 다이얼로그 닫기 */
-    fun dismissFullSyncAdDialog() {
-        _uiState.update { it.copy(showFullSyncAdDialog = false) }
-    }
-
-    /**
-     * 월별 동기화 해제 (광고 시청 완료 후 호출)
-     * 현재 보고 있는 달의 SMS만 가져오고, 해당 월을 syncedMonths에 기록.
-     */
-    fun unlockFullSync(contentResolver: ContentResolver) {
-        val state = _uiState.value
-        val yearMonth = String.format("%04d-%02d", state.selectedYear, state.selectedMonth)
-        _uiState.update { it.copy(showFullSyncAdDialog = false) }
-
-        // 현재 보고 있는 월의 범위 계산
-        val monthRange = calculateMonthRange(state.selectedYear, state.selectedMonth)
-        val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(state.monthStartDay)
-        val isCurrentMonth = state.selectedYear == effYear && state.selectedMonth == effMonth
-        val monthLabel = if (isCurrentMonth) "이번달" else "${state.selectedMonth}월"
-        snackbarBus.show("${monthLabel} 데이터를 가져옵니다.")
-
-        syncSmsV2(
-            contentResolver,
-            monthRange,
-            updateLastSyncTime = false,
-            onSyncComplete = {
-                // 동기화 성공 후에만 synced 마킹
-                settingsDataStore.addSyncedMonth(yearMonth)
-            }
-        )
-    }
-
-    /** 해당 월이 이미 동기화(광고 시청) 되었는지 확인 */
-    fun isMonthSynced(year: Int, month: Int): Boolean {
-        val state = _uiState.value
-        // 레거시: 기존 FULL_SYNC_UNLOCKED=true 사용자는 모든 월 해제로 처리
-        if (state.isLegacyFullSyncUnlocked) return true
-        val yearMonth = String.format("%04d-%02d", year, month)
-        return yearMonth in state.syncedMonths
-    }
-
-    /**
-     * 특정 년/월의 커스텀 월 기간 계산 (사용자 설정 monthStartDay 반영)
-     * @return Pair(startMillis, endMillis)
-     */
-    private fun calculateMonthRange(year: Int, month: Int): Pair<Long, Long> {
-        return DateUtils.getCustomMonthPeriod(year, month, _uiState.value.monthStartDay)
-    }
-
-    /**
-     * 해당 페이지의 커스텀 월이 동기화 범위에 부분만 포함되는지 판단
-     *
-     * 해당 월이 이미 동기화(광고 시청) 되었으면 → false (완전 커버)
-     * 미동기화 시 → 커스텀 월 시작이 (현재 - DEFAULT_SYNC_PERIOD_MILLIS) 이전이면 부분 커버
-     */
-    fun isPagePartiallyCovered(year: Int, month: Int): Boolean {
-        val state = _uiState.value
-        // 레거시 전역 해제 또는 월별 해제 시 완전 커버로 처리
-        if (state.isLegacyFullSyncUnlocked) return false
-        val yearMonth = String.format("%04d-%02d", year, month)
-        if (yearMonth in state.syncedMonths) return false
-        val (customMonthStart, _) = DateUtils.getCustomMonthPeriod(
-            year, month, state.monthStartDay
-        )
-        val syncCoverageStart = System.currentTimeMillis() - DEFAULT_SYNC_PERIOD_MILLIS
-        return customMonthStart < syncCoverageStart
-    }
-
-    /**
-     * 특정 월 데이터만 동기화 (해제 후 메뉴에서 호출)
-     */
-    fun syncMonthData(contentResolver: ContentResolver, year: Int, month: Int) {
-        val monthRange = calculateMonthRange(year, month)
-        syncSmsV2(
-            contentResolver,
-            monthRange,
-            updateLastSyncTime = false
-        )
-    }
-
-    /** 전체 동기화 해제용 광고 준비 */
-    fun preloadFullSyncAd() {
-        rewardAdManager.preloadAd()
-    }
-
     /**
      * 미분류 항목을 Gemini로 일괄 분류
      */
@@ -1613,90 +706,6 @@ class HomeViewModel @Inject constructor(
                 categoryClassifierService.getUnclassifiedCount()
             }
             onResult(count)
-        }
-    }
-
-    // ===== 비동기 백그라운드 처리 메서드 =====
-
-    /**
-     * 카테고리 자동 분류를 백그라운드에서 실행 (얼럿 없이 자동)
-     */
-    private fun launchBackgroundCategoryClassification() {
-        val job = viewModelScope.launch(Dispatchers.IO) {
-            try {
-                launchBackgroundCategoryClassificationInternal()
-            } finally {
-                coroutineContext[Job]?.let { classificationState.completeJob(it) }
-            }
-        }
-        classificationState.registerJob(job)
-        if (job.isCompleted) {
-            classificationState.completeJob(job)
-        }
-    }
-
-    /**
-     * 카테고리 자동 분류 내부 로직 (IO 디스패처에서 실행)
-     */
-    private suspend fun launchBackgroundCategoryClassificationInternal() {
-        try {
-            val count = categoryClassifierService.getUnclassifiedCount()
-            if (count == 0) {
-                android.util.Log.e("MT_DEBUG", "HomeViewModel[백그라운드분류] : 미분류 항목 없음 → 스킵")
-                return
-            }
-
-            android.util.Log.e("MT_DEBUG", "HomeViewModel[백그라운드분류] : ===== Phase 1 시작 (미분류 ${count}건, 상위 50개) =====")
-
-            val phase1Count = categoryClassifierService.classifyUnclassifiedExpenses(
-                maxStoreCount = 50
-            )
-
-            android.util.Log.e("MT_DEBUG", "HomeViewModel[백그라운드분류] : Phase 1 완료 → ${phase1Count}건 분류")
-
-            if (phase1Count > 0) {
-                withContext(Dispatchers.Main) {
-                    refreshCurrentPages()
-                    _uiState.update { it.copy(errorMessage = "${phase1Count}건의 카테고리가 정리되었습니다") }
-                }
-            }
-
-            val remainingCount = categoryClassifierService.getUnclassifiedCount()
-            if (remainingCount > 0) {
-                android.util.Log.e("MT_DEBUG", "HomeViewModel[백그라운드분류] : ===== Phase 2 시작 (남은 ${remainingCount}건, 최대 ${MAX_CLASSIFICATION_ROUNDS}라운드) =====")
-
-                val phase2Classified = categoryClassifierService.classifyAllUntilComplete(
-                    onProgress = { round, classifiedInRound, remaining ->
-                        android.util.Log.e(
-                            "MT_DEBUG",
-                            "HomeViewModel[백그라운드분류] : 라운드 $round 완료 → ${classifiedInRound}건 분류 (남은: ${remaining}건)"
-                        )
-                    },
-                    onStepProgress = null,
-                    maxRounds = MAX_CLASSIFICATION_ROUNDS
-                )
-
-                android.util.Log.e("MT_DEBUG", "HomeViewModel[백그라운드분류] : Phase 2 완료 → ${phase2Classified}건 분류")
-
-                if (phase2Classified > 0) {
-                    val finalRemaining = categoryClassifierService.getUnclassifiedCount()
-                    val message = if (finalRemaining > 0) {
-                        "총 ${phase1Count + phase2Classified}건의 카테고리가 정리되었습니다"
-                    } else {
-                        "카테고리 정리가 완료되었습니다"
-                    }
-                    withContext(Dispatchers.Main) {
-                        refreshCurrentPages()
-                        _uiState.update { it.copy(errorMessage = message) }
-                    }
-                }
-            }
-
-            android.util.Log.e("MT_DEBUG", "HomeViewModel[백그라운드분류] : ===== 전체 완료 =====")
-        } catch (e: CancellationException) {
-            android.util.Log.e("MT_DEBUG", "HomeViewModel[백그라운드분류] : 취소됨")
-        } catch (e: Exception) {
-            android.util.Log.e("MT_DEBUG", "HomeViewModel[백그라운드분류] : 실패: ${e.message}", e)
         }
     }
 
