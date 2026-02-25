@@ -1,19 +1,15 @@
 package com.sanha.moneytalk.core.util
 
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * 앱 전역 데이터 새로고침 이벤트 관리자
  *
- * 설정 화면에서 전체 데이터 삭제 등의 이벤트가 발생했을 때,
- * 다른 ViewModel(HomeViewModel 등)이 데이터를 새로고침할 수 있도록
- * 공유 이벤트를 발행합니다.
+ * ViewModel 간 데이터 변경 통지(1:N)를 담당합니다.
+ * 동기화 엔진/진행 상태는 MainViewModel이 직접 관리합니다.
  *
  * Hilt @Singleton으로 제공되어 모든 ViewModel에서 동일 인스턴스를 공유합니다.
  */
@@ -28,59 +24,6 @@ class DataRefreshEvent @Inject constructor() {
      */
     fun emit(type: RefreshType = RefreshType.ALL_DATA_DELETED) {
         _refreshEvent.tryEmit(type)
-    }
-
-    /** 월별 동기화 요청 이벤트 (History → Home 연동) */
-    data class MonthSyncRequest(val year: Int, val month: Int)
-
-    private val _monthSyncEvent = MutableSharedFlow<MonthSyncRequest>(extraBufferCapacity = 1)
-    val monthSyncEvent = _monthSyncEvent.asSharedFlow()
-
-    /** 특정 월 SMS 동기화 요청 발행 */
-    fun requestMonthSync(year: Int, month: Int) {
-        _monthSyncEvent.tryEmit(MonthSyncRequest(year, month))
-    }
-
-    /**
-     * 증분 동기화 요청 이벤트 (History → Home 연동).
-     *
-     * replay=1: HomeViewModel이 아직 구독 전이어도 이벤트가 유지됨.
-     * Home이 startDestination이므로 대부분 즉시 처리되지만,
-     * 프로세스 재시작 등 극단적 케이스에서의 소실을 방지.
-     */
-    private val _incrementalSyncEvent = MutableSharedFlow<Unit>(replay = 1)
-    val incrementalSyncEvent = _incrementalSyncEvent.asSharedFlow()
-
-    /** 증분 동기화 요청 발행 (전월 1일부터) */
-    fun requestIncrementalSync() {
-        _incrementalSyncEvent.tryEmit(Unit)
-    }
-
-    /** replay 캐시 소비 — 이벤트 처리 후 stale replay 방지 */
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    fun consumeIncrementalSync() {
-        _incrementalSyncEvent.resetReplayCache()
-    }
-
-    /** 동기화 진행 상태 (Home ↔ History 공유) */
-    data class SyncProgress(
-        val isActive: Boolean = false,
-        val step: String = "",
-        val current: Int = 0,
-        val total: Int = 0
-    )
-
-    private val _syncProgress = MutableStateFlow(SyncProgress())
-    val syncProgress: StateFlow<SyncProgress> = _syncProgress.asStateFlow()
-
-    /** 동기화 진행 상태 업데이트 */
-    fun updateSyncProgress(step: String, current: Int, total: Int) {
-        _syncProgress.value = SyncProgress(isActive = true, step = step, current = current, total = total)
-    }
-
-    /** 동기화 완료 */
-    fun completeSyncProgress() {
-        _syncProgress.value = SyncProgress()
     }
 
     enum class RefreshType {
