@@ -127,10 +127,15 @@ class SmsPatternMatcher @Inject constructor(
      *
      * 매칭 순서:
      * 1순위: 로컬 비결제 패턴 (≥0.97) → 제외
-     * 1순위: 로컬 결제 패턴 (≥0.92) → regex 파싱
-     * 2순위: 원격 RTDB 룰 매칭 (같은 sender, ≥rule.minSimilarity) → regex 파싱
+     * 2순위: 로컬 메인 결제 패턴 (isMainGroup=true, ≥0.92) → regex 파싱
+     * 3순위: 로컬 예외 결제 패턴 (isMainGroup=false, ≥0.92) → regex 파싱
+     * 4순위: 원격 RTDB 룰 매칭 (같은 sender, ≥rule.minSimilarity) → regex 파싱
      *        매칭 성공 시 로컬 패턴에 승격 저장 (다음부터 로컬 히트)
      * 미매칭: unmatched → Step 5 (그룹핑+LLM)
+     *
+     * ※ 메인/예외 분리 이유: 같은 발신번호의 예외 패턴(예: 신한카드 대금 자동이체)이
+     *   메인 SMS(일반 KB 결제)와 유사한 임베딩을 가지므로, 예외 패턴이 메인 SMS를
+     *   가로채면 parsedCardName이 왜곡됨 (KB→신한카드). 메인 우선 매칭으로 방지.
      *
      * @param embeddedSmsList Step 3에서 임베딩 완료된 SMS 리스트
      * @return Pair(매칭+파싱 성공 결과, 미매칭 SMS 리스트)
@@ -145,11 +150,15 @@ class SmsPatternMatcher @Inject constructor(
         val nonPaymentPatterns = smsPatternDao.getAllNonPaymentPatterns()
         val paymentPatterns = smsPatternDao.getAllPaymentPatterns()
 
+        // 메인/예외 분리: 같은 발신번호의 예외 패턴이 메인 SMS를 가로채는 것을 방지
+        // 메인 패턴(isMainGroup=true)을 먼저 매칭하고, 실패 시 예외 패턴 시도
+        val (mainPaymentPatterns, exceptionPaymentPatterns) = paymentPatterns.partition { it.isMainGroup }
+
         // 원격 룰 1회 로드 (캐시 재사용, 실패 시 빈 맵)
         val remoteRules = remoteSmsRuleRepository.loadRules()
 
-        Log.d(TAG, "패턴 로드: 결제 ${paymentPatterns.size}건, 비결제 ${nonPaymentPatterns.size}건, " +
-            "원격 룰 ${remoteRules.values.sumOf { it.size }}건 (${remoteRules.size}개 발신번호)")
+        Log.d(TAG, "패턴 로드: 결제 ${paymentPatterns.size}건 (메인 ${mainPaymentPatterns.size}, 예외 ${exceptionPaymentPatterns.size}), " +
+            "비결제 ${nonPaymentPatterns.size}건, 원격 룰 ${remoteRules.values.sumOf { it.size }}건 (${remoteRules.size}개 발신번호)")
 
         var remoteMatchCount = 0
         var remoteFailCount = 0
@@ -167,9 +176,13 @@ class SmsPatternMatcher @Inject constructor(
                 continue
             }
 
-            // --- [2] 결제 패턴 매칭 (1순위: 로컬) ---
+            // --- [2] 결제 패턴 매칭 (1순위: 메인 → 2순위: 예외) ---
+            // 메인 패턴을 먼저 시도하여 예외 패턴의 parsedCardName이
+            // 메인 SMS에 적용되는 것을 방지
             val paymentMatch = findBestMatch(
-                embedded.embedding, paymentPatterns, PAYMENT_MATCH_THRESHOLD
+                embedded.embedding, mainPaymentPatterns, PAYMENT_MATCH_THRESHOLD
+            ) ?: findBestMatch(
+                embedded.embedding, exceptionPaymentPatterns, PAYMENT_MATCH_THRESHOLD
             )
 
             if (paymentMatch != null) {
@@ -191,7 +204,8 @@ class SmsPatternMatcher @Inject constructor(
                         )
                     )
                     smsPatternDao.incrementMatchCount(pattern.id)
-                    Log.d(TAG, "벡터매칭 성공 ($similarity): ${analysis.storeName} ${analysis.amount}원")
+                    Log.d(TAG, "벡터매칭 성공 ($similarity, main=${pattern.isMainGroup}): " +
+                        "${analysis.cardName} ${analysis.storeName} ${analysis.amount}원")
                 } else {
                     Log.w(TAG, "벡터매칭 OK ($similarity) but 파싱 실패: ${embedded.input.body.take(30)}")
                     unmatched.add(embedded)
