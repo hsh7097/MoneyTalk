@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-24
+> **최종 갱신**: 2026-02-26
 
 ---
 
@@ -237,6 +237,13 @@
 - FullSyncCtaSection 홈에서 제거 (HistoryScreen에서는 유지)
 - buildComparisonText 형식 변경: "N% 더 쓰고 있어요" → "₩금액(N%) 더 쓰고 있어요"
 - Auto Backup 복원 규칙 수정 (backup_rules.xml, data_extraction_rules.xml)
+
+**SMS 파싱 파이프라인 순서/효율 개선**: ✅ 완료 (2026-02-26)
+- SmsPreFilter 수입 보호 화이트리스트 추가 (INCOME_PROTECTION_KEYWORDS)
+- SmsIncomeFilter classify() 순서 수정 (incomeExcludeKeywords → paymentKeywords)
+- SmsIncomeParser 취소/환불 분기 추가 (extractIncomeType → "환불")
+- SmsPatternMatcher parseWithRegex() 미사용 fallbackCategory 파라미터 제거
+- SmsIncomeFilter/SmsPreFilter 중복 코드 방어용 주석 추가
 
 ### 대기 중인 작업
 

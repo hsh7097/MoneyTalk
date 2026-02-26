@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### Fixed (2026-02-26)
+- **SmsPreFilter 수입 SMS 누락 방지**: "보험금 입금", "자동이체입금" 등 수입 키워드가 포함된 SMS가 비결제로 필터링되던 문제 수정 (INCOME_PROTECTION_KEYWORDS 화이트리스트 추가)
+- **SmsIncomeFilter classify() 순서 수정**: incomeExcludeKeywords를 paymentKeywords보다 먼저 체크하여 "자동이체출금"이 PAYMENT로 오분류되는 문제 방지
+- **취소/환불 SMS 타입 수정**: "출금취소", "승인취소" 등이 type="입금" 대신 type="환불"로 정확히 저장되도록 SmsIncomeParser 수정
+
+### Changed (2026-02-26)
+- **parseWithRegex() 미사용 파라미터 제거**: fallbackCategory 파라미터가 항상 "미분류"로 덮어쓰여져 실제 미사용 → 파라미터 제거 (SmsPatternMatcher, SmsGroupClassifier)
+
 ### Changed (2026-02-24)
 - **홈 UI 간소화**: TodayAndComparisonSection(오늘지출+전월비교 카드) 제거 → 오늘 지출을 "오늘 내역" 헤더에 인라인 표시
 - **FullSyncCtaSection 홈 제거**: 빈 데이터/부분 데이터 CTA를 홈에서 제거 (HistoryScreen에서 유지)
