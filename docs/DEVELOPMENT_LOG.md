@@ -4,6 +4,53 @@
 
 ---
 
+## 2026-02-26 - generateRegexForGroup 정규식 생성 성공률 개선
+
+### 배경
+`SmsGroupClassifier.processGroup()`에서 호출하는 `GeminiSmsExtractor.generateRegexForGroup()`의 regex 생성 실패율이 높아 개별 LLM 호출로 폴백되는 비율이 높았음. 내 분석 + Codex 분석을 교차 검토하여 합의된 6개 개선 항목을 구현.
+
+regex 생성 성공 시 Gemini API 호출이 대폭 줄어듦 (그룹 전체를 regex로 일괄 파싱 → 개별 LLM 호출 불필요).
+
+### 작업 내용
+
+#### 1. repair 1회 활성화
+- `REGEX_REPAIR_MAX_RETRIES = 0 → 1` — 기존에 repair 프롬프트가 잘 작성되어 있었으나 0으로 비활성 상태
+- 1회 수선 시도로 검증 실패 regex 구제 가능
+
+#### 2. 검증 일원화
+- `GeminiSmsExtractor.validateRegexResult()`에서 샘플 성공률 게이트(80% 기준) 제거
+- JSON 파싱 + regex 컴파일 + 필수필드 체크만 수행
+- 성공률 판정은 `SmsGroupClassifier.validateRegexAgainstSamples()` 60% 기준 1곳에서만
+- 이유: 0.5~0.79 사이 regex가 Extractor에서 버려지지 않고 Classifier 검증까지 도달 가능
+
+#### 3. 프롬프트 개선
+- 시스템 프롬프트: JSON escape 규칙(rule 8,9), 멀티라인 SMS 예시(예시2), 샘플 수 "1~5건"→"1~10건"
+- 유저 프롬프트: `buildRegexPrompt()`에서 날짜 prefix 제거 (LLM이 날짜를 패턴 일부로 오인 방지)
+- compact 프롬프트: cardRegex를 %3$s로 추가 (토큰 폴백 시 카드 정보 손실 방지)
+
+#### 4. ultraCompact 3차 폴백 활성화
+- `requestRegexWithTokenFallback()`: primary → compact → ultraCompact → 포기 (기존: compact에서 포기)
+
+#### 5. repair 프롬프트 인간 친화적 사유 매핑
+- `toHumanFriendlyReason()`: 기술적 코드(예: "amount_regex_compile_failed")를 LLM이 이해하기 쉬운 메시지로 변환
+- 문자열은 `strings.xml` + `values-en/strings.xml`에 리소스화 (하드코딩 금지 규칙 준수)
+
+#### 6. 미사용 코드 정리 (사용자 추가 작업)
+- 검증 일원화로 dead code가 된 항목 제거: `REGEX_MIN_AMOUNT`, `NON_DIGIT_PATTERN`, `STORE_*` 패턴/키워드, `isValidRegexStoreName()`, `tryExtractGroup1()`, `RegexValidationResult.successRatio`
+- `minSuccessRatio` 파라미터 제거 (`generateRegexForGroup`, `generateRegexForSms`)
+
+### 변경 파일
+- `core/sms2/GeminiSmsExtractor.kt` — 상수/검증/폴백/프롬프트/코드정리 (85 insertions, 109 deletions)
+- `res/values/string_prompt.xml` — 시스템 프롬프트 규칙 추가, compact 포맷 변경
+- `res/values/strings.xml` — sms_regex_reason_* 6개 키 추가
+- `res/values-en/strings.xml` — sms_regex_reason_* 6개 키 추가 (영문)
+
+### 결정 사항
+- `smsTimestamps` 파라미터는 public API 호환성 유지를 위해 `@Suppress("UNUSED_PARAMETER")`로 남김 (날짜 prefix 제거로 미사용이 되었으나, 호출자 변경 없이 유지)
+- 검증 기준을 1곳(Classifier)으로 통합한 이유: Classifier의 `parseWithRegex()`가 실제 런타임과 동일 경로를 타므로 더 정확한 검증
+
+---
+
 ## 2026-02-26 - SMS 파싱 파이프라인 순서/효율 개선
 
 ### 작업 내용

@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### Changed (2026-02-26 후반)
+- **generateRegexForGroup 정규식 생성 성공률 개선**:
+  - repair 1회 활성화 (REGEX_REPAIR_MAX_RETRIES 0→1) — 검증 실패 regex 1회 수선 시도
+  - 검증 일원화: GeminiSmsExtractor.validateRegexResult()에서 샘플 성공률 게이트 제거 → JSON/컴파일/필수필드만 검증, 성공률은 Classifier 1곳에서만 판정
+  - ultraCompact 3차 폴백 활성화 (primary → compact → ultraCompact → 포기)
+  - compact 프롬프트에 cardRegex 힌트 추가 (%3$s)
+  - repair 프롬프트에 인간 친화적 실패 사유 매핑 (toHumanFriendlyReason → string resources)
+  - 프롬프트 개선: JSON escape 규칙(rule 8,9), 멀티라인 SMS 예시(예시2), 샘플 수 1~5→1~10, 날짜 prefix 제거
+  - 미사용 코드 정리: REGEX_MIN_AMOUNT, NON_DIGIT_PATTERN, STORE_* 패턴/키워드, isValidRegexStoreName(), tryExtractGroup1(), RegexValidationResult.successRatio 제거
+
 ### Fixed (2026-02-26)
 - **SmsPreFilter 수입 SMS 누락 방지**: "보험금 입금", "자동이체입금" 등 수입 키워드가 포함된 SMS가 비결제로 필터링되던 문제 수정 (INCOME_PROTECTION_KEYWORDS 화이트리스트 추가)
 - **SmsIncomeFilter classify() 순서 수정**: incomeExcludeKeywords를 paymentKeywords보다 먼저 체크하여 "자동이체출금"이 PAYMENT로 오분류되는 문제 방지
