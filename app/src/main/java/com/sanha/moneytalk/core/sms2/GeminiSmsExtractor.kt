@@ -56,6 +56,10 @@ class GeminiSmsExtractor @Inject constructor(
         /** 그룹 정규식 생성 시 사용할 최대 샘플 수 */
         private const val REGEX_GROUP_MAX_SAMPLES = 10
 
+        /** LLM 응답에서 코드 펜스 제거용 정규식 (사전 컴파일) */
+        private val CODE_FENCE_JSON = Regex("```json\\s*", RegexOption.IGNORE_CASE)
+        private val CODE_FENCE = Regex("```\\s*")
+
         /** 앱에서 사용하는 유효한 카테고리 목록 (미분류 제외) */
         private val VALID_CATEGORIES = Category.entries
             .filter { it != Category.UNCLASSIFIED }
@@ -873,8 +877,8 @@ class GeminiSmsExtractor @Inject constructor(
 
     private fun stripCodeFence(response: String): String {
         return response
-            .replace(Regex("```json\\s*", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("```\\s*"), "")
+            .replace(CODE_FENCE_JSON, "")
+            .replace(CODE_FENCE, "")
             .trim()
     }
 

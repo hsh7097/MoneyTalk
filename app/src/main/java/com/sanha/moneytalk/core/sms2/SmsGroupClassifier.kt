@@ -70,9 +70,6 @@ class SmsGroupClassifier @Inject constructor(
 
     companion object {
 
-        /** LLM 배치 크기 (한 번에 LLM에 보내는 그룹 대표 수) */
-        private const val LLM_BATCH_SIZE = 20
-
         /** LLM 병렬 동시 실행 수 (API 키 5개 × 키당 1) */
         private const val LLM_CONCURRENCY = 5
 
@@ -106,6 +103,12 @@ class SmsGroupClassifier @Inject constructor(
         /** RTDB 표본 중복 판정 유사도 (0.99 = 동일 형식만 스킵) */
         private const val RTDB_DEDUP_SIMILARITY = 0.99f
 
+        /** RTDB 중복방지 캐시 최대 크기 (메모리 릭 방지) */
+        private const val RTDB_DEDUP_MAX_SAMPLES = 200
+
+        /** sender IN 쿼리 chunk 크기 (SQLite bind limit 여유) */
+        private const val MAIN_PATTERN_QUERY_CHUNK_SIZE = 500
+
         /** regex 검증: 샘플 중 이 비율 이상 파싱 성공해야 유효 (60%) */
         private const val REGEX_VALIDATION_MIN_PASS_RATIO = 0.6f
 
@@ -114,6 +117,14 @@ class SmsGroupClassifier @Inject constructor(
 
         /** 발신번호 정규화: 하이픈/공백/괄호 제거용 */
         private val ADDRESS_CLEAN_PATTERN = Regex("""[-\s().]""")
+
+        /** maskSmsBody용 사전 컴파일 정규식 (매 호출마다 컴파일 방지) */
+        private val MASK_CARD_NUM = Regex("""\d+\*+\d+""")
+        private val MASK_DATE = Regex("""\d{1,2}([/.\-])\d{1,2}""")
+        private val MASK_TIME = Regex("""\d{1,2}:\d{2}""")
+        private val MASK_AMOUNT = Regex("""(\d{1,3})(,\d{3})*""")
+        private val MASK_REMAINING_DIGITS = Regex("""\d+""")
+        private val MASK_SINGLE_DIGIT = Regex("""\d""")
     }
 
     // ===== 내부 데이터 =====
@@ -264,6 +275,9 @@ class SmsGroupClassifier @Inject constructor(
     ): List<SmsParseResult> {
         if (unmatchedList.isEmpty()) return emptyList()
 
+        // 세션 간 메모리 누적 방지: 매 classifyUnmatched 호출마다 캐시 초기화
+        synchronized(sentSampleEmbeddings) { sentSampleEmbeddings.clear() }
+
         val results = mutableListOf<SmsParseResult>()
 
         // [5-1] 그룹핑 (Level 1~3: 발신번호 → 벡터 유사도 → 소그룹 병합)
@@ -277,37 +291,34 @@ class SmsGroupClassifier @Inject constructor(
 
         // [5-1.7] DB에서 발신번호별 메인 패턴 선조회
         // 이전 동기화에서 등록된 메인 그룹의 regex를 가져와 예외 그룹 regex 생성 시 참조로 사용
-        val dbMainPatterns = mutableMapOf<String, SmsPatternEntity>()
-        for (sg in sourceGroups) {
-            if (dbMainPatterns.containsKey(sg.address)) continue
-            val mainPattern = smsPatternDao.getMainPatternBySender(sg.address)
-            if (mainPattern != null) {
-                dbMainPatterns[sg.address] = mainPattern
-            }
-        }
+        val uniqueAddresses = sourceGroups.map { it.address }.distinct()
+        val dbMainPatterns = uniqueAddresses
+            .chunked(MAIN_PATTERN_QUERY_CHUNK_SIZE)
+            .flatMap { chunk -> smsPatternDao.getMainPatternsBySenders(chunk) }
+            .groupBy { it.senderAddress }
+            .mapValues { (_, patterns) -> patterns.first() }
 
         // [5-2 ~ 5-4] 발신번호 단위로 처리
         // 각 SourceGroup 내에서: 메인 케이스 먼저 → 예외 케이스에 메인 컨텍스트 전달
         val semaphore = Semaphore(LLM_CONCURRENCY)
         val processedSources = AtomicInteger(0)
 
+        // Semaphore가 동시성을 제어하므로 chunked 배리어 없이 전체 sourceGroup을 한번에 실행
+        // (기존 chunked(20).awaitAll()은 느린 그룹 1개가 나머지 19개를 블로킹하는 문제 발생)
         coroutineScope {
-            sourceGroups.chunked(LLM_BATCH_SIZE).forEach { batch ->
-                val batchResults = batch.map { sourceGroup ->
-                    async(Dispatchers.IO) {
-                        semaphore.acquire()
-                        try {
-                            processSourceGroup(sourceGroup, dbMainPatterns[sourceGroup.address])
-                        } finally {
-                            semaphore.release()
-                            val done = processedSources.incrementAndGet()
-                            onProgress?.invoke("AI가 결제 내역 분석 중...", done, sourceGroups.size)
-                        }
+            val allResults = sourceGroups.map { sourceGroup ->
+                async(Dispatchers.IO) {
+                    semaphore.acquire()
+                    try {
+                        processSourceGroup(sourceGroup, dbMainPatterns[sourceGroup.address])
+                    } finally {
+                        semaphore.release()
+                        val done = processedSources.incrementAndGet()
+                        onProgress?.invoke("AI가 결제 내역 분석 중...", done, sourceGroups.size)
                     }
-                }.awaitAll()
-
-                results.addAll(batchResults.flatten())
-            }
+                }
+            }.awaitAll()
+            results.addAll(allResults.flatten())
         }
 
         return results
@@ -1150,8 +1161,9 @@ class SmsGroupClassifier @Inject constructor(
             return
         }
 
-        // 유사도 기반 중복 방지
+        // 유사도 기반 중복 방지 (캐시 상한 초과 시 수집 중단)
         synchronized(sentSampleEmbeddings) {
+            if (sentSampleEmbeddings.size >= RTDB_DEDUP_MAX_SAMPLES) return
             for (sentEmbedding in sentSampleEmbeddings) {
                 val similarity = patternMatcher.cosineSimilarity(embedded.embedding, sentEmbedding)
                 if (similarity >= RTDB_DEDUP_SIMILARITY) {
@@ -1221,23 +1233,23 @@ class SmsGroupClassifier @Inject constructor(
             masked = result.joinToString("\n")
         }
         // 2) 카드번호 마스킹
-        masked = masked.replace(Regex("""\d+\*+\d+""")) { match ->
+        masked = masked.replace(MASK_CARD_NUM) { match ->
             "*".repeat(match.value.length)
         }
         // 3) 날짜 마스킹
-        masked = masked.replace(Regex("""\d{1,2}([/.\-])\d{1,2}""")) { match ->
-            match.value.replace(Regex("""\d"""), "*")
+        masked = masked.replace(MASK_DATE) { match ->
+            match.value.replace(MASK_SINGLE_DIGIT, "*")
         }
         // 4) 시간 마스킹
-        masked = masked.replace(Regex("""\d{1,2}:\d{2}""")) { match ->
-            match.value.replace(Regex("""\d"""), "*")
+        masked = masked.replace(MASK_TIME) { match ->
+            match.value.replace(MASK_SINGLE_DIGIT, "*")
         }
         // 5) 금액 마스킹 (쉼표 보존)
-        masked = masked.replace(Regex("""(\d{1,3})(,\d{3})*""")) { match ->
-            match.value.replace(Regex("""\d"""), "*")
+        masked = masked.replace(MASK_AMOUNT) { match ->
+            match.value.replace(MASK_SINGLE_DIGIT, "*")
         }
         // 6) 남은 숫자 마스킹
-        masked = masked.replace(Regex("""\d+""")) { match ->
+        masked = masked.replace(MASK_REMAINING_DIGITS) { match ->
             "*".repeat(match.value.length)
         }
 
