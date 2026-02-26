@@ -216,10 +216,9 @@ class RewardAdManager @Inject constructor(
     }
 
     /** 배너 광고 활성화 여부를 반응적으로 관찰하기 위한 Flow (RTDB 변경 시 자동 반영) */
-    val isBannerAdEnabledFlow: Flow<Boolean>
-        get() = premiumManager.premiumConfig
-            .map { it.rewardAdEnabled }
-            .distinctUntilChanged()
+    val isBannerAdEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
+        .map { it.rewardAdEnabled }
+        .distinctUntilChanged()
 
     /**
      * 리워드 1회 시청 시 충전되는 횟수
