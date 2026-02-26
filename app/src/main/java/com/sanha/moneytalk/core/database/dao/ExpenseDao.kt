@@ -83,6 +83,14 @@ interface ExpenseDao {
     @Query("SELECT smsId FROM expenses")
     suspend fun getAllSmsIds(): List<String>
 
+    /** 주어진 smsId 목록 중 이미 저장된 항목만 조회 (중복 체크 최적화) */
+    @Query("SELECT smsId FROM expenses WHERE smsId IN (:smsIds)")
+    suspend fun getExistingSmsIds(smsIds: List<String>): List<String>
+
+    /** 전체 지출 건수 조회 (Auto Backup 감지용) */
+    @Query("SELECT COUNT(*) FROM expenses")
+    suspend fun getExpenseCount(): Int
+
     // 모든 필터 적용 (카드사 + 카테고리 + 기간)
     @Query("SELECT * FROM expenses WHERE (:cardName IS NULL OR cardName = :cardName) AND (:category IS NULL OR category = :category) AND dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
     fun getExpensesFiltered(

@@ -54,6 +54,14 @@ interface IncomeDao {
     @Query("SELECT smsId FROM incomes WHERE smsId IS NOT NULL")
     suspend fun getAllSmsIds(): List<String>
 
+    /** 주어진 smsId 목록 중 이미 저장된 항목만 조회 (중복 체크 최적화) */
+    @Query("SELECT smsId FROM incomes WHERE smsId IN (:smsIds)")
+    suspend fun getExistingSmsIds(smsIds: List<String>): List<String>
+
+    /** 전체 수입 건수 조회 (Auto Backup 감지용) */
+    @Query("SELECT COUNT(*) FROM incomes")
+    suspend fun getIncomeCount(): Int
+
     @Query("SELECT * FROM incomes WHERE isRecurring = 1")
     fun getRecurringIncomes(): Flow<List<IncomeEntity>>
 
