@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.feature.home.data
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
 import com.sanha.moneytalk.core.similarity.CategoryPropagationPolicy
@@ -47,7 +48,7 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
 ) : StoreEmbeddingRepository {
 
     companion object {
-        private const val TAG = "StoreEmbedding"
+        private const val TAG = "MoneyTalkLog"
 
         /** 임베딩 배치 병렬 동시 실행 수 (API 키 5개 × 키당 2 = 10) */
         private const val EMBEDDING_CONCURRENCY = 10
@@ -70,7 +71,6 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
     private suspend fun getEmbeddings(): List<StoreEmbeddingEntity> {
         return cachedEmbeddings ?: storeEmbeddingDao.getAllEmbeddings().also {
             cachedEmbeddings = it
-            Log.d(TAG, "임베딩 캐시 로드: ${it.size}건")
         }
     }
 
@@ -83,7 +83,7 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
         return try {
             embeddingService.generateEmbedding(storeName)
         } catch (e: Exception) {
-            Log.e(TAG, "임베딩 생성 실패: ${e.message}", e)
+            MoneyTalkLogger.e("임베딩 생성 실패: ${e.message}", e)
             null
         }
     }
@@ -95,14 +95,13 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
         try {
             val embeddings = getEmbeddings()
             if (embeddings.isEmpty()) {
-                Log.d(TAG, "임베딩 DB 비어있음, 벡터 검색 건너뜀")
                 return null
             }
 
             // 가게명 임베딩: 외부 제공 또는 내부 생성
             val vector = queryVector ?: embeddingService.generateEmbedding(storeName)
             if (vector == null) {
-                Log.w(TAG, "임베딩 생성 실패: $storeName")
+                MoneyTalkLogger.w("임베딩 생성 실패: $storeName")
                 return null
             }
 
@@ -114,18 +113,13 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
             )
 
             if (bestMatch != null) {
-                Log.d(
-                    TAG, "벡터 매칭: '$storeName' → '${bestMatch.storeEmbedding.storeName}' " +
-                            "(${bestMatch.storeEmbedding.category}, 유사도 ${bestMatch.similarity})"
-                )
                 storeEmbeddingDao.incrementMatchCount(bestMatch.storeEmbedding.id)
             } else {
-                Log.d(TAG, "벡터 매칭 실패: '$storeName' (유사도 미달)")
             }
 
             return bestMatch
         } catch (e: Exception) {
-            Log.e(TAG, "벡터 검색 실패: ${e.message}", e)
+            MoneyTalkLogger.e("벡터 검색 실패: ${e.message}", e)
             return null
         }
     }
@@ -158,10 +152,6 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
             val dominantCategory = categoryCounts.maxByOrNull { it.value }?.key ?: return null
             val avgSimilarity = similarStores.map { it.similarity }.average().toFloat()
 
-            Log.d(
-                TAG, "그룹 매칭: '$storeName' → '$dominantCategory' " +
-                        "(그룹 ${similarStores.size}개, 평균 유사도 $avgSimilarity)"
-            )
 
             // 매칭된 가게들의 카운트 증가
             for (result in similarStores) {
@@ -170,7 +160,7 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
 
             return dominantCategory to avgSimilarity
         } catch (e: Exception) {
-            Log.e(TAG, "그룹 검색 실패: ${e.message}", e)
+            MoneyTalkLogger.e("그룹 검색 실패: ${e.message}", e)
             return null
         }
     }
@@ -183,14 +173,13 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
     ) {
         // inFlight 중복 방지
         if (!inFlightStoreNames.add(storeName)) {
-            Log.d(TAG, "임베딩 생성 중복 스킵 (inFlight): $storeName")
             return
         }
 
         try {
             val embedding = embeddingService.generateEmbedding(storeName)
             if (embedding == null) {
-                Log.w(TAG, "임베딩 생성 실패, 저장 건너뜀: $storeName")
+                MoneyTalkLogger.w("임베딩 생성 실패, 저장 건너뜀: $storeName")
                 return
             }
 
@@ -204,9 +193,8 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
 
             storeEmbeddingDao.insertOrReplace(entity)
             invalidateCache()
-            Log.d(TAG, "임베딩 저장: $storeName → $category (source=$source)")
         } catch (e: Exception) {
-            Log.e(TAG, "임베딩 저장 실패: ${e.message}", e)
+            MoneyTalkLogger.e("임베딩 저장 실패: ${e.message}", e)
         } finally {
             inFlightStoreNames.remove(storeName)
         }
@@ -222,12 +210,10 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
             // inFlight 중복 제거: 이미 임베딩 생성 중인 가게명 스킵
             val storeNames = storeCategories.keys.filter { inFlightStoreNames.add(it) }
             if (storeNames.isEmpty()) {
-                Log.d(TAG, "배치 임베딩: 모두 inFlight 중복 → 스킵")
                 return
             }
             val skipped = storeCategories.size - storeNames.size
             if (skipped > 0) {
-                Log.d(TAG, "배치 임베딩: ${skipped}건 inFlight 중복 제거")
             }
 
             try {
@@ -265,14 +251,13 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
                 if (allEntities.isNotEmpty()) {
                     storeEmbeddingDao.insertAll(allEntities)
                     invalidateCache()
-                    Log.d(TAG, "배치 임베딩 저장: ${allEntities.size}건 (source=$source)")
                 }
             } finally {
                 // 완료 후 inFlight에서 제거
                 storeNames.forEach { inFlightStoreNames.remove(it) }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "배치 임베딩 저장 실패: ${e.message}", e)
+            MoneyTalkLogger.e("배치 임베딩 저장 실패: ${e.message}", e)
         }
     }
 
@@ -287,17 +272,13 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
                 confidence = confidence
             )
         ) {
-            Log.d(
-                TAG,
-                "전파 차단: $storeName → $newCategory (confidence=$confidence < ${CategoryPropagationPolicy.MIN_PROPAGATION_CONFIDENCE})"
-            )
             return 0
         }
 
         try {
             val queryVector = embeddingService.generateEmbedding(storeName)
             if (queryVector == null) {
-                Log.w(TAG, "전파 실패 (임베딩 생성 실패): $storeName")
+                MoneyTalkLogger.w("전파 실패 (임베딩 생성 실패): $storeName")
                 return 0
             }
 
@@ -328,20 +309,15 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
                 )
                 propagatedCount++
 
-                Log.d(
-                    TAG, "카테고리 전파: '${result.storeEmbedding.storeName}' → $newCategory " +
-                            "(유사도 ${result.similarity}, confidence=$confidence)"
-                )
             }
 
             if (propagatedCount > 0) {
                 invalidateCache()
             }
 
-            Log.d(TAG, "전파 완료: $storeName → $newCategory, ${propagatedCount}건 전파됨")
             return propagatedCount
         } catch (e: Exception) {
-            Log.e(TAG, "카테고리 전파 실패: ${e.message}", e)
+            MoneyTalkLogger.e("카테고리 전파 실패: ${e.message}", e)
             return 0
         }
     }
@@ -350,9 +326,8 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
         try {
             storeEmbeddingDao.updateCategory(storeName, newCategory, source)
             invalidateCache()
-            Log.d(TAG, "카테고리 업데이트: $storeName → $newCategory (source=$source)")
         } catch (e: Exception) {
-            Log.e(TAG, "카테고리 업데이트 실패: ${e.message}", e)
+            MoneyTalkLogger.e("카테고리 업데이트 실패: ${e.message}", e)
         }
     }
 
@@ -372,7 +347,7 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
                 saveStoreEmbedding(storeName, newCategory, source, 1.0f)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "UPSERT 실패: ${e.message}", e)
+            MoneyTalkLogger.e("UPSERT 실패: ${e.message}", e)
         }
     }
 
@@ -381,12 +356,7 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getLowConfidenceEmbeddings(threshold: Float): List<StoreEmbeddingEntity> {
-        Log.e(
-            "MT_DEBUG",
-            "StoreEmbeddingRepository[getLowConfidenceEmbeddings] : threshold=$threshold 조회 시작"
-        )
         val result = storeEmbeddingDao.getLowConfidenceEmbeddings(threshold)
-        Log.e("MT_DEBUG", "StoreEmbeddingRepository[getLowConfidenceEmbeddings] : ${result.size}건 발견")
         return result
     }
 }

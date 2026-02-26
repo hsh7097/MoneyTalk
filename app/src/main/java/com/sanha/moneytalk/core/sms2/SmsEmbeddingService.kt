@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.sms2
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -28,7 +29,7 @@ class SmsEmbeddingService @Inject constructor(
     private val apiKeyProvider: GeminiApiKeyProvider
 ) {
     companion object {
-        private const val TAG = "gemini"
+        private const val TAG = "MoneyTalkLog"
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
         /** 429 Rate Limit 재시도 최대 횟수 */
@@ -58,7 +59,7 @@ class SmsEmbeddingService @Inject constructor(
         try {
             val apiKey = apiKeyProvider.getApiKey()
             if (apiKey.isBlank()) {
-                Log.e(TAG, "API 키가 설정되지 않음")
+                MoneyTalkLogger.e("API 키가 설정되지 않음")
                 return@withContext null
             }
 
@@ -78,18 +79,17 @@ class SmsEmbeddingService @Inject constructor(
                 .post(requestBody.toString().toRequestBody("application/json".toMediaType()))
                 .build()
 
-            Log.d(TAG, "임베딩 요청: ${text.take(50)}...")
 
             val response = client.newCall(request).execute()
             val responseBody = response.body?.string()
 
             if (!response.isSuccessful) {
-                Log.e(TAG, "임베딩 API 실패: ${response.code} - ${responseBody?.take(200)}")
+                MoneyTalkLogger.e("임베딩 API 실패: ${response.code} - ${responseBody?.take(200)}")
                 return@withContext null
             }
 
             if (responseBody == null) {
-                Log.e(TAG, "응답 본문이 비어 있음")
+                MoneyTalkLogger.e("응답 본문이 비어 있음")
                 return@withContext null
             }
 
@@ -99,11 +99,10 @@ class SmsEmbeddingService @Inject constructor(
             val values = embeddingObj.getAsJsonArray("values")
 
             val embedding = values.map { it.asFloat }
-            Log.d(TAG, "임베딩 생성 성공: ${embedding.size}차원")
 
             embedding
         } catch (e: Exception) {
-            Log.e(TAG, "임베딩 생성 실패: ${e.message}", e)
+            MoneyTalkLogger.e("임베딩 생성 실패: ${e.message}", e)
             null
         }
     }
@@ -120,7 +119,7 @@ class SmsEmbeddingService @Inject constructor(
             try {
                 val apiKey = apiKeyProvider.getApiKey()
                 if (apiKey.isBlank()) {
-                    Log.e(TAG, "API 키가 설정되지 않음")
+                    MoneyTalkLogger.e("API 키가 설정되지 않음")
                     return@withContext texts.map { null }
                 }
 
@@ -141,7 +140,6 @@ class SmsEmbeddingService @Inject constructor(
                 val jsonBody = gson.toJson(requestBody)
 
                 val overallStartTime = System.currentTimeMillis()
-                Log.d(TAG, "[batchEmbed] 배치 임베딩 요청: ${texts.size}건")
 
                 // 429 Rate Limit 재시도 (지수 백오프)
                 // Quota 초과("exceeded your current quota")는 재시도 불가 → 즉시 실패
@@ -149,9 +147,7 @@ class SmsEmbeddingService @Inject constructor(
                 for (attempt in 0 until MAX_RETRIES) {
                     if (attempt > 0) {
                         val delayMs = INITIAL_RETRY_DELAY_MS * (1L shl (attempt - 1)) // 2s, 4s
-                        Log.w(
-                            TAG,
-                            "[batchEmbed] ⚠️ 429 재시도 ${attempt}/${MAX_RETRIES - 1}, ${delayMs}ms 대기... (SmsEmbeddingService.generateEmbeddings)"
+                        MoneyTalkLogger.w("[batchEmbed] ⚠️ 429 재시도 ${attempt}/${MAX_RETRIES - 1}, ${delayMs}ms 대기... (SmsEmbeddingService.generateEmbeddings)"
                         )
                         kotlinx.coroutines.delay(delayMs)
                     }
@@ -170,18 +166,16 @@ class SmsEmbeddingService @Inject constructor(
                         val isQuotaExceeded =
                             responseBody?.contains("exceeded your current quota") == true
                         if (isQuotaExceeded) {
-                            Log.e(TAG, "[batchEmbed] ❌ 임베딩 일일 할당량(Quota) 초과 - 재시도 불가")
+                            MoneyTalkLogger.e("[batchEmbed] ❌ 임베딩 일일 할당량(Quota) 초과 - 재시도 불가")
                             return@withContext texts.map { null }
                         }
-                        Log.w(
-                            TAG,
-                            "[batchEmbed] ⚠️ 429 Rate Limit 발생! (SmsEmbeddingService.generateEmbeddings, 시도 ${attempt + 1}/$MAX_RETRIES, ${texts.size}건)"
+                        MoneyTalkLogger.w("[batchEmbed] ⚠️ 429 Rate Limit 발생! (SmsEmbeddingService.generateEmbeddings, 시도 ${attempt + 1}/$MAX_RETRIES, ${texts.size}건)"
                         )
                         continue // Rate Limit은 재시도
                     }
 
                     if (!response.isSuccessful) {
-                        Log.e(TAG, "배치 임베딩 API 실패: ${response.code} - ${responseBody?.take(200)}")
+                        MoneyTalkLogger.e("배치 임베딩 API 실패: ${response.code} - ${responseBody?.take(200)}")
                         return@withContext texts.map { null }
                     }
 
@@ -200,15 +194,14 @@ class SmsEmbeddingService @Inject constructor(
                     }
 
                     val batchElapsed = System.currentTimeMillis() - overallStartTime
-                    Log.d(TAG, "[batchEmbed] 배치 임베딩 성공: ${result.size}건 (${batchElapsed}ms)")
                     return@withContext result
                 }
 
                 // 모든 재시도 실패
-                Log.e(TAG, "배치 임베딩 최종 실패 (${MAX_RETRIES}회 시도): $lastError")
+                MoneyTalkLogger.e("배치 임베딩 최종 실패 (${MAX_RETRIES}회 시도): $lastError")
                 texts.map { null }
             } catch (e: Exception) {
-                Log.e(TAG, "배치 임베딩 실패: ${e.message}", e)
+                MoneyTalkLogger.e("배치 임베딩 실패: ${e.message}", e)
                 texts.map { null }
             }
         }

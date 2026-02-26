@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.sms2
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.Dispatchers
@@ -27,7 +28,7 @@ class RemoteSmsRuleRepository @Inject constructor(
     private val database: FirebaseDatabase?
 ) {
     companion object {
-        private const val TAG = "RemoteSmsRuleRepo"
+        private const val TAG = "MoneyTalkLog"
 
         /** RTDB 규칙 경로 */
         private const val RULES_PATH = "sms_regex_rules/v1"
@@ -67,15 +68,13 @@ class RemoteSmsRuleRepository @Inject constructor(
 
                 val totalRules = rules.size
                 val senderCount = grouped.size
-                Log.d(TAG, "원격 룰 로드 완료: ${totalRules}건 (${senderCount}개 발신번호)")
                 for ((sender, senderRules) in grouped) {
-                    Log.d(TAG, "  [$sender] ${senderRules.size}건")
                 }
 
                 grouped
             }
         } catch (e: Exception) {
-            Log.w(TAG, "원격 룰 로드 실패 (빈 룰 반환): ${e.message}")
+            MoneyTalkLogger.w("원격 룰 로드 실패 (빈 룰 반환): ${e.message}")
             emptyMap()
         }
     }
@@ -117,7 +116,7 @@ class RemoteSmsRuleRepository @Inject constructor(
                         rules.add(rule)
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "룰 파싱 실패: $sender/${ruleSnapshot.key} - ${e.message}")
+                    MoneyTalkLogger.w("룰 파싱 실패: $sender/${ruleSnapshot.key} - ${e.message}")
                 }
             }
         }

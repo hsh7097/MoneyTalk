@@ -1,7 +1,8 @@
 package com.sanha.moneytalk.core.firebase
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import android.os.Bundle
-import android.util.Log
 import com.google.firebase.analytics.FirebaseAnalytics
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,7 +20,7 @@ class AnalyticsHelper @Inject constructor(
     private val analytics: FirebaseAnalytics?
 ) {
     private companion object {
-        const val TAG = "AnalyticsHelper"
+        const val TAG = "MoneyTalkLog"
         const val EVENT_CLICK = "click"
         const val PARAM_BUTTON_NAME = "button_name"
     }
@@ -35,7 +36,7 @@ class AnalyticsHelper @Inject constructor(
             }
             analytics?.logEvent(FirebaseAnalytics.Event.SCREEN_VIEW, bundle)
         } catch (e: Exception) {
-            Log.w(TAG, "화면 PV 로깅 실패: ${e.message}")
+            MoneyTalkLogger.w("화면 PV 로깅 실패: ${e.message}")
         }
     }
 
@@ -54,7 +55,7 @@ class AnalyticsHelper @Inject constructor(
             }
             analytics?.logEvent(EVENT_CLICK, bundle)
         } catch (e: Exception) {
-            Log.w(TAG, "클릭 이벤트 로깅 실패: ${e.message}")
+            MoneyTalkLogger.w("클릭 이벤트 로깅 실패: ${e.message}")
         }
     }
 
@@ -65,7 +66,7 @@ class AnalyticsHelper @Inject constructor(
         try {
             analytics?.logEvent(eventName, params)
         } catch (e: Exception) {
-            Log.w(TAG, "이벤트 로깅 실패: ${e.message}")
+            MoneyTalkLogger.w("이벤트 로깅 실패: ${e.message}")
         }
     }
 }

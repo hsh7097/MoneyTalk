@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.sms2
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import com.google.firebase.database.FirebaseDatabase
 
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
@@ -68,7 +69,7 @@ class SmsGroupClassifier @Inject constructor(
 ) {
 
     companion object {
-        private const val TAG = "SmsGroupClassifier"
+        private const val TAG = "MoneyTalkLog"
 
         /** LLM 배치 크기 (한 번에 LLM에 보내는 그룹 대표 수) */
         private const val LLM_BATCH_SIZE = 20
@@ -251,14 +252,10 @@ class SmsGroupClassifier @Inject constructor(
         // [5-1] 그룹핑 (Level 1~3: 발신번호 → 벡터 유사도 → 소그룹 병합)
         onProgress?.invoke("비슷한 문자 묶는 중...", 0, unmatchedList.size)
         val groups = groupByAddressThenSimilarity(unmatchedList)
-        Log.d(TAG, "그룹핑 완료: ${unmatchedList.size}건 → ${groups.size}그룹")
 
         // [5-1.5] 발신번호 단위로 재집계 → SourceGroup 생성
         val sourceGroups = buildSourceGroups(groups)
-        Log.d(TAG, "발신번호 집계: ${groups.size}그룹 → ${sourceGroups.size}발신번호")
         for (sg in sourceGroups) {
-            Log.d(TAG, "  [${sg.address}] ${sg.totalCount}건 → ${sg.subGroups.size}서브그룹 " +
-                "(${sg.subGroups.joinToString { "${it.members.size}건" }})")
         }
 
         // [5-1.7] DB에서 발신번호별 메인 패턴 선조회
@@ -269,8 +266,6 @@ class SmsGroupClassifier @Inject constructor(
             val mainPattern = smsPatternDao.getMainPatternBySender(sg.address)
             if (mainPattern != null) {
                 dbMainPatterns[sg.address] = mainPattern
-                Log.d(TAG, "DB 메인 패턴 조회: [${sg.address}] " +
-                    "amount=${mainPattern.amountRegex.take(30)}, store=${mainPattern.storeRegex.take(30)}")
             }
         }
 
@@ -298,7 +293,6 @@ class SmsGroupClassifier @Inject constructor(
             }
         }
 
-        Log.d(TAG, "=== 그룹 분류 완료: ${unmatchedList.size}건 → ${results.size}건 결제 확인 ===")
         return results
     }
 
@@ -377,9 +371,6 @@ class SmsGroupClassifier @Inject constructor(
             return results
         }
 
-        Log.d(TAG, "발신번호 ${sourceGroup.address}: ${sourceGroup.subGroups.size}서브그룹, " +
-            "메인 ${sourceGroup.mainGroup.members.size}건/${sourceGroup.totalCount}건" +
-            if (dbMainPattern != null) " (DB 메인 참조)" else "")
 
         // Step 1: 메인 그룹 먼저 처리 (isMainGroup=true → DB에 메인 표시)
         val mainProcessResult = processGroup(
@@ -468,7 +459,6 @@ class SmsGroupClassifier @Inject constructor(
         // 비결제 판정 → 비결제 패턴으로 DB 등록 후 종료
         if (!llmResult.isPayment) {
             registerNonPaymentPattern(representative)
-            Log.d(TAG, "비결제 확정 (LLM): ${representative.input.body.take(30)}")
             return GroupProcessResult(emptyList())
         }
 
@@ -534,9 +524,8 @@ class SmsGroupClassifier @Inject constructor(
                     cardRegex = regexResult.cardRegex
                     parseSource = "llm_regex"
                     clearRegexFailure(representative.template)
-                    Log.d(TAG, "regex 생성+검증 성공: amount=${amountRegex.take(40)}, store=${storeRegex.take(40)}")
                 } else {
-                    Log.w(TAG, "regex 생성 OK but 검증 실패 → 템플릿 폴백 시도")
+                    MoneyTalkLogger.w("regex 생성 OK but 검증 실패 → 템플릿 폴백 시도")
                     recordRegexFailure(representative.template)
 
                     val fallback = buildTemplateFallbackRegex(representative.template)
@@ -549,7 +538,7 @@ class SmsGroupClassifier @Inject constructor(
                 }
             } else {
                 recordRegexFailure(representative.template)
-                Log.w(TAG, "regex 생성 실패 → 템플릿 폴백 시도")
+                MoneyTalkLogger.w("regex 생성 실패 → 템플릿 폴백 시도")
 
                 // 템플릿 기반 폴백 regex 시도
                 val fallback = buildTemplateFallbackRegex(representative.template)
@@ -844,7 +833,6 @@ class SmsGroupClassifier @Inject constructor(
         // Level 1: 발신번호 기준 분류
         val addressGroups = embeddedSms.groupBy { normalizeAddress(it.input.address) }
 
-        Log.d(TAG, "발신번호 분류: ${embeddedSms.size}건 → ${addressGroups.size}개 번호")
 
         val allGroups = mutableListOf<VectorGroup>()
 
@@ -951,7 +939,6 @@ class SmsGroupClassifier @Inject constructor(
         }
 
         if (mergedCount > 0) {
-            Log.d(TAG, "소그룹 병합: 발신=$address, ${subGroups.size}서브→${keptGroups.size}그룹 (${mergedCount}건 흡수)")
         }
 
         return keptGroups
@@ -1022,7 +1009,6 @@ class SmsGroupClassifier @Inject constructor(
                 isMainGroup = isMainGroup
             )
             smsPatternDao.insert(pattern)
-            Log.d(TAG, "패턴 등록: ${analysis.cardName} ${analysis.storeName} ($source)")
 
             // RTDB 표본 수집: regex가 검증된 경우만 (원격 룰로 활용 가능한 표본만 수집)
             if (amountRegex.isNotBlank() && storeRegex.isNotBlank()) {
@@ -1037,7 +1023,7 @@ class SmsGroupClassifier @Inject constructor(
                 )
             }
         } catch (e: Exception) {
-            Log.e(TAG, "패턴 등록 실패: ${e.message}")
+            MoneyTalkLogger.e("패턴 등록 실패: ${e.message}")
         }
     }
 
@@ -1058,7 +1044,7 @@ class SmsGroupClassifier @Inject constructor(
             )
             smsPatternDao.insert(pattern)
         } catch (e: Exception) {
-            Log.e(TAG, "비결제 패턴 등록 실패: ${e.message}")
+            MoneyTalkLogger.e("비결제 패턴 등록 실패: ${e.message}")
         }
     }
 
@@ -1082,9 +1068,8 @@ class SmsGroupClassifier @Inject constructor(
         cardRegex: String,
         groupMemberCount: Int
     ) {
-        Log.d(TAG, "RTDB 표본 수집 시도: cardName=$cardName, source=$parseSource, db=${database != null}")
         val db = database ?: run {
-            Log.w(TAG, "RTDB 표본 수집 스킵: FirebaseDatabase가 null")
+            MoneyTalkLogger.w("RTDB 표본 수집 스킵: FirebaseDatabase가 null")
             return
         }
 
@@ -1093,7 +1078,6 @@ class SmsGroupClassifier @Inject constructor(
             for (sentEmbedding in sentSampleEmbeddings) {
                 val similarity = patternMatcher.cosineSimilarity(embedded.embedding, sentEmbedding)
                 if (similarity >= RTDB_DEDUP_SIMILARITY) {
-                    Log.d(TAG, "RTDB 표본 수집 스킵: 중복 (similarity=$similarity)")
                     return
                 }
             }
@@ -1119,16 +1103,14 @@ class SmsGroupClassifier @Inject constructor(
             if (storeRegex.isNotBlank()) data["storeRegex"] = storeRegex        // 검증된 가게명 regex
             if (cardRegex.isNotBlank()) data["cardRegex"] = cardRegex           // 검증된 카드명 regex
 
-            Log.d(TAG, "RTDB 표본 수집 전송: path=sms_samples/$sampleKey, fields=${data.keys}")
             ref.updateChildren(data)
                 .addOnSuccessListener {
-                    Log.d(TAG, "RTDB 표본 수집 성공: ${cardName.ifBlank { "UNKNOWN" }} ($parseSource) [sms_samples/$sampleKey]")
                 }
                 .addOnFailureListener { e ->
-                    Log.e(TAG, "RTDB 표본 수집 실패: ${e.javaClass.simpleName}: ${e.message} [sms_samples/$sampleKey]")
+                    MoneyTalkLogger.e("RTDB 표본 수집 실패: ${e.javaClass.simpleName}: ${e.message} [sms_samples/$sampleKey]")
                 }
         } catch (e: Exception) {
-            Log.w(TAG, "RTDB 표본 수집 예외 (무시): ${e.message}")
+            MoneyTalkLogger.w("RTDB 표본 수집 예외 (무시): ${e.message}")
         }
     }
 
@@ -1229,9 +1211,6 @@ class SmsGroupClassifier @Inject constructor(
         val passRatio = passCount.toFloat() / samples.size
         val passed = passRatio >= REGEX_VALIDATION_MIN_PASS_RATIO
 
-        Log.d(TAG, "regex 검증: ${passCount}/${samples.size} 파싱 성공 " +
-            "(${(passRatio * 100).toInt()}%, 기준 ${(REGEX_VALIDATION_MIN_PASS_RATIO * 100).toInt()}%) " +
-            "→ ${if (passed) "통과" else "실패"}")
 
         return passed
     }

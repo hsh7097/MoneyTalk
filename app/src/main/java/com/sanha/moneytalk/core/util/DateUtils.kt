@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.util
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -71,13 +72,13 @@ object DateUtils {
         return try {
             val result = dateTimeFormat.parse(dateTimeString)?.time
             if (result == null) {
-                Log.w("DateUtils", "parseDateTime 실패 (null 결과): '$dateTimeString' → 현재 시간 사용")
+                MoneyTalkLogger.w("parseDateTime 실패 (null 결과): '$dateTimeString' → 현재 시간 사용")
                 System.currentTimeMillis()
             } else {
                 result
             }
         } catch (e: Exception) {
-            Log.w("DateUtils", "parseDateTime 예외: '$dateTimeString' → 현재 시간 사용: ${e.message}")
+            MoneyTalkLogger.w("parseDateTime 예외: '$dateTimeString' → 현재 시간 사용: ${e.message}")
             System.currentTimeMillis()
         }
     }
@@ -374,8 +375,7 @@ object DateUtils {
                 extractedCal.set(Calendar.YEAR, smsYear)
 
                 val corrected = dateTimeFormat.format(extractedCal.time)
-                Log.w(
-                    "DateUtils",
+                MoneyTalkLogger.w(
                     "LLM 날짜 연도 교정: '$extractedDateTime' → '$corrected' (SMS수신: ${
                         dateTimeFormat.format(Date(smsTimestamp))
                     })"
@@ -385,7 +385,7 @@ object DateUtils {
                 extractedDateTime
             }
         } catch (e: Exception) {
-            Log.w("DateUtils", "LLM 날짜 검증 실패: '$extractedDateTime' → 원본 유지")
+            MoneyTalkLogger.w("LLM 날짜 검증 실패: '$extractedDateTime' → 원본 유지")
             extractedDateTime
         }
     }

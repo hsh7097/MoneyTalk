@@ -1,10 +1,11 @@
 package com.sanha.moneytalk.receiver
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
-import android.util.Log
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -24,7 +25,7 @@ import javax.inject.Inject
 class SmsReceiver : BroadcastReceiver() {
 
     companion object {
-        private const val TAG = "SmsReceiver"
+        private const val TAG = "MoneyTalkLog"
     }
 
     @Inject
@@ -35,7 +36,7 @@ class SmsReceiver : BroadcastReceiver() {
             return
         }
 
-        Log.d(TAG, "SMS 수신 감지 → 증분 동기화 트리거")
+        MoneyTalkLogger.i("SMS 수신 감지 → 증분 동기화 이벤트 발행")
         dataRefreshEvent.emit(DataRefreshEvent.RefreshType.SMS_RECEIVED)
     }
 }

@@ -1,7 +1,8 @@
 package com.sanha.moneytalk
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import android.app.Application
-import android.util.Log
 import com.google.android.gms.ads.MobileAds
 import com.google.firebase.FirebaseApp
 import com.sanha.moneytalk.core.firebase.CrashlyticsHelper
@@ -13,7 +14,7 @@ import javax.inject.Inject
 class MoneyTalkApplication : Application() {
 
     companion object {
-        private const val TAG = "MoneyTalkApplication"
+        private const val TAG = "MoneyTalkLog"
     }
 
     @Inject
@@ -43,7 +44,7 @@ class MoneyTalkApplication : Application() {
             FirebaseApp.initializeApp(this)
             true
         } catch (e: Exception) {
-            Log.w(TAG, "Firebase 초기화 실패 (google-services.json 미설정): ${e.message}")
+            MoneyTalkLogger.w("Firebase 초기화 실패 (google-services.json 미설정): ${e.message}")
             false
         }
     }

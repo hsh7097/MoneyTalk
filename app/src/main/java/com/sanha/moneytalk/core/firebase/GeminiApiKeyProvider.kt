@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.core.firebase
 
-import android.util.Log
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -27,7 +26,7 @@ class GeminiApiKeyProvider @Inject constructor(
     private val premiumManager: PremiumManager
 ) {
     companion object {
-        private const val TAG = "GeminiApiKeyProvider"
+        private const val TAG = "MoneyTalkLog"
     }
 
     /**

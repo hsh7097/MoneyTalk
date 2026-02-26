@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.feature.history.ui
 
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -342,10 +341,6 @@ fun BillingCycleCalendarView(
 
     // 지출 상세 다이얼로그 (삭제 및 카테고리 변경 기능 포함)
     selectedExpense?.let { expense ->
-        Log.e(
-            "MT_DEBUG",
-            "HistoryScreen[BillingCycleCalendarView] : ${expense.storeName}, ${expense.amount}원"
-        )
         ExpenseDetailDialog(
             expense = expense,
             onDismiss = { selectedExpense = null },

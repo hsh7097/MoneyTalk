@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.feature.history.ui
 
-import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -292,10 +291,6 @@ fun HistoryScreen(
 
     // 다이얼로그 상태는 ViewModel에서 관리
     uiState.selectedExpense?.let { expense ->
-        Log.e(
-            "MT_DEBUG",
-            "HistoryScreen[selectedExpense] : \nstoreName : ${expense.storeName}\noriginalSms : ${expense.originalSms}\namount : ${expense.amount}원"
-        )
 
         ExpenseDetailDialog(
             expense = expense,
@@ -316,10 +311,6 @@ fun HistoryScreen(
     }
 
     uiState.selectedIncome?.let { income ->
-        Log.e(
-            "MT_DEBUG",
-            "HistoryScreen[selectedIncome] : ${income.originalSms}, ${income.amount}원"
-        )
         IncomeDetailDialog(
             income = income,
             onDismiss = { viewModel.onIntent(HistoryIntent.DismissDialog) },

@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.core.util
 
-import android.util.Log
 import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,7 +24,7 @@ class CategoryReferenceProvider @Inject constructor(
     private val categoryMappingDao: CategoryMappingDao
 ) {
     companion object {
-        private const val TAG = "CategoryRef"
+        private const val TAG = "MoneyTalkLog"
 
         /** 참조 리스트에 포함할 최대 항목 수 (프롬프트 크기 제한) */
         private const val MAX_REFERENCE_ITEMS = 50
@@ -84,7 +83,6 @@ class CategoryReferenceProvider @Inject constructor(
         }
 
         cachedReferenceMap = result
-        Log.d(TAG, "참조 맵 생성: ${result.size}개 카테고리, 총 ${result.values.sumOf { it.size }}개 가게")
         return result
     }
 
@@ -146,6 +144,5 @@ class CategoryReferenceProvider @Inject constructor(
         // CategoryClassifierService.updateExpenseCategory()에서 이미 수행
         // 여기서는 캐시만 무효화
         invalidateCache()
-        Log.d(TAG, "사용자 참조 추가: $storeName → $category")
     }
 }

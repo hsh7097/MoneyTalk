@@ -1,9 +1,10 @@
 package com.sanha.moneytalk
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import android.Manifest
 import android.content.ContentResolver
 import android.content.pm.PackageManager
-import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -77,7 +78,7 @@ class MainViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        private const val TAG = "MainViewModel"
+        private const val TAG = "MoneyTalkLog"
 
         /** DB 배치 삽입 크기 */
         private const val DB_BATCH_INSERT_SIZE = 100
@@ -198,7 +199,7 @@ class MainViewModel @Inject constructor(
                     }
 
                     DataRefreshEvent.RefreshType.SMS_RECEIVED -> {
-                        Log.d(TAG, "SMS 수신 이벤트 → 증분 동기화 실행 (silent)")
+                        MoneyTalkLogger.i("SMS 수신 이벤트 → silent 증분 동기화 시작")
                         val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
                         syncSmsV2(range, updateLastSyncTime = true, silent = true)
                     }
@@ -235,7 +236,7 @@ class MainViewModel @Inject constructor(
      */
     private fun launchSync() {
         if (!isSyncRunning.compareAndSet(false, true)) {
-            Log.w(TAG, "launchSync: 이미 동기화 진행 중 → 스킵")
+            MoneyTalkLogger.w("launchSync: 이미 동기화 진행 중 → 스킵")
             return
         }
 
@@ -268,7 +269,7 @@ class MainViewModel @Inject constructor(
                             try {
                                 ownedCardRepository.registerCardsFromSync(result.detectedCardNames)
                             } catch (e: Exception) {
-                                Log.w(TAG, "카드 자동 등록 실패: ${e.message}")
+                                MoneyTalkLogger.w("카드 자동 등록 실패: ${e.message}")
                             }
                         }
                     }
@@ -357,7 +358,7 @@ class MainViewModel @Inject constructor(
         onSyncComplete: (suspend () -> Unit)? = null
     ) {
         if (!isSyncRunning.compareAndSet(false, true)) {
-            Log.w(TAG, "syncSmsV2: 이미 동기화 진행 중 → 스킵")
+            MoneyTalkLogger.w("syncSmsV2: 이미 동기화 진행 중 → 스킵")
             return
         }
 
@@ -413,6 +414,7 @@ class MainViewModel @Inject constructor(
 
         // Step 1: SMS 읽기 + 중복 제거
         val smsInputs = readAndFilterSms(targetMonthRange)
+        MoneyTalkLogger.i("syncSmsV2 Step1 완료: 신규 SMS ${smsInputs.size}건")
         if (smsInputs.isEmpty()) {
             if (updateLastSyncTime) {
                 settingsDataStore.saveLastSyncTime(targetMonthRange.second)
@@ -450,7 +452,7 @@ class MainViewModel @Inject constructor(
             targetMonthRange.first,
             targetMonthRange.second
         )
-        Log.d(TAG, "SMS 읽기: ${allSmsList.size}건")
+        MoneyTalkLogger.i("syncSmsV2 SMS 읽기: ${allSmsList.size}건")
 
         if (allSmsList.isEmpty()) return emptyList()
 
@@ -460,7 +462,7 @@ class MainViewModel @Inject constructor(
         val allExistingIds = existingSmsIds + existingIncomeSmsIds
 
         val newSmsList = allSmsList.filter { it.id !in allExistingIds }
-        Log.d(TAG, "중복 제거: ${allSmsList.size}건 → ${newSmsList.size}건")
+        MoneyTalkLogger.i("syncSmsV2 중복 제거: ${allSmsList.size}건 → ${newSmsList.size}건")
 
         return newSmsList
     }
@@ -586,14 +588,13 @@ class MainViewModel @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "수입 처리 실패: ${income.id} - ${e.message}")
+                MoneyTalkLogger.e("수입 처리 실패: ${income.id} - ${e.message}")
             }
         }
         if (batch.isNotEmpty()) {
             incomeRepository.insertAll(batch)
         }
 
-        Log.d(TAG, "saveIncomes: ${incomes.size}건 → ${count}건 저장")
         return count
     }
 
@@ -663,7 +664,7 @@ class MainViewModel @Inject constructor(
 
         val dbCount = expenseRepository.getAllSmsIds().size
         val effectiveSyncTime = if (savedSyncTime > 0 && dbCount == 0) {
-            Log.w(TAG, "Auto Backup 감지: savedSyncTime 있으나 DB 비어있음 → 리셋")
+            MoneyTalkLogger.w("Auto Backup 감지: savedSyncTime 있으나 DB 비어있음 → 리셋")
             settingsDataStore.saveLastSyncTime(0L)
             0L
         } else {
@@ -705,13 +706,15 @@ class MainViewModel @Inject constructor(
 
     /** 동기화 결과 처리 (UI 상태 업데이트 + snackbar + 데이터 변경 통지) */
     private suspend fun handleSyncResult(result: SyncResult, silent: Boolean) {
+        MoneyTalkLogger.i("syncSmsV2 완료: 지출 ${result.expenseCount}건, 수입 ${result.incomeCount}건")
+
         // 카드 자동 등록 (백그라운드)
         if (result.detectedCardNames.isNotEmpty()) {
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     ownedCardRepository.registerCardsFromSync(result.detectedCardNames)
                 } catch (e: Exception) {
-                    Log.w(TAG, "카드 자동 등록 실패: ${e.message}")
+                    MoneyTalkLogger.w("카드 자동 등록 실패: ${e.message}")
                 }
             }
         }
@@ -751,7 +754,7 @@ class MainViewModel @Inject constructor(
 
         if (silent || _uiState.value.syncDialogDismissed) {
             _uiState.update { it.copy(isSyncing = false) }
-            Log.w(TAG, "SMS 동기화 실패: ${e.message}")
+            MoneyTalkLogger.w("SMS 동기화 실패: ${e.message}")
         } else {
             _uiState.update {
                 it.copy(
@@ -907,7 +910,6 @@ class MainViewModel @Inject constructor(
                 if (unclassifiedCount == 0) return@launch
                 if (classificationState.isRunning.value) return@launch
 
-                Log.d(TAG, "Resume 시 미분류 ${unclassifiedCount}건 발견 → 자동 분류 시작")
                 withContext(Dispatchers.Main) {
                     if (!classificationState.isRunning.value) {
                         launchBackgroundCategoryClassification()
@@ -943,17 +945,14 @@ class MainViewModel @Inject constructor(
         try {
             val count = categoryClassifierService.getUnclassifiedCount()
             if (count == 0) {
-                Log.d(TAG, "백그라운드분류: 미분류 항목 없음 → 스킵")
                 return
             }
 
-            Log.d(TAG, "백그라운드분류: Phase 1 시작 (미분류 ${count}건, 상위 50개)")
 
             val phase1Count = categoryClassifierService.classifyUnclassifiedExpenses(
                 maxStoreCount = 50
             )
 
-            Log.d(TAG, "백그라운드분류: Phase 1 완료 → ${phase1Count}건 분류")
 
             if (phase1Count > 0) {
                 withContext(Dispatchers.Main) {
@@ -964,17 +963,14 @@ class MainViewModel @Inject constructor(
 
             val remainingCount = categoryClassifierService.getUnclassifiedCount()
             if (remainingCount > 0) {
-                Log.d(TAG, "백그라운드분류: Phase 2 시작 (남은 ${remainingCount}건, 최대 ${MAX_CLASSIFICATION_ROUNDS}라운드)")
 
                 val phase2Classified = categoryClassifierService.classifyAllUntilComplete(
                     onProgress = { round, classifiedInRound, remaining ->
-                        Log.d(TAG, "백그라운드분류: 라운드 $round 완료 → ${classifiedInRound}건 분류 (남은: ${remaining}건)")
                     },
                     onStepProgress = null,
                     maxRounds = MAX_CLASSIFICATION_ROUNDS
                 )
 
-                Log.d(TAG, "백그라운드분류: Phase 2 완료 → ${phase2Classified}건 분류")
 
                 if (phase2Classified > 0) {
                     val finalRemaining = categoryClassifierService.getUnclassifiedCount()
@@ -990,11 +986,9 @@ class MainViewModel @Inject constructor(
                 }
             }
 
-            Log.d(TAG, "백그라운드분류: 전체 완료")
         } catch (e: CancellationException) {
-            Log.d(TAG, "백그라운드분류: 취소됨")
         } catch (e: Exception) {
-            Log.e(TAG, "백그라운드분류: 실패: ${e.message}", e)
+            MoneyTalkLogger.e("백그라운드분류: 실패: ${e.message}", e)
         }
     }
 }

@@ -1,9 +1,10 @@
 package com.sanha.moneytalk.core.sms2
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.Telephony
-import android.util.Log
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -25,7 +26,7 @@ import javax.inject.Singleton
 class SmsReaderV2 @Inject constructor() {
 
     companion object {
-        private const val TAG = "SmsReaderV2"
+        private const val TAG = "MoneyTalkLog"
 
         // MMS URI
         private val MMS_INBOX_URI = Uri.parse("content://mms/inbox")
@@ -52,7 +53,6 @@ class SmsReaderV2 @Inject constructor() {
         endDate: Long
     ): List<SmsInput> {
         val sdfRange = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.KOREA)
-        Log.d(TAG, "readAllMessagesByDateRange: 요청 범위 ${sdfRange.format(java.util.Date(startDate))} ~ ${sdfRange.format(java.util.Date(endDate))}")
 
         val smsList = readAllSmsByDateRange(contentResolver, startDate, endDate)
         val mmsList = readAllMmsByDateRange(contentResolver, startDate, endDate)
@@ -62,7 +62,6 @@ class SmsReaderV2 @Inject constructor() {
             .distinctBy { it.id }
             .sortedByDescending { it.date }
 
-        Log.d(TAG, "readAllMessagesByDateRange: SMS ${smsList.size}건 + MMS ${mmsList.size}건 + RCS ${rcsList.size}건 = 총 ${combined.size}건")
         return combined
     }
 
@@ -119,7 +118,6 @@ class SmsReaderV2 @Inject constructor() {
             }
         }
 
-        Log.d(TAG, "SMS 읽기: cursor ${totalCursorCount}건 → 반환 ${result.size}건 (010/070 제외: ${senderSkipCount}건)")
         return result
     }
 
@@ -172,10 +170,9 @@ class SmsReaderV2 @Inject constructor() {
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "MMS 읽기 실패: ${e.message}")
+            MoneyTalkLogger.e("MMS 읽기 실패: ${e.message}")
         }
 
-        Log.d(TAG, "MMS 읽기: ${result.size}건 (010/070 제외: ${senderSkipCount}건)")
         return result
     }
 
@@ -213,14 +210,14 @@ class SmsReaderV2 @Inject constructor() {
                                     sb.append(reader.readText())
                                 }
                             } catch (e: Exception) {
-                                Log.w(TAG, "MMS part 읽기 실패 (partId=$partId): ${e.message}")
+                                MoneyTalkLogger.w("MMS part 읽기 실패 (partId=$partId): ${e.message}")
                             }
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "MMS 본문 읽기 실패 (mmsId=$mmsId): ${e.message}")
+            MoneyTalkLogger.w("MMS 본문 읽기 실패 (mmsId=$mmsId): ${e.message}")
         }
         return sb.toString().takeIf { it.isNotBlank() }
     }
@@ -259,7 +256,7 @@ class SmsReaderV2 @Inject constructor() {
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "MMS 주소 읽기 실패 (mmsId=$mmsId): ${e.message}")
+            MoneyTalkLogger.w("MMS 주소 읽기 실패 (mmsId=$mmsId): ${e.message}")
         }
         return "unknown"
     }
@@ -315,10 +312,9 @@ class SmsReaderV2 @Inject constructor() {
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "RCS 읽기 실패: ${e.message}")
+            MoneyTalkLogger.e("RCS 읽기 실패: ${e.message}")
         }
 
-        Log.d(TAG, "RCS 읽기: ${result.size}건 (010/070 제외: ${senderSkipCount}건)")
         return result
     }
 

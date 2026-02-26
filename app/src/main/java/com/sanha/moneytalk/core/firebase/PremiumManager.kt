@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.firebase
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
@@ -49,7 +50,7 @@ class PremiumManager @Inject constructor(
     private val settingsDataStore: SettingsDataStore
 ) {
     companion object {
-        private const val TAG = "PremiumManager"
+        private const val TAG = "MoneyTalkLog"
         private const val CONFIG_PATH = "config"
     }
 
@@ -66,7 +67,7 @@ class PremiumManager @Inject constructor(
      */
     fun startObservingConfig() {
         if (database == null) {
-            Log.w(TAG, "Firebase 미설정 — 서버 설정 감시 스킵")
+            MoneyTalkLogger.w("Firebase 미설정 — 서버 설정 감시 스킵")
             return
         }
         val configRef = database.getReference(CONFIG_PATH)
@@ -75,21 +76,14 @@ class PremiumManager @Inject constructor(
             override fun onDataChange(snapshot: DataSnapshot) {
                 val config = parseConfig(snapshot)
                 _premiumConfig.value = config
-                Log.d(
-                    TAG,
-                    "서버 설정 갱신: serviceEnabled=${config.serviceEnabled}, " +
-                        "apiKeys=${config.geminiApiKeys.size}개, " +
-                        "models=${config.modelConfig}"
-                )
             }
 
             override fun onCancelled(error: DatabaseError) {
-                Log.e(TAG, "서버 설정 감시 실패: ${error.message}")
+                MoneyTalkLogger.e("서버 설정 감시 실패: ${error.message}")
             }
         }
 
         configListener?.let { configRef.addValueEventListener(it) }
-        Log.d(TAG, "서버 설정 실시간 감시 시작")
     }
 
     /**
@@ -100,7 +94,6 @@ class PremiumManager @Inject constructor(
         configListener?.let {
             database.getReference(CONFIG_PATH).removeEventListener(it)
             configListener = null
-            Log.d(TAG, "서버 설정 실시간 감시 중지")
         }
     }
 
@@ -114,7 +107,6 @@ class PremiumManager @Inject constructor(
      */
     suspend fun setServiceTier(tier: ServiceTier) {
         settingsDataStore.saveServiceTier(tier.name)
-        Log.d(TAG, "서비스 티어 변경: $tier")
     }
 
     /**
@@ -158,7 +150,7 @@ class PremiumManager @Inject constructor(
      */
     fun fetchConfigOnce(onResult: (PremiumConfig) -> Unit) {
         if (database == null) {
-            Log.w(TAG, "Firebase 미설정 — 기본 설정 반환")
+            MoneyTalkLogger.w("Firebase 미설정 — 기본 설정 반환")
             onResult(PremiumConfig())
             return
         }
@@ -169,7 +161,7 @@ class PremiumManager @Inject constructor(
                 onResult(config)
             }
             .addOnFailureListener { e ->
-                Log.e(TAG, "서버 설정 1회 조회 실패: ${e.message}")
+                MoneyTalkLogger.e("서버 설정 1회 조회 실패: ${e.message}")
                 onResult(PremiumConfig())
             }
     }

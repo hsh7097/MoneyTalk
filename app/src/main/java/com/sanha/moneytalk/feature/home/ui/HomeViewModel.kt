@@ -1,5 +1,7 @@
 package com.sanha.moneytalk.feature.home.ui
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.dao.CategorySum
@@ -126,7 +128,7 @@ class HomeViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        private const val TAG = "HomeViewModel"
+        private const val TAG = "MoneyTalkLog"
 
         /** 기본 조회 기간 (1년, 밀리초) */
         private const val ONE_YEAR_MILLIS = 365L * 24 * 60 * 60 * 1000
@@ -582,7 +584,7 @@ class HomeViewModel @Inject constructor(
                     updatePageCache(monthKey, current.copy(aiInsight = insight))
                 }
             } catch (e: Exception) {
-                android.util.Log.w("HomeViewModel", "AI 인사이트 생성 실패 (무시): ${e.message}")
+                MoneyTalkLogger.w("AI 인사이트 생성 실패 (무시): ${e.message}")
             }
         }
     }
@@ -691,7 +693,7 @@ class HomeViewModel @Inject constructor(
                 }
                 onResult(count)
             } catch (e: Exception) {
-                android.util.Log.e("HomeViewModel", "분류 실패: ${e.message}")
+                MoneyTalkLogger.e("분류 실패: ${e.message}")
                 onResult(0)
             }
         }
@@ -796,7 +798,7 @@ class HomeViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                android.util.Log.e("HomeViewModel", "전체 분류 실패: ${e.message}")
+                MoneyTalkLogger.e("전체 분류 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
                         isClassifying = false,
@@ -836,7 +838,7 @@ class HomeViewModel @Inject constructor(
                 clearAllPageCache()
                 loadCurrentAndAdjacentPages()
             } catch (e: Exception) {
-                android.util.Log.e("HomeViewModel", "카테고리 변경 실패: ${e.message}")
+                MoneyTalkLogger.e("카테고리 변경 실패: ${e.message}")
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.firebase
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 
 /**
@@ -12,7 +13,7 @@ import com.google.firebase.crashlytics.FirebaseCrashlytics
  * - 사용자 식별 정보 설정
  */
 object CrashlyticsHelper {
-    private const val TAG = "CrashlyticsHelper"
+    private const val TAG = "MoneyTalkLog"
 
     private val crashlytics: FirebaseCrashlytics
         get() = FirebaseCrashlytics.getInstance()
@@ -25,7 +26,7 @@ object CrashlyticsHelper {
         try {
             crashlytics.recordException(throwable)
         } catch (e: Exception) {
-            Log.w(TAG, "Crashlytics 예외 기록 실패: ${e.message}")
+            MoneyTalkLogger.w("Crashlytics 예외 기록 실패: ${e.message}")
         }
     }
 
@@ -37,7 +38,7 @@ object CrashlyticsHelper {
         try {
             crashlytics.log(message)
         } catch (e: Exception) {
-            Log.w(TAG, "Crashlytics 로그 기록 실패: ${e.message}")
+            MoneyTalkLogger.w("Crashlytics 로그 기록 실패: ${e.message}")
         }
     }
 
@@ -49,7 +50,7 @@ object CrashlyticsHelper {
         try {
             crashlytics.setCustomKey(key, value)
         } catch (e: Exception) {
-            Log.w(TAG, "Crashlytics 커스텀 키 설정 실패: ${e.message}")
+            MoneyTalkLogger.w("Crashlytics 커스텀 키 설정 실패: ${e.message}")
         }
     }
 
@@ -57,7 +58,7 @@ object CrashlyticsHelper {
         try {
             crashlytics.setCustomKey(key, value)
         } catch (e: Exception) {
-            Log.w(TAG, "Crashlytics 커스텀 키 설정 실패: ${e.message}")
+            MoneyTalkLogger.w("Crashlytics 커스텀 키 설정 실패: ${e.message}")
         }
     }
 
@@ -65,7 +66,7 @@ object CrashlyticsHelper {
         try {
             crashlytics.setCustomKey(key, value)
         } catch (e: Exception) {
-            Log.w(TAG, "Crashlytics 커스텀 키 설정 실패: ${e.message}")
+            MoneyTalkLogger.w("Crashlytics 커스텀 키 설정 실패: ${e.message}")
         }
     }
 
@@ -77,7 +78,7 @@ object CrashlyticsHelper {
         try {
             crashlytics.setUserId(userId)
         } catch (e: Exception) {
-            Log.w(TAG, "Crashlytics 사용자 ID 설정 실패: ${e.message}")
+            MoneyTalkLogger.w("Crashlytics 사용자 ID 설정 실패: ${e.message}")
         }
     }
 
@@ -88,9 +89,8 @@ object CrashlyticsHelper {
     fun setCrashlyticsCollectionEnabled(enabled: Boolean) {
         try {
             crashlytics.setCrashlyticsCollectionEnabled(enabled)
-            Log.d(TAG, "Crashlytics 수집 ${if (enabled) "활성화" else "비활성화"}")
         } catch (e: Exception) {
-            Log.w(TAG, "Crashlytics 수집 설정 실패: ${e.message}")
+            MoneyTalkLogger.w("Crashlytics 수집 설정 실패: ${e.message}")
         }
     }
 }

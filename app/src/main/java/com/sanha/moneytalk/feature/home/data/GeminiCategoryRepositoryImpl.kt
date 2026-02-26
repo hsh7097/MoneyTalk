@@ -1,7 +1,8 @@
 package com.sanha.moneytalk.feature.home.data
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import android.content.Context
-import android.util.Log
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.generationConfig
 import com.sanha.moneytalk.R
@@ -36,7 +37,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
     private val apiKeyProvider: GeminiApiKeyProvider
 ) : GeminiCategoryRepository {
     companion object {
-        private const val TAG = "gemini"
+        private const val TAG = "MoneyTalkLog"
         private const val BATCH_SIZE = 50
         private const val MAX_RETRIES = 3
         /** LLM 배치 병렬 동시 실행 수 (API 키 5개 × 키당 1 = 5, LLM은 임베딩보다 무거움) */
@@ -49,16 +50,12 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
          * 긴 문자열을 Logcat에서 잘리지 않도록 분할 출력
          */
         private fun logLongString(tag: String, label: String, text: String) {
-            Log.d(tag, "=== $label (총 ${text.length}자) ===")
             if (text.length <= MAX_LOG_LENGTH) {
-                Log.d(tag, text)
             } else {
                 val chunks = text.chunked(MAX_LOG_LENGTH)
                 chunks.forEachIndexed { index, chunk ->
-                    Log.d(tag, "[$label ${index + 1}/${chunks.size}]\n$chunk")
                 }
             }
-            Log.d(tag, "=== $label 끝 ===")
         }
     }
 
@@ -107,30 +104,14 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
      */
     override suspend fun classifyStoreNames(storeNames: List<String>): Map<String, String> =
         withContext(Dispatchers.IO) {
-            Log.e(
-                "MT_DEBUG",
-                "GeminiCategoryRepository[classifyStoreNames] : === 호출됨 (${storeNames.size}건) ==="
-            )
             val apiKey = apiKeyProvider.getApiKey()
-            Log.e(
-                "MT_DEBUG",
-                "GeminiCategoryRepository[classifyStoreNames] : API 키 상태: ${
-                    if (apiKey.isBlank()) "❌ 비어있음" else "✅ 설정됨 (길이=${apiKey.length}, prefix=${
-                        apiKey.take(10)
-                    }...)"
-                }"
-            )
             if (apiKey.isBlank()) {
-                Log.e(TAG, "API 키가 설정되지 않음")
+                MoneyTalkLogger.e("API 키가 설정되지 않음")
                 return@withContext emptyMap()
             }
 
             val currentModelConfig = apiKeyProvider.modelConfig
             if (generativeModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
-                Log.e(
-                    "MT_DEBUG",
-                    "GeminiCategoryRepository[classifyStoreNames] : 모델 초기화 필요 → initModel() 호출"
-                )
                 cachedApiKey = apiKey
                 cachedModelConfig = currentModelConfig
                 initModel(apiKey, currentModelConfig.categoryClassifier)
@@ -138,13 +119,8 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
 
             val model = generativeModel
             if (model == null) {
-                Log.e(
-                    "MT_DEBUG",
-                    "GeminiCategoryRepository[classifyStoreNames] : ❌ 모델 초기화 실패 → 빈 결과 반환"
-                )
                 return@withContext emptyMap()
             }
-            Log.e("MT_DEBUG", "GeminiCategoryRepository[classifyStoreNames] : ✅ 모델 준비 완료")
 
             // 사용 가능한 카테고리 목록
             val categories = Category.entries.map { it.displayName }
@@ -160,7 +136,6 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             val results = mutableMapOf<String, String>()
             val batches = storeNames.chunked(BATCH_SIZE)
 
-            Log.d(TAG, "총 ${storeNames.size}개를 ${batches.size}개 배치로 처리 (병렬 $LLM_CONCURRENCY)")
 
             val llmSemaphore = Semaphore(LLM_CONCURRENCY)
             val classifyStart = System.currentTimeMillis()
@@ -179,20 +154,12 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                             )
                             val batchElapsed = System.currentTimeMillis() - batchStart
                             val successCount = result.first?.size ?: 0
-                            Log.e(
-                                "MT_DEBUG",
-                                "GeminiCategoryRepository[배치 ${index + 1}/${batches.size}] : 완료 — ${successCount}/${batch.size}건 (${batchElapsed}ms)"
-                            )
                             result
                         }
                     }
                 }.awaitAll()
             }
             val classifyElapsed = System.currentTimeMillis() - classifyStart
-            Log.e(
-                "MT_DEBUG",
-                "GeminiCategoryRepository[classifyStoreNames] : 전체 배치 완료 — ${batches.size}개 배치 (${classifyElapsed}ms)"
-            )
 
             val failedBatches = mutableListOf<Int>()
             for ((index, result) in batchResults.withIndex()) {
@@ -207,10 +174,9 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             }
 
             if (failedBatches.isNotEmpty()) {
-                Log.w(TAG, "총 ${failedBatches.size}개 배치 처리 실패: $failedBatches")
+                MoneyTalkLogger.w("총 ${failedBatches.size}개 배치 처리 실패: $failedBatches")
             }
 
-            Log.d(TAG, "분류 완료: ${storeNames.size}개 중 ${results.size}개 성공")
             results
         }
 
@@ -236,9 +202,6 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             try {
                 val prompt = buildClassificationPrompt(batch, categories, referenceText)
 
-                Log.d(TAG, "=== REQUEST [배치 ${batchIndex + 1}/$totalBatches, 시도 $attempt] ===")
-                Log.d(TAG, "모델: ${apiKeyProvider.modelConfig.categoryClassifier}, 배치 크기: ${batch.size}개")
-                Log.d(TAG, "가게명 목록: ${batch.joinToString(", ")}")
                 logLongString(TAG, "PROMPT", prompt)
 
                 val startTime = System.currentTimeMillis()
@@ -247,25 +210,22 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
 
                 val text = response.text
 
-                Log.d(TAG, "=== RESPONSE [배치 ${batchIndex + 1}/$totalBatches] (${elapsed}ms) ===")
                 if (text != null) {
                     logLongString(TAG, "RESPONSE", text)
                 } else {
-                    Log.d(TAG, "응답: (null)")
                 }
 
                 if (text != null) {
                     val parsed = parseClassificationResponse(text, batch)
-                    Log.d(TAG, "파싱 결과: ${parsed.size}/${batch.size}개 성공")
                     return parsed to hitRateLimit
                 }
             } catch (e: Exception) {
                 lastException = e
                 val errorMessage = e.message ?: ""
 
-                Log.e(TAG, "=== ERROR [배치 ${batchIndex + 1}/$totalBatches, 시도 $attempt] ===")
-                Log.e(TAG, "에러 클래스: ${e.javaClass.name}")
-                Log.e(TAG, "에러 메시지: $errorMessage")
+                MoneyTalkLogger.e("=== ERROR [배치 ${batchIndex + 1}/$totalBatches, 시도 $attempt] ===")
+                MoneyTalkLogger.e("에러 클래스: ${e.javaClass.name}")
+                MoneyTalkLogger.e("에러 메시지: $errorMessage")
 
                 // Rate Limit 에러인지 확인
                 val isRateLimitError = errorMessage.contains("429") ||
@@ -279,27 +239,23 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                         // 지수 백오프 + jitter (1초 → 2초 → 4초, max 30초)
                         val jitter = Random.nextLong(0, 500)
                         val actualDelay = min(currentDelay + jitter, MAX_RETRY_DELAY_MS)
-                        Log.w(
-                            TAG,
-                            "⚠️ 429 Rate Limit 발생! (GeminiCategoryRepository.classifyStoreNames 배치 ${batchIndex + 1}/$totalBatches) ${actualDelay}ms 후 재시도 ($attempt/$MAX_RETRIES)"
+                        MoneyTalkLogger.w("⚠️ 429 Rate Limit 발생! (GeminiCategoryRepository.classifyStoreNames 배치 ${batchIndex + 1}/$totalBatches) ${actualDelay}ms 후 재시도 ($attempt/$MAX_RETRIES)"
                         )
                         delay(actualDelay)
                         currentDelay *= 2
                     } else {
-                        Log.e(
-                            TAG,
-                            "❌ 최대 재시도 횟수($MAX_RETRIES) 초과 (GeminiCategoryRepository.classifyStoreNames)"
+                        MoneyTalkLogger.e("❌ 최대 재시도 횟수($MAX_RETRIES) 초과 (GeminiCategoryRepository.classifyStoreNames)"
                         )
                     }
                 } else {
                     // Rate Limit이 아닌 다른 에러는 바로 실패 처리
-                    Log.e(TAG, "비 Rate Limit 에러로 즉시 실패 처리")
+                    MoneyTalkLogger.e("비 Rate Limit 에러로 즉시 실패 처리")
                     break
                 }
             }
         }
 
-        Log.e(TAG, "배치 ${batchIndex + 1} 최종 실패: ${lastException?.message}")
+        MoneyTalkLogger.e("배치 ${batchIndex + 1} 최종 실패: ${lastException?.message}")
         return null to hitRateLimit
     }
 
@@ -401,10 +357,9 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
 
                     if (originalName != null) {
                         results[originalName] = category
-                        Log.d(TAG, "파싱 성공: $originalName -> $category")
                     }
                 } else {
-                    Log.w(TAG, "유효하지 않은 카테고리 무시: $storeName -> $category")
+                    MoneyTalkLogger.w("유효하지 않은 카테고리 무시: $storeName -> $category")
                 }
             }
         }
@@ -445,7 +400,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
         }
 
         // 찾지 못하면 기타로 반환
-        Log.w(TAG, "알 수 없는 카테고리 -> 기타로 변환: $rawCategory")
+        MoneyTalkLogger.w("알 수 없는 카테고리 -> 기타로 변환: $rawCategory")
         return "기타"
     }
 

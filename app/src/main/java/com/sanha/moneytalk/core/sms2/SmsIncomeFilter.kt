@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.core.sms2
 
-import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,7 +33,7 @@ import javax.inject.Singleton
 class SmsIncomeFilter @Inject constructor() {
 
     companion object {
-        private const val TAG = "SmsIncomeFilter"
+        private const val TAG = "MoneyTalkLog"
         /** SMS 최대 길이 (일반 결제 SMS는 40~100자, 안내/광고성은 130자 이상) */
         private const val MAX_SMS_LENGTH = 130
     }
@@ -204,7 +203,6 @@ class SmsIncomeFilter @Inject constructor() {
             }
         }
 
-        Log.d(TAG, "입력: ${smsList.size}건 → 결제: ${payments.size}건, 수입: ${incomes.size}건, 스킵: ${skipped.size}건")
 
         return Triple(payments, incomes, skipped)
     }
