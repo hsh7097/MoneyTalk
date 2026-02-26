@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.sms2
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
@@ -41,7 +42,6 @@ class SmsPatternMatcher @Inject constructor(
 ) {
 
     companion object {
-        private const val TAG = "SmsPatternMatcher"
 
         // ===== 유사도 임계값 (SmsPatternSimilarityPolicy 기준) =====
 
@@ -60,7 +60,7 @@ class SmsPatternMatcher @Inject constructor(
      * 코사인 유사도 = (A·B) / (|A| × |B|)
      * 범위: -1 ~ 1 (1에 가까울수록 유사)
      *
-     * 3072차원 벡터 간 연산 — O(n) 시간복잡도
+     * 768차원 벡터 간 연산 — O(n) 시간복잡도
      * RandomAccess 체크로 ArrayList 등에서 boxing/unboxing 최적화
      *
      * @param vectorA 첫 번째 벡터
@@ -127,10 +127,15 @@ class SmsPatternMatcher @Inject constructor(
      *
      * 매칭 순서:
      * 1순위: 로컬 비결제 패턴 (≥0.97) → 제외
-     * 1순위: 로컬 결제 패턴 (≥0.92) → regex 파싱
-     * 2순위: 원격 RTDB 룰 매칭 (같은 sender, ≥rule.minSimilarity) → regex 파싱
+     * 2순위: 로컬 메인 결제 패턴 (isMainGroup=true, ≥0.92) → regex 파싱
+     * 3순위: 로컬 예외 결제 패턴 (isMainGroup=false, ≥0.92) → regex 파싱
+     * 4순위: 원격 RTDB 룰 매칭 (같은 sender, ≥rule.minSimilarity) → regex 파싱
      *        매칭 성공 시 로컬 패턴에 승격 저장 (다음부터 로컬 히트)
      * 미매칭: unmatched → Step 5 (그룹핑+LLM)
+     *
+     * ※ 메인/예외 분리 이유: 같은 발신번호의 예외 패턴(예: 신한카드 대금 자동이체)이
+     *   메인 SMS(일반 KB 결제)와 유사한 임베딩을 가지므로, 예외 패턴이 메인 SMS를
+     *   가로채면 parsedCardName이 왜곡됨 (KB→신한카드). 메인 우선 매칭으로 방지.
      *
      * @param embeddedSmsList Step 3에서 임베딩 완료된 SMS 리스트
      * @return Pair(매칭+파싱 성공 결과, 미매칭 SMS 리스트)
@@ -145,11 +150,13 @@ class SmsPatternMatcher @Inject constructor(
         val nonPaymentPatterns = smsPatternDao.getAllNonPaymentPatterns()
         val paymentPatterns = smsPatternDao.getAllPaymentPatterns()
 
+        // 메인/예외 분리: 같은 발신번호의 예외 패턴이 메인 SMS를 가로채는 것을 방지
+        // 메인 패턴(isMainGroup=true)을 먼저 매칭하고, 실패 시 예외 패턴 시도
+        val (mainPaymentPatterns, exceptionPaymentPatterns) = paymentPatterns.partition { it.isMainGroup }
+
         // 원격 룰 1회 로드 (캐시 재사용, 실패 시 빈 맵)
         val remoteRules = remoteSmsRuleRepository.loadRules()
 
-        Log.d(TAG, "패턴 로드: 결제 ${paymentPatterns.size}건, 비결제 ${nonPaymentPatterns.size}건, " +
-            "원격 룰 ${remoteRules.values.sumOf { it.size }}건 (${remoteRules.size}개 발신번호)")
 
         var remoteMatchCount = 0
         var remoteFailCount = 0
@@ -162,14 +169,17 @@ class SmsPatternMatcher @Inject constructor(
                 embedded.embedding, nonPaymentPatterns, NON_PAYMENT_THRESHOLD
             )
             if (nonPaymentMatch != null) {
-                Log.d(TAG, "비결제 매칭 (${nonPaymentMatch.second}): ${embedded.input.body.take(30)}")
                 smsPatternDao.incrementMatchCount(nonPaymentMatch.first.id)
                 continue
             }
 
-            // --- [2] 결제 패턴 매칭 (1순위: 로컬) ---
+            // --- [2] 결제 패턴 매칭 (1순위: 메인 → 2순위: 예외) ---
+            // 메인 패턴을 먼저 시도하여 예외 패턴의 parsedCardName이
+            // 메인 SMS에 적용되는 것을 방지
             val paymentMatch = findBestMatch(
-                embedded.embedding, paymentPatterns, PAYMENT_MATCH_THRESHOLD
+                embedded.embedding, mainPaymentPatterns, PAYMENT_MATCH_THRESHOLD
+            ) ?: findBestMatch(
+                embedded.embedding, exceptionPaymentPatterns, PAYMENT_MATCH_THRESHOLD
             )
 
             if (paymentMatch != null) {
@@ -191,9 +201,8 @@ class SmsPatternMatcher @Inject constructor(
                         )
                     )
                     smsPatternDao.incrementMatchCount(pattern.id)
-                    Log.d(TAG, "벡터매칭 성공 ($similarity): ${analysis.storeName} ${analysis.amount}원")
                 } else {
-                    Log.w(TAG, "벡터매칭 OK ($similarity) but 파싱 실패: ${embedded.input.body.take(30)}")
+                    MoneyTalkLogger.w("벡터매칭 OK ($similarity) but 파싱 실패: ${embedded.input.body.take(30)}")
                     unmatched.add(embedded)
                 }
             } else {
@@ -210,9 +219,7 @@ class SmsPatternMatcher @Inject constructor(
             }
         }
 
-        Log.d(TAG, "매칭 결과: ${matched.size}건 성공, ${unmatched.size}건 미매칭")
         if (remoteMatchCount > 0 || remoteFailCount > 0) {
-            Log.d(TAG, "  원격 룰: 성공 ${remoteMatchCount}건, 실패 ${remoteFailCount}건")
         }
 
         // 발신번호별 매칭/미매칭 통계
@@ -222,7 +229,6 @@ class SmsPatternMatcher @Inject constructor(
         for (addr in allAddresses) {
             val m = matchedByAddr[addr]?.size ?: 0
             val u = unmatchedByAddr[addr]?.size ?: 0
-            Log.d(TAG, "  [$addr] 매칭: ${m}건, 미매칭: ${u}건")
         }
 
         return matched to unmatched
@@ -282,13 +288,9 @@ class SmsPatternMatcher @Inject constructor(
             )
 
             if (analysis == null || analysis.amount <= 0) {
-                Log.d(TAG, "원격 룰 매칭 ($similarity) but 파싱 실패: " +
-                    "ruleId=${rule.ruleId}, sender=$normalizedSender")
                 continue
             }
 
-            Log.d(TAG, "원격 룰 매칭 성공 ($similarity): ruleId=${rule.ruleId}, " +
-                "${analysis.storeName} ${analysis.amount}원 (sender=$normalizedSender)")
 
             // 로컬 패턴에 승격 저장 (동일 ruleId는 sync당 1회만)
             if (promotedRuleIds.add(rule.ruleId)) {
@@ -303,7 +305,6 @@ class SmsPatternMatcher @Inject constructor(
             )
         }
 
-        Log.d(TAG, "원격 룰 ${candidates.size}건 모두 파싱 실패: sender=$normalizedSender")
         return null
     }
 
@@ -335,10 +336,8 @@ class SmsPatternMatcher @Inject constructor(
                 confidence = similarity
             )
             smsPatternDao.insert(pattern)
-            Log.d(TAG, "원격 룰 → 로컬 승격: ruleId=${rule.ruleId}, " +
-                "${analysis.cardName} ${analysis.storeName}")
         } catch (e: Exception) {
-            Log.w(TAG, "로컬 승격 실패 (무시): ${e.message}")
+            MoneyTalkLogger.w("로컬 승격 실패 (무시): ${e.message}")
         }
     }
 
@@ -368,6 +367,17 @@ class SmsPatternMatcher @Inject constructor(
     /** 카드명으로 부적절한 키워드 */
     private val CARD_INVALID_KEYWORDS = listOf(
         "web발신", "국외발신", "국제발신", "해외발신", "광고", "안내", "알림"
+    )
+
+    /**
+     * SMS 본문에서 은행/카드사 태그 추출 패턴
+     *
+     * [KB], [신한카드] 등 대괄호 안의 은행/카드사 식별자.
+     * cardRegex 실패 시 fallbackCardName 전에 시도하는 중간 폴백.
+     * [Web발신], [국외발신] 등 비은행 태그는 제외.
+     */
+    private val BANK_TAG_PATTERN = Regex(
+        """\[(KB|신한카드|신한|우리|하나|삼성카드|삼성|현대카드|현대|롯데카드|롯데|IBK|NH|농협|BC|카카오뱅크|토스뱅크|토스|SC|씨티|수협|대구|부산|광주|전북|경남|제주)\]"""
     )
 
     /** 날짜/시간 추출 패턴 (MM/DD HH:mm 등) */
@@ -408,7 +418,6 @@ class SmsPatternMatcher @Inject constructor(
         // regex 없거나 파싱 실패 → 미매칭 처리 (Step 5 LLM으로 위임)
         // ※ 캐시값(parsedAmount/StoreName)을 폴백으로 사용하면
         //    다른 SMS에 첫 번째 패턴의 가게명/금액이 덮어씌워지는 버그 발생
-        Log.d(TAG, "regex 파싱 실패 → 미매칭: ${body.take(30)}")
         return null
     }
 
@@ -452,10 +461,13 @@ class SmsPatternMatcher @Inject constructor(
             ?: return null
 
         // --- 카드명 추출 ---
-        // cardRegex 실패 시 패턴/LLM에서 추출된 카드명을 fallback으로 사용
+        // cardRegex 실패 시: 은행 태그([KB] 등) → fallbackCardName 순으로 폴백
+        // 은행 태그 중간 폴백: 출금 SMS 등에서 cardRegex가 수취인(신한카드)을
+        // 잘못 캡처하거나 빈 경우, [KB] 태그에서 정확한 은행명을 추출
         val parsedCard = extractGroup1(cardPattern, smsBody)
             ?.trim()
             ?.takeIf(::isValidCardCandidate)
+            ?: extractBankTagFromBody(smsBody)
             ?: fallbackCardName
 
         // --- 카테고리 ---
@@ -486,7 +498,7 @@ class SmsPatternMatcher @Inject constructor(
             regexCache[pattern] = compiled
             compiled
         } catch (e: Exception) {
-            Log.w(TAG, "정규식 컴파일 실패: ${pattern.take(80)} (${e.message})")
+            MoneyTalkLogger.w("정규식 컴파일 실패: ${pattern.take(80)} (${e.message})")
             null
         }
     }
@@ -554,6 +566,21 @@ class SmsPatternMatcher @Inject constructor(
         val lower = trimmed.lowercase()
         if (CARD_INVALID_KEYWORDS.any { lower.contains(it) }) return false
         return true
+    }
+
+    /**
+     * SMS 본문에서 은행/카드사 태그 추출
+     *
+     * [KB], [신한카드] 등 대괄호 안의 은행/카드사 식별자를 추출.
+     * 은행 출금 SMS 등에서 cardRegex가 수취인명을 잘못 캡처하거나
+     * 빈 경우, 발신 은행 태그에서 정확한 식별자를 추출하는 중간 폴백.
+     *
+     * @param smsBody 원본 SMS 본문
+     * @return 은행/카드사 식별자 (예: "KB", "신한카드") 또는 null
+     */
+    private fun extractBankTagFromBody(smsBody: String): String? {
+        val match = BANK_TAG_PATTERN.find(smsBody) ?: return null
+        return match.groupValues[1].takeIf { it.isNotBlank() }
     }
 
     /**

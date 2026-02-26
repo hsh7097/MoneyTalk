@@ -1,7 +1,8 @@
 package com.sanha.moneytalk.core.di
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import android.content.Context
-import android.util.Log
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.database.FirebaseDatabase
@@ -18,7 +19,6 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object FirebaseModule {
 
-    private const val TAG = "FirebaseModule"
 
     @Provides
     @Singleton
@@ -26,7 +26,7 @@ object FirebaseModule {
         return try {
             FirebaseAnalytics.getInstance(context)
         } catch (e: Exception) {
-            Log.w(TAG, "FirebaseAnalytics 초기화 실패: ${e.message}")
+            MoneyTalkLogger.w("FirebaseAnalytics 초기화 실패: ${e.message}")
             null
         }
     }
@@ -37,7 +37,7 @@ object FirebaseModule {
         return try {
             FirebaseDatabase.getInstance()
         } catch (e: Exception) {
-            Log.w(TAG, "FirebaseDatabase 초기화 실패: ${e.message}")
+            MoneyTalkLogger.w("FirebaseDatabase 초기화 실패: ${e.message}")
             null
         }
     }
@@ -48,7 +48,7 @@ object FirebaseModule {
         return try {
             FirebaseCrashlytics.getInstance()
         } catch (e: Exception) {
-            Log.w(TAG, "FirebaseCrashlytics 초기화 실패: ${e.message}")
+            MoneyTalkLogger.w("FirebaseCrashlytics 초기화 실패: ${e.message}")
             null
         }
     }
@@ -64,7 +64,7 @@ object FirebaseModule {
             config.setConfigSettingsAsync(configSettings)
             config
         } catch (e: Exception) {
-            Log.w(TAG, "FirebaseRemoteConfig 초기화 실패: ${e.message}")
+            MoneyTalkLogger.w("FirebaseRemoteConfig 초기화 실패: ${e.message}")
             null
         }
     }

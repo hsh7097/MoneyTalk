@@ -32,7 +32,7 @@ List<SmsInput> (원본 보존)
 │    ┌──────────────────────────────────────────────────┐   │
 │    │ Step 3: batchEmbed()                              │   │
 │    │   SmsTemplateEngine.templateize() → 플레이스홀더    │   │
-│    │   SmsTemplateEngine.batchEmbed() → 3072차원 벡터   │   │
+│    │   SmsTemplateEngine.batchEmbed() → 768차원 벡터   │   │
 │    │   100건씩 배치 × Semaphore(10) 병렬                │   │
 │    │                                                    │   │
 │    │ Step 4: SmsPatternMatcher.matchPatterns()          │   │
@@ -321,7 +321,7 @@ SmsSyncCoordinator 경유 시 Step 2는 `skipPreFilter=true`로 스킵.
 
 ### 임베딩 생성 — `batchEmbed(templates)`
 
-Gemini Embedding API (모델명은 Firebase RTDB에서 원격 관리, 기본 `gemini-embedding-001`, 3072차원).
+Gemini Embedding API (모델명은 Firebase RTDB에서 원격 관리, 기본 `gemini-embedding-001`, 768차원).
 
 | 메소드 | API | 용도 |
 |--------|-----|------|
@@ -433,7 +433,7 @@ regex 없거나 파싱 실패:
 data class RemoteSmsRule(
     val ruleId: String,                    // RTDB 룰 고유 ID
     val normalizedSenderAddress: String,   // 정규화된 발신번호
-    val embedding: List<Float>,            // 3072차원 임베딩 벡터
+    val embedding: List<Float>,            // 768차원 임베딩 벡터
     val amountRegex: String,               // 금액 추출 정규식
     val storeRegex: String,                // 가게명 추출 정규식
     val cardRegex: String = "",            // 카드명 추출 정규식 (선택)
@@ -765,7 +765,7 @@ data class SmsInput(
 data class EmbeddedSms(
     val input: SmsInput,         // 원본 포함
     val template: String,        // 플레이스홀더 템플릿
-    val embedding: List<Float>   // 3072차원 벡터
+    val embedding: List<Float>   // 768차원 벡터
 )
 ```
 
@@ -807,7 +807,7 @@ enum class SmsType { PAYMENT, INCOME, SKIP }
 | id | Long (PK) | 자동 증가 ID |
 | smsTemplate | String | 템플릿화된 SMS 본문 ({AMOUNT}, {DATE}, {TIME}, {STORE}, {BALANCE}, {CARD_NUM}) |
 | senderAddress | String | 발신 번호 **(normalizeAddress로 정규화)** |
-| embedding | List<Float> → JSON | 임베딩 벡터 (3072차원) |
+| embedding | List<Float> → JSON | 임베딩 벡터 (768차원) |
 | isPayment | Boolean | 결제 여부 (true: 결제, false: 비결제) |
 | parsedAmount | Int | 캐시된 결제 금액 |
 | parsedStoreName | String | 캐시된 가게명 |
@@ -890,7 +890,7 @@ sms_samples/
       ├── senderAddress: String             # 원본 발신번호 (표본 추적용)
       ├── normalizedSenderAddress: String   # 정규화된 발신번호 (룰 그룹핑 키)
       ├── parseSource: String               # 파싱 소스 (llm_regex만 regex 신뢰 가능)
-      ├── embedding: List<Float>            # 3072차원 임베딩 (코사인 유사도 매칭 핵심)
+      ├── embedding: List<Float>            # 768차원 임베딩 (코사인 유사도 매칭 핵심)
       ├── groupMemberCount: Int             # 관측 SMS 수 (신뢰도 판단)
       ├── amountRegex: String?              # 검증된 금액 regex (llm_regex인 경우)
       ├── storeRegex: String?               # 검증된 가게명 regex

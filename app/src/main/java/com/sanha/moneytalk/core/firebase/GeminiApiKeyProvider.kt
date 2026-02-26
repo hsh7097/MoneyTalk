@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.core.firebase
 
-import android.util.Log
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -26,9 +25,6 @@ import javax.inject.Singleton
 class GeminiApiKeyProvider @Inject constructor(
     private val premiumManager: PremiumManager
 ) {
-    companion object {
-        private const val TAG = "GeminiApiKeyProvider"
-    }
 
     /**
      * 현재 유효한 API 키를 라운드로빈으로 반환

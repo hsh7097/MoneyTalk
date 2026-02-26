@@ -1080,7 +1080,7 @@ SpendingTrendInfo (interface)
 | ChatSessionEntity | auto | title, currentSummary, createdAt, updatedAt |
 | CategoryMappingEntity | storeName | category, confidence |
 | SmsPatternEntity | embedding | amountRegex, storeRegex, cardRegex, senderAddress |
-| StoreEmbeddingEntity | storeName | embedding(3072), category, confidence |
+| StoreEmbeddingEntity | storeName | embedding(768), category, confidence |
 | OwnedCardEntity | cardName | isOwned, seenCount, source |
 | SmsExclusionKeywordEntity | keyword | source, createdAt |
 

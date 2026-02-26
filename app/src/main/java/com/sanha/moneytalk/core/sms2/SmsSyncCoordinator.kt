@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.sms2
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,10 +40,6 @@ class SmsSyncCoordinator @Inject constructor(
     private val incomeFilter: SmsIncomeFilter,
     private val pipeline: SmsPipeline
 ) {
-
-    companion object {
-        private const val TAG = "SmsSyncCoordinator"
-    }
 
     /**
      * ★ sms2 패키지의 유일한 외부 진입점 ★
@@ -86,14 +83,14 @@ class SmsSyncCoordinator @Inject constructor(
                 stats = SyncStats()
             )
         }
+        MoneyTalkLogger.i("SmsSyncCoordinator 시작: 입력 ${smsList.size}건")
 
-        Log.d(TAG, "=== process 시작: ${smsList.size}건 ===")
 
         // Step 0: 사전 필터링 (광고, 인증번호, 배송 알림 등 비결제 SMS 제거)
         // SmsPipeline 진입 전에 여기서 처리 → 불필요한 분류/임베딩 방지
         onProgress?.invoke(SmsPipeline.STEP_FILTER, "문자 분류 준비 중...", 0, smsList.size)
         val filtered = preFilter.filter(smsList)
-        Log.d(TAG, "사전 필터링: ${smsList.size}건 → ${filtered.size}건 (${smsList.size - filtered.size}건 제외)")
+        MoneyTalkLogger.i("Step0 PreFilter: ${smsList.size}건 → ${filtered.size}건")
 
         if (filtered.isEmpty()) {
             return SyncResult(
@@ -106,8 +103,9 @@ class SmsSyncCoordinator @Inject constructor(
         // Step 1: 수입/결제 분류 (필터 통과한 SMS만 대상)
         onProgress?.invoke(SmsPipeline.STEP_FILTER, "결제 문자 찾는 중...", 0, filtered.size)
         val (paymentCandidates, incomeCandidates, skipped) = incomeFilter.classifyAll(filtered)
+        MoneyTalkLogger.i("Step1 IncomeFilter: 결제 ${paymentCandidates.size}건, 수입 ${incomeCandidates.size}건, 스킵 ${skipped.size}건"
+        )
 
-        Log.d(TAG, "분류: 결제 ${paymentCandidates.size}건, 수입 ${incomeCandidates.size}건, 스킵 ${skipped.size}건")
 
         // Step 2: 결제 후보를 SmsPipeline에 전달 (사전 필터링 스킵)
         val pipelineResult = if (paymentCandidates.isNotEmpty()) {
@@ -126,8 +124,9 @@ class SmsSyncCoordinator @Inject constructor(
             llmProcessCount = pipelineResult.llmProcessCount,
             newPatternsCreated = pipelineResult.llmProcessCount
         )
+        MoneyTalkLogger.i("SmsSyncCoordinator 완료: 지출 ${pipelineResult.results.size}건, 수입 ${incomeCandidates.size}건"
+        )
 
-        Log.d(TAG, "=== 완료: 입력 ${smsList.size}건 → 지출 ${pipelineResult.results.size}건 + 수입 ${incomeCandidates.size}건 ===")
 
         return SyncResult(
             expenses = pipelineResult.results,

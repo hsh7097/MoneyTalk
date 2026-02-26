@@ -43,6 +43,93 @@
 
 ---
 
+## 2026-02-26 - SmsGroupClassifier 품질 개선
+
+### 작업 내용
+
+#### 소그룹 병합 유사도 상향 (0.70 → 0.90)
+- 서로 다른 SMS 형식(카드 승인 vs 카드 대금 출금)이 하나로 병합되는 문제 방지
+- 같은 발신번호(예: KB 16449999)의 "일반 출금"과 "신한카드 대금 출금"이 메인 그룹으로 합쳐져 전체가 "신한카드"로 태깅되는 근본 원인
+
+#### RTDB 표본 수집 품질 개선
+- template 필드 추가: 표본에 `embedded.template` 포함
+- regex 존재 가드: `amountRegex.isNotBlank() && storeRegex.isNotBlank()` 일 때만 수집 (무용 표본 제거)
+- 기존 `hasVerifiedRegex = source in listOf("llm_regex")` 방식이 "template_regex" 소스를 제외하고 "llm" 소스의 빈 regex 표본을 수집하는 버그 수정
+
+#### LLM 프롬프트 개선
+- buildContextualLlmInput: "이 SMS는 아래 발신번호의 예외 케이스입니다" → "같은 발신번호의 메인 케이스입니다. 아래를 참조하여 비슷한 형태로 분석하세요."
+- "예외 케이스"라는 표현이 LLM에게 다른 형태로 분석하라는 오해를 줄 수 있으므로 "메인 케이스 참조"로 변경
+
+#### MainCaseContext 확장
+- `sample: String` → `samples: List<String>` (3건까지 전달)
+- buildContextualLlmInput에 메인 템플릿 + 메인 샘플 3건을 포함하여 LLM 분석 정확도 향상
+- sampleBody 참조도 `mainContext.samples.firstOrNull()`로 갱신
+
+### 변경 파일
+- `SmsGroupClassifier.kt` — SMALL_GROUP_MERGE_MIN_SIMILARITY 0.70→0.90, RTDB template 추가, regex 가드, 프롬프트 개선, MainCaseContext.samples
+- `GeminiSmsExtractor.kt` — 프롬프트 디버깅 로그 추가
+- `AI_CONTEXT.md` — 임계값 레지스트리 수직 스케일 0.70→0.90 갱신
+
+### 결정 사항
+- "출금"만으로 PAYMENT 통과하는 것은 정상 로직 (은행 출금 알림도 실제 지출이므로)
+- KB 은행 SMS에 "신한카드"가 표시되는 것은 신한카드 대금이 KB 계좌에서 출금되는 정상 케이스
+- 근본 문제는 메인 그룹 대표 SMS가 "카드 대금 출금" 알림일 때 그 cardName이 전체 그룹에 전파되는 구조 — 유사도 상향으로 그룹 분리 유도
+
+---
+
+## 2026-02-25 - 임베딩 차원 축소 (3072 → 768)
+
+### 작업 내용
+
+#### 임베딩 차원 768 변경
+- Gemini Embedding API `outputDimensionality=768` 파라미터 설정
+- Matryoshka Representation Learning 활용 — 3072→768 축소 시 MTEB 품질 손실 0.26%
+- 변경 이유: 저장/전송 크기 75% 절감, 코사인 유사도 연산 75% 감소, RTDB 대역폭 절약
+
+#### 변경 파일 (코드 4개)
+- `SmsEmbeddingService.kt` — `EMBEDDING_DIMENSION=768` 상수 추가, embedContent/batchEmbedContents에 outputDimensionality 설정
+- `SmsTemplateEngine.kt` — batchEmbedContents에 outputDimensionality 설정
+- `DatabaseMigrations.kt` — v3→v4 마이그레이션 (sms_patterns, store_embeddings 데이터 삭제)
+- `AppDatabase.kt` — version 3→4, `DatabaseModule.kt` — MIGRATION_3_4 등록
+
+#### 코드 주석 갱신 (6개)
+- `RemoteSmsRule.kt`, `SmsGroupClassifier.kt`, `SmsPatternMatcher.kt`
+- `SmsPipeline.kt`, `SmsPipelineModels.kt`, `SmsTemplateEngine.kt`
+
+#### 문서 갱신 (6개)
+- `SMS_PARSING.md` — 6건 3072→768
+- `CATEGORY_CLASSIFICATION.md`, `PROJECT_CONTEXT.md` (2건), `SCREEN_REQUIREMENTS.md`
+- `AI_HANDOFF.md` — DB 버전 v3→v4, 완료 작업 추가
+
+### 결정 사항
+- 768차원 선택 이유: Gemini의 Matryoshka 지원으로 별도 모델 변경 없이 축소 가능, 0.26% 품질 손실은 SMS/가게명 유사도 매칭에 무시 가능한 수준
+- DB 마이그레이션 전략: DELETE (테이블 유지, 데이터만 삭제) — 재동기화 시 768차원으로 자동 재생성
+- RTDB 기존 표본 주의: sms_samples에 수집된 3072차원 임베딩은 새 768차원과 호환 불가. 추후 큐레이션 시 768차원으로 재임베딩 필요
+
+---
+
+## 2026-02-25 - PR #33 MainViewModel 리팩토링 리뷰 확인
+
+### 작업 내용
+
+#### PR #33 Codex 리뷰 확인
+- `refactor/main-viewmodel` 브랜치 PR #33에 Codex 봇 리뷰 1건 확인
+- P2: `onAppResume()`에서 SMS 권한 없을 때 `DataRefreshEvent`를 emit하지 않아 수동 입력 데이터 갱신 누락 가능성 지적
+- 분석: 편집 화면(카테고리 변경, 상세 편집 등)은 자체적으로 refresh 이벤트를 발행하므로 실질적 문제 발생 가능성 낮음
+
+#### 매 진입 시 권한 재요청 팝업 검토
+- 현재 PermissionScreen은 첫 실행 시 1회만 표시 (onboardingCompleted 마킹)
+- 매번 표시 방안 검토 → 기각
+  - UX 피로감: 거부한 사용자에게 반복 노출 시 이탈 유발
+  - Google Play 정책: "disruptive permissions request" 위반 가능성
+  - 시스템 제한: 2회 거부 시 "다시 묻지 않기"로 전환되어 팝업 자체가 안 뜸
+
+### 결정 사항
+- Codex P2 리뷰: 현행 유지 (코드 수정 없음)
+- 권한 재요청 UX: 현행 유지 (첫 실행 시 1회 + 기능 사용 시 시스템 다이얼로그)
+
+---
+
 ## 2026-02-24 - Vico 차트 수정 + 홈 UI 간소화
 
 ### 작업 내용

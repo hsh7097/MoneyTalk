@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.core.database
 
-import android.util.Log
 import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
 import com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity
 import javax.inject.Inject
@@ -17,9 +16,6 @@ import javax.inject.Singleton
 class SmsExclusionRepository @Inject constructor(
     private val dao: SmsExclusionKeywordDao
 ) {
-    companion object {
-        private const val TAG = "SmsExclusion"
-    }
 
     /** 인메모리 캐시 (사용자/채팅 키워드만, lowercase) */
     private var cachedUserKeywords: Set<String>? = null
@@ -71,7 +67,6 @@ class SmsExclusionRepository @Inject constructor(
             )
         )
         invalidateCache()
-        Log.d(TAG, "키워드 추가: $normalized (source=$source)")
         return true
     }
 
@@ -84,7 +79,6 @@ class SmsExclusionRepository @Inject constructor(
         val deleted = dao.deleteByKeyword(normalized)
         if (deleted > 0) {
             invalidateCache()
-            Log.d(TAG, "키워드 삭제: $normalized")
         }
         return deleted
     }

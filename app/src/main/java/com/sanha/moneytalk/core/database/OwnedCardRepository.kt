@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.core.database
 
-import android.util.Log
 import com.sanha.moneytalk.core.database.dao.OwnedCardDao
 import com.sanha.moneytalk.core.database.entity.OwnedCardEntity
 import com.sanha.moneytalk.core.util.CardNameNormalizer
@@ -20,9 +19,6 @@ import javax.inject.Singleton
 class OwnedCardRepository @Inject constructor(
     private val ownedCardDao: OwnedCardDao
 ) {
-    companion object {
-        private const val TAG = "OwnedCard"
-    }
 
     /** 모든 카드 목록 (Flow) */
     fun getAllCards(): Flow<List<OwnedCardEntity>> = ownedCardDao.getAllCards()
@@ -36,7 +32,6 @@ class OwnedCardRepository @Inject constructor(
     /** 내 카드 여부 변경 */
     suspend fun updateOwnership(cardName: String, isOwned: Boolean) {
         ownedCardDao.updateOwnership(cardName, isOwned)
-        Log.d(TAG, "카드 소유 변경: $cardName → isOwned=$isOwned")
     }
 
     /** 내 카드 필터링 활성화 여부 */
@@ -76,7 +71,6 @@ class OwnedCardRepository @Inject constructor(
                         source = "sms_sync"
                     )
                 )
-                Log.d(TAG, "새 카드 자동 등록: $normalizedName (발견 ${count}건)")
             }
         }
     }

@@ -38,14 +38,14 @@ data class SmsInput(
  * - input.body: 원본 (파싱/LLM에 사용)
  * - template: 금액/날짜/가게명을 플레이스홀더로 치환한 텍스트 (임베딩 생성용)
  *   예: "[KB]{DATE} {TIME} {STORE} 체크카드출금 {AMOUNT} 잔액{AMOUNT}"
- * - embedding: template로부터 생성된 3072차원 벡터 (유사도 비교 + 그룹핑)
+ * - embedding: template로부터 생성된 768차원 벡터 (유사도 비교 + 그룹핑)
  */
 data class EmbeddedSms(
     /** ★ 원본 포함 (input.body로 접근) */
     val input: SmsInput,
     /** 템플릿화된 텍스트 (SmsTemplateEngine.templateize 결과) */
     val template: String,
-    /** 3072차원 임베딩 벡터 (SmsEmbeddingService.generateEmbeddings 결과) */
+    /** 768차원 임베딩 벡터 (SmsEmbeddingService.generateEmbeddings 결과) */
     val embedding: List<Float>
 )
 
