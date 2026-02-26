@@ -21,7 +21,6 @@ class ChatRepositoryImpl @Inject constructor(
 ) : ChatRepository {
 
     companion object {
-        private const val TAG = "MoneyTalkLog"
         private const val WINDOW_SIZE_TURNS = 3      // 최근 3턴 유지
         private const val WINDOW_SIZE_MESSAGES = 6   // 3턴 = 6메시지 (사용자+AI)
     }

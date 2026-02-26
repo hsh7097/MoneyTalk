@@ -25,7 +25,6 @@ class ForceUpdateChecker @Inject constructor(
     private val premiumManager: PremiumManager
 ) {
     companion object {
-        private const val TAG = "MoneyTalkLog"
 
         /**
          * 버전명 비교 (semantic versioning)

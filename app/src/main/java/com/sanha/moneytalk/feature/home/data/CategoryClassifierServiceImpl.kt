@@ -38,7 +38,6 @@ class CategoryClassifierServiceImpl @Inject constructor(
     private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider
 ) : CategoryClassifierService {
     companion object {
-        private const val TAG = "MoneyTalkLog"
 
         /**
          * Gemini 호출 전 로컬 룰로 사전 분류 가능한 패턴

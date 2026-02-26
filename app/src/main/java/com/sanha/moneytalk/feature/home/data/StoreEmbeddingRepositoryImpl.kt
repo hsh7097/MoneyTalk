@@ -48,7 +48,6 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
 ) : StoreEmbeddingRepository {
 
     companion object {
-        private const val TAG = "MoneyTalkLog"
 
         /** 임베딩 배치 병렬 동시 실행 수 (API 키 5개 × 키당 2 = 10) */
         private const val EMBEDDING_CONCURRENCY = 10

@@ -78,7 +78,6 @@ class MainViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        private const val TAG = "MoneyTalkLog"
 
         /** DB 배치 삽입 크기 */
         private const val DB_BATCH_INSERT_SIZE = 100

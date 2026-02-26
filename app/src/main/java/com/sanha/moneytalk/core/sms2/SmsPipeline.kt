@@ -65,7 +65,6 @@ class SmsPipeline @Inject constructor(
 ) {
 
     companion object {
-        private const val TAG = "MoneyTalkLog"
 
         /** 배치 임베딩 크기 (batchEmbedContents API 최대 100) */
         private const val EMBEDDING_BATCH_SIZE = 100

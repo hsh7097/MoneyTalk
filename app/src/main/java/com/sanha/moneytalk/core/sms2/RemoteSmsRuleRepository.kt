@@ -28,7 +28,6 @@ class RemoteSmsRuleRepository @Inject constructor(
     private val database: FirebaseDatabase?
 ) {
     companion object {
-        private const val TAG = "MoneyTalkLog"
 
         /** RTDB 규칙 경로 */
         private const val RULES_PATH = "sms_regex_rules/v1"

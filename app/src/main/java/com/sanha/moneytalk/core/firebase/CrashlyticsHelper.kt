@@ -13,7 +13,6 @@ import com.google.firebase.crashlytics.FirebaseCrashlytics
  * - 사용자 식별 정보 설정
  */
 object CrashlyticsHelper {
-    private const val TAG = "MoneyTalkLog"
 
     private val crashlytics: FirebaseCrashlytics
         get() = FirebaseCrashlytics.getInstance()

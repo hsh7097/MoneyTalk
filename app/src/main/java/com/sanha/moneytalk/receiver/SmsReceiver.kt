@@ -24,10 +24,6 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class SmsReceiver : BroadcastReceiver() {
 
-    companion object {
-        private const val TAG = "MoneyTalkLog"
-    }
-
     @Inject
     lateinit var dataRefreshEvent: DataRefreshEvent
 

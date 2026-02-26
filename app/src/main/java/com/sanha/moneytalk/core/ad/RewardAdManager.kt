@@ -54,7 +54,6 @@ class RewardAdManager @Inject constructor(
     private val premiumManager: PremiumManager
 ) {
     companion object {
-        private const val TAG = "MoneyTalkLog"
         /** Google 공식 테스트 리워드 광고 ID */
         private const val TEST_REWARD_AD_ID = "ca-app-pub-3940256099942544/5224354917"
         private const val MAX_RETRY_COUNT = 3

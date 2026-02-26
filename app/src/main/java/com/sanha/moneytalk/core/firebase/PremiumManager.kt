@@ -50,7 +50,6 @@ class PremiumManager @Inject constructor(
     private val settingsDataStore: SettingsDataStore
 ) {
     companion object {
-        private const val TAG = "MoneyTalkLog"
         private const val CONFIG_PATH = "config"
     }
 

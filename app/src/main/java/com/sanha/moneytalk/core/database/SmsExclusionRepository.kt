@@ -16,9 +16,6 @@ import javax.inject.Singleton
 class SmsExclusionRepository @Inject constructor(
     private val dao: SmsExclusionKeywordDao
 ) {
-    companion object {
-        private const val TAG = "MoneyTalkLog"
-    }
 
     /** 인메모리 캐시 (사용자/채팅 키워드만, lowercase) */
     private var cachedUserKeywords: Set<String>? = null

@@ -74,7 +74,6 @@ class CategoryDetailViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        private const val TAG = "MoneyTalkLog"
         /** 페이지 캐시 최대 허용 범위 (현재 월 ± 이 값) */
         private const val PAGE_CACHE_RANGE = 2
     }

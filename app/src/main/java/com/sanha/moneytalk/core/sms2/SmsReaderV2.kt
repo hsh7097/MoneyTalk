@@ -26,7 +26,6 @@ import javax.inject.Singleton
 class SmsReaderV2 @Inject constructor() {
 
     companion object {
-        private const val TAG = "MoneyTalkLog"
 
         // MMS URI
         private val MMS_INBOX_URI = Uri.parse("content://mms/inbox")

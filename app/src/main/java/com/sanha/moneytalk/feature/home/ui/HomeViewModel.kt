@@ -128,7 +128,6 @@ class HomeViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        private const val TAG = "MoneyTalkLog"
 
         /** 기본 조회 기간 (1년, 밀리초) */
         private const val ONE_YEAR_MILLIS = 365L * 24 * 60 * 60 * 1000

@@ -37,7 +37,6 @@ class StoreNameGrouper @Inject constructor(
     private val embeddingService: SmsEmbeddingService
 ) {
     companion object {
-        private const val TAG = "MoneyTalkLog"
 
         /** 배치 임베딩 한 번에 처리할 최대 개수 (batchEmbedContents 최대 100) */
         private const val EMBEDDING_BATCH_SIZE = 100

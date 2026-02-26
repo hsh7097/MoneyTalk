@@ -42,7 +42,6 @@ class SmsPatternMatcher @Inject constructor(
 ) {
 
     companion object {
-        private const val TAG = "MoneyTalkLog"
 
         // ===== 유사도 임계값 (SmsPatternSimilarityPolicy 기준) =====
 

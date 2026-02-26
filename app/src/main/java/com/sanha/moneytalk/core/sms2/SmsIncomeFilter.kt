@@ -33,7 +33,6 @@ import javax.inject.Singleton
 class SmsIncomeFilter @Inject constructor() {
 
     companion object {
-        private const val TAG = "MoneyTalkLog"
         /** SMS 최대 길이 (일반 결제 SMS는 40~100자, 안내/광고성은 130자 이상) */
         private const val MAX_SMS_LENGTH = 130
     }

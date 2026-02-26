@@ -24,7 +24,6 @@ class CategoryReferenceProvider @Inject constructor(
     private val categoryMappingDao: CategoryMappingDao
 ) {
     companion object {
-        private const val TAG = "MoneyTalkLog"
 
         /** 참조 리스트에 포함할 최대 항목 수 (프롬프트 크기 제한) */
         private const val MAX_REFERENCE_ITEMS = 50

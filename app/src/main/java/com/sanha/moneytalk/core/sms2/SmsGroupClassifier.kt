@@ -69,7 +69,6 @@ class SmsGroupClassifier @Inject constructor(
 ) {
 
     companion object {
-        private const val TAG = "MoneyTalkLog"
 
         /** LLM 배치 크기 (한 번에 LLM에 보내는 그룹 대표 수) */
         private const val LLM_BATCH_SIZE = 20

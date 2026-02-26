@@ -19,9 +19,6 @@ import javax.inject.Singleton
 class OwnedCardRepository @Inject constructor(
     private val ownedCardDao: OwnedCardDao
 ) {
-    companion object {
-        private const val TAG = "MoneyTalkLog"
-    }
 
     /** 모든 카드 목록 (Flow) */
     fun getAllCards(): Flow<List<OwnedCardEntity>> = ownedCardDao.getAllCards()

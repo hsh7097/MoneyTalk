@@ -20,7 +20,6 @@ class AnalyticsHelper @Inject constructor(
     private val analytics: FirebaseAnalytics?
 ) {
     private companion object {
-        const val TAG = "MoneyTalkLog"
         const val EVENT_CLICK = "click"
         const val PARAM_BUTTON_NAME = "button_name"
     }

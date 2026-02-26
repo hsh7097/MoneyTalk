@@ -37,26 +37,12 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
     private val apiKeyProvider: GeminiApiKeyProvider
 ) : GeminiCategoryRepository {
     companion object {
-        private const val TAG = "MoneyTalkLog"
         private const val BATCH_SIZE = 50
         private const val MAX_RETRIES = 3
         /** LLM 배치 병렬 동시 실행 수 (API 키 5개 × 키당 1 = 5, LLM은 임베딩보다 무거움) */
         private const val LLM_CONCURRENCY = 5
         private const val RETRY_BASE_DELAY_MS = 1000L  // 재시도 기본 딜레이 (1초)
         private const val MAX_RETRY_DELAY_MS = 30000L  // 최대 30초 딜레이
-        private const val MAX_LOG_LENGTH = 3000     // Logcat 한 줄 최대 길이
-
-        /**
-         * 긴 문자열을 Logcat에서 잘리지 않도록 분할 출력
-         */
-        private fun logLongString(tag: String, label: String, text: String) {
-            if (text.length <= MAX_LOG_LENGTH) {
-            } else {
-                val chunks = text.chunked(MAX_LOG_LENGTH)
-                chunks.forEachIndexed { index, chunk ->
-                }
-            }
-        }
     }
 
     private var generativeModel: GenerativeModel? = null
@@ -202,18 +188,11 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             try {
                 val prompt = buildClassificationPrompt(batch, categories, referenceText)
 
-                logLongString(TAG, "PROMPT", prompt)
-
                 val startTime = System.currentTimeMillis()
                 val response = model.generateContent(prompt)
                 val elapsed = System.currentTimeMillis() - startTime
 
                 val text = response.text
-
-                if (text != null) {
-                    logLongString(TAG, "RESPONSE", text)
-                } else {
-                }
 
                 if (text != null) {
                     val parsed = parseClassificationResponse(text, batch)

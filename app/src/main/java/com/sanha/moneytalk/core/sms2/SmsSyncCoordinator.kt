@@ -41,10 +41,6 @@ class SmsSyncCoordinator @Inject constructor(
     private val pipeline: SmsPipeline
 ) {
 
-    companion object {
-        private const val TAG = "MoneyTalkLog"
-    }
-
     /**
      * ★ sms2 패키지의 유일한 외부 진입점 ★
      *

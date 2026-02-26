@@ -46,10 +46,6 @@ class GeminiRepositoryImpl @Inject constructor(
     // 요약 전용 모델
     private var summaryModel: GenerativeModel? = null
 
-    companion object {
-        private const val TAG = "MoneyTalkLog"
-    }
-
     // API 키 또는 모델 설정 변경 감지 → 모델 재생성
     private suspend fun getApiKey(): String {
         val key = apiKeyProvider.getApiKey()

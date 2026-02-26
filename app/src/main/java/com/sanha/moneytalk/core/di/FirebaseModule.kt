@@ -19,7 +19,6 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object FirebaseModule {
 
-    private const val TAG = "MoneyTalkLog"
 
     @Provides
     @Singleton

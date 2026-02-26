@@ -39,7 +39,6 @@ class GeminiSmsExtractor @Inject constructor(
     private val apiKeyProvider: GeminiApiKeyProvider
 ) {
     companion object {
-        private const val TAG = "MoneyTalkLog"
 
         /** 배치 추출 최대 재시도 */
         private const val BATCH_MAX_RETRIES = 2

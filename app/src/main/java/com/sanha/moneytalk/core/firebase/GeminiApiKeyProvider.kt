@@ -25,9 +25,6 @@ import javax.inject.Singleton
 class GeminiApiKeyProvider @Inject constructor(
     private val premiumManager: PremiumManager
 ) {
-    companion object {
-        private const val TAG = "MoneyTalkLog"
-    }
 
     /**
      * 현재 유효한 API 키를 라운드로빈으로 반환

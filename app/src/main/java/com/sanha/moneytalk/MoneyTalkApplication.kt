@@ -13,10 +13,6 @@ import javax.inject.Inject
 @HiltAndroidApp
 class MoneyTalkApplication : Application() {
 
-    companion object {
-        private const val TAG = "MoneyTalkLog"
-    }
-
     @Inject
     lateinit var premiumManager: PremiumManager
 

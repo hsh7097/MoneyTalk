@@ -42,7 +42,6 @@ class SmsTemplateEngine @Inject constructor(
 ) {
 
     companion object {
-        private const val TAG = "MoneyTalkLog"
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
         /** 429 Rate Limit 재시도 최대 횟수 */

@@ -154,7 +154,6 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        private const val TAG = "MoneyTalkLog"
     }
 
     private val _uiState = MutableStateFlow(SettingsUiState())

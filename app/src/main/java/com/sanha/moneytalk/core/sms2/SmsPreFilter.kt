@@ -21,7 +21,6 @@ import javax.inject.Singleton
 class SmsPreFilter @Inject constructor() {
 
     companion object {
-        private const val TAG = "MoneyTalkLog"
 
         /**
          * 비결제 SMS 키워드 (통합)
