@@ -108,6 +108,13 @@ class ExpenseRepository @Inject constructor(
     /** 모든 SMS ID 조회 (배치 중복 체크용 인메모리 Set 구성) */
     suspend fun getAllSmsIds(): Set<String> = expenseDao.getAllSmsIds().toHashSet()
 
+    /** 주어진 smsId 목록 중 이미 저장된 항목 조회 (중복 체크 최적화) */
+    suspend fun getExistingSmsIds(smsIds: List<String>): Set<String> =
+        expenseDao.getExistingSmsIds(smsIds).toHashSet()
+
+    /** 전체 지출 건수 조회 */
+    suspend fun getExpenseCount(): Int = expenseDao.getExpenseCount()
+
     // ========================
     // 통계 집계 메소드
     // ========================

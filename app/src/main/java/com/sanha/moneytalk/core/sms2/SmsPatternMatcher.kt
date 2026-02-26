@@ -5,6 +5,9 @@ import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -142,7 +145,7 @@ class SmsPatternMatcher @Inject constructor(
      */
     suspend fun matchPatterns(
         embeddedSmsList: List<EmbeddedSms>
-    ): Pair<List<SmsParseResult>, List<EmbeddedSms>> {
+    ): Pair<List<SmsParseResult>, List<EmbeddedSms>> = coroutineScope {
         val matched = mutableListOf<SmsParseResult>()
         val unmatched = mutableListOf<EmbeddedSms>()
 
@@ -154,22 +157,34 @@ class SmsPatternMatcher @Inject constructor(
         // 메인 패턴(isMainGroup=true)을 먼저 매칭하고, 실패 시 예외 패턴 시도
         val (mainPaymentPatterns, exceptionPaymentPatterns) = paymentPatterns.partition { it.isMainGroup }
 
-        // 원격 룰 1회 로드 (캐시 재사용, 실패 시 빈 맵)
-        val remoteRules = remoteSmsRuleRepository.loadRules()
+        // 발신번호별 패턴 인덱싱 (검색 범위 축소: O(all) → O(sender's patterns))
+        val nonPaymentBySender = nonPaymentPatterns.groupBy { normalizeAddress(it.senderAddress) }
+        val mainPaymentBySender = mainPaymentPatterns.groupBy { normalizeAddress(it.senderAddress) }
+        val exceptionPaymentBySender = exceptionPaymentPatterns.groupBy { normalizeAddress(it.senderAddress) }
 
+        // 원격 룰 비동기 로드 시작 (실제 필요할 때 await)
+        val remoteRulesDeferred = async(Dispatchers.IO) { remoteSmsRuleRepository.loadRules() }
+        var remoteRules: Map<String, List<RemoteSmsRule>>? = null
 
         var remoteMatchCount = 0
         var remoteFailCount = 0
         // 동일 sync 내 중복 승격 방지 (ruleId 기준)
         val promotedRuleIds = mutableSetOf<String>()
 
+        // 매칭 카운트 배치 업데이트용 (루프 후 1회 DB 호출)
+        val matchCountMap = mutableMapOf<Long, Int>()
+
         for (embedded in embeddedSmsList) {
+            val sender = normalizeAddress(embedded.input.address)
+
             // --- [1] 비결제 패턴 우선 확인 (빠른 제외) ---
             val nonPaymentMatch = findBestMatch(
-                embedded.embedding, nonPaymentPatterns, NON_PAYMENT_THRESHOLD
+                embedded.embedding,
+                nonPaymentBySender[sender].orEmpty(),
+                NON_PAYMENT_THRESHOLD
             )
             if (nonPaymentMatch != null) {
-                smsPatternDao.incrementMatchCount(nonPaymentMatch.first.id)
+                matchCountMap.merge(nonPaymentMatch.first.id, 1, Int::plus)
                 continue
             }
 
@@ -177,9 +192,13 @@ class SmsPatternMatcher @Inject constructor(
             // 메인 패턴을 먼저 시도하여 예외 패턴의 parsedCardName이
             // 메인 SMS에 적용되는 것을 방지
             val paymentMatch = findBestMatch(
-                embedded.embedding, mainPaymentPatterns, PAYMENT_MATCH_THRESHOLD
+                embedded.embedding,
+                mainPaymentBySender[sender].orEmpty(),
+                PAYMENT_MATCH_THRESHOLD
             ) ?: findBestMatch(
-                embedded.embedding, exceptionPaymentPatterns, PAYMENT_MATCH_THRESHOLD
+                embedded.embedding,
+                exceptionPaymentBySender[sender].orEmpty(),
+                PAYMENT_MATCH_THRESHOLD
             )
 
             if (paymentMatch != null) {
@@ -200,22 +219,36 @@ class SmsPatternMatcher @Inject constructor(
                             confidence = similarity
                         )
                     )
-                    smsPatternDao.incrementMatchCount(pattern.id)
+                    matchCountMap.merge(pattern.id, 1, Int::plus)
                 } else {
                     MoneyTalkLogger.w("벡터매칭 OK ($similarity) but 파싱 실패: ${embedded.input.body.take(30)}")
                     unmatched.add(embedded)
                 }
             } else {
                 // --- [3] 원격 룰 매칭 (2순위: RTDB) ---
-                val remoteResult = matchWithRemoteRules(embedded, remoteRules, promotedRuleIds)
+                val rules = remoteRules ?: remoteRulesDeferred.await().also { remoteRules = it }
+                val remoteResult = matchWithRemoteRules(embedded, rules, promotedRuleIds)
                 if (remoteResult != null) {
                     matched.add(remoteResult)
                     remoteMatchCount++
                 } else {
                     // --- [4] 미매칭 → Step 5로 ---
                     unmatched.add(embedded)
-                    if (remoteRules.isNotEmpty()) remoteFailCount++
+                    if (rules.isNotEmpty()) remoteFailCount++
                 }
+            }
+        }
+
+        // 원격 룰을 한 번도 사용하지 않았다면 백그라운드 로드를 취소
+        if (remoteRules == null) {
+            remoteRulesDeferred.cancel()
+        }
+
+        // 매칭 카운트 배치 업데이트 (N_unique DB 호출, N_total 대비 대폭 절감)
+        if (matchCountMap.isNotEmpty()) {
+            val batchTimestamp = System.currentTimeMillis()
+            for ((patternId, count) in matchCountMap) {
+                smsPatternDao.incrementMatchCountBy(patternId, count, batchTimestamp)
             }
         }
 
@@ -231,7 +264,7 @@ class SmsPatternMatcher @Inject constructor(
             val u = unmatchedByAddr[addr]?.size ?: 0
         }
 
-        return matched to unmatched
+        return@coroutineScope matched to unmatched
     }
 
     // ===== 원격 룰 매칭 =====

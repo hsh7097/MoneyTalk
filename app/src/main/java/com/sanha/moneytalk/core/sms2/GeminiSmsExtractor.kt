@@ -6,6 +6,7 @@ import android.content.Context
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
 import com.google.ai.client.generativeai.type.generationConfig
+import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
@@ -49,29 +50,15 @@ class GeminiSmsExtractor @Inject constructor(
         /** 배치 실패 후 개별 폴백 호출 간 최소 대기(ms) */
         private const val FALLBACK_SINGLE_DELAY_MS = 50L
 
-        /** 정규식 생성 재시도(수선) 최대 횟수 (0=수선 비활성, 실패 시 즉시 llm_fallback) */
-        private const val REGEX_REPAIR_MAX_RETRIES = 0
+        /** 정규식 생성 재시도(수선) 최대 횟수 */
+        private const val REGEX_REPAIR_MAX_RETRIES = 1
 
         /** 그룹 정규식 생성 시 사용할 최대 샘플 수 */
         private const val REGEX_GROUP_MAX_SAMPLES = 10
 
-        /** 정규식 채택 최소 성공률 (그룹 샘플 기준) */
-        private const val REGEX_MIN_SUCCESS_RATIO = 0.8f
-
-        /** 정규식 검증 시 최소 금액 기준 (날짜/시간 오탐 방지) */
-        private const val REGEX_MIN_AMOUNT = 100
-
-        /** 정규식 검증용 숫자 외 문자 패턴 */
-        private val NON_DIGIT_PATTERN = Regex("""[^\d]""")
-
-        /** 정규식 검증용 가게명 후보 제외 패턴 */
-        private val STORE_NUMBER_ONLY_PATTERN = Regex("""^[\d,.:/\-\s]+$""")
-        private val STORE_DATE_OR_TIME_PATTERN =
-            Regex("""^(?:\d{1,2}[/.-]\d{1,2}(?:\s+\d{1,2}:\d{2})?|\d{1,2}:\d{2})$""")
-        private val STORE_CARD_MASK_PATTERN = Regex("""^\d+\*+\d+$""")
-        private val STORE_INVALID_KEYWORDS = listOf(
-            "승인", "결제", "출금", "입금", "누적", "잔액", "일시불", "할부", "이용", "카드"
-        )
+        /** LLM 응답에서 코드 펜스 제거용 정규식 (사전 컴파일) */
+        private val CODE_FENCE_JSON = Regex("```json\\s*", RegexOption.IGNORE_CASE)
+        private val CODE_FENCE = Regex("```\\s*")
 
         /** 앱에서 사용하는 유효한 카테고리 목록 (미분류 제외) */
         private val VALID_CATEGORIES = Category.entries
@@ -280,8 +267,7 @@ class GeminiSmsExtractor @Inject constructor(
 
     private data class RegexValidationResult(
         val isValid: Boolean,
-        val reason: String,
-        val successRatio: Float = 0f
+        val reason: String
     )
 
     private val smsDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
@@ -346,25 +332,24 @@ class GeminiSmsExtractor @Inject constructor(
     ): LlmRegexResult? {
         return generateRegexForGroup(
             smsBodies = listOf(smsBody),
-            smsTimestamps = listOf(smsTimestamp),
-            minSuccessRatio = 1.0f
+            smsTimestamps = listOf(smsTimestamp)
         )
     }
 
     /**
      * 같은 그룹 샘플 SMS로 공통 정규식 생성
      *
-     * - 샘플(최대 5건) 전체 기준으로 검증
+     * - 샘플(최대 10건)로 LLM 정규식 생성
      * - 실패 시 1회 repair(수선) 재요청
-     * - 성공률이 minSuccessRatio 미만이면 채택하지 않음
+     * - JSON 파싱 + regex 컴파일 + 필수필드만 검증 (샘플 성공률은 Classifier에서 검증)
      *
      * @param mainRegexContext 메인 그룹의 정규식 참조 (예외 그룹 처리 시 non-null).
      *        같은 발신번호의 메인 형식 정규식을 참조하여 정확도를 높임.
      */
+    @Suppress("UNUSED_PARAMETER")
     suspend fun generateRegexForGroup(
         smsBodies: List<String>,
         smsTimestamps: List<Long> = emptyList(),
-        minSuccessRatio: Float = REGEX_MIN_SUCCESS_RATIO,
         mainRegexContext: MainRegexContext? = null
     ): LlmRegexResult? = withContext(Dispatchers.IO) {
         try {
@@ -382,14 +367,14 @@ class GeminiSmsExtractor @Inject constructor(
             val startTime = System.currentTimeMillis()
             val responseText = requestRegexWithTokenFallback(
                 model = model,
-                primaryPrompt = buildRegexPrompt(samples, smsTimestamps, mainRegexContext),
+                primaryPrompt = buildRegexPrompt(samples, mainRegexContext),
                 compactPrompt = buildRegexCompactPrompt(samples, mainRegexContext),
                 ultraCompactPrompt = buildRegexUltraCompactPrompt(samples)
             ) ?: return@withContext null
             val elapsed = System.currentTimeMillis() - startTime
 
             var candidate = parseRegexResponse(responseText)
-            var validation = validateRegexResult(candidate, samples, minSuccessRatio)
+            var validation = validateRegexResult(candidate)
             var previousResponseText = responseText
             if (validation.isValid && candidate != null) {
                 return@withContext candidate
@@ -408,7 +393,6 @@ class GeminiSmsExtractor @Inject constructor(
                     model = model,
                     primaryPrompt = buildRegexRepairPrompt(
                         samples = samples,
-                        smsTimestamps = smsTimestamps,
                         previousResponse = previousResponseText,
                         failureReason = validation.reason
                     ),
@@ -418,17 +402,91 @@ class GeminiSmsExtractor @Inject constructor(
 
                 previousResponseText = repairResponse
                 candidate = parseRegexResponse(repairResponse)
-                validation = validateRegexResult(candidate, samples, minSuccessRatio)
+                validation = validateRegexResult(candidate)
                 if (validation.isValid && candidate != null) {
                     return@withContext candidate
                 }
             }
 
-            MoneyTalkLogger.w("[extractRegex] 정규식 생성 최종 실패 (reason=${validation.reason}, ratio=${validation.successRatio})"
-            )
+            MoneyTalkLogger.w("[extractRegex] 정규식 생성 최종 실패 (reason=${validation.reason})")
             null
         } catch (e: Exception) {
             MoneyTalkLogger.e("정규식 생성 실패: ${e.message}", e)
+            null
+        }
+    }
+
+    /**
+     * Classifier에서 호출하는 regex repair (near-miss 구간용)
+     *
+     * SmsGroupClassifier.validateRegexAgainstSamples() 실패 시,
+     * 실패한 샘플 정보를 포함하여 repair 프롬프트를 구성하고 LLM에 1회 수선 요청.
+     *
+     * @param currentRegex 현재 검증 실패한 regex 결과
+     * @param allSamples 전체 샘플 SMS 본문
+     * @param failedSampleBodies 파싱 실패한 샘플 SMS 본문 (최대 5건)
+     * @param failedSampleDiagnostics 파싱 실패 사유 (failedSampleBodies와 동일 순서)
+     * @param passRatio 현재 파싱 성공 비율
+     * @return 수선된 regex 결과 (형식 검증 통과 시), null이면 수선 실패
+     */
+    suspend fun repairRegexFromClassifier(
+        currentRegex: LlmRegexResult,
+        allSamples: List<String>,
+        failedSampleBodies: List<String>,
+        failedSampleDiagnostics: List<String>,
+        passRatio: Float
+    ): LlmRegexResult? = withContext(Dispatchers.IO) {
+        try {
+            val model = getRegexModel() ?: return@withContext null
+
+            // 이전 응답 JSON 재구성 (Gson으로 안전한 이스케이프)
+            val previousJson = JsonObject().apply {
+                addProperty("isPayment", true)
+                addProperty("amountRegex", currentRegex.amountRegex)
+                addProperty("storeRegex", currentRegex.storeRegex)
+                addProperty("cardRegex", currentRegex.cardRegex)
+            }
+
+            // 실패 사유: 인간 친화적 메시지 + 실패 샘플별 regex 진단 포함
+            val totalCount = allSamples.size
+            val passCount = totalCount - failedSampleBodies.size
+            val failedSamplesWithDiag = failedSampleBodies.take(3).mapIndexed { idx, body ->
+                val diag = failedSampleDiagnostics.getOrNull(idx)
+                    ?: diagnoseRegexFailure(currentRegex, body)
+                "실패${idx + 1}: ${toCompactRegexSample(body, 120)}\n  → $diag"
+            }.joinToString("\n")
+
+            val failureReason = "${totalCount}개 샘플 중 ${passCount}개만 매칭됩니다 " +
+                "(${(passRatio * 100).toInt()}%). " +
+                "아래 실패 샘플과 진단을 참고하여 regex를 수정하세요:\n$failedSamplesWithDiag"
+
+            MoneyTalkLogger.w("[repairFromClassifier] repair 시도 (passRatio=${(passRatio * 100).toInt()}%, failed=${failedSampleBodies.size}건)")
+
+            val repairPrompt = buildRegexRepairPrompt(
+                samples = allSamples,
+                previousResponse = previousJson.toString(),
+                failureReason = failureReason
+            )
+
+            val responseText = requestRegexWithTokenFallback(
+                model = model,
+                primaryPrompt = repairPrompt,
+                compactPrompt = buildRegexCompactPrompt(allSamples),
+                ultraCompactPrompt = buildRegexUltraCompactPrompt(allSamples)
+            ) ?: return@withContext null
+
+            val candidate = parseRegexResponse(responseText)
+            val validation = validateRegexResult(candidate)
+
+            if (validation.isValid && candidate != null) {
+                MoneyTalkLogger.w("[repairFromClassifier] repair 응답 형식 검증 통과")
+                candidate
+            } else {
+                MoneyTalkLogger.w("[repairFromClassifier] repair 응답 형식 검증 실패 (reason=${validation.reason})")
+                null
+            }
+        } catch (e: Exception) {
+            MoneyTalkLogger.e("Classifier repair 실패: ${e.message}", e)
             null
         }
     }
@@ -479,10 +537,15 @@ class GeminiSmsExtractor @Inject constructor(
         }
     }
 
+    /**
+     * regex 응답 기본 검증 (JSON 파싱 + regex 컴파일 + 필수필드 체크)
+     *
+     * 샘플 성공률 검증은 SmsGroupClassifier.validateRegexAgainstSamples()에서 수행.
+     * Extractor에서는 regex가 유효한 형식인지만 확인하여,
+     * 0.5~0.79 사이 regex가 Classifier 검증까지 도달할 수 있도록 함.
+     */
     private fun validateRegexResult(
-        result: LlmRegexResult?,
-        samples: List<String>,
-        minSuccessRatio: Float
+        result: LlmRegexResult?
     ): RegexValidationResult {
         if (result == null) {
             return RegexValidationResult(isValid = false, reason = "json_parse_failed")
@@ -494,12 +557,12 @@ class GeminiSmsExtractor @Inject constructor(
             return RegexValidationResult(isValid = false, reason = "required_regex_blank")
         }
 
-        val amountRegex = try {
+        try {
             Regex(result.amountRegex)
         } catch (e: Exception) {
             return RegexValidationResult(isValid = false, reason = "amount_regex_compile_failed")
         }
-        val storeRegex = try {
+        try {
             Regex(result.storeRegex)
         } catch (e: Exception) {
             return RegexValidationResult(isValid = false, reason = "store_regex_compile_failed")
@@ -513,39 +576,15 @@ class GeminiSmsExtractor @Inject constructor(
             }
         }
 
-        var successCount = 0
-        for (sample in samples) {
-            val amountRaw = extractGroup1(amountRegex, sample)
-            val storeRaw = extractGroup1(storeRegex, sample)
-
-            val amountNumber = amountRaw?.replace(NON_DIGIT_PATTERN, "")?.toIntOrNull()
-            val storeName = storeRaw?.trim()?.takeIf(::isValidRegexStoreName)
-
-            val ok = amountNumber != null && amountNumber >= REGEX_MIN_AMOUNT && storeName != null
-            if (ok) successCount++
-        }
-
-        val ratio = successCount.toFloat() / samples.size.toFloat()
-        if (ratio >= minSuccessRatio) {
-            return RegexValidationResult(isValid = true, reason = "ok", successRatio = ratio)
-        }
-        return RegexValidationResult(
-            isValid = false,
-            reason = "sample_match_ratio_${String.format("%.2f", ratio)}",
-            successRatio = ratio
-        )
+        return RegexValidationResult(isValid = true, reason = "ok")
     }
 
     private fun buildRegexPrompt(
         samples: List<String>,
-        smsTimestamps: List<Long>,
         mainRegexContext: MainRegexContext? = null
     ): String {
         val sampleText = samples.mapIndexed { index, body ->
-            val dateInfo = smsTimestamps.getOrNull(index)?.let { ts ->
-                if (ts > 0) "${smsDateFormat.format(Date(ts))} " else ""
-            } ?: ""
-            "${index + 1}) ${dateInfo}${toCompactRegexSample(body, 180)}"
+            "${index + 1}) ${toCompactRegexSample(body, 180)}"
         }.joinToString("\n")
 
         return if (mainRegexContext != null) {
@@ -573,7 +612,7 @@ class GeminiSmsExtractor @Inject constructor(
         model: GenerativeModel,
         primaryPrompt: String,
         compactPrompt: String,
-        @Suppress("UNUSED_PARAMETER") ultraCompactPrompt: String
+        ultraCompactPrompt: String
     ): String? {
         // 토큰 디버깅: 프롬프트 길이 + countTokens
         try {
@@ -587,23 +626,27 @@ class GeminiSmsExtractor @Inject constructor(
             text
         } catch (e: Exception) {
             if (!isMaxTokensError(e)) throw e
-            MoneyTalkLogger.w("[extractRegex] MAX_TOKENS 발생 (primaryPromptLen=${primaryPrompt.length}자) → 축약 프롬프트 재시도")
-
-            try {
-                val compactTokenCount = model.countTokens(compactPrompt)
-            } catch (te: Exception) {
-            }
+            MoneyTalkLogger.w("[extractRegex] MAX_TOKENS 발생 (primaryPromptLen=${primaryPrompt.length}자) → compact 프롬프트 재시도")
 
             try {
                 val response2 = model.generateContent(compactPrompt)
                 val text2 = response2.text
                 text2
             } catch (e2: Exception) {
-                if (isMaxTokensError(e2)) {
-                    MoneyTalkLogger.w("[extractRegex] MAX_TOKENS 재발생 (compactPromptLen=${compactPrompt.length}자) → 즉시 포기")
-                    return null
+                if (!isMaxTokensError(e2)) throw e2
+                MoneyTalkLogger.w("[extractRegex] MAX_TOKENS 재발생 (compactPromptLen=${compactPrompt.length}자) → ultraCompact 3차 시도")
+
+                try {
+                    val response3 = model.generateContent(ultraCompactPrompt)
+                    val text3 = response3.text
+                    text3
+                } catch (e3: Exception) {
+                    if (isMaxTokensError(e3)) {
+                        MoneyTalkLogger.w("[extractRegex] MAX_TOKENS 3차 발생 (ultraCompactLen=${ultraCompactPrompt.length}자) → 포기")
+                        return null
+                    }
+                    throw e3
                 }
-                throw e2
             }
         }
     }
@@ -627,6 +670,7 @@ class GeminiSmsExtractor @Inject constructor(
                 R.string.prompt_sms_regex_compact_with_main_ref,
                 mainRegexContext.amountRegex,
                 mainRegexContext.storeRegex,
+                mainRegexContext.cardRegex,
                 compactSamples
             )
         } else {
@@ -645,24 +689,91 @@ class GeminiSmsExtractor @Inject constructor(
 
     private fun buildRegexRepairPrompt(
         samples: List<String>,
-        smsTimestamps: List<Long>,
         previousResponse: String,
         failureReason: String
     ): String {
         val sampleText = samples.mapIndexed { index, body ->
-            val dateInfo = smsTimestamps.getOrNull(index)?.let { ts ->
-                if (ts > 0) "${smsDateFormat.format(Date(ts))} " else ""
-            } ?: ""
-            "${index + 1}) ${dateInfo}${toCompactRegexSample(body, 180)}"
+            "${index + 1}) ${toCompactRegexSample(body, 180)}"
         }.joinToString("\n")
         val previousShort = previousResponse.replace("\n", " ").take(240)
+        val humanReason = toHumanFriendlyReason(failureReason)
 
         return context.getString(
             R.string.prompt_sms_regex_repair,
-            failureReason,
+            humanReason,
             previousShort,
             sampleText
         )
+    }
+
+    /**
+     * 기술적 검증 실패 사유를 LLM이 이해하기 쉬운 메시지로 변환
+     */
+    private fun toHumanFriendlyReason(reason: String): String {
+        return when (reason) {
+            "json_parse_failed" -> context.getString(R.string.sms_regex_reason_json_parse_failed)
+            "isPayment_false" -> context.getString(R.string.sms_regex_reason_is_payment_false)
+            "required_regex_blank" -> context.getString(R.string.sms_regex_reason_required_regex_blank)
+            "amount_regex_compile_failed" -> context.getString(R.string.sms_regex_reason_amount_compile_failed)
+            "store_regex_compile_failed" -> context.getString(R.string.sms_regex_reason_store_compile_failed)
+            "card_regex_compile_failed" -> context.getString(R.string.sms_regex_reason_card_compile_failed)
+            else -> reason
+        }
+    }
+
+    /**
+     * 실패 샘플에 대해 각 regex의 매칭 여부를 진단
+     *
+     * repair 프롬프트에 "어떤 regex가 실패했는지" 구체적 정보를 제공하여
+     * LLM이 정확한 부분만 수정하도록 유도.
+     *
+     * 예: "amountRegex OK(12,000), storeRegex 매칭 안됨"
+     */
+    private fun diagnoseRegexFailure(regex: LlmRegexResult, sampleBody: String): String {
+        val diags = mutableListOf<String>()
+
+        // amountRegex 진단
+        try {
+            val match = Regex(regex.amountRegex).find(sampleBody)
+            val captured = match?.groupValues?.getOrNull(1)?.trim()
+            when {
+                match == null -> diags.add("amountRegex 매칭 안됨")
+                captured.isNullOrBlank() -> diags.add("amountRegex 매칭되나 캡처그룹 비어있음")
+                else -> diags.add("amountRegex OK(${captured.take(15)})")
+            }
+        } catch (e: Exception) {
+            diags.add("amountRegex 오류")
+        }
+
+        // storeRegex 진단
+        try {
+            val match = Regex(regex.storeRegex).find(sampleBody)
+            val captured = match?.groupValues?.getOrNull(1)?.trim()
+            when {
+                match == null -> diags.add("storeRegex 매칭 안됨")
+                captured.isNullOrBlank() -> diags.add("storeRegex 매칭되나 캡처그룹 비어있음")
+                else -> diags.add("storeRegex OK(${captured.take(15)})")
+            }
+        } catch (e: Exception) {
+            diags.add("storeRegex 오류")
+        }
+
+        // cardRegex 진단 (있는 경우만)
+        if (regex.cardRegex.isNotBlank()) {
+            try {
+                val match = Regex(regex.cardRegex).find(sampleBody)
+                val captured = match?.groupValues?.getOrNull(1)?.trim()
+                when {
+                    match == null -> diags.add("cardRegex 매칭 안됨")
+                    captured.isNullOrBlank() -> diags.add("cardRegex 캡처그룹 비어있음")
+                    else -> diags.add("cardRegex OK(${captured.take(15)})")
+                }
+            } catch (e: Exception) {
+                diags.add("cardRegex 오류")
+            }
+        }
+
+        return diags.joinToString(", ")
     }
 
     /**
@@ -676,28 +787,6 @@ class GeminiSmsExtractor @Inject constructor(
     private fun toCompactRegexSample(text: String, maxLen: Int): String {
         val oneLine = text.replace("\n", "\\n")
         return if (oneLine.length > maxLen) oneLine.take(maxLen) else oneLine
-    }
-
-    private fun tryExtractGroup1(pattern: String, text: String): String? {
-        return try {
-            val regex = Regex(pattern)
-            extractGroup1(regex, text)
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    private fun isValidRegexStoreName(value: String): Boolean {
-        val trimmed = value.trim()
-        if (trimmed.length < 2 || trimmed.length > 30) return false
-        if (trimmed.contains("{")) return false
-        if (STORE_NUMBER_ONLY_PATTERN.matches(trimmed)) return false
-        if (STORE_DATE_OR_TIME_PATTERN.matches(trimmed)) return false
-        if (STORE_CARD_MASK_PATTERN.matches(trimmed)) return false
-        if (STORE_INVALID_KEYWORDS.any { keyword -> trimmed.contains(keyword, ignoreCase = true) }) {
-            return false
-        }
-        return true
     }
 
     private fun extractGroup1(regex: Regex, text: String): String? {
@@ -788,8 +877,8 @@ class GeminiSmsExtractor @Inject constructor(
 
     private fun stripCodeFence(response: String): String {
         return response
-            .replace(Regex("```json\\s*", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("```\\s*"), "")
+            .replace(CODE_FENCE_JSON, "")
+            .replace(CODE_FENCE, "")
             .trim()
     }
 

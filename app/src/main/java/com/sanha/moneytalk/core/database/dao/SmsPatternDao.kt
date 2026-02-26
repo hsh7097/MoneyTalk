@@ -80,6 +80,20 @@ interface SmsPatternDao {
     """)
     suspend fun getMainPatternBySender(address: String): SmsPatternEntity?
 
+    /**
+     * 여러 발신번호의 메인 그룹 패턴 일괄 조회
+     *
+     * classifyUnmatched()에서 N번의 개별 DB 쿼리를 1회 배치로 대체.
+     * 호출측에서 senderAddress 기준 groupBy + first()로 발신번호당 1개 선택.
+     */
+    @Query("""
+        SELECT * FROM sms_patterns
+        WHERE senderAddress IN (:addresses) AND isMainGroup = 1 AND isPayment = 1
+        AND amountRegex != '' AND storeRegex != ''
+        ORDER BY matchCount DESC
+    """)
+    suspend fun getMainPatternsBySenders(addresses: List<String>): List<SmsPatternEntity>
+
     /** 전체 패턴 수 조회 */
     @Query("SELECT COUNT(*) FROM sms_patterns")
     suspend fun getPatternCount(): Int
@@ -94,6 +108,13 @@ interface SmsPatternDao {
      */
     @Query("UPDATE sms_patterns SET matchCount = matchCount + 1, lastMatchedAt = :timestamp WHERE id = :patternId")
     suspend fun incrementMatchCount(patternId: Long, timestamp: Long = System.currentTimeMillis())
+
+    /**
+     * 매칭 횟수를 지정 값만큼 증가 + 마지막 매칭 시간 갱신
+     * 동일 패턴이 여러 SMS에 매칭될 때 배치로 1회 업데이트
+     */
+    @Query("UPDATE sms_patterns SET matchCount = matchCount + :count, lastMatchedAt = :timestamp WHERE id = :patternId")
+    suspend fun incrementMatchCountBy(patternId: Long, count: Int, timestamp: Long = System.currentTimeMillis())
 
     /**
      * 오래된 미사용 패턴 정리

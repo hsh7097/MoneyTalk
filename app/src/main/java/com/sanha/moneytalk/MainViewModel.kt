@@ -33,6 +33,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -81,6 +83,9 @@ class MainViewModel @Inject constructor(
 
         /** DB 배치 삽입 크기 */
         private const val DB_BATCH_INSERT_SIZE = 100
+
+        /** smsId 존재 여부 조회 chunk 크기 (SQLite bind limit 여유) */
+        private const val SMS_ID_LOOKUP_CHUNK_SIZE = 500
 
         /** 초기 동기화 제한 기간 (2개월, 밀리초) — 전체 동기화 미해제 시 적용 */
         private const val DEFAULT_SYNC_PERIOD_MILLIS = 60L * 24 * 60 * 60 * 1000
@@ -456,9 +461,26 @@ class MainViewModel @Inject constructor(
         if (allSmsList.isEmpty()) return emptyList()
 
         _uiState.update { it.copy(syncProgress = "이미 등록된 내역 확인 중...") }
-        val existingSmsIds = expenseRepository.getAllSmsIds()
-        val existingIncomeSmsIds = incomeRepository.getAllSmsIds().toHashSet()
-        val allExistingIds = existingSmsIds + existingIncomeSmsIds
+        val smsIdChunks = allSmsList
+            .map { it.id }
+            .chunked(SMS_ID_LOOKUP_CHUNK_SIZE)
+        val allExistingIds = coroutineScope {
+            val expenseExistingDeferred = async {
+                val ids = HashSet<String>()
+                for (chunk in smsIdChunks) {
+                    ids.addAll(expenseRepository.getExistingSmsIds(chunk))
+                }
+                ids
+            }
+            val incomeExistingDeferred = async {
+                val ids = HashSet<String>()
+                for (chunk in smsIdChunks) {
+                    ids.addAll(incomeRepository.getExistingSmsIds(chunk))
+                }
+                ids
+            }
+            expenseExistingDeferred.await() + incomeExistingDeferred.await()
+        }
 
         val newSmsList = allSmsList.filter { it.id !in allExistingIds }
         MoneyTalkLogger.i("syncSmsV2 중복 제거: ${allSmsList.size}건 → ${newSmsList.size}건")
@@ -661,7 +683,7 @@ class MainViewModel @Inject constructor(
         val now = System.currentTimeMillis()
         val monthStartDay = _uiState.value.monthStartDay
 
-        val dbCount = expenseRepository.getAllSmsIds().size
+        val dbCount = expenseRepository.getExpenseCount() + incomeRepository.getIncomeCount()
         val effectiveSyncTime = if (savedSyncTime > 0 && dbCount == 0) {
             MoneyTalkLogger.w("Auto Backup 감지: savedSyncTime 있으나 DB 비어있음 → 리셋")
             settingsDataStore.saveLastSyncTime(0L)

@@ -266,6 +266,16 @@
 - SmsPatternMatcher parseWithRegex() 미사용 fallbackCategory 파라미터 제거
 - SmsIncomeFilter/SmsPreFilter 중복 코드 방어용 주석 추가
 
+**generateRegexForGroup 정규식 생성 성공률 개선**: 🔧 미커밋 (2026-02-26)
+- repair 1회 활성화 (REGEX_REPAIR_MAX_RETRIES 0→1)
+- 검증 일원화: Extractor에서 샘플 성공률 게이트 제거 → Classifier.validateRegexAgainstSamples() 1곳에서만 판정
+- 프롬프트 개선: JSON escape 규칙 명시, 멀티라인 SMS 예시 추가, 날짜 prefix 제거, 샘플 수 1~5→1~10
+- ultraCompact 3차 폴백 활성화 (primary → compact → ultraCompact)
+- compact 프롬프트에 cardRegex 힌트 추가
+- repair 프롬프트에 인간 친화적 실패 사유 매핑 (toHumanFriendlyReason)
+- 미사용 코드 정리 (REGEX_MIN_AMOUNT, NON_DIGIT_PATTERN, STORE_* 패턴, isValidRegexStoreName, tryExtractGroup1, RegexValidationResult.successRatio)
+- 하드코딩 문자열 리소스화 (strings.xml + values-en/strings.xml)
+
 ### 대기 중인 작업
 
 - `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지 (이미 머지됨 — 정리 필요)
@@ -330,6 +340,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-26 | generateRegexForGroup 정규식 생성 성공률 개선 — repair 1회 활성, 검증 일원화, 프롬프트 개선(JSON escape/멀티라인/날짜제거), ultraCompact 3차 폴백, 미사용 코드 정리 | 미커밋 |
 | 2026-02-26 | SmsGroupClassifier 품질 개선 — 소그룹 병합 0.70→0.90, RTDB 표본에 template 추가, LLM 프롬프트 메인 케이스 참조, MainCaseContext 3건 샘플 | 완료 |
 | 2026-02-25 | 임베딩 차원 3072→768 축소 — outputDimensionality=768 설정, DB v3→v4 마이그레이션, 코드/문서 16개 파일 갱신 | 완료 |
 | 2026-02-25 | PR #33 MainViewModel 리팩토링 — Codex P2 리뷰 확인, 권한 없을 때 resume DataRefreshEvent 미발행 지적 → 현행 유지 결정 | 완료 |

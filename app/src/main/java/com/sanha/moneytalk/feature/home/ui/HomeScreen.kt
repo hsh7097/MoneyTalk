@@ -151,7 +151,8 @@ fun HomeScreen(
         }
     }
 
-    val isBannerAdEnabled = mainViewModel.adManager.isRewardAdEnabled()
+    val isBannerAdEnabled by mainViewModel.adManager.isBannerAdEnabledFlow
+        .collectAsStateWithLifecycle(initialValue = false)
 
     Column(
         modifier = Modifier

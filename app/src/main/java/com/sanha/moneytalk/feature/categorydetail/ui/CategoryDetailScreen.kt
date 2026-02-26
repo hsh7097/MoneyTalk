@@ -130,7 +130,8 @@ fun CategoryDetailScreen(
             )
         )
 
-        val isBannerAdEnabled = viewModel.isBannerAdEnabled()
+        val isBannerAdEnabled by viewModel.isBannerAdEnabledFlow
+            .collectAsStateWithLifecycle(initialValue = false)
 
         // HorizontalPager: 각 페이지 = 월별 콘텐츠
         HorizontalPager(

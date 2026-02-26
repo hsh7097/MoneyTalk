@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -212,6 +214,11 @@ class RewardAdManager @Inject constructor(
     fun isRewardAdEnabled(): Boolean {
         return premiumManager.premiumConfig.value.rewardAdEnabled
     }
+
+    /** 배너 광고 활성화 여부를 반응적으로 관찰하기 위한 Flow (RTDB 변경 시 자동 반영) */
+    val isBannerAdEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
+        .map { it.rewardAdEnabled }
+        .distinctUntilChanged()
 
     /**
      * 리워드 1회 시청 시 충전되는 횟수
