@@ -4,6 +4,45 @@
 
 ---
 
+## 2026-02-26 - SMS 파싱 파이프라인 순서/효율 개선
+
+### 작업 내용
+
+#### P1 (Critical): SmsPreFilter 수입 SMS 누락 방지
+- `SmsPreFilter.isObviouslyNonPayment()`에 수입 보호 화이트리스트 추가
+- `INCOME_PROTECTION_KEYWORDS` ("입금","급여","월급","환급","송금","정산","지급","출금취소","승인취소","결제취소")
+- 수입 키워드가 포함된 SMS는 NON_PAYMENT_KEYWORDS 체크를 스킵하여 SmsIncomeFilter로 전달
+
+#### P5: 취소/환불 SMS 타입 정확도 개선
+- `SmsIncomeParser.extractIncomeType()`에 취소 분기 추가
+- "출금취소","승인취소","결제취소","취소승인","취소완료" → type="환불" (기존: "입금")
+
+#### P4: 미사용 fallbackCategory 파라미터 제거
+- `SmsPatternMatcher.parseWithRegex()`에서 `fallbackCategory` 파라미터 제거
+- 내부적으로 항상 `category="미분류"`로 하드코딩되어 파라미터가 실효 없었음
+- `SmsGroupClassifier`의 호출부 2곳 + `parseWithPatternRegex()` 1곳 정리
+
+#### classify() 순서 수정 (사용자 발견)
+- `SmsIncomeFilter.classify()`에서 incomeExcludeKeywords(step5)를 paymentKeywords(step6) 앞으로 이동
+- "자동이체출금"에 "출금"이 포함되어 PAYMENT로 오분류되던 문제 방지
+
+#### 중복 코드 정리 (P2/P3)
+- SmsIncomeFilter의 excludeKeywords, MAX_SMS_LENGTH가 SmsPreFilter와 중복 → 방어 코드 주석 추가
+- KDoc 번호 순서 정정 (classify() 내부 단계 번호)
+
+### 변경 파일
+- `core/sms2/SmsPreFilter.kt` — INCOME_PROTECTION_KEYWORDS + isObviouslyNonPayment() 화이트리스트
+- `core/sms2/SmsIncomeFilter.kt` — KDoc 정정, 방어 코드 주석, classify() 순서 수정
+- `core/sms2/SmsIncomeParser.kt` — extractIncomeType() 취소→"환불" 분기
+- `core/sms2/SmsPatternMatcher.kt` — parseWithRegex() fallbackCategory 제거
+- `core/sms2/SmsGroupClassifier.kt` — fallbackCategory 호출 인자 제거
+
+### 결정 사항
+- SmsIncomeFilter의 중복 키워드/길이체크는 "방어 코드"로 유지 (SmsIncomeFilter 단독 사용 시 안전망)
+- SmsPreFilter의 화이트리스트 방식 채택 (키워드 제거 방식보다 안전 — 새 비결제 키워드 추가 시 수입 누락 재발 방지)
+
+---
+
 ## 2026-02-26 - SmsGroupClassifier 품질 개선
 
 ### 작업 내용

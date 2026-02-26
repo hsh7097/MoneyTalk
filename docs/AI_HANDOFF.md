@@ -259,6 +259,13 @@
 - buildContextualLlmInput: 메인 템플릿 + 메인 샘플 3건 + 분포도 요약을 LLM에 전달
 - 로그 추가: GeminiSmsExtractor에 프롬프트 디버깅 로그
 
+**SMS 파싱 파이프라인 순서/효율 개선**: ✅ 완료 (2026-02-26)
+- SmsPreFilter 수입 보호 화이트리스트 추가 (INCOME_PROTECTION_KEYWORDS)
+- SmsIncomeFilter classify() 순서 수정 (incomeExcludeKeywords → paymentKeywords)
+- SmsIncomeParser 취소/환불 분기 추가 (extractIncomeType → "환불")
+- SmsPatternMatcher parseWithRegex() 미사용 fallbackCategory 파라미터 제거
+- SmsIncomeFilter/SmsPreFilter 중복 코드 방어용 주석 추가
+
 ### 대기 중인 작업
 
 - `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지 (이미 머지됨 — 정리 필요)

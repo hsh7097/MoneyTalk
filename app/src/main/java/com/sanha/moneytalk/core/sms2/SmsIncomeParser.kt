@@ -92,6 +92,10 @@ object SmsIncomeParser {
      */
     fun extractIncomeType(message: String): String {
         return when {
+            // 취소/환불 (결제 키워드와 겹치므로 우선 체크)
+            message.contains("출금취소") || message.contains("승인취소") ||
+                message.contains("결제취소") || message.contains("취소승인") ||
+                message.contains("취소완료") -> "환불"
             message.contains("급여") || message.contains("월급") -> "급여"
             message.contains("보너스") || message.contains("상여") -> "보너스"
             message.contains("환급") -> "환급"
