@@ -1,8 +1,9 @@
 package com.sanha.moneytalk.feature.settings.ui
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import android.content.Context
 import android.net.Uri
-import android.util.Log
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -153,7 +154,6 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        private const val TAG = "SettingsViewModel"
     }
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -1012,20 +1012,14 @@ class SettingsViewModel @Inject constructor(
      */
     fun classifyUnclassifiedExpenses() {
         viewModelScope.launch {
-            Log.e(
-                "MT_DEBUG",
-                "SettingsViewModel[classifyUnclassifiedExpenses] : 수동 분류 시작 (hasApiKey=${_uiState.value.hasApiKey}, unclassified=${_uiState.value.unclassifiedCount})"
-            )
             // API 키 확인
             if (!_uiState.value.hasApiKey) {
-                Log.e("MT_DEBUG", "SettingsViewModel[classifyUnclassifiedExpenses] : API 키 없음 → 중단")
                 snackbarBus.show("API 키를 먼저 설정해주세요")
                 return@launch
             }
 
             // 미정리 항목 확인
             if (_uiState.value.unclassifiedCount == 0) {
-                Log.e("MT_DEBUG", "SettingsViewModel[classifyUnclassifiedExpenses] : 미분류 0건 → 중단")
                 snackbarBus.show("정리할 항목이 없습니다")
                 return@launch
             }
@@ -1187,39 +1181,18 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun launchBackgroundReclassification() {
-        Log.e("MT_DEBUG", "SettingsViewModel[launchBackgroundReclassification] : === 백그라운드 재분류 시작 ===")
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 var totalReclassified = 0
 
                 // Step 1: 저신뢰도 임베딩 재분류
-                Log.e(
-                    "MT_DEBUG",
-                    "SettingsViewModel[launchBackgroundReclassification] : Step 1 - 저신뢰도 항목 재분류 시작"
-                )
                 val reclassifiedCount = categoryClassifierService.reclassifyLowConfidenceItems()
                 totalReclassified += reclassifiedCount
-                Log.e(
-                    "MT_DEBUG",
-                    "SettingsViewModel[launchBackgroundReclassification] : Step 1 완료 - ${reclassifiedCount}건 재분류"
-                )
 
                 // Step 2: 미분류 지출 분류
-                Log.e(
-                    "MT_DEBUG",
-                    "SettingsViewModel[launchBackgroundReclassification] : Step 2 - 미분류 지출 분류 시작"
-                )
                 val classifiedCount = categoryClassifierService.classifyUnclassifiedExpenses()
                 totalReclassified += classifiedCount
-                Log.e(
-                    "MT_DEBUG",
-                    "SettingsViewModel[launchBackgroundReclassification] : Step 2 완료 - ${classifiedCount}건 분류"
-                )
 
-                Log.e(
-                    "MT_DEBUG",
-                    "SettingsViewModel[launchBackgroundReclassification] : === 총 ${totalReclassified}건 처리 완료 ==="
-                )
                 if (totalReclassified > 0) {
                     withContext(Dispatchers.Main) {
                         loadUnclassifiedCount()
@@ -1227,18 +1200,9 @@ class SettingsViewModel @Inject constructor(
                         dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
                     }
                 } else {
-                    Log.e(
-                        "MT_DEBUG",
-                        "SettingsViewModel[launchBackgroundReclassification] : 재분류 대상 없음 (0건)"
-                    )
                 }
             } catch (e: Exception) {
-                Log.e(
-                    "MT_DEBUG",
-                    "SettingsViewModel[launchBackgroundReclassification] : 실패: ${e.message}",
-                    e
-                )
-                Log.e(TAG, "백그라운드 재분류 실패: ${e.message}")
+                MoneyTalkLogger.e("백그라운드 재분류 실패: ${e.message}")
             }
         }
     }

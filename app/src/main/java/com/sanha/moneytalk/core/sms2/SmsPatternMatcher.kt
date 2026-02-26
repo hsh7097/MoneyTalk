@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.sms2
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
@@ -41,7 +42,6 @@ class SmsPatternMatcher @Inject constructor(
 ) {
 
     companion object {
-        private const val TAG = "SmsPatternMatcher"
 
         // ===== 유사도 임계값 (SmsPatternSimilarityPolicy 기준) =====
 
@@ -157,8 +157,6 @@ class SmsPatternMatcher @Inject constructor(
         // 원격 룰 1회 로드 (캐시 재사용, 실패 시 빈 맵)
         val remoteRules = remoteSmsRuleRepository.loadRules()
 
-        Log.d(TAG, "패턴 로드: 결제 ${paymentPatterns.size}건 (메인 ${mainPaymentPatterns.size}, 예외 ${exceptionPaymentPatterns.size}), " +
-            "비결제 ${nonPaymentPatterns.size}건, 원격 룰 ${remoteRules.values.sumOf { it.size }}건 (${remoteRules.size}개 발신번호)")
 
         var remoteMatchCount = 0
         var remoteFailCount = 0
@@ -171,7 +169,6 @@ class SmsPatternMatcher @Inject constructor(
                 embedded.embedding, nonPaymentPatterns, NON_PAYMENT_THRESHOLD
             )
             if (nonPaymentMatch != null) {
-                Log.d(TAG, "비결제 매칭 (${nonPaymentMatch.second}): ${embedded.input.body.take(30)}")
                 smsPatternDao.incrementMatchCount(nonPaymentMatch.first.id)
                 continue
             }
@@ -204,10 +201,8 @@ class SmsPatternMatcher @Inject constructor(
                         )
                     )
                     smsPatternDao.incrementMatchCount(pattern.id)
-                    Log.d(TAG, "벡터매칭 성공 ($similarity, main=${pattern.isMainGroup}): " +
-                        "${analysis.cardName} ${analysis.storeName} ${analysis.amount}원")
                 } else {
-                    Log.w(TAG, "벡터매칭 OK ($similarity) but 파싱 실패: ${embedded.input.body.take(30)}")
+                    MoneyTalkLogger.w("벡터매칭 OK ($similarity) but 파싱 실패: ${embedded.input.body.take(30)}")
                     unmatched.add(embedded)
                 }
             } else {
@@ -224,9 +219,7 @@ class SmsPatternMatcher @Inject constructor(
             }
         }
 
-        Log.d(TAG, "매칭 결과: ${matched.size}건 성공, ${unmatched.size}건 미매칭")
         if (remoteMatchCount > 0 || remoteFailCount > 0) {
-            Log.d(TAG, "  원격 룰: 성공 ${remoteMatchCount}건, 실패 ${remoteFailCount}건")
         }
 
         // 발신번호별 매칭/미매칭 통계
@@ -236,7 +229,6 @@ class SmsPatternMatcher @Inject constructor(
         for (addr in allAddresses) {
             val m = matchedByAddr[addr]?.size ?: 0
             val u = unmatchedByAddr[addr]?.size ?: 0
-            Log.d(TAG, "  [$addr] 매칭: ${m}건, 미매칭: ${u}건")
         }
 
         return matched to unmatched
@@ -296,13 +288,9 @@ class SmsPatternMatcher @Inject constructor(
             )
 
             if (analysis == null || analysis.amount <= 0) {
-                Log.d(TAG, "원격 룰 매칭 ($similarity) but 파싱 실패: " +
-                    "ruleId=${rule.ruleId}, sender=$normalizedSender")
                 continue
             }
 
-            Log.d(TAG, "원격 룰 매칭 성공 ($similarity): ruleId=${rule.ruleId}, " +
-                "${analysis.storeName} ${analysis.amount}원 (sender=$normalizedSender)")
 
             // 로컬 패턴에 승격 저장 (동일 ruleId는 sync당 1회만)
             if (promotedRuleIds.add(rule.ruleId)) {
@@ -317,7 +305,6 @@ class SmsPatternMatcher @Inject constructor(
             )
         }
 
-        Log.d(TAG, "원격 룰 ${candidates.size}건 모두 파싱 실패: sender=$normalizedSender")
         return null
     }
 
@@ -349,10 +336,8 @@ class SmsPatternMatcher @Inject constructor(
                 confidence = similarity
             )
             smsPatternDao.insert(pattern)
-            Log.d(TAG, "원격 룰 → 로컬 승격: ruleId=${rule.ruleId}, " +
-                "${analysis.cardName} ${analysis.storeName}")
         } catch (e: Exception) {
-            Log.w(TAG, "로컬 승격 실패 (무시): ${e.message}")
+            MoneyTalkLogger.w("로컬 승격 실패 (무시): ${e.message}")
         }
     }
 
@@ -434,7 +419,6 @@ class SmsPatternMatcher @Inject constructor(
         // regex 없거나 파싱 실패 → 미매칭 처리 (Step 5 LLM으로 위임)
         // ※ 캐시값(parsedAmount/StoreName)을 폴백으로 사용하면
         //    다른 SMS에 첫 번째 패턴의 가게명/금액이 덮어씌워지는 버그 발생
-        Log.d(TAG, "regex 파싱 실패 → 미매칭: ${body.take(30)}")
         return null
     }
 
@@ -513,7 +497,7 @@ class SmsPatternMatcher @Inject constructor(
             regexCache[pattern] = compiled
             compiled
         } catch (e: Exception) {
-            Log.w(TAG, "정규식 컴파일 실패: ${pattern.take(80)} (${e.message})")
+            MoneyTalkLogger.w("정규식 컴파일 실패: ${pattern.take(80)} (${e.message})")
             null
         }
     }

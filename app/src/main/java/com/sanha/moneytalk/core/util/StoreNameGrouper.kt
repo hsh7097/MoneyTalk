@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.util
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import com.sanha.moneytalk.core.similarity.StoreNameSimilarityPolicy
 import com.sanha.moneytalk.core.sms2.SmsEmbeddingService
 import com.sanha.moneytalk.core.sms2.VectorSearchEngine
@@ -36,7 +37,6 @@ class StoreNameGrouper @Inject constructor(
     private val embeddingService: SmsEmbeddingService
 ) {
     companion object {
-        private const val TAG = "StoreNameGrouper"
 
         /** 배치 임베딩 한 번에 처리할 최대 개수 (batchEmbedContents 최대 100) */
         private const val EMBEDDING_BATCH_SIZE = 100
@@ -71,17 +71,15 @@ class StoreNameGrouper @Inject constructor(
         val embeddedStores = generateBatchEmbeddings(storeNames)
 
         if (embeddedStores.isEmpty()) {
-            Log.w(TAG, "임베딩 생성 실패, 그룹핑 없이 반환")
+            MoneyTalkLogger.w("임베딩 생성 실패, 그룹핑 없이 반환")
             return storeNames.map { StoreGroup(representative = it, members = listOf(it)) }
         }
 
         // Step 2: 그리디 클러스터링
         val groups = clusterByGreedy(embeddedStores)
 
-        Log.d(TAG, "그룹핑 결과: ${storeNames.size}개 → ${groups.size}그룹")
         for (group in groups) {
             if (group.members.size > 1) {
-                Log.d(TAG, "  그룹 [${group.representative}]: ${group.members.joinToString(", ")}")
             }
         }
 
@@ -98,7 +96,6 @@ class StoreNameGrouper @Inject constructor(
     ): List<Pair<String, List<Float>>> {
         val batches = storeNames.chunked(EMBEDDING_BATCH_SIZE)
         val startTime = System.currentTimeMillis()
-        Log.d(TAG, "[grouping] 가게명 임베딩 시작: ${storeNames.size}건 → ${batches.size}개 배치 (병렬 $EMBEDDING_CONCURRENCY)")
 
         val semaphore = Semaphore(EMBEDDING_CONCURRENCY)
         val batchEmbeddings = coroutineScope {
@@ -108,7 +105,6 @@ class StoreNameGrouper @Inject constructor(
                         val batchStart = System.currentTimeMillis()
                         val embeddings = embeddingService.generateEmbeddings(batch)
                         val elapsed = System.currentTimeMillis() - batchStart
-                        Log.d(TAG, "[grouping] 임베딩 배치 ${batchIdx + 1}/${batches.size} 완료 (${elapsed}ms, 성공: ${embeddings.count { it != null }}/${batch.size})")
                         embeddings
                     }
                 }
@@ -127,7 +123,6 @@ class StoreNameGrouper @Inject constructor(
         }
 
         val elapsed = System.currentTimeMillis() - startTime
-        Log.d(TAG, "배치 임베딩 생성: ${results.size}/${storeNames.size}건 성공 (${elapsed}ms)")
         return results
     }
 

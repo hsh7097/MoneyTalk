@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.feature.chat.data
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.entity.ChatEntity
 import javax.inject.Inject
@@ -20,7 +21,6 @@ class ChatRepositoryImpl @Inject constructor(
 ) : ChatRepository {
 
     companion object {
-        private const val TAG = "ChatRepository"
         private const val WINDOW_SIZE_TURNS = 3      // 최근 3턴 유지
         private const val WINDOW_SIZE_MESSAGES = 6   // 3턴 = 6메시지 (사용자+AI)
     }
@@ -87,7 +87,6 @@ class ChatRepositoryImpl @Inject constructor(
 
             // 윈도우 크기 이하면 요약 불필요
             if (totalMessages <= WINDOW_SIZE_MESSAGES) {
-                Log.d(TAG, "메시지 수($totalMessages)가 윈도우 크기 이하, 요약 생략")
                 return
             }
 
@@ -111,12 +110,11 @@ class ChatRepositoryImpl @Inject constructor(
             val result = geminiRepository.generateRollingSummary(existingSummary, newMessagesText)
             result.onSuccess { newSummary ->
                 chatDao.updateSessionSummary(sessionId, newSummary)
-                Log.d(TAG, "Rolling Summary 갱신 완료: ${newSummary.take(100)}...")
             }.onFailure { e ->
-                Log.e(TAG, "Rolling Summary 생성 실패, 기존 요약 유지", e)
+                MoneyTalkLogger.e("Rolling Summary 생성 실패, 기존 요약 유지", e)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "updateRollingSummary 오류", e)
+            MoneyTalkLogger.e("updateRollingSummary 오류", e)
         }
     }
 }

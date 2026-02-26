@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.sms2
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
@@ -41,7 +42,6 @@ class SmsTemplateEngine @Inject constructor(
 ) {
 
     companion object {
-        private const val TAG = "SmsTemplateEngine"
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
         /** 429 Rate Limit 재시도 최대 횟수 */
@@ -222,7 +222,7 @@ class SmsTemplateEngine @Inject constructor(
             try {
                 val apiKey = apiKeyProvider.getApiKey()
                 if (apiKey.isBlank()) {
-                    Log.e(TAG, "API 키가 설정되지 않음")
+                    MoneyTalkLogger.e("API 키가 설정되지 않음")
                     return@withContext templates.map { null }
                 }
 
@@ -242,14 +242,13 @@ class SmsTemplateEngine @Inject constructor(
                 val jsonBody = gson.toJson(mapOf("requests" to requests))
 
                 val startTime = System.currentTimeMillis()
-                Log.d(TAG, "배치 임베딩 요청: ${templates.size}건")
 
                 // 429 Rate Limit 재시도 (지수 백오프)
                 var lastError: String? = null
                 for (attempt in 0 until MAX_RETRIES) {
                     if (attempt > 0) {
                         val delayMs = INITIAL_RETRY_DELAY_MS * (1L shl (attempt - 1))
-                        Log.w(TAG, "429 재시도 ${attempt}/$MAX_RETRIES, ${delayMs}ms 대기")
+                        MoneyTalkLogger.w("429 재시도 ${attempt}/$MAX_RETRIES, ${delayMs}ms 대기")
                         kotlinx.coroutines.delay(delayMs)
                     }
 
@@ -267,15 +266,15 @@ class SmsTemplateEngine @Inject constructor(
                         val isQuotaExceeded =
                             responseBody?.contains("exceeded your current quota") == true
                         if (isQuotaExceeded) {
-                            Log.e(TAG, "임베딩 일일 할당량(Quota) 초과 - 재시도 불가")
+                            MoneyTalkLogger.e("임베딩 일일 할당량(Quota) 초과 - 재시도 불가")
                             return@withContext templates.map { null }
                         }
-                        Log.w(TAG, "429 Rate Limit (시도 ${attempt + 1}/$MAX_RETRIES, ${templates.size}건)")
+                        MoneyTalkLogger.w("429 Rate Limit (시도 ${attempt + 1}/$MAX_RETRIES, ${templates.size}건)")
                         continue
                     }
 
                     if (!response.isSuccessful) {
-                        Log.e(TAG, "배치 임베딩 API 실패: ${response.code} - ${responseBody?.take(200)}")
+                        MoneyTalkLogger.e("배치 임베딩 API 실패: ${response.code} - ${responseBody?.take(200)}")
                         return@withContext templates.map { null }
                     }
 
@@ -294,15 +293,14 @@ class SmsTemplateEngine @Inject constructor(
                     }
 
                     val elapsed = System.currentTimeMillis() - startTime
-                    Log.d(TAG, "배치 임베딩 성공: ${result.size}건 (${elapsed}ms)")
                     return@withContext result
                 }
 
                 // 모든 재시도 실패
-                Log.e(TAG, "배치 임베딩 최종 실패 (${MAX_RETRIES}회 시도): $lastError")
+                MoneyTalkLogger.e("배치 임베딩 최종 실패 (${MAX_RETRIES}회 시도): $lastError")
                 templates.map { null }
             } catch (e: Exception) {
-                Log.e(TAG, "배치 임베딩 실패: ${e.message}", e)
+                MoneyTalkLogger.e("배치 임베딩 실패: ${e.message}", e)
                 templates.map { null }
             }
         }
