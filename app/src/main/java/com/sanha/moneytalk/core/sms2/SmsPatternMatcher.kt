@@ -162,8 +162,8 @@ class SmsPatternMatcher @Inject constructor(
         val mainPaymentBySender = mainPaymentPatterns.groupBy { normalizeAddress(it.senderAddress) }
         val exceptionPaymentBySender = exceptionPaymentPatterns.groupBy { normalizeAddress(it.senderAddress) }
 
-        // 원격 룰 비동기 로드 시작 (실제 필요할 때 await)
-        val remoteRulesDeferred = async(Dispatchers.IO) { remoteSmsRuleRepository.loadRules() }
+        // 원격 룰은 로컬 매칭 실패 시점에만 비동기로 로드 시작
+        var remoteRulesDeferred: kotlinx.coroutines.Deferred<Map<String, List<RemoteSmsRule>>>? = null
         var remoteRules: Map<String, List<RemoteSmsRule>>? = null
 
         var remoteMatchCount = 0
@@ -176,11 +176,14 @@ class SmsPatternMatcher @Inject constructor(
 
         for (embedded in embeddedSmsList) {
             val sender = normalizeAddress(embedded.input.address)
+            val nonPaymentCandidates = nonPaymentBySender[sender] ?: nonPaymentPatterns
+            val mainPaymentCandidates = mainPaymentBySender[sender] ?: mainPaymentPatterns
+            val exceptionPaymentCandidates = exceptionPaymentBySender[sender] ?: exceptionPaymentPatterns
 
             // --- [1] 비결제 패턴 우선 확인 (빠른 제외) ---
             val nonPaymentMatch = findBestMatch(
                 embedded.embedding,
-                nonPaymentBySender[sender].orEmpty(),
+                nonPaymentCandidates,
                 NON_PAYMENT_THRESHOLD
             )
             if (nonPaymentMatch != null) {
@@ -193,11 +196,11 @@ class SmsPatternMatcher @Inject constructor(
             // 메인 SMS에 적용되는 것을 방지
             val paymentMatch = findBestMatch(
                 embedded.embedding,
-                mainPaymentBySender[sender].orEmpty(),
+                mainPaymentCandidates,
                 PAYMENT_MATCH_THRESHOLD
             ) ?: findBestMatch(
                 embedded.embedding,
-                exceptionPaymentBySender[sender].orEmpty(),
+                exceptionPaymentCandidates,
                 PAYMENT_MATCH_THRESHOLD
             )
 
@@ -226,7 +229,12 @@ class SmsPatternMatcher @Inject constructor(
                 }
             } else {
                 // --- [3] 원격 룰 매칭 (2순위: RTDB) ---
-                val rules = remoteRules ?: remoteRulesDeferred.await().also { remoteRules = it }
+                val rules = remoteRules ?: run {
+                    val deferred = remoteRulesDeferred
+                        ?: async(Dispatchers.IO) { remoteSmsRuleRepository.loadRules() }
+                            .also { remoteRulesDeferred = it }
+                    deferred.await().also { remoteRules = it }
+                }
                 val remoteResult = matchWithRemoteRules(embedded, rules, promotedRuleIds)
                 if (remoteResult != null) {
                     matched.add(remoteResult)
@@ -237,11 +245,6 @@ class SmsPatternMatcher @Inject constructor(
                     if (rules.isNotEmpty()) remoteFailCount++
                 }
             }
-        }
-
-        // 원격 룰을 한 번도 사용하지 않았다면 백그라운드 로드를 취소
-        if (remoteRules == null) {
-            remoteRulesDeferred.cancel()
         }
 
         // 매칭 카운트 배치 업데이트 (N_unique DB 호출, N_total 대비 대폭 절감)
