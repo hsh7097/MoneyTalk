@@ -25,11 +25,13 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -78,8 +80,10 @@ class CategoryDetailViewModel @Inject constructor(
         private const val PAGE_CACHE_RANGE = 2
     }
 
-    /** 배너 광고 노출 여부 (RTDB reward_ad_enabled 연동) */
-    fun isBannerAdEnabled(): Boolean = premiumManager.premiumConfig.value.rewardAdEnabled
+    /** 배너 광고 노출 여부 (RTDB reward_ad_enabled 연동, 변경 시 자동 반영) */
+    val isBannerAdEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
+        .map { it.rewardAdEnabled }
+        .distinctUntilChanged()
 
     // Intent extras (SavedStateHandle로 주입)
     private val categoryDisplayName: String =

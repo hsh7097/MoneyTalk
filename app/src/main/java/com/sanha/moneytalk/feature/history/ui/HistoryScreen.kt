@@ -199,7 +199,8 @@ fun HistoryScreen(
             )
         }
 
-        val isBannerAdEnabled = mainViewModel.adManager.isRewardAdEnabled()
+        val isBannerAdEnabled by mainViewModel.adManager.isBannerAdEnabledFlow
+            .collectAsStateWithLifecycle(initialValue = false)
 
         // 콘텐츠 — HorizontalPager로 월별 페이징
         HorizontalPager(
