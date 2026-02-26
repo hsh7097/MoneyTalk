@@ -115,6 +115,12 @@ class SmsGroupClassifier @Inject constructor(
         /** Classifier repair 대상 near-miss 하한 (이 비율 미만이면 repair 스킵) */
         private const val REGEX_NEAR_MISS_MIN_RATIO = 0.2f
 
+        /** 템플릿 기반 시드 그룹 최소 멤버 수 */
+        private const val TEMPLATE_SEED_MIN_BUCKET_SIZE = 2
+
+        /** 발신번호 내 유사도 그룹핑 최대 대상 수 (초과 시 단독 그룹으로 빠르게 처리) */
+        private const val SIMILARITY_GROUPING_MAX_SIZE = 120
+
         /** 발신번호 정규화: 하이픈/공백/괄호 제거용 */
         private val ADDRESS_CLEAN_PATTERN = Regex("""[-\s().]""")
 
@@ -282,12 +288,12 @@ class SmsGroupClassifier @Inject constructor(
 
         // [5-1] 그룹핑 (Level 1~3: 발신번호 → 벡터 유사도 → 소그룹 병합)
         onProgress?.invoke("비슷한 문자 묶는 중...", 0, unmatchedList.size)
-        val groups = groupByAddressThenSimilarity(unmatchedList)
+        val groups = groupByAddressThenSimilarity(unmatchedList) { current, total ->
+            onProgress?.invoke("비슷한 문자 묶는 중...", current, total)
+        }
 
         // [5-1.5] 발신번호 단위로 재집계 → SourceGroup 생성
         val sourceGroups = buildSourceGroups(groups)
-        for (sg in sourceGroups) {
-        }
 
         // [5-1.7] DB에서 발신번호별 메인 패턴 선조회
         // 이전 동기화에서 등록된 메인 그룹의 regex를 가져와 예외 그룹 regex 생성 시 참조로 사용
@@ -300,6 +306,7 @@ class SmsGroupClassifier @Inject constructor(
 
         // [5-2 ~ 5-4] 발신번호 단위로 처리
         // 각 SourceGroup 내에서: 메인 케이스 먼저 → 예외 케이스에 메인 컨텍스트 전달
+        onProgress?.invoke("AI가 결제 내역 분석 중...", 0, sourceGroups.size)
         val semaphore = Semaphore(LLM_CONCURRENCY)
         val processedSources = AtomicInteger(0)
 
@@ -916,30 +923,99 @@ class SmsGroupClassifier @Inject constructor(
      * @return 그룹 리스트 (멤버 많은 순 정렬)
      */
     private suspend fun groupByAddressThenSimilarity(
-        embeddedSms: List<EmbeddedSms>
+        embeddedSms: List<EmbeddedSms>,
+        onProgress: ((current: Int, total: Int) -> Unit)? = null
     ): List<VectorGroup> {
         // Level 1: 발신번호 기준 분류
         val addressGroups = embeddedSms.groupBy { normalizeAddress(it.input.address) }
 
 
         val allGroups = mutableListOf<VectorGroup>()
+        var processedCount = 0
 
-        for ((address, smsInAddress) in addressGroups) {
-            if (smsInAddress.size == 1) {
-                // 1건뿐이면 단독 그룹
-                allGroups.add(VectorGroup(smsInAddress[0], mutableListOf(smsInAddress[0])))
-                continue
-            }
-
-            // Level 2: 벡터 유사도 기반 서브그룹핑
-            val subGroups = groupBySimilarityInternal(smsInAddress)
-
-            // Level 3: 소그룹 병합
-            val merged = mergeSmallGroups(subGroups, address)
+        for ((_, smsInAddress) in addressGroups) {
+            val subGroups = buildSubGroupsByTemplateThenSimilarity(smsInAddress)
+            val merged = mergeSmallGroups(subGroups)
             allGroups.addAll(merged)
+
+            processedCount += smsInAddress.size
+            onProgress?.invoke(processedCount.coerceAtMost(embeddedSms.size), embeddedSms.size)
         }
 
         return allGroups.sortedByDescending { it.members.size }
+    }
+
+    /**
+     * 발신번호 내 서브그룹 구성:
+     * 1) 템플릿 기준으로 먼저 시드 그룹 생성 (O(n))
+     * 2) 단건 템플릿은 기존 시드 대표와 유사도 매칭 후 병합
+     * 3) 남은 단건만 유사도 클러스터링 (최대 SIMILARITY_GROUPING_MAX_SIZE)
+     */
+    private suspend fun buildSubGroupsByTemplateThenSimilarity(
+        smsInAddress: List<EmbeddedSms>
+    ): List<VectorGroup> {
+        if (smsInAddress.size == 1) {
+            return listOf(VectorGroup(smsInAddress[0], mutableListOf(smsInAddress[0])))
+        }
+
+        val byTemplate = smsInAddress.groupBy { it.template }
+        val seededGroups = mutableListOf<VectorGroup>()
+        val singles = mutableListOf<EmbeddedSms>()
+
+        for ((_, members) in byTemplate) {
+            if (members.size >= TEMPLATE_SEED_MIN_BUCKET_SIZE) {
+                seededGroups.add(
+                    VectorGroup(
+                        representative = members.first(),
+                        members = members.toMutableList()
+                    )
+                )
+            } else {
+                singles.add(members.first())
+            }
+        }
+
+        if (seededGroups.isNotEmpty() && singles.isNotEmpty()) {
+            val unresolved = mutableListOf<EmbeddedSms>()
+            for (single in singles) {
+                var bestGroup: VectorGroup? = null
+                var bestSimilarity = 0f
+                for (group in seededGroups) {
+                    val similarity = patternMatcher.cosineSimilarity(
+                        single.embedding,
+                        group.representative.embedding
+                    )
+                    if (similarity > bestSimilarity) {
+                        bestSimilarity = similarity
+                        bestGroup = group
+                    }
+                }
+                if (bestGroup != null && bestSimilarity >= GROUPING_SIMILARITY) {
+                    bestGroup.members.add(single)
+                } else {
+                    unresolved.add(single)
+                }
+            }
+            singles.clear()
+            singles.addAll(unresolved)
+        }
+
+        if (singles.isEmpty()) return seededGroups
+
+        if (singles.size > SIMILARITY_GROUPING_MAX_SIZE) {
+            val singletonGroups = singles.map { single ->
+                VectorGroup(single, mutableListOf(single))
+            }
+            return seededGroups + singletonGroups
+        }
+
+        val similarityGroups = if (singles.size == 1) {
+            listOf(VectorGroup(singles.first(), mutableListOf(singles.first())))
+        } else {
+            groupBySimilarityInternal(singles)
+        }
+
+        return seededGroups + similarityGroups
     }
 
     /**
@@ -997,10 +1073,7 @@ class SmsGroupClassifier @Inject constructor(
      * 같은 발신번호 내 소그룹(멤버 ≤ 5)을 최대 그룹에 흡수.
      * 대표 벡터 간 유사도 ≥ 0.90이면 병합, 미만이면 독립 유지.
      */
-    private fun mergeSmallGroups(
-        subGroups: List<VectorGroup>,
-        address: String
-    ): List<VectorGroup> {
+    private fun mergeSmallGroups(subGroups: List<VectorGroup>): List<VectorGroup> {
         if (subGroups.size <= 1) return subGroups
 
         val sorted = subGroups.sortedByDescending { it.members.size }
