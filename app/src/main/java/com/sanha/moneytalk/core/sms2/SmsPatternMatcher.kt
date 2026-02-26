@@ -400,7 +400,6 @@ class SmsPatternMatcher @Inject constructor(
                 amountRegex = pattern.amountRegex,
                 storeRegex = pattern.storeRegex,
                 cardRegex = pattern.cardRegex,
-                fallbackCategory = pattern.parsedCategory,
                 fallbackCardName = pattern.parsedCardName.ifBlank { "기타" }
             )
             if (result != null) return result
@@ -419,12 +418,15 @@ class SmsPatternMatcher @Inject constructor(
      * amountRegex/storeRegex/cardRegex의 첫 번째 캡처 그룹에서 값 추출.
      * regex로 추출 실패 시 null 반환 (다른 SMS의 값을 덮어씌우지 않음).
      *
+     * 카테고리는 항상 "미분류"로 설정 → saveExpenses()에서 4-tier 분류로 위임.
+     * (같은 패턴이라도 가게명이 다를 수 있으므로 패턴의 parsedCategory를 사용하지 않음)
+     *
      * @param smsBody 원본 SMS 본문
      * @param smsTimestamp SMS 수신 시간 (ms)
      * @param amountRegex 금액 추출 정규식 (캡처 그룹 1)
      * @param storeRegex 가게명 추출 정규식 (캡처 그룹 1)
      * @param cardRegex 카드명 추출 정규식 (캡처 그룹 1)
-     * @param fallbackCategory 카테고리 힌트 (가게명 일치 시에만 사용)
+     * @param fallbackCardName cardRegex 실패 시 대체 카드명
      * @return 파싱 성공 시 SmsAnalysisResult, 추출 실패 시 null
      */
     fun parseWithRegex(
@@ -433,7 +435,6 @@ class SmsPatternMatcher @Inject constructor(
         amountRegex: String,
         storeRegex: String,
         cardRegex: String = "",
-        fallbackCategory: String = "",
         fallbackCardName: String = "기타"
     ): SmsAnalysisResult? {
         val amountPattern = compileRegex(amountRegex) ?: return null
