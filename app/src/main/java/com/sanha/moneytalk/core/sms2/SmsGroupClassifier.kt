@@ -106,8 +106,11 @@ class SmsGroupClassifier @Inject constructor(
         /** RTDB 표본 중복 판정 유사도 (0.99 = 동일 형식만 스킵) */
         private const val RTDB_DEDUP_SIMILARITY = 0.99f
 
-        /** regex 검증: 샘플 중 이 비율 이상 파싱 성공해야 유효 (50%) */
-        private const val REGEX_VALIDATION_MIN_PASS_RATIO = 0.5f
+        /** regex 검증: 샘플 중 이 비율 이상 파싱 성공해야 유효 (60%) */
+        private const val REGEX_VALIDATION_MIN_PASS_RATIO = 0.6f
+
+        /** Classifier repair 대상 near-miss 하한 (이 비율 미만이면 repair 스킵) */
+        private const val REGEX_NEAR_MISS_MIN_RATIO = 0.2f
 
         /** 발신번호 정규화: 하이픈/공백/괄호 제거용 */
         private val ADDRESS_CLEAN_PATTERN = Regex("""[-\s().]""")
@@ -211,6 +214,21 @@ class SmsGroupClassifier @Inject constructor(
         val amountRegex: String = "",
         val storeRegex: String = "",
         val cardRegex: String = ""
+    )
+
+    /**
+     * regex 검증 상세 결과 — near-miss repair 판단에 사용
+     *
+     * @property passed 검증 통과 여부 (passRatio >= REGEX_VALIDATION_MIN_PASS_RATIO)
+     * @property passRatio 샘플 파싱 성공 비율 (0.0 ~ 1.0)
+     * @property failedSampleIndices 파싱 실패한 샘플의 인덱스 목록
+     * @property failedSampleDiagnostics 파싱 실패 사유(샘플 인덱스와 동일 순서)
+     */
+    private data class RegexValidationDetail(
+        val passed: Boolean,
+        val passRatio: Float,
+        val failedSampleIndices: List<Int>,
+        val failedSampleDiagnostics: List<String>
     )
 
     /** regex 생성 실패 쿨다운 추적 */
@@ -509,7 +527,7 @@ class SmsGroupClassifier @Inject constructor(
                 regexResult.amountRegex.isNotBlank() && regexResult.storeRegex.isNotBlank()
             ) {
                 // regex 검증: 샘플 SMS에 실제 적용하여 파싱 성공률 확인
-                val validated = validateRegexAgainstSamples(
+                val validation = validateRegexAgainstSamples(
                     amountRegex = regexResult.amountRegex,
                     storeRegex = regexResult.storeRegex,
                     cardRegex = regexResult.cardRegex,
@@ -517,22 +535,54 @@ class SmsGroupClassifier @Inject constructor(
                     timestamps = timestamps
                 )
 
-                if (validated) {
+                if (validation.passed) {
                     amountRegex = regexResult.amountRegex
                     storeRegex = regexResult.storeRegex
                     cardRegex = regexResult.cardRegex
                     parseSource = "llm_regex"
                     clearRegexFailure(representative.template)
                 } else {
-                    MoneyTalkLogger.w("regex 생성 OK but 검증 실패 → 템플릿 폴백 시도")
-                    recordRegexFailure(representative.template)
+                    // near-miss 구간이면 Classifier repair 1회 시도
+                    if (validation.passRatio >= REGEX_NEAR_MISS_MIN_RATIO) {
+                        MoneyTalkLogger.w("regex near-miss (${(validation.passRatio * 100).toInt()}%) → Classifier repair 시도")
+                        val failedBodies = validation.failedSampleIndices.map { samples[it] }
+                        val repaired = smsExtractor.repairRegexFromClassifier(
+                            currentRegex = regexResult,
+                            allSamples = samples,
+                            failedSampleBodies = failedBodies,
+                            failedSampleDiagnostics = validation.failedSampleDiagnostics,
+                            passRatio = validation.passRatio
+                        )
+                        if (repaired != null) {
+                            val repairValidation = validateRegexAgainstSamples(
+                                amountRegex = repaired.amountRegex,
+                                storeRegex = repaired.storeRegex,
+                                cardRegex = repaired.cardRegex,
+                                samples = samples,
+                                timestamps = timestamps
+                            )
+                            if (repairValidation.passed) {
+                                MoneyTalkLogger.w("Classifier repair 성공 (${(repairValidation.passRatio * 100).toInt()}%) → regex 채택")
+                                amountRegex = repaired.amountRegex
+                                storeRegex = repaired.storeRegex
+                                cardRegex = repaired.cardRegex
+                                parseSource = "llm_regex"
+                                clearRegexFailure(representative.template)
+                            }
+                        }
+                    }
 
-                    val fallback = buildTemplateFallbackRegex(representative.template)
-                    if (fallback != null) {
-                        amountRegex = fallback.amountRegex
-                        storeRegex = fallback.storeRegex
-                        cardRegex = fallback.cardRegex
-                        parseSource = "template_regex"
+                    // repair 미시도/실패 → 템플릿 폴백
+                    if (amountRegex.isBlank()) {
+                        MoneyTalkLogger.w("regex 검증 실패 (${(validation.passRatio * 100).toInt()}%) → 템플릿 폴백 시도")
+                        recordRegexFailure(representative.template)
+                        val fallback = buildTemplateFallbackRegex(representative.template)
+                        if (fallback != null) {
+                            amountRegex = fallback.amountRegex
+                            storeRegex = fallback.storeRegex
+                            cardRegex = fallback.cardRegex
+                            parseSource = "template_regex"
+                        }
                     }
                 }
             } else {
@@ -640,21 +690,51 @@ class SmsGroupClassifier @Inject constructor(
                 mainRegexContext = mainRegexContext
             )
 
-            val retryValid = retryRegex != null && retryRegex.isPayment &&
-                retryRegex.amountRegex.isNotBlank() && retryRegex.storeRegex.isNotBlank() &&
-                validateRegexAgainstSamples(
+            // retry regex 검증 + near-miss repair
+            var adoptedRetryRegex: GeminiSmsExtractor.LlmRegexResult? = null
+            if (retryRegex != null && retryRegex.isPayment &&
+                retryRegex.amountRegex.isNotBlank() && retryRegex.storeRegex.isNotBlank()
+            ) {
+                val retryValidation = validateRegexAgainstSamples(
                     amountRegex = retryRegex.amountRegex,
                     storeRegex = retryRegex.storeRegex,
                     cardRegex = retryRegex.cardRegex,
                     samples = retrySamples,
                     timestamps = retryTimestamps
                 )
+                if (retryValidation.passed) {
+                    adoptedRetryRegex = retryRegex
+                } else if (retryValidation.passRatio >= REGEX_NEAR_MISS_MIN_RATIO) {
+                    MoneyTalkLogger.w("retry regex near-miss (${(retryValidation.passRatio * 100).toInt()}%) → Classifier repair 시도")
+                    val failedBodies = retryValidation.failedSampleIndices.map { retrySamples[it] }
+                    val repaired = smsExtractor.repairRegexFromClassifier(
+                        currentRegex = retryRegex,
+                        allSamples = retrySamples,
+                        failedSampleBodies = failedBodies,
+                        failedSampleDiagnostics = retryValidation.failedSampleDiagnostics,
+                        passRatio = retryValidation.passRatio
+                    )
+                    if (repaired != null) {
+                        val repairValidation = validateRegexAgainstSamples(
+                            amountRegex = repaired.amountRegex,
+                            storeRegex = repaired.storeRegex,
+                            cardRegex = repaired.cardRegex,
+                            samples = retrySamples,
+                            timestamps = retryTimestamps
+                        )
+                        if (repairValidation.passed) {
+                            MoneyTalkLogger.w("retry Classifier repair 성공 (${(repairValidation.passRatio * 100).toInt()}%) → regex 채택")
+                            adoptedRetryRegex = repaired
+                        }
+                    }
+                }
+            }
 
-            if (retryValid && retryRegex != null) {
+            if (adoptedRetryRegex != null) {
                 // regex 재생성 성공 → 패턴 DB 갱신 + 전체 멤버 regex 파싱
-                amountRegex = retryRegex.amountRegex
-                storeRegex = retryRegex.storeRegex
-                cardRegex = retryRegex.cardRegex
+                amountRegex = adoptedRetryRegex.amountRegex
+                storeRegex = adoptedRetryRegex.storeRegex
+                cardRegex = adoptedRetryRegex.cardRegex
                 registerPaymentPattern(
                     embedded = representative,
                     analysis = llmAnalysis,
@@ -1171,16 +1251,17 @@ class SmsGroupClassifier @Inject constructor(
      *
      * 검증 기준:
      * - 각 샘플에 regex를 적용해 금액/가게명이 추출되는지 확인
-     * - 전체 샘플 중 50% 이상 파싱 성공해야 유효
+     * - 전체 샘플 중 60% 이상 파싱 성공해야 유효 (REGEX_VALIDATION_MIN_PASS_RATIO)
      *
      * LLM hallucination으로 인한 깨진 regex가 DB에 등록되는 것을 방지.
+     * near-miss 구간(20%~60%)이면 Classifier repair 시도 대상.
      *
      * @param amountRegex LLM이 생성한 금액 정규식
      * @param storeRegex LLM이 생성한 가게명 정규식
      * @param cardRegex LLM이 생성한 카드명 정규식
      * @param samples 검증에 사용할 SMS 본문 리스트
      * @param timestamps 검증에 사용할 SMS 타임스탬프 리스트
-     * @return 검증 통과 여부
+     * @return 검증 상세 결과 (통과 여부 + 성공 비율 + 실패 인덱스)
      */
     private fun validateRegexAgainstSamples(
         amountRegex: String,
@@ -1188,13 +1269,25 @@ class SmsGroupClassifier @Inject constructor(
         cardRegex: String,
         samples: List<String>,
         timestamps: List<Long>
-    ): Boolean {
-        if (samples.isEmpty()) return false
+    ): RegexValidationDetail {
+        if (samples.isEmpty()) return RegexValidationDetail(
+            passed = false,
+            passRatio = 0f,
+            failedSampleIndices = emptyList(),
+            failedSampleDiagnostics = emptyList()
+        )
+
+        val amountPattern = runCatching { Regex(amountRegex) }.getOrNull()
+        val storePattern = runCatching { Regex(storeRegex) }.getOrNull()
+        val cardPattern = if (cardRegex.isNotBlank()) runCatching { Regex(cardRegex) }.getOrNull() else null
 
         var passCount = 0
+        val failedIndices = mutableListOf<Int>()
+        val failedDiagnostics = mutableListOf<String>()
         for (i in samples.indices) {
+            val sampleBody = samples[i]
             val result = patternMatcher.parseWithRegex(
-                smsBody = samples[i],
+                smsBody = sampleBody,
                 smsTimestamp = timestamps.getOrElse(i) { 0L },
                 amountRegex = amountRegex,
                 storeRegex = storeRegex,
@@ -1202,6 +1295,16 @@ class SmsGroupClassifier @Inject constructor(
             )
             if (result != null && result.amount > 0) {
                 passCount++
+            } else {
+                failedIndices.add(i)
+                failedDiagnostics.add(
+                    diagnoseRegexFailure(
+                        sampleBody = sampleBody,
+                        amountPattern = amountPattern,
+                        storePattern = storePattern,
+                        cardPattern = cardPattern
+                    )
+                )
             }
         }
 
@@ -1209,7 +1312,64 @@ class SmsGroupClassifier @Inject constructor(
         val passed = passRatio >= REGEX_VALIDATION_MIN_PASS_RATIO
 
 
-        return passed
+        return RegexValidationDetail(
+            passed = passed,
+            passRatio = passRatio,
+            failedSampleIndices = failedIndices,
+            failedSampleDiagnostics = failedDiagnostics
+        )
+    }
+
+    /**
+     * regex 검증 실패 원인을 샘플 단위로 진단.
+     * repair 프롬프트에 전달되어 LLM이 실패 포인트를 정확히 수정하도록 돕는다.
+     */
+    private fun diagnoseRegexFailure(
+        sampleBody: String,
+        amountPattern: Regex?,
+        storePattern: Regex?,
+        cardPattern: Regex?
+    ): String {
+        val reasons = mutableListOf<String>()
+
+        val amountValue = amountPattern?.let { extractGroup1(it, sampleBody) }
+        if (amountPattern == null) {
+            reasons.add("amountRegex compile failed")
+        } else if (amountValue.isNullOrBlank()) {
+            reasons.add("amountRegex no match")
+        } else {
+            val numericAmount = amountValue
+                .replace(",", "")
+                .replace(Regex("""[^\d]"""), "")
+                .toIntOrNull()
+            if (numericAmount == null || numericAmount <= 0) {
+                reasons.add("amount capture invalid")
+            }
+        }
+
+        val storeValue = storePattern?.let { extractGroup1(it, sampleBody) }
+        if (storePattern == null) {
+            reasons.add("storeRegex compile failed")
+        } else if (storeValue.isNullOrBlank()) {
+            reasons.add("storeRegex no match")
+        }
+
+        if (cardPattern != null) {
+            val cardValue = extractGroup1(cardPattern, sampleBody)
+            if (cardValue.isNullOrBlank()) {
+                reasons.add("cardRegex no match")
+            }
+        }
+
+        if (reasons.isEmpty()) {
+            reasons.add("parseWithRegex returned null")
+        }
+        return reasons.joinToString(", ")
+    }
+
+    private fun extractGroup1(regex: Regex, text: String): String? {
+        val match = regex.find(text) ?: return null
+        return match.groupValues.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() }
     }
 
     // ===== [5-3] regex 실패 쿨다운 =====

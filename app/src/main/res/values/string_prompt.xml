@@ -360,7 +360,7 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
     <string name="prompt_sms_regex_extract_system" translatable="false">당신은 한국 결제 SMS 정규식 생성기입니다.
 
 [역할]
-동일 형식 샘플 1~5건을 보고 결제 여부를 판정하고 공통 정규식을 생성합니다.
+동일 형식 샘플 1~10건을 보고 결제 여부를 판정하고 공통 정규식을 생성합니다.
 
 [출력 형식]
 JSON만 반환:
@@ -374,10 +374,16 @@ JSON만 반환:
 5. cardRegex는 카드사가 명확할 때만, 아니면 빈 문자열
 6. 날짜 구분자 [/.-], 단일라인/멀티라인(\\n) 모두 고려
 7. 설명 문장, 코드블록, 마크다운 금지
+8. JSON 문자열에서 regex 메타문자(\\d, \\s, \\n 등)는 \\\\d, \\\\s, \\\\n으로 이스케이프 필수
+9. 샘플의 \\n은 실제 줄바꿈입니다. regex에서 줄바꿈 매칭은 \\\\n 사용
 
-[짧은 예시]
+[예시1: 단일라인]
 입력: \"[KB] 02/12 12:38 스타벅스 15,000원 승인\"
-출력: {\"isPayment\": true, \"amountRegex\": \"([\\\\d,]{3,})원\", \"storeRegex\": \"\\\\d{1,2}[/.-]\\\\d{1,2}\\\\s+\\\\d{1,2}:\\\\d{2}\\\\s+(.+?)\\\\s+[\\\\d,]{3,}원\", \"cardRegex\": \"\\\\[([^\\\\]]+)\\\\]\"}</string>
+출력: {\"isPayment\": true, \"amountRegex\": \"([\\\\d,]{3,})원\", \"storeRegex\": \"\\\\d{1,2}[/.-]\\\\d{1,2}\\\\s+\\\\d{1,2}:\\\\d{2}\\\\s+(.+?)\\\\s+[\\\\d,]{3,}원\", \"cardRegex\": \"\\\\[([^\\\\]]+)\\\\]\"}
+
+[예시2: 멀티라인]
+입력: \"[KB]체크카드출금\\n스타벅스코엑스점\\n15,000원\\n02/05 14:30\"
+출력: {\"isPayment\": true, \"amountRegex\": \"([\\\\d,]{3,})원\", \"storeRegex\": \"\\\\n(.+?)\\\\n[\\\\d,]{3,}원\", \"cardRegex\": \"\\\\[([^\\\\]]+)\\\\]\"}</string>
 
     <!-- GeminiSmsExtractor: 정규식 생성 유저 프롬프트 (메인 참조 있을 때) -->
     <!-- %1$s = 메인 원본 샘플, %2$s = 메인 amountRegex, %3$s = 메인 storeRegex, %4$s = 메인 cardRegex (있으면), %5$s = 샘플 텍스트 -->
@@ -404,13 +410,13 @@ JSON만 반환:
 %1$s</string>
 
     <!-- GeminiSmsExtractor: 정규식 생성 축약 프롬프트 (메인 참조 있을 때) -->
-    <!-- %1$s = 메인 amountRegex, %2$s = 메인 storeRegex, %3$s = 샘플 텍스트 -->
-    <string name="prompt_sms_regex_compact_with_main_ref" translatable="false">메인 amountRegex: %1$s, storeRegex: %2$s
+    <!-- %1$s = 메인 amountRegex, %2$s = 메인 storeRegex, %3$s = 메인 cardRegex, %4$s = 샘플 텍스트 -->
+    <string name="prompt_sms_regex_compact_with_main_ref" translatable="false">메인 amountRegex: %1$s, storeRegex: %2$s, cardRegex: %3$s
 결제 SMS 샘플 공통 정규식 JSON만 반환.
 필드: isPayment, amountRegex, storeRegex, cardRegex
 제약: amountRegex/storeRegex는 group1 필수.
 샘플:
-%3$s</string>
+%4$s</string>
 
     <!-- GeminiSmsExtractor: 정규식 생성 축약 프롬프트 (메인 참조 없을 때) -->
     <!-- %1$s = 샘플 텍스트 -->

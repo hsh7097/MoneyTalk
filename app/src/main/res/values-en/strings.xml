@@ -397,4 +397,12 @@
     <string name="force_update_message">A new version is available.\nPlease update to version %1$s to continue using the app.\n\nCurrent version: %2$s</string>
     <string name="force_update_button">Update</string>
     <string name="force_update_exit">Exit</string>
+
+    <!-- SMS regex repair failure reasons -->
+    <string name="sms_regex_reason_json_parse_failed" translatable="false">Response is not valid JSON. Return JSON format only.</string>
+    <string name="sms_regex_reason_is_payment_false" translatable="false">isPayment is false. Set it to true for payment SMS.</string>
+    <string name="sms_regex_reason_required_regex_blank" translatable="false">amountRegex or storeRegex is empty. Both fields are required.</string>
+    <string name="sms_regex_reason_amount_compile_failed" translatable="false">amountRegex is not a valid regex. Check JSON escaping.</string>
+    <string name="sms_regex_reason_store_compile_failed" translatable="false">storeRegex is not a valid regex. Check JSON escaping.</string>
+    <string name="sms_regex_reason_card_compile_failed" translatable="false">cardRegex is not a valid regex. Check JSON escaping.</string>
 </resources>

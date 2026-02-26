@@ -479,6 +479,14 @@
     <string name="force_update_button">업데이트</string>
     <string name="force_update_exit">종료</string>
 
+    <!-- SMS regex 수선 실패 사유 -->
+    <string name="sms_regex_reason_json_parse_failed" translatable="false">응답이 유효한 JSON이 아닙니다. JSON 형식으로만 반환하세요.</string>
+    <string name="sms_regex_reason_is_payment_false" translatable="false">isPayment가 false입니다. 결제 SMS이면 true로 설정하세요.</string>
+    <string name="sms_regex_reason_required_regex_blank" translatable="false">amountRegex 또는 storeRegex가 비어 있습니다. 두 필드 모두 필수입니다.</string>
+    <string name="sms_regex_reason_amount_compile_failed" translatable="false">amountRegex가 유효하지 않은 정규식입니다. JSON 이스케이프를 확인하세요.</string>
+    <string name="sms_regex_reason_store_compile_failed" translatable="false">storeRegex가 유효하지 않은 정규식입니다. JSON 이스케이프를 확인하세요.</string>
+    <string name="sms_regex_reason_card_compile_failed" translatable="false">cardRegex가 유효하지 않은 정규식입니다. JSON 이스케이프를 확인하세요.</string>
+
     <!-- 카테고리 상세 -->
     <string name="action_back">뒤로가기</string>
     <string name="category_detail_spending_trend">%s 지출 추이</string>
