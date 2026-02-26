@@ -143,7 +143,7 @@ SimilarityPolicy (판단 인터페이스)
 |------|-----|------|------|
 | `GROUPING_SIMILARITY` | 0.95 | 벡터 그룹핑 유사도 | SmsGroupClassifier |
 | `SMALL_GROUP_MERGE_THRESHOLD` | 5 | 소그룹 병합 대상 멤버 수 상한 | SmsGroupClassifier |
-| `SMALL_GROUP_MERGE_MIN_SIMILARITY` | 0.70 | 소그룹 병합 시 대표 벡터 최소 유사도 | SmsGroupClassifier |
+| `SMALL_GROUP_MERGE_MIN_SIMILARITY` | 0.90 | 소그룹 병합 시 대표 벡터 최소 유사도 | SmsGroupClassifier |
 | `LLM_BATCH_SIZE` | 20 | LLM 배치당 최대 SMS 수 | SmsGroupClassifier |
 | `LLM_CONCURRENCY` | 5 | LLM 병렬 동시 실행 수 | SmsGroupClassifier |
 | `REGEX_SAMPLE_SIZE` | 5 | 정규식 생성 시 사용할 샘플 수 | SmsGroupClassifier |
@@ -216,11 +216,11 @@ SimilarityPolicy (판단 인터페이스)
 0.92 ─── 결제 문자 판정 (SmsPatternMatcher.PAYMENT_MATCH_THRESHOLD / SmsPatternSimilarityPolicy.profile.confirm)
        ─── 가게명 → 카테고리 자동 적용 (StoreNameSimilarityPolicy.profile.autoApply)
 0.90 ─── 카테고리 전파 (StoreNameSimilarityPolicy.profile.propagate)
+       ─── 소그룹 병합 최소 유사도 (SmsGroupClassifier.SMALL_GROUP_MERGE_MIN_SIMILARITY)
 0.88 ─── 가게명 시맨틱 그룹핑 (StoreNameSimilarityPolicy.profile.group)
 0.85 ─── template_regex confidence (SmsGroupClassifier)
 0.80 ─── LLM 트리거 임계값 (SmsPatternSimilarityPolicy.LLM_TRIGGER_THRESHOLD) — V1 전용
        ─── LLM 고정 confidence
-0.70 ─── 소그룹 병합 최소 유사도 (SmsGroupClassifier.SMALL_GROUP_MERGE_MIN_SIMILARITY)
 0.60 ─── confidence 차단 임계값 (CategoryPropagationPolicy.MIN_PROPAGATION_CONFIDENCE)
 0.50 ─── regex 검증 최소 파싱 성공률 (SmsGroupClassifier.REGEX_VALIDATION_MIN_PASS_RATIO)
 0.00 ─── 매칭 없음

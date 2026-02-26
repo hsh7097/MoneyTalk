@@ -1,8 +1,9 @@
 package com.sanha.moneytalk.core.ad
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import android.app.Activity
 import android.content.Context
-import android.util.Log
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
@@ -53,7 +54,6 @@ class RewardAdManager @Inject constructor(
     private val premiumManager: PremiumManager
 ) {
     companion object {
-        private const val TAG = "RewardAdManager"
         /** Google 공식 테스트 리워드 광고 ID */
         private const val TEST_REWARD_AD_ID = "ca-app-pub-3940256099942544/5224354917"
         private const val MAX_RETRY_COUNT = 3
@@ -74,17 +74,14 @@ class RewardAdManager @Inject constructor(
      */
     fun preloadAd() {
         if (!premiumManager.premiumConfig.value.rewardAdEnabled) {
-            Log.d(TAG, "리워드 광고 비활성 상태, 로드 스킵")
             return
         }
 
         if (_adState.value is AdState.Loading || _adState.value is AdState.Ready) {
-            Log.d(TAG, "이미 로드 중이거나 준비 완료 상태")
             return
         }
 
         _adState.value = AdState.Loading
-        Log.d(TAG, "리워드 광고 로드 시작")
 
         val adRequest = AdRequest.Builder().build()
         RewardedAd.load(context, TEST_REWARD_AD_ID, adRequest,
@@ -93,16 +90,14 @@ class RewardAdManager @Inject constructor(
                     rewardedAd = ad
                     retryCount = 0
                     _adState.value = AdState.Ready
-                    Log.d(TAG, "리워드 광고 로드 완료")
                 }
 
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     rewardedAd = null
-                    Log.e(TAG, "리워드 광고 로드 실패: ${error.message} (code: ${error.code})")
+                    MoneyTalkLogger.e("리워드 광고 로드 실패: ${error.message} (code: ${error.code})")
 
                     if (retryCount < MAX_RETRY_COUNT) {
                         retryCount++
-                        Log.d(TAG, "재시도 $retryCount/$MAX_RETRY_COUNT")
                         _adState.value = AdState.Idle
                         preloadAd()
                     } else {
@@ -124,7 +119,7 @@ class RewardAdManager @Inject constructor(
     fun showAd(activity: Activity, onRewarded: () -> Unit, onFailed: () -> Unit) {
         val ad = rewardedAd
         if (ad == null) {
-            Log.e(TAG, "광고가 로드되지 않음")
+            MoneyTalkLogger.e("광고가 로드되지 않음")
             _adState.value = AdState.Error("광고가 준비되지 않았습니다.")
             onFailed()
             // 다시 로드 시도
@@ -136,7 +131,6 @@ class RewardAdManager @Inject constructor(
 
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
-                Log.d(TAG, "광고 닫힘")
                 rewardedAd = null
                 _adState.value = AdState.Idle
                 // 다음 광고 미리 로드
@@ -144,7 +138,7 @@ class RewardAdManager @Inject constructor(
             }
 
             override fun onAdFailedToShowFullScreenContent(error: AdError) {
-                Log.e(TAG, "광고 표시 실패: ${error.message}")
+                MoneyTalkLogger.e("광고 표시 실패: ${error.message}")
                 rewardedAd = null
                 _adState.value = AdState.Error(error.message)
                 onFailed()
@@ -153,12 +147,10 @@ class RewardAdManager @Inject constructor(
             }
 
             override fun onAdShowedFullScreenContent() {
-                Log.d(TAG, "광고 표시 시작")
             }
         }
 
         ad.show(activity) { rewardItem ->
-            Log.d(TAG, "보상 지급: type=${rewardItem.type}, amount=${rewardItem.amount}")
             onRewarded()
         }
     }
@@ -176,7 +168,6 @@ class RewardAdManager @Inject constructor(
         if (remaining <= 0) return false
 
         settingsDataStore.saveRewardChatRemaining(remaining - 1)
-        Log.d(TAG, "리워드 채팅 차감: ${remaining}회 → ${remaining - 1}회")
         return true
     }
 
@@ -189,7 +180,6 @@ class RewardAdManager @Inject constructor(
         val current = settingsDataStore.getRewardChatRemaining()
         val newCount = current + config.rewardAdChatCount
         settingsDataStore.saveRewardChatRemaining(newCount)
-        Log.d(TAG, "리워드 채팅 충전: ${current}회 → ${newCount}회 (+${config.rewardAdChatCount})")
     }
 
     /**
@@ -207,7 +197,6 @@ class RewardAdManager @Inject constructor(
      */
     suspend fun unlockFullSync() {
         settingsDataStore.saveFullSyncUnlocked(true)
-        Log.d(TAG, "전체 동기화 해제 완료 (광고 시청 보상)")
     }
 
     /**

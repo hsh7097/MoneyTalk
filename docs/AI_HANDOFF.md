@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-24
+> **최종 갱신**: 2026-02-26
 
 ---
 
@@ -238,6 +238,27 @@
 - buildComparisonText 형식 변경: "N% 더 쓰고 있어요" → "₩금액(N%) 더 쓰고 있어요"
 - Auto Backup 복원 규칙 수정 (backup_rules.xml, data_extraction_rules.xml)
 
+**Activity-scoped MainViewModel 도입**: ✅ 완료 (2026-02-25)
+- 동기화/권한/광고 통합 관리를 MainActivity-scoped ViewModel로 이관
+- PR #33 생성 + Codex 리뷰 P2 확인 (SMS 권한 없을 때 resume 시 DataRefreshEvent 미발행)
+- 결정: 현재 상태 유지 — SMS 권한 없는 사용자의 편집 화면은 자체 refresh 이벤트 발행하므로 실질적 문제 낮음
+- 매 진입 시 권한 재요청 팝업 검토 → 기각 (UX 피로감 + Google Play 정책 위반 가능성)
+
+**임베딩 차원 축소 (3072 → 768)**: ✅ 완료 (2026-02-25)
+- Gemini Embedding API `outputDimensionality=768` 설정 (SmsEmbeddingService, SmsTemplateEngine)
+- Matryoshka Representation Learning 활용 — MTEB 벤치마크 기준 품질 손실 0.26%
+- DB v3→v4 마이그레이션 (기존 3072 차원 sms_patterns, store_embeddings 삭제)
+- 코드 주석(8개 파일) + 문서(6개 md) 3072→768 갱신
+- 효과: 임베딩 저장/전송 크기 75% 감소, 코사인 유사도 연산 75% 감소
+
+**SmsGroupClassifier 품질 개선**: ✅ 완료 (2026-02-26)
+- 소그룹 병합 유사도 0.70→0.90 상향 (서로 다른 SMS 형식 과도 병합 방지)
+- RTDB 표본 수집: template 필드 추가 + regex 존재 시만 수집 (amountRegex+storeRegex 비어있는 무용 표본 제거)
+- LLM 프롬프트 개선: "예외 케이스" → "메인 케이스 참조" (같은 발신번호 메인 형식 참고하여 분석)
+- MainCaseContext.samples: 단일 sample → 3건 리스트 전달 (LLM 분석 정확도 향상)
+- buildContextualLlmInput: 메인 템플릿 + 메인 샘플 3건 + 분포도 요약을 LLM에 전달
+- 로그 추가: GeminiSmsExtractor에 프롬프트 디버깅 로그
+
 ### 대기 중인 작업
 
 - `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지 (이미 머지됨 — 정리 필요)
@@ -283,12 +304,12 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 ## 5. 주의사항
 
 ### 절대 금지
-- DB 스키마 변경 시 마이그레이션 필수 (현재 AppDatabase v3, sms_patterns v3)
+- DB 스키마 변경 시 마이그레이션 필수 (현재 AppDatabase v4, sms_patterns v3)
 - 임계값 수치 변경 시 [AI_CONTEXT.md](AI_CONTEXT.md) SSOT 먼저 업데이트
 - `!!` non-null assertion 사용 금지
 
 ### 알려진 이슈
-- `SmsGroupClassifier.kt`(sms2)의 그룹핑 임계값(0.95)과 `StoreNameGrouper.kt`(0.88)은 의도적으로 다름 (SMS 패턴 vs 가게명)
+- `SmsGroupClassifier.kt`(sms2)의 그룹핑 임계값(0.95)과 소그룹 병합(0.90), `StoreNameGrouper.kt`(0.88)은 의도적으로 다름 (SMS 패턴 vs 가게명)
 - ChatViewModel.kt가 대형 파일(~1717줄) — 향후 query/action 로직 분리 후보
 - core/sms(V1)은 SmsProcessingService 실시간 수신에서만 사용, 배치 동기화는 sms2로 완전 전환
 
@@ -302,6 +323,9 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-26 | SmsGroupClassifier 품질 개선 — 소그룹 병합 0.70→0.90, RTDB 표본에 template 추가, LLM 프롬프트 메인 케이스 참조, MainCaseContext 3건 샘플 | 완료 |
+| 2026-02-25 | 임베딩 차원 3072→768 축소 — outputDimensionality=768 설정, DB v3→v4 마이그레이션, 코드/문서 16개 파일 갱신 | 완료 |
+| 2026-02-25 | PR #33 MainViewModel 리팩토링 — Codex P2 리뷰 확인, 권한 없을 때 resume DataRefreshEvent 미발행 지적 → 현행 유지 결정 | 완료 |
 | 2026-02-24 | Vico 차트 수정(스크롤/X축/Y축/동기화) + 홈 UI 간소화(TodayAndComparisonSection·FullSyncCtaSection 제거, 비교문구 가격+% 형식) | 완료 |
 | 2026-02-24 | 홈 화면 Phase1 리디자인 — 디자인 시스템(Color/Type/Dimens) + Hero 카드 + Vico 차트 + 다크 테마 복원 | 완료 |
 | 2026-02-22 | 예산 관리 확장 — 홈 카테고리 예산 UI + AI 채팅 예산 조회(BUDGET_STATUS)/설정(SET_BUDGET) | 완료 |

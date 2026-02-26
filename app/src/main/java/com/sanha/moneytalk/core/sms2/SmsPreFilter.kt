@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.core.sms2
 
-import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,7 +21,6 @@ import javax.inject.Singleton
 class SmsPreFilter @Inject constructor() {
 
     companion object {
-        private const val TAG = "SmsPreFilter"
 
         /**
          * 비결제 SMS 키워드 (통합)
@@ -124,7 +122,6 @@ class SmsPreFilter @Inject constructor() {
             true
         }
 
-        Log.d(TAG, "입력: ${smsList.size}건 → 통과: ${result.size}건 (제거: ${smsList.size - result.size}건)")
 
         return result
     }

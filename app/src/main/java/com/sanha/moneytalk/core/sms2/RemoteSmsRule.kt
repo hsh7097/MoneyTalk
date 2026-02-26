@@ -13,7 +13,7 @@ package com.sanha.moneytalk.core.sms2
  *
  * @property ruleId RTDB 룰 고유 ID
  * @property normalizedSenderAddress 정규화된 발신번호
- * @property embedding 3072차원 임베딩 벡터
+ * @property embedding 768차원 임베딩 벡터
  * @property amountRegex 금액 추출 정규식
  * @property storeRegex 가게명 추출 정규식
  * @property cardRegex 카드명 추출 정규식 (선택)

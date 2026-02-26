@@ -38,4 +38,17 @@ object DatabaseMigrations {
             )
         }
     }
+
+    /**
+     * v3 -> v4
+     * 임베딩 차원 변경 (3072 → 768): 기존 벡터 데이터와 호환 불가 → 삭제
+     * - sms_patterns: SMS 임베딩 패턴 (재동기화 시 768차원으로 재생성)
+     * - store_embeddings: 가게명 임베딩 벡터 (사용 시 768차원으로 재생성)
+     */
+    val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("DELETE FROM sms_patterns")
+            db.execSQL("DELETE FROM store_embeddings")
+        }
+    }
 }

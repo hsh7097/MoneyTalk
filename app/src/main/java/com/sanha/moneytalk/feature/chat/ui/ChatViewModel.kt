@@ -1,7 +1,8 @@
 package com.sanha.moneytalk.feature.chat.ui
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import android.app.Activity
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.ad.RewardAdManager
@@ -193,13 +194,13 @@ class ChatViewModel @Inject constructor(
                     }
                 } catch (e: Exception) {
                     // 타이틀 생성 실패 시 첫 사용자 메시지로 폴백
-                    Log.w("ChatViewModel", "자동 타이틀 생성 실패, 폴백 적용: ${e.message}")
+                    MoneyTalkLogger.w("자동 타이틀 생성 실패, 폴백 적용: ${e.message}")
                     try {
                         val fallbackTitle =
                             messages.firstOrNull { it.isUser }?.content?.take(30) ?: "대화"
                         chatDao.updateSessionTitle(sessionId, fallbackTitle)
                     } catch (inner: Exception) {
-                        Log.e("ChatViewModel", "폴백 타이틀 저장도 실패: ${inner.message}")
+                        MoneyTalkLogger.e("폴백 타이틀 저장도 실패: ${inner.message}")
                     }
                 }
             }
@@ -496,33 +497,17 @@ class ChatViewModel @Inject constructor(
                 analyzeResult.onSuccess { queryRequest ->
                     if (queryRequest != null && queryRequest.isClarification) {
                         // Clarification 응답: 추가 확인 질문을 AI 응답으로 표시
-                        Log.d(
-                            "gemini",
-                            "=== Clarification 응답: ${queryRequest.clarification} ==="
-                        )
                         isClarification = true
                         chatRepository.saveAiResponseAndUpdateSummary(
                             sessionId,
                             queryRequest.clarification ?: ""
                         )
                     } else if (queryRequest != null) {
-                        Log.d(
-                            "gemini",
-                            "=== Step2: 쿼리 ${queryRequest.queries.size}개, 액션 ${queryRequest.actions.size}개 실행 시작 ==="
-                        )
                         // 3단계: 요청된 쿼리 실행
                         if (queryRequest.queries.isNotEmpty()) {
                             for (query in queryRequest.queries) {
-                                Log.d(
-                                    "gemini",
-                                    "쿼리 실행: type=${query.type}, startDate=${query.startDate}, endDate=${query.endDate}, category=${query.category}, filters=${query.filters?.size ?: 0}개, groupBy=${query.groupBy}, metrics=${query.metrics?.size ?: 0}개, topN=${query.topN}"
-                                )
                                 val result = executeQuery(query)
                                 if (result != null) {
-                                    Log.d(
-                                        "gemini",
-                                        "쿼리 결과 [${result.queryType}]: ${result.data.take(200)}${if (result.data.length > 200) "..." else ""}"
-                                    )
                                     queryResults.add(result)
                                 }
                             }
@@ -1081,17 +1066,10 @@ class ChatViewModel @Inject constructor(
         endTimestamp: Long
     ): QueryResult {
         try {
-            Log.d("gemini", "=== ANALYTICS 실행 시작 ===")
-            Log.d("gemini", "기간: $startTimestamp ~ $endTimestamp")
-            Log.d(
-                "gemini",
-                "filters: ${query.filters}, groupBy: ${query.groupBy}, metrics: ${query.metrics}, topN: ${query.topN}, sort: ${query.sort}"
-            )
 
             // 1. DB에서 기간 내 전체 지출 조회
             var expenses =
                 expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp)
-            Log.d("gemini", "1단계: DB 조회 결과 ${expenses.size}건")
 
             // 2. filters 배열 순회하며 메모리 필터링
             val filters = query.filters ?: emptyList()
@@ -1100,10 +1078,6 @@ class ChatViewModel @Inject constructor(
             for (filter in filters) {
                 val before = expenses.size
                 expenses = applyAnalyticsFilter(expenses, filter)
-                Log.d(
-                    "gemini",
-                    "2단계 필터: ${filter.field} ${filter.op} ${filter.value} → ${before}건 → ${expenses.size}건"
-                )
                 if (expenses.size != before || filters.isNotEmpty()) {
                     filterDescriptions.add(describeFilter(filter))
                 }
@@ -1117,12 +1091,6 @@ class ChatViewModel @Inject constructor(
                 } else {
                     expenses.groupBy { expense -> getGroupKey(expense, groupBy) }
                 }
-            Log.d(
-                "gemini",
-                "3단계 그룹: groupBy=$groupBy → ${grouped.size}개 그룹 (${
-                    grouped.keys.take(10).joinToString(", ")
-                }${if (grouped.size > 10) "..." else ""})"
-            )
 
             // 4. metrics 계산
             val metrics = if (query.metrics.isNullOrEmpty()) {
@@ -1202,13 +1170,12 @@ class ChatViewModel @Inject constructor(
             }
 
             val resultData = sb.toString().trimEnd()
-            Log.d("gemini", "=== ANALYTICS 최종 결과 ===\n$resultData")
             return QueryResult(
                 queryType = QueryType.ANALYTICS,
                 data = resultData
             )
         } catch (e: Exception) {
-            Log.e("gemini", "ANALYTICS 실행 오류: ${e.message}", e)
+            MoneyTalkLogger.e("ANALYTICS 실행 오류: ${e.message}", e)
             return QueryResult(
                 queryType = QueryType.ANALYTICS,
                 data = "[ANALYTICS 계산 결과]\n분석 실행 중 오류가 발생했습니다: ${e.message}"
@@ -1642,7 +1609,6 @@ class ChatViewModel @Inject constructor(
                     )
                 } else {
                     val deletedCount = expenseRepository.deleteByKeyword(keyword)
-                    Log.d("gemini", "키워드 기반 삭제: '$keyword' → ${deletedCount}건 삭제")
                     ActionResult(
                         actionType = ActionType.DELETE_BY_KEYWORD,
                         success = deletedCount > 0,
@@ -1696,7 +1662,6 @@ class ChatViewModel @Inject constructor(
                         memo = action.memo
                     )
                     val id = expenseRepository.insert(expense)
-                    Log.d("gemini", "지출 추가: $storeName ${amount}원 → ID $id")
                     ActionResult(
                         actionType = ActionType.ADD_EXPENSE,
                         success = true,
@@ -1718,7 +1683,6 @@ class ChatViewModel @Inject constructor(
                     val expense = expenseRepository.getExpenseById(expenseId)
                     if (expense != null) {
                         val count = expenseRepository.updateMemo(expenseId, action.memo)
-                        Log.d("gemini", "메모 수정: ID $expenseId → '${action.memo}'")
                         ActionResult(
                             actionType = ActionType.UPDATE_MEMO,
                             success = count > 0,
@@ -1749,7 +1713,6 @@ class ChatViewModel @Inject constructor(
                     if (expense != null) {
                         val oldName = expense.storeName
                         val count = expenseRepository.updateStoreName(id, name)
-                        Log.d("gemini", "가게명 수정: ID $id '$oldName' → '$name'")
                         ActionResult(
                             actionType = ActionType.UPDATE_STORE_NAME,
                             success = count > 0,
@@ -1780,7 +1743,6 @@ class ChatViewModel @Inject constructor(
                     if (expense != null) {
                         val oldAmount = expense.amount
                         val count = expenseRepository.updateAmount(expenseId, newAmount)
-                        Log.d("gemini", "금액 수정: ID $expenseId ${oldAmount}원 → ${newAmount}원")
                         ActionResult(
                             actionType = ActionType.UPDATE_AMOUNT,
                             success = count > 0,

@@ -1,7 +1,8 @@
 package com.sanha.moneytalk.feature.categorydetail.ui
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import android.content.Context
-import android.util.Log
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -73,7 +74,6 @@ class CategoryDetailViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        private const val TAG = "CategoryDetailVM"
         /** 페이지 캐시 최대 허용 범위 (현재 월 ± 이 값) */
         private const val PAGE_CACHE_RANGE = 2
     }
@@ -313,7 +313,7 @@ class CategoryDetailViewModel @Inject constructor(
                     null, categoryNames, monthStart, monthEnd
                 )
                     .catch { e ->
-                        Log.e(TAG, "Flow 수집 오류: ${e.message}")
+                        MoneyTalkLogger.e("Flow 수집 오류: ${e.message}")
                         updatePageCache(
                             key,
                             (_uiState.value.pageCache[key] ?: CategoryDetailPageData())
@@ -345,7 +345,7 @@ class CategoryDetailViewModel @Inject constructor(
                     }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                Log.e(TAG, "loadPageData 오류: ${e.message}")
+                MoneyTalkLogger.e("loadPageData 오류: ${e.message}")
                 updatePageCache(
                     key,
                     (_uiState.value.pageCache[key] ?: CategoryDetailPageData())
@@ -443,7 +443,7 @@ class CategoryDetailViewModel @Inject constructor(
                     expenseRepository.delete(expense)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "삭제 실패: ${e.message}")
+                MoneyTalkLogger.e("삭제 실패: ${e.message}")
             }
         }
     }
@@ -458,7 +458,7 @@ class CategoryDetailViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "카테고리 변경 실패: ${e.message}")
+                MoneyTalkLogger.e("카테고리 변경 실패: ${e.message}")
             }
         }
     }
@@ -471,7 +471,7 @@ class CategoryDetailViewModel @Inject constructor(
                     expenseRepository.updateMemo(expenseId, memo?.ifBlank { null })
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "메모 변경 실패: ${e.message}")
+                MoneyTalkLogger.e("메모 변경 실패: ${e.message}")
             }
         }
     }

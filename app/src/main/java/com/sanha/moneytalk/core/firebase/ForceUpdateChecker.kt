@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.firebase
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import com.sanha.moneytalk.BuildConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -24,7 +25,6 @@ class ForceUpdateChecker @Inject constructor(
     private val premiumManager: PremiumManager
 ) {
     companion object {
-        private const val TAG = "ForceUpdateChecker"
 
         /**
          * 버전명 비교 (semantic versioning)
@@ -51,7 +51,7 @@ class ForceUpdateChecker @Inject constructor(
         .map { config ->
             val currentVersionName = BuildConfig.VERSION_NAME
             if (compareVersionNames(currentVersionName, config.minVersionName) < 0) {
-                Log.w(TAG, "강제 업데이트 필요: currentVersion=$currentVersionName < minVersion=${config.minVersionName}")
+                MoneyTalkLogger.w("강제 업데이트 필요: currentVersion=$currentVersionName < minVersion=${config.minVersionName}")
                 ForceUpdateState.Required(
                     currentVersion = currentVersionName,
                     requiredVersion = config.minVersionName,
