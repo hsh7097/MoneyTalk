@@ -171,7 +171,8 @@ class SmsGroupClassifier @Inject constructor(
         val results: List<SmsParseResult>,
         val amountRegex: String = "",
         val storeRegex: String = "",
-        val cardRegex: String = ""
+        val cardRegex: String = "",
+        val outcomeCode: String = ""
     )
 
     /**
@@ -284,6 +285,9 @@ class SmsGroupClassifier @Inject constructor(
      * Phase4: 동기화/학습 완전 분리를 위한 백그라운드 학습 작업
      */
     private sealed class DeferredLearningTask {
+        abstract val reasonCode: String
+        abstract val dedupKey: String
+
         data class Payment(
             val embedded: EmbeddedSms,
             val analysis: SmsAnalysisResult,
@@ -293,12 +297,14 @@ class SmsGroupClassifier @Inject constructor(
             val cardRegex: String,
             val isMainGroup: Boolean,
             val groupMemberCount: Int,
-            val reasonCode: String
+            override val reasonCode: String,
+            override val dedupKey: String
         ) : DeferredLearningTask()
 
         data class NonPayment(
             val embedded: EmbeddedSms,
-            val reasonCode: String
+            override val reasonCode: String,
+            override val dedupKey: String
         ) : DeferredLearningTask()
     }
 
@@ -315,6 +321,7 @@ class SmsGroupClassifier @Inject constructor(
     private val learningQueueSize = AtomicInteger(0)
     private val learningDroppedCount = AtomicInteger(0)
     private val learningProcessorRunning = AtomicBoolean(false)
+    private val learningDedupKeys = ConcurrentHashMap.newKeySet<String>()
 
     // ===== Step 4.5: regex 실패건 배치 LLM 추출 =====
 
@@ -388,11 +395,16 @@ class SmsGroupClassifier @Inject constructor(
     // ===== Phase4: 백그라운드 학습 큐 =====
 
     private fun enqueueDeferredLearning(task: DeferredLearningTask) {
+        if (!learningDedupKeys.add(task.dedupKey)) {
+            return
+        }
+
         // 큐 상한 유지: 초과 시 oldest drop
         while (learningQueueSize.get() >= LEARNING_QUEUE_MAX_SIZE) {
-            learningQueue.poll() ?: break
+            val dropped = learningQueue.poll() ?: break
             learningQueueSize.updateAndGet { current -> if (current > 0) current - 1 else 0 }
             learningDroppedCount.incrementAndGet()
+            learningDedupKeys.remove(dropped.dedupKey)
         }
 
         learningQueue.offer(task)
@@ -410,6 +422,7 @@ class SmsGroupClassifier @Inject constructor(
                 while (true) {
                     val task = learningQueue.poll() ?: break
                     learningQueueSize.updateAndGet { current -> if (current > 0) current - 1 else 0 }
+                    learningDedupKeys.remove(task.dedupKey)
 
                     try {
                         when (task) {
@@ -438,11 +451,7 @@ class SmsGroupClassifier @Inject constructor(
                         }
                     } catch (e: Exception) {
                         failed++
-                        val reason = when (task) {
-                            is DeferredLearningTask.Payment -> task.reasonCode
-                            is DeferredLearningTask.NonPayment -> task.reasonCode
-                        }
-                        MoneyTalkLogger.w("[learningQueue] 처리 실패: reason=$reason, msg=${e.message}")
+                        MoneyTalkLogger.w("[learningQueue] 처리 실패: reason=${task.reasonCode}, msg=${e.message}")
                     }
 
                     if (processed % 10 == 0) {
@@ -521,6 +530,7 @@ class SmsGroupClassifier @Inject constructor(
         val processedSources = AtomicInteger(0)
         val step5StartTime = System.currentTimeMillis()
         val degradedByBudget = AtomicInteger(0)
+        val outcomeCounts = ConcurrentHashMap<String, AtomicInteger>()
 
         // Semaphore가 동시성을 제어하므로 chunked 배리어 없이 전체 sourceGroup을 한번에 실행
         // (기존 chunked(20).awaitAll()은 느린 그룹 1개가 나머지 19개를 블로킹하는 문제 발생)
@@ -539,7 +549,12 @@ class SmsGroupClassifier @Inject constructor(
                             sourceGroup = sourceGroup,
                             dbMainPattern = dbMainPatterns[sourceGroup.address],
                             index = index,
-                            forceSkipRegex = forceDirectLlm
+                            forceSkipRegex = forceDirectLlm,
+                            onGroupOutcome = { outcome ->
+                                if (outcome.isNotBlank()) {
+                                    outcomeCounts.computeIfAbsent(outcome) { AtomicInteger(0) }.incrementAndGet()
+                                }
+                            }
                         )
                     } finally {
                         semaphore.release()
@@ -551,11 +566,16 @@ class SmsGroupClassifier @Inject constructor(
             results.addAll(allResults.flatten())
         }
 
+        val outcomeSummary = outcomeCounts.entries
+            .sortedByDescending { it.value.get() }
+            .joinToString(", ") { "${it.key}:${it.value.get()}" }
+
         val step5TotalElapsed = System.currentTimeMillis() - step5StartTime
         MoneyTalkLogger.e(
             "[Step5 summary] sources=${sourceGroups.size}, parsed=${results.size}건, " +
                 "degradedByBudget=${degradedByBudget.get()}건, softBudget=${STEP5_TIME_BUDGET_MS}ms, " +
-                "learningQueue=${learningQueueSize.get()}건, dropped=${learningDroppedCount.get()}건, elapsed=${step5TotalElapsed}ms"
+                "learningQueue=${learningQueueSize.get()}건, dropped=${learningDroppedCount.get()}건, " +
+                "outcomes=[$outcomeSummary], elapsed=${step5TotalElapsed}ms"
         )
 
         return results
@@ -608,7 +628,8 @@ class SmsGroupClassifier @Inject constructor(
         sourceGroup: SourceGroup,
         dbMainPattern: SmsPatternEntity? = null,
         index : Int = 0,
-        forceSkipRegex: Boolean = false
+        forceSkipRegex: Boolean = false,
+        onGroupOutcome: ((String) -> Unit)? = null
     ): List<SmsParseResult> {
         val results = mutableListOf<SmsParseResult>()
         MoneyTalkLogger.i("[processSourceGroup_$index] 시작: addr=${sourceGroup.address}, subGroups=${sourceGroup.subGroups.size}")
@@ -629,14 +650,14 @@ class SmsGroupClassifier @Inject constructor(
         if (sourceGroup.subGroups.size == 1) {
             // 서브그룹 1개 = 메인만 존재
             // DB 메인 패턴이 있으면 regex 참조로 전달 (같은 번호의 이전 메인 형식)
-            results.addAll(
-                processGroupWithPolicy(
-                    sourceGroup.mainGroup,
-                    mainContext = dbMainContext,
-                    isMainGroup = true,
-                    forceSkipRegex = forceSkipRegex
-                ).results
+            val singleResult = processGroupWithPolicy(
+                sourceGroup.mainGroup,
+                mainContext = dbMainContext,
+                isMainGroup = true,
+                forceSkipRegex = forceSkipRegex,
+                onGroupOutcome = onGroupOutcome
             )
+            results.addAll(singleResult.results)
             return results
         }
 
@@ -645,7 +666,8 @@ class SmsGroupClassifier @Inject constructor(
         val mainProcessResult = processGroupWithPolicy(
             sourceGroup.mainGroup,
             isMainGroup = true,
-            forceSkipRegex = forceSkipRegex
+            forceSkipRegex = forceSkipRegex,
+            onGroupOutcome = onGroupOutcome
         )
         results.addAll(mainProcessResult.results)
 
@@ -679,7 +701,8 @@ class SmsGroupClassifier @Inject constructor(
                 group = exceptionGroup,
                 mainContext = mainContext,
                 distributionSummary = sourceGroup.buildDistributionSummary(),
-                forceSkipRegex = forceSkipRegex
+                forceSkipRegex = forceSkipRegex,
+                onGroupOutcome = onGroupOutcome
             )
             results.addAll(exResults.results)
         }
@@ -704,7 +727,8 @@ class SmsGroupClassifier @Inject constructor(
         distributionSummary: String? = null,
         isMainGroup: Boolean = false,
         forceSkipRegex: Boolean = false,
-        allowResplit: Boolean = true
+        allowResplit: Boolean = true,
+        onGroupOutcome: ((String) -> Unit)? = null
     ): GroupProcessResult {
         val stability = evaluateGroupStability(group)
         val addr = group.representative.input.address.takeLast(4)
@@ -722,7 +746,8 @@ class SmsGroupClassifier @Inject constructor(
                 isMainGroup = isMainGroup,
                 forceSkipRegex = true,
                 directLlmOnly = true,
-                skipLearning = true
+                skipLearning = true,
+                onGroupOutcome = onGroupOutcome
             )
         }
 
@@ -745,7 +770,8 @@ class SmsGroupClassifier @Inject constructor(
                         distributionSummary = distributionSummary,
                         isMainGroup = isMainGroup && idx == 0,
                         forceSkipRegex = forceSkipRegex,
-                        allowResplit = false
+                        allowResplit = false,
+                        onGroupOutcome = onGroupOutcome
                     )
                     if (idx == 0) {
                         seedRegex = subResult
@@ -757,7 +783,8 @@ class SmsGroupClassifier @Inject constructor(
                     results = mergedResults,
                     amountRegex = seedRegex?.amountRegex.orEmpty(),
                     storeRegex = seedRegex?.storeRegex.orEmpty(),
-                    cardRegex = seedRegex?.cardRegex.orEmpty()
+                    cardRegex = seedRegex?.cardRegex.orEmpty(),
+                    outcomeCode = seedRegex?.outcomeCode.orEmpty()
                 )
             }
         }
@@ -769,7 +796,8 @@ class SmsGroupClassifier @Inject constructor(
             distributionSummary = distributionSummary,
             isMainGroup = isMainGroup,
             forceSkipRegex = forceSkipRegex,
-            skipLearning = forceSkipRegex
+            skipLearning = forceSkipRegex,
+            onGroupOutcome = onGroupOutcome
         )
     }
 
@@ -797,7 +825,8 @@ class SmsGroupClassifier @Inject constructor(
         isMainGroup: Boolean = false,
         forceSkipRegex: Boolean = false,
         directLlmOnly: Boolean = false,
-        skipLearning: Boolean = false
+        skipLearning: Boolean = false,
+        onGroupOutcome: ((String) -> Unit)? = null
     ): GroupProcessResult {
         val groupStartTime = System.currentTimeMillis()
         val results = mutableListOf<SmsParseResult>()
@@ -822,8 +851,10 @@ class SmsGroupClassifier @Inject constructor(
         val llmResult = llmResults.firstOrNull()
         if (llmResult == null) {
             val elapsed = System.currentTimeMillis() - groupStartTime
-            MoneyTalkLogger.e("[processGroup] 완료: addr=*$addr, outcome=LLM_FAILED, results=0건, elapsed=${elapsed}ms")
-            return GroupProcessResult(emptyList())
+            val failOutcome = "LLM_FAILED"
+            onGroupOutcome?.invoke(failOutcome)
+            MoneyTalkLogger.e("[processGroup] 완료: addr=*$addr, outcome=$failOutcome, results=0건, elapsed=${elapsed}ms")
+            return GroupProcessResult(emptyList(), outcomeCode = failOutcome)
         }
         MoneyTalkLogger.i("[processGroup] LLM 추출 완료: addr=*$addr, isPayment=${llmResult.isPayment}, elapsed=${System.currentTimeMillis() - groupStartTime}ms")
 
@@ -835,14 +866,17 @@ class SmsGroupClassifier @Inject constructor(
                 enqueueDeferredLearning(
                     DeferredLearningTask.NonPayment(
                         embedded = representative,
-                        reasonCode = outcome.ifBlank { "DIRECT_LLM" }
+                        reasonCode = outcome.ifBlank { "NON_PAYMENT" },
+                        dedupKey = "NON:${representative.input.id}"
                     )
                 )
                 MoneyTalkLogger.i("[processGroup] 학습 큐 적재(non-payment): addr=*$addr")
             }
             val elapsed = System.currentTimeMillis() - groupStartTime
-            MoneyTalkLogger.e("[processGroup] 완료: addr=*$addr, outcome=NON_PAYMENT, results=0건, elapsed=${elapsed}ms")
-            return GroupProcessResult(emptyList())
+            val nonPaymentOutcome = "NON_PAYMENT"
+            onGroupOutcome?.invoke(nonPaymentOutcome)
+            MoneyTalkLogger.e("[processGroup] 완료: addr=*$addr, outcome=$nonPaymentOutcome, results=0건, elapsed=${elapsed}ms")
+            return GroupProcessResult(emptyList(), outcomeCode = nonPaymentOutcome)
         }
 
         // LLM이 추출한 결제 정보
@@ -1044,7 +1078,8 @@ class SmsGroupClassifier @Inject constructor(
                     cardRegex = cardRegex,
                     isMainGroup = isMainGroup,
                     groupMemberCount = group.members.size,
-                    reasonCode = outcome.ifBlank { "DIRECT_LLM" }
+                    reasonCode = outcome.ifBlank { "DIRECT_LLM" },
+                    dedupKey = "PAY:${representative.input.id}"
                 )
             )
             MoneyTalkLogger.i("[processGroup] 학습 큐 적재(payment): addr=*$addr, source=$parseSource")
@@ -1195,13 +1230,15 @@ class SmsGroupClassifier @Inject constructor(
                 else -> "DIRECT_LLM"
             }
         }
+        onGroupOutcome?.invoke(outcome)
         MoneyTalkLogger.e("[processGroup] 완료: addr=*$addr, outcome=$outcome, source=$parseSource, results=${results.size}건, members=${group.members.size}, elapsed=${groupElapsed}ms")
 
         return GroupProcessResult(
             results = results,
             amountRegex = amountRegex,
             storeRegex = storeRegex,
-            cardRegex = cardRegex
+            cardRegex = cardRegex,
+            outcomeCode = outcome
         )
     }
 
