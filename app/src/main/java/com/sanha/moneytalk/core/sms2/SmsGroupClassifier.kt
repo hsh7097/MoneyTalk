@@ -14,6 +14,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
 import java.util.Locale
@@ -87,6 +88,10 @@ class SmsGroupClassifier @Inject constructor(
 
         /** processGroup 전체 시간 예산 — LLM 추출 + regex 생성/검증/repair (초과 시 regex 스킵) */
         private const val GROUP_TIME_BUDGET_MS = 10_000L
+
+        /** processGroup 단건 LLM 추출 null 응답 재시도 횟수 */
+        private const val GROUP_LLM_NULL_RETRY_MAX = 1
+        private const val GROUP_LLM_NULL_RETRY_DELAY_MS = 300L
 
         /** Step5 소프트 시간 예산 — 초과 시 regex 생략하고 Direct LLM 강등 */
         private const val STEP5_TIME_BUDGET_MS = 20_000L
@@ -1127,11 +1132,22 @@ class SmsGroupClassifier @Inject constructor(
         } else {
             groupContextBody
         }
-        val llmResults = smsExtractor.extractFromSmsBatch(
-            smsMessages = listOf(smsBodyForLlm),
-            smsTimestamps = listOf(representative.input.date)
-        )
-        val llmResult = llmResults.firstOrNull()
+        var llmResult: GeminiSmsExtractor.LlmExtractionResult? = null
+        var llmAttempts = 0
+        while (llmResult == null && llmAttempts <= GROUP_LLM_NULL_RETRY_MAX) {
+            llmAttempts++
+            llmResult = smsExtractor.extractFromSmsBatch(
+                smsMessages = listOf(smsBodyForLlm),
+                smsTimestamps = listOf(representative.input.date)
+            ).firstOrNull()
+            if (llmResult == null && llmAttempts <= GROUP_LLM_NULL_RETRY_MAX) {
+                MoneyTalkLogger.w(
+                    "[processGroup] LLM 응답 null → 재시도 ${llmAttempts}/${GROUP_LLM_NULL_RETRY_MAX} " +
+                        "(${GROUP_LLM_NULL_RETRY_DELAY_MS}ms 후)"
+                )
+                delay(GROUP_LLM_NULL_RETRY_DELAY_MS)
+            }
+        }
         if (llmResult == null) {
             val elapsed = System.currentTimeMillis() - groupStartTime
             val failOutcome = "LLM_FAILED"
@@ -1139,7 +1155,10 @@ class SmsGroupClassifier @Inject constructor(
             MoneyTalkLogger.e("[processGroup] 완료: addr=*$addr, outcome=$failOutcome, results=0건, elapsed=${elapsed}ms")
             return GroupProcessResult(emptyList(), outcomeCode = failOutcome)
         }
-        MoneyTalkLogger.i("[processGroup] LLM 추출 완료: addr=*$addr, isPayment=${llmResult.isPayment}, elapsed=${System.currentTimeMillis() - groupStartTime}ms")
+        MoneyTalkLogger.i(
+            "[processGroup] LLM 추출 완료: addr=*$addr, isPayment=${llmResult.isPayment}, " +
+                "attempts=$llmAttempts, elapsed=${System.currentTimeMillis() - groupStartTime}ms"
+        )
 
         // 비결제 판정 → 비결제 패턴으로 DB 등록 후 종료
         if (!llmResult.isPayment) {
@@ -1458,6 +1477,7 @@ class SmsGroupClassifier @Inject constructor(
                 // regex 미생성 → 나머지 멤버 개별 LLM 추출
                 val skipReason = when {
                     directLlmOnly -> "unstable 그룹 direct LLM"
+                    forceSkipRegexAll -> "regexFailed fallback 모드"
                     forceSkipRegex -> "Step5 예산 모드"
                     primaryRegexAttempted -> "regex 실패"
                     skipRegexByBudget -> "그룹 시간 예산 초과"
