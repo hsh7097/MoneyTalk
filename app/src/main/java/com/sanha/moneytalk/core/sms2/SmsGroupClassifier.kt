@@ -684,7 +684,7 @@ class SmsGroupClassifier @Inject constructor(
         val results = mutableListOf<SmsParseResult>()
         val representative = group.representative
         val addr = representative.input.address.takeLast(4)
-        var outcome = ""  // G: reason code (REGEX_ACCEPTED, REGEX_REPAIRED, TEMPLATE_FALLBACK, DIRECT_LLM, NON_PAYMENT, LLM_FAILED, GROUP_BUDGET_SKIP_REGEX, STEP5_BUDGET_DIRECT_LLM, UNSTABLE_DIRECT_LLM)
+        var outcome = ""  // G: reason code (REGEX_ACCEPTED, REGEX_REPAIRED, TEMPLATE_FALLBACK, DIRECT_LLM, NON_PAYMENT, LLM_FAILED, GROUP_BUDGET_SKIP_REGEX, STEP5_BUDGET_DIRECT_LLM, UNSTABLE_DIRECT_LLM, REGEX_ABORT_LOW_PASS)
 
         MoneyTalkLogger.i("[processGroup] 시작: addr=*$addr, members=${group.members.size}, isMain=$isMainGroup")
 
@@ -805,6 +805,7 @@ class SmsGroupClassifier @Inject constructor(
                     outcome = "REGEX_ACCEPTED"
                     clearRegexFailure(representative.template)
                 } else {
+                    var abortLowPass = false
                     // near-miss 구간 + 시간 예산 내이면 Classifier repair 1회 시도
                     val regexElapsed = System.currentTimeMillis() - groupStartTime
                     if (validation.passRatio >= REGEX_NEAR_MISS_MIN_RATIO &&
@@ -837,6 +838,14 @@ class SmsGroupClassifier @Inject constructor(
                                 clearRegexFailure(representative.template)
                             }
                         }
+                    } else if (validation.passRatio < REGEX_NEAR_MISS_MIN_RATIO) {
+                        // Phase 3-C: 저품질 regex(<60%)는 repair/템플릿 폴백에 시간 쓰지 않고 즉시 direct LLM
+                        recordRegexFailure(representative.template)
+                        abortLowPass = true
+                        outcome = "REGEX_ABORT_LOW_PASS"
+                        MoneyTalkLogger.w(
+                            "regex abort: passRatio=${(validation.passRatio * 100).toInt()}% < ${(REGEX_NEAR_MISS_MIN_RATIO * 100).toInt()}% → direct LLM 전환"
+                        )
                     }
 
                     if (regexElapsed > GROUP_TIME_BUDGET_MS) {
@@ -844,7 +853,8 @@ class SmsGroupClassifier @Inject constructor(
                     }
 
                     // repair 미시도/실패/시간초과 → 템플릿 폴백
-                    if (amountRegex.isBlank()) {
+                    // 단, 저품질 regex abort(<60%)는 템플릿 폴백 없이 direct LLM
+                    if (amountRegex.isBlank() && !abortLowPass) {
                         MoneyTalkLogger.w("regex 검증 실패 (${(validation.passRatio * 100).toInt()}%) → 템플릿 폴백 시도")
                         recordRegexFailure(representative.template)
                         val fallback = buildTemplateFallbackRegex(representative.template)
@@ -855,6 +865,8 @@ class SmsGroupClassifier @Inject constructor(
                             parseSource = "template_regex"
                             outcome = "TEMPLATE_FALLBACK"
                         }
+                    } else if (abortLowPass) {
+                        MoneyTalkLogger.w("regex abort 정책 적용 → 템플릿 폴백 스킵")
                     }
                 }
             } else {
@@ -1184,16 +1196,52 @@ class SmsGroupClassifier @Inject constructor(
         val seededGroups = mutableListOf<VectorGroup>()
         val singles = mutableListOf<EmbeddedSms>()
 
-        for ((_, members) in byTemplate) {
-            if (members.size >= TEMPLATE_SEED_MIN_BUCKET_SIZE) {
+        for ((template, members) in byTemplate) {
+            if (members.size < TEMPLATE_SEED_MIN_BUCKET_SIZE) {
+                singles.add(members.first())
+                continue
+            }
+
+            val stability = evaluateMembersStability(
+                representative = members.first(),
+                members = members
+            )
+
+            // Phase 3-A: 템플릿 시드라도 cohesion gate를 통과해야 seed 그룹으로 확정
+            if (!stability.unstable) {
                 seededGroups.add(
                     VectorGroup(
                         representative = members.first(),
                         members = members.toMutableList()
                     )
                 )
+                continue
+            }
+
+            val sampleAddress = members.first().input.address.takeLast(4)
+            if (members.size <= UNSTABLE_DIRECT_LLM_MAX_SIZE) {
+                // 소규모 unstable 버킷은 seed 우회 금지 → singles로 내려 유사도 그룹핑/정책 분기로 처리
+                singles.addAll(members)
+                MoneyTalkLogger.w(
+                    "[cohesionGate] template unstable -> singles: addr=*$sampleAddress, template=${template.take(40)}, " +
+                        "size=${members.size}, median=${formatSimilarity(stability.medianSimilarity)}, p20=${formatSimilarity(stability.p20Similarity)}"
+                )
             } else {
-                singles.add(members.first())
+                // 대규모 unstable 버킷은 1회 유사도 재분할
+                val splitGroups = groupBySimilarityInternal(members)
+                if (splitGroups.size > 1) {
+                    seededGroups.addAll(splitGroups)
+                    MoneyTalkLogger.w(
+                        "[cohesionGate] template unstable -> re-split: addr=*$sampleAddress, template=${template.take(40)}, " +
+                            "size=${members.size}, split=${splitGroups.size}"
+                    )
+                } else {
+                    singles.addAll(members)
+                    MoneyTalkLogger.w(
+                        "[cohesionGate] template unstable but unsplittable -> singles: addr=*$sampleAddress, template=${template.take(40)}, " +
+                            "size=${members.size}"
+                    )
+                }
             }
         }
 
@@ -1296,7 +1344,17 @@ class SmsGroupClassifier @Inject constructor(
      * - median < 0.92 또는 p20 < 0.88 이면 unstable
      */
     private fun evaluateGroupStability(group: VectorGroup): GroupStability {
-        if (group.members.size <= 1) {
+        return evaluateMembersStability(
+            representative = group.representative,
+            members = group.members
+        )
+    }
+
+    private fun evaluateMembersStability(
+        representative: EmbeddedSms,
+        members: List<EmbeddedSms>
+    ): GroupStability {
+        if (members.size <= 1) {
             return GroupStability(
                 unstable = false,
                 medianSimilarity = 1.0f,
@@ -1304,8 +1362,8 @@ class SmsGroupClassifier @Inject constructor(
             )
         }
 
-        val representativeEmbedding = group.representative.embedding
-        val similarities = group.members
+        val representativeEmbedding = representative.embedding
+        val similarities = members
             .map { member ->
                 patternMatcher.cosineSimilarity(representativeEmbedding, member.embedding)
             }
