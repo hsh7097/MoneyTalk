@@ -44,6 +44,20 @@ class SmsPatternMatcher @Inject constructor(
     private val remoteSmsRuleRepository: RemoteSmsRuleRepository
 ) {
 
+    /**
+     * matchPatterns()의 반환 타입
+     *
+     * Step4 결과를 3-way 분류하여 Step4.5/Step5에서 각각 처리:
+     * - matched: 벡터매칭 + regex 파싱 성공 → 최종 결과
+     * - regexFailed: 벡터매칭 OK + regex 파싱 실패 → Step4.5 배치 LLM
+     * - unmatched: 벡터매칭 자체 실패 → Step5 그룹핑+LLM
+     */
+    data class MatchResult(
+        val matched: List<SmsParseResult>,
+        val regexFailed: List<EmbeddedSms>,
+        val unmatched: List<EmbeddedSms>
+    )
+
     companion object {
 
         // ===== 유사도 임계값 (SmsPatternSimilarityPolicy 기준) =====
@@ -141,12 +155,13 @@ class SmsPatternMatcher @Inject constructor(
      *   가로채면 parsedCardName이 왜곡됨 (KB→신한카드). 메인 우선 매칭으로 방지.
      *
      * @param embeddedSmsList Step 3에서 임베딩 완료된 SMS 리스트
-     * @return Pair(매칭+파싱 성공 결과, 미매칭 SMS 리스트)
+     * @return MatchResult(매칭 성공, regex 실패→Step4.5, 미매칭→Step5)
      */
     suspend fun matchPatterns(
         embeddedSmsList: List<EmbeddedSms>
-    ): Pair<List<SmsParseResult>, List<EmbeddedSms>> = coroutineScope {
+    ): MatchResult = coroutineScope {
         val matched = mutableListOf<SmsParseResult>()
+        val regexFailed = mutableListOf<EmbeddedSms>()
         val unmatched = mutableListOf<EmbeddedSms>()
 
         // DB에서 패턴 1회 로드 (매 SMS마다 쿼리하지 않음)
@@ -224,8 +239,8 @@ class SmsPatternMatcher @Inject constructor(
                     )
                     matchCountMap.merge(pattern.id, 1, Int::plus)
                 } else {
-                    MoneyTalkLogger.w("벡터매칭 OK ($similarity) but 파싱 실패: ${embedded.input.body.take(30)}")
-                    unmatched.add(embedded)
+                    MoneyTalkLogger.w("벡터매칭 OK ($similarity) but regex 파싱 실패 → Step4.5: ${embedded.input.body.take(30)}")
+                    regexFailed.add(embedded)
                 }
             } else {
                 // --- [3] 원격 룰 매칭 (2순위: RTDB) ---
@@ -258,16 +273,18 @@ class SmsPatternMatcher @Inject constructor(
         if (remoteMatchCount > 0 || remoteFailCount > 0) {
         }
 
-        // 발신번호별 매칭/미매칭 통계
+        // 발신번호별 매칭/regex실패/미매칭 통계
         val matchedByAddr = matched.groupBy { it.input.address }
+        val regexFailedByAddr = regexFailed.groupBy { it.input.address }
         val unmatchedByAddr = unmatched.groupBy { it.input.address }
-        val allAddresses = (matchedByAddr.keys + unmatchedByAddr.keys).distinct().sorted()
+        val allAddresses = (matchedByAddr.keys + regexFailedByAddr.keys + unmatchedByAddr.keys).distinct().sorted()
         for (addr in allAddresses) {
             val m = matchedByAddr[addr]?.size ?: 0
+            val rf = regexFailedByAddr[addr]?.size ?: 0
             val u = unmatchedByAddr[addr]?.size ?: 0
         }
 
-        return@coroutineScope matched to unmatched
+        return@coroutineScope MatchResult(matched, regexFailed, unmatched)
     }
 
     // ===== 원격 룰 매칭 =====

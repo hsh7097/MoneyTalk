@@ -122,7 +122,8 @@ class SmsSyncCoordinator @Inject constructor(
             skipped = skipped.size + preFilterSkipped,
             vectorMatchCount = pipelineResult.vectorMatchCount,
             llmProcessCount = pipelineResult.llmProcessCount,
-            newPatternsCreated = pipelineResult.llmProcessCount
+            newPatternsCreated = pipelineResult.llmProcessCount,
+            regexFailedRecoveredCount = pipelineResult.regexFailedRecoveredCount
         )
         MoneyTalkLogger.i("SmsSyncCoordinator 완료: 지출 ${pipelineResult.results.size}건, 수입 ${incomeCandidates.size}건"
         )

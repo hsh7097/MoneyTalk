@@ -258,6 +258,75 @@ class SmsGroupClassifier @Inject constructor(
     /** RTDB 중복 방지용 전송 기록 */
     private val sentSampleEmbeddings = mutableListOf<List<Float>>()
 
+    // ===== Step 4.5: regex 실패건 배치 LLM 추출 =====
+
+    /**
+     * Step4 벡터매칭 OK + regex 파싱 실패건을 배치 LLM으로 추출
+     *
+     * Step5(그룹핑+regex생성)를 건너뛰고, 같은 발신번호끼리 묶어 배치 LLM으로 추출.
+     * regex 실패건은 이미 패턴 DB에 임베딩이 존재하므로 regex 재생성이 무의미.
+     * LLM 배치 추출로 빠르게 처리 (~3초).
+     *
+     * @param regexFailedList Step4에서 벡터매칭 OK + regex 파싱 실패한 SMS 리스트
+     * @return Pair(성공 결과, 실패→Step5 fallback)
+     */
+    suspend fun batchExtractRegexFailed(
+        regexFailedList: List<EmbeddedSms>
+    ): Pair<List<SmsParseResult>, List<EmbeddedSms>> {
+        if (regexFailedList.isEmpty()) return Pair(emptyList(), emptyList())
+
+        val results = mutableListOf<SmsParseResult>()
+        val fallback = mutableListOf<EmbeddedSms>()
+
+        // 발신번호별 그룹핑
+        val byAddress = regexFailedList.groupBy { normalizeAddress(it.input.address) }
+
+        for ((address, group) in byAddress) {
+            val addr = address.takeLast(4)
+            var addrSuccess = 0
+            var addrFailed = 0
+            // chunk(10)으로 분할하여 프롬프트 과대화 방지
+            val chunks = group.chunked(LLM_FALLBACK_MAX_SAMPLES)
+
+            for (chunk in chunks) {
+                val bodies = chunk.map { it.input.body }
+                val timestamps = chunk.map { it.input.date }
+
+                val llmResults = smsExtractor.extractFromSmsBatch(bodies, timestamps)
+
+                chunk.forEachIndexed { index, embedded ->
+                    val llmResult = llmResults.getOrNull(index)
+                    if (llmResult != null && llmResult.isPayment && llmResult.amount > 0) {
+                        results.add(
+                            SmsParseResult(
+                                input = embedded.input,
+                                analysis = SmsAnalysisResult(
+                                    amount = llmResult.amount,
+                                    storeName = llmResult.storeName,
+                                    category = llmResult.category,
+                                    dateTime = llmResult.dateTime,
+                                    cardName = llmResult.cardName
+                                ),
+                                tier = 3,  // LLM 추출
+                                confidence = 1.0f
+                            )
+                        )
+                        addrSuccess++
+                    } else {
+                        // LLM 추출 실패 → Step5 fallback
+                        fallback.add(embedded)
+                        addrFailed++
+                    }
+                }
+            }
+
+            MoneyTalkLogger.i("[batchExtractRegexFailed] addr=*$addr: ${group.size}건 → 성공${addrSuccess}건, 실패${addrFailed}건→Step5")
+        }
+
+        MoneyTalkLogger.i("[batchExtractRegexFailed] 총 ${regexFailedList.size}건 → 성공${results.size}건, Step5 fallback ${fallback.size}건")
+        return Pair(results, fallback)
+    }
+
     // ===== 메인 진입점 =====
 
     /**
