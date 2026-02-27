@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### Added (2026-02-27)
+- **Step4.5 regex 실패건 배치 LLM 복구 경로**: 벡터매칭 성공 + regex 파싱 실패 SMS를 발신번호별 배치 LLM으로 추출 (Step5 그룹핑+regex생성 스킵)
+  - SmsPatternMatcher `MatchResult` 3-way 분할 (matched/regexFailed/unmatched)
+  - SmsGroupClassifier `batchExtractRegexFailed()` 신규 메서드
+  - SmsPipeline Step4→Step4.5→Step5 체인
+
+### Changed (2026-02-27)
+- **SMS Step5 성능 최적화**: GeminiSmsExtractor 타임아웃 60초 + CancellationException 조기 캐치, SmsGroupClassifier regex 생성 실패 루프 방지 (REGEX_MIN_SAMPLES=5, TIME_BUDGET=15초)
+- **SmsPipeline 파이프라인 통계 확장**: PipelineResult/SyncStats에 regexFailedRecoveredCount 추가
+
 ### Changed (2026-02-26 후반)
 - **generateRegexForGroup 정규식 생성 성공률 개선**:
   - repair 1회 활성화 (REGEX_REPAIR_MAX_RETRIES 0→1) — 검증 실패 regex 1회 수선 시도

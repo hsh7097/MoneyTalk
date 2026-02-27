@@ -39,9 +39,15 @@ List<SmsInput> (원본 보존)
 │    │   DB 패턴과 코사인 유사도 비교                       │   │
 │    │   ≥0.97 비결제 → 제외                               │   │
 │    │   ≥0.92 결제 → regex 파싱 → SmsParseResult          │   │
+│    │   ≥0.92 결제 + regex 실패 → regexFailed (Step 4.5) │   │
 │    │   <0.92 미매칭 → Step 5                             │   │
 │    │                                                    │   │
+│    │ Step 4.5: batchExtractRegexFailed()                │   │
+│    │   발신번호별 그룹 → chunk(10) → 배치 LLM 추출        │   │
+│    │   성공 → SmsParseResult / 실패 → Step 5 fallback   │   │
+│    │                                                    │   │
 │    │ Step 5: SmsGroupClassifier.classifyUnmatched()     │   │
+│    │   미매칭 + Step4.5 fallback                         │   │
 │    │   발신번호→벡터 2레벨 그룹핑                         │   │
 │    │   그룹 대표 LLM → regex 생성 → 패턴 DB 등록          │   │
 │    │   멤버 일괄 파싱 → SmsParseResult                    │   │
@@ -368,15 +374,15 @@ matchPatterns(embeddedSmsList)
   │   ├─ [1] 비결제 패턴 우선 확인 (≥0.97) → 제외 (matched에도 unmatched에도 안 넣음)
   │   ├─ [2] 결제 패턴 매칭 (≥0.92) → parseWithPatternRegex()
   │   │   ├ 파싱 성공 → SmsParseResult(tier=2) → matched
-  │   │   └ 파싱 실패 → unmatched (Step 5로)
-  │   ├─ [3] 원격 룰 매칭 ★ 신규 2순위
+  │   │   └ 파싱 실패 → regexFailed (Step 4.5로)
+  │   ├─ [3] 원격 룰 매칭 ★ 2순위
   │   │   ├ 동일 발신번호 룰 필터 → 코사인 유사도 ≥ rule.minSimilarity(기본 0.94)
   │   │   ├ regex 파싱 성공 → SmsParseResult(tier=2) → matched
   │   │   ├ 로컬 패턴 DB에 승격(promoteToLocalPattern, parseSource="remote_rule")
   │   │   └ 파싱 실패 → unmatched
   │   └─ [4] 미매칭 (<0.92, 원격 룰도 없음) → unmatched
   │
-  └── 반환: (matched, unmatched)
+  └── 반환: MatchResult(matched, regexFailed, unmatched)
 ```
 
 ### Regex 파싱 체인 — `parseWithPatternRegex()`

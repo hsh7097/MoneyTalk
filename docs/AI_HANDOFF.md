@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-26
+> **최종 갱신**: 2026-02-27
 
 ---
 
@@ -266,7 +266,7 @@
 - SmsPatternMatcher parseWithRegex() 미사용 fallbackCategory 파라미터 제거
 - SmsIncomeFilter/SmsPreFilter 중복 코드 방어용 주석 추가
 
-**generateRegexForGroup 정규식 생성 성공률 개선**: 🔧 미커밋 (2026-02-26)
+**generateRegexForGroup 정규식 생성 성공률 개선**: ✅ 완료 (2026-02-26)
 - repair 1회 활성화 (REGEX_REPAIR_MAX_RETRIES 0→1)
 - 검증 일원화: Extractor에서 샘플 성공률 게이트 제거 → Classifier.validateRegexAgainstSamples() 1곳에서만 판정
 - 프롬프트 개선: JSON escape 규칙 명시, 멀티라인 SMS 예시 추가, 날짜 prefix 제거, 샘플 수 1~5→1~10
@@ -275,6 +275,21 @@
 - repair 프롬프트에 인간 친화적 실패 사유 매핑 (toHumanFriendlyReason)
 - 미사용 코드 정리 (REGEX_MIN_AMOUNT, NON_DIGIT_PATTERN, STORE_* 패턴, isValidRegexStoreName, tryExtractGroup1, RegexValidationResult.successRatio)
 - 하드코딩 문자열 리소스화 (strings.xml + values-en/strings.xml)
+
+**SMS Step5 성능 최적화 + Step4.5 배치 LLM 복구 경로**: ✅ 완료 (2026-02-27)
+- PR #38 (`optimize/sms-step5-performance` → `develop`) 머지 완료
+- **Step5 성능 최적화** (커밋 b339245):
+  - GeminiSmsExtractor: LLM 타임아웃 60초, CancellationException 조기 캐치, isPayment=false 스킵, 디버그 로깅
+  - SmsGroupClassifier: REGEX_MIN_SAMPLES=5, REGEX_TIME_BUDGET_MS=15초, REGEX_NEAR_MISS_MIN_RATIO=0.4f, dead code 제거
+  - SmsPipeline: Step5 진행률 콜백 연동
+- **Step4.5 regex 실패건 배치 LLM 복구** (커밋 43de46e):
+  - SmsPatternMatcher: `MatchResult` 3-way 분할 (matched/regexFailed/unmatched)
+  - SmsGroupClassifier: `batchExtractRegexFailed()` — 발신번호별 그룹 + chunk(10) + 배치 LLM 추출
+  - SmsPipeline: Step4→Step4.5→Step5 체인, `PipelineResult.regexFailedRecoveredCount`
+  - SmsPipelineModels: `SyncStats.regexFailedRecoveredCount`
+  - SmsSyncCoordinator/MainViewModel: stats 매핑
+- **근본 원인**: KB출금 26건이 벡터매칭 OK + regex 파싱 실패(STORE_INVALID_KEYWORDS에 "출금","카드") → 매 동기화 25초 Step5 무한 루프 → Step4.5에서 ~3초 처리
+- CLAUDE.md에 MoneyTalkLogger 로깅 규칙 추가 (커밋 b745945)
 
 ### 대기 중인 작업
 
@@ -340,7 +355,8 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
-| 2026-02-26 | generateRegexForGroup 정규식 생성 성공률 개선 — repair 1회 활성, 검증 일원화, 프롬프트 개선(JSON escape/멀티라인/날짜제거), ultraCompact 3차 폴백, 미사용 코드 정리 | 미커밋 |
+| 2026-02-27 | SMS Step5 성능 최적화 + Step4.5 배치 LLM 복구 경로 — KB출금 regex 실패 무한 루프 해결, MatchResult 3-way 분할, batchExtractRegexFailed, PR #38 머지 | 완료 |
+| 2026-02-26 | generateRegexForGroup 정규식 생성 성공률 개선 — repair 1회 활성, 검증 일원화, 프롬프트 개선(JSON escape/멀티라인/날짜제거), ultraCompact 3차 폴백, 미사용 코드 정리 | 완료 |
 | 2026-02-26 | SmsGroupClassifier 품질 개선 — 소그룹 병합 0.70→0.90, RTDB 표본에 template 추가, LLM 프롬프트 메인 케이스 참조, MainCaseContext 3건 샘플 | 완료 |
 | 2026-02-25 | 임베딩 차원 3072→768 축소 — outputDimensionality=768 설정, DB v3→v4 마이그레이션, 코드/문서 16개 파일 갱신 | 완료 |
 | 2026-02-25 | PR #33 MainViewModel 리팩토링 — Codex P2 리뷰 확인, 권한 없을 때 resume DataRefreshEvent 미발행 지적 → 현행 유지 결정 | 완료 |
@@ -443,7 +459,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | [`SmsReaderV2.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsReaderV2.kt) | SMS/MMS/RCS 통합 읽기 → List\<SmsInput\> 직접 반환 |
 | [`SmsIncomeFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsIncomeFilter.kt) | PAYMENT/INCOME/SKIP 3분류 (financialKeywords 46개) |
 | [`SmsIncomeParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsIncomeParser.kt) | 수입 SMS 파싱 (금액/유형/출처/날짜시간) |
-| [`SmsPipeline.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipeline.kt) | 오케스트레이터 (Step 2→3→4→5) |
+| [`SmsPipeline.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipeline.kt) | 오케스트레이터 (Step 2→3→4→4.5→5) |
 | [`SmsPipelineModels.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipelineModels.kt) | 데이터 클래스 (SmsInput, EmbeddedSms, SmsParseResult, SyncResult) |
 | [`SmsPreFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPreFilter.kt) | Step 2: 사전 필터링 (키워드 + 구조) |
 | [`SmsTemplateEngine.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsTemplateEngine.kt) | Step 3: 템플릿화 + Gemini Embedding API |

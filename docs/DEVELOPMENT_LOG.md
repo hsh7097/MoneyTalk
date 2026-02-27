@@ -4,6 +4,50 @@
 
 ---
 
+## 2026-02-27 - SMS Step5 성능 최적화 + Step4.5 배치 LLM 복구 경로
+
+### 배경
+데이터 초기화 후 재동기화 시, 패턴 DB에 임베딩은 남아있지만 regex가 비거나 파싱 실패하는 패턴이 존재. 이 SMS들은 Step4 벡터매칭(≥0.92)을 통과하지만 `parseWithPatternRegex` 실패 → Step5로 떨어짐. Step5에서 regex 재생성을 시도하지만 또 실패(STORE_INVALID_KEYWORDS에 "출금","카드" → isValidStoreCandidate 탈락) → 매 동기화마다 25초 낭비하는 무한 루프.
+
+실측: KB출금 SMS 26건이 매번 Step5로 빠져 25.2초 소요 (전체 28초 중 90%).
+
+### 작업 내용
+
+#### Step5 성능 최적화 (커밋 b339245)
+- **GeminiSmsExtractor**: LLM 타임아웃 60초 설정(3개 모델), CancellationException을 7개 generic catch보다 먼저 캐치, isPayment=false 조기 리턴, 디버그 로깅 추가
+- **SmsGroupClassifier**: REGEX_MIN_SAMPLES=5 (소그룹 regex 생성 스킵), REGEX_TIME_BUDGET_MS=15초 (시간 제한), REGEX_NEAR_MISS_MIN_RATIO=0.4f (near-miss 그룹 regex 재시도 기준), dead code 제거, LLM 배치 호출 시 drop(1) 오류 수정
+- **SmsPipeline**: Step5 진행률 콜백(step, current, total) 연동
+
+#### Step4.5 regex 실패건 배치 LLM 복구 (커밋 43de46e)
+- **SmsPatternMatcher**: `MatchResult` data class 도입 — 3-way 분할 (matched/regexFailed/unmatched)
+  - 벡터매칭 OK + regex 파싱 실패 → `regexFailed` (기존: `unmatched`에 섞임)
+  - stats 로그에 `regexFailed` 포함
+- **SmsGroupClassifier**: `batchExtractRegexFailed()` 신규 메서드
+  - 발신번호별 그룹핑 → chunk(10) → `smsExtractor.extractFromSmsBatch()` 배치 LLM 추출
+  - 성공: SmsParseResult(tier=3) 반환 / 실패: Step5 fallback 리스트로 전달
+- **SmsPipeline**: Step4→Step4.5→Step5 체인 삽입, `PipelineResult.regexFailedRecoveredCount` 추가
+- **SmsPipelineModels**: `SyncStats.regexFailedRecoveredCount` 추가
+- **SmsSyncCoordinator**: stats 매핑
+- **MainViewModel**: `engineSummaryPatterns`에 `regexFailedRecoveredCount` 합산
+
+### 변경 파일 (PR #38: 8 files, +248/-126)
+- `core/sms2/SmsPatternMatcher.kt` — MatchResult 3-way 분할
+- `core/sms2/SmsGroupClassifier.kt` — batchExtractRegexFailed() + Step5 최적화 상수
+- `core/sms2/SmsPipeline.kt` — Step4.5 삽입
+- `core/sms2/SmsPipelineModels.kt` — SyncStats 필드 추가
+- `core/sms2/SmsSyncCoordinator.kt` — stats 매핑
+- `core/sms2/GeminiSmsExtractor.kt` — 타임아웃, 예외 처리, 디버그 로깅
+- `MainViewModel.kt` — engineSummaryPatterns 합산
+- `CLAUDE.md` — MoneyTalkLogger 로깅 규칙 추가
+
+### 결정 사항
+- **regex 실패건은 Step5(그룹핑+regex생성)를 건너뛰고 배치 LLM 추출**: regex가 이미 실패한 패턴에 다시 regex 생성을 시도하는 것은 무의미. 직접 LLM으로 추출하는 것이 확실하고 빠름 (~3초 vs 25초)
+- **Step4.5 LLM 실패건은 Step5로 fallback**: 데이터 손실 없음
+- **SmsPipeline `.e()` 로그 레벨 유지**: 사용자가 가시성 목적으로 의도적으로 사용 — 변경하지 않음
+- **Codex P1 리뷰(그룹 LLM blended 위험)**: 같은 발신번호+같은 템플릿 그룹이므로 실질적 위험 낮음 → 조치 불필요
+
+---
+
 ## 2026-02-26 - generateRegexForGroup 정규식 생성 성공률 개선
 
 ### 배경
