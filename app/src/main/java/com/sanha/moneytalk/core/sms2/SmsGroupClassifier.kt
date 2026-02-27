@@ -757,11 +757,13 @@ class SmsGroupClassifier @Inject constructor(
      * - LLM이 전체 그림을 보고 판단 → 오파싱/오분류 감소
      *
      * @param unmatchedList Step 4에서 미매칭된 EmbeddedSms 리스트
+     * @param forceSkipRegexAll true면 Step5 전체에서 regex 생성/검증을 생략하고 direct LLM 경로로만 처리
      * @param onProgress 진행률 콜백
      * @return 결제로 확인되고 파싱 성공한 결과 리스트
      */
     suspend fun classifyUnmatched(
         unmatchedList: List<EmbeddedSms>,
+        forceSkipRegexAll: Boolean = false,
         onProgress: ((step: String, current: Int, total: Int) -> Unit)? = null
     ): List<SmsParseResult> {
         if (unmatchedList.isEmpty()) return emptyList()
@@ -796,6 +798,7 @@ class SmsGroupClassifier @Inject constructor(
         val processedSources = AtomicInteger(0)
         val step5StartTime = System.currentTimeMillis()
         val degradedByBudget = AtomicInteger(0)
+        val forcedSkipRegexCount = AtomicInteger(0)
         val outcomeCounts = ConcurrentHashMap<String, AtomicInteger>()
 
         // Semaphore가 동시성을 제어하므로 chunked 배리어 없이 전체 sourceGroup을 한번에 실행
@@ -807,9 +810,12 @@ class SmsGroupClassifier @Inject constructor(
                     try {
                         // Step5 소프트 예산 초과 → 이 sourceGroup은 regex 생성을 생략하고 빠른 경로로 처리
                         val step5Elapsed = System.currentTimeMillis() - step5StartTime
-                        val forceDirectLlm = step5Elapsed > STEP5_TIME_BUDGET_MS
-                        if (forceDirectLlm) {
+                        val forceDirectByBudget = step5Elapsed > STEP5_TIME_BUDGET_MS
+                        val forceDirectLlm = forceSkipRegexAll || forceDirectByBudget
+                        if (forceDirectByBudget) {
                             degradedByBudget.addAndGet(sourceGroup.subGroups.sumOf { it.members.size })
+                        } else if (forceSkipRegexAll) {
+                            forcedSkipRegexCount.addAndGet(sourceGroup.subGroups.sumOf { it.members.size })
                         }
                         processSourceGroup(
                             sourceGroup = sourceGroup,
@@ -840,6 +846,7 @@ class SmsGroupClassifier @Inject constructor(
         MoneyTalkLogger.e(
             "[Step5 summary] sources=${sourceGroups.size}, parsed=${results.size}건, " +
                 "degradedByBudget=${degradedByBudget.get()}건, softBudget=${STEP5_TIME_BUDGET_MS}ms, " +
+                "forcedSkipRegex=${forcedSkipRegexCount.get()}건, " +
                 "learningQueue=${learningQueueSize.get()}건, dropped=${learningDroppedCount.get()}건, " +
                 "outcomes=[$outcomeSummary], elapsed=${step5TotalElapsed}ms"
         )
