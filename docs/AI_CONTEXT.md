@@ -320,8 +320,9 @@ HomeViewModel.syncSmsV2(contentResolver, targetMonthRange)
      → SmsIncomeFilter: PAYMENT/INCOME/SKIP 3분류 (financialKeywords 46개)
      → SmsPipeline (결제 후보만):
        → SmsTemplateEngine: 템플릿화 + Gemini Embedding API (배치 100건)
-       → SmsPatternMatcher: 기존 패턴 DB에서 코사인 유사도 매칭 + regex 파싱
-       → SmsGroupClassifier: 3레벨 그룹핑 → LLM 배치 추출 → regex 생성 → 패턴 DB 등록
+       → SmsPatternMatcher: 기존 패턴 DB에서 코사인 유사도 매칭 + regex 파싱 → MatchResult(matched/regexFailed/unmatched)
+       → SmsGroupClassifier.batchExtractRegexFailed(): regex 실패건 배치 LLM 추출 (Step4.5)
+       → SmsGroupClassifier.classifyUnmatched(): 미매칭+Step4.5 fallback → 3레벨 그룹핑 → LLM 배치 추출 → regex 생성 → 패턴 DB 등록
    → saveExpenses(): SmsParseResult → ExpenseEntity 변환 + 배치 저장
    → saveIncomes(): SmsIncomeParser 파싱 → IncomeEntity 변환 + 배치 저장
    → postSyncCleanup(): 카테고리 분류 + 패턴 정리 + lastSyncTime + 카드 등록
