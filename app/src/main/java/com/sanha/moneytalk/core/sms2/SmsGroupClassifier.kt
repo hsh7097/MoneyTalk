@@ -422,7 +422,6 @@ class SmsGroupClassifier @Inject constructor(
                 while (true) {
                     val task = learningQueue.poll() ?: break
                     learningQueueSize.updateAndGet { current -> if (current > 0) current - 1 else 0 }
-                    learningDedupKeys.remove(task.dedupKey)
 
                     try {
                         when (task) {
@@ -452,6 +451,10 @@ class SmsGroupClassifier @Inject constructor(
                     } catch (e: Exception) {
                         failed++
                         MoneyTalkLogger.w("[learningQueue] 처리 실패: reason=${task.reasonCode}, msg=${e.message}")
+                    } finally {
+                        // dedup key는 작업 완료(성공/실패) 시점까지 유지하여
+                        // in-flight 상태에서 동일 작업이 재적재되지 않도록 보장한다.
+                        learningDedupKeys.remove(task.dedupKey)
                     }
 
                     if (processed % 10 == 0) {
