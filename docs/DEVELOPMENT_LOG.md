@@ -4,6 +4,105 @@
 
 ---
 
+## 2026-02-27 - PR #41: Step4.5 복구 경로 최적화 및 프롬프트 안정화
+
+### 배경
+PR #40에서 Step5 정책이 고도화되었으나, Step4.5(regex 실패건 복구)는 직렬 처리 + 품질 게이트 없이 모든 실패건을 LLM에 전달하는 상태. 프롬프트도 근거 부족 SMS에 대한 처리가 미흡. 누락 SMS 디버깅 수단 부재.
+
+### 작업 내용
+
+#### Step4.5 병렬화 + 품질 게이트 (커밋 2a428f9)
+- **병렬 처리**: `Semaphore(LLM_CONCURRENCY)` + `async(Dispatchers.IO)` + `awaitAll()` — 직렬→병렬 전환
+- **복구 가능성 판정**: `isRecoverableRegexFailedSms()` — SMS 길이≥12, 금액 패턴 + 힌트 키워드 확인
+- **근거 검증**: `isGroundedRegexFailedRecovery()` — 금액 증거(containsAmountEvidence) + 가게명 부분문자열 매칭
+- **실패 쿨다운**: `regexFailedRecoveryStates` — `sender:templateHash` 키, 2회 실패→30분 쿨다운
+- **KB 멀티라인 출금 휴리스틱**: `tryParseKbDebitFallback()` — 정규식으로 KB 스타일 출금 SMS 직접 파싱 (LLM 스킵)
+
+#### Step5 경로 분리 (커밋 023cf71, 9707f4b, 42a9760)
+- **5-A (unmatched)**: full regex policy — 기존 그대로
+- **5-B (regexFailedFallback)**: `forceSkipRegexAll=true` — regex 재생성 스킵 (이미 실패한 regex 재시도 방지)
+- outcome 코드 구분: `REGEX_FAILED_HEURISTIC_KB`, `REGEX_FAILED_FALLBACK_DIRECT_LLM`
+- 단건 LLM null 시 1회 재시도 (`GROUP_LLM_NULL_RETRY_MAX=1`, 300ms delay)
+
+#### 프롬프트 강화 (커밋 1394ff6, 4de73b3)
+- 근거 부족 문자 처리 규칙 (rules 7-10), 예외 규칙 추가
+- `SMS_EXTRACT_PROMPT_VERSION` / `SMS_BATCH_PROMPT_VERSION` 로깅
+
+#### 누락 SMS 드롭 경로 진단 (커밋 d90a3b2)
+- SmsPipeline: parsedIds vs embedded 차집합 추적 → 드롭된 SMS 원문 로그
+
+#### SMS 누락 복구 + insight 재시도 + 메모 표기 (커밋 b8485f7)
+- **Home insight 재시도**: `HOME_INSIGHT_MAX_ATTEMPTS=3`, 503/UNAVAILABLE 시 선형 백오프 (1200ms*attempt)
+- **TransactionCard 메모 표시**: `memoText` 필드 추가 + `buildAnnotatedString` (alpha=0.72f)
+- `TransactionCardInfo`에 `memoText: String?` 프로퍼티 (default null, expense.memo 매핑)
+
+#### 코드 정리 (커밋 9b03917)
+- `tryHeuristicParse()` 헬퍼 추출 — 4곳 중복 `tryParseKbDebitFallback()` + `SmsParseResult` 생성 통합
+- `DEBIT_FALLBACK_STORE_NAME` 상수 추출 (SmsPatternMatcher)
+- outcome 코드 `REGEX_FAILED_HEURISTIC_KB` 구분 (휴리스틱 vs LLM 경로)
+
+### 변경 파일 (PR #41: 9 files)
+- `core/sms2/SmsGroupClassifier.kt` — Step4.5 병렬화, 품질 게이트, KB 휴리스틱, tryHeuristicParse 헬퍼
+- `core/sms2/SmsPatternMatcher.kt` — DEBIT_FALLBACK_STORE_NAME 상수
+- `core/sms2/SmsPipeline.kt` — Step5 경로 분리(5-A/5-B), 드롭 경로 진단 로그
+- `core/sms2/GeminiSmsExtractor.kt` — 프롬프트 버전 로깅
+- `core/sms2/SmsPreFilter.kt` — (미변경, 원복)
+- `res/values/string_prompt.xml` — 근거 부족 규칙, 예외 규칙
+- `feature/chat/data/GeminiRepositoryImpl.kt` — insight 재시도 로직
+- `core/ui/component/transaction/card/TransactionCardCompose.kt` — 메모 표시
+- `core/ui/component/transaction/card/TransactionCardInfo.kt` — memoText 필드
+
+### 결정 사항
+- **Step4.5 품질 게이트 도입 이유**: 모든 regex 실패건을 LLM에 보내면 비용 과다 + 근거 없는 SMS(잔액 알림 등)까지 추출 시도 → 복구 가능성 판정으로 LLM 호출 최소화
+- **forceSkipRegexAll=true**: regex가 이미 실패한 패턴에 다시 regex를 생성하는 것은 무의미. LLM 직접 추출만 시도
+- **KB 휴리스틱**: KB 멀티라인 출금은 형식이 고정되어 정규식으로 확실하게 파싱 가능. LLM 호출 없이 즉시 처리
+
+---
+
+## 2026-02-27 - PR #40: Step5 SMS 파싱 정책/예산/학습 분리 고도화
+
+### 배경
+PR #38에서 Step5의 기본 성능 최적화(시간 제한, 최소 샘플)를 적용했으나, 여전히 비효율적인 패턴이 존재: 이질적 SMS가 섞인 unstable 그룹에 regex 생성 시도, 시간 예산 초과 시 데이터 누락, 성공한 regex 패턴의 즉시 등록으로 인한 동기화 병목.
+
+### 작업 내용
+
+#### Phase1: regex 정책 강화 + 시간 예산 (커밋 5876f3a)
+- `REGEX_MIN_SAMPLES=5`: 5건 미만 그룹은 regex 생성 스킵 (비용 대비 효과 낮음)
+- `GROUP_TIME_BUDGET_MS=10초`: 단일 그룹 처리 시간 제한
+- `STEP5_TIME_BUDGET_MS=20초`: Step5 전체 시간 제한
+- 계측 로그: 그룹별 처리 시간/결과 상세 출력
+
+#### Phase2: 예산 초과 시 스킵→강등 (커밋 71a7d55)
+- 기존: 시간 예산 초과 시 그룹 스킵 → 데이터 누락
+- 변경: regex 생성 포기 + LLM 직접 추출로 강등 → 데이터 보존
+- 가성비: regex 생성(~5초) vs LLM 직접 추출(~1초) 트레이드오프
+
+#### Phase3: unstable 그룹 정책 + cohesion gate (커밋 dd75187, 584cc4d)
+- **unstable 판정**: 그룹 내 유사도 중앙값 < 0.92 또는 P20 < 0.88 → 이질적 SMS 혼입
+- **unstable 처리**: 그룹 해체 → 개별 LLM 추출 (max 10건, 초과분 스킵)
+- **cohesion gate**: regex 생성 전 그룹 응집도 검증 — 낮으면 regex 생성 abort
+- E-lite 모델 분리: unstable 개별 추출에 경량 모델 사용
+
+#### Phase4: 백그라운드 학습 큐 (커밋 3283d02)
+- `DeferredLearningTask`: regex 등록을 즉시→비동기로 전환
+- `learningQueue` + `learningQueueSize` + `learningDroppedCount`: 큐 관리
+- `LEARNING_QUEUE_MAX_SIZE=1000`: 큐 오버플로우 방지
+- `learningProcessorRunning`: 단일 프로세서 보장
+
+#### Phase5: outcome 집계 + 학습 큐 dedup (커밋 275098f, 8464f7a)
+- outcome별 집계 로그: matched/regexFailed/llmDirect/unstable/skipped 카운트
+- `learningDedupKeys`: ConcurrentHashMap.newKeySet() 기반 in-flight 중복 방지
+
+### 변경 파일 (PR #40: 1 file, 7 commits)
+- `core/sms2/SmsGroupClassifier.kt` — 전체 변경
+
+### 결정 사항
+- **SmsGroupClassifier 단일 파일 PR**: 모든 Step5 정책이 이 파일에 집중되어 있어 분리 효과 낮음
+- **강등 정책**: 데이터 누락(=사용자가 직접 입력해야 함)보다 LLM 비용이 낮다고 판단
+- **unstable 해체 기준(0.92/0.88)**: 실측으로 이 수치 미만 그룹은 regex 성공률이 <20%였음
+
+---
+
 ## 2026-02-27 - SMS Step5 성능 최적화 + Step4.5 배치 LLM 복구 경로
 
 ### 배경

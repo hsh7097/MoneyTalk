@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-27
+> **최종 갱신**: 2026-02-27 (PR #40, #41 반영)
 
 ---
 
@@ -291,6 +291,25 @@
 - **근본 원인**: KB출금 26건이 벡터매칭 OK + regex 파싱 실패(STORE_INVALID_KEYWORDS에 "출금","카드") → 매 동기화 25초 Step5 무한 루프 → Step4.5에서 ~3초 처리
 - CLAUDE.md에 MoneyTalkLogger 로깅 규칙 추가 (커밋 b745945)
 
+**PR #40: Step5 SMS 파싱 정책/예산/학습 분리 고도화**: ✅ 완료 (2026-02-27)
+- PR #40 (`optimize/step5-phase1` → `develop`) 머지 완료, 7 커밋, SmsGroupClassifier.kt 단일 파일
+- **Phase1**: regex 정책 강화 (REGEX_MIN_SAMPLES=5, near-miss 재시도), 그룹별/전체 시간 예산 (GROUP_TIME_BUDGET_MS=10초, STEP5_TIME_BUDGET_MS=20초), 계측 로그
+- **Phase2**: 예산 초과 시 스킵→강등 정책 (regex 생성 포기하고 LLM 직접 추출로 전환, 데이터 누락 방지)
+- **Phase3**: unstable 그룹 정책 (중앙값 0.92/P20 0.88 미달 시 그룹 해체→개별 LLM), cohesion gate, E-lite 모델 분리
+- **Phase4**: 백그라운드 학습 큐 (DeferredLearningTask, learningQueue, LEARNING_QUEUE_MAX_SIZE=1000, dedup)
+- **Phase5**: outcome 집계 로그 + 학습 큐 in-flight dedup 중복 방지
+
+**PR #41: Step4.5 복구 경로 최적화 및 프롬프트 안정화**: ✅ 완료 (2026-02-27)
+- PR #41 (`codex/step4-5-optimize` → `develop`) 머지 완료, 9 커밋, 9 파일
+- **Step4.5 병렬화 + 품질 게이트**: Semaphore(LLM_CONCURRENCY) + async/awaitAll, isRecoverableRegexFailedSms() 복구 가능성 판정, isGroundedRegexFailedRecovery() 근거 검증, 실패 쿨다운 (sender:templateHash, 2회→30분)
+- **KB 멀티라인 출금 휴리스틱**: tryParseKbDebitFallback() + tryHeuristicParse() 헬퍼 추출 (4곳 중복 제거)
+- **Step5 경로 분리**: 5-A (unmatched, full regex policy) vs 5-B (regexFailedFallback, forceSkipRegexAll=true)
+- **프롬프트 강화**: 근거 부족 문자 처리 규칙(rules 7-10), SMS_EXTRACT_PROMPT_VERSION/SMS_BATCH_PROMPT_VERSION 로깅
+- **누락 SMS 드롭 경로 진단**: SmsPipeline에서 parsedIds vs embedded 차집합 추적 로그
+- **Home insight 재시도**: HOME_INSIGHT_MAX_ATTEMPTS=3, 503/UNAVAILABLE 시 선형 백오프
+- **TransactionCard 메모 표시**: memoText 필드 + buildAnnotatedString (alpha=0.72f)
+- **상수 추출**: DEBIT_FALLBACK_STORE_NAME (SmsPatternMatcher), outcome 코드 REGEX_FAILED_HEURISTIC_KB 구분
+
 ### 대기 중인 작업
 
 - `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지 (이미 머지됨 — 정리 필요)
@@ -355,6 +374,8 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-02-27 | PR #41: Step4.5 복구 경로 최적화 — 병렬화+품질게이트, KB 휴리스틱, Step5 경로 분리(5-A/5-B), 프롬프트 강화, insight 재시도, 메모 표시, 상수 정리 | 완료 |
+| 2026-02-27 | PR #40: Step5 정책/예산/학습 고도화 — 그룹/전체 시간 예산, 스킵→강등, unstable 그룹 해체, cohesion gate, 백그라운드 학습 큐+dedup | 완료 |
 | 2026-02-27 | SMS Step5 성능 최적화 + Step4.5 배치 LLM 복구 경로 — KB출금 regex 실패 무한 루프 해결, MatchResult 3-way 분할, batchExtractRegexFailed, PR #38 머지 | 완료 |
 | 2026-02-26 | generateRegexForGroup 정규식 생성 성공률 개선 — repair 1회 활성, 검증 일원화, 프롬프트 개선(JSON escape/멀티라인/날짜제거), ultraCompact 3차 폴백, 미사용 코드 정리 | 완료 |
 | 2026-02-26 | SmsGroupClassifier 품질 개선 — 소그룹 병합 0.70→0.90, RTDB 표본에 template 추가, LLM 프롬프트 메인 케이스 참조, MainCaseContext 3건 샘플 | 완료 |
