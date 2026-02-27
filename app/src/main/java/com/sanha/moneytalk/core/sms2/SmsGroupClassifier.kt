@@ -8,12 +8,17 @@ import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
 import java.util.Locale
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
@@ -135,6 +140,10 @@ class SmsGroupClassifier @Inject constructor(
 
         /** 발신번호 정규화: 하이픈/공백/괄호 제거용 */
         private val ADDRESS_CLEAN_PATTERN = Regex("""[-\s().]""")
+
+        /** Phase4: 백그라운드 학습 큐 최대 적재량 (초과 시 oldest drop) */
+        private const val LEARNING_QUEUE_MAX_SIZE = 1000
+        private const val LEARNING_PROCESSOR_BATCH_LOG = 20
 
         /** maskSmsBody용 사전 컴파일 정규식 (매 호출마다 컴파일 방지) */
         private val MASK_CARD_NUM = Regex("""\d+\*+\d+""")
@@ -271,12 +280,41 @@ class SmsGroupClassifier @Inject constructor(
         val p20Similarity: Float
     )
 
+    /**
+     * Phase4: 동기화/학습 완전 분리를 위한 백그라운드 학습 작업
+     */
+    private sealed class DeferredLearningTask {
+        data class Payment(
+            val embedded: EmbeddedSms,
+            val analysis: SmsAnalysisResult,
+            val source: String,
+            val amountRegex: String,
+            val storeRegex: String,
+            val cardRegex: String,
+            val isMainGroup: Boolean,
+            val groupMemberCount: Int,
+            val reasonCode: String
+        ) : DeferredLearningTask()
+
+        data class NonPayment(
+            val embedded: EmbeddedSms,
+            val reasonCode: String
+        ) : DeferredLearningTask()
+    }
+
     /** regex 생성 실패 쿨다운 추적 */
     private val regexFailureStates = ConcurrentHashMap<String, RegexFailureState>()
     private data class RegexFailureState(val failCount: Int, val lastFailedAt: Long)
 
     /** RTDB 중복 방지용 전송 기록 */
     private val sentSampleEmbeddings = mutableListOf<List<Float>>()
+
+    /** Phase4: 백그라운드 학습 큐 */
+    private val learningScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val learningQueue = ConcurrentLinkedQueue<DeferredLearningTask>()
+    private val learningQueueSize = AtomicInteger(0)
+    private val learningDroppedCount = AtomicInteger(0)
+    private val learningProcessorRunning = AtomicBoolean(false)
 
     // ===== Step 4.5: regex 실패건 배치 LLM 추출 =====
 
@@ -345,6 +383,86 @@ class SmsGroupClassifier @Inject constructor(
 
         MoneyTalkLogger.i("[batchExtractRegexFailed] 총 ${regexFailedList.size}건 → 성공${results.size}건, Step5 fallback ${fallback.size}건")
         return Pair(results, fallback)
+    }
+
+    // ===== Phase4: 백그라운드 학습 큐 =====
+
+    private fun enqueueDeferredLearning(task: DeferredLearningTask) {
+        // 큐 상한 유지: 초과 시 oldest drop
+        while (learningQueueSize.get() >= LEARNING_QUEUE_MAX_SIZE) {
+            learningQueue.poll() ?: break
+            learningQueueSize.updateAndGet { current -> if (current > 0) current - 1 else 0 }
+            learningDroppedCount.incrementAndGet()
+        }
+
+        learningQueue.offer(task)
+        learningQueueSize.incrementAndGet()
+        startLearningProcessorIfNeeded()
+    }
+
+    private fun startLearningProcessorIfNeeded() {
+        if (!learningProcessorRunning.compareAndSet(false, true)) return
+
+        learningScope.launch {
+            var processed = 0
+            var failed = 0
+            try {
+                while (true) {
+                    val task = learningQueue.poll() ?: break
+                    learningQueueSize.updateAndGet { current -> if (current > 0) current - 1 else 0 }
+
+                    try {
+                        when (task) {
+                            is DeferredLearningTask.Payment -> {
+                                registerPaymentPattern(
+                                    embedded = task.embedded,
+                                    analysis = task.analysis,
+                                    source = task.source,
+                                    amountRegex = task.amountRegex,
+                                    storeRegex = task.storeRegex,
+                                    cardRegex = task.cardRegex,
+                                    isMainGroup = task.isMainGroup,
+                                    groupMemberCount = task.groupMemberCount
+                                )
+                            }
+                            is DeferredLearningTask.NonPayment -> {
+                                registerNonPaymentPattern(task.embedded)
+                            }
+                        }
+                        processed++
+                        if (processed % LEARNING_PROCESSOR_BATCH_LOG == 0) {
+                            MoneyTalkLogger.i(
+                                "[learningQueue] 처리중: processed=$processed, failed=$failed, " +
+                                    "remaining=${learningQueueSize.get()}, dropped=${learningDroppedCount.get()}"
+                            )
+                        }
+                    } catch (e: Exception) {
+                        failed++
+                        val reason = when (task) {
+                            is DeferredLearningTask.Payment -> task.reasonCode
+                            is DeferredLearningTask.NonPayment -> task.reasonCode
+                        }
+                        MoneyTalkLogger.w("[learningQueue] 처리 실패: reason=$reason, msg=${e.message}")
+                    }
+
+                    if (processed % 10 == 0) {
+                        yield()
+                    }
+                }
+            } finally {
+                learningProcessorRunning.set(false)
+                if (learningQueue.isNotEmpty()) {
+                    // 실행 중 적재된 작업이 남아있으면 재시작
+                    startLearningProcessorIfNeeded()
+                }
+                if (processed > 0 || failed > 0) {
+                    MoneyTalkLogger.i(
+                        "[learningQueue] 처리 완료: processed=$processed, failed=$failed, " +
+                            "remaining=${learningQueueSize.get()}, dropped=${learningDroppedCount.get()}"
+                    )
+                }
+            }
+        }
     }
 
     // ===== 메인 진입점 =====
@@ -436,7 +554,8 @@ class SmsGroupClassifier @Inject constructor(
         val step5TotalElapsed = System.currentTimeMillis() - step5StartTime
         MoneyTalkLogger.e(
             "[Step5 summary] sources=${sourceGroups.size}, parsed=${results.size}건, " +
-                "degradedByBudget=${degradedByBudget.get()}건, softBudget=${STEP5_TIME_BUDGET_MS}ms, elapsed=${step5TotalElapsed}ms"
+                "degradedByBudget=${degradedByBudget.get()}건, softBudget=${STEP5_TIME_BUDGET_MS}ms, " +
+                "learningQueue=${learningQueueSize.get()}건, dropped=${learningDroppedCount.get()}건, elapsed=${step5TotalElapsed}ms"
         )
 
         return results
@@ -713,7 +832,13 @@ class SmsGroupClassifier @Inject constructor(
             if (!skipLearning) {
                 registerNonPaymentPattern(representative)
             } else {
-                MoneyTalkLogger.i("[processGroup] 학습 스킵(non-payment): addr=*$addr")
+                enqueueDeferredLearning(
+                    DeferredLearningTask.NonPayment(
+                        embedded = representative,
+                        reasonCode = outcome.ifBlank { "DIRECT_LLM" }
+                    )
+                )
+                MoneyTalkLogger.i("[processGroup] 학습 큐 적재(non-payment): addr=*$addr")
             }
             val elapsed = System.currentTimeMillis() - groupStartTime
             MoneyTalkLogger.e("[processGroup] 완료: addr=*$addr, outcome=NON_PAYMENT, results=0건, elapsed=${elapsed}ms")
@@ -909,7 +1034,20 @@ class SmsGroupClassifier @Inject constructor(
             )
             MoneyTalkLogger.i("[processGroup] 패턴 등록 완료: addr=*$addr, source=$parseSource, hasRegex=${amountRegex.isNotBlank()}")
         } else {
-            MoneyTalkLogger.i("[processGroup] 학습 스킵(payment): addr=*$addr, source=$parseSource")
+            enqueueDeferredLearning(
+                DeferredLearningTask.Payment(
+                    embedded = representative,
+                    analysis = llmAnalysis,
+                    source = parseSource,
+                    amountRegex = amountRegex,
+                    storeRegex = storeRegex,
+                    cardRegex = cardRegex,
+                    isMainGroup = isMainGroup,
+                    groupMemberCount = group.members.size,
+                    reasonCode = outcome.ifBlank { "DIRECT_LLM" }
+                )
+            )
+            MoneyTalkLogger.i("[processGroup] 학습 큐 적재(payment): addr=*$addr, source=$parseSource")
         }
 
         // --- [5-4] 그룹 전체 멤버 파싱 ---
