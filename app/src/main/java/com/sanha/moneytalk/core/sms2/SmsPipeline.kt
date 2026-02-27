@@ -125,21 +125,21 @@ class SmsPipeline @Inject constructor(
             val result = preFilter.filter(smsList)
             result
         }
-        MoneyTalkLogger.i("Step2 PreFilter: ${smsList.size}건 → ${filtered.size}건")
+        MoneyTalkLogger.e("Step2 PreFilter: ${smsList.size}건 → ${filtered.size}건")
 
         if (filtered.isEmpty()) return PipelineResult(emptyList(), 0, 0)
 
         // Step 3: 전체 임베딩 — 100건씩 배치, Semaphore(10)로 병렬 제한
         onProgress?.invoke(STEP_EMBED, "문자 패턴 분석 중...", 0, filtered.size)
         val embedded = batchEmbed(filtered)
-        MoneyTalkLogger.i("Step3 Embedding: ${filtered.size}건 → ${embedded.size}건")
+        MoneyTalkLogger.e("Step3 Embedding: ${filtered.size}건 → ${embedded.size}건")
 
         if (embedded.isEmpty()) return PipelineResult(emptyList(), 0, 0)
 
         // Step 4: 벡터 매칭 — DB 기존 패턴과 유사도 비교
         onProgress?.invoke(STEP_MATCH, "이전 내역과 비교 중...", 0, embedded.size)
         val (vectorResults, unmatched) = patternMatcher.matchPatterns(embedded)
-        MoneyTalkLogger.i("Step4 VectorMatch: 매칭 ${vectorResults.size}건, 미매칭 ${unmatched.size}건")
+        MoneyTalkLogger.e("Step4 VectorMatch: 매칭 ${vectorResults.size}건, 미매칭 ${unmatched.size}건")
 
         // Step 5: 미매칭분 그룹핑 + LLM
         val llmResults = if (unmatched.isNotEmpty()) {
@@ -152,7 +152,7 @@ class SmsPipeline @Inject constructor(
         }
 
         val total = vectorResults + llmResults
-        MoneyTalkLogger.i("SmsPipeline 완료: 결제 확정 ${total.size}건")
+        MoneyTalkLogger.e("SmsPipeline 완료: 결제 확정 ${total.size}건")
         return PipelineResult(
             results = total,
             vectorMatchCount = vectorResults.size,

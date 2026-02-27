@@ -4,6 +4,7 @@ import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
 import android.content.Context
 import com.google.ai.client.generativeai.GenerativeModel
+import com.google.ai.client.generativeai.type.RequestOptions
 import com.google.ai.client.generativeai.type.content
 import com.google.ai.client.generativeai.type.generationConfig
 import com.google.gson.JsonObject
@@ -14,6 +15,7 @@ import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.util.CategoryReferenceProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -40,6 +42,9 @@ class GeminiSmsExtractor @Inject constructor(
     private val apiKeyProvider: GeminiApiKeyProvider
 ) {
     companion object {
+
+        /** LLM 요청 타임아웃 (초) — SDK 기본값은 Long.MAX_VALUE(무한)이므로 60초로 제한 */
+        private const val LLM_REQUEST_TIMEOUT_SECONDS = 60L
 
         /** 배치 추출 최대 재시도 */
         private const val BATCH_MAX_RETRIES = 2
@@ -163,6 +168,7 @@ class GeminiSmsExtractor @Inject constructor(
                     // 단건 추출은 응답 길이가 짧아 1024면 충분
                     maxOutputTokens = 1024
                 },
+                requestOptions = RequestOptions(timeout = LLM_REQUEST_TIMEOUT_SECONDS * 1000),
                 systemInstruction = content { text(context.getString(R.string.prompt_sms_extract_system)) }
             )
         }
@@ -189,6 +195,7 @@ class GeminiSmsExtractor @Inject constructor(
                     temperature = 0.1f
                     maxOutputTokens = 4096  // 배치 응답용 확장
                 },
+                requestOptions = RequestOptions(timeout = LLM_REQUEST_TIMEOUT_SECONDS * 1000),
                 systemInstruction = content { text(context.getString(R.string.prompt_sms_batch_extract_system)) }
             )
         }
@@ -217,6 +224,7 @@ class GeminiSmsExtractor @Inject constructor(
                     responseMimeType = "application/json"
                     maxOutputTokens = 8192
                 },
+                requestOptions = RequestOptions(timeout = LLM_REQUEST_TIMEOUT_SECONDS * 1000),
                 systemInstruction = content { text(context.getString(R.string.prompt_sms_regex_extract_system)) }
             )
         }
@@ -314,6 +322,8 @@ class GeminiSmsExtractor @Inject constructor(
 
                 // JSON 파싱
                 parseExtractionResponse(responseText)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 MoneyTalkLogger.e("LLM 추출 실패: ${e.message}", e)
                 null
@@ -364,24 +374,44 @@ class GeminiSmsExtractor @Inject constructor(
                 .take(REGEX_GROUP_MAX_SAMPLES)
             if (samples.isEmpty()) return@withContext null
 
+            val primaryPrompt = buildRegexPrompt(samples, mainRegexContext)
+            MoneyTalkLogger.i("[generateRegex] 시작: samples=${samples.size}건, hasMainCtx=${mainRegexContext != null}")
+            samples.forEachIndexed { i, s ->
+                MoneyTalkLogger.i("[generateRegex] sample[$i]: ${s.replace("\n", "↵").take(120)}")
+            }
+
             val startTime = System.currentTimeMillis()
             val responseText = requestRegexWithTokenFallback(
                 model = model,
-                primaryPrompt = buildRegexPrompt(samples, mainRegexContext),
+                primaryPrompt = primaryPrompt,
                 compactPrompt = buildRegexCompactPrompt(samples, mainRegexContext),
                 ultraCompactPrompt = buildRegexUltraCompactPrompt(samples)
-            ) ?: return@withContext null
+            ) ?: run {
+                MoneyTalkLogger.w("[generateRegex] LLM 응답 없음 (null)")
+                return@withContext null
+            }
             val elapsed = System.currentTimeMillis() - startTime
 
             var candidate = parseRegexResponse(responseText)
             var validation = validateRegexResult(candidate)
             var previousResponseText = responseText
             if (validation.isValid && candidate != null) {
+                MoneyTalkLogger.i("[generateRegex] 성공 (${elapsed}ms): amount=${candidate.amountRegex}, store=${candidate.storeRegex}")
                 return@withContext candidate
             }
 
-            // 디버깅: 검증 실패 시 LLM 응답 + 샘플 로깅
-            samples.forEachIndexed { i, s ->
+            // 검증 실패 시 상세 로깅
+            MoneyTalkLogger.w("[generateRegex] 검증 실패 (${elapsed}ms): reason=${validation.reason}")
+            MoneyTalkLogger.w("[generateRegex] LLM 응답: ${responseText.take(500)}")
+            if (candidate != null) {
+                MoneyTalkLogger.w("[generateRegex] 파싱된 regex: amount=[${candidate.amountRegex}], store=[${candidate.storeRegex}], card=[${candidate.cardRegex}], isPayment=${candidate.isPayment}")
+            }
+
+            // isPayment_false는 LLM이 "비결제"로 판단한 것 → repair로 뒤집기 어려우므로 스킵
+            // 호출자(processGroup)가 이미 결제 판정 완료한 상태이므로 템플릿 폴백으로 처리
+            if (validation.reason == "isPayment_false") {
+                MoneyTalkLogger.w("[generateRegex] isPayment=false → repair 스킵, 템플릿 폴백으로 위임")
+                return@withContext null
             }
 
             // 1회 수선(repair) 재요청
@@ -410,6 +440,8 @@ class GeminiSmsExtractor @Inject constructor(
 
             MoneyTalkLogger.w("[extractRegex] 정규식 생성 최종 실패 (reason=${validation.reason})")
             null
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             MoneyTalkLogger.e("정규식 생성 실패: ${e.message}", e)
             null
@@ -485,6 +517,8 @@ class GeminiSmsExtractor @Inject constructor(
                 MoneyTalkLogger.w("[repairFromClassifier] repair 응답 형식 검증 실패 (reason=${validation.reason})")
                 null
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             MoneyTalkLogger.e("Classifier repair 실패: ${e.message}", e)
             null
@@ -617,7 +651,9 @@ class GeminiSmsExtractor @Inject constructor(
         // 토큰 디버깅: 프롬프트 길이 + countTokens
         try {
             val tokenCount = model.countTokens(primaryPrompt)
-        } catch (e: Exception) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
         }
 
         return try {
@@ -950,6 +986,8 @@ class GeminiSmsExtractor @Inject constructor(
                     if (parsed != null) {
                         return@withContext parsed
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     val isRateLimit = e.message?.contains("429") == true ||
                             e.message?.contains("RESOURCE_EXHAUSTED") == true
@@ -976,11 +1014,15 @@ class GeminiSmsExtractor @Inject constructor(
                         delay(FALLBACK_SINGLE_DELAY_MS)
                     }
                     result
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     MoneyTalkLogger.e("[extractBatch→fallback] 개별 LLM ${idx + 1} 실패: ${e.message}")
                     null
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             MoneyTalkLogger.e("LLM 배치 추출 전체 실패: ${e.message}", e)
             smsMessages.map { null }
