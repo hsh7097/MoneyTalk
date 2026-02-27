@@ -136,6 +136,7 @@ class MainViewModel @Inject constructor(
         checkSmsPermission()
 
         val hasSmsPermission = _uiState.value.hasSmsPermission
+        var syncTriggered = false
 
         if (hasSmsPermission && !_uiState.value.isSyncing) {
             val firstLaunch = isFirstLaunch
@@ -143,18 +144,23 @@ class MainViewModel @Inject constructor(
 
             if (firstLaunch) {
                 launchSync()
+                syncTriggered = true
             } else {
                 viewModelScope.launch {
                     val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
                     syncSmsV2(range, updateLastSyncTime = true, silent = true)
                 }
+                syncTriggered = true
             }
         } else if (!hasSmsPermission) {
             isFirstLaunch = false
         }
         // isSyncing=true일 때는 isFirstLaunch 유지 → 동기화 완료 후 다음 resume에서 재시도
 
-        tryResumeClassification()
+        // 동기화를 이번 resume에서 시작/예약했으면 분류는 동기화 finally에서 재시도.
+        if (!syncTriggered) {
+            tryResumeClassification()
+        }
     }
 
     /** SMS 권한 상태 확인 및 갱신 */
@@ -312,10 +318,13 @@ class MainViewModel @Inject constructor(
                 } else {
                     handleSyncResult(result, silent = false)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 handleSyncError(e, silent = false)
             } finally {
                 isSyncRunning.set(false)
+                tryResumeClassification()
             }
         }
     }
@@ -393,10 +402,13 @@ class MainViewModel @Inject constructor(
 
                 handleSyncResult(result, silent)
                 onSyncComplete?.invoke()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 handleSyncError(e, silent)
             } finally {
                 isSyncRunning.set(false)
+                tryResumeClassification()
             }
         }
     }
@@ -916,9 +928,13 @@ class MainViewModel @Inject constructor(
 
     /**
      * resume 시 미분류 항목 자동 분류 시도
-     * 조건: (1) 분류 미진행 (2) Gemini API 키 존재 (3) 미분류 항목 존재
+     * 조건: (1) 동기화 미진행 (2) 분류 미진행 (3) Gemini API 키 존재 (4) 미분류 항목 존재
+     *
+     * 동기화 중에는 postSyncCleanup에서 분류를 실행하므로, 여기서 중복 시작하면
+     * API 429 에러 + 지수 백오프로 양쪽 모두 느려지는 문제가 발생한다.
      */
     private fun tryResumeClassification() {
+        if (_uiState.value.isSyncing) return
         if (classificationState.isRunning.value) return
         if (!isResumeClassificationChecking.compareAndSet(false, true)) return
 
@@ -1008,6 +1024,7 @@ class MainViewModel @Inject constructor(
             }
 
         } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             MoneyTalkLogger.e("백그라운드분류: 실패: ${e.message}", e)
         }

@@ -796,6 +796,8 @@ class HomeViewModel @Inject constructor(
                         errorMessage = resultMessage
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 MoneyTalkLogger.e("전체 분류 실패: ${e.message}")
                 _uiState.update {
