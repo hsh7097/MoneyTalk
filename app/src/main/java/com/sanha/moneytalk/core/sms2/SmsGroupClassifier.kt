@@ -560,20 +560,13 @@ class SmsGroupClassifier @Inject constructor(
                     )
                 )
             } else {
-                val heuristicParsed = tryParseKbDebitFallback(
+                val heuristicResult = tryHeuristicParse(
                     embedded = embedded,
                     fallbackCardName = llm?.cardName?.takeIf { it.isNotBlank() } ?: "KB"
                 )
-                if (heuristicParsed != null) {
+                if (heuristicResult != null) {
                     clearRegexFailedRecoveryFailure(embedded)
-                    recovered.add(
-                        SmsParseResult(
-                            input = embedded.input,
-                            analysis = heuristicParsed,
-                            tier = 3,
-                            confidence = 1.0f
-                        )
-                    )
+                    recovered.add(heuristicResult)
                     return@forEachIndexed
                 }
 
@@ -667,6 +660,23 @@ class SmsGroupClassifier @Inject constructor(
             amountRegex = KB_DEBIT_FALLBACK_AMOUNT_REGEX,
             storeRegex = KB_DEBIT_FALLBACK_STORE_REGEX,
             fallbackCardName = fallbackCardName
+        )
+    }
+
+    /**
+     * KB 멀티라인 출금 휴리스틱 파싱 → SmsParseResult 변환 helper.
+     * tryParseKbDebitFallback 호출 + SmsParseResult 래핑을 한곳에서 관리한다.
+     */
+    private fun tryHeuristicParse(
+        embedded: EmbeddedSms,
+        fallbackCardName: String = "KB"
+    ): SmsParseResult? {
+        val analysis = tryParseKbDebitFallback(embedded, fallbackCardName) ?: return null
+        return SmsParseResult(
+            input = embedded.input,
+            analysis = analysis,
+            tier = 3,
+            confidence = 1.0f
         )
     }
 
@@ -1162,7 +1172,7 @@ class SmsGroupClassifier @Inject constructor(
         val results = mutableListOf<SmsParseResult>()
         val representative = group.representative
         val addr = representative.input.address.takeLast(4)
-        var outcome = ""  // G: reason code (REGEX_ACCEPTED, REGEX_REPAIRED, TEMPLATE_FALLBACK, DIRECT_LLM, NON_PAYMENT, LLM_FAILED, GROUP_BUDGET_SKIP_REGEX, STEP5_BUDGET_DIRECT_LLM, REGEX_FAILED_FALLBACK_DIRECT_LLM, UNSTABLE_DIRECT_LLM, REGEX_ABORT_LOW_PASS)
+        var outcome = ""  // G: reason code (REGEX_ACCEPTED, REGEX_REPAIRED, TEMPLATE_FALLBACK, DIRECT_LLM, NON_PAYMENT, LLM_FAILED, GROUP_BUDGET_SKIP_REGEX, STEP5_BUDGET_DIRECT_LLM, REGEX_FAILED_FALLBACK_DIRECT_LLM, REGEX_FAILED_HEURISTIC_KB, UNSTABLE_DIRECT_LLM, REGEX_ABORT_LOW_PASS)
 
         MoneyTalkLogger.i("[processGroup] 시작: addr=*$addr, members=${group.members.size}, isMain=$isMainGroup")
 
@@ -1193,17 +1203,11 @@ class SmsGroupClassifier @Inject constructor(
         if (llmResult == null) {
             if (forceSkipRegexAll) {
                 val heuristicResults = group.members.mapNotNull { member ->
-                    val parsed = tryParseKbDebitFallback(member, fallbackCardName = "KB") ?: return@mapNotNull null
-                    SmsParseResult(
-                        input = member.input,
-                        analysis = parsed,
-                        tier = 3,
-                        confidence = 1.0f
-                    )
+                    tryHeuristicParse(member)
                 }
                 if (heuristicResults.isNotEmpty()) {
                     val elapsed = System.currentTimeMillis() - groupStartTime
-                    val fallbackOutcome = "REGEX_FAILED_FALLBACK_DIRECT_LLM"
+                    val fallbackOutcome = "REGEX_FAILED_HEURISTIC_KB"
                     onGroupOutcome?.invoke(fallbackOutcome)
                     MoneyTalkLogger.w(
                         "[processGroup] LLM null → 휴리스틱 보정 채택: addr=*$addr, results=${heuristicResults.size}건, elapsed=${elapsed}ms"
@@ -1535,19 +1539,12 @@ class SmsGroupClassifier @Inject constructor(
                 )
             } else if (forceSkipRegexAll) {
                 // regexFailed fallback 모드에서 대표 LLM이 약할 때 KB 멀티라인 출금 휴리스틱 1회 보정
-                val representativeHeuristic = tryParseKbDebitFallback(
+                val heuristicResult = tryHeuristicParse(
                     embedded = representative,
                     fallbackCardName = llmAnalysis.cardName.ifBlank { "KB" }
                 )
-                if (representativeHeuristic != null) {
-                    results.add(
-                        SmsParseResult(
-                            input = representative.input,
-                            analysis = representativeHeuristic,
-                            tier = 3,
-                            confidence = 1.0f
-                        )
-                    )
+                if (heuristicResult != null) {
+                    results.add(heuristicResult)
                 }
             }
 
@@ -1606,19 +1603,12 @@ class SmsGroupClassifier @Inject constructor(
                         }
 
                         if (!added && forceSkipRegexAll) {
-                            val heuristic = tryParseKbDebitFallback(
+                            val heuristicResult = tryHeuristicParse(
                                 embedded = member,
                                 fallbackCardName = llmAnalysis.cardName.ifBlank { "KB" }
                             )
-                            if (heuristic != null) {
-                                results.add(
-                                    SmsParseResult(
-                                        input = member.input,
-                                        analysis = heuristic,
-                                        tier = 3,
-                                        confidence = 1.0f
-                                    )
-                                )
+                            if (heuristicResult != null) {
+                                results.add(heuristicResult)
                                 added = true
                             }
                         }

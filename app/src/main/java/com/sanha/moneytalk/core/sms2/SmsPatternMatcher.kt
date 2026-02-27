@@ -67,6 +67,9 @@ class SmsPatternMatcher @Inject constructor(
 
         /** 결제 패턴 매칭 임계값 — 이 이상이면 기존 regex로 파싱 시도 */
         private const val PAYMENT_MATCH_THRESHOLD = 0.92f
+
+        /** 출금 알림 컨텍스트에서 숫자코드/입출통지 등의 대체 가게명 */
+        private const val DEBIT_FALLBACK_STORE_NAME = "계좌출금"
     }
 
     // ===== 벡터 유사도 연산 =====
@@ -619,8 +622,8 @@ class SmsPatternMatcher @Inject constructor(
         if (STORE_DATE_OR_TIME_PATTERN.matches(value)) return null
 
         if (value.length == 1) return value
-        if (STORE_NUMBER_ONLY_PATTERN.matches(value)) return "계좌출금"
-        if (value.contains("입출통지")) return "계좌출금"
+        if (STORE_NUMBER_ONLY_PATTERN.matches(value)) return DEBIT_FALLBACK_STORE_NAME
+        if (value.contains("입출통지")) return DEBIT_FALLBACK_STORE_NAME
         return value.take(20)
     }
 
