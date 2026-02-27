@@ -173,6 +173,10 @@ class SmsGroupClassifier @Inject constructor(
         /** 공백/구분자 제거용 정규식 (grounding 비교) */
         private val WHITESPACE_OR_SEP = Regex("""[\s\-\[\]()_/]""")
 
+        /** Step4.5/Step5 fallback용 KB 멀티라인 출금 휴리스틱 regex */
+        private const val KB_DEBIT_FALLBACK_AMOUNT_REGEX = """출금\n([\d,]+)\n잔액"""
+        private const val KB_DEBIT_FALLBACK_STORE_REGEX = """\d+\*+\d+\n(.+?)\n출금"""
+
         /** Phase4: 백그라운드 학습 큐 최대 적재량 (초과 시 oldest drop) */
         private const val LEARNING_QUEUE_MAX_SIZE = 1000
         private const val LEARNING_PROCESSOR_BATCH_LOG = 20
@@ -556,6 +560,23 @@ class SmsGroupClassifier @Inject constructor(
                     )
                 )
             } else {
+                val heuristicParsed = tryParseKbDebitFallback(
+                    embedded = embedded,
+                    fallbackCardName = llm?.cardName?.takeIf { it.isNotBlank() } ?: "KB"
+                )
+                if (heuristicParsed != null) {
+                    clearRegexFailedRecoveryFailure(embedded)
+                    recovered.add(
+                        SmsParseResult(
+                            input = embedded.input,
+                            analysis = heuristicParsed,
+                            tier = 3,
+                            confidence = 1.0f
+                        )
+                    )
+                    return@forEachIndexed
+                }
+
                 fallback.add(embedded)
                 recordRegexFailedRecoveryFailure(embedded)
                 if (llm != null && llm.isPayment && llm.amount > 0) {
@@ -626,6 +647,27 @@ class SmsGroupClassifier @Inject constructor(
         val amountToken = amount.toString()
         val pattern = Regex("(^|\\D)$amountToken(\\D|$)")
         return pattern.containsMatchIn(normalizedBody)
+    }
+
+    /**
+     * KB 멀티라인 출금 SMS 휴리스틱 파싱.
+     * Step4.5/Step5에서 LLM이 흔들릴 때 마지막 보정 수단으로 사용한다.
+     */
+    private fun tryParseKbDebitFallback(
+        embedded: EmbeddedSms,
+        fallbackCardName: String = "KB"
+    ): SmsAnalysisResult? {
+        val body = embedded.input.body
+        if (!body.contains("[KB]")) return null
+        if (!body.contains("\n출금\n")) return null
+
+        return patternMatcher.parseWithRegex(
+            smsBody = body,
+            smsTimestamp = embedded.input.date,
+            amountRegex = KB_DEBIT_FALLBACK_AMOUNT_REGEX,
+            storeRegex = KB_DEBIT_FALLBACK_STORE_REGEX,
+            fallbackCardName = fallbackCardName
+        )
     }
 
     private fun shouldSkipRegexFailedRecovery(embedded: EmbeddedSms): Boolean {
@@ -1149,6 +1191,29 @@ class SmsGroupClassifier @Inject constructor(
             }
         }
         if (llmResult == null) {
+            if (forceSkipRegexAll) {
+                val heuristicResults = group.members.mapNotNull { member ->
+                    val parsed = tryParseKbDebitFallback(member, fallbackCardName = "KB") ?: return@mapNotNull null
+                    SmsParseResult(
+                        input = member.input,
+                        analysis = parsed,
+                        tier = 3,
+                        confidence = 1.0f
+                    )
+                }
+                if (heuristicResults.isNotEmpty()) {
+                    val elapsed = System.currentTimeMillis() - groupStartTime
+                    val fallbackOutcome = "REGEX_FAILED_FALLBACK_DIRECT_LLM"
+                    onGroupOutcome?.invoke(fallbackOutcome)
+                    MoneyTalkLogger.w(
+                        "[processGroup] LLM null → 휴리스틱 보정 채택: addr=*$addr, results=${heuristicResults.size}건, elapsed=${elapsed}ms"
+                    )
+                    MoneyTalkLogger.e(
+                        "[processGroup] 완료: addr=*$addr, outcome=$fallbackOutcome, source=heuristic, results=${heuristicResults.size}건, members=${group.members.size}, elapsed=${elapsed}ms"
+                    )
+                    return GroupProcessResult(results = heuristicResults, outcomeCode = fallbackOutcome)
+                }
+            }
             val elapsed = System.currentTimeMillis() - groupStartTime
             val failOutcome = "LLM_FAILED"
             onGroupOutcome?.invoke(failOutcome)
@@ -1468,6 +1533,22 @@ class SmsGroupClassifier @Inject constructor(
                         confidence = 1.0f
                     )
                 )
+            } else if (forceSkipRegexAll) {
+                // regexFailed fallback 모드에서 대표 LLM이 약할 때 KB 멀티라인 출금 휴리스틱 1회 보정
+                val representativeHeuristic = tryParseKbDebitFallback(
+                    embedded = representative,
+                    fallbackCardName = llmAnalysis.cardName.ifBlank { "KB" }
+                )
+                if (representativeHeuristic != null) {
+                    results.add(
+                        SmsParseResult(
+                            input = representative.input,
+                            analysis = representativeHeuristic,
+                            tier = 3,
+                            confidence = 1.0f
+                        )
+                    )
+                }
             }
 
             // 대표 제외 나머지 멤버 (representative는 항상 members[0])
@@ -1501,26 +1582,48 @@ class SmsGroupClassifier @Inject constructor(
 
                     chunk.forEachIndexed { index, member ->
                         val memberResult = memberLlmResults.getOrNull(index)
-                        if (memberResult == null || !memberResult.isPayment) return@forEachIndexed
-
-                        val parsed = SmsAnalysisResult(
-                            amount = memberResult.amount,
-                            storeName = memberResult.storeName,
-                            category = memberResult.category,
-                            dateTime = memberResult.dateTime,
-                            cardName = memberResult.cardName
-                        )
-
-                        if (parsed.amount > 0) {
-                            results.add(
-                                SmsParseResult(
-                                    input = member.input,
-                                    analysis = parsed,
-                                    tier = 3,
-                                    confidence = 1.0f
-                                )
+                        var added = false
+                        if (memberResult != null && memberResult.isPayment) {
+                            val parsed = SmsAnalysisResult(
+                                amount = memberResult.amount,
+                                storeName = memberResult.storeName,
+                                category = memberResult.category,
+                                dateTime = memberResult.dateTime,
+                                cardName = memberResult.cardName
                             )
+
+                            if (parsed.amount > 0) {
+                                results.add(
+                                    SmsParseResult(
+                                        input = member.input,
+                                        analysis = parsed,
+                                        tier = 3,
+                                        confidence = 1.0f
+                                    )
+                                )
+                                added = true
+                            }
                         }
+
+                        if (!added && forceSkipRegexAll) {
+                            val heuristic = tryParseKbDebitFallback(
+                                embedded = member,
+                                fallbackCardName = llmAnalysis.cardName.ifBlank { "KB" }
+                            )
+                            if (heuristic != null) {
+                                results.add(
+                                    SmsParseResult(
+                                        input = member.input,
+                                        analysis = heuristic,
+                                        tier = 3,
+                                        confidence = 1.0f
+                                    )
+                                )
+                                added = true
+                            }
+                        }
+
+                        if (!added) return@forEachIndexed
                     }
                 }
             }
