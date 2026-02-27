@@ -49,7 +49,6 @@ sealed interface SettingsIntent {
     data object ShowGoogleDriveDialog : SettingsIntent
     data object ShowAppInfoDialog : SettingsIntent
     data object ShowPrivacyDialog : SettingsIntent
-    data object ShowExclusionKeywordDialog : SettingsIntent
     data object ShowThemeDialog : SettingsIntent
     data object ShowMonthlyBudgetDialog : SettingsIntent
     data object ShowBudgetBottomSheet : SettingsIntent
@@ -69,8 +68,6 @@ sealed interface SettingsIntent {
     data object ClassifyUnclassified : SettingsIntent
     data object DeleteAllData : SettingsIntent
     data object DeleteDuplicates : SettingsIntent
-    data class AddExclusionKeyword(val keyword: String) : SettingsIntent
-    data class RemoveExclusionKeyword(val keyword: String) : SettingsIntent
     data object OpenRestoreFilePicker : SettingsIntent
     data class SetPendingRestoreUri(val uri: Uri) : SettingsIntent
     data object ConfirmRestore : SettingsIntent
@@ -86,7 +83,6 @@ enum class SettingsDialog {
     GOOGLE_DRIVE,
     APP_INFO,
     PRIVACY,
-    EXCLUSION_KEYWORD,
     THEME,
     MONTHLY_BUDGET,
     BUDGET_BOTTOM_SHEET
@@ -117,8 +113,6 @@ data class SettingsUiState(
     val classifyProgressTotal: Int = 0,
     // 내 카드 관리
     val ownedCards: List<com.sanha.moneytalk.core.database.entity.OwnedCardEntity> = emptyList(),
-    // SMS 제외 키워드 관리
-    val exclusionKeywords: List<com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity> = emptyList(),
     // 백그라운드 분류 진행 중 (HomeViewModel에서 진행 중인 경우)
     val isBackgroundClassifying: Boolean = false,
     // 다이얼로그 상태 (null이면 닫힘)
@@ -147,7 +141,6 @@ class SettingsViewModel @Inject constructor(
     private val budgetDao: BudgetDao,
     private val dataRefreshEvent: DataRefreshEvent,
     private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
-    private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
     private val snackbarBus: AppSnackbarBus,
     private val classificationState: ClassificationState,
     private val analyticsHelper: AnalyticsHelper
@@ -164,7 +157,6 @@ class SettingsViewModel @Inject constructor(
         loadFilterOptions()
         loadUnclassifiedCount()
         loadOwnedCards()
-        loadExclusionKeywords()
         observeClassificationState()
         loadThemeMode()
         loadMonthlyBudget()
@@ -182,7 +174,6 @@ class SettingsViewModel @Inject constructor(
             is SettingsIntent.ShowGoogleDriveDialog -> showDialog(SettingsDialog.GOOGLE_DRIVE)
             is SettingsIntent.ShowAppInfoDialog -> showDialog(SettingsDialog.APP_INFO)
             is SettingsIntent.ShowPrivacyDialog -> showDialog(SettingsDialog.PRIVACY)
-            is SettingsIntent.ShowExclusionKeywordDialog -> showDialog(SettingsDialog.EXCLUSION_KEYWORD)
             is SettingsIntent.ShowThemeDialog -> showDialog(SettingsDialog.THEME)
             is SettingsIntent.ShowMonthlyBudgetDialog -> showDialog(SettingsDialog.MONTHLY_BUDGET)
             is SettingsIntent.ShowBudgetBottomSheet -> showDialog(SettingsDialog.BUDGET_BOTTOM_SHEET)
@@ -220,8 +211,6 @@ class SettingsViewModel @Inject constructor(
             }
 
             is SettingsIntent.DeleteDuplicates -> deleteDuplicates()
-            is SettingsIntent.AddExclusionKeyword -> addExclusionKeyword(intent.keyword)
-            is SettingsIntent.RemoveExclusionKeyword -> removeExclusionKeyword(intent.keyword)
             is SettingsIntent.OpenRestoreFilePicker -> {
                 _uiState.update { it.copy(triggerRestoreFilePicker = true) }
             }
@@ -1112,70 +1101,6 @@ class SettingsViewModel @Inject constructor(
                         isLoading = false
                     )
                 }
-            }
-        }
-    }
-
-    // ========== SMS 제외 키워드 관리 ==========
-
-    /**
-     * 제외 키워드 목록 로드
-     */
-    private fun loadExclusionKeywords() {
-        viewModelScope.launch {
-            try {
-                val keywords = withContext(Dispatchers.IO) {
-                    smsExclusionRepository.getAllKeywords()
-                }
-                _uiState.update { it.copy(exclusionKeywords = keywords) }
-            } catch (e: Exception) {
-                // 무시
-            }
-        }
-    }
-
-    /**
-     * 제외 키워드 추가
-     */
-    fun addExclusionKeyword(keyword: String) {
-        viewModelScope.launch {
-            try {
-                val added = withContext(Dispatchers.IO) {
-                    smsExclusionRepository.addKeyword(keyword, "user")
-                }
-                if (added) {
-                    loadExclusionKeywords()
-                    snackbarBus.show("'${keyword}' 제외 키워드가 추가되었습니다")
-                    // Home/History에서 해당 키워드 포함 데이터를 필터링하도록 새로고침
-                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
-                } else {
-                    snackbarBus.show("키워드를 추가할 수 없습니다")
-                }
-            } catch (e: Exception) {
-                snackbarBus.show("추가 실패: ${e.message}")
-            }
-        }
-    }
-
-    /**
-     * 제외 키워드 삭제 (default 소스는 삭제 불가)
-     */
-    fun removeExclusionKeyword(keyword: String) {
-        viewModelScope.launch {
-            try {
-                val deleted = withContext(Dispatchers.IO) {
-                    smsExclusionRepository.removeKeyword(keyword)
-                }
-                if (deleted > 0) {
-                    loadExclusionKeywords()
-                    snackbarBus.show("'${keyword}' 제외 키워드가 삭제되었습니다")
-                    // 필터 해제로 이전에 숨겨졌던 데이터가 다시 표시되도록 새로고침
-                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
-                } else {
-                    snackbarBus.show("기본 키워드는 삭제할 수 없습니다")
-                }
-            } catch (e: Exception) {
-                snackbarBus.show("삭제 실패: ${e.message}")
             }
         }
     }

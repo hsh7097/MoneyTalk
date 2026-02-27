@@ -117,7 +117,6 @@ fun SmsSettingsScreen(
                     uiState = uiState,
                     onRequestSync = {
                         viewModel.requestSmsAnalysisUpdate()
-                        viewModel.refresh()
                     },
                     onOpenBlockedPhrases = { navController.navigate(SmsSettingsRoute.BLOCKED_PHRASES) },
                     onOpenBlockedSenders = { navController.navigate(SmsSettingsRoute.BLOCKED_SENDERS) }

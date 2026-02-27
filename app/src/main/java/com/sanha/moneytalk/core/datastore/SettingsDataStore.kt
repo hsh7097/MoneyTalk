@@ -113,6 +113,11 @@ class SettingsDataStore @Inject constructor(
         return context.dataStore.data.first()[LAST_SYNC_TIME] ?: 0L
     }
 
+    // 마지막 동기화 시간 Flow
+    val lastSyncTimeFlow: Flow<Long> = context.dataStore.data.map { preferences ->
+        preferences[LAST_SYNC_TIME] ?: 0L
+    }
+
     // 월 시작일 저장 (1-31)
     suspend fun saveMonthStartDay(day: Int) {
         context.dataStore.edit { preferences ->

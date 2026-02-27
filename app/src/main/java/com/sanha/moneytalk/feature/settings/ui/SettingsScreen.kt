@@ -641,21 +641,6 @@ fun SettingsScreen(
             PrivacyPolicyDialog(onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) })
         }
 
-        SettingsDialog.EXCLUSION_KEYWORD -> {
-            ExclusionKeywordDialog(
-                keywords = uiState.exclusionKeywords,
-                onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) },
-                onAdd = { keyword -> viewModel.onIntent(SettingsIntent.AddExclusionKeyword(keyword)) },
-                onRemove = { keyword ->
-                    viewModel.onIntent(
-                        SettingsIntent.RemoveExclusionKeyword(
-                            keyword
-                        )
-                    )
-                }
-            )
-        }
-
         SettingsDialog.MONTHLY_BUDGET -> {
             MonthlyBudgetDialog(
                 initialAmount = uiState.monthlyBudget ?: 0,

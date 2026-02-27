@@ -49,7 +49,7 @@ class SmsReaderV2 @Inject constructor(
      * @param endDate 종료 시간 (밀리초)
      * @return 모든 메시지의 SmsInput 리스트 (최신순 정렬, id 중복 제거)
      */
-    fun readAllMessagesByDateRange(
+    suspend fun readAllMessagesByDateRange(
         contentResolver: ContentResolver,
         startDate: Long,
         endDate: Long

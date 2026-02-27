@@ -38,12 +38,8 @@ class SmsSettingsViewModel @Inject constructor(
 
     init {
         observeBlockedSenders()
-        refresh()
-    }
-
-    fun refresh() {
+        observeLastSyncTime()
         loadExclusionKeywords()
-        refreshLastSyncTime()
     }
 
     fun requestSmsAnalysisUpdate() {
@@ -52,15 +48,21 @@ class SmsSettingsViewModel @Inject constructor(
 
     fun addExclusionKeyword(keyword: String) {
         viewModelScope.launch {
-            smsExclusionRepository.addKeyword(keyword, source = "user")
-            loadExclusionKeywords()
+            val added = smsExclusionRepository.addKeyword(keyword, source = "user")
+            if (added) {
+                loadExclusionKeywords()
+                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
+            }
         }
     }
 
     fun removeExclusionKeyword(keyword: String) {
         viewModelScope.launch {
-            smsExclusionRepository.removeKeyword(keyword)
-            loadExclusionKeywords()
+            val deleted = smsExclusionRepository.removeKeyword(keyword)
+            if (deleted > 0) {
+                loadExclusionKeywords()
+                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
+            }
         }
     }
 
@@ -91,10 +93,11 @@ class SmsSettingsViewModel @Inject constructor(
         }
     }
 
-    private fun refreshLastSyncTime() {
+    private fun observeLastSyncTime() {
         viewModelScope.launch {
-            val lastSyncTime = settingsDataStore.getLastSyncTime()
-            _uiState.update { it.copy(lastSyncTime = lastSyncTime) }
+            settingsDataStore.lastSyncTimeFlow.collect { lastSyncTime ->
+                _uiState.update { it.copy(lastSyncTime = lastSyncTime) }
+            }
         }
     }
 }

@@ -19,7 +19,7 @@ interface SmsBlockedSenderDao {
 
     /** 파싱 필터링용 주소 목록 조회 (동기 쿼리, 백그라운드 스레드에서만 사용) */
     @Query("SELECT address FROM sms_blocked_senders")
-    fun getAllAddresses(): List<String>
+    suspend fun getAllAddresses(): List<String>
 
     /** 수신거부 번호 추가/갱신 */
     @Insert(onConflict = OnConflictStrategy.REPLACE)

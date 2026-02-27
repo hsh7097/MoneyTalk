@@ -1,7 +1,7 @@
 # MoneyTalk 앱 엔트리 포인트 맵
 
 > 코드 기준 앱 시작 지점과 주요 화면 진입 흐름 정리
-> 마지막 확인: 2026-02-21
+> 마지막 확인: 2026-02-27
 
 ## 1. 엔트리 포인트
 
@@ -70,3 +70,4 @@ NavGraph에 포함되지 않고 `Intent`로 직접 시작하는 Activity:
 | Activity | 경로 | 진입 방식 | 설명 |
 |----------|------|----------|------|
 | `CategoryDetailActivity` | [`CategoryDetailActivity.kt`](../app/src/main/java/com/sanha/moneytalk/feature/categorydetail/CategoryDetailActivity.kt) | `HomeScreen` 카테고리 롱클릭 → `Intent(EXTRA_CATEGORY)` | 카테고리별 월별 지출 추이 차트 + 월별 리스트 |
+| `SmsSettingsActivity` | [`SmsSettingsActivity.kt`](../app/src/main/java/com/sanha/moneytalk/feature/smssettings/ui/SmsSettingsActivity.kt) | `SettingsScreen` "문자 설정" 클릭 → `Intent` | 문자분석 업데이트 + 수신거부 문구/번호 관리 |
