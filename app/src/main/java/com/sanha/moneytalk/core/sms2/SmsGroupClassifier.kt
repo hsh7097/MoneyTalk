@@ -14,6 +14,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
 import java.util.Locale
@@ -88,6 +89,10 @@ class SmsGroupClassifier @Inject constructor(
         /** processGroup 전체 시간 예산 — LLM 추출 + regex 생성/검증/repair (초과 시 regex 스킵) */
         private const val GROUP_TIME_BUDGET_MS = 10_000L
 
+        /** processGroup 단건 LLM 추출 null 응답 재시도 횟수 */
+        private const val GROUP_LLM_NULL_RETRY_MAX = 1
+        private const val GROUP_LLM_NULL_RETRY_DELAY_MS = 300L
+
         /** Step5 소프트 시간 예산 — 초과 시 regex 생략하고 Direct LLM 강등 */
         private const val STEP5_TIME_BUDGET_MS = 20_000L
 
@@ -140,6 +145,37 @@ class SmsGroupClassifier @Inject constructor(
 
         /** 발신번호 정규화: 하이픈/공백/괄호 제거용 */
         private val ADDRESS_CLEAN_PATTERN = Regex("""[-\s().]""")
+
+        // ===== Step4.5 regex 실패 복구 정책 =====
+        /** Step4.5에서 같은 키가 반복 실패할 때 쿨다운 적용 기준 횟수 */
+        private const val REGEX_FAILED_RECOVERY_FAILURE_THRESHOLD = 2
+        /** Step4.5 반복 실패 키 쿨다운 (30분) */
+        private const val REGEX_FAILED_RECOVERY_COOLDOWN_MS = 30L * 60L * 1000L
+
+        /** 복구 대상 최소 길이 (이보다 짧으면 정보 부족으로 Step5 fallback) */
+        private const val REGEX_FAILED_RECOVERY_MIN_LENGTH = 12
+
+        /** 정규식 실패건 recoverable 판단용 키워드 */
+        private val REGEX_FAILED_RECOVERY_HINT_KEYWORDS = listOf(
+            "승인", "결제", "출금", "입금", "사용", "취소", "잔액", "이체"
+        )
+
+        /** amount 근거 탐지용 정규식 */
+        private val RECOVERY_AMOUNT_WITH_CURRENCY = Regex("""\d{1,3}(,\d{3})*(원|usd|jpy|eur)""", RegexOption.IGNORE_CASE)
+        private val RECOVERY_AMOUNT_WITH_COMMA = Regex("""\d{1,3}(,\d{3})+""")
+        private val RECOVERY_PLAIN_AMOUNT = Regex("""\b\d{3,8}\b""")
+
+        /** grounding 검증에서 제외할 generic store 후보 */
+        private val RECOVERY_GENERIC_STORE_NAMES = setOf(
+            "결제", "사용", "출금", "입금", "승인", "취소", "기타"
+        )
+
+        /** 공백/구분자 제거용 정규식 (grounding 비교) */
+        private val WHITESPACE_OR_SEP = Regex("""[\s\-\[\]()_/]""")
+
+        /** Step4.5/Step5 fallback용 KB 멀티라인 출금 휴리스틱 regex */
+        private const val KB_DEBIT_FALLBACK_AMOUNT_REGEX = """출금\n([\d,]+)\n잔액"""
+        private const val KB_DEBIT_FALLBACK_STORE_REGEX = """\d+\*+\d+\n(.+?)\n출금"""
 
         /** Phase4: 백그라운드 학습 큐 최대 적재량 (초과 시 oldest drop) */
         private const val LEARNING_QUEUE_MAX_SIZE = 1000
@@ -282,6 +318,38 @@ class SmsGroupClassifier @Inject constructor(
     )
 
     /**
+     * Step4.5 chunk 실행 계획 (발신번호별 chunk를 병렬 처리)
+     */
+    private data class RegexFailedChunk(
+        val address: String,
+        val items: List<EmbeddedSms>
+    )
+
+    /**
+     * Step4.5 chunk 처리 결과
+     */
+    private data class RegexFailedChunkResult(
+        val address: String,
+        val recovered: List<SmsParseResult>,
+        val fallback: List<EmbeddedSms>,
+        val retryAttempted: Int,
+        val groundingRejected: Int,
+        val llmFailed: Int
+    )
+
+    /**
+     * Step4.5 발신번호 단위 통계
+     */
+    private data class RegexFailedAddressStats(
+        var inputCount: Int = 0,
+        var recoveredCount: Int = 0,
+        var fallbackCount: Int = 0,
+        var retryAttempted: Int = 0,
+        var groundingRejected: Int = 0,
+        var llmFailed: Int = 0
+    )
+
+    /**
      * Phase4: 동기화/학습 완전 분리를 위한 백그라운드 학습 작업
      */
     private sealed class DeferredLearningTask {
@@ -312,6 +380,9 @@ class SmsGroupClassifier @Inject constructor(
     private val regexFailureStates = ConcurrentHashMap<String, RegexFailureState>()
     private data class RegexFailureState(val failCount: Int, val lastFailedAt: Long)
 
+    /** Step4.5 regex 실패 복구 쿨다운 추적 */
+    private val regexFailedRecoveryStates = ConcurrentHashMap<String, RegexFailureState>()
+
     /** RTDB 중복 방지용 전송 기록 */
     private val sentSampleEmbeddings = mutableListOf<List<Float>>()
 
@@ -340,56 +411,305 @@ class SmsGroupClassifier @Inject constructor(
     ): Pair<List<SmsParseResult>, List<EmbeddedSms>> {
         if (regexFailedList.isEmpty()) return Pair(emptyList(), emptyList())
 
-        val results = mutableListOf<SmsParseResult>()
-        val fallback = mutableListOf<EmbeddedSms>()
+        val startTime = System.currentTimeMillis()
+        val immediateFallback = mutableListOf<EmbeddedSms>()
+        val addressCandidates = linkedMapOf<String, MutableList<EmbeddedSms>>()
+        var skippedByCooldown = 0
+        var skippedByUnrecoverable = 0
 
-        // 발신번호별 그룹핑
-        val byAddress = regexFailedList.groupBy { normalizeAddress(it.input.address) }
-
-        for ((address, group) in byAddress) {
-            val addr = address.takeLast(4)
-            var addrSuccess = 0
-            var addrFailed = 0
-            // chunk(10)으로 분할하여 프롬프트 과대화 방지
-            val chunks = group.chunked(LLM_FALLBACK_MAX_SAMPLES)
-
-            for (chunk in chunks) {
-                val bodies = chunk.map { it.input.body }
-                val timestamps = chunk.map { it.input.date }
-
-                val llmResults = smsExtractor.extractFromSmsBatch(bodies, timestamps)
-
-                chunk.forEachIndexed { index, embedded ->
-                    val llmResult = llmResults.getOrNull(index)
-                    if (llmResult != null && llmResult.isPayment && llmResult.amount > 0) {
-                        results.add(
-                            SmsParseResult(
-                                input = embedded.input,
-                                analysis = SmsAnalysisResult(
-                                    amount = llmResult.amount,
-                                    storeName = llmResult.storeName,
-                                    category = llmResult.category,
-                                    dateTime = llmResult.dateTime,
-                                    cardName = llmResult.cardName
-                                ),
-                                tier = 3,  // LLM 추출
-                                confidence = 1.0f
-                            )
-                        )
-                        addrSuccess++
-                    } else {
-                        // LLM 추출 실패 → Step5 fallback
-                        fallback.add(embedded)
-                        addrFailed++
-                    }
+        // 1) recoverable/cooldown 게이트: 비복구/반복실패 키는 Step5로 즉시 위임
+        for (embedded in regexFailedList) {
+            when {
+                shouldSkipRegexFailedRecovery(embedded) -> {
+                    immediateFallback.add(embedded)
+                    skippedByCooldown++
+                }
+                !isRecoverableRegexFailedSms(embedded.input.body) -> {
+                    immediateFallback.add(embedded)
+                    recordRegexFailedRecoveryFailure(embedded)
+                    skippedByUnrecoverable++
+                }
+                else -> {
+                    val address = normalizeAddress(embedded.input.address)
+                    addressCandidates.getOrPut(address) { mutableListOf() }.add(embedded)
                 }
             }
-
-            MoneyTalkLogger.i("[batchExtractRegexFailed] addr=*$addr: ${group.size}건 → 성공${addrSuccess}건, 실패${addrFailed}건→Step5")
         }
 
-        MoneyTalkLogger.i("[batchExtractRegexFailed] 총 ${regexFailedList.size}건 → 성공${results.size}건, Step5 fallback ${fallback.size}건")
-        return Pair(results, fallback)
+        // 복구 대상이 없으면 즉시 반환
+        if (addressCandidates.isEmpty()) {
+            MoneyTalkLogger.i(
+                "[batchExtractRegexFailed] 총 ${regexFailedList.size}건 → 복구 0건, " +
+                    "Step5 fallback ${immediateFallback.size}건, skipCooldown=${skippedByCooldown}건, " +
+                    "skipUnrecoverable=${skippedByUnrecoverable}건, elapsed=${System.currentTimeMillis() - startTime}ms"
+            )
+            return Pair(emptyList(), immediateFallback)
+        }
+
+        val chunks = addressCandidates.flatMap { (address, members) ->
+            members.chunked(LLM_FALLBACK_MAX_SAMPLES).map { chunk ->
+                RegexFailedChunk(address = address, items = chunk)
+            }
+        }
+
+        // 2) chunk 병렬 실행 (같은 발신번호도 chunk 단위 병렬 가능)
+        val semaphore = Semaphore(LLM_CONCURRENCY)
+        val chunkResults = coroutineScope {
+            chunks.map { chunk ->
+                async(Dispatchers.IO) {
+                    semaphore.acquire()
+                    try {
+                        processRegexFailedChunk(chunk)
+                    } finally {
+                        semaphore.release()
+                    }
+                }
+            }.awaitAll()
+        }
+
+        // 3) 결과 집계
+        val recovered = mutableListOf<SmsParseResult>()
+        val fallback = mutableListOf<EmbeddedSms>()
+        fallback.addAll(immediateFallback)
+
+        val addrStats = linkedMapOf<String, RegexFailedAddressStats>()
+        for (result in chunkResults) {
+            recovered.addAll(result.recovered)
+            fallback.addAll(result.fallback)
+
+            val stats = addrStats.getOrPut(result.address) { RegexFailedAddressStats() }
+            stats.inputCount += result.recovered.size + result.fallback.size
+            stats.recoveredCount += result.recovered.size
+            stats.fallbackCount += result.fallback.size
+            stats.retryAttempted += result.retryAttempted
+            stats.groundingRejected += result.groundingRejected
+            stats.llmFailed += result.llmFailed
+        }
+
+        addrStats.forEach { (address, stats) ->
+            val addr = address.takeLast(4)
+            MoneyTalkLogger.i(
+                "[batchExtractRegexFailed] addr=*$addr: ${stats.inputCount}건 → " +
+                    "복구${stats.recoveredCount}건, Step5 ${stats.fallbackCount}건, " +
+                    "retry=${stats.retryAttempted}건, groundingReject=${stats.groundingRejected}건, llmFail=${stats.llmFailed}건"
+            )
+        }
+
+        val elapsed = System.currentTimeMillis() - startTime
+        val totalRetry = addrStats.values.sumOf { it.retryAttempted }
+        val totalGroundingReject = addrStats.values.sumOf { it.groundingRejected }
+        val totalLlmFail = addrStats.values.sumOf { it.llmFailed }
+        MoneyTalkLogger.i(
+            "[batchExtractRegexFailed] 총 ${regexFailedList.size}건 → 복구 ${recovered.size}건, Step5 fallback ${fallback.size}건, " +
+                "retry=${totalRetry}건, groundingReject=${totalGroundingReject}건, llmFail=${totalLlmFail}건, " +
+                "skipCooldown=${skippedByCooldown}건, skipUnrecoverable=${skippedByUnrecoverable}건, elapsed=${elapsed}ms"
+        )
+        return Pair(recovered, fallback)
+    }
+
+    /**
+     * Step4.5 단일 chunk 처리
+     * - 1차 배치 호출
+     * - null 응답 항목은 단건 재시도 1회
+     * - grounding 검증 통과분만 채택
+     */
+    private suspend fun processRegexFailedChunk(chunk: RegexFailedChunk): RegexFailedChunkResult {
+        val bodies = chunk.items.map { it.input.body }
+        val timestamps = chunk.items.map { it.input.date }
+
+        val primary = smsExtractor.extractFromSmsBatch(bodies, timestamps).toMutableList()
+        val retryIndices = primary.indices.filter { primary[it] == null }
+        var retryAttempted = 0
+
+        // parse 오류(JsonNull/빈응답 등)로 null인 항목만 1회 단건 재시도
+        for (index in retryIndices) {
+            retryAttempted++
+            val retried = smsExtractor.extractFromSmsBatch(
+                smsMessages = listOf(bodies[index]),
+                smsTimestamps = listOf(timestamps[index])
+            ).firstOrNull()
+            primary[index] = retried
+        }
+
+        val recovered = mutableListOf<SmsParseResult>()
+        val fallback = mutableListOf<EmbeddedSms>()
+        var groundingRejected = 0
+        var llmFailed = 0
+
+        chunk.items.forEachIndexed { index, embedded ->
+            val llm = primary.getOrNull(index)
+            val accepted = llm != null &&
+                llm.isPayment &&
+                llm.amount > 0 &&
+                isGroundedRegexFailedRecovery(embedded.input.body, llm)
+
+            if (accepted && llm != null) {
+                clearRegexFailedRecoveryFailure(embedded)
+                recovered.add(
+                    SmsParseResult(
+                        input = embedded.input,
+                        analysis = SmsAnalysisResult(
+                            amount = llm.amount,
+                            storeName = llm.storeName,
+                            category = llm.category,
+                            dateTime = llm.dateTime,
+                            cardName = llm.cardName
+                        ),
+                        tier = 3,
+                        confidence = 1.0f
+                    )
+                )
+            } else {
+                val heuristicResult = tryHeuristicParse(
+                    embedded = embedded,
+                    fallbackCardName = llm?.cardName?.takeIf { it.isNotBlank() } ?: "KB"
+                )
+                if (heuristicResult != null) {
+                    clearRegexFailedRecoveryFailure(embedded)
+                    recovered.add(heuristicResult)
+                    return@forEachIndexed
+                }
+
+                fallback.add(embedded)
+                recordRegexFailedRecoveryFailure(embedded)
+                if (llm != null && llm.isPayment && llm.amount > 0) {
+                    groundingRejected++
+                } else {
+                    llmFailed++
+                }
+            }
+        }
+
+        return RegexFailedChunkResult(
+            address = chunk.address,
+            recovered = recovered,
+            fallback = fallback,
+            retryAttempted = retryAttempted,
+            groundingRejected = groundingRejected,
+            llmFailed = llmFailed
+        )
+    }
+
+    /**
+     * Step4.5 복구 대상 여부 판단.
+     * - 너무 짧은/근거 부족 본문은 LLM 복구 대신 Step5로 위임.
+     */
+    private fun isRecoverableRegexFailedSms(body: String): Boolean {
+        if (body.length < REGEX_FAILED_RECOVERY_MIN_LENGTH) return false
+
+        val hasAmountPattern = RECOVERY_AMOUNT_WITH_CURRENCY.containsMatchIn(body) ||
+            RECOVERY_AMOUNT_WITH_COMMA.containsMatchIn(body)
+        if (hasAmountPattern) return true
+
+        val lower = body.lowercase(Locale.getDefault())
+        val hasHintKeyword = REGEX_FAILED_RECOVERY_HINT_KEYWORDS.any { keyword ->
+            lower.contains(keyword.lowercase(Locale.getDefault()))
+        }
+        val hasPlainAmount = RECOVERY_PLAIN_AMOUNT.containsMatchIn(body)
+        return hasHintKeyword && hasPlainAmount
+    }
+
+    /**
+     * Step4.5 LLM 결과가 원문 근거를 갖는지 검증.
+     * - amount는 원문에서 직접 매칭되어야 함
+     * - store는 generic 명칭 제외 + 원문 substring 매칭 필요
+     */
+    private fun isGroundedRegexFailedRecovery(
+        body: String,
+        llm: GeminiSmsExtractor.LlmExtractionResult
+    ): Boolean {
+        if (!containsAmountEvidence(body, llm.amount)) return false
+
+        val store = llm.storeName.trim()
+        if (store.isBlank()) return false
+        if (store in RECOVERY_GENERIC_STORE_NAMES) return false
+
+        val compactBody = body
+            .lowercase(Locale.getDefault())
+            .replace(WHITESPACE_OR_SEP, "")
+        val compactStore = store
+            .lowercase(Locale.getDefault())
+            .replace(WHITESPACE_OR_SEP, "")
+        if (compactStore.length < 2) return false
+        return compactBody.contains(compactStore)
+    }
+
+    private fun containsAmountEvidence(body: String, amount: Int): Boolean {
+        if (amount <= 0) return false
+        val normalizedBody = body.replace(",", "")
+        val amountToken = amount.toString()
+        val pattern = Regex("(^|\\D)$amountToken(\\D|$)")
+        return pattern.containsMatchIn(normalizedBody)
+    }
+
+    /**
+     * KB 멀티라인 출금 SMS 휴리스틱 파싱.
+     * Step4.5/Step5에서 LLM이 흔들릴 때 마지막 보정 수단으로 사용한다.
+     */
+    private fun tryParseKbDebitFallback(
+        embedded: EmbeddedSms,
+        fallbackCardName: String = "KB"
+    ): SmsAnalysisResult? {
+        val body = embedded.input.body
+        if (!body.contains("[KB]")) return null
+        if (!body.contains("\n출금\n")) return null
+
+        return patternMatcher.parseWithRegex(
+            smsBody = body,
+            smsTimestamp = embedded.input.date,
+            amountRegex = KB_DEBIT_FALLBACK_AMOUNT_REGEX,
+            storeRegex = KB_DEBIT_FALLBACK_STORE_REGEX,
+            fallbackCardName = fallbackCardName
+        )
+    }
+
+    /**
+     * KB 멀티라인 출금 휴리스틱 파싱 → SmsParseResult 변환 helper.
+     * tryParseKbDebitFallback 호출 + SmsParseResult 래핑을 한곳에서 관리한다.
+     */
+    private fun tryHeuristicParse(
+        embedded: EmbeddedSms,
+        fallbackCardName: String = "KB"
+    ): SmsParseResult? {
+        val analysis = tryParseKbDebitFallback(embedded, fallbackCardName) ?: return null
+        return SmsParseResult(
+            input = embedded.input,
+            analysis = analysis,
+            tier = 3,
+            confidence = 1.0f
+        )
+    }
+
+    private fun shouldSkipRegexFailedRecovery(embedded: EmbeddedSms): Boolean {
+        val key = regexFailedRecoveryKey(embedded)
+        val state = regexFailedRecoveryStates[key] ?: return false
+        if (state.failCount < REGEX_FAILED_RECOVERY_FAILURE_THRESHOLD) return false
+        val elapsed = System.currentTimeMillis() - state.lastFailedAt
+        return elapsed < REGEX_FAILED_RECOVERY_COOLDOWN_MS
+    }
+
+    private fun recordRegexFailedRecoveryFailure(embedded: EmbeddedSms) {
+        val key = regexFailedRecoveryKey(embedded)
+        val now = System.currentTimeMillis()
+        regexFailedRecoveryStates.compute(key) { _, current ->
+            if (current == null) {
+                RegexFailureState(failCount = 1, lastFailedAt = now)
+            } else if (now - current.lastFailedAt >= REGEX_FAILED_RECOVERY_COOLDOWN_MS) {
+                RegexFailureState(failCount = 1, lastFailedAt = now)
+            } else {
+                current.copy(failCount = current.failCount + 1, lastFailedAt = now)
+            }
+        }
+    }
+
+    private fun clearRegexFailedRecoveryFailure(embedded: EmbeddedSms) {
+        regexFailedRecoveryStates.remove(regexFailedRecoveryKey(embedded))
+    }
+
+    private fun regexFailedRecoveryKey(embedded: EmbeddedSms): String {
+        val sender = normalizeAddress(embedded.input.address)
+        val templateHash = embedded.template.hashCode().toUInt()
+        return "$sender:$templateHash"
     }
 
     // ===== Phase4: 백그라운드 학습 큐 =====
@@ -494,11 +814,13 @@ class SmsGroupClassifier @Inject constructor(
      * - LLM이 전체 그림을 보고 판단 → 오파싱/오분류 감소
      *
      * @param unmatchedList Step 4에서 미매칭된 EmbeddedSms 리스트
+     * @param forceSkipRegexAll true면 Step5 전체에서 regex 생성/검증을 생략하고 direct LLM 경로로만 처리
      * @param onProgress 진행률 콜백
      * @return 결제로 확인되고 파싱 성공한 결과 리스트
      */
     suspend fun classifyUnmatched(
         unmatchedList: List<EmbeddedSms>,
+        forceSkipRegexAll: Boolean = false,
         onProgress: ((step: String, current: Int, total: Int) -> Unit)? = null
     ): List<SmsParseResult> {
         if (unmatchedList.isEmpty()) return emptyList()
@@ -533,6 +855,7 @@ class SmsGroupClassifier @Inject constructor(
         val processedSources = AtomicInteger(0)
         val step5StartTime = System.currentTimeMillis()
         val degradedByBudget = AtomicInteger(0)
+        val forcedSkipRegexCount = AtomicInteger(0)
         val outcomeCounts = ConcurrentHashMap<String, AtomicInteger>()
 
         // Semaphore가 동시성을 제어하므로 chunked 배리어 없이 전체 sourceGroup을 한번에 실행
@@ -544,8 +867,11 @@ class SmsGroupClassifier @Inject constructor(
                     try {
                         // Step5 소프트 예산 초과 → 이 sourceGroup은 regex 생성을 생략하고 빠른 경로로 처리
                         val step5Elapsed = System.currentTimeMillis() - step5StartTime
-                        val forceDirectLlm = step5Elapsed > STEP5_TIME_BUDGET_MS
-                        if (forceDirectLlm) {
+                        val forceDirectByBudget = step5Elapsed > STEP5_TIME_BUDGET_MS
+                        val forceDirectLlm = forceSkipRegexAll || forceDirectByBudget
+                        if (forceSkipRegexAll) {
+                            forcedSkipRegexCount.addAndGet(sourceGroup.subGroups.sumOf { it.members.size })
+                        } else if (forceDirectByBudget) {
                             degradedByBudget.addAndGet(sourceGroup.subGroups.sumOf { it.members.size })
                         }
                         processSourceGroup(
@@ -553,6 +879,7 @@ class SmsGroupClassifier @Inject constructor(
                             dbMainPattern = dbMainPatterns[sourceGroup.address],
                             index = index,
                             forceSkipRegex = forceDirectLlm,
+                            forceSkipRegexAll = forceSkipRegexAll,
                             onGroupOutcome = { outcome ->
                                 if (outcome.isNotBlank()) {
                                     outcomeCounts.computeIfAbsent(outcome) { AtomicInteger(0) }.incrementAndGet()
@@ -577,6 +904,7 @@ class SmsGroupClassifier @Inject constructor(
         MoneyTalkLogger.e(
             "[Step5 summary] sources=${sourceGroups.size}, parsed=${results.size}건, " +
                 "degradedByBudget=${degradedByBudget.get()}건, softBudget=${STEP5_TIME_BUDGET_MS}ms, " +
+                "forcedSkipRegex=${forcedSkipRegexCount.get()}건, " +
                 "learningQueue=${learningQueueSize.get()}건, dropped=${learningDroppedCount.get()}건, " +
                 "outcomes=[$outcomeSummary], elapsed=${step5TotalElapsed}ms"
         )
@@ -632,6 +960,7 @@ class SmsGroupClassifier @Inject constructor(
         dbMainPattern: SmsPatternEntity? = null,
         index : Int = 0,
         forceSkipRegex: Boolean = false,
+        forceSkipRegexAll: Boolean = false,
         onGroupOutcome: ((String) -> Unit)? = null
     ): List<SmsParseResult> {
         val results = mutableListOf<SmsParseResult>()
@@ -658,6 +987,7 @@ class SmsGroupClassifier @Inject constructor(
                 mainContext = dbMainContext,
                 isMainGroup = true,
                 forceSkipRegex = forceSkipRegex,
+                forceSkipRegexAll = forceSkipRegexAll,
                 onGroupOutcome = onGroupOutcome
             )
             results.addAll(singleResult.results)
@@ -670,6 +1000,7 @@ class SmsGroupClassifier @Inject constructor(
             sourceGroup.mainGroup,
             isMainGroup = true,
             forceSkipRegex = forceSkipRegex,
+            forceSkipRegexAll = forceSkipRegexAll,
             onGroupOutcome = onGroupOutcome
         )
         results.addAll(mainProcessResult.results)
@@ -705,6 +1036,7 @@ class SmsGroupClassifier @Inject constructor(
                 mainContext = mainContext,
                 distributionSummary = sourceGroup.buildDistributionSummary(),
                 forceSkipRegex = forceSkipRegex,
+                forceSkipRegexAll = forceSkipRegexAll,
                 onGroupOutcome = onGroupOutcome
             )
             results.addAll(exResults.results)
@@ -730,6 +1062,7 @@ class SmsGroupClassifier @Inject constructor(
         distributionSummary: String? = null,
         isMainGroup: Boolean = false,
         forceSkipRegex: Boolean = false,
+        forceSkipRegexAll: Boolean = false,
         allowResplit: Boolean = true,
         onGroupOutcome: ((String) -> Unit)? = null
     ): GroupProcessResult {
@@ -748,6 +1081,7 @@ class SmsGroupClassifier @Inject constructor(
                 distributionSummary = distributionSummary,
                 isMainGroup = isMainGroup,
                 forceSkipRegex = true,
+                forceSkipRegexAll = forceSkipRegexAll,
                 directLlmOnly = true,
                 skipLearning = true,
                 onGroupOutcome = onGroupOutcome
@@ -773,6 +1107,7 @@ class SmsGroupClassifier @Inject constructor(
                         distributionSummary = distributionSummary,
                         isMainGroup = isMainGroup && idx == 0,
                         forceSkipRegex = forceSkipRegex,
+                        forceSkipRegexAll = forceSkipRegexAll,
                         allowResplit = false,
                         onGroupOutcome = onGroupOutcome
                     )
@@ -799,6 +1134,7 @@ class SmsGroupClassifier @Inject constructor(
             distributionSummary = distributionSummary,
             isMainGroup = isMainGroup,
             forceSkipRegex = forceSkipRegex,
+            forceSkipRegexAll = forceSkipRegexAll,
             skipLearning = forceSkipRegex,
             onGroupOutcome = onGroupOutcome
         )
@@ -827,6 +1163,7 @@ class SmsGroupClassifier @Inject constructor(
         distributionSummary: String? = null,
         isMainGroup: Boolean = false,
         forceSkipRegex: Boolean = false,
+        forceSkipRegexAll: Boolean = false,
         directLlmOnly: Boolean = false,
         skipLearning: Boolean = false,
         onGroupOutcome: ((String) -> Unit)? = null
@@ -835,7 +1172,7 @@ class SmsGroupClassifier @Inject constructor(
         val results = mutableListOf<SmsParseResult>()
         val representative = group.representative
         val addr = representative.input.address.takeLast(4)
-        var outcome = ""  // G: reason code (REGEX_ACCEPTED, REGEX_REPAIRED, TEMPLATE_FALLBACK, DIRECT_LLM, NON_PAYMENT, LLM_FAILED, GROUP_BUDGET_SKIP_REGEX, STEP5_BUDGET_DIRECT_LLM, UNSTABLE_DIRECT_LLM, REGEX_ABORT_LOW_PASS)
+        var outcome = ""  // G: reason code (REGEX_ACCEPTED, REGEX_REPAIRED, TEMPLATE_FALLBACK, DIRECT_LLM, NON_PAYMENT, LLM_FAILED, GROUP_BUDGET_SKIP_REGEX, STEP5_BUDGET_DIRECT_LLM, REGEX_FAILED_FALLBACK_DIRECT_LLM, REGEX_FAILED_HEURISTIC_KB, UNSTABLE_DIRECT_LLM, REGEX_ABORT_LOW_PASS)
 
         MoneyTalkLogger.i("[processGroup] 시작: addr=*$addr, members=${group.members.size}, isMain=$isMainGroup")
 
@@ -847,19 +1184,50 @@ class SmsGroupClassifier @Inject constructor(
         } else {
             groupContextBody
         }
-        val llmResults = smsExtractor.extractFromSmsBatch(
-            smsMessages = listOf(smsBodyForLlm),
-            smsTimestamps = listOf(representative.input.date)
-        )
-        val llmResult = llmResults.firstOrNull()
+        var llmResult: GeminiSmsExtractor.LlmExtractionResult? = null
+        var llmAttempts = 0
+        while (llmResult == null && llmAttempts <= GROUP_LLM_NULL_RETRY_MAX) {
+            llmAttempts++
+            llmResult = smsExtractor.extractFromSmsBatch(
+                smsMessages = listOf(smsBodyForLlm),
+                smsTimestamps = listOf(representative.input.date)
+            ).firstOrNull()
+            if (llmResult == null && llmAttempts <= GROUP_LLM_NULL_RETRY_MAX) {
+                MoneyTalkLogger.w(
+                    "[processGroup] LLM 응답 null → 재시도 ${llmAttempts}/${GROUP_LLM_NULL_RETRY_MAX} " +
+                        "(${GROUP_LLM_NULL_RETRY_DELAY_MS}ms 후)"
+                )
+                delay(GROUP_LLM_NULL_RETRY_DELAY_MS)
+            }
+        }
         if (llmResult == null) {
+            if (forceSkipRegexAll) {
+                val heuristicResults = group.members.mapNotNull { member ->
+                    tryHeuristicParse(member)
+                }
+                if (heuristicResults.isNotEmpty()) {
+                    val elapsed = System.currentTimeMillis() - groupStartTime
+                    val fallbackOutcome = "REGEX_FAILED_HEURISTIC_KB"
+                    onGroupOutcome?.invoke(fallbackOutcome)
+                    MoneyTalkLogger.w(
+                        "[processGroup] LLM null → 휴리스틱 보정 채택: addr=*$addr, results=${heuristicResults.size}건, elapsed=${elapsed}ms"
+                    )
+                    MoneyTalkLogger.e(
+                        "[processGroup] 완료: addr=*$addr, outcome=$fallbackOutcome, source=heuristic, results=${heuristicResults.size}건, members=${group.members.size}, elapsed=${elapsed}ms"
+                    )
+                    return GroupProcessResult(results = heuristicResults, outcomeCode = fallbackOutcome)
+                }
+            }
             val elapsed = System.currentTimeMillis() - groupStartTime
             val failOutcome = "LLM_FAILED"
             onGroupOutcome?.invoke(failOutcome)
             MoneyTalkLogger.e("[processGroup] 완료: addr=*$addr, outcome=$failOutcome, results=0건, elapsed=${elapsed}ms")
             return GroupProcessResult(emptyList(), outcomeCode = failOutcome)
         }
-        MoneyTalkLogger.i("[processGroup] LLM 추출 완료: addr=*$addr, isPayment=${llmResult.isPayment}, elapsed=${System.currentTimeMillis() - groupStartTime}ms")
+        MoneyTalkLogger.i(
+            "[processGroup] LLM 추출 완료: addr=*$addr, isPayment=${llmResult.isPayment}, " +
+                "attempts=$llmAttempts, elapsed=${System.currentTimeMillis() - groupStartTime}ms"
+        )
 
         // 비결제 판정 → 비결제 패턴으로 DB 등록 후 종료
         if (!llmResult.isPayment) {
@@ -919,6 +1287,9 @@ class SmsGroupClassifier @Inject constructor(
             if (directLlmOnly) {
                 MoneyTalkLogger.w("[processGroup] unstable 그룹 정책 → regex 스킵, direct LLM")
                 outcome = "UNSTABLE_DIRECT_LLM"
+            } else if (forceSkipRegexAll) {
+                MoneyTalkLogger.w("[processGroup] regexFailed fallback 모드 → regex 스킵, direct LLM")
+                outcome = "REGEX_FAILED_FALLBACK_DIRECT_LLM"
             } else if (forceSkipRegex) {
                 MoneyTalkLogger.w("[processGroup] Step5 소프트 예산 모드 → regex 스킵, 추출만")
                 outcome = "STEP5_BUDGET_DIRECT_LLM"
@@ -1166,6 +1537,15 @@ class SmsGroupClassifier @Inject constructor(
                         confidence = 1.0f
                     )
                 )
+            } else if (forceSkipRegexAll) {
+                // regexFailed fallback 모드에서 대표 LLM이 약할 때 KB 멀티라인 출금 휴리스틱 1회 보정
+                val heuristicResult = tryHeuristicParse(
+                    embedded = representative,
+                    fallbackCardName = llmAnalysis.cardName.ifBlank { "KB" }
+                )
+                if (heuristicResult != null) {
+                    results.add(heuristicResult)
+                }
             }
 
             // 대표 제외 나머지 멤버 (representative는 항상 members[0])
@@ -1175,6 +1555,7 @@ class SmsGroupClassifier @Inject constructor(
                 // regex 미생성 → 나머지 멤버 개별 LLM 추출
                 val skipReason = when {
                     directLlmOnly -> "unstable 그룹 direct LLM"
+                    forceSkipRegexAll -> "regexFailed fallback 모드"
                     forceSkipRegex -> "Step5 예산 모드"
                     primaryRegexAttempted -> "regex 실패"
                     skipRegexByBudget -> "그룹 시간 예산 초과"
@@ -1198,26 +1579,41 @@ class SmsGroupClassifier @Inject constructor(
 
                     chunk.forEachIndexed { index, member ->
                         val memberResult = memberLlmResults.getOrNull(index)
-                        if (memberResult == null || !memberResult.isPayment) return@forEachIndexed
-
-                        val parsed = SmsAnalysisResult(
-                            amount = memberResult.amount,
-                            storeName = memberResult.storeName,
-                            category = memberResult.category,
-                            dateTime = memberResult.dateTime,
-                            cardName = memberResult.cardName
-                        )
-
-                        if (parsed.amount > 0) {
-                            results.add(
-                                SmsParseResult(
-                                    input = member.input,
-                                    analysis = parsed,
-                                    tier = 3,
-                                    confidence = 1.0f
-                                )
+                        var added = false
+                        if (memberResult != null && memberResult.isPayment) {
+                            val parsed = SmsAnalysisResult(
+                                amount = memberResult.amount,
+                                storeName = memberResult.storeName,
+                                category = memberResult.category,
+                                dateTime = memberResult.dateTime,
+                                cardName = memberResult.cardName
                             )
+
+                            if (parsed.amount > 0) {
+                                results.add(
+                                    SmsParseResult(
+                                        input = member.input,
+                                        analysis = parsed,
+                                        tier = 3,
+                                        confidence = 1.0f
+                                    )
+                                )
+                                added = true
+                            }
                         }
+
+                        if (!added && forceSkipRegexAll) {
+                            val heuristicResult = tryHeuristicParse(
+                                embedded = member,
+                                fallbackCardName = llmAnalysis.cardName.ifBlank { "KB" }
+                            )
+                            if (heuristicResult != null) {
+                                results.add(heuristicResult)
+                                added = true
+                            }
+                        }
+
+                        if (!added) return@forEachIndexed
                     }
                 }
             }

@@ -12,6 +12,7 @@ import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.DataQueryParser
 import com.sanha.moneytalk.core.util.DataQueryRequest
 import com.sanha.moneytalk.core.util.QueryResult
+import kotlinx.coroutines.delay
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Calendar
 import javax.inject.Inject
@@ -34,6 +35,13 @@ class GeminiRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val apiKeyProvider: GeminiApiKeyProvider
 ) : GeminiRepository {
+    companion object {
+        /** Home 인사이트 생성 재시도 횟수 (최초 포함) */
+        private const val HOME_INSIGHT_MAX_ATTEMPTS = 3
+        /** Home 인사이트 재시도 기본 지연 (선형 백오프) */
+        private const val HOME_INSIGHT_RETRY_BASE_DELAY_MS = 1200L
+    }
+
     private var cachedApiKey: String? = null
     private var cachedModelConfig: GeminiModelConfig? = null
 
@@ -146,21 +154,20 @@ class GeminiRepositoryImpl @Inject constructor(
         val apiKey = getApiKey()
         if (apiKey.isBlank()) return null
 
-        return try {
-            val model = GenerativeModel(
-                modelName = apiKeyProvider.modelConfig.homeInsight,
-                apiKey = apiKey,
-                generationConfig = generationConfig {
-                    temperature = 0.7f
-                    maxOutputTokens = 100
-                }
-            )
-            val topCatText = topCategories.joinToString(", ") { "${it.first} ${it.second}원" }
-            val lastMonthCatText = if (lastMonthTopCategories.isNotEmpty()) {
-                "\n전월 동일 카테고리: " + lastMonthTopCategories.joinToString(", ") { "${it.first} ${it.second}원" }
-            } else ""
-            val noExpenseHint = if (monthlyExpense == 0) "\n※ 이번 달 지출이 아직 없습니다. 격려/기대감 톤으로 작성." else ""
-            val prompt = """
+        val model = GenerativeModel(
+            modelName = apiKeyProvider.modelConfig.homeInsight,
+            apiKey = apiKey,
+            generationConfig = generationConfig {
+                temperature = 0.7f
+                maxOutputTokens = 100
+            }
+        )
+        val topCatText = topCategories.joinToString(", ") { "${it.first} ${it.second}원" }
+        val lastMonthCatText = if (lastMonthTopCategories.isNotEmpty()) {
+            "\n전월 동일 카테고리: " + lastMonthTopCategories.joinToString(", ") { "${it.first} ${it.second}원" }
+        } else ""
+        val noExpenseHint = if (monthlyExpense == 0) "\n※ 이번 달 지출이 아직 없습니다. 격려/기대감 톤으로 작성." else ""
+        val prompt = """
                 재무 어드바이저로서 한국어로 한줄 인사이트를 작성해.
                 이번 달 지출: ${monthlyExpense}원
                 지난 달 지출: ${lastMonthExpense}원
@@ -172,12 +179,34 @@ class GeminiRepositoryImpl @Inject constructor(
                 예시: "💪 지난달보다 15% 절약 중이에요!" 또는 "☕ 카페 지출이 늘고 있어요"
             """.trimIndent()
 
-            val response = model.generateContent(prompt)
-            response.text?.trim()
-        } catch (e: Exception) {
-            MoneyTalkLogger.w("인사이트 생성 실패: ${e.message}")
-            null
+        for (attempt in 1..HOME_INSIGHT_MAX_ATTEMPTS) {
+            try {
+                val response = model.generateContent(prompt)
+                val insight = response.text?.trim()
+                if (!insight.isNullOrBlank()) return insight
+                throw IllegalStateException("인사이트 응답이 비어있습니다")
+            } catch (e: Exception) {
+                val message = e.message.orEmpty()
+                val retryable = message.contains("503") ||
+                    message.contains("UNAVAILABLE", ignoreCase = true) ||
+                    message.contains("high demand", ignoreCase = true)
+                val hasNext = attempt < HOME_INSIGHT_MAX_ATTEMPTS
+
+                if (retryable && hasNext) {
+                    val delayMs = HOME_INSIGHT_RETRY_BASE_DELAY_MS * attempt
+                    MoneyTalkLogger.w(
+                        "인사이트 생성 일시 실패(재시도 ${attempt}/${HOME_INSIGHT_MAX_ATTEMPTS - 1}, ${delayMs}ms 대기): ${e.message}"
+                    )
+                    delay(delayMs)
+                    continue
+                }
+
+                MoneyTalkLogger.w("인사이트 생성 실패: ${e.message}")
+                return null
+            }
         }
+
+        return null
     }
 
     @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")

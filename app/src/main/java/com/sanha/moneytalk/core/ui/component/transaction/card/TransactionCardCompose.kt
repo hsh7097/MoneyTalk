@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -114,6 +116,7 @@ fun TransactionCardCompose(
                     val tag = info.categoryTag
                     val time = info.time
                     val cardName = info.cardNameText
+                    val memoText = info.memoText
                     if (tag != null || time != null) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -133,14 +136,29 @@ fun TransactionCardCompose(
                             }
 
                             // 시간 + 카드명
-                            val detail = buildString {
+                            val detail = buildAnnotatedString {
                                 if (time != null) append(time)
                                 if (cardName != null) {
-                                    if (isNotEmpty()) append(" • ")
+                                    if (length > 0) append(" • ")
                                     append(cardName)
+
+                                    if (!memoText.isNullOrBlank()) {
+                                        append(" ")
+                                        val memoStart = length
+                                        append("(")
+                                        append(memoText)
+                                        append(")")
+                                        addStyle(
+                                            style = SpanStyle(
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+                                            ),
+                                            start = memoStart,
+                                            end = length
+                                        )
+                                    }
                                 }
                             }
-                            if (detail.isNotEmpty()) {
+                            if (detail.text.isNotEmpty()) {
                                 Text(
                                     text = detail,
                                     style = MaterialTheme.typography.bodySmall,

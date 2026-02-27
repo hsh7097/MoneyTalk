@@ -115,7 +115,7 @@ class SmsPipeline @Inject constructor(
         skipPreFilter: Boolean = false
     ): PipelineResult {
         if (smsList.isEmpty()) return PipelineResult(emptyList(), 0, 0)
-        MoneyTalkLogger.i("SmsPipeline 시작: 입력 ${smsList.size}건")
+        MoneyTalkLogger.e("SmsPipeline 시작: 입력 ${smsList.size}건")
 
 
         // Step 2: 사전 필터링 — 비결제 SMS 제거
@@ -154,18 +154,53 @@ class SmsPipeline @Inject constructor(
             MoneyTalkLogger.e("Step4.5 RegexFailedRecovery: ${matchResult.regexFailed.size}건 → 복구 ${regexFailedResults.size}건, Step5 fallback ${regexFailedFallback.size}건")
         }
 
-        // Step 5: 미매칭 + Step4.5 실패 fallback → 그룹핑 + LLM
-        val step5Input = matchResult.unmatched + regexFailedFallback
-        val llmResults = if (step5Input.isNotEmpty()) {
+        // Step 5-A: 순수 미매칭건은 기존 정책(그룹핑 + regex 생성 가능) 유지
+        val unmatchedLlmResults = if (matchResult.unmatched.isNotEmpty()) {
             onProgress?.invoke(STEP_LLM, "AI가 결제 내역 분석 중...", matchResult.matched.size + regexFailedResults.size, embedded.size)
-            groupClassifier.classifyUnmatched(step5Input) { step, current, total ->
+            groupClassifier.classifyUnmatched(matchResult.unmatched) { step, current, total ->
                 onProgress?.invoke(STEP_LLM, step, current, total)
             }
         } else {
             emptyList()
         }
 
+        // Step 5-B: Step4.5 fallback은 regex 재시도하지 않고 direct LLM만 수행
+        val regexFallbackLlmResults = if (regexFailedFallback.isNotEmpty()) {
+            onProgress?.invoke(STEP_LLM, "AI가 결제 내역 분석 중...", matchResult.matched.size + regexFailedResults.size + unmatchedLlmResults.size, embedded.size)
+            groupClassifier.classifyUnmatched(
+                unmatchedList = regexFailedFallback,
+                forceSkipRegexAll = true
+            ) { step, current, total ->
+                onProgress?.invoke(STEP_LLM, step, current, total)
+            }
+        } else {
+            emptyList()
+        }
+
+        val llmResults = unmatchedLlmResults + regexFallbackLlmResults
+
         val total = matchResult.matched + regexFailedResults + llmResults
+        val parsedIds = total.map { it.input.id }.toHashSet()
+        if (parsedIds.size < embedded.size) {
+            val regexFailedFallbackIds = regexFailedFallback.map { it.input.id }.toHashSet()
+            val unmatchedIds = matchResult.unmatched.map { it.input.id }.toHashSet()
+            val dropped = embedded.filter { it.input.id !in parsedIds }
+
+            MoneyTalkLogger.w(
+                "[pipelineDrop] 누락 ${dropped.size}건 (input=${embedded.size}, parsed=${total.size})"
+            )
+            dropped.forEachIndexed { index, item ->
+                val reason = when (item.input.id) {
+                    in regexFailedFallbackIds -> "regex_fallback_drop"
+                    in unmatchedIds -> "unmatched_drop"
+                    else -> "unknown_drop"
+                }
+                MoneyTalkLogger.w(
+                    "[pipelineDrop] #${index + 1} reason=$reason, id=${item.input.id}, " +
+                        "addr=${item.input.address}, body=${item.input.body.replace("\n", "↵")}"
+                )
+            }
+        }
         MoneyTalkLogger.e("SmsPipeline 완료: 결제 확정 ${total.size}건 (벡터${matchResult.matched.size} + regex복구${regexFailedResults.size} + LLM${llmResults.size})")
         return PipelineResult(
             results = total,

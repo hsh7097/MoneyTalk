@@ -297,6 +297,16 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 - 명세서/청구서 안내: \"명세서\", \"청구서\", \"이용대금\" 포함
 - 광고/홍보/이벤트/혜택안내/포인트 적립 문자
 
+[근거 부족 문자 처리 - 다음에 해당하면 반드시 isPayment: false]
+- 금액 근거가 본문에 없거나(예: 801302 같은 코드만 존재), 금액을 추정해야만 하는 경우
+- 가게명/상호명 근거가 본문에 없고, \"결제\" 같은 일반어만으로 판단해야 하는 경우
+- [Web발신] 형식의 축약 문자처럼 핵심 정보(금액/가게)가 누락된 경우
+
+[근거 부족 예외 규칙 - 아래는 isPayment: true 가능]
+- 해외 결제처럼 통화 근거가 명확한 경우 (예: USD/EUR/JPY/$ + 금액)
+- 링크가 포함되어 있어도, 본문에 금액/가게명/승인·결제 키워드 근거가 함께 있는 경우
+- \"카드대금\", \"카드결제\" 자동이체 문자에서 출금 금액 근거가 명확한 경우
+
 [카드 대금 자동이체 처리 규칙]
 - \"XX카드결제\", \"카드대금\" 등 카드 대금이 은행 계좌에서 출금된 SMS는 실제 지출이므로 isPayment: true
 - storeName에는 카드사명(\"우리카드\", \"신한카드\" 등)을 기입
@@ -308,6 +318,10 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 4. 카드사가 불분명하면 \"기타\"로 기입
 5. 결제 문자가 아니면 isPayment: false
 6. dateTime의 연도는 반드시 SMS 수신 날짜의 연도를 따를 것
+7. null 사용 금지 (문자열 필드는 빈 문자열 또는 기본값 사용)
+8. isPayment=true일 때는 amount/storeName/cardName/dateTime/category를 모두 포함할 것
+9. 확신이 없으면 isPayment=false로 반환할 것 (추정 금지)
+10. JSON 키 이름은 정확히 다음만 사용: isPayment, amount, storeName, cardName, dateTime, category
 
 [응답 형식]
 {\"isPayment\": true, \"amount\": 15000, \"storeName\": \"스타벅스\", \"cardName\": \"KB국민\", \"dateTime\": \"2025-01-15 14:30\", \"category\": \"카페\"}</string>
@@ -336,6 +350,16 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 - 명세서/청구서 안내: \"명세서\", \"청구서\", \"이용대금\" 포함
 - 광고/홍보/이벤트/혜택안내/포인트 적립 문자
 
+[근거 부족 문자 처리 - 다음에 해당하면 반드시 isPayment: false]
+- 금액 근거가 본문에 없거나(예: 801302 같은 코드만 존재), 금액을 추정해야만 하는 경우
+- 가게명/상호명 근거가 본문에 없고, \"결제\" 같은 일반어만으로 판단해야 하는 경우
+- [Web발신] 형식의 축약 문자처럼 핵심 정보(금액/가게)가 누락된 경우
+
+[근거 부족 예외 규칙 - 아래는 isPayment: true 가능]
+- 해외 결제처럼 통화 근거가 명확한 경우 (예: USD/EUR/JPY/$ + 금액)
+- 링크가 포함되어 있어도, 본문에 금액/가게명/승인·결제 키워드 근거가 함께 있는 경우
+- \"카드대금\", \"카드결제\" 자동이체 문자에서 출금 금액 근거가 명확한 경우
+
 [카드 대금 자동이체 처리 규칙]
 - \"XX카드결제\", \"카드대금\" 등 카드 대금이 은행 계좌에서 출금된 SMS는 실제 지출이므로 isPayment: true
 - storeName에는 카드사명(\"우리카드\", \"신한카드\" 등)을 기입
@@ -348,6 +372,10 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 5. 결제 문자가 아니면 해당 항목은 {\"no\": N, \"isPayment\": false}만 반환
 6. 입력된 모든 SMS에 대해 반드시 결과를 반환
 7. dateTime의 연도는 반드시 각 SMS의 수신 날짜 연도를 따를 것
+8. null 사용 금지 (문자열 필드는 빈 문자열 또는 기본값 사용)
+9. 각 항목은 반드시 no 필드를 포함하고, no 순서를 유지해 반환할 것
+10. isPayment=true일 때는 amount/storeName/cardName/dateTime/category를 모두 포함할 것
+11. 확신이 없으면 해당 항목은 {\"no\": N, \"isPayment\": false}로 반환할 것
 
 [응답 형식 예시]
 [
@@ -444,16 +472,27 @@ JSON만 반환:
 
     <!-- GeminiSmsExtractor: SMS 단일 추출 유저 프롬프트 -->
     <!-- %1$s = SMS 수신 날짜 정보, %2$s = 참조 텍스트, %3$s = SMS 본문 -->
-    <string name="prompt_sms_extract_user" translatable="false">다음 SMS에서 결제 정보를 추출해주세요:%1$s
+    <string name="prompt_sms_extract_user" translatable="false">다음 SMS에서 결제 정보를 추출해주세요.%1$s
+
+[참고 정보]
 %2$s
-%3$s</string>
+
+[분석 대상 SMS]
+%3$s
+
+반드시 JSON 객체 1개만 반환하고 null은 사용하지 마세요.</string>
 
     <!-- GeminiSmsExtractor: SMS 배치 추출 유저 프롬프트 -->
     <!-- %1$s = SMS 개수, %2$s = 참조 텍스트, %3$s = SMS 목록 텍스트 -->
-    <string name="prompt_sms_batch_extract_user" translatable="false">다음 %1$s개 SMS에서 각각 결제 정보를 추출해주세요:
+    <string name="prompt_sms_batch_extract_user" translatable="false">다음 %1$s개 SMS에서 각각 결제 정보를 추출해주세요.
+
+[참고 정보]
 %2$s
 
-%3$s</string>
+[분석 대상 SMS 목록]
+%3$s
+
+반드시 JSON 배열만 반환하고, 각 항목의 no를 유지하며 null은 사용하지 마세요.</string>
 
     <!-- GeminiCategoryRepository: 카테고리 분류 프롬프트 (gemini-2.5-flash-lite) -->
     <string name="prompt_category_classification" translatable="false">당신은 가계부 앱의 카테고리 분류 전문가입니다.

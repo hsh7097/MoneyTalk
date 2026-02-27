@@ -67,6 +67,9 @@ class SmsPatternMatcher @Inject constructor(
 
         /** 결제 패턴 매칭 임계값 — 이 이상이면 기존 regex로 파싱 시도 */
         private const val PAYMENT_MATCH_THRESHOLD = 0.92f
+
+        /** 출금 알림 컨텍스트에서 숫자코드/입출통지 등의 대체 가게명 */
+        private const val DEBIT_FALLBACK_STORE_NAME = "계좌출금"
     }
 
     // ===== 벡터 유사도 연산 =====
@@ -409,6 +412,9 @@ class SmsPatternMatcher @Inject constructor(
     private val STORE_DATE_OR_TIME_PATTERN =
         Regex("""^(?:\d{1,2}[/.-]\d{1,2}(?:\s+\d{1,2}:\d{2})?|\d{1,2}:\d{2})$""")
 
+    /** 출금 알림 본문 여부 판정 (라인 단위 '출금') */
+    private val DEBIT_LINE_PATTERN = Regex("""(?:^|\n)출금(?:\n|$)""")
+
     /** 가게명으로 부적절한 키워드 */
     private val STORE_INVALID_KEYWORDS = listOf(
         "승인", "결제", "출금", "입금", "누적", "잔액", "일시불", "할부", "이용", "카드"
@@ -499,28 +505,29 @@ class SmsPatternMatcher @Inject constructor(
         cardRegex: String = "",
         fallbackCardName: String = "기타"
     ): SmsAnalysisResult? {
+        val normalizedBody = normalizeBodyForRegex(smsBody)
         val amountPattern = compileRegex(amountRegex) ?: return null
         val storePattern = compileRegex(storeRegex) ?: return null
         val cardPattern = compileRegex(cardRegex)
 
         // --- 금액 추출 ---
-        val amount = extractAmount(amountPattern, smsBody) ?: return null
+        val amount = extractAmount(amountPattern, normalizedBody) ?: return null
         if (amount <= 0) return null
 
         // --- 가게명 추출 ---
-        val parsedStore = extractGroup1(storePattern, smsBody)
+        val parsedStore = extractGroup1(storePattern, normalizedBody)
             ?.let(::sanitizeStoreName)
-            ?.takeIf(::isValidStoreCandidate)
+            ?.let { normalizeStoreCandidate(it, normalizedBody) }
             ?: return null
 
         // --- 카드명 추출 ---
         // cardRegex 실패 시: 은행 태그([KB] 등) → fallbackCardName 순으로 폴백
         // 은행 태그 중간 폴백: 출금 SMS 등에서 cardRegex가 수취인(신한카드)을
         // 잘못 캡처하거나 빈 경우, [KB] 태그에서 정확한 은행명을 추출
-        val parsedCard = extractGroup1(cardPattern, smsBody)
+        val parsedCard = extractGroup1(cardPattern, normalizedBody)
             ?.trim()
             ?.takeIf(::isValidCardCandidate)
-            ?: extractBankTagFromBody(smsBody)
+            ?: extractBankTagFromBody(normalizedBody)
             ?: fallbackCardName
 
         // --- 카테고리 ---
@@ -531,9 +538,19 @@ class SmsPatternMatcher @Inject constructor(
             amount = amount,
             storeName = parsedStore,
             category = category,
-            dateTime = extractDateTime(smsBody, smsTimestamp),
+            dateTime = extractDateTime(normalizedBody, smsTimestamp),
             cardName = parsedCard
         )
+    }
+
+    /**
+     * regex 파싱용 본문 정규화.
+     * SMS 소스에 따라 \r\n/\r이 섞일 수 있어 \n으로 통일한다.
+     */
+    private fun normalizeBodyForRegex(body: String): String {
+        return body
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
     }
 
     /**
@@ -582,6 +599,32 @@ class SmsPatternMatcher @Inject constructor(
     /** 가게명 정제: 앞뒤 공백 제거 + 최대 20자 */
     private fun sanitizeStoreName(value: String): String {
         return value.trim().take(20)
+    }
+
+    /**
+     * 가게명 후보 정규화.
+     * 기본 검증 실패 시, 출금 알림 컨텍스트에서는 제한적으로 보정한다.
+     */
+    private fun normalizeStoreCandidate(value: String, smsBody: String): String? {
+        val trimmed = value.trim()
+        if (isValidStoreCandidate(trimmed)) return trimmed
+        return normalizeDebitStoreCandidate(trimmed, smsBody)
+    }
+
+    /**
+     * 출금 알림 컨텍스트용 가게명 보정.
+     * ATM출금/입출통지/1글자 약어/숫자코드 등으로 인해 null 탈락되는 케이스를 완화한다.
+     */
+    private fun normalizeDebitStoreCandidate(value: String, smsBody: String): String? {
+        if (value.isBlank()) return null
+        if (!DEBIT_LINE_PATTERN.containsMatchIn(smsBody)) return null
+        if (value.contains("{")) return null
+        if (STORE_DATE_OR_TIME_PATTERN.matches(value)) return null
+
+        if (value.length == 1) return value
+        if (STORE_NUMBER_ONLY_PATTERN.matches(value)) return DEBIT_FALLBACK_STORE_NAME
+        if (value.contains("입출통지")) return DEBIT_FALLBACK_STORE_NAME
+        return value.take(20)
     }
 
     /**
