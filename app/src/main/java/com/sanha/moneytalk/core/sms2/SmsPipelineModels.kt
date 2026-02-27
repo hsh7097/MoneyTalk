@@ -114,5 +114,7 @@ data class SyncStats(
     /** Step 5에서 LLM 처리 건수 (신규 패턴 생성) */
     val llmProcessCount: Int = 0,
     /** 새로 생성된 패턴 DB 수 (vectorMatchCount + llmProcessCount 합산 가능) */
-    val newPatternsCreated: Int = 0
+    val newPatternsCreated: Int = 0,
+    /** Step 4.5에서 regex 실패→LLM 복구된 건수 (기존 패턴, 신규 패턴 아님) */
+    val regexFailedRecoveredCount: Int = 0
 )
