@@ -79,8 +79,11 @@ class SmsGroupClassifier @Inject constructor(
         /** regex 생성 최소 멤버 수 (5건 미만이면 regex 생성 스킵, LLM 배치로 직접 파싱) */
         private const val REGEX_MIN_SAMPLES = 5
 
-        /** processGroup 내 regex 처리 시간 예산 (초과 시 Classifier repair 스킵) */
-        private const val REGEX_TIME_BUDGET_MS = 15_000L
+        /** processGroup 전체 시간 예산 — LLM 추출 + regex 생성/검증/repair (초과 시 regex 스킵) */
+        private const val GROUP_TIME_BUDGET_MS = 10_000L
+
+        /** Step5 전체 시간 예산 — 초과 시 미처리 sourceGroup 스킵 */
+        private const val STEP5_TIME_BUDGET_MS = 20_000L
 
         /** 그룹핑 유사도 임계값 (같은 발신번호 내 벡터 클러스터링) */
         private const val GROUPING_SIMILARITY = 0.95f
@@ -112,11 +115,11 @@ class SmsGroupClassifier @Inject constructor(
         /** sender IN 쿼리 chunk 크기 (SQLite bind limit 여유) */
         private const val MAIN_PATTERN_QUERY_CHUNK_SIZE = 500
 
-        /** regex 검증: 샘플 중 이 비율 이상 파싱 성공해야 유효 (60%) */
-        private const val REGEX_VALIDATION_MIN_PASS_RATIO = 0.6f
+        /** regex 검증: 샘플 중 이 비율 이상 파싱 성공해야 유효 (80%) */
+        private const val REGEX_VALIDATION_MIN_PASS_RATIO = 0.8f
 
-        /** Classifier repair 대상 near-miss 하한 (이 비율 미만이면 repair 스킵) */
-        private const val REGEX_NEAR_MISS_MIN_RATIO = 0.4f
+        /** Classifier repair 대상 near-miss 하한 (이 비율 미만이면 repair 스킵 → abort) */
+        private const val REGEX_NEAR_MISS_MIN_RATIO = 0.6f
 
         /** 템플릿 기반 시드 그룹 최소 멤버 수 */
         private const val TEMPLATE_SEED_MIN_BUCKET_SIZE = 2
@@ -381,6 +384,8 @@ class SmsGroupClassifier @Inject constructor(
         onProgress?.invoke("AI가 결제 내역 분석 중...", 0, sourceGroups.size)
         val semaphore = Semaphore(LLM_CONCURRENCY)
         val processedSources = AtomicInteger(0)
+        val step5StartTime = System.currentTimeMillis()
+        val skippedByBudget = AtomicInteger(0)
 
         // Semaphore가 동시성을 제어하므로 chunked 배리어 없이 전체 sourceGroup을 한번에 실행
         // (기존 chunked(20).awaitAll()은 느린 그룹 1개가 나머지 19개를 블로킹하는 문제 발생)
@@ -389,6 +394,12 @@ class SmsGroupClassifier @Inject constructor(
                 async(Dispatchers.IO) {
                     semaphore.acquire()
                     try {
+                        // Step5 전체 시간 예산 초과 → 이 sourceGroup 스킵
+                        val step5Elapsed = System.currentTimeMillis() - step5StartTime
+                        if (step5Elapsed > STEP5_TIME_BUDGET_MS) {
+                            skippedByBudget.addAndGet(sourceGroup.subGroups.sumOf { it.members.size })
+                            return@async emptyList()
+                        }
                         processSourceGroup(sourceGroup, dbMainPatterns[sourceGroup.address], index)
                     } finally {
                         semaphore.release()
@@ -399,6 +410,9 @@ class SmsGroupClassifier @Inject constructor(
             }.awaitAll()
             results.addAll(allResults.flatten())
         }
+
+        val step5TotalElapsed = System.currentTimeMillis() - step5StartTime
+        MoneyTalkLogger.e("[Step5 summary] sources=${sourceGroups.size}, parsed=${results.size}건, skippedByBudget=${skippedByBudget.get()}건, elapsed=${step5TotalElapsed}ms")
 
         return results
     }
@@ -553,6 +567,7 @@ class SmsGroupClassifier @Inject constructor(
         val results = mutableListOf<SmsParseResult>()
         val representative = group.representative
         val addr = representative.input.address.takeLast(4)
+        var outcome = ""  // G: reason code (REGEX_ACCEPTED, REGEX_REPAIRED, TEMPLATE_FALLBACK, DIRECT_LLM, NON_PAYMENT, LLM_FAILED, GROUP_BUDGET_SKIP_REGEX)
 
         MoneyTalkLogger.i("[processGroup] 시작: addr=*$addr, members=${group.members.size}, isMain=$isMainGroup")
 
@@ -570,7 +585,8 @@ class SmsGroupClassifier @Inject constructor(
         )
         val llmResult = llmResults.firstOrNull()
         if (llmResult == null) {
-            MoneyTalkLogger.w("[processGroup] LLM 추출 실패 (null) addr=*$addr")
+            val elapsed = System.currentTimeMillis() - groupStartTime
+            MoneyTalkLogger.e("[processGroup] 완료: addr=*$addr, outcome=LLM_FAILED, results=0건, elapsed=${elapsed}ms")
             return GroupProcessResult(emptyList())
         }
         MoneyTalkLogger.i("[processGroup] LLM 추출 완료: addr=*$addr, isPayment=${llmResult.isPayment}, elapsed=${System.currentTimeMillis() - groupStartTime}ms")
@@ -578,6 +594,8 @@ class SmsGroupClassifier @Inject constructor(
         // 비결제 판정 → 비결제 패턴으로 DB 등록 후 종료
         if (!llmResult.isPayment) {
             registerNonPaymentPattern(representative)
+            val elapsed = System.currentTimeMillis() - groupStartTime
+            MoneyTalkLogger.e("[processGroup] 완료: addr=*$addr, outcome=NON_PAYMENT, results=0건, elapsed=${elapsed}ms")
             return GroupProcessResult(emptyList())
         }
 
@@ -611,8 +629,17 @@ class SmsGroupClassifier @Inject constructor(
         // primary regex 시도 여부 (retry 스킵 판단용)
         var primaryRegexAttempted = false
 
-        // 멤버가 충분하고 쿨다운이 아니면 regex 생성 시도
-        if (group.members.size >= REGEX_MIN_SAMPLES &&
+        // F-lite: LLM 추출 후 시간 예산 체크 — 초과 시 regex 생성 스킵
+        val preRegexElapsed = System.currentTimeMillis() - groupStartTime
+        val skipRegexByBudget = preRegexElapsed > GROUP_TIME_BUDGET_MS
+        if (skipRegexByBudget) {
+            MoneyTalkLogger.w("[processGroup] 그룹 시간 예산 초과 (${preRegexElapsed}ms>${GROUP_TIME_BUDGET_MS}ms) → regex 스킵, 추출만")
+            outcome = "GROUP_BUDGET_SKIP_REGEX"
+        }
+
+        // 멤버가 충분하고 쿨다운이 아니고 시간 예산 내이면 regex 생성 시도
+        if (!skipRegexByBudget &&
+            group.members.size >= REGEX_MIN_SAMPLES &&
             !shouldSkipRegexGeneration(representative.template)
         ) {
             primaryRegexAttempted = true
@@ -646,12 +673,13 @@ class SmsGroupClassifier @Inject constructor(
                     storeRegex = regexResult.storeRegex
                     cardRegex = regexResult.cardRegex
                     parseSource = "llm_regex"
+                    outcome = "REGEX_ACCEPTED"
                     clearRegexFailure(representative.template)
                 } else {
                     // near-miss 구간 + 시간 예산 내이면 Classifier repair 1회 시도
                     val regexElapsed = System.currentTimeMillis() - groupStartTime
                     if (validation.passRatio >= REGEX_NEAR_MISS_MIN_RATIO &&
-                        regexElapsed <= REGEX_TIME_BUDGET_MS
+                        regexElapsed <= GROUP_TIME_BUDGET_MS
                     ) {
                         MoneyTalkLogger.w("regex near-miss (${(validation.passRatio * 100).toInt()}%) → Classifier repair 시도 (elapsed=${regexElapsed}ms)")
                         val failedBodies = validation.failedSampleIndices.map { samples[it] }
@@ -676,13 +704,14 @@ class SmsGroupClassifier @Inject constructor(
                                 storeRegex = repaired.storeRegex
                                 cardRegex = repaired.cardRegex
                                 parseSource = "llm_regex"
+                                outcome = "REGEX_REPAIRED"
                                 clearRegexFailure(representative.template)
                             }
                         }
                     }
 
-                    if (regexElapsed > REGEX_TIME_BUDGET_MS) {
-                        MoneyTalkLogger.w("[processGroup] 시간 예산 초과 (${regexElapsed}ms>${REGEX_TIME_BUDGET_MS}ms) → Classifier repair 스킵")
+                    if (regexElapsed > GROUP_TIME_BUDGET_MS) {
+                        MoneyTalkLogger.w("[processGroup] 시간 예산 초과 (${regexElapsed}ms>${GROUP_TIME_BUDGET_MS}ms) → Classifier repair 스킵")
                     }
 
                     // repair 미시도/실패/시간초과 → 템플릿 폴백
@@ -695,6 +724,7 @@ class SmsGroupClassifier @Inject constructor(
                             storeRegex = fallback.storeRegex
                             cardRegex = fallback.cardRegex
                             parseSource = "template_regex"
+                            outcome = "TEMPLATE_FALLBACK"
                         }
                     }
                 }
@@ -709,9 +739,10 @@ class SmsGroupClassifier @Inject constructor(
                     storeRegex = fallback.storeRegex
                     cardRegex = fallback.cardRegex
                     parseSource = "template_regex"
+                    outcome = "TEMPLATE_FALLBACK"
                 }
             }
-        } else if (group.members.size < REGEX_MIN_SAMPLES) {
+        } else if (!skipRegexByBudget && group.members.size < REGEX_MIN_SAMPLES) {
             // 멤버 부족 시에도 템플릿 폴백 시도
             val fallback = buildTemplateFallbackRegex(representative.template)
             if (fallback != null) {
@@ -719,6 +750,7 @@ class SmsGroupClassifier @Inject constructor(
                 storeRegex = fallback.storeRegex
                 cardRegex = fallback.cardRegex
                 parseSource = "template_regex"
+                outcome = "TEMPLATE_FALLBACK"
             }
         }
 
@@ -859,7 +891,15 @@ class SmsGroupClassifier @Inject constructor(
         }
 
         val groupElapsed = System.currentTimeMillis() - groupStartTime
-        MoneyTalkLogger.i("[processGroup] 완료: addr=*$addr, results=${results.size}건, elapsed=${groupElapsed}ms")
+        // outcome이 아직 빈 문자열이면 parseSource로 결정
+        if (outcome.isEmpty()) {
+            outcome = when (parseSource) {
+                "llm_regex" -> "REGEX_ACCEPTED"
+                "template_regex" -> "TEMPLATE_FALLBACK"
+                else -> "DIRECT_LLM"
+            }
+        }
+        MoneyTalkLogger.e("[processGroup] 완료: addr=*$addr, outcome=$outcome, source=$parseSource, results=${results.size}건, members=${group.members.size}, elapsed=${groupElapsed}ms")
 
         return GroupProcessResult(
             results = results,
