@@ -5,6 +5,7 @@ import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.Telephony
+import com.sanha.moneytalk.core.database.SmsBlockedSenderRepository
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -23,7 +24,9 @@ import javax.inject.Singleton
  * - RCS: content://im/chat (date 밀리초, 삼성 기기)
  */
 @Singleton
-class SmsReaderV2 @Inject constructor() {
+class SmsReaderV2 @Inject constructor(
+    private val smsBlockedSenderRepository: SmsBlockedSenderRepository
+) {
 
     companion object {
 
@@ -51,11 +54,10 @@ class SmsReaderV2 @Inject constructor() {
         startDate: Long,
         endDate: Long
     ): List<SmsInput> {
-        val sdfRange = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.KOREA)
-
-        val smsList = readAllSmsByDateRange(contentResolver, startDate, endDate)
-        val mmsList = readAllMmsByDateRange(contentResolver, startDate, endDate)
-        val rcsList = readAllRcsByDateRange(contentResolver, startDate, endDate)
+        val blockedAddressSet = smsBlockedSenderRepository.getBlockedAddressSet()
+        val smsList = readAllSmsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
+        val mmsList = readAllMmsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
+        val rcsList = readAllRcsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
 
         val combined = (smsList + mmsList + rcsList)
             .distinctBy { it.id }
@@ -69,10 +71,12 @@ class SmsReaderV2 @Inject constructor() {
     private fun readAllSmsByDateRange(
         contentResolver: ContentResolver,
         startDate: Long,
-        endDate: Long
+        endDate: Long,
+        blockedAddressSet: Set<String>
     ): List<SmsInput> {
         val result = mutableListOf<SmsInput>()
         var senderSkipCount = 0
+        var blockedSenderSkipCount = 0
         var totalCursorCount = 0
 
         val cursor = contentResolver.query(
@@ -101,6 +105,11 @@ class SmsReaderV2 @Inject constructor() {
                 val body = it.getString(bodyIndex) ?: continue
                 val date = it.getLong(dateIndex)
 
+                if (shouldSkipBlockedSender(address, blockedAddressSet)) {
+                    blockedSenderSkipCount++
+                    continue
+                }
+
                 if (SmsFilter.shouldSkipBySender(address, body)) {
                     senderSkipCount++
                     continue
@@ -125,10 +134,12 @@ class SmsReaderV2 @Inject constructor() {
     private fun readAllMmsByDateRange(
         contentResolver: ContentResolver,
         startDate: Long,
-        endDate: Long
+        endDate: Long,
+        blockedAddressSet: Set<String>
     ): List<SmsInput> {
         val result = mutableListOf<SmsInput>()
         var senderSkipCount = 0
+        var blockedSenderSkipCount = 0
         val startSec = startDate / 1000
         val endSec = endDate / 1000
 
@@ -152,6 +163,11 @@ class SmsReaderV2 @Inject constructor() {
 
                     val body = getMmsTextBody(contentResolver, mmsId) ?: continue
                     val address = getMmsAddress(contentResolver, mmsId)
+
+                    if (shouldSkipBlockedSender(address, blockedAddressSet)) {
+                        blockedSenderSkipCount++
+                        continue
+                    }
 
                     if (SmsFilter.shouldSkipBySender(address, body)) {
                         senderSkipCount++
@@ -265,10 +281,12 @@ class SmsReaderV2 @Inject constructor() {
     private fun readAllRcsByDateRange(
         contentResolver: ContentResolver,
         startDate: Long,
-        endDate: Long
+        endDate: Long,
+        blockedAddressSet: Set<String>
     ): List<SmsInput> {
         val result = mutableListOf<SmsInput>()
         var senderSkipCount = 0
+        var blockedSenderSkipCount = 0
         if (!isRcsAvailable(contentResolver)) return result
 
         try {
@@ -295,6 +313,11 @@ class SmsReaderV2 @Inject constructor() {
 
                     if (body.isBlank()) continue
 
+                    if (shouldSkipBlockedSender(address, blockedAddressSet)) {
+                        blockedSenderSkipCount++
+                        continue
+                    }
+
                     if (SmsFilter.shouldSkipBySender(address, body)) {
                         senderSkipCount++
                         continue
@@ -315,6 +338,13 @@ class SmsReaderV2 @Inject constructor() {
         }
 
         return result
+    }
+
+    /** 수신거부 발신번호 여부 확인 */
+    private fun shouldSkipBlockedSender(address: String, blockedAddressSet: Set<String>): Boolean {
+        if (blockedAddressSet.isEmpty()) return false
+        val normalized = SmsFilter.normalizeAddress(address)
+        return normalized in blockedAddressSet
     }
 
     /**
