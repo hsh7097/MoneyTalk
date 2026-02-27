@@ -141,6 +141,33 @@ class SmsGroupClassifier @Inject constructor(
         /** 발신번호 정규화: 하이픈/공백/괄호 제거용 */
         private val ADDRESS_CLEAN_PATTERN = Regex("""[-\s().]""")
 
+        // ===== Step4.5 regex 실패 복구 정책 =====
+        /** Step4.5에서 같은 키가 반복 실패할 때 쿨다운 적용 기준 횟수 */
+        private const val REGEX_FAILED_RECOVERY_FAILURE_THRESHOLD = 2
+        /** Step4.5 반복 실패 키 쿨다운 (30분) */
+        private const val REGEX_FAILED_RECOVERY_COOLDOWN_MS = 30L * 60L * 1000L
+
+        /** 복구 대상 최소 길이 (이보다 짧으면 정보 부족으로 Step5 fallback) */
+        private const val REGEX_FAILED_RECOVERY_MIN_LENGTH = 12
+
+        /** 정규식 실패건 recoverable 판단용 키워드 */
+        private val REGEX_FAILED_RECOVERY_HINT_KEYWORDS = listOf(
+            "승인", "결제", "출금", "입금", "사용", "취소", "잔액", "이체"
+        )
+
+        /** amount 근거 탐지용 정규식 */
+        private val RECOVERY_AMOUNT_WITH_CURRENCY = Regex("""\d{1,3}(,\d{3})*(원|usd|jpy|eur)""", RegexOption.IGNORE_CASE)
+        private val RECOVERY_AMOUNT_WITH_COMMA = Regex("""\d{1,3}(,\d{3})+""")
+        private val RECOVERY_PLAIN_AMOUNT = Regex("""\b\d{3,8}\b""")
+
+        /** grounding 검증에서 제외할 generic store 후보 */
+        private val RECOVERY_GENERIC_STORE_NAMES = setOf(
+            "결제", "사용", "출금", "입금", "승인", "취소", "기타"
+        )
+
+        /** 공백/구분자 제거용 정규식 (grounding 비교) */
+        private val WHITESPACE_OR_SEP = Regex("""[\s\-\[\]()_/]""")
+
         /** Phase4: 백그라운드 학습 큐 최대 적재량 (초과 시 oldest drop) */
         private const val LEARNING_QUEUE_MAX_SIZE = 1000
         private const val LEARNING_PROCESSOR_BATCH_LOG = 20
@@ -282,6 +309,38 @@ class SmsGroupClassifier @Inject constructor(
     )
 
     /**
+     * Step4.5 chunk 실행 계획 (발신번호별 chunk를 병렬 처리)
+     */
+    private data class RegexFailedChunk(
+        val address: String,
+        val items: List<EmbeddedSms>
+    )
+
+    /**
+     * Step4.5 chunk 처리 결과
+     */
+    private data class RegexFailedChunkResult(
+        val address: String,
+        val recovered: List<SmsParseResult>,
+        val fallback: List<EmbeddedSms>,
+        val retryAttempted: Int,
+        val groundingRejected: Int,
+        val llmFailed: Int
+    )
+
+    /**
+     * Step4.5 발신번호 단위 통계
+     */
+    private data class RegexFailedAddressStats(
+        var inputCount: Int = 0,
+        var recoveredCount: Int = 0,
+        var fallbackCount: Int = 0,
+        var retryAttempted: Int = 0,
+        var groundingRejected: Int = 0,
+        var llmFailed: Int = 0
+    )
+
+    /**
      * Phase4: 동기화/학습 완전 분리를 위한 백그라운드 학습 작업
      */
     private sealed class DeferredLearningTask {
@@ -312,6 +371,9 @@ class SmsGroupClassifier @Inject constructor(
     private val regexFailureStates = ConcurrentHashMap<String, RegexFailureState>()
     private data class RegexFailureState(val failCount: Int, val lastFailedAt: Long)
 
+    /** Step4.5 regex 실패 복구 쿨다운 추적 */
+    private val regexFailedRecoveryStates = ConcurrentHashMap<String, RegexFailureState>()
+
     /** RTDB 중복 방지용 전송 기록 */
     private val sentSampleEmbeddings = mutableListOf<List<Float>>()
 
@@ -340,56 +402,257 @@ class SmsGroupClassifier @Inject constructor(
     ): Pair<List<SmsParseResult>, List<EmbeddedSms>> {
         if (regexFailedList.isEmpty()) return Pair(emptyList(), emptyList())
 
-        val results = mutableListOf<SmsParseResult>()
-        val fallback = mutableListOf<EmbeddedSms>()
+        val startTime = System.currentTimeMillis()
+        val immediateFallback = mutableListOf<EmbeddedSms>()
+        val addressCandidates = linkedMapOf<String, MutableList<EmbeddedSms>>()
+        var skippedByCooldown = 0
+        var skippedByUnrecoverable = 0
 
-        // 발신번호별 그룹핑
-        val byAddress = regexFailedList.groupBy { normalizeAddress(it.input.address) }
-
-        for ((address, group) in byAddress) {
-            val addr = address.takeLast(4)
-            var addrSuccess = 0
-            var addrFailed = 0
-            // chunk(10)으로 분할하여 프롬프트 과대화 방지
-            val chunks = group.chunked(LLM_FALLBACK_MAX_SAMPLES)
-
-            for (chunk in chunks) {
-                val bodies = chunk.map { it.input.body }
-                val timestamps = chunk.map { it.input.date }
-
-                val llmResults = smsExtractor.extractFromSmsBatch(bodies, timestamps)
-
-                chunk.forEachIndexed { index, embedded ->
-                    val llmResult = llmResults.getOrNull(index)
-                    if (llmResult != null && llmResult.isPayment && llmResult.amount > 0) {
-                        results.add(
-                            SmsParseResult(
-                                input = embedded.input,
-                                analysis = SmsAnalysisResult(
-                                    amount = llmResult.amount,
-                                    storeName = llmResult.storeName,
-                                    category = llmResult.category,
-                                    dateTime = llmResult.dateTime,
-                                    cardName = llmResult.cardName
-                                ),
-                                tier = 3,  // LLM 추출
-                                confidence = 1.0f
-                            )
-                        )
-                        addrSuccess++
-                    } else {
-                        // LLM 추출 실패 → Step5 fallback
-                        fallback.add(embedded)
-                        addrFailed++
-                    }
+        // 1) recoverable/cooldown 게이트: 비복구/반복실패 키는 Step5로 즉시 위임
+        for (embedded in regexFailedList) {
+            when {
+                shouldSkipRegexFailedRecovery(embedded) -> {
+                    immediateFallback.add(embedded)
+                    skippedByCooldown++
+                }
+                !isRecoverableRegexFailedSms(embedded.input.body) -> {
+                    immediateFallback.add(embedded)
+                    recordRegexFailedRecoveryFailure(embedded)
+                    skippedByUnrecoverable++
+                }
+                else -> {
+                    val address = normalizeAddress(embedded.input.address)
+                    addressCandidates.getOrPut(address) { mutableListOf() }.add(embedded)
                 }
             }
-
-            MoneyTalkLogger.i("[batchExtractRegexFailed] addr=*$addr: ${group.size}건 → 성공${addrSuccess}건, 실패${addrFailed}건→Step5")
         }
 
-        MoneyTalkLogger.i("[batchExtractRegexFailed] 총 ${regexFailedList.size}건 → 성공${results.size}건, Step5 fallback ${fallback.size}건")
-        return Pair(results, fallback)
+        // 복구 대상이 없으면 즉시 반환
+        if (addressCandidates.isEmpty()) {
+            MoneyTalkLogger.i(
+                "[batchExtractRegexFailed] 총 ${regexFailedList.size}건 → 복구 0건, " +
+                    "Step5 fallback ${immediateFallback.size}건, skipCooldown=${skippedByCooldown}건, " +
+                    "skipUnrecoverable=${skippedByUnrecoverable}건, elapsed=${System.currentTimeMillis() - startTime}ms"
+            )
+            return Pair(emptyList(), immediateFallback)
+        }
+
+        val chunks = addressCandidates.flatMap { (address, members) ->
+            members.chunked(LLM_FALLBACK_MAX_SAMPLES).map { chunk ->
+                RegexFailedChunk(address = address, items = chunk)
+            }
+        }
+
+        // 2) chunk 병렬 실행 (같은 발신번호도 chunk 단위 병렬 가능)
+        val semaphore = Semaphore(LLM_CONCURRENCY)
+        val chunkResults = coroutineScope {
+            chunks.map { chunk ->
+                async(Dispatchers.IO) {
+                    semaphore.acquire()
+                    try {
+                        processRegexFailedChunk(chunk)
+                    } finally {
+                        semaphore.release()
+                    }
+                }
+            }.awaitAll()
+        }
+
+        // 3) 결과 집계
+        val recovered = mutableListOf<SmsParseResult>()
+        val fallback = mutableListOf<EmbeddedSms>()
+        fallback.addAll(immediateFallback)
+
+        val addrStats = linkedMapOf<String, RegexFailedAddressStats>()
+        for (result in chunkResults) {
+            recovered.addAll(result.recovered)
+            fallback.addAll(result.fallback)
+
+            val stats = addrStats.getOrPut(result.address) { RegexFailedAddressStats() }
+            stats.inputCount += result.recovered.size + result.fallback.size
+            stats.recoveredCount += result.recovered.size
+            stats.fallbackCount += result.fallback.size
+            stats.retryAttempted += result.retryAttempted
+            stats.groundingRejected += result.groundingRejected
+            stats.llmFailed += result.llmFailed
+        }
+
+        addrStats.forEach { (address, stats) ->
+            val addr = address.takeLast(4)
+            MoneyTalkLogger.i(
+                "[batchExtractRegexFailed] addr=*$addr: ${stats.inputCount}건 → " +
+                    "복구${stats.recoveredCount}건, Step5 ${stats.fallbackCount}건, " +
+                    "retry=${stats.retryAttempted}건, groundingReject=${stats.groundingRejected}건, llmFail=${stats.llmFailed}건"
+            )
+        }
+
+        val elapsed = System.currentTimeMillis() - startTime
+        val totalRetry = addrStats.values.sumOf { it.retryAttempted }
+        val totalGroundingReject = addrStats.values.sumOf { it.groundingRejected }
+        val totalLlmFail = addrStats.values.sumOf { it.llmFailed }
+        MoneyTalkLogger.i(
+            "[batchExtractRegexFailed] 총 ${regexFailedList.size}건 → 복구 ${recovered.size}건, Step5 fallback ${fallback.size}건, " +
+                "retry=${totalRetry}건, groundingReject=${totalGroundingReject}건, llmFail=${totalLlmFail}건, " +
+                "skipCooldown=${skippedByCooldown}건, skipUnrecoverable=${skippedByUnrecoverable}건, elapsed=${elapsed}ms"
+        )
+        return Pair(recovered, fallback)
+    }
+
+    /**
+     * Step4.5 단일 chunk 처리
+     * - 1차 배치 호출
+     * - null 응답 항목은 단건 재시도 1회
+     * - grounding 검증 통과분만 채택
+     */
+    private suspend fun processRegexFailedChunk(chunk: RegexFailedChunk): RegexFailedChunkResult {
+        val bodies = chunk.items.map { it.input.body }
+        val timestamps = chunk.items.map { it.input.date }
+
+        val primary = smsExtractor.extractFromSmsBatch(bodies, timestamps).toMutableList()
+        val retryIndices = primary.indices.filter { primary[it] == null }
+        var retryAttempted = 0
+
+        // parse 오류(JsonNull/빈응답 등)로 null인 항목만 1회 단건 재시도
+        for (index in retryIndices) {
+            retryAttempted++
+            val retried = smsExtractor.extractFromSmsBatch(
+                smsMessages = listOf(bodies[index]),
+                smsTimestamps = listOf(timestamps[index])
+            ).firstOrNull()
+            primary[index] = retried
+        }
+
+        val recovered = mutableListOf<SmsParseResult>()
+        val fallback = mutableListOf<EmbeddedSms>()
+        var groundingRejected = 0
+        var llmFailed = 0
+
+        chunk.items.forEachIndexed { index, embedded ->
+            val llm = primary.getOrNull(index)
+            val accepted = llm != null &&
+                llm.isPayment &&
+                llm.amount > 0 &&
+                isGroundedRegexFailedRecovery(embedded.input.body, llm)
+
+            if (accepted && llm != null) {
+                clearRegexFailedRecoveryFailure(embedded)
+                recovered.add(
+                    SmsParseResult(
+                        input = embedded.input,
+                        analysis = SmsAnalysisResult(
+                            amount = llm.amount,
+                            storeName = llm.storeName,
+                            category = llm.category,
+                            dateTime = llm.dateTime,
+                            cardName = llm.cardName
+                        ),
+                        tier = 3,
+                        confidence = 1.0f
+                    )
+                )
+            } else {
+                fallback.add(embedded)
+                recordRegexFailedRecoveryFailure(embedded)
+                if (llm != null && llm.isPayment && llm.amount > 0) {
+                    groundingRejected++
+                } else {
+                    llmFailed++
+                }
+            }
+        }
+
+        return RegexFailedChunkResult(
+            address = chunk.address,
+            recovered = recovered,
+            fallback = fallback,
+            retryAttempted = retryAttempted,
+            groundingRejected = groundingRejected,
+            llmFailed = llmFailed
+        )
+    }
+
+    /**
+     * Step4.5 복구 대상 여부 판단.
+     * - 너무 짧은/근거 부족 본문은 LLM 복구 대신 Step5로 위임.
+     */
+    private fun isRecoverableRegexFailedSms(body: String): Boolean {
+        if (body.length < REGEX_FAILED_RECOVERY_MIN_LENGTH) return false
+
+        val hasAmountPattern = RECOVERY_AMOUNT_WITH_CURRENCY.containsMatchIn(body) ||
+            RECOVERY_AMOUNT_WITH_COMMA.containsMatchIn(body)
+        if (hasAmountPattern) return true
+
+        val lower = body.lowercase(Locale.getDefault())
+        val hasHintKeyword = REGEX_FAILED_RECOVERY_HINT_KEYWORDS.any { keyword ->
+            lower.contains(keyword.lowercase(Locale.getDefault()))
+        }
+        val hasPlainAmount = RECOVERY_PLAIN_AMOUNT.containsMatchIn(body)
+        return hasHintKeyword && hasPlainAmount
+    }
+
+    /**
+     * Step4.5 LLM 결과가 원문 근거를 갖는지 검증.
+     * - amount는 원문에서 직접 매칭되어야 함
+     * - store는 generic 명칭 제외 + 원문 substring 매칭 필요
+     */
+    private fun isGroundedRegexFailedRecovery(
+        body: String,
+        llm: GeminiSmsExtractor.LlmExtractionResult
+    ): Boolean {
+        if (!containsAmountEvidence(body, llm.amount)) return false
+
+        val store = llm.storeName.trim()
+        if (store.isBlank()) return false
+        if (store in RECOVERY_GENERIC_STORE_NAMES) return false
+
+        val compactBody = body
+            .lowercase(Locale.getDefault())
+            .replace(WHITESPACE_OR_SEP, "")
+        val compactStore = store
+            .lowercase(Locale.getDefault())
+            .replace(WHITESPACE_OR_SEP, "")
+        if (compactStore.length < 2) return false
+        return compactBody.contains(compactStore)
+    }
+
+    private fun containsAmountEvidence(body: String, amount: Int): Boolean {
+        if (amount <= 0) return false
+        val normalizedBody = body.replace(",", "")
+        val amountToken = amount.toString()
+        val pattern = Regex("(^|\\D)$amountToken(\\D|$)")
+        return pattern.containsMatchIn(normalizedBody)
+    }
+
+    private fun shouldSkipRegexFailedRecovery(embedded: EmbeddedSms): Boolean {
+        val key = regexFailedRecoveryKey(embedded)
+        val state = regexFailedRecoveryStates[key] ?: return false
+        if (state.failCount < REGEX_FAILED_RECOVERY_FAILURE_THRESHOLD) return false
+        val elapsed = System.currentTimeMillis() - state.lastFailedAt
+        return elapsed < REGEX_FAILED_RECOVERY_COOLDOWN_MS
+    }
+
+    private fun recordRegexFailedRecoveryFailure(embedded: EmbeddedSms) {
+        val key = regexFailedRecoveryKey(embedded)
+        val now = System.currentTimeMillis()
+        regexFailedRecoveryStates.compute(key) { _, current ->
+            if (current == null) {
+                RegexFailureState(failCount = 1, lastFailedAt = now)
+            } else if (now - current.lastFailedAt >= REGEX_FAILED_RECOVERY_COOLDOWN_MS) {
+                RegexFailureState(failCount = 1, lastFailedAt = now)
+            } else {
+                current.copy(failCount = current.failCount + 1, lastFailedAt = now)
+            }
+        }
+    }
+
+    private fun clearRegexFailedRecoveryFailure(embedded: EmbeddedSms) {
+        regexFailedRecoveryStates.remove(regexFailedRecoveryKey(embedded))
+    }
+
+    private fun regexFailedRecoveryKey(embedded: EmbeddedSms): String {
+        val sender = normalizeAddress(embedded.input.address)
+        val templateHash = embedded.template.hashCode().toUInt()
+        return "$sender:$templateHash"
     }
 
     // ===== Phase4: 백그라운드 학습 큐 =====
