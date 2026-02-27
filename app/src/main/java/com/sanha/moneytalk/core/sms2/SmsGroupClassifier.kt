@@ -82,7 +82,7 @@ class SmsGroupClassifier @Inject constructor(
         /** processGroup 전체 시간 예산 — LLM 추출 + regex 생성/검증/repair (초과 시 regex 스킵) */
         private const val GROUP_TIME_BUDGET_MS = 10_000L
 
-        /** Step5 전체 시간 예산 — 초과 시 미처리 sourceGroup 스킵 */
+        /** Step5 소프트 시간 예산 — 초과 시 regex 생략하고 Direct LLM 강등 */
         private const val STEP5_TIME_BUDGET_MS = 20_000L
 
         /** 그룹핑 유사도 임계값 (같은 발신번호 내 벡터 클러스터링) */
@@ -385,7 +385,7 @@ class SmsGroupClassifier @Inject constructor(
         val semaphore = Semaphore(LLM_CONCURRENCY)
         val processedSources = AtomicInteger(0)
         val step5StartTime = System.currentTimeMillis()
-        val skippedByBudget = AtomicInteger(0)
+        val degradedByBudget = AtomicInteger(0)
 
         // Semaphore가 동시성을 제어하므로 chunked 배리어 없이 전체 sourceGroup을 한번에 실행
         // (기존 chunked(20).awaitAll()은 느린 그룹 1개가 나머지 19개를 블로킹하는 문제 발생)
@@ -394,13 +394,18 @@ class SmsGroupClassifier @Inject constructor(
                 async(Dispatchers.IO) {
                     semaphore.acquire()
                     try {
-                        // Step5 전체 시간 예산 초과 → 이 sourceGroup 스킵
+                        // Step5 소프트 예산 초과 → 이 sourceGroup은 regex 생성을 생략하고 빠른 경로로 처리
                         val step5Elapsed = System.currentTimeMillis() - step5StartTime
-                        if (step5Elapsed > STEP5_TIME_BUDGET_MS) {
-                            skippedByBudget.addAndGet(sourceGroup.subGroups.sumOf { it.members.size })
-                            return@async emptyList()
+                        val forceDirectLlm = step5Elapsed > STEP5_TIME_BUDGET_MS
+                        if (forceDirectLlm) {
+                            degradedByBudget.addAndGet(sourceGroup.subGroups.sumOf { it.members.size })
                         }
-                        processSourceGroup(sourceGroup, dbMainPatterns[sourceGroup.address], index)
+                        processSourceGroup(
+                            sourceGroup = sourceGroup,
+                            dbMainPattern = dbMainPatterns[sourceGroup.address],
+                            index = index,
+                            forceSkipRegex = forceDirectLlm
+                        )
                     } finally {
                         semaphore.release()
                         val done = processedSources.incrementAndGet()
@@ -412,7 +417,10 @@ class SmsGroupClassifier @Inject constructor(
         }
 
         val step5TotalElapsed = System.currentTimeMillis() - step5StartTime
-        MoneyTalkLogger.e("[Step5 summary] sources=${sourceGroups.size}, parsed=${results.size}건, skippedByBudget=${skippedByBudget.get()}건, elapsed=${step5TotalElapsed}ms")
+        MoneyTalkLogger.e(
+            "[Step5 summary] sources=${sourceGroups.size}, parsed=${results.size}건, " +
+                "degradedByBudget=${degradedByBudget.get()}건, softBudget=${STEP5_TIME_BUDGET_MS}ms, elapsed=${step5TotalElapsed}ms"
+        )
 
         return results
     }
@@ -463,7 +471,8 @@ class SmsGroupClassifier @Inject constructor(
     private suspend fun processSourceGroup(
         sourceGroup: SourceGroup,
         dbMainPattern: SmsPatternEntity? = null,
-        index : Int = 0
+        index : Int = 0,
+        forceSkipRegex: Boolean = false
     ): List<SmsParseResult> {
         val results = mutableListOf<SmsParseResult>()
         MoneyTalkLogger.i("[processSourceGroup_$index] 시작: addr=${sourceGroup.address}, subGroups=${sourceGroup.subGroups.size}")
@@ -488,7 +497,8 @@ class SmsGroupClassifier @Inject constructor(
                 processGroup(
                     sourceGroup.mainGroup,
                     mainContext = dbMainContext,
-                    isMainGroup = true
+                    isMainGroup = true,
+                    forceSkipRegex = forceSkipRegex
                 ).results
             )
             return results
@@ -498,7 +508,8 @@ class SmsGroupClassifier @Inject constructor(
         // Step 1: 메인 그룹 먼저 처리 (isMainGroup=true → DB에 메인 표시)
         val mainProcessResult = processGroup(
             sourceGroup.mainGroup,
-            isMainGroup = true
+            isMainGroup = true,
+            forceSkipRegex = forceSkipRegex
         )
         results.addAll(mainProcessResult.results)
 
@@ -531,7 +542,8 @@ class SmsGroupClassifier @Inject constructor(
             val exResults = processGroup(
                 group = exceptionGroup,
                 mainContext = mainContext,
-                distributionSummary = sourceGroup.buildDistributionSummary()
+                distributionSummary = sourceGroup.buildDistributionSummary(),
+                forceSkipRegex = forceSkipRegex
             )
             results.addAll(exResults.results)
         }
@@ -561,13 +573,14 @@ class SmsGroupClassifier @Inject constructor(
         group: VectorGroup,
         mainContext: MainCaseContext? = null,
         distributionSummary: String? = null,
-        isMainGroup: Boolean = false
+        isMainGroup: Boolean = false,
+        forceSkipRegex: Boolean = false
     ): GroupProcessResult {
         val groupStartTime = System.currentTimeMillis()
         val results = mutableListOf<SmsParseResult>()
         val representative = group.representative
         val addr = representative.input.address.takeLast(4)
-        var outcome = ""  // G: reason code (REGEX_ACCEPTED, REGEX_REPAIRED, TEMPLATE_FALLBACK, DIRECT_LLM, NON_PAYMENT, LLM_FAILED, GROUP_BUDGET_SKIP_REGEX)
+        var outcome = ""  // G: reason code (REGEX_ACCEPTED, REGEX_REPAIRED, TEMPLATE_FALLBACK, DIRECT_LLM, NON_PAYMENT, LLM_FAILED, GROUP_BUDGET_SKIP_REGEX, STEP5_BUDGET_DIRECT_LLM)
 
         MoneyTalkLogger.i("[processGroup] 시작: addr=*$addr, members=${group.members.size}, isMain=$isMainGroup")
 
@@ -631,10 +644,15 @@ class SmsGroupClassifier @Inject constructor(
 
         // F-lite: LLM 추출 후 시간 예산 체크 — 초과 시 regex 생성 스킵
         val preRegexElapsed = System.currentTimeMillis() - groupStartTime
-        val skipRegexByBudget = preRegexElapsed > GROUP_TIME_BUDGET_MS
+        val skipRegexByBudget = forceSkipRegex || preRegexElapsed > GROUP_TIME_BUDGET_MS
         if (skipRegexByBudget) {
-            MoneyTalkLogger.w("[processGroup] 그룹 시간 예산 초과 (${preRegexElapsed}ms>${GROUP_TIME_BUDGET_MS}ms) → regex 스킵, 추출만")
-            outcome = "GROUP_BUDGET_SKIP_REGEX"
+            if (forceSkipRegex) {
+                MoneyTalkLogger.w("[processGroup] Step5 소프트 예산 모드 → regex 스킵, 추출만")
+                outcome = "STEP5_BUDGET_DIRECT_LLM"
+            } else {
+                MoneyTalkLogger.w("[processGroup] 그룹 시간 예산 초과 (${preRegexElapsed}ms>${GROUP_TIME_BUDGET_MS}ms) → regex 스킵, 추출만")
+                outcome = "GROUP_BUDGET_SKIP_REGEX"
+            }
         }
 
         // 멤버가 충분하고 쿨다운이 아니고 시간 예산 내이면 regex 생성 시도
@@ -849,7 +867,13 @@ class SmsGroupClassifier @Inject constructor(
 
             if (remainingMembers.isNotEmpty()) {
                 // regex 미생성 → 나머지 멤버 개별 LLM 추출
-                val skipReason = if (primaryRegexAttempted) "regex 실패" else "멤버 부족"
+                val skipReason = when {
+                    forceSkipRegex -> "Step5 예산 모드"
+                    primaryRegexAttempted -> "regex 실패"
+                    skipRegexByBudget -> "그룹 시간 예산 초과"
+                    group.members.size < REGEX_MIN_SAMPLES -> "멤버 부족"
+                    else -> "regex 미생성"
+                }
                 MoneyTalkLogger.i("[processGroup] $skipReason → LLM 개별 추출: addr=*$addr, remaining=${remainingMembers.size}")
                 val memberBodies = remainingMembers.map { member ->
                     if (mainContext != null && distributionSummary != null) {
@@ -1412,10 +1436,10 @@ class SmsGroupClassifier @Inject constructor(
      *
      * 검증 기준:
      * - 각 샘플에 regex를 적용해 금액/가게명이 추출되는지 확인
-     * - 전체 샘플 중 60% 이상 파싱 성공해야 유효 (REGEX_VALIDATION_MIN_PASS_RATIO)
+     * - 전체 샘플 중 80% 이상 파싱 성공해야 유효 (REGEX_VALIDATION_MIN_PASS_RATIO)
      *
      * LLM hallucination으로 인한 깨진 regex가 DB에 등록되는 것을 방지.
-     * near-miss 구간(20%~60%)이면 Classifier repair 시도 대상.
+     * near-miss 구간(60%~80%)이면 Classifier repair 시도 대상.
      *
      * @param amountRegex LLM이 생성한 금액 정규식
      * @param storeRegex LLM이 생성한 가게명 정규식
