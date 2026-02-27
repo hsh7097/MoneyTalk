@@ -55,6 +55,10 @@ class GeminiSmsExtractor @Inject constructor(
         /** 배치 실패 후 개별 폴백 호출 간 최소 대기(ms) */
         private const val FALLBACK_SINGLE_DELAY_MS = 50L
 
+        /** A/B 비교용 프롬프트 버전 태그 */
+        private const val SMS_EXTRACT_PROMPT_VERSION = "sms_extract_v2026_02_27_r3"
+        private const val SMS_BATCH_PROMPT_VERSION = "sms_batch_extract_v2026_02_27_r3"
+
         /** 정규식 생성 재시도(수선) 최대 횟수 */
         private const val REGEX_REPAIR_MAX_RETRIES = 1
 
@@ -317,7 +321,10 @@ class GeminiSmsExtractor @Inject constructor(
                 val startTime = System.currentTimeMillis()
                 val response = model.generateContent(prompt)
                 val elapsed = System.currentTimeMillis() - startTime
-                val responseText = response.text ?: return@withContext null
+                val responseText = response.text ?: run {
+                    MoneyTalkLogger.w("[extractSingle] 응답 text=null (promptVersion=$SMS_EXTRACT_PROMPT_VERSION)")
+                    return@withContext null
+                }
 
 
                 // JSON 파싱
@@ -325,7 +332,7 @@ class GeminiSmsExtractor @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                MoneyTalkLogger.e("LLM 추출 실패: ${e.message}", e)
+                MoneyTalkLogger.e("LLM 추출 실패: ${e.message} (promptVersion=$SMS_EXTRACT_PROMPT_VERSION)", e)
                 null
             }
         }
@@ -977,7 +984,9 @@ class GeminiSmsExtractor @Inject constructor(
                     val elapsed = System.currentTimeMillis() - startTime
                     val responseText = response.text
                     if (responseText == null) {
-                        MoneyTalkLogger.e("[extractBatch] LLM 배치 응답 없음 (${elapsed}ms, 시도 ${attempt + 1})")
+                        MoneyTalkLogger.e(
+                            "[extractBatch] LLM 배치 응답 없음 (${elapsed}ms, 시도 ${attempt + 1}, promptVersion=$SMS_BATCH_PROMPT_VERSION)"
+                        )
                         continue
                     }
 
@@ -998,7 +1007,9 @@ class GeminiSmsExtractor @Inject constructor(
                         delay(retryDelayMs)
                         continue
                     }
-                    MoneyTalkLogger.e("[extractBatch] LLM 배치 추출 실패 (시도 ${attempt + 1}): ${e.message}")
+                    MoneyTalkLogger.e(
+                        "[extractBatch] LLM 배치 추출 실패 (시도 ${attempt + 1}, promptVersion=$SMS_BATCH_PROMPT_VERSION): ${e.message}"
+                    )
                 }
             }
 
