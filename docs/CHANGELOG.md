@@ -4,11 +4,36 @@
 
 ## [Unreleased]
 
+### Added (2026-02-27 — PR #41)
+- **Step4.5 복구 품질 게이트**: `isRecoverableRegexFailedSms()` + `isGroundedRegexFailedRecovery()` — 복구 가능성 + 근거 검증으로 불필요한 LLM 호출 방지
+- **KB 멀티라인 출금 휴리스틱**: `tryParseKbDebitFallback()` + `tryHeuristicParse()` — KB 스타일 출금 SMS를 정규식으로 즉시 파싱 (LLM 스킵)
+- **Step4.5 실패 쿨다운**: `regexFailedRecoveryStates` — sender:templateHash 기반, 2회 실패→30분 쿨다운
+- **누락 SMS 드롭 경로 진단**: SmsPipeline parsedIds vs embedded 차집합 추적 로그
+- **Home insight 재시도**: `HOME_INSIGHT_MAX_ATTEMPTS=3`, 503/UNAVAILABLE 시 선형 백오프
+- **TransactionCard 메모 표시**: `memoText` 필드 + `buildAnnotatedString` (alpha=0.72f)
+
+### Added (2026-02-27 — PR #40)
+- **Step5 백그라운드 학습 큐**: `DeferredLearningTask` + `learningQueue` — regex 패턴 등록을 비동기로 전환, dedup 적용
+- **unstable 그룹 판정**: 중앙값 < 0.92 또는 P20 < 0.88 → 그룹 해체 → 개별 LLM 추출
+- **cohesion gate**: regex 생성 전 그룹 응집도 검증, 낮으면 abort
+- **outcome 집계 로그**: matched/regexFailed/llmDirect/unstable/skipped 카운트
+
 ### Added (2026-02-27)
 - **Step4.5 regex 실패건 배치 LLM 복구 경로**: 벡터매칭 성공 + regex 파싱 실패 SMS를 발신번호별 배치 LLM으로 추출 (Step5 그룹핑+regex생성 스킵)
   - SmsPatternMatcher `MatchResult` 3-way 분할 (matched/regexFailed/unmatched)
   - SmsGroupClassifier `batchExtractRegexFailed()` 신규 메서드
   - SmsPipeline Step4→Step4.5→Step5 체인
+
+### Changed (2026-02-27 — PR #41)
+- **Step4.5 병렬 처리**: 직렬→`Semaphore(LLM_CONCURRENCY)` + `async/awaitAll` 병렬 전환
+- **Step5 경로 분리**: 5-A (unmatched, full regex) vs 5-B (regexFailedFallback, `forceSkipRegexAll=true`)
+- **SMS 추출 프롬프트**: 근거 부족 문자 처리 규칙(rules 7-10) + 예외 규칙 추가
+- **코드 정리**: `tryHeuristicParse()` 헬퍼 추출(4곳 중복), `DEBIT_FALLBACK_STORE_NAME` 상수, outcome 코드 구분
+
+### Changed (2026-02-27 — PR #40)
+- **Step5 예산 초과 정책**: 스킵(데이터 누락)→강등(LLM 직접 추출)으로 변경
+- **Step5 시간 예산**: GROUP_TIME_BUDGET_MS=10초/그룹, STEP5_TIME_BUDGET_MS=20초/전체
+- **학습 큐 in-flight dedup**: `learningDedupKeys` ConcurrentHashMap.newKeySet() 기반 중복 방지
 
 ### Changed (2026-02-27)
 - **SMS Step5 성능 최적화**: GeminiSmsExtractor 타임아웃 60초 + CancellationException 조기 캐치, SmsGroupClassifier regex 생성 실패 루프 방지 (REGEX_MIN_SAMPLES=5, TIME_BUDGET=15초)
