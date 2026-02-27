@@ -180,6 +180,27 @@ class SmsPipeline @Inject constructor(
         val llmResults = unmatchedLlmResults + regexFallbackLlmResults
 
         val total = matchResult.matched + regexFailedResults + llmResults
+        val parsedIds = total.map { it.input.id }.toHashSet()
+        if (parsedIds.size < embedded.size) {
+            val regexFailedFallbackIds = regexFailedFallback.map { it.input.id }.toHashSet()
+            val unmatchedIds = matchResult.unmatched.map { it.input.id }.toHashSet()
+            val dropped = embedded.filter { it.input.id !in parsedIds }
+
+            MoneyTalkLogger.w(
+                "[pipelineDrop] 누락 ${dropped.size}건 (input=${embedded.size}, parsed=${total.size})"
+            )
+            dropped.forEachIndexed { index, item ->
+                val reason = when (item.input.id) {
+                    in regexFailedFallbackIds -> "regex_fallback_drop"
+                    in unmatchedIds -> "unmatched_drop"
+                    else -> "unknown_drop"
+                }
+                MoneyTalkLogger.w(
+                    "[pipelineDrop] #${index + 1} reason=$reason, id=${item.input.id}, " +
+                        "addr=${item.input.address}, body=${item.input.body.replace("\n", "↵")}"
+                )
+            }
+        }
         MoneyTalkLogger.e("SmsPipeline 완료: 결제 확정 ${total.size}건 (벡터${matchResult.matched.size} + regex복구${regexFailedResults.size} + LLM${llmResults.size})")
         return PipelineResult(
             results = total,
