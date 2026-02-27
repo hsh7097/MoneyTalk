@@ -812,16 +812,17 @@ class SmsGroupClassifier @Inject constructor(
                         val step5Elapsed = System.currentTimeMillis() - step5StartTime
                         val forceDirectByBudget = step5Elapsed > STEP5_TIME_BUDGET_MS
                         val forceDirectLlm = forceSkipRegexAll || forceDirectByBudget
-                        if (forceDirectByBudget) {
-                            degradedByBudget.addAndGet(sourceGroup.subGroups.sumOf { it.members.size })
-                        } else if (forceSkipRegexAll) {
+                        if (forceSkipRegexAll) {
                             forcedSkipRegexCount.addAndGet(sourceGroup.subGroups.sumOf { it.members.size })
+                        } else if (forceDirectByBudget) {
+                            degradedByBudget.addAndGet(sourceGroup.subGroups.sumOf { it.members.size })
                         }
                         processSourceGroup(
                             sourceGroup = sourceGroup,
                             dbMainPattern = dbMainPatterns[sourceGroup.address],
                             index = index,
                             forceSkipRegex = forceDirectLlm,
+                            forceSkipRegexAll = forceSkipRegexAll,
                             onGroupOutcome = { outcome ->
                                 if (outcome.isNotBlank()) {
                                     outcomeCounts.computeIfAbsent(outcome) { AtomicInteger(0) }.incrementAndGet()
@@ -902,6 +903,7 @@ class SmsGroupClassifier @Inject constructor(
         dbMainPattern: SmsPatternEntity? = null,
         index : Int = 0,
         forceSkipRegex: Boolean = false,
+        forceSkipRegexAll: Boolean = false,
         onGroupOutcome: ((String) -> Unit)? = null
     ): List<SmsParseResult> {
         val results = mutableListOf<SmsParseResult>()
@@ -928,6 +930,7 @@ class SmsGroupClassifier @Inject constructor(
                 mainContext = dbMainContext,
                 isMainGroup = true,
                 forceSkipRegex = forceSkipRegex,
+                forceSkipRegexAll = forceSkipRegexAll,
                 onGroupOutcome = onGroupOutcome
             )
             results.addAll(singleResult.results)
@@ -940,6 +943,7 @@ class SmsGroupClassifier @Inject constructor(
             sourceGroup.mainGroup,
             isMainGroup = true,
             forceSkipRegex = forceSkipRegex,
+            forceSkipRegexAll = forceSkipRegexAll,
             onGroupOutcome = onGroupOutcome
         )
         results.addAll(mainProcessResult.results)
@@ -975,6 +979,7 @@ class SmsGroupClassifier @Inject constructor(
                 mainContext = mainContext,
                 distributionSummary = sourceGroup.buildDistributionSummary(),
                 forceSkipRegex = forceSkipRegex,
+                forceSkipRegexAll = forceSkipRegexAll,
                 onGroupOutcome = onGroupOutcome
             )
             results.addAll(exResults.results)
@@ -1000,6 +1005,7 @@ class SmsGroupClassifier @Inject constructor(
         distributionSummary: String? = null,
         isMainGroup: Boolean = false,
         forceSkipRegex: Boolean = false,
+        forceSkipRegexAll: Boolean = false,
         allowResplit: Boolean = true,
         onGroupOutcome: ((String) -> Unit)? = null
     ): GroupProcessResult {
@@ -1018,6 +1024,7 @@ class SmsGroupClassifier @Inject constructor(
                 distributionSummary = distributionSummary,
                 isMainGroup = isMainGroup,
                 forceSkipRegex = true,
+                forceSkipRegexAll = forceSkipRegexAll,
                 directLlmOnly = true,
                 skipLearning = true,
                 onGroupOutcome = onGroupOutcome
@@ -1043,6 +1050,7 @@ class SmsGroupClassifier @Inject constructor(
                         distributionSummary = distributionSummary,
                         isMainGroup = isMainGroup && idx == 0,
                         forceSkipRegex = forceSkipRegex,
+                        forceSkipRegexAll = forceSkipRegexAll,
                         allowResplit = false,
                         onGroupOutcome = onGroupOutcome
                     )
@@ -1069,6 +1077,7 @@ class SmsGroupClassifier @Inject constructor(
             distributionSummary = distributionSummary,
             isMainGroup = isMainGroup,
             forceSkipRegex = forceSkipRegex,
+            forceSkipRegexAll = forceSkipRegexAll,
             skipLearning = forceSkipRegex,
             onGroupOutcome = onGroupOutcome
         )
@@ -1097,6 +1106,7 @@ class SmsGroupClassifier @Inject constructor(
         distributionSummary: String? = null,
         isMainGroup: Boolean = false,
         forceSkipRegex: Boolean = false,
+        forceSkipRegexAll: Boolean = false,
         directLlmOnly: Boolean = false,
         skipLearning: Boolean = false,
         onGroupOutcome: ((String) -> Unit)? = null
@@ -1105,7 +1115,7 @@ class SmsGroupClassifier @Inject constructor(
         val results = mutableListOf<SmsParseResult>()
         val representative = group.representative
         val addr = representative.input.address.takeLast(4)
-        var outcome = ""  // G: reason code (REGEX_ACCEPTED, REGEX_REPAIRED, TEMPLATE_FALLBACK, DIRECT_LLM, NON_PAYMENT, LLM_FAILED, GROUP_BUDGET_SKIP_REGEX, STEP5_BUDGET_DIRECT_LLM, UNSTABLE_DIRECT_LLM, REGEX_ABORT_LOW_PASS)
+        var outcome = ""  // G: reason code (REGEX_ACCEPTED, REGEX_REPAIRED, TEMPLATE_FALLBACK, DIRECT_LLM, NON_PAYMENT, LLM_FAILED, GROUP_BUDGET_SKIP_REGEX, STEP5_BUDGET_DIRECT_LLM, REGEX_FAILED_FALLBACK_DIRECT_LLM, UNSTABLE_DIRECT_LLM, REGEX_ABORT_LOW_PASS)
 
         MoneyTalkLogger.i("[processGroup] 시작: addr=*$addr, members=${group.members.size}, isMain=$isMainGroup")
 
@@ -1189,6 +1199,9 @@ class SmsGroupClassifier @Inject constructor(
             if (directLlmOnly) {
                 MoneyTalkLogger.w("[processGroup] unstable 그룹 정책 → regex 스킵, direct LLM")
                 outcome = "UNSTABLE_DIRECT_LLM"
+            } else if (forceSkipRegexAll) {
+                MoneyTalkLogger.w("[processGroup] regexFailed fallback 모드 → regex 스킵, direct LLM")
+                outcome = "REGEX_FAILED_FALLBACK_DIRECT_LLM"
             } else if (forceSkipRegex) {
                 MoneyTalkLogger.w("[processGroup] Step5 소프트 예산 모드 → regex 스킵, 추출만")
                 outcome = "STEP5_BUDGET_DIRECT_LLM"
