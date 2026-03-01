@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### Added (2026-02-27)
+- **문자 설정 Activity**: `SmsSettingsActivity` + `SmsSettingsScreen` — 문자분석 업데이트, 수신거부 문구 관리, 수신거부 전화번호 관리를 별도 화면으로 분리
+- **수신거부 발신번호 DB**: `SmsBlockedSenderEntity` + `SmsBlockedSenderDao` + `SmsBlockedSenderRepository` — Room DB v4→v5 마이그레이션
+- **SMS 차단 필터링**: `SmsReaderV2`에서 차단 번호 필터 적용, 차단된 발신번호 SMS 자동 제외
+
+### Changed (2026-02-27)
+- **설정 화면**: SMS 제외 키워드 다이얼로그를 문자 설정 Activity로 이동, SettingsViewModel에서 ExclusionKeyword 관련 데드코드 제거
+- **normalizeAddress 통합**: `SmsBlockedSenderRepository`에서 자체 구현 제거, `SmsFilter.normalizeAddress()` 단일 소스로 통합
+- **lastSyncTime 반응형**: `SettingsDataStore.lastSyncTimeFlow` 추가, 일회성 조회에서 Flow 관찰로 전환
+- **DAO suspend 전환**: `SmsBlockedSenderDao.getAllAddresses()` + `SmsReaderV2.readAllMessagesByDateRange()` suspend 전환
+
 ### Added (2026-02-27 — PR #41)
 - **Step4.5 복구 품질 게이트**: `isRecoverableRegexFailedSms()` + `isGroundedRegexFailedRecovery()` — 복구 가능성 + 근거 검증으로 불필요한 LLM 호출 방지
 - **KB 멀티라인 출금 휴리스틱**: `tryParseKbDebitFallback()` + `tryHeuristicParse()` — KB 스타일 출금 SMS를 정규식으로 즉시 파싱 (LLM 스킵)

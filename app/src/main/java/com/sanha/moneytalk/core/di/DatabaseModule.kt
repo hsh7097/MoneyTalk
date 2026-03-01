@@ -10,6 +10,7 @@ import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
 import com.sanha.moneytalk.core.database.dao.OwnedCardDao
+import com.sanha.moneytalk.core.database.dao.SmsBlockedSenderDao
 import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
@@ -51,7 +52,8 @@ object DatabaseModule {
             .addMigrations(
                 DatabaseMigrations.MIGRATION_1_2,
                 DatabaseMigrations.MIGRATION_2_3,
-                DatabaseMigrations.MIGRATION_3_4
+                DatabaseMigrations.MIGRATION_3_4,
+                DatabaseMigrations.MIGRATION_4_5
             )
             .build()
     }
@@ -117,5 +119,12 @@ object DatabaseModule {
     @Singleton
     fun provideSmsExclusionKeywordDao(database: AppDatabase): SmsExclusionKeywordDao {
         return database.smsExclusionKeywordDao()
+    }
+
+    /** SMS 수신거부 발신번호 DAO 제공 */
+    @Provides
+    @Singleton
+    fun provideSmsBlockedSenderDao(database: AppDatabase): SmsBlockedSenderDao {
+        return database.smsBlockedSenderDao()
     }
 }

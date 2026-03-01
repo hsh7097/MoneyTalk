@@ -438,6 +438,25 @@
     <string name="settings_exclusion_empty">등록된 키워드가 없습니다</string>
     <string name="settings_exclusion_source_chat">(채팅)</string>
 
+    <!-- 문자 설정 -->
+    <string name="sms_settings_title">문자 설정</string>
+    <string name="sms_settings_subtitle">문자 분석 및 수신 차단 관리</string>
+    <string name="sms_settings_section_analysis">문자 분석</string>
+    <string name="sms_settings_section_block">수신 차단</string>
+    <string name="sms_settings_sync_title">문자분석 업데이트</string>
+    <string name="sms_settings_sync_subtitle">SMS를 다시 읽어 분석합니다</string>
+    <string name="sms_settings_sync_subtitle_last">마지막 업데이트 %1$s</string>
+    <string name="sms_settings_blocked_phrase_title">수신거부 문구 관리</string>
+    <string name="sms_settings_blocked_phrase_subtitle_count">사용자 %1$d개 · 기본 %2$d개</string>
+    <string name="sms_settings_blocked_sender_title">수신거부 전화번호 관리</string>
+    <string name="sms_settings_blocked_sender_subtitle_count">%1$d개 등록</string>
+    <string name="sms_settings_blocked_sender_subtitle_empty">등록된 번호 없음</string>
+    <string name="sms_settings_blocked_phrase_page_title">수신거부 문구 관리</string>
+    <string name="sms_settings_blocked_sender_page_title">수신거부 전화번호 관리</string>
+    <string name="sms_settings_blocked_sender_description">추가한 번호의 문자는 SMS 동기화 대상에서 제외됩니다.</string>
+    <string name="sms_settings_blocked_sender_input_hint">전화번호 입력</string>
+    <string name="sms_settings_blocked_sender_empty">등록된 차단 번호가 없습니다</string>
+
     <!-- 공통 suffix -->
     <string name="common_suffix_won">원</string>
     <string name="common_suffix_day">일</string>

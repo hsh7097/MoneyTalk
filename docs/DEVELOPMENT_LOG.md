@@ -4,6 +4,37 @@
 
 ---
 
+## 2026-02-27 - 문자 설정 Activity 및 수신거부 번호 관리
+
+### 배경
+설정 화면의 SMS 제외 키워드가 다이얼로그 하나로만 관리되어, 레퍼런스 앱처럼 문자 관련 설정을 별도 화면으로 분리하는 것이 필요. 수신거부 전화번호 관리 기능도 신규 추가.
+
+### 작업 내용
+
+#### 신규 문자 설정 Activity
+- `SmsSettingsActivity` — CategoryDetailActivity 패턴 (@AndroidEntryPoint, enableEdgeToEdge)
+- `SmsSettingsScreen` — NavHost 기반 내부 네비게이션 (MAIN/BLOCKED_PHRASES/BLOCKED_SENDERS)
+- `SmsSettingsViewModel` — 제외 키워드 + 차단 번호 + 동기화 시간 관리
+
+#### 수신거부 발신번호 DB (v4→v5)
+- `SmsBlockedSenderEntity` (PK=정규화 주소, rawAddress, createdAt)
+- `SmsBlockedSenderDao` + `SmsBlockedSenderRepository` (캐시 + SmsFilter.normalizeAddress 재사용)
+- `MIGRATION_4_5`: sms_blocked_senders 테이블 생성
+
+#### 코드 정리 및 개선
+- **데드코드 제거**: SettingsViewModel에서 ExclusionKeyword 관련 Intent/Dialog/메서드/Repository 주입 전부 제거
+- **ExclusionKeywordDialog 제거**: SettingsDataDialogs.kt에서 미사용 다이얼로그+아이템 삭제, Preview도 정리
+- **normalizeAddress 통합**: SmsBlockedSenderRepository 자체 구현 제거 → SmsFilter.normalizeAddress() SSOT
+- **CATEGORY_UPDATED 이벤트**: SmsSettingsViewModel에서 키워드 추가/삭제 시 이벤트 발행
+- **lastSyncTime 반응형**: SettingsDataStore.lastSyncTimeFlow 추가, 일회성→Flow 관찰
+- **DAO suspend 전환**: getAllAddresses, readAllMessagesByDateRange suspend 전환
+
+### 변경 파일
+- 신규: `SmsSettingsActivity.kt`, `SmsSettingsScreen.kt`, `SmsSettingsViewModel.kt`, `SmsBlockedSenderEntity.kt`, `SmsBlockedSenderDao.kt`, `SmsBlockedSenderRepository.kt`
+- 수정: `SettingsScreen.kt`, `SettingsViewModel.kt`, `SettingsDataDialogs.kt`, `SettingsDataStore.kt`, `SmsReaderV2.kt`, `AppDatabase.kt`, `DatabaseModule.kt`, `DatabaseMigrations.kt`, `AndroidManifest.xml`, `strings.xml`
+
+---
+
 ## 2026-02-27 - PR #41: Step4.5 복구 경로 최적화 및 프롬프트 안정화
 
 ### 배경

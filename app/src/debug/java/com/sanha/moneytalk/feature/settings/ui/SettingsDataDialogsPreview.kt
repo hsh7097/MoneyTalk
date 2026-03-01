@@ -1,14 +1,9 @@
 package com.sanha.moneytalk.feature.settings.ui
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity
 import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
@@ -34,15 +29,6 @@ private val sampleDriveFiles = listOf(
         createdTime = System.currentTimeMillis() - 1123200000,
         size = 1024 * 30
     )
-)
-
-private val sampleExclusionKeywords = listOf(
-    SmsExclusionKeywordEntity(keyword = "인증", source = "default"),
-    SmsExclusionKeywordEntity(keyword = "광고", source = "default"),
-    SmsExclusionKeywordEntity(keyword = "OTP", source = "default"),
-    SmsExclusionKeywordEntity(keyword = "택배", source = "user"),
-    SmsExclusionKeywordEntity(keyword = "할인쿠폰", source = "user"),
-    SmsExclusionKeywordEntity(keyword = "이벤트당첨", source = "chat")
 )
 
 // ========== ExportDialog Preview ==========
@@ -138,91 +124,3 @@ private fun DriveBackupFileItemPreview() {
     }
 }
 
-// ========== ExclusionKeywordDialog Preview ==========
-
-@Preview(showBackground = true, name = "SMS 제외 키워드 - 키워드 있음")
-@Composable
-private fun ExclusionKeywordDialogWithKeywordsPreview() {
-    MaterialTheme {
-        ExclusionKeywordDialog(
-            keywords = sampleExclusionKeywords,
-            onDismiss = {},
-            onAdd = {},
-            onRemove = {}
-        )
-    }
-}
-
-@Preview(showBackground = true, name = "SMS 제외 키워드 - 빈 상태")
-@Composable
-private fun ExclusionKeywordDialogEmptyPreview() {
-    MaterialTheme {
-        ExclusionKeywordDialog(
-            keywords = emptyList(),
-            onDismiss = {},
-            onAdd = {},
-            onRemove = {}
-        )
-    }
-}
-
-// ========== ExclusionKeywordItem Preview ==========
-
-@Preview(showBackground = true, name = "키워드 아이템 - 삭제 가능 (사용자)", widthDp = 320)
-@Composable
-private fun ExclusionKeywordItemUserPreview() {
-    MaterialTheme {
-        Surface {
-            ExclusionKeywordItem(
-                keyword = "택배",
-                source = "user",
-                canDelete = true,
-                onDelete = {}
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true, name = "키워드 아이템 - 삭제 불가 (기본)", widthDp = 320)
-@Composable
-private fun ExclusionKeywordItemDefaultPreview() {
-    MaterialTheme {
-        Surface {
-            ExclusionKeywordItem(
-                keyword = "인증",
-                source = "default",
-                canDelete = false,
-                onDelete = {}
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true, name = "키워드 아이템 - 채팅 소스", widthDp = 320)
-@Composable
-private fun ExclusionKeywordItemChatPreview() {
-    MaterialTheme {
-        Surface {
-            ExclusionKeywordItem(
-                keyword = "이벤트당첨",
-                source = "chat",
-                canDelete = true,
-                onDelete = {}
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true, name = "키워드 아이템 모음", widthDp = 320)
-@Composable
-private fun ExclusionKeywordItemListPreview() {
-    MaterialTheme {
-        Surface {
-            Column(modifier = Modifier.padding(8.dp)) {
-                ExclusionKeywordItem("택배", "user", true) {}
-                ExclusionKeywordItem("이벤트당첨", "chat", true) {}
-                ExclusionKeywordItem("인증", "default", false) {}
-            }
-        }
-    }
-}

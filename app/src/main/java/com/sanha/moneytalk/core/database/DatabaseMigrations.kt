@@ -51,4 +51,22 @@ object DatabaseMigrations {
             db.execSQL("DELETE FROM store_embeddings")
         }
     }
+
+    /**
+     * v4 -> v5
+     * SMS 수신거부 발신번호 테이블 추가
+     */
+    val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS sms_blocked_senders (
+                    address TEXT NOT NULL PRIMARY KEY,
+                    rawAddress TEXT NOT NULL DEFAULT '',
+                    createdAt INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+        }
+    }
 }

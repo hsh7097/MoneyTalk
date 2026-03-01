@@ -10,6 +10,7 @@ import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
 import com.sanha.moneytalk.core.database.dao.OwnedCardDao
+import com.sanha.moneytalk.core.database.dao.SmsBlockedSenderDao
 import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
@@ -20,6 +21,7 @@ import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.database.entity.OwnedCardEntity
+import com.sanha.moneytalk.core.database.entity.SmsBlockedSenderEntity
 import com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
@@ -40,6 +42,7 @@ import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
  * - StoreEmbeddingEntity: 가게명 임베딩 벡터 (카테고리 벡터 캐싱용)
  * - OwnedCardEntity: 보유 카드 관리 (사용자 카드 화이트리스트)
  * - SmsExclusionKeywordEntity: SMS 제외 키워드 (블랙리스트)
+ * - SmsBlockedSenderEntity: SMS 수신거부 발신번호
  *
  * TypeConverters:
  * - FloatListConverter: 임베딩 벡터(List<Float>)를 JSON String으로 변환
@@ -59,9 +62,10 @@ import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
         SmsPatternEntity::class,
         StoreEmbeddingEntity::class,
         OwnedCardEntity::class,
-        SmsExclusionKeywordEntity::class
+        SmsExclusionKeywordEntity::class,
+        SmsBlockedSenderEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(FloatListConverter::class)
@@ -93,6 +97,9 @@ abstract class AppDatabase : RoomDatabase() {
 
     /** SMS 제외 키워드 DAO (블랙리스트 관리) */
     abstract fun smsExclusionKeywordDao(): SmsExclusionKeywordDao
+
+    /** SMS 수신거부 발신번호 DAO */
+    abstract fun smsBlockedSenderDao(): SmsBlockedSenderDao
 
     companion object {
         /** 데이터베이스 파일명 */

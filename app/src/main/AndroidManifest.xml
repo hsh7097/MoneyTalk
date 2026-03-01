@@ -64,6 +64,12 @@
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- 문자 설정 -->
+        <activity
+            android:name=".feature.smssettings.ui.SmsSettingsActivity"
+            android:theme="@style/Theme.MoneyTalk"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- SMS Receiver -->
         <receiver
             android:name=".receiver.SmsReceiver"
