@@ -205,6 +205,7 @@ class PremiumManager @Inject constructor(
             maintenanceMessage = snapshot.child("maintenance_message").getValue(String::class.java) ?: "",
             rewardAdEnabled = snapshot.child("reward_ad_enabled").getValue(Boolean::class.java) ?: false,
             rewardAdChatCount = snapshot.child("reward_ad_chat_count").getValue(Int::class.java) ?: 5,
+            freeSyncCount = snapshot.child("free_sync_count").getValue(Int::class.java) ?: 3,
             minVersionCode = snapshot.child("min_version_code").getValue(Int::class.java) ?: 1,
             minVersionName = snapshot.child("min_version_name").getValue(String::class.java) ?: "1.0.0",
             forceUpdateMessage = snapshot.child("force_update_message").getValue(String::class.java) ?: "",

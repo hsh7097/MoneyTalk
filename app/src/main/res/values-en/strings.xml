@@ -51,7 +51,6 @@
     <string name="chat_subtitle_with_api">Chat with Gemini</string>
     <string name="chat_subtitle_no_api">Please set up API key</string>
     <string name="chat_input_placeholder">Type a message…</string>
-    <string name="chat_voice_hint">Use the Voice Command button on the right to speak your question.</string>
     <string name="chat_send">Send</string>
     <string name="chat_thinking">Thinking…</string>
     <string name="chat_session_list">Conversations</string>
@@ -268,16 +267,6 @@
     <string name="dialog_api_key_message_settings">Get a free API key from\nGoogle AI Studio (aistudio.google.com)</string>
     <string name="dialog_api_key_current">Currently set</string>
 
-    <!-- Speech-to-Text (STT) -->
-    <string name="stt_start">Start voice input</string>
-    <string name="stt_stop">Stop voice input</string>
-    <string name="stt_button_start">Voice Command</string>
-    <string name="stt_button_stop">Stop</string>
-    <string name="stt_error_no_match">Could not recognize speech. Please try again.</string>
-    <string name="stt_error_audio">Microphone error occurred.</string>
-    <string name="stt_error_general">An error occurred during speech recognition.</string>
-    <string name="permission_audio_denied">Microphone permission is required.</string>
-
     <!-- Category Classification Dialog -->
     <string name="classify_dialog_title">Auto-Classify Categories</string>
     <string name="classify_dialog_message">%d items need classification.\n\nAI will automatically classify categories.\nThis may take a moment on first run.</string>
@@ -327,7 +316,7 @@
 
     <!-- Engine Summary -->
     <string name="engine_summary_title">✨ AI Engine Ready</string>
-    <string name="engine_summary_sms_analyzed">\uD83D\uDCE9 Analyzed %d messages from last 14 days</string>
+    <string name="engine_summary_sms_analyzed">\uD83D\uDCE9 Analyzed %d messages from last 2 months</string>
     <string name="engine_summary_patterns_learned">\uD83C\uDFAF %d card patterns learned</string>
     <string name="engine_summary_expense_count">%d expenses</string>
     <string name="engine_summary_income_count">%d incomes</string>
@@ -397,6 +386,25 @@
     <string name="force_update_message">A new version is available.\nPlease update to version %1$s to continue using the app.\n\nCurrent version: %2$s</string>
     <string name="force_update_button">Update</string>
     <string name="force_update_exit">Exit</string>
+
+    <!-- SMS Settings -->
+    <string name="sms_settings_title">SMS Settings</string>
+    <string name="sms_settings_subtitle">SMS analysis &amp; blocked sender management</string>
+    <string name="sms_settings_section_analysis">SMS Analysis</string>
+    <string name="sms_settings_section_block">Blocked</string>
+    <string name="sms_settings_sync_title">Update SMS Analysis</string>
+    <string name="sms_settings_sync_subtitle">Re-read and analyze SMS messages</string>
+    <string name="sms_settings_sync_subtitle_last">Last updated %1$s</string>
+    <string name="sms_settings_blocked_phrase_title">Blocked Phrases</string>
+    <string name="sms_settings_blocked_phrase_subtitle_count">%1$d user · %2$d default</string>
+    <string name="sms_settings_blocked_sender_title">Blocked Phone Numbers</string>
+    <string name="sms_settings_blocked_sender_subtitle_count">%1$d registered</string>
+    <string name="sms_settings_blocked_sender_subtitle_empty">No numbers registered</string>
+    <string name="sms_settings_blocked_phrase_page_title">Blocked Phrases</string>
+    <string name="sms_settings_blocked_sender_page_title">Blocked Phone Numbers</string>
+    <string name="sms_settings_blocked_sender_description">Messages from added numbers will be excluded from SMS sync.</string>
+    <string name="sms_settings_blocked_sender_input_hint">Enter phone number</string>
+    <string name="sms_settings_blocked_sender_empty">No blocked numbers registered</string>
 
     <!-- SMS regex repair failure reasons -->
     <string name="sms_regex_reason_json_parse_failed" translatable="false">Response is not valid JSON. Return JSON format only.</string>

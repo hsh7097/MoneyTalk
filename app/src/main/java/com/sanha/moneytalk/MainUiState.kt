@@ -35,6 +35,8 @@ data class MainUiState(
     // 월별 동기화 해제 (리워드 광고)
     val syncedMonths: Set<String> = emptySet(),
     val isLegacyFullSyncUnlocked: Boolean = false,
+    /** 무료 동기화 사용 횟수 (DataStore 기반) */
+    val freeSyncUsedCount: Int = 0,
     val showFullSyncAdDialog: Boolean = false,
     /** 광고 다이얼로그 대상 연도 */
     val fullSyncAdYear: Int = 0,

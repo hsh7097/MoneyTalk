@@ -10,6 +10,7 @@ import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.PremiumManager
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -45,9 +46,9 @@ sealed class AdState {
  * Firebase RTDB의 reward_ad_enabled 설정에 따라 동작하며,
  * 광고 시청 시 reward_ad_chat_count만큼 채팅 횟수를 충전합니다.
  *
- * ## 테스트 ID (현재 사용 중)
- * - 앱 ID: ca-app-pub-3940256099942544~3347511713
- * - 리워드 광고 ID: ca-app-pub-3940256099942544/5224354917
+ * ## 광고 ID
+ * - 앱 ID: ca-app-pub-4707673176609005~5012288836
+ * - 리워드 광고 ID: ca-app-pub-4707673176609005/2566523665
  */
 @Singleton
 class RewardAdManager @Inject constructor(
@@ -56,8 +57,10 @@ class RewardAdManager @Inject constructor(
     private val premiumManager: PremiumManager
 ) {
     companion object {
-        /** Google 공식 테스트 리워드 광고 ID */
+        /** Google 공식 리워드 테스트 광고 ID */
         private const val TEST_REWARD_AD_ID = "ca-app-pub-3940256099942544/5224354917"
+        private const val PROD_REWARD_AD_ID = "ca-app-pub-4707673176609005/2566523665"
+        private val REWARD_AD_ID = if (BuildConfig.DEBUG) TEST_REWARD_AD_ID else PROD_REWARD_AD_ID
         private const val MAX_RETRY_COUNT = 3
     }
 
@@ -86,7 +89,7 @@ class RewardAdManager @Inject constructor(
         _adState.value = AdState.Loading
 
         val adRequest = AdRequest.Builder().build()
-        RewardedAd.load(context, TEST_REWARD_AD_ID, adRequest,
+        RewardedAd.load(context, REWARD_AD_ID, adRequest,
             object : RewardedAdLoadCallback() {
                 override fun onAdLoaded(ad: RewardedAd) {
                     rewardedAd = ad
@@ -225,5 +228,12 @@ class RewardAdManager @Inject constructor(
      */
     fun getRewardChatCount(): Int {
         return premiumManager.premiumConfig.value.rewardAdChatCount
+    }
+
+    /**
+     * RTDB에서 설정된 무료 동기화 허용 횟수 (기본 3회)
+     */
+    fun getFreeSyncCount(): Int {
+        return premiumManager.premiumConfig.value.freeSyncCount
     }
 }

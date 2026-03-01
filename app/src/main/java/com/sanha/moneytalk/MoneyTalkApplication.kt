@@ -31,7 +31,7 @@ class MoneyTalkApplication : Application() {
             premiumManager.startObservingConfig()
         }
 
-        // Google AdMob 초기화
+        // Google AdMob 초기화 (디버그 빌드는 Google 공식 테스트 광고 ID 사용)
         MobileAds.initialize(this) {}
     }
 

@@ -47,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
+import com.sanha.moneytalk.core.ui.component.BannerAdIds
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
@@ -171,7 +172,7 @@ fun CategoryDetailScreen(
 
         // 배너 광고 (RTDB reward_ad_enabled 연동)
         if (isBannerAdEnabled) {
-            BannerAdCompose()
+            BannerAdCompose(adUnitId = BannerAdIds.CATEGORY_DETAIL)
         }
     }
 

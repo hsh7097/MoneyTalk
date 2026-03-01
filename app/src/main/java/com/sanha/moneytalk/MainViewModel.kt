@@ -195,6 +195,12 @@ class MainViewModel @Inject constructor(
                 _uiState.update { it.copy(isLegacyFullSyncUnlocked = unlocked) }
             }
         }
+        // 무료 동기화 사용 횟수
+        viewModelScope.launch {
+            settingsDataStore.freeSyncUsedCountFlow.collect { count ->
+                _uiState.update { it.copy(freeSyncUsedCount = count) }
+            }
+        }
     }
 
     // ========== 전역 이벤트 처리 ==========
@@ -856,7 +862,7 @@ class MainViewModel @Inject constructor(
      * @param year 대상 연도
      * @param month 대상 월
      */
-    fun unlockFullSync(year: Int, month: Int) {
+    fun unlockFullSync(year: Int, month: Int, isFreeSyncUsed: Boolean = false) {
         val yearMonth = String.format("%04d-%02d", year, month)
         _uiState.update { it.copy(showFullSyncAdDialog = false) }
 
@@ -871,8 +877,21 @@ class MainViewModel @Inject constructor(
             updateLastSyncTime = false,
             onSyncComplete = {
                 settingsDataStore.addSyncedMonth(yearMonth)
+                if (isFreeSyncUsed) {
+                    settingsDataStore.incrementFreeSyncUsedCount()
+                }
             }
         )
+    }
+
+    /**
+     * 무료 동기화 잔여 횟수가 있는지 확인
+     * PremiumConfig.freeSyncCount와 DataStore 사용 횟수 비교
+     */
+    fun hasFreeSyncRemaining(): Boolean {
+        val maxFree = rewardAdManager.getFreeSyncCount()
+        val used = _uiState.value.freeSyncUsedCount
+        return used < maxFree
     }
 
     /** 해당 월이 이미 동기화(광고 시청) 되었는지 확인 */

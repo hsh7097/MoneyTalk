@@ -13,6 +13,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
+import com.sanha.moneytalk.BuildConfig
 
 /**
  * AdMob 배너 광고 Composable.
@@ -20,18 +21,20 @@ import com.google.android.gms.ads.AdView
  * 화면 하단에 고정 배치하여 사용.
  * 호출부에서 RTDB `reward_ad_enabled` 플래그를 확인 후 조건부 렌더링할 것.
  *
- * ## 테스트 광고 ID
- * - 배너: ca-app-pub-3940256099942544/9214589741
+ * @param adUnitId 화면별 배너 광고 단위 ID
  */
 @Composable
-fun BannerAdCompose(modifier: Modifier = Modifier) {
+fun BannerAdCompose(
+    adUnitId: String,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    val adView = remember {
+    val adView = remember(adUnitId) {
         AdView(context).apply {
             setAdSize(AdSize.BANNER)
-            adUnitId = TEST_BANNER_AD_ID
+            this.adUnitId = adUnitId
             loadAd(AdRequest.Builder().build())
         }
     }
@@ -57,5 +60,12 @@ fun BannerAdCompose(modifier: Modifier = Modifier) {
     )
 }
 
-/** Google 공식 테스트 배너 광고 ID */
-private const val TEST_BANNER_AD_ID = "ca-app-pub-3940256099942544/9214589741"
+/** 배너 광고 단위 ID (디버그 빌드 시 Google 공식 테스트 ID 사용) */
+object BannerAdIds {
+    /** Google 공식 배너 테스트 광고 ID */
+    private const val TEST_BANNER = "ca-app-pub-3940256099942544/6300978111"
+
+    val HOME = if (BuildConfig.DEBUG) TEST_BANNER else "ca-app-pub-4707673176609005/8344902874"
+    val HISTORY = if (BuildConfig.DEBUG) TEST_BANNER else "ca-app-pub-4707673176609005/5323629075"
+    val CATEGORY_DETAIL = if (BuildConfig.DEBUG) TEST_BANNER else "ca-app-pub-4707673176609005/9633933815"
+}

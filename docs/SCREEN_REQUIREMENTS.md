@@ -62,7 +62,7 @@
 | 항목 | 스펙 |
 |------|------|
 | 조건 | RTDB의 minVersionCode > 현재 versionCode |
-| UI | AlertDialog (취소 불가) + 업데이트 메시지 (RTDB에서 가져옴) |
+| UI | AlertDialog (취소 불가, Predictive Back 방어) + 업데이트 메시지 (RTDB에서 가져옴) |
 | 동작 | Play Store로 이동 |
 
 ---
@@ -98,8 +98,8 @@
 | 조건 | CTA 종류 | 동작 |
 |------|----------|------|
 | 현재월 + 권한없음/데이터없음 | ImportDataCtaSection | SMS 권한 요청 + 증분 동기화 |
-| 과거월 + 미동기화 | FullSyncCtaSection | 광고 시청 → 해당 월 전체 동기화 |
-| 과거월 + 부분 커버리지 | FullSyncCtaSection (variant) | 불완전 동기화 경고 + 광고 |
+| 과거월 + 미동기화 | FullSyncCtaSection | 무료 잔여 시 바로 동기화 / 소진 후 광고 시청 → 동기화 |
+| 과거월 + 부분 커버리지 | FullSyncCtaSection (variant) | 무료 잔여 시 바로 동기화 / 소진 후 광고 시청 → 동기화 |
 
 ### 2.4 누적 추이 차트 (SpendingTrendSection)
 
@@ -169,7 +169,7 @@
 |------|------|
 | 증분 동기화 | lastSyncTime - 5분 ~ 현재 (경계 SMS 안전 마진) |
 | 초기 동기화 | 전월 1일 ~ 현재 (monthStartDay > 1이면 2개월 전부터) |
-| 전체 동기화 | 광고 시청 후 특정 월 잠금 해제 |
+| 전체 동기화 | 처음 N회 무료 (RTDB `free_sync_count`, 기본 3) → 이후 광고 시청 필요 |
 | 실시간 수신 | SmsProcessingService (BroadcastReceiver, 항상 무료) |
 | Auto Backup 감지 | lastSyncTime > 0 but DB 비어있음 → 초기로 리셋 |
 | 최대 범위 | 현재일 - 60일 |
@@ -567,9 +567,6 @@ BillingCycleCalendarView 입력 데이터:
 | 텍스트 필드 | OutlinedTextField, 최대 3줄 |
 | 비활성화 | API 키 없음 OR 로딩 중 |
 | 전송 버튼 | 텍스트 비어있지 않을 때만 활성 |
-| 음성 버튼 | RECORD_AUDIO 권한 요청 → STT (Mic/Stop 토글) |
-| 음성 힌트 | 최초 1회 배너 "오른쪽 음성 명령 버튼으로 말해서 질문할 수 있어요" |
-| 힌트 표시 | 음성 버튼 첫 클릭 시 seen 처리 (DataStore) |
 
 ### 4.5 3-Step AI 파이프라인
 
@@ -1009,8 +1006,8 @@ SpendingTrendInfo (interface)
 | 항목 | 스펙 |
 |------|------|
 | 위치 | History 화면 전용 (Home에서 제거됨) |
-| 내용 | "광고 보고 전체 데이터 가져오기" |
-| 동작 | 광고 시청 → 과거 월 동기화 |
+| 내용 | 무료 잔여 시 "X월 데이터 가져오기" / 소진 후 "광고 보고 X월 데이터 가져오기" |
+| 동작 | 무료 잔여(N회) → 바로 동기화 / 소진 후 → 광고 시청 → 동기화 |
 
 ### 7.8 SettingsItemCompose / SettingsSectionCompose
 
@@ -1088,7 +1085,7 @@ SpendingTrendInfo (interface)
 
 | 항목 | 스펙 |
 |------|------|
-| 전체 동기화 | 과거 월 per-month 광고 시청 |
+| 전체 동기화 | 과거 월 per-month: 처음 N회 무료 (RTDB `free_sync_count`) → 이후 광고 |
 | AI 채팅 | remaining=0 시 광고 → N회 무료 |
 | 실시간 수신 | 항상 무료 (BroadcastReceiver) |
 | 프리로드 | 자동 |

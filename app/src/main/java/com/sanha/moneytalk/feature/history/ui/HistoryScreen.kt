@@ -54,6 +54,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.activity.ComponentActivity
 import com.sanha.moneytalk.MainViewModel
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
+import com.sanha.moneytalk.core.ui.component.BannerAdIds
 import com.sanha.moneytalk.feature.home.ui.component.ImportDataCtaSection
 import kotlinx.coroutines.launch
 
@@ -214,9 +215,10 @@ fun HistoryScreen(
             val (pageYear, pageMonth) = remember(page) {
                 MonthPagerUtils.pageToYearMonth(page)
             }
-            // pageCache에서 이 페이지의 데이터 읽기 (없으면 기본값)
+            // pageCache에서 이 페이지의 데이터 읽기
+            // 캐시 미적재 페이지는 isLoading=false로 처리하여 CTA 조건이 즉시 평가되도록 함
             val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
-                ?: HistoryPageData()
+                ?: HistoryPageData(isLoading = false)
 
             // CTA 판별용: 현재 실효 월 여부
             val (effYearCta, effMonthCta) = com.sanha.moneytalk.core.util.DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
@@ -236,7 +238,7 @@ fun HistoryScreen(
                         isPartiallyCovered = mainViewModel.isPagePartiallyCovered(pageYear, pageMonth),
                         hasSmsPermission = mainUiState.hasSmsPermission,
                         monthLabel = pageMonthLabel,
-                        isAdEnabled = isBannerAdEnabled,
+                        isAdEnabled = isBannerAdEnabled && !mainViewModel.hasFreeSyncRemaining(),
                         onImportData = {
                             onRequestSmsPermission {
                                 mainViewModel.syncIncremental()
@@ -252,6 +254,11 @@ fun HistoryScreen(
                                 // 광고 비활성 → 광고 없이 바로 전체 동기화 해제
                                 onRequestSmsPermission {
                                     mainViewModel.unlockFullSync(pageYear, pageMonth)
+                                }
+                            } else if (mainViewModel.hasFreeSyncRemaining()) {
+                                // 무료 동기화 잔여 횟수 있음 → 광고 없이 동기화
+                                onRequestSmsPermission {
+                                    mainViewModel.unlockFullSync(pageYear, pageMonth, isFreeSyncUsed = true)
                                 }
                             } else {
                                 mainViewModel.showFullSyncAdDialog(pageYear, pageMonth)
@@ -286,7 +293,7 @@ fun HistoryScreen(
 
         // 배너 광고 (RTDB reward_ad_enabled 연동)
         if (isBannerAdEnabled) {
-            BannerAdCompose()
+            BannerAdCompose(adUnitId = BannerAdIds.HISTORY)
         }
     }
 

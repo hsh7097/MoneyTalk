@@ -1,16 +1,6 @@
 package com.sanha.moneytalk.feature.chat.ui
 
 import android.app.Activity
-import android.Manifest
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -27,8 +17,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -36,8 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledIconButton
@@ -50,7 +36,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -64,7 +49,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.R
 
@@ -98,8 +82,6 @@ fun ChatScreen(
                 onSendMessage = { viewModel.sendMessage(it) },
                 onRetry = { viewModel.retryLastMessage() },
                 hasApiKey = uiState.hasApiKey,
-                showVoiceHint = uiState.showVoiceHint,
-                onVoiceHintShown = { viewModel.markVoiceHintSeen() },
                 onApiKeyClick = { showApiKeyDialog = true },
                 onShowRewardAd = { activity -> viewModel.showRewardAd(activity) },
                 onDismissRewardAdDialog = { viewModel.onRewardAdDismissed() },
@@ -166,8 +148,6 @@ fun ChatRoomView(
     onSendMessage: (String) -> Unit,
     onRetry: () -> Unit,
     hasApiKey: Boolean,
-    showVoiceHint: Boolean,
-    onVoiceHintShown: () -> Unit,
     onApiKeyClick: () -> Unit,
     onShowRewardAd: (Activity) -> Unit = {},
     onDismissRewardAdDialog: () -> Unit = {},
@@ -176,86 +156,6 @@ fun ChatRoomView(
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val context = LocalContext.current
-
-    // ==================== 음성 입력 (STT) ====================
-    var isListening by remember { mutableStateOf(false) }
-
-    val audioPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            isListening = true
-        } else {
-            Toast.makeText(
-                context,
-                context.getString(R.string.permission_audio_denied),
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    val speechRecognizer = remember {
-        SpeechRecognizer.createSpeechRecognizer(context)
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            speechRecognizer.destroy()
-        }
-    }
-
-    LaunchedEffect(isListening) {
-        if (isListening) {
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(
-                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                )
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault().toLanguageTag())
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            }
-
-            speechRecognizer.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) {}
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() {}
-
-                override fun onError(error: Int) {
-                    isListening = false
-                    val errorMsg = when (error) {
-                        SpeechRecognizer.ERROR_NO_MATCH ->
-                            context.getString(R.string.stt_error_no_match)
-                        SpeechRecognizer.ERROR_AUDIO ->
-                            context.getString(R.string.stt_error_audio)
-                        else ->
-                            context.getString(R.string.stt_error_general)
-                    }
-                    Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
-                }
-
-                override fun onResults(results: Bundle?) {
-                    isListening = false
-                    val matches = results
-                        ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    val spokenText = matches?.firstOrNull() ?: return
-                    messageText = if (messageText.isBlank()) {
-                        spokenText
-                    } else {
-                        "${messageText} $spokenText"
-                    }
-                }
-
-                override fun onPartialResults(partialResults: Bundle?) {}
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
-
-            speechRecognizer.startListening(intent)
-        } else {
-            speechRecognizer.stopListening()
-        }
-    }
 
     // 새 메시지가 오면 스크롤
     LaunchedEffect(uiState.messages.size) {
@@ -383,14 +283,6 @@ fun ChatRoomView(
                 thickness = 1.dp,
                 color = MaterialTheme.colorScheme.outlineVariant
             )
-            if (showVoiceHint && uiState.messages.isEmpty() && hasApiKey && !uiState.isLoading) {
-                Text(
-                    text = stringResource(R.string.chat_voice_hint),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp)
-                )
-            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -408,48 +300,6 @@ fun ChatRoomView(
                     maxLines = 3,
                     enabled = hasApiKey && !uiState.isLoading
                 )
-
-                // 음성 명령 버튼 (아이콘 + 텍스트)
-                FilledTonalButton(
-                    onClick = {
-                        if (showVoiceHint) {
-                            onVoiceHintShown()
-                        }
-                        if (isListening) {
-                            isListening = false
-                        } else {
-                            val hasPermission = ContextCompat.checkSelfPermission(
-                                context, Manifest.permission.RECORD_AUDIO
-                            ) == PackageManager.PERMISSION_GRANTED
-
-                            if (hasPermission) {
-                                isListening = true
-                            } else {
-                                audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            }
-                        }
-                    },
-                    enabled = hasApiKey && !uiState.isLoading
-                ) {
-                    Icon(
-                        imageVector = if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
-                        contentDescription = stringResource(
-                            if (isListening) R.string.stt_stop else R.string.stt_start
-                        ),
-                        tint = if (isListening) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = stringResource(
-                            if (isListening) R.string.stt_button_stop else R.string.stt_button_start
-                        ),
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
 
                 FilledIconButton(
                     onClick = {
