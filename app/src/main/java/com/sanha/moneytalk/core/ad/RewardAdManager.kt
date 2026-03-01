@@ -10,6 +10,7 @@ import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.PremiumManager
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -56,7 +57,10 @@ class RewardAdManager @Inject constructor(
     private val premiumManager: PremiumManager
 ) {
     companion object {
-        private const val REWARD_AD_ID = "ca-app-pub-4707673176609005/2566523665"
+        /** Google 공식 리워드 테스트 광고 ID */
+        private const val TEST_REWARD_AD_ID = "ca-app-pub-3940256099942544/5224354917"
+        private const val PROD_REWARD_AD_ID = "ca-app-pub-4707673176609005/2566523665"
+        private val REWARD_AD_ID = if (BuildConfig.DEBUG) TEST_REWARD_AD_ID else PROD_REWARD_AD_ID
         private const val MAX_RETRY_COUNT = 3
     }
 

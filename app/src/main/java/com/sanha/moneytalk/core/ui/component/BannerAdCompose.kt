@@ -13,6 +13,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
+import com.sanha.moneytalk.BuildConfig
 
 /**
  * AdMob 배너 광고 Composable.
@@ -59,9 +60,12 @@ fun BannerAdCompose(
     )
 }
 
-/** 배너 광고 단위 ID */
+/** 배너 광고 단위 ID (디버그 빌드 시 Google 공식 테스트 ID 사용) */
 object BannerAdIds {
-    const val HOME = "ca-app-pub-4707673176609005/8344902874"
-    const val HISTORY = "ca-app-pub-4707673176609005/5323629075"
-    const val CATEGORY_DETAIL = "ca-app-pub-4707673176609005/9633933815"
+    /** Google 공식 배너 테스트 광고 ID */
+    private const val TEST_BANNER = "ca-app-pub-3940256099942544/6300978111"
+
+    val HOME = if (BuildConfig.DEBUG) TEST_BANNER else "ca-app-pub-4707673176609005/8344902874"
+    val HISTORY = if (BuildConfig.DEBUG) TEST_BANNER else "ca-app-pub-4707673176609005/5323629075"
+    val CATEGORY_DETAIL = if (BuildConfig.DEBUG) TEST_BANNER else "ca-app-pub-4707673176609005/9633933815"
 }
