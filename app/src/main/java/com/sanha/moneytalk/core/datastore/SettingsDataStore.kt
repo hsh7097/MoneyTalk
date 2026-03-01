@@ -32,7 +32,6 @@ class SettingsDataStore @Inject constructor(
         private val LAST_SYNC_TIME = longPreferencesKey("last_sync_time")
         private val MONTH_START_DAY = intPreferencesKey("month_start_day")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
-        private val CHAT_VOICE_HINT_SEEN = booleanPreferencesKey("chat_voice_hint_seen")
         private val SERVICE_TIER = stringPreferencesKey("service_tier")
         private val REWARD_CHAT_REMAINING = intPreferencesKey("reward_chat_remaining")
         private val FULL_SYNC_UNLOCKED = booleanPreferencesKey("full_sync_unlocked")
@@ -144,18 +143,6 @@ class SettingsDataStore @Inject constructor(
     // 테마 모드 가져오기 (기본값: SYSTEM)
     val themeModeFlow: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[THEME_MODE] ?: "SYSTEM"
-    }
-
-    // 채팅 음성 힌트 표시 여부 저장 (true=이미 표시됨)
-    suspend fun setChatVoiceHintSeen(seen: Boolean = true) {
-        context.dataStore.edit { preferences ->
-            preferences[CHAT_VOICE_HINT_SEEN] = seen
-        }
-    }
-
-    // 채팅 음성 힌트 표시 여부 가져오기 (기본값: false)
-    val chatVoiceHintSeenFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[CHAT_VOICE_HINT_SEEN] ?: false
     }
 
     // 서비스 티어 저장 (FREE / PREMIUM)

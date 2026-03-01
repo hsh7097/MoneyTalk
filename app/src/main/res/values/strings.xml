@@ -33,7 +33,6 @@
     <string name="chat_subtitle_with_api">Gemini와 대화하세요</string>
     <string name="chat_subtitle_no_api">API 키를 설정해주세요</string>
     <string name="chat_input_placeholder">메시지를 입력하세요…</string>
-    <string name="chat_voice_hint">오른쪽 음성 명령 버튼으로 말해서 질문할 수 있어요.</string>
     <string name="chat_send">전송</string>
     <string name="chat_thinking">생각 중…</string>
     <string name="chat_session_list">대화 목록</string>
@@ -155,22 +154,12 @@
 
     <!-- AI 성과 요약 -->
     <string name="engine_summary_title">✨ AI 엔진 준비 완료</string>
-    <string name="engine_summary_sms_analyzed">\uD83D\uDCE9 최근 14일간 문자 %d건 분석</string>
+    <string name="engine_summary_sms_analyzed">\uD83D\uDCE9 최근 2개월간 문자 %d건 분석</string>
     <string name="engine_summary_patterns_learned">\uD83C\uDFAF 카드 패턴 %d개 학습 완료</string>
     <string name="engine_summary_expense_count">지출 %d건</string>
     <string name="engine_summary_income_count">수입 %d건</string>
     <string name="engine_summary_registered">\uD83D\uDCB0 %s 등록</string>
     <string name="engine_summary_background_note">나머지 기간은 백그라운드에서\n자동으로 처리합니다</string>
-
-    <!-- 음성 입력 (STT) -->
-    <string name="stt_start">음성 입력 시작</string>
-    <string name="stt_stop">음성 입력 중지</string>
-    <string name="stt_button_start">음성 명령</string>
-    <string name="stt_button_stop">중지</string>
-    <string name="stt_error_no_match">음성을 인식하지 못했어요. 다시 시도해주세요.</string>
-    <string name="stt_error_audio">마이크 오류가 발생했어요.</string>
-    <string name="stt_error_general">음성 인식 중 오류가 발생했어요.</string>
-    <string name="permission_audio_denied">마이크 권한이 필요합니다.</string>
 
     <!-- 권한 및 종료 -->
     <string name="permission_sms_granted">SMS 권한이 허용되었습니다</string>
