@@ -13,6 +13,7 @@ package com.sanha.moneytalk.core.firebase
  *   "maintenance_message": "",
  *   "reward_ad_enabled": false,
  *   "reward_ad_chat_count": 5,
+ *   "free_sync_count": 3,
  *   "min_version_code": 1,
  *   "min_version_name": "1.0.0",
  *   "force_update_message": "",
@@ -45,6 +46,8 @@ data class PremiumConfig(
     val rewardAdEnabled: Boolean = false,
     /** 리워드 광고 1회 시청 시 충전되는 채팅 횟수 */
     val rewardAdChatCount: Int = 5,
+    /** 광고 없이 허용되는 과거 월 동기화 무료 횟수 (기본 3회) */
+    val freeSyncCount: Int = 3,
     /** 최소 요구 versionCode — 미만이면 강제 업데이트 */
     val minVersionCode: Int = 1,
     /** 최소 요구 versionName (표시용) */

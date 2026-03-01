@@ -238,7 +238,7 @@ fun HistoryScreen(
                         isPartiallyCovered = mainViewModel.isPagePartiallyCovered(pageYear, pageMonth),
                         hasSmsPermission = mainUiState.hasSmsPermission,
                         monthLabel = pageMonthLabel,
-                        isAdEnabled = isBannerAdEnabled,
+                        isAdEnabled = isBannerAdEnabled && !mainViewModel.hasFreeSyncRemaining(),
                         onImportData = {
                             onRequestSmsPermission {
                                 mainViewModel.syncIncremental()
@@ -254,6 +254,11 @@ fun HistoryScreen(
                                 // 광고 비활성 → 광고 없이 바로 전체 동기화 해제
                                 onRequestSmsPermission {
                                     mainViewModel.unlockFullSync(pageYear, pageMonth)
+                                }
+                            } else if (mainViewModel.hasFreeSyncRemaining()) {
+                                // 무료 동기화 잔여 횟수 있음 → 광고 없이 동기화
+                                onRequestSmsPermission {
+                                    mainViewModel.unlockFullSync(pageYear, pageMonth, isFreeSyncUsed = true)
                                 }
                             } else {
                                 mainViewModel.showFullSyncAdDialog(pageYear, pageMonth)

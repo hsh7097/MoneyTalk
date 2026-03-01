@@ -36,6 +36,7 @@ class SettingsDataStore @Inject constructor(
         private val REWARD_CHAT_REMAINING = intPreferencesKey("reward_chat_remaining")
         private val FULL_SYNC_UNLOCKED = booleanPreferencesKey("full_sync_unlocked")
         private val SYNCED_MONTHS = stringSetPreferencesKey("synced_months")
+        private val FREE_SYNC_USED_COUNT = intPreferencesKey("free_sync_used_count")
         private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     }
 
@@ -251,11 +252,27 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
-    /** 광고 시청으로 해제된 월별 동기화 + 레거시 전역 플래그 초기화 */
+    /** 광고 시청으로 해제된 월별 동기화 + 레거시 전역 플래그 + 무료 동기화 카운터 초기화 */
     suspend fun clearSyncedMonths() {
         context.dataStore.edit { preferences ->
             preferences.remove(SYNCED_MONTHS)
             preferences.remove(FULL_SYNC_UNLOCKED)
+            preferences.remove(FREE_SYNC_USED_COUNT)
+        }
+    }
+
+    // ===== 무료 동기화 사용 횟수 =====
+
+    /** 무료 동기화 사용 횟수 Flow */
+    val freeSyncUsedCountFlow: Flow<Int> = context.dataStore.data.map { preferences ->
+        preferences[FREE_SYNC_USED_COUNT] ?: 0
+    }
+
+    /** 무료 동기화 사용 횟수 1 증가 */
+    suspend fun incrementFreeSyncUsedCount() {
+        context.dataStore.edit { preferences ->
+            val current = preferences[FREE_SYNC_USED_COUNT] ?: 0
+            preferences[FREE_SYNC_USED_COUNT] = current + 1
         }
     }
 }

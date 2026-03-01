@@ -225,4 +225,11 @@ class RewardAdManager @Inject constructor(
     fun getRewardChatCount(): Int {
         return premiumManager.premiumConfig.value.rewardAdChatCount
     }
+
+    /**
+     * RTDB에서 설정된 무료 동기화 허용 횟수 (기본 3회)
+     */
+    fun getFreeSyncCount(): Int {
+        return premiumManager.premiumConfig.value.freeSyncCount
+    }
 }

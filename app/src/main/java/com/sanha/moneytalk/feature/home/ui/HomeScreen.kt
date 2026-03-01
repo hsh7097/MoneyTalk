@@ -185,7 +185,7 @@ fun HomeScreen(
                 hasSmsPermission = mainUiState.hasSmsPermission,
                 selectedCategory = uiState.selectedCategory,
                 isSyncing = mainUiState.isSyncing,
-                isAdEnabled = isBannerAdEnabled,
+                isAdEnabled = isBannerAdEnabled && !mainViewModel.hasFreeSyncRemaining(),
                 onPreviousMonth = {
                     coroutineScope.launch {
                         pagerState.animateScrollToPage(pagerState.currentPage - 1)
@@ -216,6 +216,11 @@ fun HomeScreen(
                         // 광고 비활성 → 광고 없이 바로 전체 동기화 해제
                         onRequestSmsPermission {
                             mainViewModel.unlockFullSync(pageYear, pageMonth)
+                        }
+                    } else if (mainViewModel.hasFreeSyncRemaining()) {
+                        // 무료 동기화 잔여 횟수 있음 → 광고 없이 동기화
+                        onRequestSmsPermission {
+                            mainViewModel.unlockFullSync(pageYear, pageMonth, isFreeSyncUsed = true)
                         }
                     } else {
                         mainViewModel.preloadFullSyncAd()
