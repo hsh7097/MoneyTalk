@@ -45,9 +45,9 @@ sealed class AdState {
  * Firebase RTDB의 reward_ad_enabled 설정에 따라 동작하며,
  * 광고 시청 시 reward_ad_chat_count만큼 채팅 횟수를 충전합니다.
  *
- * ## 테스트 ID (현재 사용 중)
- * - 앱 ID: ca-app-pub-3940256099942544~3347511713
- * - 리워드 광고 ID: ca-app-pub-3940256099942544/5224354917
+ * ## 광고 ID
+ * - 앱 ID: ca-app-pub-4707673176609005~5012288836
+ * - 리워드 광고 ID: ca-app-pub-4707673176609005/2566523665
  */
 @Singleton
 class RewardAdManager @Inject constructor(
@@ -56,8 +56,7 @@ class RewardAdManager @Inject constructor(
     private val premiumManager: PremiumManager
 ) {
     companion object {
-        /** Google 공식 테스트 리워드 광고 ID */
-        private const val TEST_REWARD_AD_ID = "ca-app-pub-3940256099942544/5224354917"
+        private const val REWARD_AD_ID = "ca-app-pub-4707673176609005/2566523665"
         private const val MAX_RETRY_COUNT = 3
     }
 
@@ -86,7 +85,7 @@ class RewardAdManager @Inject constructor(
         _adState.value = AdState.Loading
 
         val adRequest = AdRequest.Builder().build()
-        RewardedAd.load(context, TEST_REWARD_AD_ID, adRequest,
+        RewardedAd.load(context, REWARD_AD_ID, adRequest,
             object : RewardedAdLoadCallback() {
                 override fun onAdLoaded(ad: RewardedAd) {
                     rewardedAd = ad

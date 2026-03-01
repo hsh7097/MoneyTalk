@@ -71,6 +71,7 @@ import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
+import com.sanha.moneytalk.core.ui.component.BannerAdIds
 import com.sanha.moneytalk.core.ui.component.FullSyncCtaSection
 import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.feature.history.ui.IncomeDetailDialog
@@ -169,9 +170,10 @@ fun HomeScreen(
             val (pageYear, pageMonth) = remember(page) {
                 MonthPagerUtils.pageToYearMonth(page)
             }
-            // pageCache에서 이 페이지의 데이터 읽기 (없으면 기본값)
+            // pageCache에서 이 페이지의 데이터 읽기
+            // 캐시 미적재 페이지는 isLoading=false로 처리하여 CTA 조건이 즉시 평가되도록 함
             val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
-                ?: HomePageData()
+                ?: HomePageData(isLoading = false)
 
             HomePageContent(
                 pageData = pageData,
@@ -250,7 +252,7 @@ fun HomeScreen(
 
         // 배너 광고 (RTDB reward_ad_enabled 연동)
         if (isBannerAdEnabled) {
-            BannerAdCompose()
+            BannerAdCompose(adUnitId = BannerAdIds.HOME)
         }
     } // Column
 
