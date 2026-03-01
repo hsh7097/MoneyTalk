@@ -62,7 +62,7 @@
 | 항목 | 스펙 |
 |------|------|
 | 조건 | RTDB의 minVersionCode > 현재 versionCode |
-| UI | AlertDialog (취소 불가) + 업데이트 메시지 (RTDB에서 가져옴) |
+| UI | AlertDialog (취소 불가, Predictive Back 방어) + 업데이트 메시지 (RTDB에서 가져옴) |
 | 동작 | Play Store로 이동 |
 
 ---
@@ -567,9 +567,6 @@ BillingCycleCalendarView 입력 데이터:
 | 텍스트 필드 | OutlinedTextField, 최대 3줄 |
 | 비활성화 | API 키 없음 OR 로딩 중 |
 | 전송 버튼 | 텍스트 비어있지 않을 때만 활성 |
-| 음성 버튼 | RECORD_AUDIO 권한 요청 → STT (Mic/Stop 토글) |
-| 음성 힌트 | 최초 1회 배너 "오른쪽 음성 명령 버튼으로 말해서 질문할 수 있어요" |
-| 힌트 표시 | 음성 버튼 첫 클릭 시 seen 처리 (DataStore) |
 
 ### 4.5 3-Step AI 파이프라인
 

@@ -4,6 +4,45 @@
 
 ---
 
+## 2026-03-01 - v1.1.0 출시 준비 (API 35 + AdMob + STT 제거)
+
+### 배경
+Google Play Console 배포를 위해 targetSdk 35 마이그레이션, AdMob 테스트→실제 ID 전환, RECORD_AUDIO 권한(STT) 제거가 필요.
+
+### 작업 내용
+
+#### API 35 마이그레이션
+- compileSdk/targetSdk 34→35, versionCode 2→3
+- AGP 8.2.2→8.7.3, Gradle 8.5→8.9
+- Theme.kt: statusBarColor에 `@Suppress("DEPRECATION")` 추가 (API 35에서 무시되지만 하위 호환)
+- 모든 Activity(MainActivity, IntroActivity, SmsSettingsActivity, CategoryDetailActivity)에 `enableEdgeToEdge()` 이미 적용 확인
+- ForceUpdateDialog: DialogProperties(dismissOnBackPress=false) 추가 — API 35 Predictive Back 대응
+
+#### AdMob 실제 ID 전환
+- AndroidManifest APPLICATION_ID: 테스트→실제
+- RewardAdManager: TEST_REWARD_AD_ID→REWARD_AD_ID (실제 리워드 광고 ID)
+- BannerAdCompose: adUnitId 파라미터 추가, BannerAdIds object로 화면별 ID 관리 (HOME/HISTORY/CATEGORY_DETAIL)
+- AD_SERVICES_CONFIG property 추가 (AdMob+Firebase Analytics 충돌 해결)
+
+#### STT/RECORD_AUDIO 완전 제거
+- **이유**: Play Console에서 RECORD_AUDIO 권한 플래그 → 음성 입력 기능은 사용률 낮으므로 제거
+- AndroidManifest에서 RECORD_AUDIO 권한 제거
+- ChatScreen.kt에서 ~150줄 삭제 (SpeechRecognizer, RecognitionListener, 음성 버튼, 음성 힌트)
+- ChatViewModel.kt에서 showVoiceHint/observeVoiceHintSeen/markVoiceHintSeen 제거
+- SettingsDataStore에서 CHAT_VOICE_HINT_SEEN 키 제거 (기존 사용자 기기에 고아 키 잔존, 무해)
+- strings.xml(ko/en)에서 STT 관련 9개 문자열 + chat_voice_hint 제거
+
+#### 버그 수정
+- HomePageData/HistoryPageData: 캐시 미적재 페이지에서 isLoading=false fallback — 1월 CTA 미표시 버그 수정
+- engine_summary_sms_analyzed: "최근 14일간"→"최근 2개월간" (실제 동기화 기간과 일치)
+
+### 결정 사항
+- **DataStore 고아 키 미삭제**: chat_voice_hint_seen boolean 1바이트, 마이그레이션/삭제 불필요
+- **deprecated 패딩 함수 유지**: OnboardingScreen(statusBarsPadding, navigationBarsPadding), ChatScreen(imePadding) — 동작에 문제 없으나 향후 `windowInsetsPadding(WindowInsets.*)` 전환 권장
+- **BannerAdIds 하드코딩**: RTDB 동적 관리 대신 const로 배포. 광고 단위 변경 시 앱 업데이트 필요하나 현 단계에서 충분
+
+---
+
 ## 2026-02-27 - 문자 설정 Activity 및 수신거부 번호 관리
 
 ### 배경

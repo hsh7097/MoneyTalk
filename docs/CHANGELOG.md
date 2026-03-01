@@ -4,6 +4,25 @@
 
 ## [Unreleased]
 
+### Changed (2026-03-01)
+- **targetSdk 35 마이그레이션**: compileSdk/targetSdk 34→35, AGP 8.2.2→8.7.3, Gradle 8.5→8.9, versionCode 2→3
+- **AdMob 테스트→실제 ID 전환**: APPLICATION_ID, 리워드 광고, 배너 광고 3화면 (BannerAdIds object)
+  - BannerAdCompose에 adUnitId 파라미터 추가, AD_SERVICES_CONFIG property 추가
+- **Theme.kt statusBarColor**: API 35 deprecated 대응 `@Suppress("DEPRECATION")` 추가
+- **engine_summary_sms_analyzed**: "최근 14일간"→"최근 2개월간" (실제 동기화 기간과 일치)
+
+### Fixed (2026-03-01)
+- **ForceUpdateDialog Predictive Back**: DialogProperties(dismissOnBackPress=false, dismissOnClickOutside=false) 추가 — API 35에서 백 제스처로 강제 업데이트 다이얼로그가 닫히는 문제 방지
+- **CTA 1월 미표시 버그**: HomePageData/HistoryPageData 캐시 미적재 페이지에서 `isLoading=false` fallback 적용하여 CTA 조건이 즉시 평가되도록 수정
+
+### Removed (2026-03-01)
+- **RECORD_AUDIO 권한 + STT 음성 입력 제거**: Play Console 권한 플래그 대응
+  - AndroidManifest에서 RECORD_AUDIO 권한 제거
+  - ChatScreen.kt에서 SpeechRecognizer/RecognitionListener/음성 버튼/힌트 ~150줄 삭제
+  - ChatViewModel.kt에서 showVoiceHint/observeVoiceHintSeen/markVoiceHintSeen 제거
+  - SettingsDataStore에서 CHAT_VOICE_HINT_SEEN 키 제거
+  - strings.xml(ko/en)에서 STT 관련 10개 문자열 제거
+
 ### Added (2026-02-27)
 - **문자 설정 Activity**: `SmsSettingsActivity` + `SmsSettingsScreen` — 문자분석 업데이트, 수신거부 문구 관리, 수신거부 전화번호 관리를 별도 화면으로 분리
 - **수신거부 발신번호 DB**: `SmsBlockedSenderEntity` + `SmsBlockedSenderDao` + `SmsBlockedSenderRepository` — Room DB v4→v5 마이그레이션

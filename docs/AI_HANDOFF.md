@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-27 (PR #40, #41 반영)
+> **최종 갱신**: 2026-03-01 (v1.1.0 출시 준비 — API 35, AdMob, STT 제거)
 
 ---
 
@@ -310,9 +310,27 @@
 - **TransactionCard 메모 표시**: memoText 필드 + buildAnnotatedString (alpha=0.72f)
 - **상수 추출**: DEBIT_FALLBACK_STORE_NAME (SmsPatternMatcher), outcome 코드 REGEX_FAILED_HEURISTIC_KB 구분
 
+**v1.1.0 출시 준비**: 🔄 진행 중 (2026-03-01)
+- **targetSdk 34→35 (API 35 마이그레이션)**: compileSdk/targetSdk 35, AGP 8.2.2→8.7.3, Gradle 8.5→8.9
+  - 모든 Activity에 `enableEdgeToEdge()` 적용 확인됨
+  - Theme.kt statusBarColor에 `@Suppress("DEPRECATION")` 추가 (API 35에서 deprecated)
+  - OnboardingScreen/ChatScreen의 deprecated 패딩 함수는 기술 부채로 유지 (동작에 문제 없음)
+- **AdMob 테스트→실제 ID 전환**: APPLICATION_ID, 리워드 광고, 배너 광고(HOME/HISTORY/CATEGORY_DETAIL) 3화면
+  - BannerAdCompose에 adUnitId 파라미터 추가, BannerAdIds object로 화면별 ID 관리
+  - AD_SERVICES_CONFIG property 추가 (AdMob+Firebase Analytics 충돌 해결)
+- **STT/RECORD_AUDIO 완전 제거**: Play Console 권한 플래그 대응
+  - ChatScreen.kt에서 ~150줄 삭제 (SpeechRecognizer, RecognitionListener, 음성 버튼)
+  - ChatViewModel.kt에서 showVoiceHint/observeVoiceHintSeen/markVoiceHintSeen 제거
+  - SettingsDataStore에서 CHAT_VOICE_HINT_SEEN 키 제거
+  - strings.xml(ko/en)에서 STT 관련 9개 문자열 제거
+- **CTA 1월 버그 수정**: HomePageData/HistoryPageData 캐시 미적재 시 isLoading=false fallback (CTA 즉시 평가)
+- **ForceUpdateDialog Predictive Back 방어**: DialogProperties(dismissOnBackPress=false) 추가
+- **문자열 수정**: "최근 14일간"→"최근 2개월간" (engine_summary_sms_analyzed)
+- **versionCode 2→3**: 릴리스 빌드 준비
+
 ### 대기 중인 작업
 
-- `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지 (이미 머지됨 — 정리 필요)
+- 위 변경사항 커밋 + 릴리스 빌드(assembleRelease) 검증
 - GitHub Pages 설정 (Settings → Pages → `/docs` 디렉토리) — 개인정보처리방침 URL 활성화용
 - Google Play Console 알파 트랙 AAB 업로드 + SMS 권한 선언 양식 제출
 
@@ -355,7 +373,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 ## 5. 주의사항
 
 ### 절대 금지
-- DB 스키마 변경 시 마이그레이션 필수 (현재 AppDatabase v4, sms_patterns v3)
+- DB 스키마 변경 시 마이그레이션 필수 (현재 AppDatabase v5, sms_patterns v3)
 - 임계값 수치 변경 시 [AI_CONTEXT.md](AI_CONTEXT.md) SSOT 먼저 업데이트
 - `!!` non-null assertion 사용 금지
 
@@ -374,6 +392,8 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-03-01 | v1.1.0 출시 준비: targetSdk 35, AdMob 실제 ID, STT/RECORD_AUDIO 제거, CTA 버그 수정, ForceUpdateDialog 백키 방어, versionCode 3 | 진행 중 |
+| 2026-02-27 | PR #42: 문자설정 Activity + 수신거부 번호 관리 + 영어 번역 보강 | 완료 |
 | 2026-02-27 | PR #41: Step4.5 복구 경로 최적화 — 병렬화+품질게이트, KB 휴리스틱, Step5 경로 분리(5-A/5-B), 프롬프트 강화, insight 재시도, 메모 표시, 상수 정리 | 완료 |
 | 2026-02-27 | PR #40: Step5 정책/예산/학습 고도화 — 그룹/전체 시간 예산, 스킵→강등, unstable 그룹 해체, cohesion gate, 백그라운드 학습 큐+dedup | 완료 |
 | 2026-02-27 | SMS Step5 성능 최적화 + Step4.5 배치 LLM 복구 경로 — KB출금 regex 실패 무한 루프 해결, MatchResult 3-way 분할, batchExtractRegexFailed, PR #38 머지 | 완료 |
