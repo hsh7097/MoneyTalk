@@ -34,6 +34,7 @@
     <string name="chat_subtitle_no_api">API 키를 설정해주세요</string>
     <string name="chat_input_placeholder">메시지를 입력하세요…</string>
     <string name="chat_send">전송</string>
+    <string name="chat_ai_disclaimer">AI는 실수할 수 있습니다. 중요한 정보는 직접 확인하세요.</string>
     <string name="chat_thinking">생각 중…</string>
     <string name="chat_session_list">대화 목록</string>
     <string name="chat_new_session">새 대화</string>
