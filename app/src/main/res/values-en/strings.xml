@@ -398,6 +398,25 @@
     <string name="force_update_button">Update</string>
     <string name="force_update_exit">Exit</string>
 
+    <!-- SMS Settings -->
+    <string name="sms_settings_title">SMS Settings</string>
+    <string name="sms_settings_subtitle">SMS analysis &amp; blocked sender management</string>
+    <string name="sms_settings_section_analysis">SMS Analysis</string>
+    <string name="sms_settings_section_block">Blocked</string>
+    <string name="sms_settings_sync_title">Update SMS Analysis</string>
+    <string name="sms_settings_sync_subtitle">Re-read and analyze SMS messages</string>
+    <string name="sms_settings_sync_subtitle_last">Last updated %1$s</string>
+    <string name="sms_settings_blocked_phrase_title">Blocked Phrases</string>
+    <string name="sms_settings_blocked_phrase_subtitle_count">%1$d user · %2$d default</string>
+    <string name="sms_settings_blocked_sender_title">Blocked Phone Numbers</string>
+    <string name="sms_settings_blocked_sender_subtitle_count">%1$d registered</string>
+    <string name="sms_settings_blocked_sender_subtitle_empty">No numbers registered</string>
+    <string name="sms_settings_blocked_phrase_page_title">Blocked Phrases</string>
+    <string name="sms_settings_blocked_sender_page_title">Blocked Phone Numbers</string>
+    <string name="sms_settings_blocked_sender_description">Messages from added numbers will be excluded from SMS sync.</string>
+    <string name="sms_settings_blocked_sender_input_hint">Enter phone number</string>
+    <string name="sms_settings_blocked_sender_empty">No blocked numbers registered</string>
+
     <!-- SMS regex repair failure reasons -->
     <string name="sms_regex_reason_json_parse_failed" translatable="false">Response is not valid JSON. Return JSON format only.</string>
     <string name="sms_regex_reason_is_payment_false" translatable="false">isPayment is false. Set it to true for payment SMS.</string>

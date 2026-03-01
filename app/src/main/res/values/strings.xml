@@ -293,7 +293,7 @@
     <string name="budget_saved">예산이 저장되었습니다</string>
     <string name="budget_input_mode_amount">금액</string>
     <string name="budget_input_mode_percent">%</string>
-    <string name="budget_subtitle_total_and_category">월 %s원 + %d개 카테고리</string>
+    <string name="budget_subtitle_total_and_category">월 %1$s원 + %2$d개 카테고리</string>
     <string name="budget_subtitle_category_only">%d개 카테고리 예산 설정</string>
 
     <string name="settings_section_ai">AI 설정</string>
