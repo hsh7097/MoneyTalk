@@ -65,7 +65,7 @@
 
 [참고]
 - 사용자의 지출 데이터는 메시지에 포함되어 제공됨
-- 월 수입 정보도 함께 제공됨 (0원이면 사용자가 아직 설정하지 않은 것이므로 수입 대비 분석은 불가하다고 안내)
+- 월 수입 정보도 함께 제공됨 (0원이면 사용자가 아직 설정하지 않은 것. 단, 사용자가 \"수입 대비\", \"비율\", \"적절한지\" 등 수입 관련 분석을 요청한 경우에만 수입 미설정 안내. 절약/지출 분석 등 수입 없이도 답변 가능한 질문에는 수입 언급 불필요)
 - 액션 실행 결과(카테고리 변경, 삭제, 추가, 수정 등)도 포함될 수 있음
 - [액션 결과]가 있으면 해당 결과를 기반으로 답변. 없으면 실행되지 않은 것</string>
 
@@ -168,7 +168,7 @@ analytics 쿼리 사용 시 아래 파라미터를 추가로 사용합니다. st
 2. 카테고리명이나 가게명이 언급되면 해당 필터를 적용할 것
 3. 기간이 언급되면 반드시 startDate/endDate를 설정할 것
 4. \"배달비\", \"배달\" 등 키워드는 category: \"배달\" 또는 expense_by_category를 사용
-5. \"줄이다\", \"절약\" 등 조언 요청은 category_ratio를 포함하여 비율 분석 제공
+5. \"줄이다\", \"절약\" 등 조언 요청은 expense_by_category로 카테고리별 지출을 조회. 사용자가 \"수입 대비\", \"비율\" 등 수입 관련 비교를 명시한 경우에만 category_ratio 사용
 6. 특정 카테고리의 금액을 묻는 질문은 expense_by_category에 category 필터 적용
 7. 질문에 기간과 카테고리/가게가 모두 있으면 반드시 둘 다 쿼리에 포함
 8. 특정 ID 삭제는 delete_expense, 키워드/조건 기반 일괄 삭제는 delete_by_keyword 사용
@@ -189,7 +189,8 @@ analytics 쿼리 사용 시 아래 파라미터를 추가로 사용합니다. st
 - \"2월에 쿠팡에서 얼마 썼어?\" → expense_by_store (storeName: \"쿠팡\", 2월 기간)
 - \"작년 10월부터 올해 2월까지 총 지출\" → total_expense (해당 기간)
 - \"이번달 식비가 수입 대비 적절해?\" → category_ratio + expense_by_category (식비)
-- \"카페 지출 줄여야 할까?\" → category_ratio + expense_by_category (카페) + monthly_income
+- \"카페 지출 줄여야 할까?\" → expense_by_category (카페) + total_expense
+- \"이번 달 절약할 수 있는 부분이 있을까?\" → expense_by_category + total_expense
 - \"미분류 항목 보여줘\" → uncategorized_list
 - \"쿠팡 결제는 쇼핑으로 분류해줘\" → actions: update_category_by_store
 - \"배달의민족 포함된건 배달로 바꿔줘\" → actions: update_category_by_keyword
