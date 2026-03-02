@@ -321,7 +321,6 @@
     <string name="engine_summary_expense_count">%d expenses</string>
     <string name="engine_summary_income_count">%d incomes</string>
     <string name="engine_summary_registered">\uD83D\uDCB0 %s added</string>
-    <string name="engine_summary_background_note">Remaining period will be\nprocessed in the background</string>
     <string name="home_this_month_expense">This Month Expense</string>
     <string name="home_today_count">%d items</string>
     <string name="home_insight_diff_more">vs Last Month +₩%s</string>

@@ -160,7 +160,6 @@
     <string name="engine_summary_expense_count">지출 %d건</string>
     <string name="engine_summary_income_count">수입 %d건</string>
     <string name="engine_summary_registered">\uD83D\uDCB0 %s 등록</string>
-    <string name="engine_summary_background_note">나머지 기간은 백그라운드에서\n자동으로 처리합니다</string>
 
     <!-- 권한 및 종료 -->
     <string name="permission_sms_granted">SMS 권한이 허용되었습니다</string>
