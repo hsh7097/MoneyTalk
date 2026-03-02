@@ -24,7 +24,8 @@ data class CategorySpendingTrendInfo(
     override val primaryLine: CumulativeChartLine,
     override val toggleableLines: List<ToggleableLine>,
     override val daysInMonth: Int,
-    override val todayDayIndex: Int
+    override val todayDayIndex: Int,
+    override val currentAmount: Long
 ) : SpendingTrendInfo {
 
     companion object {
@@ -120,7 +121,8 @@ data class CategorySpendingTrendInfo(
                 primaryLine = primaryLine,
                 toggleableLines = toggleableLines,
                 daysInMonth = pageData.daysInMonth,
-                todayDayIndex = pageData.todayDayIndex
+                todayDayIndex = pageData.todayDayIndex,
+                currentAmount = pageData.dailyCumulativeExpenses.lastOrNull() ?: 0L
             )
         }
     }
