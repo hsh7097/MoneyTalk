@@ -38,7 +38,9 @@ import javax.inject.Singleton
 class SmsSyncCoordinator @Inject constructor(
     private val preFilter: SmsPreFilter,
     private val incomeFilter: SmsIncomeFilter,
-    private val pipeline: SmsPipeline
+    private val pipeline: SmsPipeline,
+    private val regexRuleMatcher: SmsRegexRuleMatcher,
+    private val regexRuleSyncService: SmsRegexRuleSyncService
 ) {
 
     /**
@@ -85,6 +87,11 @@ class SmsSyncCoordinator @Inject constructor(
         }
         MoneyTalkLogger.i("SmsSyncCoordinator 시작: 입력 ${smsList.size}건")
 
+        runCatching {
+            regexRuleSyncService.syncRules()
+        }.onFailure { e ->
+            MoneyTalkLogger.w("Regex 룰 동기화 실패 (폴백 진행): ${e.message}")
+        }
 
         // Step 0: 사전 필터링 (광고, 인증번호, 배송 알림 등 비결제 SMS 제거)
         // SmsPipeline 진입 전에 여기서 처리 → 불필요한 분류/임베딩 방지
@@ -106,31 +113,37 @@ class SmsSyncCoordinator @Inject constructor(
         MoneyTalkLogger.i("Step1 IncomeFilter: 결제 ${paymentCandidates.size}건, 수입 ${incomeCandidates.size}건, 스킵 ${skipped.size}건"
         )
 
+        // Step 1.5: sender 기반 로컬 regex 룰 매칭 (Fast Path)
+        val regexMatchResult = regexRuleMatcher.matchPaymentCandidates(paymentCandidates)
+        val fastPathMatched = regexMatchResult.matched
+        val fastPathUnmatched = regexMatchResult.unmatched
+        MoneyTalkLogger.i("Step1.5 SenderRegex: 매칭 ${fastPathMatched.size}건, 폴백 ${fastPathUnmatched.size}건")
 
-        // Step 2: 결제 후보를 SmsPipeline에 전달 (사전 필터링 스킵)
-        val pipelineResult = if (paymentCandidates.isNotEmpty()) {
-            pipeline.process(paymentCandidates, onProgress, skipPreFilter = true)
+        // Step 2: Fast Path 미매칭 결제 후보만 SmsPipeline에 전달 (사전 필터링 스킵)
+        val pipelineResult = if (fastPathUnmatched.isNotEmpty()) {
+            pipeline.process(fastPathUnmatched, onProgress, skipPreFilter = true)
         } else {
             SmsPipeline.PipelineResult(emptyList(), 0, 0)
         }
 
+        val expenses = fastPathMatched + pipelineResult.results
         val preFilterSkipped = smsList.size - filtered.size
         val stats = SyncStats(
             totalInput = smsList.size,
             paymentCandidates = paymentCandidates.size,
             incomeCandidates = incomeCandidates.size,
             skipped = skipped.size + preFilterSkipped,
-            vectorMatchCount = pipelineResult.vectorMatchCount,
+            vectorMatchCount = fastPathMatched.size + pipelineResult.vectorMatchCount,
             llmProcessCount = pipelineResult.llmProcessCount,
             newPatternsCreated = pipelineResult.llmProcessCount,
             regexFailedRecoveredCount = pipelineResult.regexFailedRecoveredCount
         )
-        MoneyTalkLogger.i("SmsSyncCoordinator 완료: 지출 ${pipelineResult.results.size}건, 수입 ${incomeCandidates.size}건"
+        MoneyTalkLogger.i("SmsSyncCoordinator 완료: 지출 ${expenses.size}건, 수입 ${incomeCandidates.size}건"
         )
 
 
         return SyncResult(
-            expenses = pipelineResult.results,
+            expenses = expenses,
             incomes = incomeCandidates,
             stats = stats
         )

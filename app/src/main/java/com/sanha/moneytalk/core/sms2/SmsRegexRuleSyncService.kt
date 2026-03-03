@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.sms2
 
 import com.sanha.moneytalk.core.database.SmsRegexRuleRepository
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,17 +18,39 @@ class SmsRegexRuleSyncService @Inject constructor(
     private val assetLoader: SmsRegexRuleAssetLoader,
     private val remoteLoader: SmsRegexRemoteRuleLoader
 ) {
+    companion object {
+        /** 원격 룰 upsert 최소 주기 */
+        private const val REMOTE_SYNC_MIN_INTERVAL_MS = 10L * 60L * 1000L
+    }
+
     data class SyncSummary(
         val assetRuleCount: Int = 0,
         val remoteRuleCount: Int = 0
     )
 
-    suspend fun syncRules(forceRemoteRefresh: Boolean = false): SyncSummary {
-        val assetRules = assetLoader.loadRules()
-        repository.upsertRules(assetRules)
+    private val assetSeeded = AtomicBoolean(false)
 
-        val remoteRules = remoteLoader.loadRules(forceRefresh = forceRemoteRefresh)
-        repository.upsertRules(remoteRules)
+    @Volatile
+    private var lastRemoteSyncAt: Long = 0L
+
+    suspend fun syncRules(forceRemoteRefresh: Boolean = false): SyncSummary {
+        val now = System.currentTimeMillis()
+        val assetRules = if (assetSeeded.compareAndSet(false, true)) {
+            assetLoader.loadRules().also { repository.upsertRules(it) }
+        } else {
+            emptyList()
+        }
+
+        val shouldSyncRemote = forceRemoteRefresh ||
+            (now - lastRemoteSyncAt) >= REMOTE_SYNC_MIN_INTERVAL_MS
+        val remoteRules = if (shouldSyncRemote) {
+            remoteLoader.loadRules(forceRefresh = forceRemoteRefresh).also {
+                repository.upsertRules(it)
+                lastRemoteSyncAt = now
+            }
+        } else {
+            emptyList()
+        }
 
         return SyncSummary(
             assetRuleCount = assetRules.size,
