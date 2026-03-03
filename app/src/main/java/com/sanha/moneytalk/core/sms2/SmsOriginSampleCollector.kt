@@ -27,7 +27,6 @@ class SmsOriginSampleCollector @Inject constructor(
     }
 
     data class SuccessSample(
-        val senderAddress: String,
         val normalizedSenderAddress: String,
         val type: String,
         val template: String,
@@ -36,15 +35,10 @@ class SmsOriginSampleCollector @Inject constructor(
         val parseSource: String,
         val cardName: String,
         val groupMemberCount: Int,
-        val amountRegex: String = "",
-        val storeRegex: String = "",
-        val cardRegex: String = "",
-        val dateRegex: String = "",
         val matchedRuleKey: String = ""
     )
 
     data class FailureSample(
-        val senderAddress: String,
         val normalizedSenderAddress: String,
         val type: String,
         val originBody: String,
@@ -72,17 +66,8 @@ class SmsOriginSampleCollector @Inject constructor(
                 append(sample.type)
                 append('|')
                 append(sample.template.trim())
-                append('|')
-                append(sample.amountRegex.trim())
-                append('|')
-                append(sample.storeRegex.trim())
-                append('|')
-                append(sample.cardRegex.trim())
-                append('|')
-                append(sample.dateRegex.trim())
             }
         )
-        val sampleKey = fingerprint
         val bucketKey = "${sample.normalizedSenderAddress}|${sample.type.lowercase(Locale.ROOT)}"
 
         val isNewInSession = synchronized(successFingerprintsByBucket) {
@@ -97,14 +82,12 @@ class SmsOriginSampleCollector @Inject constructor(
         val ref = db.getReference(SMS_ORIGIN_PATH)
             .child(sample.normalizedSenderAddress)
             .child(sample.type.lowercase(Locale.ROOT))
-            .child(sampleKey)
+            .child(fingerprint)
 
         val payload = mutableMapOf<String, Any>(
             "schemaVersion" to 2,
-            "sampleKey" to sampleKey,
             "fingerprint" to fingerprint,
             "outcome" to "success",
-            "senderAddress" to sample.senderAddress,
             "normalizedSenderAddress" to sample.normalizedSenderAddress,
             "type" to sample.type.lowercase(Locale.ROOT),
             "template" to sample.template,
@@ -120,14 +103,6 @@ class SmsOriginSampleCollector @Inject constructor(
         if (isNewInSession) {
             payload["createdAt"] = now
         }
-        val normalizedAmountRegex = normalizeRegexForStorage(sample.amountRegex)
-        val normalizedStoreRegex = normalizeRegexForStorage(sample.storeRegex)
-        val normalizedCardRegex = normalizeRegexForStorage(sample.cardRegex)
-        val normalizedDateRegex = normalizeRegexForStorage(sample.dateRegex)
-        if (normalizedAmountRegex.isNotBlank()) payload["amountRegex"] = normalizedAmountRegex
-        if (normalizedStoreRegex.isNotBlank()) payload["storeRegex"] = normalizedStoreRegex
-        if (normalizedCardRegex.isNotBlank()) payload["cardRegex"] = normalizedCardRegex
-        if (normalizedDateRegex.isNotBlank()) payload["dateRegex"] = normalizedDateRegex
         if (sample.matchedRuleKey.isNotBlank()) payload["matchedRuleKey"] = sample.matchedRuleKey
         appendRuleShapeFields(
             payload = payload,
@@ -168,19 +143,15 @@ class SmsOriginSampleCollector @Inject constructor(
                 append(failureTemplate)
             }
         )
-        val sampleKey = fingerprint
-
         val ref = db.getReference(SMS_ORIGIN_PATH)
             .child(sample.normalizedSenderAddress)
             .child(normalizedType)
-            .child(sampleKey)
+            .child(fingerprint)
 
         val payload = mutableMapOf<String, Any>(
             "schemaVersion" to 2,
-            "sampleKey" to sampleKey,
             "fingerprint" to fingerprint,
             "outcome" to "fail",
-            "senderAddress" to sample.senderAddress,
             "normalizedSenderAddress" to sample.normalizedSenderAddress,
             "type" to normalizedType,
             "originBody" to sample.originBody,

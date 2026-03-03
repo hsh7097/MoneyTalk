@@ -184,8 +184,6 @@ class SmsPatternMatcher @Inject constructor(
         var remoteRulesDeferred: kotlinx.coroutines.Deferred<Map<String, List<RemoteSmsRule>>>? = null
         var remoteRules: Map<String, List<RemoteSmsRule>>? = null
 
-        var remoteMatchCount = 0
-        var remoteFailCount = 0
         // 동일 sync 내 중복 승격 방지 (ruleId 기준)
         val promotedRuleIds = mutableSetOf<String>()
 
@@ -256,11 +254,9 @@ class SmsPatternMatcher @Inject constructor(
                 val remoteResult = matchWithRemoteRules(embedded, rules, promotedRuleIds)
                 if (remoteResult != null) {
                     matched.add(remoteResult)
-                    remoteMatchCount++
                 } else {
                     // --- [4] 미매칭 → Step 5로 ---
                     unmatched.add(embedded)
-                    if (rules.isNotEmpty()) remoteFailCount++
                 }
             }
         }
@@ -271,20 +267,6 @@ class SmsPatternMatcher @Inject constructor(
             for ((patternId, count) in matchCountMap) {
                 smsPatternDao.incrementMatchCountBy(patternId, count, batchTimestamp)
             }
-        }
-
-        if (remoteMatchCount > 0 || remoteFailCount > 0) {
-        }
-
-        // 발신번호별 매칭/regex실패/미매칭 통계
-        val matchedByAddr = matched.groupBy { it.input.address }
-        val regexFailedByAddr = regexFailed.groupBy { it.input.address }
-        val unmatchedByAddr = unmatched.groupBy { it.input.address }
-        val allAddresses = (matchedByAddr.keys + regexFailedByAddr.keys + unmatchedByAddr.keys).distinct().sorted()
-        for (addr in allAddresses) {
-            val m = matchedByAddr[addr]?.size ?: 0
-            val rf = regexFailedByAddr[addr]?.size ?: 0
-            val u = unmatchedByAddr[addr]?.size ?: 0
         }
 
         return@coroutineScope MatchResult(matched, regexFailed, unmatched)
