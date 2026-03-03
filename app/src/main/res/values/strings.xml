@@ -385,6 +385,8 @@
     <!-- 달력 뷰 (History Calendar) -->
     <string name="calendar_day_expense_title">%1$s월 %2$d일 지출 내역</string>
     <string name="calendar_no_expense_for_day">해당 날짜에 지출 내역이 없습니다</string>
+    <string name="calendar_day_transaction_title">%1$s월 %2$d일 거래 내역</string>
+    <string name="calendar_no_transaction_for_day">해당 날짜에 거래 내역이 없습니다</string>
 
     <!-- 수입 상세 다이얼로그 (Income Detail) -->
     <string name="income_detail_type">유형</string>
@@ -501,4 +503,32 @@
     <string name="action_back">뒤로가기</string>
     <string name="category_detail_spending_trend">%s 지출 추이</string>
     <string name="category_detail_empty">이 달에는 %s 지출이 없습니다</string>
+
+    <!-- 카테고리 상세 정렬 -->
+    <string name="category_sort_date">최신순</string>
+    <string name="category_sort_amount">가격순</string>
+
+    <!-- 거래 편집 Activity -->
+    <string name="transaction_edit_title">거래 상세</string>
+    <string name="transaction_add_title">거래 추가</string>
+    <string name="transaction_edit_amount">금액</string>
+    <string name="transaction_edit_store">가게명</string>
+    <string name="transaction_edit_card">결제수단</string>
+    <string name="transaction_edit_date">날짜</string>
+    <string name="transaction_edit_time">시간</string>
+    <string name="transaction_edit_memo">메모</string>
+    <string name="transaction_edit_original_sms">원본 문자</string>
+    <string name="transaction_edit_save">저장</string>
+    <string name="transaction_edit_saved">저장되었습니다</string>
+    <string name="transaction_edit_deleted">삭제되었습니다</string>
+    <string name="transaction_edit_input_required">금액과 가게명을 입력해주세요</string>
+    <string name="transaction_edit_save_failed">저장에 실패했습니다</string>
+    <string name="transaction_edit_delete_failed">삭제에 실패했습니다</string>
+
+    <!-- 날짜별 거래 목록 Activity -->
+    <string name="transaction_list_title">%1$s월 %2$d일 거래 내역</string>
+    <string name="transaction_list_empty">거래 내역이 없습니다</string>
+
+    <!-- 공통 -->
+    <string name="common_clear_input">입력 내용 지우기</string>
 </resources>

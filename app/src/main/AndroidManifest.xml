@@ -67,6 +67,18 @@
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- 거래 편집/추가 -->
+        <activity
+            android:name=".feature.transactionedit.ui.TransactionEditActivity"
+            android:theme="@style/Theme.MoneyTalk"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- 날짜별 거래 목록 -->
+        <activity
+            android:name=".feature.transactionlist.ui.TransactionDetailListActivity"
+            android:theme="@style/Theme.MoneyTalk"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- 문자 설정 -->
         <activity
             android:name=".feature.smssettings.ui.SmsSettingsActivity"
