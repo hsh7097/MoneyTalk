@@ -33,7 +33,7 @@
 | 2026-03-03 | Phase 2 | `codex/sms-regex-phase1-schema` | `assets/sms_rules_v1.json` 추가, `SmsRegexRuleAssetLoader` + `SmsRegexRemoteRuleLoader` + `SmsRegexRuleSyncService` 추가(Asset seed + RTDB overlay 기반), `assembleDebug` 검증 완료 | 완료 |
 | 2026-03-03 | Phase 3 | `codex/sms-regex-phase1-schema` | `SmsRegexRuleMatcher` 추가, `SmsSyncCoordinator`에 Step1.5 Fast Path(sender regex 매칭) 삽입, 미매칭만 기존 Pipeline 폴백, `assembleDebug` 검증 완료 | 완료 |
 | 2026-03-03 | Phase 4 | `codex/sms-regex-phase1-schema` | Fast Path miss→Pipeline fallback 안전 연결 보강: 결과 `id` 기준 중복 제거, 파이프라인 drop 카운트 노출, SyncStats에 fastPath/pipeline 분리 지표 추가, 누락 경고 로그 추가, `assembleDebug` 검증 완료 | 완료 |
-| 2026-03-03 | Phase 5 | `codex/sms-regex-phase1-schema` | `collectSampleToRtdb`를 sender/type 결정적 키 기반으로 전환: `/sms_samples/{sender}/{type}/{sampleKey}` 저장, `sampleKey=sha256(sender|type|template|regex...)`, 원본/마스킹/템플릿/타입/fingerprint 스키마 고정 | 완료 |
+| 2026-03-03 | Phase 5 | `codex/sms-regex-phase1-schema` | `collectSampleToRtdb`를 sender/type 결정적 키 기반으로 전환: `/sms_origin/{sender}/{type}/{sampleKey}` 저장, `sampleKey=sha256(sender|type|template|regex...)`, 원본/마스킹/템플릿/타입/fingerprint 스키마 고정 | 완료 |
 | 2026-03-03 | Phase 6 | `codex/sms-regex-phase1-schema` | 룰 운영 최적화 적용: match/fail 카운트 기반 priority 자동 보정, 실패 누적 룰 자동 `INACTIVE`, sender/type 활성 룰 상한(5개) 초과 시 자동 비활성화, `assembleDebug` 검증 완료 | 완료 |
 
 ## 3. 확정 설계 원칙
@@ -195,7 +195,7 @@
 - 목표:
 - 표본 중복 억제 + 룰 생성 입력 품질 확보
 - 작업:
-- `sms_samples` 저장 키를 결정적 키로 전환
+- `sms_origin` 저장 키를 결정적 키로 전환
 - 원본문자/마스킹/템플릿/sender/type 저장 규칙 확정
 - 룰 생성 스크립트 입력 포맷 고정
 - 완료 기준:
@@ -204,7 +204,7 @@
 
 ### Phase 5 결과 (완료)
 
-- RTDB 표본 경로를 `/sms_samples/{sender}/{type}/{sampleKey}`로 고정
+- RTDB 표본 경로를 `/sms_origin/{sender}/{type}/{sampleKey}`로 고정
 - `sampleKey`를 결정적 해시로 전환:
 - `sha256(sender|type|template|amountRegex|storeRegex|cardRegex)`
 - 세션 중복 전송은 `sentSampleKeys` 캐시로 억제

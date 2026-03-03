@@ -419,11 +419,11 @@ regex 없거나 파싱 실패:
 
 ```
 [Step 5 LLM 처리]
-  → collectSampleToRtdb() → /sms_samples/{sender}/{type}/{sampleKey}/
+  → collectSampleToRtdb() → /sms_origin/{sender}/{type}/{sampleKey}/
     (원본/마스킹 SMS + 템플릿 + regex + 카드명 + 발신번호)
 
 [관리자 수동 처리] ← 아직 미자동화
-  → sms_samples에서 sender/type 단위 표본 검토
+  → sms_origin에서 sender/type 단위 표본 검토
   → 검증된 regex를 /sms_rules/{sender}/{type}/{ruleKey}/ 에 배포
 
 [다음 동기화 시 Step 4]
@@ -889,7 +889,7 @@ ORDER BY matchCount DESC LIMIT 1
 ### RTDB 데이터 구조
 
 ```
-sms_samples/
+sms_origin/
   └── {normalizedSenderAddress}/
       └── {type}/
           └── {sampleKey(sha256)}/

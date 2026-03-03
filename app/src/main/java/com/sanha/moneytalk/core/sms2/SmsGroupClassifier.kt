@@ -122,7 +122,7 @@ class SmsGroupClassifier @Inject constructor(
         private const val SAMPLE_KEY_CACHE_MAX_SIZE = 500
 
         /** RTDB 표본 저장 경로 */
-        private const val SMS_SAMPLES_PATH = "sms_samples"
+        private const val SMS_SAMPLES_PATH = "sms_origin"
 
         /** sender IN 쿼리 chunk 크기 (SQLite bind limit 여유) */
         private const val MAIN_PATTERN_QUERY_CHUNK_SIZE = 500
@@ -2156,7 +2156,7 @@ class SmsGroupClassifier @Inject constructor(
      *
      * 목적: sender/type 기준 룰 생성용 표본 축적.
      * 중복 방지: sender + type + template + regex fingerprint 결정적 키 사용.
-     * RTDB 경로: /sms_samples/{sender}/{type}/{sampleKey}
+     * RTDB 경로: /sms_origin/{sender}/{type}/{sampleKey}
      */
     private fun collectSampleToRtdb(
         embedded: EmbeddedSms,
