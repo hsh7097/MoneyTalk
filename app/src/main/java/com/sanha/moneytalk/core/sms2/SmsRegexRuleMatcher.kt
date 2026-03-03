@@ -28,7 +28,9 @@ class SmsRegexRuleMatcher @Inject constructor(
 ) {
     data class RuleMatchResult(
         val matched: List<SmsParseResult>,
-        val unmatched: List<SmsInput>
+        val unmatched: List<SmsInput>,
+        val failureReasonCounts: Map<String, Int> = emptyMap(),
+        val fallbackSenderCounts: Map<String, Int> = emptyMap()
     )
 
     companion object {
@@ -39,10 +41,15 @@ class SmsRegexRuleMatcher @Inject constructor(
             """\[(KB|신한카드|신한|우리|하나|삼성카드|삼성|현대카드|현대|롯데카드|롯데|IBK|NH|농협|BC|카카오뱅크|토스뱅크|토스|SC|씨티|수협|대구|부산|광주|전북|경남|제주)\]"""
         )
         private val STORE_NUMBER_ONLY_PATTERN = Regex("""^[\d,.:/\-\s]+$""")
+        private val STORE_DATE_OR_TIME_PATTERN =
+            Regex("""^(?:\d{1,2}[/.-]\d{1,2}(?:\s+\d{1,2}:\d{2})?|\d{1,2}:\d{2})$""")
+        private val DEBIT_LINE_PATTERN = Regex("""(?:^|\n)출금(?:\n|$)""")
+        private const val DEBIT_FALLBACK_STORE_NAME = "계좌출금"
         private const val MAX_ACTIVE_RULES_PER_TYPE = 5
         private const val RULE_FAIL_INACTIVE_THRESHOLD = 12
         private const val RULE_STALE_INACTIVE_DAYS = 120L
         private const val MAX_LOCAL_REGEX_PATTERNS_PER_SENDER = 20
+        private const val MAX_STRUCTURAL_CANDIDATES = 12
 
         private val ELIGIBLE_TYPES = setOf(
             "expense",
@@ -51,9 +58,37 @@ class SmsRegexRuleMatcher @Inject constructor(
             "payment",
             "debit"
         )
+
+        private val ACCOUNT_LINE_PATTERN = Regex("""\d+\*+\d+""")
+        private val STORE_AFTER_ACCOUNT_PATTERN = Regex(
+            """\n\d+\*+\d+\n(.+?)\n(?:출금|입금|체크카드출금|스마트폰출금|공동CMS출|지로출금|FBS출금)"""
+        )
+        private val STORE_AFTER_TIME_PATTERN = Regex(
+            """\d{1,2}[/.-]\d{1,2}\s+\d{1,2}:\d{2}\s+(.+?)(?:\s+누적|\s*$)"""
+        )
+        private val CASHBACK_PREFIX_PATTERN = Regex("""^\*?\d+원(?:캐쉬백|캐시백)\s*""")
+        private val STORE_SUFFIX_TRIM_PATTERN = Regex("""\s*(?:누적.*|잔액.*)$""")
+        private val STORE_INVALID_KEYWORDS = setOf(
+            "출금",
+            "입금",
+            "승인",
+            "누적",
+            "잔액",
+            "일시불",
+            "할부",
+            "통지수수료",
+            "민생회복",
+            "소비쿠폰",
+            "승인거절"
+        )
+        private val TEMPLATE_STORE_SLOT_PATTERN = Regex(
+            """(\{CARD_NUM\}|\{CARD_NO\}|\d+\*+\d+)\s*\n([^\n]{2,40})\s*\n(출금|입금|승인|취소|결제)"""
+        )
     }
 
     private val regexCache = ConcurrentHashMap<String, Regex>()
+    private val placeholderPattern = Regex("""\{[^}]+\}""")
+    private val nonTemplateTextPattern = Regex("""[^\p{L}\p{IsHangul}#]""")
 
     private data class MatchAttemptResult(
         val parsed: SmsParseResult? = null,
@@ -70,6 +105,8 @@ class SmsRegexRuleMatcher @Inject constructor(
         val localRegexPatternsBySender = mutableMapOf<String, List<SmsPatternEntity>>()
         val matched = mutableListOf<SmsParseResult>()
         val unmatched = mutableListOf<SmsInput>()
+        val failureReasonCounts = mutableMapOf<String, Int>()
+        val fallbackSenderCounts = mutableMapOf<String, Int>()
 
         for (input in inputs) {
             val sender = SmsFilter.normalizeAddress(input.address)
@@ -103,6 +140,8 @@ class SmsRegexRuleMatcher @Inject constructor(
             }
 
             if (senderRules.isEmpty() && senderLocalPatterns.isEmpty()) {
+                incrementCount(failureReasonCounts, "fast_path_rule_lookup:no_active_rule")
+                incrementCount(fallbackSenderCounts, sender)
                 collectFastPathFailure(
                     input = input,
                     normalizedSender = sender,
@@ -121,18 +160,27 @@ class SmsRegexRuleMatcher @Inject constructor(
                 } else {
                     primaryAttempt
                 }
+            val failStage = finalAttempt.failStage.ifBlank { "fast_path_regex" }
+            val failReason = finalAttempt.failReason.ifBlank { "no_regex_match" }
+            incrementCount(failureReasonCounts, "$failStage:$failReason")
+            incrementCount(fallbackSenderCounts, sender)
             collectFastPathFailure(
                 input = input,
                 normalizedSender = sender,
                 type = finalAttempt.ruleType.ifBlank { inferTypeFromBody(input.body) },
-                failReason = finalAttempt.failReason.ifBlank { "no_regex_match" },
-                failStage = finalAttempt.failStage,
+                failReason = failReason,
+                failStage = failStage,
                 matchedRuleKey = finalAttempt.matchedRuleKey
             )
             unmatched.add(input)
         }
 
-        return RuleMatchResult(matched = matched, unmatched = unmatched)
+        return RuleMatchResult(
+            matched = matched,
+            unmatched = unmatched,
+            failureReasonCounts = failureReasonCounts.toSortedCountMap(),
+            fallbackSenderCounts = fallbackSenderCounts.toSortedCountMap()
+        )
     }
 
     private suspend fun loadSenderRules(sender: String): List<SmsRegexRuleEntity> {
@@ -288,7 +336,9 @@ class SmsRegexRuleMatcher @Inject constructor(
 
             val storeName = extractGroupValue(match, rule.storeGroup)
                 ?.trim()
-                ?.takeIf(::isValidStoreCandidate)
+                ?.let(::sanitizeStoreCandidate)
+                ?.let { normalizeStoreCandidate(it, normalizedBody) }
+                ?: extractStoreFallback(normalizedBody)
             if (storeName.isNullOrBlank()) {
                 markRuleFailure(sender, rule)
                 lastFailure = MatchAttemptResult(
@@ -371,7 +421,38 @@ class SmsRegexRuleMatcher @Inject constructor(
             val patternTemplate = normalizeTemplate(pattern.smsTemplate)
             patternTemplate == inputTemplate
         }
-        if (templateMatchedPatterns.isEmpty()) {
+        val looseMatchedPatterns = if (templateMatchedPatterns.isEmpty()) {
+            patterns.filter { pattern ->
+                val patternTemplate = normalizeTemplate(pattern.smsTemplate)
+                isLooseTemplateMatch(inputTemplate, patternTemplate)
+            }
+        } else {
+            emptyList()
+        }
+        val structuralMatchedPatterns = if (
+            templateMatchedPatterns.isEmpty() && looseMatchedPatterns.isEmpty()
+        ) {
+            patterns.filter { pattern ->
+                val patternTemplate = normalizeTemplate(pattern.smsTemplate)
+                isStructuralTemplateMatch(
+                    inputBody = normalizedBody,
+                    inputTemplate = inputTemplate,
+                    patternTemplate = patternTemplate
+                )
+            }.take(MAX_STRUCTURAL_CANDIDATES)
+        } else {
+            emptyList()
+        }
+        val candidatePatterns = if (templateMatchedPatterns.isNotEmpty()) {
+            templateMatchedPatterns
+        } else if (looseMatchedPatterns.isNotEmpty()) {
+            looseMatchedPatterns
+        } else if (structuralMatchedPatterns.isNotEmpty()) {
+            structuralMatchedPatterns
+        } else {
+            emptyList()
+        }
+        if (candidatePatterns.isEmpty()) {
             return MatchAttemptResult(
                 failReason = "local_template_mismatch",
                 failStage = "fast_path_local_template",
@@ -384,7 +465,7 @@ class SmsRegexRuleMatcher @Inject constructor(
             ruleType = inferTypeFromBody(input.body)
         )
 
-        for (pattern in templateMatchedPatterns) {
+        for (pattern in candidatePatterns) {
             val amountPattern = compileRegex(pattern.amountRegex)
             val storePattern = compileRegex(pattern.storeRegex)
             if (amountPattern == null || storePattern == null) {
@@ -410,7 +491,9 @@ class SmsRegexRuleMatcher @Inject constructor(
 
             val storeName = extractGroup1(storePattern, normalizedBody)
                 ?.trim()
-                ?.takeIf(::isValidStoreCandidate)
+                ?.let(::sanitizeStoreCandidate)
+                ?.let { normalizeStoreCandidate(it, normalizedBody) }
+                ?: extractStoreFallback(normalizedBody)
             if (storeName.isNullOrBlank()) {
                 lastFailure = MatchAttemptResult(
                     failReason = "local_store_extract_failed",
@@ -591,6 +674,7 @@ class SmsRegexRuleMatcher @Inject constructor(
         if (value.length > 30) return false
         if (value.contains("{")) return false
         if (STORE_NUMBER_ONLY_PATTERN.matches(value)) return false
+        if (STORE_INVALID_KEYWORDS.any { value.contains(it) }) return false
         return true
     }
 
@@ -635,5 +719,135 @@ class SmsRegexRuleMatcher @Inject constructor(
             normalized.contains("입금") || normalized.contains("이체입금") -> "income"
             else -> "expense"
         }
+    }
+
+    private fun isLooseTemplateMatch(inputTemplate: String, patternTemplate: String): Boolean {
+        val inputKey = toLooseTemplateKey(inputTemplate)
+        val patternKey = toLooseTemplateKey(patternTemplate)
+        if (inputKey.isBlank() || patternKey.isBlank()) return false
+        if (inputKey == patternKey) return true
+        if (inputKey.contains(patternKey) || patternKey.contains(inputKey)) return true
+
+        val prefixLength = commonPrefixLength(inputKey, patternKey)
+        if (prefixLength < 8) return false
+        val shorterLength = minOf(inputKey.length, patternKey.length)
+        return (prefixLength * 100) / shorterLength >= 45
+    }
+
+    private fun isStructuralTemplateMatch(
+        inputBody: String,
+        inputTemplate: String,
+        patternTemplate: String
+    ): Boolean {
+        val inputLines = inputBody.split('\n').count { it.isNotBlank() }
+        val patternLines = patternTemplate.split('\n').count { it.isNotBlank() }
+        val lineCompatible = kotlin.math.abs(inputLines - patternLines) <= 2 ||
+            (inputLines >= 5 && patternLines >= 5)
+        if (!lineCompatible) return false
+
+        val inputType = inferTypeFromBody(inputTemplate)
+        val patternType = inferTypeFromBody(patternTemplate)
+        if (inputType != patternType) return false
+
+        val debitLike = inputBody.contains("출금")
+        val approvalLike = inputBody.contains("승인")
+        val patternDebitLike = patternTemplate.contains("출금")
+        val patternApprovalLike = patternTemplate.contains("승인")
+        if (debitLike != patternDebitLike && approvalLike != patternApprovalLike) return false
+
+        return true
+    }
+
+    private fun toLooseTemplateKey(template: String): String {
+        val normalizedTemplate = template
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+            .replace(TEMPLATE_STORE_SLOT_PATTERN, "$1\n#\n$3")
+
+        return normalizedTemplate
+            .lowercase(Locale.ROOT)
+            .replace("[web발신]", "")
+            .replace("(광고)", "")
+            .replace("광고", "")
+            .replace(placeholderPattern, "#")
+            .replace(nonTemplateTextPattern, "")
+            .replace(Regex("""#+"""), "#")
+            .trim('#')
+    }
+
+    private fun extractStoreFallback(body: String): String? {
+        val byAccountRegex = STORE_AFTER_ACCOUNT_PATTERN.find(body)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.let(::sanitizeStoreCandidate)
+            ?.takeIf(::isValidStoreCandidate)
+        if (!byAccountRegex.isNullOrBlank()) return byAccountRegex
+
+        val byTimeRegex = STORE_AFTER_TIME_PATTERN.find(body)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.let(::sanitizeStoreCandidate)
+            ?.takeIf(::isValidStoreCandidate)
+        if (!byTimeRegex.isNullOrBlank()) return byTimeRegex
+
+        val lines = body.split('\n').map { it.trim() }.filter { it.isNotBlank() }
+        val accountIndex = lines.indexOfFirst { ACCOUNT_LINE_PATTERN.containsMatchIn(it) }
+        if (accountIndex >= 0 && accountIndex + 1 < lines.size) {
+            val nextLineStore = sanitizeStoreCandidate(lines[accountIndex + 1])
+            if (isValidStoreCandidate(nextLineStore)) return nextLineStore
+        }
+
+        return lines
+            .map(::sanitizeStoreCandidate)
+            .firstOrNull(::isValidStoreCandidate)
+    }
+
+    private fun sanitizeStoreCandidate(raw: String): String {
+        return raw
+            .replace(CASHBACK_PREFIX_PATTERN, "")
+            .replace(STORE_SUFFIX_TRIM_PATTERN, "")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+    }
+
+    private fun normalizeStoreCandidate(value: String, body: String): String? {
+        val trimmed = value.trim()
+        if (isValidStoreCandidate(trimmed)) return trimmed
+        return normalizeDebitStoreCandidate(trimmed, body)
+    }
+
+    /**
+     * 출금형 메시지에서 상호 추출이 애매한 경우(예: KB카드출금/해외승인대금출금)
+     * Fast Path 탈락을 줄이기 위해 보수적으로 store를 보정합니다.
+     */
+    private fun normalizeDebitStoreCandidate(value: String, body: String): String? {
+        if (value.isBlank()) return null
+        if (!DEBIT_LINE_PATTERN.containsMatchIn(body)) return null
+        if (value.contains("{")) return null
+        if (STORE_DATE_OR_TIME_PATTERN.matches(value)) return null
+        if (STORE_NUMBER_ONLY_PATTERN.matches(value)) return DEBIT_FALLBACK_STORE_NAME
+        if (value.contains("입출통지")) return DEBIT_FALLBACK_STORE_NAME
+        if (STORE_INVALID_KEYWORDS.any { value.contains(it) }) return DEBIT_FALLBACK_STORE_NAME
+        return value
+    }
+
+    private fun commonPrefixLength(left: String, right: String): Int {
+        val limit = minOf(left.length, right.length)
+        var index = 0
+        while (index < limit && left[index] == right[index]) {
+            index++
+        }
+        return index
+    }
+
+    private fun incrementCount(map: MutableMap<String, Int>, key: String) {
+        if (key.isBlank()) return
+        map[key] = (map[key] ?: 0) + 1
+    }
+
+    private fun Map<String, Int>.toSortedCountMap(): Map<String, Int> {
+        return entries
+            .sortedByDescending { it.value }
+            .associate { it.key to it.value }
     }
 }

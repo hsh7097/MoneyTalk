@@ -121,6 +121,21 @@ class SmsSyncCoordinator @Inject constructor(
         val fastPathUnmatched = regexMatchResult.unmatched
         MoneyTalkLogger.i("Step1.5 SenderRegex: 매칭 ${fastPathMatched.size}건, 폴백 ${fastPathUnmatched.size}건")
         if (fastPathUnmatched.isNotEmpty()) {
+            val reasonSummary = regexMatchResult.failureReasonCounts.entries
+                .take(5)
+                .joinToString(", ") { "${it.key}=${it.value}" }
+            if (reasonSummary.isNotBlank()) {
+                MoneyTalkLogger.i("Step1.5 실패사유 TOP5: $reasonSummary")
+            }
+
+            val senderSummary = regexMatchResult.fallbackSenderCounts.entries
+                .take(5)
+                .joinToString(", ") { "${it.key}=${it.value}" }
+            if (senderSummary.isNotBlank()) {
+                MoneyTalkLogger.i("Step1.5 폴백 발신번호 TOP5: $senderSummary")
+            }
+        }
+        if (fastPathUnmatched.isNotEmpty()) {
             val preview = fastPathUnmatched.take(5)
             preview.forEachIndexed { index, sms ->
                 MoneyTalkLogger.i(

@@ -68,6 +68,7 @@ class GeminiSmsExtractor @Inject constructor(
         /** LLM 응답에서 코드 펜스 제거용 정규식 (사전 컴파일) */
         private val CODE_FENCE_JSON = Regex("```json\\s*", RegexOption.IGNORE_CASE)
         private val CODE_FENCE = Regex("```\\s*")
+        private val CAPTURING_GROUP_PATTERN = Regex("""(?<!\\)\((?!\?(?:[:=!<]|>))""")
 
         /** 앱에서 사용하는 유효한 카테고리 목록 (미분류 제외) */
         private val VALID_CATEGORIES = Category.entries
@@ -568,9 +569,15 @@ class GeminiSmsExtractor @Inject constructor(
             val json = JsonParser.parseString(jsonStr).asJsonObject
             LlmRegexResult(
                 isPayment = json.get("isPayment")?.asBoolean ?: false,
-                amountRegex = json.get("amountRegex")?.asString?.trim().orEmpty(),
-                storeRegex = json.get("storeRegex")?.asString?.trim().orEmpty(),
-                cardRegex = json.get("cardRegex")?.asString?.trim().orEmpty()
+                amountRegex = normalizeRegexCandidate(
+                    json.get("amountRegex")?.asString?.trim().orEmpty()
+                ),
+                storeRegex = normalizeRegexCandidate(
+                    json.get("storeRegex")?.asString?.trim().orEmpty()
+                ),
+                cardRegex = normalizeRegexCandidate(
+                    json.get("cardRegex")?.asString?.trim().orEmpty()
+                )
             )
         } catch (e: Exception) {
             MoneyTalkLogger.e("정규식 응답 파싱 실패: ${e.message}")
@@ -596,6 +603,12 @@ class GeminiSmsExtractor @Inject constructor(
         }
         if (result.amountRegex.isBlank() || result.storeRegex.isBlank()) {
             return RegexValidationResult(isValid = false, reason = "required_regex_blank")
+        }
+        if (!hasCapturingGroup(result.amountRegex)) {
+            return RegexValidationResult(isValid = false, reason = "amount_capture_group_missing")
+        }
+        if (!hasCapturingGroup(result.storeRegex)) {
+            return RegexValidationResult(isValid = false, reason = "store_capture_group_missing")
         }
 
         try {
@@ -747,6 +760,59 @@ class GeminiSmsExtractor @Inject constructor(
             previousShort,
             sampleText
         )
+    }
+
+    private fun normalizeRegexCandidate(rawRegex: String): String {
+        if (rawRegex.isBlank()) return rawRegex
+        var normalized = rawRegex.trim()
+        if (
+            normalized.length >= 2 &&
+            (
+                (normalized.startsWith('"') && normalized.endsWith('"')) ||
+                    (normalized.startsWith('\'') && normalized.endsWith('\'')) ||
+                    (normalized.startsWith('`') && normalized.endsWith('`'))
+                )
+        ) {
+            normalized = normalized.substring(1, normalized.length - 1).trim()
+        }
+        return decodeOverEscapedRegex(normalized)
+    }
+
+    private fun decodeOverEscapedRegex(pattern: String): String {
+        if (pattern.isBlank()) return pattern
+        var normalized = pattern
+        val replacements = listOf(
+            """\\d""" to """\d""",
+            """\\D""" to """\D""",
+            """\\s""" to """\s""",
+            """\\S""" to """\S""",
+            """\\w""" to """\w""",
+            """\\W""" to """\W""",
+            """\\n""" to """\n""",
+            """\\t""" to """\t""",
+            """\\r""" to """\r""",
+            """\\b""" to """\b""",
+            """\\B""" to """\B""",
+            """\\(""" to """\(""",
+            """\\)""" to """\)""",
+            """\\[""" to """\[""",
+            """\\]""" to """\]""",
+            """\\{""" to """\{""",
+            """\\}""" to """\}""",
+            """\\*""" to """\*""",
+            """\\+""" to """\+""",
+            """\\?""" to """\?""",
+            """\\|""" to """\|"""
+        )
+        replacements.forEach { (from, to) ->
+            normalized = normalized.replace(from, to)
+        }
+        return normalized
+    }
+
+    private fun hasCapturingGroup(regexPattern: String): Boolean {
+        if (regexPattern.isBlank()) return false
+        return CAPTURING_GROUP_PATTERN.containsMatchIn(regexPattern)
     }
 
     /**

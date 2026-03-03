@@ -28,6 +28,12 @@
 
 | 날짜 | Phase | PR/브랜치 | 변경 요약 | 상태 |
 |------|-------|-----------|-----------|------|
+| 2026-03-03 | Origin Rule-Shape Enrichment | `codex/sms-regex-phase1-schema` | `SmsOriginSampleCollector`에서 `/sms_rules` 자동 업서트는 제거하고, `/sms_origin/{sender}/{type}/{sampleKey}` payload에 `bodyRegex/amountGroup/storeGroup/cardGroup/dateGroup/priority/status/source/version` 필드를 병기하도록 변경. 기존 origin 메타(outcome/failReason/failureTemplate 등)는 유지 | 완료 |
+| 2026-03-03 | Regex Canonicalization | `codex/sms-regex-phase1-schema` | RTDB/export 표기 차이 대응: `GeminiSmsExtractor`에 regex 후보 정규화(과이스케이프 `\\\\d`→`\\d` 등) 및 amount/store 캡처그룹 존재 검증 추가. `SmsRegexRemoteRuleLoader`에서 `bodyRegex` 컴파일 검증 + 과이스케이프 자동 보정 후 유효 룰만 로드하도록 강화 | 완료 |
+| 2026-03-03 | Asset Rule Additions | `codex/sms-regex-phase1-schema` | `sms_rules_v1.json` 룰 보강: `15881688`에 `expense(교통대금)`, `overseas(해외승인 USD)` 추가, `15447000`에 `expense(후불교통비)` 추가. 룰 데이터 롤백 이후 no_active_rule/LLM fallback 빈도 감소 목적 | 완료 |
+| 2026-03-03 | FastPath Tuning | `codex/sms-regex-phase1-schema` | 룰 데이터 변경 없이 파싱 성능 보강: `SmsRegexRuleMatcher`에 구조 기반 템플릿 후보 매칭(완전/완화 실패 시 3차 후보) 추가, store 추출 실패 시 본문 휴리스틱 fallback(계좌행/시간 뒤 매장명 + 캐쉬백 prefix 정리) 적용. `SmsPreFilter`에 고신뢰 비결제 패턴(민생회복 소비쿠폰/승인거절/정지카드/가맹점이용취소+입금/통지수수료) 선제 제외 추가 | 완료 |
+| 2026-03-03 | Hotfix | `codex/sms-regex-phase1-schema` | 앱 시작 크래시 수정: `SmsRegexRuleMatcher` placeholder 정규식 `\\{[^}]+\\}`로 교정(닫는 중괄호 escape 누락으로 Android ICU `PatternSyntaxException` 발생) | 완료 |
+| 2026-03-03 | FastPath Observability | `codex/sms-regex-phase1-schema` | 룰 데이터 변경 없이 Fast Path 관측성 강화: `Step1.5` 실패사유 TOP5/폴백 sender TOP5 로그 추가, 로컬 `sms_patterns` 매칭을 템플릿 완전일치 우선 + 완화 매칭 보조로 확장(과도한 template mismatch 완화) | 완료 |
 | 2026-03-03 | Phase 0 | `codex/sms-regex-phase1-schema` | `SmsGroupClassifier` 상수와 `SMS_PARSING.md` 문서 값 정합성 수정(정규식 최소 샘플 5, 소그룹 병합 0.90, regex 검증 통과율 0.80), baseline 지표 포맷 확정 | 완료 |
 | 2026-03-03 | Phase 1 | `codex/sms-regex-phase1-schema` | `sms_regex_rules` 엔티티/DAO/Repository 추가, DB v7 마이그레이션(6→7) 추가, AppDatabase/DatabaseModule 연결, `assembleDebug` 검증 완료 | 완료 |
 | 2026-03-03 | Phase 2 | `codex/sms-regex-phase1-schema` | `assets/sms_rules_v1.json` 추가, `SmsRegexRuleAssetLoader` + `SmsRegexRemoteRuleLoader` + `SmsRegexRuleSyncService` 추가(Asset seed + RTDB overlay 기반), `assembleDebug` 검증 완료 | 완료 |

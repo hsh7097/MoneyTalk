@@ -71,8 +71,15 @@ class SmsRegexRemoteRuleLoader @Inject constructor(
 
                 for (ruleSnapshot in typeSnapshot.children) {
                     val ruleKey = ruleSnapshot.key ?: continue
-                    val bodyRegex = ruleSnapshot.getString("bodyRegex")
-                    if (bodyRegex.isNullOrBlank()) continue
+                    val rawBodyRegex = ruleSnapshot.getString("bodyRegex")
+                    if (rawBodyRegex.isNullOrBlank()) continue
+                    val bodyRegex = normalizeBodyRegex(rawBodyRegex)
+                    if (bodyRegex.isBlank()) {
+                        MoneyTalkLogger.w(
+                            "RTDB 룰 스킵: invalid bodyRegex sender=$sender type=$type ruleKey=$ruleKey"
+                        )
+                        continue
+                    }
 
                     result.add(
                         SmsRegexRuleEntity(
@@ -99,6 +106,49 @@ class SmsRegexRemoteRuleLoader @Inject constructor(
             }
         }
         return result
+    }
+
+    private fun normalizeBodyRegex(raw: String): String {
+        val trimmed = raw.trim()
+        if (trimmed.isBlank()) return ""
+        if (isCompilableRegex(trimmed)) return trimmed
+
+        val deEscaped = decodeOverEscapedRegex(trimmed)
+        if (isCompilableRegex(deEscaped)) return deEscaped
+        return ""
+    }
+
+    private fun isCompilableRegex(pattern: String): Boolean {
+        return runCatching { Regex(pattern) }.isSuccess
+    }
+
+    private fun decodeOverEscapedRegex(pattern: String): String {
+        var normalized = pattern
+        val replacements = listOf(
+            """\\d""" to """\d""",
+            """\\D""" to """\D""",
+            """\\s""" to """\s""",
+            """\\S""" to """\S""",
+            """\\w""" to """\w""",
+            """\\W""" to """\W""",
+            """\\n""" to """\n""",
+            """\\t""" to """\t""",
+            """\\r""" to """\r""",
+            """\\(""" to """\(""",
+            """\\)""" to """\)""",
+            """\\[""" to """\[""",
+            """\\]""" to """\]""",
+            """\\{""" to """\{""",
+            """\\}""" to """\}""",
+            """\\*""" to """\*""",
+            """\\+""" to """\+""",
+            """\\?""" to """\?""",
+            """\\|""" to """\|"""
+        )
+        replacements.forEach { (from, to) ->
+            normalized = normalized.replace(from, to)
+        }
+        return normalized
     }
 }
 

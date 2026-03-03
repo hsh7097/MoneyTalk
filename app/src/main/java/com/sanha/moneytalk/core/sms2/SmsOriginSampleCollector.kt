@@ -1,10 +1,8 @@
 package com.sanha.moneytalk.core.sms2
 
-import android.content.Context
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ServerValue
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -15,27 +13,17 @@ import javax.inject.Singleton
  * sms_origin 표본 수집기
  *
  * 정책:
- * - 성공(outcome=success): sender+type당 고유 fingerprint 최대 3개만 유지
+ * - 성공(outcome=success): sender+type당 fingerprint 단위 upsert + count/lastSeen 누적
  * - 실패(outcome=fail): fingerprint 단위 upsert + count/lastSeen 누적
  * - 동일 fingerprint는 새 row를 만들지 않고 count/lastSeenAt만 갱신
  */
 @Singleton
 class SmsOriginSampleCollector @Inject constructor(
-    @ApplicationContext private val appContext: Context,
     private val database: FirebaseDatabase?
 ) {
     companion object {
         private const val SMS_ORIGIN_PATH = "sms_origin"
-        private const val MAX_SUCCESS_FINGERPRINTS_PER_BUCKET = 3
         private const val SUCCESS_CACHE_MAX = 500
-        private const val FAILURE_UPLOAD_GUARD_PREFS = "sms_origin_failure_upload_guard"
-        private const val FAILURE_GUARD_LAST_CLEANUP_AT_KEY = "failure_guard_last_cleanup_at"
-        private const val FAILURE_FINGERPRINT_KEY_PREFIX = "fp:"
-        private const val FAILURE_BUCKET_KEY_PREFIX = "bk:"
-        private const val FAILURE_FINGERPRINT_RETENTION_MS = 7L * 24L * 60L * 60L * 1000L
-        private const val FAILURE_GUARD_CLEANUP_INTERVAL_MS = 24L * 60L * 60L * 1000L
-        private const val FAILURE_FINGERPRINT_COOLDOWN_MS = 24L * 60L * 60L * 1000L
-        private const val MAX_FAILURE_UPLOADS_PER_BUCKET_PER_DAY = 5
     }
 
     data class SuccessSample(
@@ -66,19 +54,7 @@ class SmsOriginSampleCollector @Inject constructor(
         val matchedRuleKey: String = ""
     )
 
-    private data class FailureUploadPermit(
-        val fingerprint: String,
-        val fingerprintKey: String,
-        val bucketKey: String,
-        val reservedAt: Long
-    )
-
     private val successFingerprintsByBucket = ConcurrentHashMap<String, LinkedHashSet<String>>()
-    private val failureUploadLock = Any()
-    private val inFlightFailureFingerprints = mutableSetOf<String>()
-    private val failureUploadPrefs by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        appContext.getSharedPreferences(FAILURE_UPLOAD_GUARD_PREFS, Context.MODE_PRIVATE)
-    }
 
     fun resetSession() {
         successFingerprintsByBucket.clear()
@@ -112,9 +88,6 @@ class SmsOriginSampleCollector @Inject constructor(
         val isNewInSession = synchronized(successFingerprintsByBucket) {
             val bucket = successFingerprintsByBucket.getOrPut(bucketKey) { linkedSetOf() }
             val alreadyExists = bucket.contains(fingerprint)
-            if (!alreadyExists && bucket.size >= MAX_SUCCESS_FINGERPRINTS_PER_BUCKET) {
-                return
-            }
             bucket.add(fingerprint)
             trimSuccessCacheIfNeeded()
             !alreadyExists
@@ -147,17 +120,30 @@ class SmsOriginSampleCollector @Inject constructor(
         if (isNewInSession) {
             payload["createdAt"] = now
         }
-        if (sample.amountRegex.isNotBlank()) payload["amountRegex"] = sample.amountRegex
-        if (sample.storeRegex.isNotBlank()) payload["storeRegex"] = sample.storeRegex
-        if (sample.cardRegex.isNotBlank()) payload["cardRegex"] = sample.cardRegex
-        if (sample.dateRegex.isNotBlank()) payload["dateRegex"] = sample.dateRegex
+        val normalizedAmountRegex = normalizeRegexForStorage(sample.amountRegex)
+        val normalizedStoreRegex = normalizeRegexForStorage(sample.storeRegex)
+        val normalizedCardRegex = normalizeRegexForStorage(sample.cardRegex)
+        val normalizedDateRegex = normalizeRegexForStorage(sample.dateRegex)
+        if (normalizedAmountRegex.isNotBlank()) payload["amountRegex"] = normalizedAmountRegex
+        if (normalizedStoreRegex.isNotBlank()) payload["storeRegex"] = normalizedStoreRegex
+        if (normalizedCardRegex.isNotBlank()) payload["cardRegex"] = normalizedCardRegex
+        if (normalizedDateRegex.isNotBlank()) payload["dateRegex"] = normalizedDateRegex
         if (sample.matchedRuleKey.isNotBlank()) payload["matchedRuleKey"] = sample.matchedRuleKey
+        appendRuleShapeFields(
+            payload = payload,
+            normalizedType = normalizeRuleType(sample.type),
+            parseSource = sample.parseSource,
+            groupMemberCount = sample.groupMemberCount,
+            template = sample.template,
+            status = "ACTIVE"
+        )
 
         ref.updateChildren(payload).addOnFailureListener { e ->
             MoneyTalkLogger.w(
                 "sms_origin success 표본 업로드 실패: ${e.javaClass.simpleName} ${e.message}"
             )
         }
+
     }
 
     fun collectFailure(sample: FailureSample) {
@@ -182,16 +168,6 @@ class SmsOriginSampleCollector @Inject constructor(
             }
         )
         val sampleKey = fingerprint
-
-        val permit = acquireFailureUploadPermit(
-                normalizedSender = sample.normalizedSenderAddress,
-                normalizedType = normalizedType,
-                failStage = sample.failStage,
-                failReason = sample.failReason,
-                fingerprint = fingerprint
-            ) ?: run {
-            return
-        }
 
         val ref = db.getReference(SMS_ORIGIN_PATH)
             .child(sample.normalizedSenderAddress)
@@ -219,117 +195,21 @@ class SmsOriginSampleCollector @Inject constructor(
         if (sample.matchedRuleKey.isNotBlank()) {
             payload["matchedRuleKey"] = sample.matchedRuleKey
         }
+        appendRuleShapeFields(
+            payload = payload,
+            normalizedType = normalizedType,
+            parseSource = sample.parseSource,
+            groupMemberCount = 1,
+            template = failureTemplate,
+            status = "INACTIVE"
+        )
 
         ref.updateChildren(payload)
-            .addOnSuccessListener {
-                markFailureUploadCommitted(permit)
-            }
             .addOnFailureListener { e ->
-                releaseFailureUploadPermit(permit)
                 MoneyTalkLogger.w(
                     "sms_origin failure 표본 업로드 실패: ${e.javaClass.simpleName} ${e.message}"
                 )
             }
-    }
-
-    private fun acquireFailureUploadPermit(
-        normalizedSender: String,
-        normalizedType: String,
-        failStage: String,
-        failReason: String,
-        fingerprint: String
-    ): FailureUploadPermit? {
-        val now = System.currentTimeMillis()
-        cleanupFailureGuardIfNeeded(now)
-
-        val dayBucket = buildString {
-            val calendar = java.util.Calendar.getInstance().apply { timeInMillis = now }
-            append(calendar.get(java.util.Calendar.YEAR))
-            append(String.format(Locale.ROOT, "%02d", calendar.get(java.util.Calendar.MONTH) + 1))
-            append(String.format(Locale.ROOT, "%02d", calendar.get(java.util.Calendar.DAY_OF_MONTH)))
-        }
-        val fingerprintKey = "$FAILURE_FINGERPRINT_KEY_PREFIX$fingerprint"
-        val bucketHash = sha256Hex(
-            buildString {
-                append(normalizedSender)
-                append('|')
-                append(normalizedType)
-                append('|')
-                append(failStage.lowercase(Locale.ROOT))
-                append('|')
-                append(failReason.lowercase(Locale.ROOT))
-                append('|')
-                append(dayBucket)
-            }
-        ).take(24)
-        val bucketKey = "$FAILURE_BUCKET_KEY_PREFIX$dayBucket:$bucketHash"
-
-        synchronized(failureUploadLock) {
-            if (!inFlightFailureFingerprints.add(fingerprint)) {
-                return null
-            }
-
-            val lastUploadedAt = failureUploadPrefs.getLong(fingerprintKey, 0L)
-            if (lastUploadedAt > 0L && now - lastUploadedAt < FAILURE_FINGERPRINT_COOLDOWN_MS) {
-                inFlightFailureFingerprints.remove(fingerprint)
-                return null
-            }
-
-            val bucketCount = failureUploadPrefs.getInt(bucketKey, 0)
-            if (bucketCount >= MAX_FAILURE_UPLOADS_PER_BUCKET_PER_DAY) {
-                inFlightFailureFingerprints.remove(fingerprint)
-                return null
-            }
-            return FailureUploadPermit(
-                fingerprint = fingerprint,
-                fingerprintKey = fingerprintKey,
-                bucketKey = bucketKey,
-                reservedAt = now
-            )
-        }
-    }
-
-    private fun markFailureUploadCommitted(permit: FailureUploadPermit) {
-        synchronized(failureUploadLock) {
-            val currentBucketCount = failureUploadPrefs.getInt(permit.bucketKey, 0)
-            failureUploadPrefs.edit()
-                .putLong(permit.fingerprintKey, permit.reservedAt)
-                .putInt(permit.bucketKey, currentBucketCount + 1)
-                .apply()
-            inFlightFailureFingerprints.remove(permit.fingerprint)
-        }
-    }
-
-    private fun releaseFailureUploadPermit(permit: FailureUploadPermit) {
-        synchronized(failureUploadLock) {
-            inFlightFailureFingerprints.remove(permit.fingerprint)
-        }
-    }
-
-    private fun cleanupFailureGuardIfNeeded(now: Long) {
-        synchronized(failureUploadLock) {
-            val lastCleanupAt =
-                failureUploadPrefs.getLong(FAILURE_GUARD_LAST_CLEANUP_AT_KEY, 0L)
-            if (lastCleanupAt > 0L && now - lastCleanupAt < FAILURE_GUARD_CLEANUP_INTERVAL_MS) {
-                return
-            }
-
-            val editor = failureUploadPrefs.edit()
-            failureUploadPrefs.all.forEach { (key, value) ->
-                when {
-                    key.startsWith(FAILURE_BUCKET_KEY_PREFIX) -> {
-                        editor.remove(key)
-                    }
-                    key.startsWith(FAILURE_FINGERPRINT_KEY_PREFIX) -> {
-                        val timestamp = (value as? Number)?.toLong() ?: 0L
-                        if (timestamp <= 0L || now - timestamp > FAILURE_FINGERPRINT_RETENTION_MS) {
-                            editor.remove(key)
-                        }
-                    }
-                }
-            }
-            editor.putLong(FAILURE_GUARD_LAST_CLEANUP_AT_KEY, now).apply()
-        }
     }
 
     private fun trimSuccessCacheIfNeeded() {
@@ -338,6 +218,194 @@ class SmsOriginSampleCollector @Inject constructor(
         if (iterator.hasNext()) {
             val oldestBucket = iterator.next()
             successFingerprintsByBucket.remove(oldestBucket)
+        }
+    }
+
+    private fun normalizeRuleType(type: String): String {
+        return when (type.lowercase(Locale.ROOT)) {
+            "expense", "cancel", "overseas", "income", "payment", "debit" -> type.lowercase(Locale.ROOT)
+            else -> "expense"
+        }
+    }
+
+    private fun deriveRulePriority(parseSource: String, groupMemberCount: Int): Int {
+        val base = when (parseSource.lowercase(Locale.ROOT)) {
+            "llm_regex" -> 900
+            "template_regex" -> 860
+            "remote_rule" -> 840
+            else -> 820
+        }
+        val bonus = (groupMemberCount.coerceAtMost(20)) * 3
+        return (base + bonus).coerceIn(700, 980)
+    }
+
+    private fun appendRuleShapeFields(
+        payload: MutableMap<String, Any>,
+        normalizedType: String,
+        parseSource: String,
+        groupMemberCount: Int,
+        template: String,
+        status: String
+    ) {
+        val bodyRegex = normalizeRegexForStorage(buildBodyRegexFromTemplate(template))
+        payload["type"] = normalizedType
+        payload["priority"] = deriveRulePriority(parseSource, groupMemberCount)
+        payload["status"] = status
+        payload["source"] = "sms_origin"
+        payload["version"] = 1
+        payload["amountGroup"] = if (containsNamedGroup(bodyRegex, "amount")) "amount" else ""
+        payload["storeGroup"] = if (containsNamedGroup(bodyRegex, "store")) "store" else ""
+        payload["cardGroup"] = if (containsNamedGroup(bodyRegex, "card")) "card" else ""
+        payload["dateGroup"] = if (containsNamedGroup(bodyRegex, "date")) "date" else ""
+        if (!bodyRegex.isNullOrBlank()) {
+            payload["bodyRegex"] = bodyRegex
+        }
+    }
+
+    private fun normalizeRegexForStorage(rawPattern: String?): String {
+        val trimmed = rawPattern?.trim().orEmpty()
+        if (trimmed.isBlank()) return ""
+
+        val deEscaped = decodeOverEscapedRegex(trimmed)
+        if (deEscaped != trimmed && runCatching { Regex(deEscaped) }.isSuccess) {
+            return deEscaped
+        }
+
+        return if (runCatching { Regex(trimmed) }.isSuccess) {
+            trimmed
+        } else {
+            ""
+        }
+    }
+
+    private fun decodeOverEscapedRegex(pattern: String): String {
+        var normalized = pattern
+        val replacements = listOf(
+            """\\d""" to """\d""",
+            """\\D""" to """\D""",
+            """\\s""" to """\s""",
+            """\\S""" to """\S""",
+            """\\w""" to """\w""",
+            """\\W""" to """\W""",
+            """\\n""" to """\n""",
+            """\\t""" to """\t""",
+            """\\r""" to """\r""",
+            """\\(""" to """\(""",
+            """\\)""" to """\)""",
+            """\\[""" to """\[""",
+            """\\]""" to """\]""",
+            """\\{""" to """\{""",
+            """\\}""" to """\}""",
+            """\\*""" to """\*""",
+            """\\+""" to """\+""",
+            """\\?""" to """\?""",
+            """\\|""" to """\|"""
+        )
+        replacements.forEach { (from, to) ->
+            normalized = normalized.replace(from, to)
+        }
+        return normalized
+    }
+
+    private fun containsNamedGroup(bodyRegex: String?, groupName: String): Boolean {
+        if (bodyRegex.isNullOrBlank()) return false
+        return bodyRegex.contains("(?<$groupName>")
+    }
+
+    private fun buildBodyRegexFromTemplate(template: String): String? {
+        val normalizedTemplate = template
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+            .trim()
+        if (normalizedTemplate.isBlank()) return null
+        if (!normalizedTemplate.contains("{AMOUNT}")) {
+            return null
+        }
+
+        val enrichedTemplate = injectStorePlaceholderIfNeeded(normalizedTemplate)
+        val placeholderPattern = Regex("""\{[A-Z_]+\}""")
+        val builder = StringBuilder("(?s)")
+        val usedNamedGroups = mutableSetOf<String>()
+        var cursor = 0
+
+        for (match in placeholderPattern.findAll(enrichedTemplate)) {
+            val start = match.range.first
+            if (start > cursor) {
+                builder.append(escapeLiteralForRegex(enrichedTemplate.substring(cursor, start)))
+            }
+            builder.append(placeholderToRegex(match.value, usedNamedGroups))
+            cursor = match.range.last + 1
+        }
+        if (cursor < enrichedTemplate.length) {
+            builder.append(escapeLiteralForRegex(enrichedTemplate.substring(cursor)))
+        }
+
+        var bodyRegex = builder.toString()
+        bodyRegex = bodyRegex.replace("""\[Web발신\]""", """(?:\[Web발신\])?""")
+        return if (runCatching { Regex(bodyRegex) }.isSuccess) bodyRegex else null
+    }
+
+    private fun injectStorePlaceholderIfNeeded(template: String): String {
+        if (template.contains("{STORE}")) return template
+
+        val withFlowKeyword = Regex(
+            """(\{CARD_NUM\}|\{CARD_NO\}|\{TIME\}|\{DATE\})\s+([^\{\}\n]{2,40}?)\s+(출금|입금|승인|취소|결제)"""
+        )
+        withFlowKeyword.find(template)?.let { match ->
+            val replacement = "${match.groupValues[1]} {STORE} ${match.groupValues[3]}"
+            return template.replaceRange(match.range, replacement)
+        }
+
+        val trailingStore = Regex("""(\{DATE\}(?:\s+\{TIME\})?)\s+([^\{\}\n]{2,40})$""")
+        trailingStore.find(template)?.let { match ->
+            val replacement = "${match.groupValues[1]} {STORE}"
+            return template.replaceRange(match.range, replacement)
+        }
+
+        return template
+    }
+
+    private fun escapeLiteralForRegex(value: String): String {
+        val out = StringBuilder()
+        value.forEach { ch ->
+            when (ch) {
+                '\n' -> out.append("""\s*\n\s*""")
+                '\r' -> Unit
+                ' ', '\t' -> out.append("""\s*""")
+                else -> {
+                    if ("\\.^$|?*+()[]{}".contains(ch)) {
+                        out.append('\\')
+                    }
+                    out.append(ch)
+                }
+            }
+        }
+        return out.toString()
+    }
+
+    private fun placeholderToRegex(token: String, usedNamedGroups: MutableSet<String>): String {
+        return when (token) {
+            "{AMOUNT}" -> namedOrRaw("amount", """[\d,]+""", usedNamedGroups)
+            "{STORE}" -> namedOrRaw("store", """.+?""", usedNamedGroups)
+            "{DATE}" -> namedOrRaw("date", """\d{1,2}[/.-]\d{1,2}""", usedNamedGroups)
+            "{TIME}" -> """\d{1,2}:\d{2}"""
+            "{CARD_NUM}", "{CARD_NO}" -> namedOrRaw("card", """\d+\*+\d+""", usedNamedGroups)
+            "{USER_NAME}" -> """\S+"""
+            "{BALANCE}" -> """[\d,]+"""
+            "{N}" -> """\d+"""
+            else -> """.+?"""
+        }
+    }
+
+    private fun namedOrRaw(
+        groupName: String,
+        rawPattern: String,
+        usedNamedGroups: MutableSet<String>
+    ): String {
+        return if (usedNamedGroups.add(groupName)) {
+            "(?<$groupName>$rawPattern)"
+        } else {
+            rawPattern
         }
     }
 
