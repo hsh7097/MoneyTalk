@@ -1,8 +1,10 @@
 package com.sanha.moneytalk.core.sms2
 
+import android.content.Context
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ServerValue
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -19,12 +21,16 @@ import javax.inject.Singleton
  */
 @Singleton
 class SmsOriginSampleCollector @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val database: FirebaseDatabase?
 ) {
     companion object {
         private const val SMS_ORIGIN_PATH = "sms_origin"
         private const val MAX_SUCCESS_FINGERPRINTS_PER_BUCKET = 3
         private const val SUCCESS_CACHE_MAX = 500
+        private const val FAILURE_UPLOAD_GUARD_PREFS = "sms_origin_failure_upload_guard"
+        private const val FAILURE_FINGERPRINT_COOLDOWN_MS = 24L * 60L * 60L * 1000L
+        private const val MAX_FAILURE_UPLOADS_PER_BUCKET_PER_DAY = 5
     }
 
     data class SuccessSample(
@@ -56,6 +62,10 @@ class SmsOriginSampleCollector @Inject constructor(
     )
 
     private val successFingerprintsByBucket = ConcurrentHashMap<String, LinkedHashSet<String>>()
+    private val failureUploadLock = Any()
+    private val failureUploadPrefs by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        appContext.getSharedPreferences(FAILURE_UPLOAD_GUARD_PREFS, Context.MODE_PRIVATE)
+    }
 
     fun resetSession() {
         successFingerprintsByBucket.clear()
@@ -160,6 +170,17 @@ class SmsOriginSampleCollector @Inject constructor(
         )
         val sampleKey = fingerprint
 
+        if (!shouldUploadFailure(
+                normalizedSender = sample.normalizedSenderAddress,
+                normalizedType = normalizedType,
+                failStage = sample.failStage,
+                failReason = sample.failReason,
+                fingerprint = fingerprint
+            )
+        ) {
+            return
+        }
+
         val ref = db.getReference(SMS_ORIGIN_PATH)
             .child(sample.normalizedSenderAddress)
             .child(normalizedType)
@@ -192,6 +213,55 @@ class SmsOriginSampleCollector @Inject constructor(
                 "sms_origin failure 표본 업로드 실패: ${e.javaClass.simpleName} ${e.message}"
             )
         }
+    }
+
+    private fun shouldUploadFailure(
+        normalizedSender: String,
+        normalizedType: String,
+        failStage: String,
+        failReason: String,
+        fingerprint: String
+    ): Boolean {
+        val now = System.currentTimeMillis()
+        val dayBucket = buildString {
+            val calendar = java.util.Calendar.getInstance().apply { timeInMillis = now }
+            append(calendar.get(java.util.Calendar.YEAR))
+            append(String.format(Locale.ROOT, "%02d", calendar.get(java.util.Calendar.MONTH) + 1))
+            append(String.format(Locale.ROOT, "%02d", calendar.get(java.util.Calendar.DAY_OF_MONTH)))
+        }
+        val fingerprintKey = "fp:$fingerprint"
+        val bucketHash = sha256Hex(
+            buildString {
+                append(normalizedSender)
+                append('|')
+                append(normalizedType)
+                append('|')
+                append(failStage.lowercase(Locale.ROOT))
+                append('|')
+                append(failReason.lowercase(Locale.ROOT))
+                append('|')
+                append(dayBucket)
+            }
+        ).take(24)
+        val bucketKey = "bk:$bucketHash"
+
+        synchronized(failureUploadLock) {
+            val lastUploadedAt = failureUploadPrefs.getLong(fingerprintKey, 0L)
+            if (lastUploadedAt > 0L && now - lastUploadedAt < FAILURE_FINGERPRINT_COOLDOWN_MS) {
+                return false
+            }
+
+            val bucketCount = failureUploadPrefs.getInt(bucketKey, 0)
+            if (bucketCount >= MAX_FAILURE_UPLOADS_PER_BUCKET_PER_DAY) {
+                return false
+            }
+
+            failureUploadPrefs.edit()
+                .putLong(fingerprintKey, now)
+                .putInt(bucketKey, bucketCount + 1)
+                .apply()
+        }
+        return true
     }
 
     private fun trimSuccessCacheIfNeeded() {

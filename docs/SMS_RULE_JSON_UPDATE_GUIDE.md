@@ -16,6 +16,8 @@
 1. Asset 룰 로드 (`sms_rules_v1.json`)
 2. RTDB 룰 overlay (동일 키면 RTDB가 덮어씀)
 3. 결제 후보 SMS에 Step1.5 Fast Path 적용
+   - 1차: `sms_regex_rules` (asset/rtdb/local_learned)
+   - 2차: `sms_patterns`의 sender별 검증 regex (`amountRegex/storeRegex`) 로컬 보조 매칭
 4. Fast Path miss만 기존 임베딩/벡터/LLM 파이프라인 진입
 
 중요:
@@ -54,6 +56,9 @@ Step1.5 SenderRegex: 매칭 X건, 폴백 Y건
 - Fast Path 실패건은 실패 사유와 함께 전송
 - fingerprint 기준 upsert(`count`, `lastSeenAt` 누적)
 - 경로: `/sms_origin/{sender}/{type}/{sampleKey}`
+- 업로드 제한:
+  - 동일 fingerprint 재전송 쿨다운: 24시간
+  - sender/type/failStage/failReason 버킷당 일 최대 5건
 
 주의:
 - 결제 후보가 전부 Fast Path miss이면 실패 표본이 많이 올라간다.

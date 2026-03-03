@@ -1,6 +1,8 @@
 package com.sanha.moneytalk.core.sms2
 
+import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.SmsRegexRuleRepository
+import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.database.entity.SmsRegexRuleEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
@@ -20,6 +22,7 @@ import javax.inject.Singleton
 @Singleton
 class SmsRegexRuleMatcher @Inject constructor(
     private val ruleRepository: SmsRegexRuleRepository,
+    private val smsPatternDao: SmsPatternDao,
     private val originSampleCollector: SmsOriginSampleCollector
 ) {
     data class RuleMatchResult(
@@ -38,6 +41,7 @@ class SmsRegexRuleMatcher @Inject constructor(
         private const val MAX_ACTIVE_RULES_PER_TYPE = 5
         private const val RULE_FAIL_INACTIVE_THRESHOLD = 12
         private const val RULE_STALE_INACTIVE_DAYS = 120L
+        private const val MAX_LOCAL_REGEX_PATTERNS_PER_SENDER = 20
 
         private val ELIGIBLE_TYPES = setOf(
             "expense",
@@ -62,6 +66,7 @@ class SmsRegexRuleMatcher @Inject constructor(
         if (inputs.isEmpty()) return RuleMatchResult(emptyList(), emptyList())
 
         val rulesBySender = mutableMapOf<String, List<SmsRegexRuleEntity>>()
+        val localRegexPatternsBySender = mutableMapOf<String, List<SmsPatternEntity>>()
         val matched = mutableListOf<SmsParseResult>()
         val unmatched = mutableListOf<SmsInput>()
 
@@ -70,12 +75,37 @@ class SmsRegexRuleMatcher @Inject constructor(
             val senderRules = rulesBySender[sender] ?: loadSenderRules(sender).also {
                 rulesBySender[sender] = it
             }
+            val senderLocalPatterns =
+                localRegexPatternsBySender[sender] ?: loadLocalRegexPatterns(sender).also {
+                    localRegexPatternsBySender[sender] = it
+                }
 
-            if (senderRules.isEmpty()) {
+            val primaryAttempt = if (senderRules.isEmpty()) {
+                MatchAttemptResult(
+                    failReason = "no_active_rule",
+                    failStage = "fast_path_rule_lookup",
+                    ruleType = inferTypeFromBody(input.body)
+                )
+            } else {
+                matchOne(input = input, sender = sender, rules = senderRules)
+            }
+            val localAttempt = if (primaryAttempt.parsed == null) {
+                matchWithLocalRegexPatterns(input = input, patterns = senderLocalPatterns)
+            } else {
+                MatchAttemptResult()
+            }
+
+            val parsed = primaryAttempt.parsed ?: localAttempt.parsed
+            if (parsed != null) {
+                matched.add(parsed)
+                continue
+            }
+
+            if (senderRules.isEmpty() && senderLocalPatterns.isEmpty()) {
                 collectFastPathFailure(
                     input = input,
                     normalizedSender = sender,
-                    type = "expense",
+                    type = primaryAttempt.ruleType.ifBlank { "expense" },
                     failReason = "no_active_rule",
                     failStage = "fast_path_rule_lookup",
                     matchedRuleKey = ""
@@ -84,21 +114,21 @@ class SmsRegexRuleMatcher @Inject constructor(
                 continue
             }
 
-            val attempt = matchOne(input = input, sender = sender, rules = senderRules)
-            val parsed = attempt.parsed
-            if (parsed != null) {
-                matched.add(parsed)
-            } else {
-                collectFastPathFailure(
-                    input = input,
-                    normalizedSender = sender,
-                    type = attempt.ruleType.ifBlank { "expense" },
-                    failReason = attempt.failReason.ifBlank { "no_regex_match" },
-                    failStage = attempt.failStage,
-                    matchedRuleKey = attempt.matchedRuleKey
-                )
-                unmatched.add(input)
-            }
+            val finalAttempt =
+                if (localAttempt.failReason.isNotBlank() && localAttempt.failReason != "local_no_pattern") {
+                    localAttempt
+                } else {
+                    primaryAttempt
+                }
+            collectFastPathFailure(
+                input = input,
+                normalizedSender = sender,
+                type = finalAttempt.ruleType.ifBlank { inferTypeFromBody(input.body) },
+                failReason = finalAttempt.failReason.ifBlank { "no_regex_match" },
+                failStage = finalAttempt.failStage,
+                matchedRuleKey = finalAttempt.matchedRuleKey
+            )
+            unmatched.add(input)
         }
 
         return RuleMatchResult(matched = matched, unmatched = unmatched)
@@ -308,6 +338,103 @@ class SmsRegexRuleMatcher @Inject constructor(
         )
     }
 
+    private suspend fun loadLocalRegexPatterns(sender: String): List<SmsPatternEntity> {
+        if (sender.isBlank()) return emptyList()
+        return smsPatternDao.getPatternsBySender(sender)
+            .asSequence()
+            .filter { it.isPayment && it.amountRegex.isNotBlank() && it.storeRegex.isNotBlank() }
+            .sortedWith(
+                compareByDescending<SmsPatternEntity> { it.matchCount }
+                    .thenByDescending { it.lastMatchedAt }
+                    .thenByDescending { it.createdAt }
+            )
+            .take(MAX_LOCAL_REGEX_PATTERNS_PER_SENDER)
+            .toList()
+    }
+
+    private suspend fun matchWithLocalRegexPatterns(
+        input: SmsInput,
+        patterns: List<SmsPatternEntity>
+    ): MatchAttemptResult {
+        if (patterns.isEmpty()) {
+            return MatchAttemptResult(
+                failReason = "local_no_pattern",
+                failStage = "fast_path_local_regex",
+                ruleType = inferTypeFromBody(input.body)
+            )
+        }
+
+        val normalizedBody = normalizeBody(input.body)
+        var lastFailure = MatchAttemptResult(
+            failReason = "local_no_regex_match",
+            failStage = "fast_path_local_regex",
+            ruleType = inferTypeFromBody(input.body)
+        )
+
+        for (pattern in patterns) {
+            val amountPattern = compileRegex(pattern.amountRegex)
+            val storePattern = compileRegex(pattern.storeRegex)
+            if (amountPattern == null || storePattern == null) {
+                lastFailure = MatchAttemptResult(
+                    failReason = "local_regex_compile_failed",
+                    failStage = "fast_path_local_regex_compile",
+                    ruleType = inferTypeFromBody(input.body)
+                )
+                continue
+            }
+
+            val amount = extractGroup1(amountPattern, normalizedBody)
+                ?.replace(NON_DIGIT_PATTERN, "")
+                ?.toIntOrNull()
+            if (amount == null || amount <= 0) {
+                lastFailure = MatchAttemptResult(
+                    failReason = "local_amount_extract_failed",
+                    failStage = "fast_path_local_regex",
+                    ruleType = inferTypeFromBody(input.body)
+                )
+                continue
+            }
+
+            val storeName = extractGroup1(storePattern, normalizedBody)
+                ?.trim()
+                ?.takeIf(::isValidStoreCandidate)
+            if (storeName.isNullOrBlank()) {
+                lastFailure = MatchAttemptResult(
+                    failReason = "local_store_extract_failed",
+                    failStage = "fast_path_local_regex",
+                    ruleType = inferTypeFromBody(input.body)
+                )
+                continue
+            }
+
+            val cardPattern = compileRegex(pattern.cardRegex)
+            val cardName = extractGroup1(cardPattern, normalizedBody)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: extractBankTagFromBody(normalizedBody)
+                ?: pattern.parsedCardName.ifBlank { "기타" }
+
+            smsPatternDao.incrementMatchCount(pattern.id)
+
+            return MatchAttemptResult(
+                parsed = SmsParseResult(
+                    input = input,
+                    analysis = SmsAnalysisResult(
+                        amount = amount,
+                        storeName = storeName,
+                        category = "미분류",
+                        dateTime = extractDateTimeFromBody(normalizedBody, input.date),
+                        cardName = cardName
+                    ),
+                    tier = 1,
+                    confidence = 0.97f
+                ),
+                ruleType = inferTypeFromBody(input.body)
+            )
+        }
+        return lastFailure
+    }
+
     private fun collectFastPathFailure(
         input: SmsInput,
         normalizedSender: String,
@@ -445,5 +572,48 @@ class SmsRegexRuleMatcher @Inject constructor(
         if (value.contains("{")) return false
         if (STORE_NUMBER_ONLY_PATTERN.matches(value)) return false
         return true
+    }
+
+    private fun extractGroup1(regex: Regex?, text: String): String? {
+        if (regex == null) return null
+        val match = regex.find(text) ?: return null
+        return match.groupValues.getOrNull(1)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+    }
+
+    private fun extractDateTimeFromBody(body: String, timestamp: Long): String {
+        val calendar = Calendar.getInstance().apply { timeInMillis = timestamp }
+
+        val dateMatch = DATE_PATTERN.find(body)
+        if (dateMatch != null) {
+            val month = dateMatch.groupValues[1].toIntOrNull() ?: (calendar.get(Calendar.MONTH) + 1)
+            val day = dateMatch.groupValues[2].toIntOrNull() ?: calendar.get(Calendar.DAY_OF_MONTH)
+            calendar.set(Calendar.MONTH, month - 1)
+            calendar.set(Calendar.DAY_OF_MONTH, day)
+        }
+
+        val timeMatch = TIME_PATTERN.find(body)
+        if (timeMatch != null) {
+            val hour = timeMatch.groupValues[1].toIntOrNull() ?: calendar.get(Calendar.HOUR_OF_DAY)
+            val minute = timeMatch.groupValues[2].toIntOrNull() ?: calendar.get(Calendar.MINUTE)
+            calendar.set(Calendar.HOUR_OF_DAY, hour)
+            calendar.set(Calendar.MINUTE, minute)
+        }
+
+        return SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(calendar.time)
+    }
+
+    private fun inferTypeFromBody(body: String): String {
+        val normalized = body.lowercase(Locale.ROOT)
+        return when {
+            normalized.contains("취소") -> "cancel"
+            normalized.contains("해외") ||
+                normalized.contains("usd") ||
+                normalized.contains("jpy") ||
+                normalized.contains("eur") -> "overseas"
+            normalized.contains("입금") || normalized.contains("이체입금") -> "income"
+            else -> "expense"
+        }
     }
 }

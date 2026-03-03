@@ -41,6 +41,7 @@
 | 2026-03-03 | Fallback Hotfix | `codex/sms-regex-phase1-schema` | `16449999` 출금 멀티라인 변형(중간 reference 줄 포함) 전용 asset 룰 추가, `processGroup` NON_PAYMENT 상세 로그(LLM 추출 필드+대표 본문 preview) 보강 | 완료 |
 | 2026-03-03 | Rule Guide | `codex/sms-regex-phase1-schema` | `SMS_RULE_JSON_UPDATE_GUIDE.md` 추가: CSV 기반 룰 추출, `ruleKey` 생성, priority 기준, 검증/반영 절차 문서화 | 완료 |
 | 2026-03-03 | Rule Guide V2 | `codex/sms-regex-phase1-schema` | 가이드 상세화: 런타임 병합 순서(Asset+RTDB), 속도 해석 기준, `sms_origin` 성공/실패 업로드 정책, JSON 주석 금지/INACTIVE 운영 원칙 추가 | 완료 |
+| 2026-03-03 | Failure Throttle | `codex/sms-regex-phase1-schema` | Fast Path에 `sms_patterns` sender별 로컬 regex 보조 매칭 추가(다음 동기화부터 재사용), `sms_origin` 실패 업로드에 fingerprint 24h 쿨다운 + 일 버킷 상한(5건) 적용 | 완료 |
 
 ## 3. 확정 설계 원칙
 
