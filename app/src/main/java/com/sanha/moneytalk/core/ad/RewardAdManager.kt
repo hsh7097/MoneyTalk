@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -236,4 +237,8 @@ class RewardAdManager @Inject constructor(
     fun getFreeSyncCount(): Int {
         return premiumManager.premiumConfig.value.freeSyncCount
     }
+
+    /** 무료 동기화 허용 횟수 Flow (Compose 관찰용) */
+    val freeSyncCountFlow: Flow<Int>
+        get() = premiumManager.premiumConfig.map { it.freeSyncCount }
 }

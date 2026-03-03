@@ -44,7 +44,7 @@ interface TransactionCardInfo {
     val cardNameText: String?
         get() = null
 
-    /** 거래 메모 (카드명 옆 보조 표기용) */
+    /** 거래 메모 (사용처 옆 보조 표기용) */
     val memoText: String?
         get() = null
 }

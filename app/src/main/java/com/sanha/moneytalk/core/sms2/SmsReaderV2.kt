@@ -36,6 +36,9 @@ class SmsReaderV2 @Inject constructor(
 
         // RCS (채팅+) URI — 삼성 메시지 앱에서 사용
         private val RCS_URI = Uri.parse("content://im/chat")
+
+        /** 진단 대상 발신번호 (정규화 후 비교) — 누락 원인 추적용 */
+        private val DIAG_TARGET_SENDERS = setOf("15881600", "15881688")
     }
 
     /**
@@ -59,9 +62,25 @@ class SmsReaderV2 @Inject constructor(
         val mmsList = readAllMmsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
         val rcsList = readAllRcsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
 
+        MoneyTalkLogger.i("[SmsReaderV2] 채널별 읽기 결과: SMS=${smsList.size}, MMS=${mmsList.size}, RCS=${rcsList.size}")
+
         val combined = (smsList + mmsList + rcsList)
             .distinctBy { it.id }
             .sortedByDescending { it.date }
+
+        // 진단 대상 발신번호가 포함되었는지 확인
+        val diagFound = combined.filter { msg ->
+            val normalized = SmsFilter.normalizeAddress(msg.address)
+            DIAG_TARGET_SENDERS.any { normalized.contains(it) }
+        }
+        if (diagFound.isNotEmpty()) {
+            MoneyTalkLogger.i("[SmsReaderV2] 진단 대상 발견: ${diagFound.size}건")
+            diagFound.take(3).forEach { msg ->
+                MoneyTalkLogger.i("[SmsReaderV2]   → address=${msg.address}, body=${msg.body.take(50)}")
+            }
+        } else {
+            MoneyTalkLogger.w("[SmsReaderV2] 진단 대상 발신번호 미발견 (${DIAG_TARGET_SENDERS.joinToString()})")
+        }
 
         return combined
     }
@@ -105,6 +124,12 @@ class SmsReaderV2 @Inject constructor(
                 val body = it.getString(bodyIndex) ?: continue
                 val date = it.getLong(dateIndex)
 
+                // 진단 대상 발신번호 상세 로깅
+                val normalizedAddr = SmsFilter.normalizeAddress(address)
+                if (DIAG_TARGET_SENDERS.any { normalizedAddr.contains(it) }) {
+                    MoneyTalkLogger.i("[SmsReaderV2][SMS] 진단 대상 발견! address=$address, body=${body.take(60)}")
+                }
+
                 if (shouldSkipBlockedSender(address, blockedAddressSet)) {
                     blockedSenderSkipCount++
                     continue
@@ -126,6 +151,7 @@ class SmsReaderV2 @Inject constructor(
             }
         }
 
+        MoneyTalkLogger.i("[SmsReaderV2][SMS] 총 ${totalCursorCount}건 조회, ${result.size}건 통과, sender스킵=${senderSkipCount}, blocked스킵=${blockedSenderSkipCount}")
         return result
     }
 
@@ -140,6 +166,7 @@ class SmsReaderV2 @Inject constructor(
         val result = mutableListOf<SmsInput>()
         var senderSkipCount = 0
         var blockedSenderSkipCount = 0
+        var totalCursorCount = 0
         val startSec = startDate / 1000
         val endSec = endDate / 1000
 
@@ -157,12 +184,19 @@ class SmsReaderV2 @Inject constructor(
                 val dateIndex = it.getColumnIndex("date")
 
                 while (it.moveToNext()) {
+                    totalCursorCount++
                     val mmsId = it.getString(idIndex) ?: continue
                     val dateSec = it.getLong(dateIndex)
                     val dateMs = dateSec * 1000
 
                     val body = getMmsTextBody(contentResolver, mmsId) ?: continue
                     val address = getMmsAddress(contentResolver, mmsId)
+
+                    // 진단 대상 발신번호 상세 로깅
+                    val normalizedAddr = SmsFilter.normalizeAddress(address)
+                    if (DIAG_TARGET_SENDERS.any { normalizedAddr.contains(it) }) {
+                        MoneyTalkLogger.i("[SmsReaderV2][MMS] 진단 대상 발견! address=$address, body=${body.take(60)}")
+                    }
 
                     if (shouldSkipBlockedSender(address, blockedAddressSet)) {
                         blockedSenderSkipCount++
@@ -188,6 +222,7 @@ class SmsReaderV2 @Inject constructor(
             MoneyTalkLogger.e("MMS 읽기 실패: ${e.message}")
         }
 
+        MoneyTalkLogger.i("[SmsReaderV2][MMS] 총 ${totalCursorCount}건 조회, ${result.size}건 통과, sender스킵=${senderSkipCount}, blocked스킵=${blockedSenderSkipCount}")
         return result
     }
 
@@ -287,7 +322,10 @@ class SmsReaderV2 @Inject constructor(
         val result = mutableListOf<SmsInput>()
         var senderSkipCount = 0
         var blockedSenderSkipCount = 0
-        if (!isRcsAvailable(contentResolver)) return result
+        var totalCursorCount = 0
+        val rcsAvailable = isRcsAvailable(contentResolver)
+        MoneyTalkLogger.i("[SmsReaderV2][RCS] 가용 여부: $rcsAvailable")
+        if (!rcsAvailable) return result
 
         try {
             val cursor = contentResolver.query(
@@ -305,6 +343,7 @@ class SmsReaderV2 @Inject constructor(
                 val dateIndex = it.getColumnIndex("date")
 
                 while (it.moveToNext()) {
+                    totalCursorCount++
                     it.getString(idIndex) ?: continue
                     val address = it.getString(addressIndex) ?: continue
                     val rawBody = it.getString(bodyIndex) ?: continue
@@ -312,6 +351,12 @@ class SmsReaderV2 @Inject constructor(
                     val body = extractRcsText(rawBody)
 
                     if (body.isBlank()) continue
+
+                    // 진단 대상 발신번호 상세 로깅
+                    val normalizedAddr = SmsFilter.normalizeAddress(address)
+                    if (DIAG_TARGET_SENDERS.any { normalizedAddr.contains(it) }) {
+                        MoneyTalkLogger.i("[SmsReaderV2][RCS] 진단 대상 발견! address=$address, rawBody=${rawBody.take(80)}, extractedBody=${body.take(60)}")
+                    }
 
                     if (shouldSkipBlockedSender(address, blockedAddressSet)) {
                         blockedSenderSkipCount++
@@ -337,6 +382,7 @@ class SmsReaderV2 @Inject constructor(
             MoneyTalkLogger.e("RCS 읽기 실패: ${e.message}")
         }
 
+        MoneyTalkLogger.i("[SmsReaderV2][RCS] 총 ${totalCursorCount}건 조회, ${result.size}건 통과, sender스킵=${senderSkipCount}, blocked스킵=${blockedSenderSkipCount}")
         return result
     }
 

@@ -37,9 +37,15 @@ data class MainUiState(
     val isLegacyFullSyncUnlocked: Boolean = false,
     /** 무료 동기화 사용 횟수 (DataStore 기반) */
     val freeSyncUsedCount: Int = 0,
+    /** 무료 동기화 최대 허용 횟수 (RTDB 기반) */
+    val freeSyncMaxCount: Int = 3,
     val showFullSyncAdDialog: Boolean = false,
     /** 광고 다이얼로그 대상 연도 */
     val fullSyncAdYear: Int = 0,
     /** 광고 다이얼로그 대상 월 */
     val fullSyncAdMonth: Int = 0
-)
+) {
+    /** 무료 동기화 잔여 횟수 존재 여부 (Compose 관찰 가능) */
+    val hasFreeSyncRemaining: Boolean
+        get() = freeSyncUsedCount < freeSyncMaxCount
+}

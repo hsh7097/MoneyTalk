@@ -101,9 +101,28 @@ fun TransactionCardCompose(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Column {
-                    // 가게명
+                    // 가게명 + 메모
+                    val memoText = info.memoText
+                    val titleText = buildAnnotatedString {
+                        append(info.title)
+                        if (!memoText.isNullOrBlank()) {
+                            append(" ")
+                            val memoStart = length
+                            append("(")
+                            append(memoText)
+                            append(")")
+                            addStyle(
+                                style = SpanStyle(
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    fontSize = MaterialTheme.typography.bodyMedium.fontSize
+                                ),
+                                start = memoStart,
+                                end = length
+                            )
+                        }
+                    }
                     Text(
-                        text = info.title,
+                        text = titleText,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
@@ -116,7 +135,6 @@ fun TransactionCardCompose(
                     val tag = info.categoryTag
                     val time = info.time
                     val cardName = info.cardNameText
-                    val memoText = info.memoText
                     if (tag != null || time != null) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -141,21 +159,6 @@ fun TransactionCardCompose(
                                 if (cardName != null) {
                                     if (length > 0) append(" • ")
                                     append(cardName)
-
-                                    if (!memoText.isNullOrBlank()) {
-                                        append(" ")
-                                        val memoStart = length
-                                        append("(")
-                                        append(memoText)
-                                        append(")")
-                                        addStyle(
-                                            style = SpanStyle(
-                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
-                                            ),
-                                            start = memoStart,
-                                            end = length
-                                        )
-                                    }
                                 }
                             }
                             if (detail.text.isNotEmpty()) {

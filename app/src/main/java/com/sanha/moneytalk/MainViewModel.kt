@@ -201,6 +201,12 @@ class MainViewModel @Inject constructor(
                 _uiState.update { it.copy(freeSyncUsedCount = count) }
             }
         }
+        // 무료 동기화 최대 횟수 (RTDB)
+        viewModelScope.launch {
+            rewardAdManager.freeSyncCountFlow.collect { maxCount ->
+                _uiState.update { it.copy(freeSyncMaxCount = maxCount) }
+            }
+        }
     }
 
     // ========== 전역 이벤트 처리 ==========
@@ -882,16 +888,6 @@ class MainViewModel @Inject constructor(
                 }
             }
         )
-    }
-
-    /**
-     * 무료 동기화 잔여 횟수가 있는지 확인
-     * PremiumConfig.freeSyncCount와 DataStore 사용 횟수 비교
-     */
-    fun hasFreeSyncRemaining(): Boolean {
-        val maxFree = rewardAdManager.getFreeSyncCount()
-        val used = _uiState.value.freeSyncUsedCount
-        return used < maxFree
     }
 
     /** 해당 월이 이미 동기화(광고 시청) 되었는지 확인 */
