@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -99,9 +101,28 @@ fun TransactionCardCompose(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Column {
-                    // 가게명
+                    // 가게명 + 메모
+                    val memoText = info.memoText
+                    val titleText = buildAnnotatedString {
+                        append(info.title)
+                        if (!memoText.isNullOrBlank()) {
+                            append(" ")
+                            val memoStart = length
+                            append("(")
+                            append(memoText)
+                            append(")")
+                            addStyle(
+                                style = SpanStyle(
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    fontSize = MaterialTheme.typography.bodyMedium.fontSize
+                                ),
+                                start = memoStart,
+                                end = length
+                            )
+                        }
+                    }
                     Text(
-                        text = info.title,
+                        text = titleText,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
@@ -133,14 +154,14 @@ fun TransactionCardCompose(
                             }
 
                             // 시간 + 카드명
-                            val detail = buildString {
+                            val detail = buildAnnotatedString {
                                 if (time != null) append(time)
                                 if (cardName != null) {
-                                    if (isNotEmpty()) append(" • ")
+                                    if (length > 0) append(" • ")
                                     append(cardName)
                                 }
                             }
-                            if (detail.isNotEmpty()) {
+                            if (detail.text.isNotEmpty()) {
                                 Text(
                                     text = detail,
                                     style = MaterialTheme.typography.bodySmall,

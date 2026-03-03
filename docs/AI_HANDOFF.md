@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-02-24
+> **최종 갱신**: 2026-03-03 (SMS regex Fast Path 전환 완료)
 
 ---
 
@@ -238,9 +238,109 @@
 - buildComparisonText 형식 변경: "N% 더 쓰고 있어요" → "₩금액(N%) 더 쓰고 있어요"
 - Auto Backup 복원 규칙 수정 (backup_rules.xml, data_extraction_rules.xml)
 
+**Activity-scoped MainViewModel 도입**: ✅ 완료 (2026-02-25)
+- 동기화/권한/광고 통합 관리를 MainActivity-scoped ViewModel로 이관
+- PR #33 생성 + Codex 리뷰 P2 확인 (SMS 권한 없을 때 resume 시 DataRefreshEvent 미발행)
+- 결정: 현재 상태 유지 — SMS 권한 없는 사용자의 편집 화면은 자체 refresh 이벤트 발행하므로 실질적 문제 낮음
+- 매 진입 시 권한 재요청 팝업 검토 → 기각 (UX 피로감 + Google Play 정책 위반 가능성)
+
+**임베딩 차원 축소 (3072 → 768)**: ✅ 완료 (2026-02-25)
+- Gemini Embedding API `outputDimensionality=768` 설정 (SmsEmbeddingService, SmsTemplateEngine)
+- Matryoshka Representation Learning 활용 — MTEB 벤치마크 기준 품질 손실 0.26%
+- DB v3→v4 마이그레이션 (기존 3072 차원 sms_patterns, store_embeddings 삭제)
+- 코드 주석(8개 파일) + 문서(6개 md) 3072→768 갱신
+- 효과: 임베딩 저장/전송 크기 75% 감소, 코사인 유사도 연산 75% 감소
+
+**SmsGroupClassifier 품질 개선**: ✅ 완료 (2026-02-26)
+- 소그룹 병합 유사도 0.70→0.90 상향 (서로 다른 SMS 형식 과도 병합 방지)
+- RTDB 표본 수집: template 필드 추가 + regex 존재 시만 수집 (amountRegex+storeRegex 비어있는 무용 표본 제거)
+- LLM 프롬프트 개선: "예외 케이스" → "메인 케이스 참조" (같은 발신번호 메인 형식 참고하여 분석)
+- MainCaseContext.samples: 단일 sample → 3건 리스트 전달 (LLM 분석 정확도 향상)
+- buildContextualLlmInput: 메인 템플릿 + 메인 샘플 3건 + 분포도 요약을 LLM에 전달
+- 로그 추가: GeminiSmsExtractor에 프롬프트 디버깅 로그
+
+**SMS 파싱 파이프라인 순서/효율 개선**: ✅ 완료 (2026-02-26)
+- SmsPreFilter 수입 보호 화이트리스트 추가 (INCOME_PROTECTION_KEYWORDS)
+- SmsIncomeFilter classify() 순서 수정 (incomeExcludeKeywords → paymentKeywords)
+- SmsIncomeParser 취소/환불 분기 추가 (extractIncomeType → "환불")
+- SmsPatternMatcher parseWithRegex() 미사용 fallbackCategory 파라미터 제거
+- SmsIncomeFilter/SmsPreFilter 중복 코드 방어용 주석 추가
+
+**generateRegexForGroup 정규식 생성 성공률 개선**: ✅ 완료 (2026-02-26)
+- repair 1회 활성화 (REGEX_REPAIR_MAX_RETRIES 0→1)
+- 검증 일원화: Extractor에서 샘플 성공률 게이트 제거 → Classifier.validateRegexAgainstSamples() 1곳에서만 판정
+- 프롬프트 개선: JSON escape 규칙 명시, 멀티라인 SMS 예시 추가, 날짜 prefix 제거, 샘플 수 1~5→1~10
+- ultraCompact 3차 폴백 활성화 (primary → compact → ultraCompact)
+- compact 프롬프트에 cardRegex 힌트 추가
+- repair 프롬프트에 인간 친화적 실패 사유 매핑 (toHumanFriendlyReason)
+- 미사용 코드 정리 (REGEX_MIN_AMOUNT, NON_DIGIT_PATTERN, STORE_* 패턴, isValidRegexStoreName, tryExtractGroup1, RegexValidationResult.successRatio)
+- 하드코딩 문자열 리소스화 (strings.xml + values-en/strings.xml)
+
+**SMS Step5 성능 최적화 + Step4.5 배치 LLM 복구 경로**: ✅ 완료 (2026-02-27)
+- PR #38 (`optimize/sms-step5-performance` → `develop`) 머지 완료
+- **Step5 성능 최적화** (커밋 b339245):
+  - GeminiSmsExtractor: LLM 타임아웃 60초, CancellationException 조기 캐치, isPayment=false 스킵, 디버그 로깅
+  - SmsGroupClassifier: REGEX_MIN_SAMPLES=5, REGEX_TIME_BUDGET_MS=15초, REGEX_NEAR_MISS_MIN_RATIO=0.4f, dead code 제거
+  - SmsPipeline: Step5 진행률 콜백 연동
+- **Step4.5 regex 실패건 배치 LLM 복구** (커밋 43de46e):
+  - SmsPatternMatcher: `MatchResult` 3-way 분할 (matched/regexFailed/unmatched)
+  - SmsGroupClassifier: `batchExtractRegexFailed()` — 발신번호별 그룹 + chunk(10) + 배치 LLM 추출
+  - SmsPipeline: Step4→Step4.5→Step5 체인, `PipelineResult.regexFailedRecoveredCount`
+  - SmsPipelineModels: `SyncStats.regexFailedRecoveredCount`
+  - SmsSyncCoordinator/MainViewModel: stats 매핑
+- **근본 원인**: KB출금 26건이 벡터매칭 OK + regex 파싱 실패(STORE_INVALID_KEYWORDS에 "출금","카드") → 매 동기화 25초 Step5 무한 루프 → Step4.5에서 ~3초 처리
+- CLAUDE.md에 MoneyTalkLogger 로깅 규칙 추가 (커밋 b745945)
+
+**PR #40: Step5 SMS 파싱 정책/예산/학습 분리 고도화**: ✅ 완료 (2026-02-27)
+- PR #40 (`optimize/step5-phase1` → `develop`) 머지 완료, 7 커밋, SmsGroupClassifier.kt 단일 파일
+- **Phase1**: regex 정책 강화 (REGEX_MIN_SAMPLES=5, near-miss 재시도), 그룹별/전체 시간 예산 (GROUP_TIME_BUDGET_MS=10초, STEP5_TIME_BUDGET_MS=20초), 계측 로그
+- **Phase2**: 예산 초과 시 스킵→강등 정책 (regex 생성 포기하고 LLM 직접 추출로 전환, 데이터 누락 방지)
+- **Phase3**: unstable 그룹 정책 (중앙값 0.92/P20 0.88 미달 시 그룹 해체→개별 LLM), cohesion gate, E-lite 모델 분리
+- **Phase4**: 백그라운드 학습 큐 (DeferredLearningTask, learningQueue, LEARNING_QUEUE_MAX_SIZE=1000, dedup)
+- **Phase5**: outcome 집계 로그 + 학습 큐 in-flight dedup 중복 방지
+
+**PR #41: Step4.5 복구 경로 최적화 및 프롬프트 안정화**: ✅ 완료 (2026-02-27)
+- PR #41 (`codex/step4-5-optimize` → `develop`) 머지 완료, 9 커밋, 9 파일
+- **Step4.5 병렬화 + 품질 게이트**: Semaphore(LLM_CONCURRENCY) + async/awaitAll, isRecoverableRegexFailedSms() 복구 가능성 판정, isGroundedRegexFailedRecovery() 근거 검증, 실패 쿨다운 (sender:templateHash, 2회→30분)
+- **KB 멀티라인 출금 휴리스틱**: tryParseKbDebitFallback() + tryHeuristicParse() 헬퍼 추출 (4곳 중복 제거)
+- **Step5 경로 분리**: 5-A (unmatched, full regex policy) vs 5-B (regexFailedFallback, forceSkipRegexAll=true)
+- **프롬프트 강화**: 근거 부족 문자 처리 규칙(rules 7-10), SMS_EXTRACT_PROMPT_VERSION/SMS_BATCH_PROMPT_VERSION 로깅
+- **누락 SMS 드롭 경로 진단**: SmsPipeline에서 parsedIds vs embedded 차집합 추적 로그
+- **Home insight 재시도**: HOME_INSIGHT_MAX_ATTEMPTS=3, 503/UNAVAILABLE 시 선형 백오프
+- **TransactionCard 메모 표시**: memoText 필드 + buildAnnotatedString (alpha=0.72f)
+- **상수 추출**: DEBIT_FALLBACK_STORE_NAME (SmsPatternMatcher), outcome 코드 REGEX_FAILED_HEURISTIC_KB 구분
+
+**SMS Regex Fast Path 전환 (sms2)**: ✅ 완료 (2026-03-03)
+- `sms_regex_rules` 테이블 추가 (DB v6→v7, 복합PK: senderAddress+type+ruleKey)
+- 3-tier 파싱: Step 1.5 sender regex Fast Path → Vector → LLM
+- Asset seed (`sms_rules_v1.json`, 8 sender 16룰) + RTDB overlay
+- `SmsRegexRuleMatcher`: 매칭 통계 자동 갱신, 저품질 룰 자동 비활성화, sender/type별 5개 상한
+- `SmsOriginSampleCollector`: 성공/실패 표본 분리 수집 (SHA-256 결정적 키)
+- Fallback 안전 연결: `distinctBy { input.id }` 중복 제거, SyncStats 분리 지표
+- `docs/SMS_RULE_JSON_UPDATE_GUIDE.md` 운영 가이드 추가
+- 상세: `docs/TEMP_SMS_REGEX_RULE_MIGRATION_PLAN.md` (Phase 0~6 + 추가 작업 완료)
+
+**v1.1.0 출시 준비**: 🔄 진행 중 (2026-03-01)
+- **targetSdk 34→35 (API 35 마이그레이션)**: compileSdk/targetSdk 35, AGP 8.2.2→8.7.3, Gradle 8.5→8.9
+  - 모든 Activity에 `enableEdgeToEdge()` 적용 확인됨
+  - Theme.kt statusBarColor에 `@Suppress("DEPRECATION")` 추가 (API 35에서 deprecated)
+  - OnboardingScreen/ChatScreen의 deprecated 패딩 함수는 기술 부채로 유지 (동작에 문제 없음)
+- **AdMob 테스트→실제 ID 전환**: APPLICATION_ID, 리워드 광고, 배너 광고(HOME/HISTORY/CATEGORY_DETAIL) 3화면
+  - BannerAdCompose에 adUnitId 파라미터 추가, BannerAdIds object로 화면별 ID 관리
+  - AD_SERVICES_CONFIG property 추가 (AdMob+Firebase Analytics 충돌 해결)
+- **STT/RECORD_AUDIO 완전 제거**: Play Console 권한 플래그 대응
+  - ChatScreen.kt에서 ~150줄 삭제 (SpeechRecognizer, RecognitionListener, 음성 버튼)
+  - ChatViewModel.kt에서 showVoiceHint/observeVoiceHintSeen/markVoiceHintSeen 제거
+  - SettingsDataStore에서 CHAT_VOICE_HINT_SEEN 키 제거
+  - strings.xml(ko/en)에서 STT 관련 9개 문자열 제거
+- **CTA 1월 버그 수정**: HomePageData/HistoryPageData 캐시 미적재 시 isLoading=false fallback (CTA 즉시 평가)
+- **ForceUpdateDialog Predictive Back 방어**: DialogProperties(dismissOnBackPress=false) 추가
+- **문자열 수정**: "최근 14일간"→"최근 2개월간" (engine_summary_sms_analyzed)
+- **versionCode 2→3**: 릴리스 빌드 준비
+
 ### 대기 중인 작업
 
-- `feature/proguard-analytics` 브랜치 PR 생성 및 develop 머지 (이미 머지됨 — 정리 필요)
+- 위 변경사항 커밋 + 릴리스 빌드(assembleRelease) 검증
 - GitHub Pages 설정 (Settings → Pages → `/docs` 디렉토리) — 개인정보처리방침 URL 활성화용
 - Google Play Console 알파 트랙 AAB 업로드 + SMS 권한 선언 양식 제출
 
@@ -283,12 +383,12 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 ## 5. 주의사항
 
 ### 절대 금지
-- DB 스키마 변경 시 마이그레이션 필수 (현재 AppDatabase v3, sms_patterns v3)
+- DB 스키마 변경 시 마이그레이션 필수 (현재 AppDatabase v7, sms_patterns v3)
 - 임계값 수치 변경 시 [AI_CONTEXT.md](AI_CONTEXT.md) SSOT 먼저 업데이트
 - `!!` non-null assertion 사용 금지
 
 ### 알려진 이슈
-- `SmsGroupClassifier.kt`(sms2)의 그룹핑 임계값(0.95)과 `StoreNameGrouper.kt`(0.88)은 의도적으로 다름 (SMS 패턴 vs 가게명)
+- `SmsGroupClassifier.kt`(sms2)의 그룹핑 임계값(0.95)과 소그룹 병합(0.90), `StoreNameGrouper.kt`(0.88)은 의도적으로 다름 (SMS 패턴 vs 가게명)
 - ChatViewModel.kt가 대형 파일(~1717줄) — 향후 query/action 로직 분리 후보
 - core/sms(V1)은 SmsProcessingService 실시간 수신에서만 사용, 배치 동기화는 sms2로 완전 전환
 
@@ -302,6 +402,16 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-03-03 | SMS Regex Fast Path 전환: DB v7(sms_regex_rules), Step1.5 sender regex, Asset seed+RTDB overlay, 표본 수집, 룰 자동 최적화, 운영 가이드 — Phase 0~6 + 추가 작업 완료 | 완료 |
+| 2026-03-01 | v1.1.0 출시 준비: targetSdk 35, AdMob 실제 ID, STT/RECORD_AUDIO 제거, CTA 버그 수정, ForceUpdateDialog 백키 방어, versionCode 3 | 진행 중 |
+| 2026-02-27 | PR #42: 문자설정 Activity + 수신거부 번호 관리 + 영어 번역 보강 | 완료 |
+| 2026-02-27 | PR #41: Step4.5 복구 경로 최적화 — 병렬화+품질게이트, KB 휴리스틱, Step5 경로 분리(5-A/5-B), 프롬프트 강화, insight 재시도, 메모 표시, 상수 정리 | 완료 |
+| 2026-02-27 | PR #40: Step5 정책/예산/학습 고도화 — 그룹/전체 시간 예산, 스킵→강등, unstable 그룹 해체, cohesion gate, 백그라운드 학습 큐+dedup | 완료 |
+| 2026-02-27 | SMS Step5 성능 최적화 + Step4.5 배치 LLM 복구 경로 — KB출금 regex 실패 무한 루프 해결, MatchResult 3-way 분할, batchExtractRegexFailed, PR #38 머지 | 완료 |
+| 2026-02-26 | generateRegexForGroup 정규식 생성 성공률 개선 — repair 1회 활성, 검증 일원화, 프롬프트 개선(JSON escape/멀티라인/날짜제거), ultraCompact 3차 폴백, 미사용 코드 정리 | 완료 |
+| 2026-02-26 | SmsGroupClassifier 품질 개선 — 소그룹 병합 0.70→0.90, RTDB 표본에 template 추가, LLM 프롬프트 메인 케이스 참조, MainCaseContext 3건 샘플 | 완료 |
+| 2026-02-25 | 임베딩 차원 3072→768 축소 — outputDimensionality=768 설정, DB v3→v4 마이그레이션, 코드/문서 16개 파일 갱신 | 완료 |
+| 2026-02-25 | PR #33 MainViewModel 리팩토링 — Codex P2 리뷰 확인, 권한 없을 때 resume DataRefreshEvent 미발행 지적 → 현행 유지 결정 | 완료 |
 | 2026-02-24 | Vico 차트 수정(스크롤/X축/Y축/동기화) + 홈 UI 간소화(TodayAndComparisonSection·FullSyncCtaSection 제거, 비교문구 가격+% 형식) | 완료 |
 | 2026-02-24 | 홈 화면 Phase1 리디자인 — 디자인 시스템(Color/Type/Dimens) + Hero 카드 + Vico 차트 + 다크 테마 복원 | 완료 |
 | 2026-02-22 | 예산 관리 확장 — 홈 카테고리 예산 UI + AI 채팅 예산 조회(BUDGET_STATUS)/설정(SET_BUDGET) | 완료 |
@@ -368,7 +478,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 파일 | 설명 |
 |------|------|
-| [`AppDatabase.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/AppDatabase.kt) | Room DB 정의 (v6, 10 entities, sms_patterns v3) |
+| [`AppDatabase.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/AppDatabase.kt) | Room DB 정의 (v7, 11 entities, sms_patterns v3) |
 | [`OwnedCardEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/OwnedCardEntity.kt) | 카드 화이트리스트 Entity |
 | [`SmsExclusionKeywordEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/SmsExclusionKeywordEntity.kt) | SMS 제외 키워드 Entity |
 | [`OwnedCardRepository.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt) | 카드 관리 + CardNameNormalizer 연동 |
@@ -401,7 +511,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | [`SmsReaderV2.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsReaderV2.kt) | SMS/MMS/RCS 통합 읽기 → List\<SmsInput\> 직접 반환 |
 | [`SmsIncomeFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsIncomeFilter.kt) | PAYMENT/INCOME/SKIP 3분류 (financialKeywords 46개) |
 | [`SmsIncomeParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsIncomeParser.kt) | 수입 SMS 파싱 (금액/유형/출처/날짜시간) |
-| [`SmsPipeline.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipeline.kt) | 오케스트레이터 (Step 2→3→4→5) |
+| [`SmsPipeline.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipeline.kt) | 오케스트레이터 (Step 2→3→4→4.5→5) |
 | [`SmsPipelineModels.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipelineModels.kt) | 데이터 클래스 (SmsInput, EmbeddedSms, SmsParseResult, SyncResult) |
 | [`SmsPreFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPreFilter.kt) | Step 2: 사전 필터링 (키워드 + 구조) |
 | [`SmsTemplateEngine.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsTemplateEngine.kt) | Step 3: 템플릿화 + Gemini Embedding API |
@@ -409,6 +519,11 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | [`SmsGroupClassifier.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsGroupClassifier.kt) | Step 5: 그룹핑 + LLM + regex 생성 + RTDB 표본 수집 |
 | [`RemoteSmsRule.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/RemoteSmsRule.kt) | 원격 SMS regex 룰 데이터 클래스 |
 | [`RemoteSmsRuleRepository.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/RemoteSmsRuleRepository.kt) | 원격 룰 리포지토리 (RTDB + 메모리 캐시) |
+| [`SmsRegexRuleMatcher.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsRegexRuleMatcher.kt) | Step 1.5 Fast Path: sender regex 룰 매칭 + 통계 갱신 + 자동 최적화 |
+| [`SmsOriginSampleCollector.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsOriginSampleCollector.kt) | RTDB 성공/실패 표본 수집 (SHA-256 결정적 키) |
+| [`SmsRegexRuleAssetLoader.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/rules/SmsRegexRuleAssetLoader.kt) | Asset JSON 기본 룰 시드 로더 |
+| [`SmsRegexRemoteRuleLoader.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/rules/SmsRegexRemoteRuleLoader.kt) | RTDB overlay 룰 로더 (10분 캐시) |
+| [`SmsRegexRuleSyncService.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/rules/SmsRegexRuleSyncService.kt) | Asset seed + RTDB overlay 병합 서비스 |
 
 ### 유사도 정책
 

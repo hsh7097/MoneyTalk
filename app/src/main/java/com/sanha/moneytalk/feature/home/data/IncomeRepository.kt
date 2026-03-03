@@ -33,6 +33,13 @@ class IncomeRepository @Inject constructor(
 
     suspend fun getAllSmsIds(): List<String> = incomeDao.getAllSmsIds()
 
+    /** 주어진 smsId 목록 중 이미 저장된 항목 조회 (중복 체크 최적화) */
+    suspend fun getExistingSmsIds(smsIds: List<String>): Set<String> =
+        incomeDao.getExistingSmsIds(smsIds).toHashSet()
+
+    /** 전체 수입 건수 조회 */
+    suspend fun getIncomeCount(): Int = incomeDao.getIncomeCount()
+
     suspend fun getTotalIncomeByDateRange(startTime: Long, endTime: Long): Int =
         incomeDao.getTotalIncomeByDateRange(startTime, endTime) ?: 0
 

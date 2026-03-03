@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.feature.history.ui
 
-import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -15,17 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,7 +38,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.R
@@ -57,13 +51,10 @@ import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCom
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.compose.runtime.DisposableEffect
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.activity.ComponentActivity
+import com.sanha.moneytalk.MainViewModel
+import com.sanha.moneytalk.core.ui.component.BannerAdCompose
+import com.sanha.moneytalk.core.ui.component.BannerAdIds
 import com.sanha.moneytalk.feature.home.ui.component.ImportDataCtaSection
 import kotlinx.coroutines.launch
 
@@ -98,29 +89,11 @@ fun HistoryScreen(
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
     var showAddDialog by remember { mutableStateOf(false) }
 
-    // SMS 권한 상태 (resume 시 갱신)
-    var hasSmsPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
-                    PackageManager.PERMISSION_GRANTED
-        )
-    }
-
-    // 화면 재진입(resume) 시 권한 상태 갱신
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                hasSmsPermission = ContextCompat.checkSelfPermission(
-                    context, Manifest.permission.READ_SMS
-                ) == PackageManager.PERMISSION_GRANTED
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
+    // Activity-scoped MainViewModel (동기화/권한/광고 상태)
+    val mainViewModel: MainViewModel = hiltViewModel(
+        viewModelStoreOwner = context as ComponentActivity
+    )
+    val mainUiState by mainViewModel.uiState.collectAsStateWithLifecycle()
 
     // HorizontalPager — Virtual Infinite Pager
     val initialPage = remember {
@@ -227,10 +200,13 @@ fun HistoryScreen(
             )
         }
 
+        val isBannerAdEnabled by mainViewModel.adManager.isBannerAdEnabledFlow
+            .collectAsStateWithLifecycle(initialValue = false)
+
         // 콘텐츠 — HorizontalPager로 월별 페이징
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.weight(1f),
             beyondViewportPageCount = 1,
             key = { it },
             userScrollEnabled = !uiState.isSearchMode
@@ -239,9 +215,10 @@ fun HistoryScreen(
             val (pageYear, pageMonth) = remember(page) {
                 MonthPagerUtils.pageToYearMonth(page)
             }
-            // pageCache에서 이 페이지의 데이터 읽기 (없으면 기본값)
+            // pageCache에서 이 페이지의 데이터 읽기
+            // 캐시 미적재 페이지는 isLoading=false로 처리하여 CTA 조건이 즉시 평가되도록 함
             val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
-                ?: HistoryPageData()
+                ?: HistoryPageData(isLoading = false)
 
             // CTA 판별용: 현재 실효 월 여부
             val (effYearCta, effMonthCta) = com.sanha.moneytalk.core.util.DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
@@ -257,23 +234,34 @@ fun HistoryScreen(
                         showIncomes = uiState.showIncomes,
                         hasActiveFilter = uiState.selectedCategory != null,
                         isCurrentMonth = isCurrentMonth,
-                        isMonthSynced = viewModel.isMonthSynced(pageYear, pageMonth),
-                        isPartiallyCovered = viewModel.isPagePartiallyCovered(pageYear, pageMonth),
-                        hasSmsPermission = hasSmsPermission,
+                        isMonthSynced = mainViewModel.isMonthSynced(pageYear, pageMonth),
+                        isPartiallyCovered = mainViewModel.isPagePartiallyCovered(pageYear, pageMonth),
+                        hasSmsPermission = mainUiState.hasSmsPermission,
                         monthLabel = pageMonthLabel,
+                        isAdEnabled = isBannerAdEnabled && !mainUiState.hasFreeSyncRemaining,
                         onImportData = {
                             onRequestSmsPermission {
-                                viewModel.requestIncrementalSync()
+                                mainViewModel.syncIncremental()
                             }
                         },
                         onRequestFullSync = {
                             if (isCurrentMonth) {
-                                // 현재월 → 광고 없이 바로 동기화
+                                // 현재월 → 바로 증분 동기화
                                 onRequestSmsPermission {
-                                    viewModel.requestIncrementalSync()
+                                    mainViewModel.syncIncremental()
+                                }
+                            } else if (!isBannerAdEnabled) {
+                                // 광고 비활성 → 광고 없이 바로 전체 동기화 해제
+                                onRequestSmsPermission {
+                                    mainViewModel.unlockFullSync(pageYear, pageMonth)
+                                }
+                            } else if (mainUiState.hasFreeSyncRemaining) {
+                                // 무료 동기화 잔여 횟수 있음 → 광고 없이 동기화
+                                onRequestSmsPermission {
+                                    mainViewModel.unlockFullSync(pageYear, pageMonth, isFreeSyncUsed = true)
                                 }
                             } else {
-                                viewModel.showFullSyncAdDialog()
+                                mainViewModel.showFullSyncAdDialog(pageYear, pageMonth)
                             }
                         },
                         scrollResetKey = Triple(
@@ -302,14 +290,15 @@ fun HistoryScreen(
                 }
             }
         }
+
+        // 배너 광고 (RTDB reward_ad_enabled 연동)
+        if (isBannerAdEnabled) {
+            BannerAdCompose(adUnitId = BannerAdIds.HISTORY)
+        }
     }
 
     // 다이얼로그 상태는 ViewModel에서 관리
     uiState.selectedExpense?.let { expense ->
-        Log.e(
-            "MT_DEBUG",
-            "HistoryScreen[selectedExpense] : \nstoreName : ${expense.storeName}\noriginalSms : ${expense.originalSms}\namount : ${expense.amount}원"
-        )
 
         ExpenseDetailDialog(
             expense = expense,
@@ -330,10 +319,6 @@ fun HistoryScreen(
     }
 
     uiState.selectedIncome?.let { income ->
-        Log.e(
-            "MT_DEBUG",
-            "HistoryScreen[selectedIncome] : ${income.originalSms}, ${income.amount}원"
-        )
         IncomeDetailDialog(
             income = income,
             onDismiss = { viewModel.onIntent(HistoryIntent.DismissDialog) },
@@ -355,101 +340,7 @@ fun HistoryScreen(
         )
     }
 
-    // SMS 동기화 진행 다이얼로그
-    if (uiState.showSyncDialog) {
-        AlertDialog(
-            onDismissRequest = { /* 진행 중에는 닫기 불가 */ },
-            title = { Text(stringResource(R.string.home_sync_dialog_title)) },
-            text = {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(48.dp),
-                        strokeWidth = 4.dp
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    if (uiState.syncProgressTotal > 0) {
-                        val progress =
-                            uiState.syncProgressCurrent.toFloat() / uiState.syncProgressTotal.toFloat()
-                        LinearProgressIndicator(
-                            progress = { progress.coerceIn(0f, 1f) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                                .padding(horizontal = 8.dp),
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "${uiState.syncProgressCurrent} / ${uiState.syncProgressTotal}건",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                    } else {
-                        LinearProgressIndicator(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                                .padding(horizontal = 8.dp),
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-
-                    Text(
-                        text = uiState.syncProgress,
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            confirmButton = { }
-        )
-    }
-
-    // 전체 동기화 해제 광고 다이얼로그
-    if (uiState.showFullSyncAdDialog) {
-        val activity = context as? android.app.Activity
-        val (effYearDialog, effMonthDialog) = com.sanha.moneytalk.core.util.DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
-        val isCurrentMonthForDialog = uiState.selectedYear == effYearDialog &&
-                uiState.selectedMonth == effMonthDialog
-        val dialogMonthLabel = if (isCurrentMonthForDialog) "이번달" else "${uiState.selectedMonth}월"
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissFullSyncAdDialog() },
-            title = { Text(stringResource(R.string.full_sync_ad_dialog_title, dialogMonthLabel)) },
-            text = { Text(stringResource(R.string.full_sync_ad_dialog_message, dialogMonthLabel)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (activity != null) {
-                            viewModel.dismissFullSyncAdDialog()
-                            viewModel.rewardAdManager.showAd(
-                                activity = activity,
-                                onRewarded = {
-                                    viewModel.unlockFullSync()
-                                },
-                                onFailed = {
-                                    // 광고 로드/표시 실패 시에도 해제 처리
-                                    viewModel.unlockFullSync()
-                                }
-                            )
-                        }
-                    }
-                ) {
-                    Text(stringResource(R.string.full_sync_ad_watch_button, dialogMonthLabel))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissFullSyncAdDialog() }) {
-                    Text(stringResource(R.string.full_sync_ad_later))
-                }
-            }
-        )
-    }
+    // 동기화/광고 다이얼로그는 Activity 레벨(MoneyTalkApp)에서 전역 관리
 }
 
 enum class ViewMode {
@@ -472,6 +363,7 @@ fun TransactionListView(
     isPartiallyCovered: Boolean = false,
     hasSmsPermission: Boolean = true,
     monthLabel: String = "이번달",
+    isAdEnabled: Boolean = true,
     onImportData: () -> Unit = {},
     onRequestFullSync: () -> Unit = {},
     scrollResetKey: Any? = null,
@@ -518,7 +410,8 @@ fun TransactionListView(
             } else if (showFullSyncCta) {
                 com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
                     onRequestFullSync = onRequestFullSync,
-                    monthLabel = monthLabel
+                    monthLabel = monthLabel,
+                    isAdEnabled = isAdEnabled
                 )
             } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -566,7 +459,8 @@ fun TransactionListView(
                     com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
                         onRequestFullSync = onRequestFullSync,
                         monthLabel = monthLabel,
-                        isPartial = true
+                        isPartial = true,
+                        isAdEnabled = isAdEnabled
                     )
                 }
             }

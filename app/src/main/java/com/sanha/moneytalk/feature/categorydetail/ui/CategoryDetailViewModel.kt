@@ -1,7 +1,8 @@
 package com.sanha.moneytalk.feature.categorydetail.ui
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import android.content.Context
-import android.util.Log
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -24,11 +25,13 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -68,14 +71,19 @@ class CategoryDetailViewModel @Inject constructor(
     private val smsExclusionRepository: SmsExclusionRepository,
     private val categoryClassifierService: CategoryClassifierService,
     private val budgetDao: BudgetDao,
+    private val premiumManager: com.sanha.moneytalk.core.firebase.PremiumManager,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     companion object {
-        private const val TAG = "CategoryDetailVM"
         /** 페이지 캐시 최대 허용 범위 (현재 월 ± 이 값) */
         private const val PAGE_CACHE_RANGE = 2
     }
+
+    /** 배너 광고 노출 여부 (RTDB reward_ad_enabled 연동, 변경 시 자동 반영) */
+    val isBannerAdEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
+        .map { it.rewardAdEnabled }
+        .distinctUntilChanged()
 
     // Intent extras (SavedStateHandle로 주입)
     private val categoryDisplayName: String =
@@ -176,6 +184,10 @@ class CategoryDetailViewModel @Inject constructor(
                     }
                     DataRefreshEvent.RefreshType.SMS_RECEIVED -> {
                         // SMS 동기화는 Home에서 처리 — 여기서는 무시
+                    }
+
+                    DataRefreshEvent.RefreshType.DEBUG_FULL_SYNC_ALL_MESSAGES -> {
+                        // MainViewModel이 전체 동기화 수행 후 TRANSACTION_ADDED로 갱신됨
                     }
                 }
             }
@@ -309,7 +321,7 @@ class CategoryDetailViewModel @Inject constructor(
                     null, categoryNames, monthStart, monthEnd
                 )
                     .catch { e ->
-                        Log.e(TAG, "Flow 수집 오류: ${e.message}")
+                        MoneyTalkLogger.e("Flow 수집 오류: ${e.message}")
                         updatePageCache(
                             key,
                             (_uiState.value.pageCache[key] ?: CategoryDetailPageData())
@@ -341,7 +353,7 @@ class CategoryDetailViewModel @Inject constructor(
                     }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                Log.e(TAG, "loadPageData 오류: ${e.message}")
+                MoneyTalkLogger.e("loadPageData 오류: ${e.message}")
                 updatePageCache(
                     key,
                     (_uiState.value.pageCache[key] ?: CategoryDetailPageData())
@@ -439,7 +451,7 @@ class CategoryDetailViewModel @Inject constructor(
                     expenseRepository.delete(expense)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "삭제 실패: ${e.message}")
+                MoneyTalkLogger.e("삭제 실패: ${e.message}")
             }
         }
     }
@@ -454,7 +466,7 @@ class CategoryDetailViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "카테고리 변경 실패: ${e.message}")
+                MoneyTalkLogger.e("카테고리 변경 실패: ${e.message}")
             }
         }
     }
@@ -467,7 +479,7 @@ class CategoryDetailViewModel @Inject constructor(
                     expenseRepository.updateMemo(expenseId, memo?.ifBlank { null })
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "메모 변경 실패: ${e.message}")
+                MoneyTalkLogger.e("메모 변경 실패: ${e.message}")
             }
         }
     }

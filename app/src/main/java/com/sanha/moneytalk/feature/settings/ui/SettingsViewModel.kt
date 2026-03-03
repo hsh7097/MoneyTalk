@@ -1,8 +1,9 @@
 package com.sanha.moneytalk.feature.settings.ui
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import android.content.Context
 import android.net.Uri
-import android.util.Log
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -48,7 +49,6 @@ sealed interface SettingsIntent {
     data object ShowGoogleDriveDialog : SettingsIntent
     data object ShowAppInfoDialog : SettingsIntent
     data object ShowPrivacyDialog : SettingsIntent
-    data object ShowExclusionKeywordDialog : SettingsIntent
     data object ShowThemeDialog : SettingsIntent
     data object ShowMonthlyBudgetDialog : SettingsIntent
     data object ShowBudgetBottomSheet : SettingsIntent
@@ -68,8 +68,7 @@ sealed interface SettingsIntent {
     data object ClassifyUnclassified : SettingsIntent
     data object DeleteAllData : SettingsIntent
     data object DeleteDuplicates : SettingsIntent
-    data class AddExclusionKeyword(val keyword: String) : SettingsIntent
-    data class RemoveExclusionKeyword(val keyword: String) : SettingsIntent
+    data object DebugFullSyncAllMessages : SettingsIntent
     data object OpenRestoreFilePicker : SettingsIntent
     data class SetPendingRestoreUri(val uri: Uri) : SettingsIntent
     data object ConfirmRestore : SettingsIntent
@@ -85,7 +84,6 @@ enum class SettingsDialog {
     GOOGLE_DRIVE,
     APP_INFO,
     PRIVACY,
-    EXCLUSION_KEYWORD,
     THEME,
     MONTHLY_BUDGET,
     BUDGET_BOTTOM_SHEET
@@ -116,8 +114,6 @@ data class SettingsUiState(
     val classifyProgressTotal: Int = 0,
     // 내 카드 관리
     val ownedCards: List<com.sanha.moneytalk.core.database.entity.OwnedCardEntity> = emptyList(),
-    // SMS 제외 키워드 관리
-    val exclusionKeywords: List<com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity> = emptyList(),
     // 백그라운드 분류 진행 중 (HomeViewModel에서 진행 중인 경우)
     val isBackgroundClassifying: Boolean = false,
     // 다이얼로그 상태 (null이면 닫힘)
@@ -146,14 +142,12 @@ class SettingsViewModel @Inject constructor(
     private val budgetDao: BudgetDao,
     private val dataRefreshEvent: DataRefreshEvent,
     private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
-    private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
     private val snackbarBus: AppSnackbarBus,
     private val classificationState: ClassificationState,
     private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
 
     companion object {
-        private const val TAG = "SettingsViewModel"
     }
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -164,7 +158,6 @@ class SettingsViewModel @Inject constructor(
         loadFilterOptions()
         loadUnclassifiedCount()
         loadOwnedCards()
-        loadExclusionKeywords()
         observeClassificationState()
         loadThemeMode()
         loadMonthlyBudget()
@@ -182,7 +175,6 @@ class SettingsViewModel @Inject constructor(
             is SettingsIntent.ShowGoogleDriveDialog -> showDialog(SettingsDialog.GOOGLE_DRIVE)
             is SettingsIntent.ShowAppInfoDialog -> showDialog(SettingsDialog.APP_INFO)
             is SettingsIntent.ShowPrivacyDialog -> showDialog(SettingsDialog.PRIVACY)
-            is SettingsIntent.ShowExclusionKeywordDialog -> showDialog(SettingsDialog.EXCLUSION_KEYWORD)
             is SettingsIntent.ShowThemeDialog -> showDialog(SettingsDialog.THEME)
             is SettingsIntent.ShowMonthlyBudgetDialog -> showDialog(SettingsDialog.MONTHLY_BUDGET)
             is SettingsIntent.ShowBudgetBottomSheet -> showDialog(SettingsDialog.BUDGET_BOTTOM_SHEET)
@@ -220,8 +212,7 @@ class SettingsViewModel @Inject constructor(
             }
 
             is SettingsIntent.DeleteDuplicates -> deleteDuplicates()
-            is SettingsIntent.AddExclusionKeyword -> addExclusionKeyword(intent.keyword)
-            is SettingsIntent.RemoveExclusionKeyword -> removeExclusionKeyword(intent.keyword)
+            is SettingsIntent.DebugFullSyncAllMessages -> requestDebugFullSyncAllMessages()
             is SettingsIntent.OpenRestoreFilePicker -> {
                 _uiState.update { it.copy(triggerRestoreFilePicker = true) }
             }
@@ -1012,20 +1003,14 @@ class SettingsViewModel @Inject constructor(
      */
     fun classifyUnclassifiedExpenses() {
         viewModelScope.launch {
-            Log.e(
-                "MT_DEBUG",
-                "SettingsViewModel[classifyUnclassifiedExpenses] : 수동 분류 시작 (hasApiKey=${_uiState.value.hasApiKey}, unclassified=${_uiState.value.unclassifiedCount})"
-            )
             // API 키 확인
             if (!_uiState.value.hasApiKey) {
-                Log.e("MT_DEBUG", "SettingsViewModel[classifyUnclassifiedExpenses] : API 키 없음 → 중단")
                 snackbarBus.show("API 키를 먼저 설정해주세요")
                 return@launch
             }
 
             // 미정리 항목 확인
             if (_uiState.value.unclassifiedCount == 0) {
-                Log.e("MT_DEBUG", "SettingsViewModel[classifyUnclassifiedExpenses] : 미분류 0건 → 중단")
                 snackbarBus.show("정리할 항목이 없습니다")
                 return@launch
             }
@@ -1122,104 +1107,23 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    // ========== SMS 제외 키워드 관리 ==========
-
-    /**
-     * 제외 키워드 목록 로드
-     */
-    private fun loadExclusionKeywords() {
-        viewModelScope.launch {
-            try {
-                val keywords = withContext(Dispatchers.IO) {
-                    smsExclusionRepository.getAllKeywords()
-                }
-                _uiState.update { it.copy(exclusionKeywords = keywords) }
-            } catch (e: Exception) {
-                // 무시
-            }
-        }
-    }
-
-    /**
-     * 제외 키워드 추가
-     */
-    fun addExclusionKeyword(keyword: String) {
-        viewModelScope.launch {
-            try {
-                val added = withContext(Dispatchers.IO) {
-                    smsExclusionRepository.addKeyword(keyword, "user")
-                }
-                if (added) {
-                    loadExclusionKeywords()
-                    snackbarBus.show("'${keyword}' 제외 키워드가 추가되었습니다")
-                    // Home/History에서 해당 키워드 포함 데이터를 필터링하도록 새로고침
-                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
-                } else {
-                    snackbarBus.show("키워드를 추가할 수 없습니다")
-                }
-            } catch (e: Exception) {
-                snackbarBus.show("추가 실패: ${e.message}")
-            }
-        }
-    }
-
-    /**
-     * 제외 키워드 삭제 (default 소스는 삭제 불가)
-     */
-    fun removeExclusionKeyword(keyword: String) {
-        viewModelScope.launch {
-            try {
-                val deleted = withContext(Dispatchers.IO) {
-                    smsExclusionRepository.removeKeyword(keyword)
-                }
-                if (deleted > 0) {
-                    loadExclusionKeywords()
-                    snackbarBus.show("'${keyword}' 제외 키워드가 삭제되었습니다")
-                    // 필터 해제로 이전에 숨겨졌던 데이터가 다시 표시되도록 새로고침
-                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
-                } else {
-                    snackbarBus.show("기본 키워드는 삭제할 수 없습니다")
-                }
-            } catch (e: Exception) {
-                snackbarBus.show("삭제 실패: ${e.message}")
-            }
-        }
+    private fun requestDebugFullSyncAllMessages() {
+        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.DEBUG_FULL_SYNC_ALL_MESSAGES)
     }
 
     private fun launchBackgroundReclassification() {
-        Log.e("MT_DEBUG", "SettingsViewModel[launchBackgroundReclassification] : === 백그라운드 재분류 시작 ===")
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 var totalReclassified = 0
 
                 // Step 1: 저신뢰도 임베딩 재분류
-                Log.e(
-                    "MT_DEBUG",
-                    "SettingsViewModel[launchBackgroundReclassification] : Step 1 - 저신뢰도 항목 재분류 시작"
-                )
                 val reclassifiedCount = categoryClassifierService.reclassifyLowConfidenceItems()
                 totalReclassified += reclassifiedCount
-                Log.e(
-                    "MT_DEBUG",
-                    "SettingsViewModel[launchBackgroundReclassification] : Step 1 완료 - ${reclassifiedCount}건 재분류"
-                )
 
                 // Step 2: 미분류 지출 분류
-                Log.e(
-                    "MT_DEBUG",
-                    "SettingsViewModel[launchBackgroundReclassification] : Step 2 - 미분류 지출 분류 시작"
-                )
                 val classifiedCount = categoryClassifierService.classifyUnclassifiedExpenses()
                 totalReclassified += classifiedCount
-                Log.e(
-                    "MT_DEBUG",
-                    "SettingsViewModel[launchBackgroundReclassification] : Step 2 완료 - ${classifiedCount}건 분류"
-                )
 
-                Log.e(
-                    "MT_DEBUG",
-                    "SettingsViewModel[launchBackgroundReclassification] : === 총 ${totalReclassified}건 처리 완료 ==="
-                )
                 if (totalReclassified > 0) {
                     withContext(Dispatchers.Main) {
                         loadUnclassifiedCount()
@@ -1227,18 +1131,9 @@ class SettingsViewModel @Inject constructor(
                         dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
                     }
                 } else {
-                    Log.e(
-                        "MT_DEBUG",
-                        "SettingsViewModel[launchBackgroundReclassification] : 재분류 대상 없음 (0건)"
-                    )
                 }
             } catch (e: Exception) {
-                Log.e(
-                    "MT_DEBUG",
-                    "SettingsViewModel[launchBackgroundReclassification] : 실패: ${e.message}",
-                    e
-                )
-                Log.e(TAG, "백그라운드 재분류 실패: ${e.message}")
+                MoneyTalkLogger.e("백그라운드 재분류 실패: ${e.message}")
             }
         }
     }

@@ -32,11 +32,11 @@ class SettingsDataStore @Inject constructor(
         private val LAST_SYNC_TIME = longPreferencesKey("last_sync_time")
         private val MONTH_START_DAY = intPreferencesKey("month_start_day")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
-        private val CHAT_VOICE_HINT_SEEN = booleanPreferencesKey("chat_voice_hint_seen")
         private val SERVICE_TIER = stringPreferencesKey("service_tier")
         private val REWARD_CHAT_REMAINING = intPreferencesKey("reward_chat_remaining")
         private val FULL_SYNC_UNLOCKED = booleanPreferencesKey("full_sync_unlocked")
         private val SYNCED_MONTHS = stringSetPreferencesKey("synced_months")
+        private val FREE_SYNC_USED_COUNT = intPreferencesKey("free_sync_used_count")
         private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     }
 
@@ -113,6 +113,11 @@ class SettingsDataStore @Inject constructor(
         return context.dataStore.data.first()[LAST_SYNC_TIME] ?: 0L
     }
 
+    // 마지막 동기화 시간 Flow
+    val lastSyncTimeFlow: Flow<Long> = context.dataStore.data.map { preferences ->
+        preferences[LAST_SYNC_TIME] ?: 0L
+    }
+
     // 월 시작일 저장 (1-31)
     suspend fun saveMonthStartDay(day: Int) {
         context.dataStore.edit { preferences ->
@@ -139,18 +144,6 @@ class SettingsDataStore @Inject constructor(
     // 테마 모드 가져오기 (기본값: SYSTEM)
     val themeModeFlow: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[THEME_MODE] ?: "SYSTEM"
-    }
-
-    // 채팅 음성 힌트 표시 여부 저장 (true=이미 표시됨)
-    suspend fun setChatVoiceHintSeen(seen: Boolean = true) {
-        context.dataStore.edit { preferences ->
-            preferences[CHAT_VOICE_HINT_SEEN] = seen
-        }
-    }
-
-    // 채팅 음성 힌트 표시 여부 가져오기 (기본값: false)
-    val chatVoiceHintSeenFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[CHAT_VOICE_HINT_SEEN] ?: false
     }
 
     // 서비스 티어 저장 (FREE / PREMIUM)
@@ -259,11 +252,27 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
-    /** 광고 시청으로 해제된 월별 동기화 + 레거시 전역 플래그 초기화 */
+    /** 광고 시청으로 해제된 월별 동기화 + 레거시 전역 플래그 + 무료 동기화 카운터 초기화 */
     suspend fun clearSyncedMonths() {
         context.dataStore.edit { preferences ->
             preferences.remove(SYNCED_MONTHS)
             preferences.remove(FULL_SYNC_UNLOCKED)
+            preferences.remove(FREE_SYNC_USED_COUNT)
+        }
+    }
+
+    // ===== 무료 동기화 사용 횟수 =====
+
+    /** 무료 동기화 사용 횟수 Flow */
+    val freeSyncUsedCountFlow: Flow<Int> = context.dataStore.data.map { preferences ->
+        preferences[FREE_SYNC_USED_COUNT] ?: 0
+    }
+
+    /** 무료 동기화 사용 횟수 1 증가 */
+    suspend fun incrementFreeSyncUsedCount() {
+        context.dataStore.edit { preferences ->
+            val current = preferences[FREE_SYNC_USED_COUNT] ?: 0
+            preferences[FREE_SYNC_USED_COUNT] = current + 1
         }
     }
 }

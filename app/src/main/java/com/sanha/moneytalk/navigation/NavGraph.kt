@@ -17,8 +17,6 @@ import kotlinx.coroutines.flow.SharedFlow
 fun NavGraph(
     navController: NavHostController,
     onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
-    autoSyncOnStart: Boolean = false,
-    onAutoSyncConsumed: () -> Unit = {},
     homeTabReClickEvent: SharedFlow<Unit>? = null,
     historyTabReClickEvent: SharedFlow<Unit>? = null
 ) {
@@ -29,8 +27,6 @@ fun NavGraph(
         composable(Screen.Home.route) {
             HomeScreen(
                 onRequestSmsPermission = onRequestSmsPermission,
-                autoSyncOnStart = autoSyncOnStart,
-                onAutoSyncConsumed = onAutoSyncConsumed,
                 homeTabReClickEvent = homeTabReClickEvent
             )
         }

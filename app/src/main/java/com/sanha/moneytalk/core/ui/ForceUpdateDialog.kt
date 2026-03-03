@@ -6,6 +6,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.window.DialogProperties
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.firebase.ForceUpdateState
 
@@ -28,6 +29,10 @@ fun ForceUpdateDialog(
 
     AlertDialog(
         onDismissRequest = { /* 닫기 차단 — 강제 업데이트 */ },
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false
+        ),
         title = {
             Text(
                 text = stringResource(R.string.force_update_title),

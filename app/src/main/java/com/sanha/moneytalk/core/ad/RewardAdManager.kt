@@ -1,14 +1,16 @@
 package com.sanha.moneytalk.core.ad
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import android.app.Activity
 import android.content.Context
-import android.util.Log
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.PremiumManager
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -16,6 +18,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,9 +47,9 @@ sealed class AdState {
  * Firebase RTDB의 reward_ad_enabled 설정에 따라 동작하며,
  * 광고 시청 시 reward_ad_chat_count만큼 채팅 횟수를 충전합니다.
  *
- * ## 테스트 ID (현재 사용 중)
- * - 앱 ID: ca-app-pub-3940256099942544~3347511713
- * - 리워드 광고 ID: ca-app-pub-3940256099942544/5224354917
+ * ## 광고 ID
+ * - 앱 ID: ca-app-pub-4707673176609005~5012288836
+ * - 리워드 광고 ID: ca-app-pub-4707673176609005/2566523665
  */
 @Singleton
 class RewardAdManager @Inject constructor(
@@ -53,9 +58,10 @@ class RewardAdManager @Inject constructor(
     private val premiumManager: PremiumManager
 ) {
     companion object {
-        private const val TAG = "RewardAdManager"
-        /** Google 공식 테스트 리워드 광고 ID */
+        /** Google 공식 리워드 테스트 광고 ID */
         private const val TEST_REWARD_AD_ID = "ca-app-pub-3940256099942544/5224354917"
+        private const val PROD_REWARD_AD_ID = "ca-app-pub-4707673176609005/2566523665"
+        private val REWARD_AD_ID = if (BuildConfig.DEBUG) TEST_REWARD_AD_ID else PROD_REWARD_AD_ID
         private const val MAX_RETRY_COUNT = 3
     }
 
@@ -74,35 +80,30 @@ class RewardAdManager @Inject constructor(
      */
     fun preloadAd() {
         if (!premiumManager.premiumConfig.value.rewardAdEnabled) {
-            Log.d(TAG, "리워드 광고 비활성 상태, 로드 스킵")
             return
         }
 
         if (_adState.value is AdState.Loading || _adState.value is AdState.Ready) {
-            Log.d(TAG, "이미 로드 중이거나 준비 완료 상태")
             return
         }
 
         _adState.value = AdState.Loading
-        Log.d(TAG, "리워드 광고 로드 시작")
 
         val adRequest = AdRequest.Builder().build()
-        RewardedAd.load(context, TEST_REWARD_AD_ID, adRequest,
+        RewardedAd.load(context, REWARD_AD_ID, adRequest,
             object : RewardedAdLoadCallback() {
                 override fun onAdLoaded(ad: RewardedAd) {
                     rewardedAd = ad
                     retryCount = 0
                     _adState.value = AdState.Ready
-                    Log.d(TAG, "리워드 광고 로드 완료")
                 }
 
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     rewardedAd = null
-                    Log.e(TAG, "리워드 광고 로드 실패: ${error.message} (code: ${error.code})")
+                    MoneyTalkLogger.e("리워드 광고 로드 실패: ${error.message} (code: ${error.code})")
 
                     if (retryCount < MAX_RETRY_COUNT) {
                         retryCount++
-                        Log.d(TAG, "재시도 $retryCount/$MAX_RETRY_COUNT")
                         _adState.value = AdState.Idle
                         preloadAd()
                     } else {
@@ -124,7 +125,7 @@ class RewardAdManager @Inject constructor(
     fun showAd(activity: Activity, onRewarded: () -> Unit, onFailed: () -> Unit) {
         val ad = rewardedAd
         if (ad == null) {
-            Log.e(TAG, "광고가 로드되지 않음")
+            MoneyTalkLogger.e("광고가 로드되지 않음")
             _adState.value = AdState.Error("광고가 준비되지 않았습니다.")
             onFailed()
             // 다시 로드 시도
@@ -136,7 +137,6 @@ class RewardAdManager @Inject constructor(
 
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
-                Log.d(TAG, "광고 닫힘")
                 rewardedAd = null
                 _adState.value = AdState.Idle
                 // 다음 광고 미리 로드
@@ -144,7 +144,7 @@ class RewardAdManager @Inject constructor(
             }
 
             override fun onAdFailedToShowFullScreenContent(error: AdError) {
-                Log.e(TAG, "광고 표시 실패: ${error.message}")
+                MoneyTalkLogger.e("광고 표시 실패: ${error.message}")
                 rewardedAd = null
                 _adState.value = AdState.Error(error.message)
                 onFailed()
@@ -153,12 +153,10 @@ class RewardAdManager @Inject constructor(
             }
 
             override fun onAdShowedFullScreenContent() {
-                Log.d(TAG, "광고 표시 시작")
             }
         }
 
         ad.show(activity) { rewardItem ->
-            Log.d(TAG, "보상 지급: type=${rewardItem.type}, amount=${rewardItem.amount}")
             onRewarded()
         }
     }
@@ -176,7 +174,6 @@ class RewardAdManager @Inject constructor(
         if (remaining <= 0) return false
 
         settingsDataStore.saveRewardChatRemaining(remaining - 1)
-        Log.d(TAG, "리워드 채팅 차감: ${remaining}회 → ${remaining - 1}회")
         return true
     }
 
@@ -189,7 +186,6 @@ class RewardAdManager @Inject constructor(
         val current = settingsDataStore.getRewardChatRemaining()
         val newCount = current + config.rewardAdChatCount
         settingsDataStore.saveRewardChatRemaining(newCount)
-        Log.d(TAG, "리워드 채팅 충전: ${current}회 → ${newCount}회 (+${config.rewardAdChatCount})")
     }
 
     /**
@@ -207,7 +203,6 @@ class RewardAdManager @Inject constructor(
      */
     suspend fun unlockFullSync() {
         settingsDataStore.saveFullSyncUnlocked(true)
-        Log.d(TAG, "전체 동기화 해제 완료 (광고 시청 보상)")
     }
 
     /**
@@ -224,10 +219,26 @@ class RewardAdManager @Inject constructor(
         return premiumManager.premiumConfig.value.rewardAdEnabled
     }
 
+    /** 배너 광고 활성화 여부를 반응적으로 관찰하기 위한 Flow (RTDB 변경 시 자동 반영) */
+    val isBannerAdEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
+        .map { it.rewardAdEnabled }
+        .distinctUntilChanged()
+
     /**
      * 리워드 1회 시청 시 충전되는 횟수
      */
     fun getRewardChatCount(): Int {
         return premiumManager.premiumConfig.value.rewardAdChatCount
     }
+
+    /**
+     * RTDB에서 설정된 무료 동기화 허용 횟수 (기본 3회)
+     */
+    fun getFreeSyncCount(): Int {
+        return premiumManager.premiumConfig.value.freeSyncCount
+    }
+
+    /** 무료 동기화 허용 횟수 Flow (Compose 관찰용) */
+    val freeSyncCountFlow: Flow<Int>
+        get() = premiumManager.premiumConfig.map { it.freeSyncCount }
 }

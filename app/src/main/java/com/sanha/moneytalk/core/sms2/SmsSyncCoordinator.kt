@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.sms2
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -37,12 +38,11 @@ import javax.inject.Singleton
 class SmsSyncCoordinator @Inject constructor(
     private val preFilter: SmsPreFilter,
     private val incomeFilter: SmsIncomeFilter,
-    private val pipeline: SmsPipeline
+    private val pipeline: SmsPipeline,
+    private val regexRuleMatcher: SmsRegexRuleMatcher,
+    private val regexRuleSyncService: SmsRegexRuleSyncService,
+    private val originSampleCollector: SmsOriginSampleCollector
 ) {
-
-    companion object {
-        private const val TAG = "SmsSyncCoordinator"
-    }
 
     /**
      * ★ sms2 패키지의 유일한 외부 진입점 ★
@@ -86,14 +86,20 @@ class SmsSyncCoordinator @Inject constructor(
                 stats = SyncStats()
             )
         }
+        MoneyTalkLogger.i("SmsSyncCoordinator 시작: 입력 ${smsList.size}건")
+        originSampleCollector.resetSession()
 
-        Log.d(TAG, "=== process 시작: ${smsList.size}건 ===")
+        runCatching {
+            regexRuleSyncService.syncRules()
+        }.onFailure { e ->
+            MoneyTalkLogger.w("Regex 룰 동기화 실패 (폴백 진행): ${e.message}")
+        }
 
         // Step 0: 사전 필터링 (광고, 인증번호, 배송 알림 등 비결제 SMS 제거)
         // SmsPipeline 진입 전에 여기서 처리 → 불필요한 분류/임베딩 방지
         onProgress?.invoke(SmsPipeline.STEP_FILTER, "문자 분류 준비 중...", 0, smsList.size)
         val filtered = preFilter.filter(smsList)
-        Log.d(TAG, "사전 필터링: ${smsList.size}건 → ${filtered.size}건 (${smsList.size - filtered.size}건 제외)")
+        MoneyTalkLogger.i("Step0 PreFilter: ${smsList.size}건 → ${filtered.size}건")
 
         if (filtered.isEmpty()) {
             return SyncResult(
@@ -106,31 +112,88 @@ class SmsSyncCoordinator @Inject constructor(
         // Step 1: 수입/결제 분류 (필터 통과한 SMS만 대상)
         onProgress?.invoke(SmsPipeline.STEP_FILTER, "결제 문자 찾는 중...", 0, filtered.size)
         val (paymentCandidates, incomeCandidates, skipped) = incomeFilter.classifyAll(filtered)
+        MoneyTalkLogger.i("Step1 IncomeFilter: 결제 ${paymentCandidates.size}건, 수입 ${incomeCandidates.size}건, 스킵 ${skipped.size}건"
+        )
 
-        Log.d(TAG, "분류: 결제 ${paymentCandidates.size}건, 수입 ${incomeCandidates.size}건, 스킵 ${skipped.size}건")
+        // Step 1.5: sender 기반 로컬 regex 룰 매칭 (Fast Path)
+        val regexMatchResult = regexRuleMatcher.matchPaymentCandidates(paymentCandidates)
+        val fastPathMatched = regexMatchResult.matched
+        val fastPathUnmatched = regexMatchResult.unmatched
+        MoneyTalkLogger.i("Step1.5 SenderRegex: 매칭 ${fastPathMatched.size}건, 폴백 ${fastPathUnmatched.size}건")
+        if (fastPathUnmatched.isNotEmpty()) {
+            val reasonSummary = regexMatchResult.failureReasonCounts.entries
+                .take(5)
+                .joinToString(", ") { "${it.key}=${it.value}" }
+            if (reasonSummary.isNotBlank()) {
+                MoneyTalkLogger.i("Step1.5 실패사유 TOP5: $reasonSummary")
+            }
 
-        // Step 2: 결제 후보를 SmsPipeline에 전달 (사전 필터링 스킵)
-        val pipelineResult = if (paymentCandidates.isNotEmpty()) {
-            pipeline.process(paymentCandidates, onProgress, skipPreFilter = true)
+            val senderSummary = regexMatchResult.fallbackSenderCounts.entries
+                .take(5)
+                .joinToString(", ") { "${it.key}=${it.value}" }
+            if (senderSummary.isNotBlank()) {
+                MoneyTalkLogger.i("Step1.5 폴백 발신번호 TOP5: $senderSummary")
+            }
+        }
+        if (fastPathUnmatched.isNotEmpty()) {
+            val preview = fastPathUnmatched.take(5)
+            preview.forEachIndexed { index, sms ->
+                MoneyTalkLogger.i(
+                    "[Step1.5 fallback] #${index + 1} id=${sms.id}, addr=${sms.address}, body=${sms.body.replace("\n", "↵").take(120)}"
+                )
+            }
+            if (fastPathUnmatched.size > preview.size) {
+                MoneyTalkLogger.i(
+                    "[Step1.5 fallback] ... ${fastPathUnmatched.size - preview.size}건 추가"
+                )
+            }
+        }
+
+        // Step 2: Fast Path 미매칭 결제 후보만 SmsPipeline에 전달 (사전 필터링 스킵)
+        val pipelineResult = if (fastPathUnmatched.isNotEmpty()) {
+            pipeline.process(fastPathUnmatched, onProgress, skipPreFilter = true)
         } else {
             SmsPipeline.PipelineResult(emptyList(), 0, 0)
         }
 
+        val expenses = (fastPathMatched + pipelineResult.results)
+            .distinctBy { it.input.id }
+        val duplicateExpenseCount = fastPathMatched.size + pipelineResult.results.size - expenses.size
+        if (duplicateExpenseCount > 0) {
+            MoneyTalkLogger.w("중복 파싱 결과 감지: ${duplicateExpenseCount}건 (동일 SMS id 기준)")
+        }
+
+        val unresolvedPayments = (paymentCandidates.size - expenses.size - pipelineResult.droppedCount)
+            .coerceAtLeast(0)
+        if (unresolvedPayments > 0) {
+            MoneyTalkLogger.w(
+                "결제 후보 대비 미해결 건 감지: ${unresolvedPayments}건 " +
+                    "(candidates=${paymentCandidates.size}, parsed=${expenses.size}, dropped=${pipelineResult.droppedCount})"
+            )
+        }
+
         val preFilterSkipped = smsList.size - filtered.size
+        val totalVectorMatchCount = fastPathMatched.size + pipelineResult.vectorMatchCount
         val stats = SyncStats(
             totalInput = smsList.size,
             paymentCandidates = paymentCandidates.size,
             incomeCandidates = incomeCandidates.size,
             skipped = skipped.size + preFilterSkipped,
-            vectorMatchCount = pipelineResult.vectorMatchCount,
+            fastPathMatchCount = fastPathMatched.size,
+            fallbackToPipelineCount = fastPathUnmatched.size,
+            pipelineVectorMatchCount = pipelineResult.vectorMatchCount,
+            vectorMatchCount = totalVectorMatchCount,
             llmProcessCount = pipelineResult.llmProcessCount,
-            newPatternsCreated = pipelineResult.llmProcessCount
+            newPatternsCreated = pipelineResult.llmProcessCount,
+            regexFailedRecoveredCount = pipelineResult.regexFailedRecoveredCount,
+            pipelineDroppedCount = pipelineResult.droppedCount
+        )
+        MoneyTalkLogger.i("SmsSyncCoordinator 완료: 지출 ${expenses.size}건, 수입 ${incomeCandidates.size}건"
         )
 
-        Log.d(TAG, "=== 완료: 입력 ${smsList.size}건 → 지출 ${pipelineResult.results.size}건 + 수입 ${incomeCandidates.size}건 ===")
 
         return SyncResult(
-            expenses = pipelineResult.results,
+            expenses = expenses,
             incomes = incomeCandidates,
             stats = stats
         )

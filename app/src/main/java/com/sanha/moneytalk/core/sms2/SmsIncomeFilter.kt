@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.core.sms2
 
-import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,12 +16,12 @@ import javax.inject.Singleton
  * 수입으로 분류된 SMS는 SmsPipeline에 넣지 않고 SyncResult.incomes로 반환.
  *
  * 분류 로직:
- * 1. shouldSkip: 빈 SMS, 100자 초과, 제외 키워드 → SKIP
+ * 1. shouldSkip: 빈 SMS, 130자 초과, 제외 키워드 → SKIP
  * 2. 금융기관 키워드 없음 → SKIP
  * 3. 금액 패턴 없음 → SKIP
  * 4. 취소 키워드 → INCOME (출금취소 = 돈 돌아옴)
- * 5. 결제 키워드 → PAYMENT
- * 6. 수입 제외 키워드 → SKIP (자동이체출금 안내 등)
+ * 5. 수입 제외 키워드 → SKIP (자동이체출금, 출금예정 등 안내성 문구)
+ * 6. 결제 키워드 → PAYMENT
  * 7. 수입 키워드 → INCOME
  * 8. 그 외 (금융+금액은 있지만 명시적 키워드 없음) → PAYMENT (벡터/LLM에 맡김)
  *
@@ -34,8 +33,12 @@ import javax.inject.Singleton
 class SmsIncomeFilter @Inject constructor() {
 
     companion object {
-        private const val TAG = "SmsIncomeFilter"
-        /** SMS 최대 길이 (일반 결제 SMS는 40~100자, 안내/광고성은 130자 이상) */
+        /**
+         * SMS 최대 길이 (일반 결제 SMS는 40~100자, 안내/광고성은 130자 이상)
+         *
+         * ※ SmsPreFilter가 동일 길이 제한을 먼저 적용하므로 SmsSyncCoordinator 경유 시
+         *   이 체크는 항상 통과함. SmsIncomeFilter를 단독으로 사용하는 경우를 위한 방어 코드.
+         */
         private const val MAX_SMS_LENGTH = 130
     }
 
@@ -104,12 +107,11 @@ class SmsIncomeFilter @Inject constructor() {
     /**
      * 제외 키워드 (광고/안내 필터링)
      *
-     * SmsPreFilter의 NON_PAYMENT_KEYWORDS와 일부 중복되지만,
-     * SmsIncomeFilter가 SmsPipeline 전에 실행되므로 필요.
-     * 최소한의 제외만 수행 (SmsPreFilter가 상세 필터링 담당).
+     * ※ SmsPreFilter.NON_PAYMENT_KEYWORDS가 이 키워드를 모두 포함하므로
+     *   SmsSyncCoordinator 경유 시 이 체크는 실질적으로 히트하지 않음.
+     *   SmsIncomeFilter를 단독으로 사용하는 경우를 위한 방어 코드.
      */
     private val excludeKeywords = listOf(
-        // V1(SmsParser.excludeKeywords)과 동일
         "광고", "홍보", "이벤트", "혜택안내", "포인트 적립",
         "명세서", "청구서", "이용대금",
         "결제금액", "카드대금", "결제대금", "청구금액",
@@ -168,11 +170,12 @@ class SmsIncomeFilter @Inject constructor() {
         // 4. 취소 → 수입 (결제 키워드보다 우선)
         if (cancellationKeywords.any { bodyLower.contains(it) }) return SmsType.INCOME to "cancel"
 
-        // 5. 결제 → 지출
-        if (paymentKeywords.any { bodyLower.contains(it) }) return SmsType.PAYMENT to "paymentKw"
-
-        // 6. 수입 제외 키워드 (자동이체 출금 안내 등)
+        // 5. 수입 제외 키워드 (자동이체 출금 안내 등)
+        // 결제 키워드("출금")와 겹치는 안내성 문구를 먼저 제외하여 오분류 방지
         if (incomeExcludeKeywords.any { bodyLower.contains(it) }) return SmsType.SKIP to "incomeExclude"
+
+        // 6. 결제 → 지출
+        if (paymentKeywords.any { bodyLower.contains(it) }) return SmsType.PAYMENT to "paymentKw"
 
         // 7. 수입 키워드
         if (incomeKeywords.any { bodyLower.contains(it) }) return SmsType.INCOME to "incomeKw"
@@ -204,7 +207,6 @@ class SmsIncomeFilter @Inject constructor() {
             }
         }
 
-        Log.d(TAG, "입력: ${smsList.size}건 → 결제: ${payments.size}건, 수입: ${incomes.size}건, 스킵: ${skipped.size}건")
 
         return Triple(payments, incomes, skipped)
     }

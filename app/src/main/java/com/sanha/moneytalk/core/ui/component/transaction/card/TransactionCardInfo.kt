@@ -43,6 +43,10 @@ interface TransactionCardInfo {
     /** 카드명 (예: "신한카드") */
     val cardNameText: String?
         get() = null
+
+    /** 거래 메모 (사용처 옆 보조 표기용) */
+    val memoText: String?
+        get() = null
 }
 
 /** ExpenseEntity → TransactionCardInfo 변환 */
@@ -59,6 +63,7 @@ class ExpenseTransactionCardInfo(
     override val categoryTag: String = expense.category
     override val time: String = timeFormat.format(Date(expense.dateTime))
     override val cardNameText: String = expense.cardName
+    override val memoText: String? = expense.memo?.takeIf { it.isNotBlank() }
 }
 
 /** IncomeEntity → TransactionCardInfo 변환 */

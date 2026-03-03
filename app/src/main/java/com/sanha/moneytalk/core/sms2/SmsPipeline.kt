@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.sms2
 
-import android.util.Log
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.async
@@ -27,7 +28,7 @@ import javax.inject.Singleton
  * │   SmsTemplateEngine.templateize() → 템플릿화                │
  * │   SmsTemplateEngine.batchEmbed() → 벡터 생성                │
  * │   Semaphore(10)으로 병렬 제한                               │
- * │   결과: List<EmbeddedSms> (원본 + 템플릿 + 3072차원 벡터)    │
+ * │   결과: List<EmbeddedSms> (원본 + 템플릿 + 768차원 벡터)     │
  * │                                                            │
  * │ Step 4: SmsPatternMatcher.matchPatterns()                  │
  * │   DB 기존 패턴과 벡터 유사도 비교                            │
@@ -64,7 +65,6 @@ class SmsPipeline @Inject constructor(
 ) {
 
     companion object {
-        private const val TAG = "SmsPipeline"
 
         /** 배치 임베딩 크기 (batchEmbedContents API 최대 100) */
         private const val EMBEDDING_BATCH_SIZE = 100
@@ -93,7 +93,11 @@ class SmsPipeline @Inject constructor(
     data class PipelineResult(
         val results: List<SmsParseResult>,
         val vectorMatchCount: Int,
-        val llmProcessCount: Int
+        val llmProcessCount: Int,
+        /** Step 4.5에서 regex 실패→LLM 복구된 건수 */
+        val regexFailedRecoveredCount: Int = 0,
+        /** 파이프라인 처리 중 최종 파싱 누락된 건수 */
+        val droppedCount: Int = 0
     )
 
     /**
@@ -113,52 +117,145 @@ class SmsPipeline @Inject constructor(
         skipPreFilter: Boolean = false
     ): PipelineResult {
         if (smsList.isEmpty()) return PipelineResult(emptyList(), 0, 0)
+        MoneyTalkLogger.e("SmsPipeline 시작: 입력 ${smsList.size}건")
 
-        Log.d(TAG, "=== 파이프라인 시작: ${smsList.size}건 ===")
 
         // Step 2: 사전 필터링 — 비결제 SMS 제거
         // SmsSyncCoordinator 경유 시 이미 필터링 완료 → 스킵
         val filtered = if (skipPreFilter) {
-            Log.d(TAG, "사전 필터링 스킵 (SmsSyncCoordinator에서 처리됨)")
             smsList
         } else {
             onProgress?.invoke(STEP_FILTER, "문자 분류 준비 중...", 0, smsList.size)
             val result = preFilter.filter(smsList)
-            Log.d(TAG, "필터링: ${smsList.size}건 → ${result.size}건 (${smsList.size - result.size}건 제외)")
             result
         }
+        MoneyTalkLogger.e("Step2 PreFilter: ${smsList.size}건 → ${filtered.size}건")
 
         if (filtered.isEmpty()) return PipelineResult(emptyList(), 0, 0)
 
         // Step 3: 전체 임베딩 — 100건씩 배치, Semaphore(10)로 병렬 제한
         onProgress?.invoke(STEP_EMBED, "문자 패턴 분석 중...", 0, filtered.size)
         val embedded = batchEmbed(filtered)
-        Log.d(TAG, "임베딩: ${filtered.size}건 → ${embedded.size}건 성공")
+        MoneyTalkLogger.e("Step3 Embedding: ${filtered.size}건 → ${embedded.size}건")
 
         if (embedded.isEmpty()) return PipelineResult(emptyList(), 0, 0)
 
         // Step 4: 벡터 매칭 — DB 기존 패턴과 유사도 비교
         onProgress?.invoke(STEP_MATCH, "이전 내역과 비교 중...", 0, embedded.size)
-        val (vectorResults, unmatched) = patternMatcher.matchPatterns(embedded)
-        Log.d(TAG, "벡터매칭: ${embedded.size}건 → 매칭 ${vectorResults.size}건, 미매칭 ${unmatched.size}건")
+        val matchResult = patternMatcher.matchPatterns(embedded)
+        MoneyTalkLogger.e("Step4 VectorMatch: 매칭 ${matchResult.matched.size}건, regex실패 ${matchResult.regexFailed.size}건, 미매칭 ${matchResult.unmatched.size}건")
 
-        // Step 5: 미매칭분 그룹핑 + LLM
-        val llmResults = if (unmatched.isNotEmpty()) {
-            onProgress?.invoke(STEP_LLM, "AI가 결제 내역 분석 중...", vectorResults.size, embedded.size)
-            groupClassifier.classifyUnmatched(unmatched) { step, current, total ->
+        // Step 4.5: regex 실패건 배치 LLM (그룹핑+regex생성 스킵)
+        val (regexFailedResults, regexFailedFallback) = if (matchResult.regexFailed.isNotEmpty()) {
+            onProgress?.invoke(STEP_LLM, "regex 실패건 복구 중...", matchResult.matched.size, embedded.size)
+            groupClassifier.batchExtractRegexFailed(matchResult.regexFailed)
+        } else {
+            Pair(emptyList(), emptyList())
+        }
+        if (matchResult.regexFailed.isNotEmpty()) {
+            MoneyTalkLogger.e("Step4.5 RegexFailedRecovery: ${matchResult.regexFailed.size}건 → 복구 ${regexFailedResults.size}건, Step5 fallback ${regexFailedFallback.size}건")
+        }
+
+        // Step 5-A: 순수 미매칭건은 기존 정책(그룹핑 + regex 생성 가능) 유지
+        val unmatchedLlmResults = if (matchResult.unmatched.isNotEmpty()) {
+            val preview = matchResult.unmatched.take(5)
+            preview.forEachIndexed { index, embeddedSms ->
+                MoneyTalkLogger.i(
+                    "[Step5-A input] #${index + 1} id=${embeddedSms.input.id}, addr=${embeddedSms.input.address}, body=${embeddedSms.input.body.replace("\n", "↵").take(120)}"
+                )
+            }
+            if (matchResult.unmatched.size > preview.size) {
+                MoneyTalkLogger.i(
+                    "[Step5-A input] ... ${matchResult.unmatched.size - preview.size}건 추가"
+                )
+            }
+            onProgress?.invoke(STEP_LLM, "AI가 결제 내역 분석 중...", matchResult.matched.size + regexFailedResults.size, embedded.size)
+            groupClassifier.classifyUnmatched(matchResult.unmatched) { step, current, total ->
                 onProgress?.invoke(STEP_LLM, step, current, total)
             }
         } else {
             emptyList()
         }
-        Log.d(TAG, "LLM: ${unmatched.size}건 → ${llmResults.size}건 성공")
+        if (matchResult.unmatched.isNotEmpty()) {
+            val unmatchedParsedIds = unmatchedLlmResults.map { it.input.id }.toHashSet()
+            val unresolvedFromUnmatched = matchResult.unmatched
+                .filter { it.input.id !in unmatchedParsedIds }
+            MoneyTalkLogger.i(
+                "Step5-A 결과: 입력 ${matchResult.unmatched.size}건 → 결제확정 ${unmatchedLlmResults.size}건, 미확정 ${unresolvedFromUnmatched.size}건"
+            )
+            unresolvedFromUnmatched.take(5).forEachIndexed { index, embeddedSms ->
+                MoneyTalkLogger.w(
+                    "[Step5-A unresolved] #${index + 1} id=${embeddedSms.input.id}, addr=${embeddedSms.input.address}, " +
+                        "body=${embeddedSms.input.body.replace("\n", "↵").take(120)} (비결제 판정 또는 추출 실패 가능)"
+                )
+            }
+        }
 
-        val total = vectorResults + llmResults
-        Log.d(TAG, "=== 파이프라인 완료: ${smsList.size}건 입력 → ${total.size}건 결제 확인 ===")
+        // Step 5-B: Step4.5 fallback은 regex 재시도하지 않고 direct LLM만 수행
+        val regexFallbackLlmResults = if (regexFailedFallback.isNotEmpty()) {
+            val preview = regexFailedFallback.take(5)
+            preview.forEachIndexed { index, embeddedSms ->
+                MoneyTalkLogger.i(
+                    "[Step5-B input] #${index + 1} id=${embeddedSms.input.id}, addr=${embeddedSms.input.address}, body=${embeddedSms.input.body.replace("\n", "↵").take(120)}"
+                )
+            }
+            onProgress?.invoke(STEP_LLM, "AI가 결제 내역 분석 중...", matchResult.matched.size + regexFailedResults.size + unmatchedLlmResults.size, embedded.size)
+            groupClassifier.classifyUnmatched(
+                unmatchedList = regexFailedFallback,
+                forceSkipRegexAll = true
+            ) { step, current, total ->
+                onProgress?.invoke(STEP_LLM, step, current, total)
+            }
+        } else {
+            emptyList()
+        }
+        if (regexFailedFallback.isNotEmpty()) {
+            val fallbackParsedIds = regexFallbackLlmResults.map { it.input.id }.toHashSet()
+            val unresolvedFromRegexFallback = regexFailedFallback
+                .filter { it.input.id !in fallbackParsedIds }
+            MoneyTalkLogger.i(
+                "Step5-B 결과: 입력 ${regexFailedFallback.size}건 → 결제확정 ${regexFallbackLlmResults.size}건, 미확정 ${unresolvedFromRegexFallback.size}건"
+            )
+            unresolvedFromRegexFallback.take(5).forEachIndexed { index, embeddedSms ->
+                MoneyTalkLogger.w(
+                    "[Step5-B unresolved] #${index + 1} id=${embeddedSms.input.id}, addr=${embeddedSms.input.address}, " +
+                        "body=${embeddedSms.input.body.replace("\n", "↵").take(120)} (비결제 판정 또는 추출 실패 가능)"
+                )
+            }
+        }
+
+        val llmResults = unmatchedLlmResults + regexFallbackLlmResults
+
+        val total = matchResult.matched + regexFailedResults + llmResults
+        val parsedIds = total.map { it.input.id }.toHashSet()
+        val droppedCount = (embedded.size - parsedIds.size).coerceAtLeast(0)
+        if (parsedIds.size < embedded.size) {
+            val regexFailedFallbackIds = regexFailedFallback.map { it.input.id }.toHashSet()
+            val unmatchedIds = matchResult.unmatched.map { it.input.id }.toHashSet()
+            val dropped = embedded.filter { it.input.id !in parsedIds }
+
+            MoneyTalkLogger.w(
+                "[pipelineDrop] 누락 ${dropped.size}건 (input=${embedded.size}, parsed=${total.size})"
+            )
+            dropped.forEachIndexed { index, item ->
+                val reason = when (item.input.id) {
+                    in regexFailedFallbackIds -> "regex_fallback_drop"
+                    in unmatchedIds -> "unmatched_drop"
+                    else -> "unknown_drop"
+                }
+                MoneyTalkLogger.w(
+                    "[pipelineDrop] #${index + 1} reason=$reason, id=${item.input.id}, " +
+                        "addr=${item.input.address}, body=${item.input.body.replace("\n", "↵")}"
+                )
+            }
+        }
+        MoneyTalkLogger.e("SmsPipeline 완료: 결제 확정 ${total.size}건 (벡터${matchResult.matched.size} + regex복구${regexFailedResults.size} + LLM${llmResults.size})")
         return PipelineResult(
             results = total,
-            vectorMatchCount = vectorResults.size,
-            llmProcessCount = llmResults.size
+            vectorMatchCount = matchResult.matched.size,
+            llmProcessCount = llmResults.size,
+            regexFailedRecoveredCount = regexFailedResults.size,
+            droppedCount = droppedCount
         )
     }
 
@@ -207,7 +304,7 @@ class SmsPipeline @Inject constructor(
                                     embedding = embedding
                                 )
                             } else {
-                                Log.w(TAG, "임베딩 실패 (null): ${sms.body.take(30)}")
+                                MoneyTalkLogger.w("임베딩 실패 (null): ${sms.body.take(30)}")
                                 null
                             }
                         }

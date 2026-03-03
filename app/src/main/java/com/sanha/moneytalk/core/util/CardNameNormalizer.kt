@@ -67,6 +67,16 @@ object CardNameNormalizer {
         }
     }
 
+    private val CANONICAL_SET: Set<String> = CANONICAL_NAMES.keys.toSet()
+
+    /**
+     * SMS body에서 은행/카드사 태그를 추출하는 패턴
+     * [Web발신], [국외발신] 등 비은행 태그는 제외
+     */
+    private val BANK_TAG_PATTERN = Regex(
+        """\[(KB|신한카드|신한|우리|하나|삼성카드|삼성|현대카드|현대|롯데카드|롯데|IBK|NH|농협|BC|카카오뱅크|토스뱅크|토스|SC|씨티|수협|대구|부산|광주|전북|경남|제주)\]"""
+    )
+
     /**
      * 카드사명 정규화
      *
@@ -96,5 +106,26 @@ object CardNameNormalizer {
 
         // 3. 매핑 안 되면 원본 반환
         return trimmed
+    }
+
+    /**
+     * cardName 정규화 + SMS body fallback
+     *
+     * LLM이 "[Web발신]" 등 비카드명을 cardName으로 추출하는 경우,
+     * 원본 SMS body에서 [KB], [NH] 등 은행 태그를 추출하여 보정한다.
+     *
+     * @param rawCardName LLM/regex가 추출한 원본 카드사명
+     * @param smsBody 원본 SMS 본문
+     * @return 정규화된 카드사명
+     */
+    fun normalizeWithFallback(rawCardName: String, smsBody: String): String {
+        val normalized = normalize(rawCardName)
+        if (CANONICAL_SET.contains(normalized)) return normalized
+
+        // normalize가 알려진 카드사를 찾지 못한 경우, SMS body에서 은행 태그 추출
+        val bankTag = BANK_TAG_PATTERN.find(smsBody)?.groupValues?.getOrNull(1)
+        if (bankTag != null) return normalize(bankTag)
+
+        return normalized
     }
 }

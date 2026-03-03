@@ -11,9 +11,6 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
 
-    <!-- 음성 입력 권한 -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-
     <!-- 알림 권한 (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
@@ -31,12 +28,18 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MoneyTalk"
-        tools:targetApi="31">
+        tools:targetApi="35">
 
-        <!-- AdMob (테스트 ID) -->
+        <!-- AdMob -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="ca-app-pub-4707673176609005~5012288836" />
+
+        <!-- AdMob + Firebase Analytics AD_SERVICES_CONFIG 충돌 해결 -->
+        <property
+            android:name="android.adservices.AD_SERVICES_CONFIG"
+            android:resource="@xml/gma_ad_services_config"
+            tools:replace="android:resource" />
 
         <!-- 인트로 (LAUNCHER) — 스플래시 + 권한 + RTDB + 강제 업데이트 -->
         <activity
@@ -61,6 +64,12 @@
         <!-- 카테고리 상세 -->
         <activity
             android:name=".feature.categorydetail.ui.CategoryDetailActivity"
+            android:theme="@style/Theme.MoneyTalk"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- 문자 설정 -->
+        <activity
+            android:name=".feature.smssettings.ui.SmsSettingsActivity"
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 

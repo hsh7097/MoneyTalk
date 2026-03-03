@@ -202,11 +202,13 @@ fun MoneyTalkTheme(
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
     val extendedColors = if (darkTheme) DarkExtendedColors else LightExtendedColors
 
-    // 상태바 색상 설정 — 배경색과 동일하게
+    // 상태바 아이콘 색상 설정 (라이트/다크)
+    // API 35+에서 statusBarColor는 deprecated (enableEdgeToEdge()가 투명 처리)
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
+            @Suppress("DEPRECATION")
             window.statusBarColor = colorScheme.background.toArgb()
             // 라이트 테마: 어두운 아이콘, 다크 테마: 밝은 아이콘
             WindowCompat.getInsetsController(window, view)

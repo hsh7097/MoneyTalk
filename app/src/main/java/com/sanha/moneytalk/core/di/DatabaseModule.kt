@@ -10,8 +10,10 @@ import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
 import com.sanha.moneytalk.core.database.dao.OwnedCardDao
+import com.sanha.moneytalk.core.database.dao.SmsBlockedSenderDao
 import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
+import com.sanha.moneytalk.core.database.dao.SmsRegexRuleDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import dagger.Module
 import dagger.Provides
@@ -48,7 +50,14 @@ object DatabaseModule {
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
-            .addMigrations(DatabaseMigrations.MIGRATION_1_2, DatabaseMigrations.MIGRATION_2_3)
+            .addMigrations(
+                DatabaseMigrations.MIGRATION_1_2,
+                DatabaseMigrations.MIGRATION_2_3,
+                DatabaseMigrations.MIGRATION_3_4,
+                DatabaseMigrations.MIGRATION_4_5,
+                DatabaseMigrations.MIGRATION_5_6,
+                DatabaseMigrations.MIGRATION_6_7
+            )
             .build()
     }
 
@@ -113,5 +122,19 @@ object DatabaseModule {
     @Singleton
     fun provideSmsExclusionKeywordDao(database: AppDatabase): SmsExclusionKeywordDao {
         return database.smsExclusionKeywordDao()
+    }
+
+    /** SMS 수신거부 발신번호 DAO 제공 */
+    @Provides
+    @Singleton
+    fun provideSmsBlockedSenderDao(database: AppDatabase): SmsBlockedSenderDao {
+        return database.smsBlockedSenderDao()
+    }
+
+    /** sender 기반 regex 룰 DAO 제공 */
+    @Provides
+    @Singleton
+    fun provideSmsRegexRuleDao(database: AppDatabase): SmsRegexRuleDao {
+        return database.smsRegexRuleDao()
     }
 }

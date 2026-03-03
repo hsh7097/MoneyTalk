@@ -1,7 +1,7 @@
 # AI_CONTEXT.md - MoneyTalk 프로젝트 컨텍스트
 
 > AI 에이전트가 MoneyTalk 프로젝트를 이해하고 작업하기 위한 핵심 컨텍스트 문서
-> **최종 갱신**: 2026-02-20
+> **최종 갱신**: 2026-02-27
 
 ---
 
@@ -15,7 +15,7 @@
 - **AI**: Google Gemini (2.5-pro/2.5-flash/2.5-flash-lite)
 - **Min SDK**: 26 (Android 8.0)
 - **Package**: `com.sanha.moneytalk`
-- **DB 버전**: 6 (moneytalk_v4.db)
+- **DB 버전**: 7 (moneytalk_v4.db)
 
 ---
 
@@ -43,7 +43,8 @@ app/src/main/java/com/sanha/moneytalk/
 │   │       └── transaction/       # card/ (TransactionCard), header/ (GroupHeader)
 │   ├── similarity/        # 유사도 판정 정책 (SimilarityPolicy 구현체)
 │   ├── sms/               # SMS V1 — 실시간 수신 전용 (9개: SmsParser, SmsReader, SmsFilter, HybridSmsClassifier, SmsBatchProcessor, GeminiSmsExtractor, GeneratedSmsRegexParser, SmsEmbeddingService, VectorSearchEngine)
-│   ├── sms2/              # SMS 통합 파이프라인 — 배치 동기화 메인 (12개: SmsSyncCoordinator, SmsReaderV2, SmsIncomeFilter, SmsIncomeParser, SmsPipeline, SmsPipelineModels, SmsPreFilter, SmsTemplateEngine, SmsPatternMatcher, SmsGroupClassifier, RemoteSmsRule, RemoteSmsRuleRepository)
+│   ├── sms2/              # SMS 통합 파이프라인 — 배치 동기화 메인 (16개: SmsSyncCoordinator, SmsReaderV2, SmsIncomeFilter, SmsIncomeParser, SmsPipeline, SmsPipelineModels, SmsPreFilter, SmsTemplateEngine, SmsPatternMatcher, SmsGroupClassifier, RemoteSmsRule, RemoteSmsRuleRepository, SmsRegexRuleMatcher, SmsOriginSampleCollector, GeminiSmsExtractor)
+│   ├── sms2/rules/        # SMS regex 룰 관리 (4개: SmsRegexRuleAssetLoader, SmsRegexRemoteRuleLoader, SmsRegexRuleSyncService, SmsRegexRuleRepository)
 │   └── util/              # 유틸 (DateUtils, CardNameNormalizer, StoreNameGrouper 등)
 ├── feature/
 │   ├── home/              # 홈 화면 (월간 현황, SMS 동기화)
@@ -65,7 +66,7 @@ app/src/main/java/com/sanha/moneytalk/
 
 | 시스템 | 설명 | 핵심 파일 |
 |--------|------|-----------|
-| SMS 파싱 (sms2, 2-tier) | Vector → Gemini LLM (배치 동기화) | [SmsSyncCoordinator.kt](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsSyncCoordinator.kt), [SmsPipeline.kt](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipeline.kt) |
+| SMS 파싱 (sms2, 3-tier) | Regex Fast Path → Vector → Gemini LLM (배치 동기화) | [SmsSyncCoordinator.kt](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsSyncCoordinator.kt), [SmsRegexRuleMatcher.kt](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsRegexRuleMatcher.kt), [SmsPipeline.kt](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipeline.kt) |
 | SMS 파싱 (V1, 실시간) | Regex only (SmsProcessingService) | [HybridSmsClassifier.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/HybridSmsClassifier.kt), [SmsParser.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsParser.kt) |
 | SMS 필터링 (발신자) | 010/070 조건부 제외 + 금융 힌트 보존 | [SmsFilter.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsFilter.kt) |
 | 카테고리 분류 (4-tier) | Room → Vector → Keyword → Gemini Batch | [CategoryClassifierService.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt), [StoreEmbeddingRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreEmbeddingRepository.kt) |
@@ -73,7 +74,7 @@ app/src/main/java/com/sanha/moneytalk/
 | 카드 관리 | 소유 카드 화이트리스트 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
 | SMS 필터링 | 제외 키워드 블랙리스트 | [SmsExclusionRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/SmsExclusionRepository.kt) |
 
-### 2-3. DB 엔티티 (10개)
+### 2-3. DB 엔티티 (11개)
 
 | Entity | 테이블 | 용도 |
 |--------|--------|------|
@@ -87,6 +88,7 @@ app/src/main/java/com/sanha/moneytalk/
 | StoreEmbeddingEntity | store_embeddings | 가게명 벡터 임베딩 |
 | OwnedCardEntity | owned_cards | 소유 카드 화이트리스트 |
 | SmsExclusionKeywordEntity | sms_exclusion_keywords | SMS 제외 키워드 |
+| SmsRegexRuleEntity | sms_regex_rules | SMS regex 룰 (sender+type+ruleKey 복합키) |
 
 ### 2-4. DB 마이그레이션 히스토리
 
@@ -97,6 +99,7 @@ app/src/main/java/com/sanha/moneytalk/
 | v3→v4 | sms_exclusion_keywords 테이블 생성 (SMS 제외 키워드) |
 | v4→v5 | expenses/incomes 성능 인덱스 추가 (smsId UNIQUE, dateTime, category, cardName, storeName+dateTime) |
 | v5→v6 | sms_patterns 테이블에 amountRegex, storeRegex, cardRegex, parseSource 컬럼 추가 |
+| v6→v7 | sms_regex_rules 테이블 생성 (sender 기반 regex 룰, 복합PK: senderAddress+type+ruleKey, 4개 인덱스) |
 
 > **sms_patterns 내부 마이그레이션** (DatabaseMigrations.kt):
 > - MIGRATION_1_2: amountRegex, storeRegex, cardRegex 컬럼 추가
@@ -143,13 +146,36 @@ SimilarityPolicy (판단 인터페이스)
 |------|-----|------|------|
 | `GROUPING_SIMILARITY` | 0.95 | 벡터 그룹핑 유사도 | SmsGroupClassifier |
 | `SMALL_GROUP_MERGE_THRESHOLD` | 5 | 소그룹 병합 대상 멤버 수 상한 | SmsGroupClassifier |
-| `SMALL_GROUP_MERGE_MIN_SIMILARITY` | 0.70 | 소그룹 병합 시 대표 벡터 최소 유사도 | SmsGroupClassifier |
-| `LLM_BATCH_SIZE` | 20 | LLM 배치당 최대 SMS 수 | SmsGroupClassifier |
-| `LLM_CONCURRENCY` | 5 | LLM 병렬 동시 실행 수 | SmsGroupClassifier |
+| `SMALL_GROUP_MERGE_MIN_SIMILARITY` | 0.90 | 소그룹 병합 시 대표 벡터 최소 유사도 | SmsGroupClassifier |
+| `SIMILARITY_GROUPING_MAX_SIZE` | 120 | 유사도 그룹핑 최대 SMS 수 (초과 시 강등) | SmsGroupClassifier |
+| `LLM_CONCURRENCY` | 5 | LLM 병렬 동시 실행 수 (Step4.5/5 공유) | SmsGroupClassifier |
+| `LLM_FALLBACK_MAX_SAMPLES` | 10 | Step4.5 배치 LLM chunk 크기 | SmsGroupClassifier |
+| `GROUP_CONTEXT_MAX_SAMPLES` | 10 | processGroup LLM 컨텍스트 샘플 수 | SmsGroupClassifier |
 | `REGEX_SAMPLE_SIZE` | 5 | 정규식 생성 시 사용할 샘플 수 | SmsGroupClassifier |
-| `REGEX_MIN_SAMPLES_FOR_GENERATION` | 3 | 정규식 생성 최소 샘플 수 | SmsGroupClassifier |
+| `REGEX_MIN_SAMPLES` | 5 | 정규식 생성 최소 그룹 크기 (미달 시 스킵) | SmsGroupClassifier |
+| `REGEX_VALIDATION_MIN_PASS_RATIO` | 0.80 | regex 검증 최소 파싱 성공률 | SmsGroupClassifier |
+| `REGEX_NEAR_MISS_MIN_RATIO` | 0.60 | near-miss 그룹 regex 재시도 기준 | SmsGroupClassifier |
 | `REGEX_FAILURE_THRESHOLD` | 2 | 정규식 생성 실패 쿨다운 기준 | SmsGroupClassifier |
-| `RTDB_DEDUP_SIMILARITY` | 0.99 | RTDB 표본 중복 판정 유사도 | SmsGroupClassifier |
+| `REGEX_FAILURE_COOLDOWN_MS` | 30분 | 정규식 실패 쿨다운 시간 | SmsGroupClassifier |
+| `GROUP_TIME_BUDGET_MS` | 10초 | 단일 그룹 처리 시간 제한 | SmsGroupClassifier |
+| `STEP5_TIME_BUDGET_MS` | 20초 | Step5 전체 시간 제한 | SmsGroupClassifier |
+| `GROUP_LLM_NULL_RETRY_MAX` | 1 | 단건 LLM null 시 재시도 횟수 | SmsGroupClassifier |
+| `UNSTABLE_MEDIAN_MIN_SIMILARITY` | 0.92 | unstable 그룹 판정 중앙값 기준 | SmsGroupClassifier |
+| `UNSTABLE_P20_MIN_SIMILARITY` | 0.88 | unstable 그룹 판정 P20 기준 | SmsGroupClassifier |
+| `UNSTABLE_DIRECT_LLM_MAX_SIZE` | 10 | unstable 해체 시 직접 LLM 최대 수 | SmsGroupClassifier |
+| `TEMPLATE_SEED_MIN_BUCKET_SIZE` | 2 | 템플릿 시드 최소 버킷 크기 | SmsGroupClassifier |
+| `SAMPLE_KEY_CACHE_MAX_SIZE` | 500 | RTDB 표본 세션 중복 전송 방지 캐시 상한 | SmsGroupClassifier |
+| `LEARNING_QUEUE_MAX_SIZE` | 1000 | 백그라운드 학습 큐 최대 크기 | SmsGroupClassifier |
+
+#### SmsGroupClassifier Step4.5 복구 상수
+
+| 상수 | 값 | 용도 | 파일 |
+|------|-----|------|------|
+| `REGEX_FAILED_RECOVERY_FAILURE_THRESHOLD` | 2 | 복구 실패 쿨다운 기준 (sender:templateHash) | SmsGroupClassifier |
+| `REGEX_FAILED_RECOVERY_COOLDOWN_MS` | 30분 | 복구 실패 쿨다운 시간 | SmsGroupClassifier |
+| `REGEX_FAILED_RECOVERY_MIN_LENGTH` | 12 | 복구 대상 SMS 최소 길이 | SmsGroupClassifier |
+| `KB_DEBIT_FALLBACK_AMOUNT_REGEX` | `출금\n([\d,]+)\n잔액` | KB 멀티라인 출금 금액 추출 | SmsGroupClassifier |
+| `KB_DEBIT_FALLBACK_STORE_REGEX` | `\d+\*+\d+\n(.+?)\n출금` | KB 멀티라인 출금 가게명 추출 | SmsGroupClassifier |
 
 #### SmsPatternMatcher 내부 상수 (sms2)
 
@@ -157,6 +183,7 @@ SimilarityPolicy (판단 인터페이스)
 |------|-----|------|------|
 | `NON_PAYMENT_THRESHOLD` | 0.97 | 비결제 패턴 캐시 히트 | SmsPatternMatcher |
 | `PAYMENT_MATCH_THRESHOLD` | 0.92 | 결제 패턴 매칭 판정 | SmsPatternMatcher |
+| `DEBIT_FALLBACK_STORE_NAME` | "계좌출금" | 출금 알림 대체 가게명 | SmsPatternMatcher |
 
 #### SmsPipeline 내부 상수 (sms2)
 
@@ -216,13 +243,14 @@ SimilarityPolicy (판단 인터페이스)
 0.92 ─── 결제 문자 판정 (SmsPatternMatcher.PAYMENT_MATCH_THRESHOLD / SmsPatternSimilarityPolicy.profile.confirm)
        ─── 가게명 → 카테고리 자동 적용 (StoreNameSimilarityPolicy.profile.autoApply)
 0.90 ─── 카테고리 전파 (StoreNameSimilarityPolicy.profile.propagate)
+       ─── 소그룹 병합 최소 유사도 (SmsGroupClassifier.SMALL_GROUP_MERGE_MIN_SIMILARITY)
 0.88 ─── 가게명 시맨틱 그룹핑 (StoreNameSimilarityPolicy.profile.group)
 0.85 ─── template_regex confidence (SmsGroupClassifier)
 0.80 ─── LLM 트리거 임계값 (SmsPatternSimilarityPolicy.LLM_TRIGGER_THRESHOLD) — V1 전용
        ─── LLM 고정 confidence
-0.70 ─── 소그룹 병합 최소 유사도 (SmsGroupClassifier.SMALL_GROUP_MERGE_MIN_SIMILARITY)
+       ─── regex 검증 최소 파싱 성공률 (SmsGroupClassifier.REGEX_VALIDATION_MIN_PASS_RATIO)
 0.60 ─── confidence 차단 임계값 (CategoryPropagationPolicy.MIN_PROPAGATION_CONFIDENCE)
-0.50 ─── regex 검증 최소 파싱 성공률 (SmsGroupClassifier.REGEX_VALIDATION_MIN_PASS_RATIO)
+       ─── near-miss 그룹 regex 재시도 기준 (SmsGroupClassifier.REGEX_NEAR_MISS_MIN_RATIO)
 0.00 ─── 매칭 없음
 ```
 
@@ -318,10 +346,28 @@ HomeViewModel.syncSmsV2(contentResolver, targetMonthRange)
    → processSmsPipeline(): SmsSyncCoordinator.process(smsInputs)
      → SmsPreFilter: 비결제 SMS 제거 (60+ 키워드, 100자 초과)
      → SmsIncomeFilter: PAYMENT/INCOME/SKIP 3분류 (financialKeywords 46개)
-     → SmsPipeline (결제 후보만):
+     → Step 1.5: SmsRegexRuleMatcher.matchPaymentCandidates() ★ Fast Path
+       - sender 기반 로컬 regex 룰 매칭 (Asset seed + RTDB overlay)
+       - 매칭 성공 → SmsParseResult (SmsPipeline 스킵)
+       - 미매칭 → SmsPipeline으로 fallback
+       - 룰 통계 자동 갱신 (matchCount/failCount/priority)
+       - 저품질 룰 자동 비활성화, sender/type별 5개 상한
+     → SmsPipeline (Fast Path 미매칭만):
        → SmsTemplateEngine: 템플릿화 + Gemini Embedding API (배치 100건)
-       → SmsPatternMatcher: 기존 패턴 DB에서 코사인 유사도 매칭 + regex 파싱
-       → SmsGroupClassifier: 3레벨 그룹핑 → LLM 배치 추출 → regex 생성 → 패턴 DB 등록
+       → SmsPatternMatcher: 기존 패턴 DB에서 코사인 유사도 매칭 + regex 파싱 → MatchResult(matched/regexFailed/unmatched)
+       → SmsGroupClassifier.batchExtractRegexFailed(): regex 실패건 배치 LLM 추출 (Step4.5)
+         - 병렬 처리: Semaphore(LLM_CONCURRENCY) + async/awaitAll
+         - 품질 게이트: isRecoverableRegexFailedSms() → 길이≥12 + 금액패턴 + 키워드
+         - 근거 검증: isGroundedRegexFailedRecovery() → 금액 증거 + 가게명 부분문자열
+         - KB 휴리스틱: tryParseKbDebitFallback() → tryHeuristicParse() (LLM 스킵)
+         - 실패 쿨다운: sender:templateHash, 2회 실패→30분
+       → SmsGroupClassifier.classifyUnmatched(): 미매칭+Step4.5 fallback → 3레벨 그룹핑 → LLM 배치 추출 → regex 생성 → 패턴 DB 등록
+         - 5-A (unmatched): full regex policy
+         - 5-B (regexFailedFallback): forceSkipRegexAll=true (regex 재생성 스킵)
+         - 시간 예산: GROUP_TIME_BUDGET_MS=10초/그룹, STEP5_TIME_BUDGET_MS=20초/전체
+         - unstable 그룹: 중앙값<0.92 또는 P20<0.88 → 해체 → 개별 LLM
+         - 예산 초과: regex 스킵→LLM 직접 강등 (데이터 누락 방지)
+         - 백그라운드 학습 큐: 성공 패턴 비동기 등록 (learningQueue, dedup)
    → saveExpenses(): SmsParseResult → ExpenseEntity 변환 + 배치 저장
    → saveIncomes(): SmsIncomeParser 파싱 → IncomeEntity 변환 + 배치 저장
    → postSyncCleanup(): 카테고리 분류 + 패턴 정리 + lastSyncTime + 카드 등록

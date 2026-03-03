@@ -31,6 +31,7 @@ import com.sanha.moneytalk.R
  * @param monthLabel 표시할 월 라벨 (예: "이번달", "2025년 12월")
  * @param isPartial 부분 데이터 모드 여부
  * @param isSyncing 동기화 진행 중 여부 (true 시 버튼 비활성화 + 진행중 표시)
+ * @param isAdEnabled 광고 활성화 여부 (false면 광고 문구 대신 일반 문구 표시)
  */
 @Composable
 fun FullSyncCtaSection(
@@ -38,6 +39,7 @@ fun FullSyncCtaSection(
     monthLabel: String,
     isPartial: Boolean = false,
     isSyncing: Boolean = false,
+    isAdEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -62,8 +64,12 @@ fun FullSyncCtaSection(
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = stringResource(
-                if (isPartial) R.string.partial_sync_cta_subtitle
-                else R.string.full_sync_cta_subtitle
+                when {
+                    isPartial && isAdEnabled -> R.string.partial_sync_cta_subtitle
+                    isPartial && !isAdEnabled -> R.string.partial_sync_cta_subtitle_no_ad
+                    !isAdEnabled -> R.string.full_sync_cta_subtitle_no_ad
+                    else -> R.string.full_sync_cta_subtitle
+                }
             ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
@@ -84,7 +90,13 @@ fun FullSyncCtaSection(
                     Text(stringResource(R.string.sync_in_progress_button))
                 }
             } else {
-                Text(stringResource(R.string.full_sync_cta_button, monthLabel))
+                Text(
+                    stringResource(
+                        if (isAdEnabled) R.string.full_sync_cta_button
+                        else R.string.full_sync_cta_button_no_ad,
+                        monthLabel
+                    )
+                )
             }
         }
     }

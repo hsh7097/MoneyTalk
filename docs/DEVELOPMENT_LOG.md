@@ -4,6 +4,440 @@
 
 ---
 
+## 2026-03-03 - SMS Regex Fast Path 전환 (sender 기반 regex 1차 파싱)
+
+### 배경
+임베딩 기반 2-tier(Vector→LLM) 파이프라인의 속도/비용/누락률을 개선하기 위해, 전화번호(sender) 기반 regex 룰을 1차 파싱 경로(Step 1.5)로 삽입. 룰 소스는 앱 내 JSON(Asset seed) + RTDB overlay 2-tier로 운영.
+
+### 작업 내용
+
+#### Phase 0: 기준선 정리
+- `SmsGroupClassifier` 상수와 `SMS_PARSING.md` 문서 값 정합성 수정 (REGEX_MIN_SAMPLES=5, 소그룹 병합 0.90, regex 검증 0.80)
+
+#### Phase 1: 룰 전용 로컬 스키마
+- `SmsRegexRuleEntity` (17필드, 복합PK: senderAddress+type+ruleKey), `SmsRegexRuleDao`, `SmsRegexRuleRepository` 추가
+- DB v6→v7 마이그레이션, AppDatabase 등록
+
+#### Phase 2: 룰 로더 (Asset + RTDB)
+- `assets/sms_rules_v1.json` (8 sender, 16룰)
+- `SmsRegexRuleAssetLoader` + `SmsRegexRemoteRuleLoader` + `SmsRegexRuleSyncService`
+
+#### Phase 3: Fast Path 파서
+- `SmsRegexRuleMatcher`: sender 기반 regex 매칭, `SmsSyncCoordinator`에 Step 1.5로 삽입
+- 매칭 성공 → SmsPipeline 스킵, 미매칭만 기존 Vector/LLM 경로
+
+#### Phase 4: Fallback 안전 연결
+- `distinctBy { input.id }` 중복 제거, `SyncStats`에 fastPath/pipeline 분리 지표
+
+#### Phase 5: 표본 수집 파이프라인
+- `SmsOriginSampleCollector`: 성공 표본(sender/type/fingerprint 3개 제한), 실패 표본(failStage/failReason 누적)
+- RTDB 경로: `/sms_origin/{sender}/{type}/{sampleKey}`, sampleKey=SHA-256 결정적 해시
+
+#### Phase 6: 운영 최적화
+- `computeAdaptivePriority()`: match/fail/recency 기반 priority 자동 보정
+- 저품질 룰 자동 비활성화 (matchCount=0 && failCount≥12)
+- sender/type별 활성 룰 상한 5개
+
+#### 추가 작업
+- **Rule Seed**: CSV 기반 에셋 룰 16개 생성 (커버리지 99.94%)
+- **Failure Loop**: Fast Path 실패/LLM 성공 모두 `sms_origin`으로 통합
+- **Fallback Trace**: Step1.5/5-A/5-B 입력·결과·미확정 로그
+- **Fallback Hotfix**: KB 출금 멀티라인 변형 전용 룰 + NON_PAYMENT 상세 로그
+- **Rule Guide**: `SMS_RULE_JSON_UPDATE_GUIDE.md` 운영 가이드
+
+### 결정 사항
+- **ruleKey 결정적 해시**: `sha256(sender|type|canonicalRegex|amountGroup|storeGroup|cardGroup|dateGroup|version)` — 기기별 랜덤 키 방지, 동일 룰 중복 저장 방지
+- **2-source 병합**: Asset(seed, 1회) + RTDB(overlay, 10분 간격) → 동일 키 충돌 시 RTDB 우선
+- **Step 1.5 위치**: SmsPreFilter/SmsIncomeFilter 이후, SmsPipeline 이전 — 비결제 SMS를 먼저 제거한 뒤 regex 매칭
+
+---
+
+## 2026-03-01 - v1.1.0 출시 준비 (API 35 + AdMob + STT 제거)
+
+### 배경
+Google Play Console 배포를 위해 targetSdk 35 마이그레이션, AdMob 테스트→실제 ID 전환, RECORD_AUDIO 권한(STT) 제거가 필요.
+
+### 작업 내용
+
+#### API 35 마이그레이션
+- compileSdk/targetSdk 34→35, versionCode 2→3
+- AGP 8.2.2→8.7.3, Gradle 8.5→8.9
+- Theme.kt: statusBarColor에 `@Suppress("DEPRECATION")` 추가 (API 35에서 무시되지만 하위 호환)
+- 모든 Activity(MainActivity, IntroActivity, SmsSettingsActivity, CategoryDetailActivity)에 `enableEdgeToEdge()` 이미 적용 확인
+- ForceUpdateDialog: DialogProperties(dismissOnBackPress=false) 추가 — API 35 Predictive Back 대응
+
+#### AdMob 실제 ID 전환
+- AndroidManifest APPLICATION_ID: 테스트→실제
+- RewardAdManager: TEST_REWARD_AD_ID→REWARD_AD_ID (실제 리워드 광고 ID)
+- BannerAdCompose: adUnitId 파라미터 추가, BannerAdIds object로 화면별 ID 관리 (HOME/HISTORY/CATEGORY_DETAIL)
+- AD_SERVICES_CONFIG property 추가 (AdMob+Firebase Analytics 충돌 해결)
+
+#### STT/RECORD_AUDIO 완전 제거
+- **이유**: Play Console에서 RECORD_AUDIO 권한 플래그 → 음성 입력 기능은 사용률 낮으므로 제거
+- AndroidManifest에서 RECORD_AUDIO 권한 제거
+- ChatScreen.kt에서 ~150줄 삭제 (SpeechRecognizer, RecognitionListener, 음성 버튼, 음성 힌트)
+- ChatViewModel.kt에서 showVoiceHint/observeVoiceHintSeen/markVoiceHintSeen 제거
+- SettingsDataStore에서 CHAT_VOICE_HINT_SEEN 키 제거 (기존 사용자 기기에 고아 키 잔존, 무해)
+- strings.xml(ko/en)에서 STT 관련 9개 문자열 + chat_voice_hint 제거
+
+#### 버그 수정
+- HomePageData/HistoryPageData: 캐시 미적재 페이지에서 isLoading=false fallback — 1월 CTA 미표시 버그 수정
+- engine_summary_sms_analyzed: "최근 14일간"→"최근 2개월간" (실제 동기화 기간과 일치)
+
+### 결정 사항
+- **DataStore 고아 키 미삭제**: chat_voice_hint_seen boolean 1바이트, 마이그레이션/삭제 불필요
+- **deprecated 패딩 함수 유지**: OnboardingScreen(statusBarsPadding, navigationBarsPadding), ChatScreen(imePadding) — 동작에 문제 없으나 향후 `windowInsetsPadding(WindowInsets.*)` 전환 권장
+- **BannerAdIds 하드코딩**: RTDB 동적 관리 대신 const로 배포. 광고 단위 변경 시 앱 업데이트 필요하나 현 단계에서 충분
+
+---
+
+## 2026-02-27 - 문자 설정 Activity 및 수신거부 번호 관리
+
+### 배경
+설정 화면의 SMS 제외 키워드가 다이얼로그 하나로만 관리되어, 레퍼런스 앱처럼 문자 관련 설정을 별도 화면으로 분리하는 것이 필요. 수신거부 전화번호 관리 기능도 신규 추가.
+
+### 작업 내용
+
+#### 신규 문자 설정 Activity
+- `SmsSettingsActivity` — CategoryDetailActivity 패턴 (@AndroidEntryPoint, enableEdgeToEdge)
+- `SmsSettingsScreen` — NavHost 기반 내부 네비게이션 (MAIN/BLOCKED_PHRASES/BLOCKED_SENDERS)
+- `SmsSettingsViewModel` — 제외 키워드 + 차단 번호 + 동기화 시간 관리
+
+#### 수신거부 발신번호 DB (v4→v5)
+- `SmsBlockedSenderEntity` (PK=정규화 주소, rawAddress, createdAt)
+- `SmsBlockedSenderDao` + `SmsBlockedSenderRepository` (캐시 + SmsFilter.normalizeAddress 재사용)
+- `MIGRATION_4_5`: sms_blocked_senders 테이블 생성
+
+#### 코드 정리 및 개선
+- **데드코드 제거**: SettingsViewModel에서 ExclusionKeyword 관련 Intent/Dialog/메서드/Repository 주입 전부 제거
+- **ExclusionKeywordDialog 제거**: SettingsDataDialogs.kt에서 미사용 다이얼로그+아이템 삭제, Preview도 정리
+- **normalizeAddress 통합**: SmsBlockedSenderRepository 자체 구현 제거 → SmsFilter.normalizeAddress() SSOT
+- **CATEGORY_UPDATED 이벤트**: SmsSettingsViewModel에서 키워드 추가/삭제 시 이벤트 발행
+- **lastSyncTime 반응형**: SettingsDataStore.lastSyncTimeFlow 추가, 일회성→Flow 관찰
+- **DAO suspend 전환**: getAllAddresses, readAllMessagesByDateRange suspend 전환
+
+### 변경 파일
+- 신규: `SmsSettingsActivity.kt`, `SmsSettingsScreen.kt`, `SmsSettingsViewModel.kt`, `SmsBlockedSenderEntity.kt`, `SmsBlockedSenderDao.kt`, `SmsBlockedSenderRepository.kt`
+- 수정: `SettingsScreen.kt`, `SettingsViewModel.kt`, `SettingsDataDialogs.kt`, `SettingsDataStore.kt`, `SmsReaderV2.kt`, `AppDatabase.kt`, `DatabaseModule.kt`, `DatabaseMigrations.kt`, `AndroidManifest.xml`, `strings.xml`
+
+---
+
+## 2026-02-27 - PR #41: Step4.5 복구 경로 최적화 및 프롬프트 안정화
+
+### 배경
+PR #40에서 Step5 정책이 고도화되었으나, Step4.5(regex 실패건 복구)는 직렬 처리 + 품질 게이트 없이 모든 실패건을 LLM에 전달하는 상태. 프롬프트도 근거 부족 SMS에 대한 처리가 미흡. 누락 SMS 디버깅 수단 부재.
+
+### 작업 내용
+
+#### Step4.5 병렬화 + 품질 게이트 (커밋 2a428f9)
+- **병렬 처리**: `Semaphore(LLM_CONCURRENCY)` + `async(Dispatchers.IO)` + `awaitAll()` — 직렬→병렬 전환
+- **복구 가능성 판정**: `isRecoverableRegexFailedSms()` — SMS 길이≥12, 금액 패턴 + 힌트 키워드 확인
+- **근거 검증**: `isGroundedRegexFailedRecovery()` — 금액 증거(containsAmountEvidence) + 가게명 부분문자열 매칭
+- **실패 쿨다운**: `regexFailedRecoveryStates` — `sender:templateHash` 키, 2회 실패→30분 쿨다운
+- **KB 멀티라인 출금 휴리스틱**: `tryParseKbDebitFallback()` — 정규식으로 KB 스타일 출금 SMS 직접 파싱 (LLM 스킵)
+
+#### Step5 경로 분리 (커밋 023cf71, 9707f4b, 42a9760)
+- **5-A (unmatched)**: full regex policy — 기존 그대로
+- **5-B (regexFailedFallback)**: `forceSkipRegexAll=true` — regex 재생성 스킵 (이미 실패한 regex 재시도 방지)
+- outcome 코드 구분: `REGEX_FAILED_HEURISTIC_KB`, `REGEX_FAILED_FALLBACK_DIRECT_LLM`
+- 단건 LLM null 시 1회 재시도 (`GROUP_LLM_NULL_RETRY_MAX=1`, 300ms delay)
+
+#### 프롬프트 강화 (커밋 1394ff6, 4de73b3)
+- 근거 부족 문자 처리 규칙 (rules 7-10), 예외 규칙 추가
+- `SMS_EXTRACT_PROMPT_VERSION` / `SMS_BATCH_PROMPT_VERSION` 로깅
+
+#### 누락 SMS 드롭 경로 진단 (커밋 d90a3b2)
+- SmsPipeline: parsedIds vs embedded 차집합 추적 → 드롭된 SMS 원문 로그
+
+#### SMS 누락 복구 + insight 재시도 + 메모 표기 (커밋 b8485f7)
+- **Home insight 재시도**: `HOME_INSIGHT_MAX_ATTEMPTS=3`, 503/UNAVAILABLE 시 선형 백오프 (1200ms*attempt)
+- **TransactionCard 메모 표시**: `memoText` 필드 추가 + `buildAnnotatedString` (alpha=0.72f)
+- `TransactionCardInfo`에 `memoText: String?` 프로퍼티 (default null, expense.memo 매핑)
+
+#### 코드 정리 (커밋 9b03917)
+- `tryHeuristicParse()` 헬퍼 추출 — 4곳 중복 `tryParseKbDebitFallback()` + `SmsParseResult` 생성 통합
+- `DEBIT_FALLBACK_STORE_NAME` 상수 추출 (SmsPatternMatcher)
+- outcome 코드 `REGEX_FAILED_HEURISTIC_KB` 구분 (휴리스틱 vs LLM 경로)
+
+### 변경 파일 (PR #41: 9 files)
+- `core/sms2/SmsGroupClassifier.kt` — Step4.5 병렬화, 품질 게이트, KB 휴리스틱, tryHeuristicParse 헬퍼
+- `core/sms2/SmsPatternMatcher.kt` — DEBIT_FALLBACK_STORE_NAME 상수
+- `core/sms2/SmsPipeline.kt` — Step5 경로 분리(5-A/5-B), 드롭 경로 진단 로그
+- `core/sms2/GeminiSmsExtractor.kt` — 프롬프트 버전 로깅
+- `core/sms2/SmsPreFilter.kt` — (미변경, 원복)
+- `res/values/string_prompt.xml` — 근거 부족 규칙, 예외 규칙
+- `feature/chat/data/GeminiRepositoryImpl.kt` — insight 재시도 로직
+- `core/ui/component/transaction/card/TransactionCardCompose.kt` — 메모 표시
+- `core/ui/component/transaction/card/TransactionCardInfo.kt` — memoText 필드
+
+### 결정 사항
+- **Step4.5 품질 게이트 도입 이유**: 모든 regex 실패건을 LLM에 보내면 비용 과다 + 근거 없는 SMS(잔액 알림 등)까지 추출 시도 → 복구 가능성 판정으로 LLM 호출 최소화
+- **forceSkipRegexAll=true**: regex가 이미 실패한 패턴에 다시 regex를 생성하는 것은 무의미. LLM 직접 추출만 시도
+- **KB 휴리스틱**: KB 멀티라인 출금은 형식이 고정되어 정규식으로 확실하게 파싱 가능. LLM 호출 없이 즉시 처리
+
+---
+
+## 2026-02-27 - PR #40: Step5 SMS 파싱 정책/예산/학습 분리 고도화
+
+### 배경
+PR #38에서 Step5의 기본 성능 최적화(시간 제한, 최소 샘플)를 적용했으나, 여전히 비효율적인 패턴이 존재: 이질적 SMS가 섞인 unstable 그룹에 regex 생성 시도, 시간 예산 초과 시 데이터 누락, 성공한 regex 패턴의 즉시 등록으로 인한 동기화 병목.
+
+### 작업 내용
+
+#### Phase1: regex 정책 강화 + 시간 예산 (커밋 5876f3a)
+- `REGEX_MIN_SAMPLES=5`: 5건 미만 그룹은 regex 생성 스킵 (비용 대비 효과 낮음)
+- `GROUP_TIME_BUDGET_MS=10초`: 단일 그룹 처리 시간 제한
+- `STEP5_TIME_BUDGET_MS=20초`: Step5 전체 시간 제한
+- 계측 로그: 그룹별 처리 시간/결과 상세 출력
+
+#### Phase2: 예산 초과 시 스킵→강등 (커밋 71a7d55)
+- 기존: 시간 예산 초과 시 그룹 스킵 → 데이터 누락
+- 변경: regex 생성 포기 + LLM 직접 추출로 강등 → 데이터 보존
+- 가성비: regex 생성(~5초) vs LLM 직접 추출(~1초) 트레이드오프
+
+#### Phase3: unstable 그룹 정책 + cohesion gate (커밋 dd75187, 584cc4d)
+- **unstable 판정**: 그룹 내 유사도 중앙값 < 0.92 또는 P20 < 0.88 → 이질적 SMS 혼입
+- **unstable 처리**: 그룹 해체 → 개별 LLM 추출 (max 10건, 초과분 스킵)
+- **cohesion gate**: regex 생성 전 그룹 응집도 검증 — 낮으면 regex 생성 abort
+- E-lite 모델 분리: unstable 개별 추출에 경량 모델 사용
+
+#### Phase4: 백그라운드 학습 큐 (커밋 3283d02)
+- `DeferredLearningTask`: regex 등록을 즉시→비동기로 전환
+- `learningQueue` + `learningQueueSize` + `learningDroppedCount`: 큐 관리
+- `LEARNING_QUEUE_MAX_SIZE=1000`: 큐 오버플로우 방지
+- `learningProcessorRunning`: 단일 프로세서 보장
+
+#### Phase5: outcome 집계 + 학습 큐 dedup (커밋 275098f, 8464f7a)
+- outcome별 집계 로그: matched/regexFailed/llmDirect/unstable/skipped 카운트
+- `learningDedupKeys`: ConcurrentHashMap.newKeySet() 기반 in-flight 중복 방지
+
+### 변경 파일 (PR #40: 1 file, 7 commits)
+- `core/sms2/SmsGroupClassifier.kt` — 전체 변경
+
+### 결정 사항
+- **SmsGroupClassifier 단일 파일 PR**: 모든 Step5 정책이 이 파일에 집중되어 있어 분리 효과 낮음
+- **강등 정책**: 데이터 누락(=사용자가 직접 입력해야 함)보다 LLM 비용이 낮다고 판단
+- **unstable 해체 기준(0.92/0.88)**: 실측으로 이 수치 미만 그룹은 regex 성공률이 <20%였음
+
+---
+
+## 2026-02-27 - SMS Step5 성능 최적화 + Step4.5 배치 LLM 복구 경로
+
+### 배경
+데이터 초기화 후 재동기화 시, 패턴 DB에 임베딩은 남아있지만 regex가 비거나 파싱 실패하는 패턴이 존재. 이 SMS들은 Step4 벡터매칭(≥0.92)을 통과하지만 `parseWithPatternRegex` 실패 → Step5로 떨어짐. Step5에서 regex 재생성을 시도하지만 또 실패(STORE_INVALID_KEYWORDS에 "출금","카드" → isValidStoreCandidate 탈락) → 매 동기화마다 25초 낭비하는 무한 루프.
+
+실측: KB출금 SMS 26건이 매번 Step5로 빠져 25.2초 소요 (전체 28초 중 90%).
+
+### 작업 내용
+
+#### Step5 성능 최적화 (커밋 b339245)
+- **GeminiSmsExtractor**: LLM 타임아웃 60초 설정(3개 모델), CancellationException을 7개 generic catch보다 먼저 캐치, isPayment=false 조기 리턴, 디버그 로깅 추가
+- **SmsGroupClassifier**: REGEX_MIN_SAMPLES=5 (소그룹 regex 생성 스킵), REGEX_TIME_BUDGET_MS=15초 (시간 제한), REGEX_NEAR_MISS_MIN_RATIO=0.4f (near-miss 그룹 regex 재시도 기준), dead code 제거, LLM 배치 호출 시 drop(1) 오류 수정
+- **SmsPipeline**: Step5 진행률 콜백(step, current, total) 연동
+
+#### Step4.5 regex 실패건 배치 LLM 복구 (커밋 43de46e)
+- **SmsPatternMatcher**: `MatchResult` data class 도입 — 3-way 분할 (matched/regexFailed/unmatched)
+  - 벡터매칭 OK + regex 파싱 실패 → `regexFailed` (기존: `unmatched`에 섞임)
+  - stats 로그에 `regexFailed` 포함
+- **SmsGroupClassifier**: `batchExtractRegexFailed()` 신규 메서드
+  - 발신번호별 그룹핑 → chunk(10) → `smsExtractor.extractFromSmsBatch()` 배치 LLM 추출
+  - 성공: SmsParseResult(tier=3) 반환 / 실패: Step5 fallback 리스트로 전달
+- **SmsPipeline**: Step4→Step4.5→Step5 체인 삽입, `PipelineResult.regexFailedRecoveredCount` 추가
+- **SmsPipelineModels**: `SyncStats.regexFailedRecoveredCount` 추가
+- **SmsSyncCoordinator**: stats 매핑
+- **MainViewModel**: `engineSummaryPatterns`에 `regexFailedRecoveredCount` 합산
+
+### 변경 파일 (PR #38: 8 files, +248/-126)
+- `core/sms2/SmsPatternMatcher.kt` — MatchResult 3-way 분할
+- `core/sms2/SmsGroupClassifier.kt` — batchExtractRegexFailed() + Step5 최적화 상수
+- `core/sms2/SmsPipeline.kt` — Step4.5 삽입
+- `core/sms2/SmsPipelineModels.kt` — SyncStats 필드 추가
+- `core/sms2/SmsSyncCoordinator.kt` — stats 매핑
+- `core/sms2/GeminiSmsExtractor.kt` — 타임아웃, 예외 처리, 디버그 로깅
+- `MainViewModel.kt` — engineSummaryPatterns 합산
+- `CLAUDE.md` — MoneyTalkLogger 로깅 규칙 추가
+
+### 결정 사항
+- **regex 실패건은 Step5(그룹핑+regex생성)를 건너뛰고 배치 LLM 추출**: regex가 이미 실패한 패턴에 다시 regex 생성을 시도하는 것은 무의미. 직접 LLM으로 추출하는 것이 확실하고 빠름 (~3초 vs 25초)
+- **Step4.5 LLM 실패건은 Step5로 fallback**: 데이터 손실 없음
+- **SmsPipeline `.e()` 로그 레벨 유지**: 사용자가 가시성 목적으로 의도적으로 사용 — 변경하지 않음
+- **Codex P1 리뷰(그룹 LLM blended 위험)**: 같은 발신번호+같은 템플릿 그룹이므로 실질적 위험 낮음 → 조치 불필요
+
+---
+
+## 2026-02-26 - generateRegexForGroup 정규식 생성 성공률 개선
+
+### 배경
+`SmsGroupClassifier.processGroup()`에서 호출하는 `GeminiSmsExtractor.generateRegexForGroup()`의 regex 생성 실패율이 높아 개별 LLM 호출로 폴백되는 비율이 높았음. 내 분석 + Codex 분석을 교차 검토하여 합의된 6개 개선 항목을 구현.
+
+regex 생성 성공 시 Gemini API 호출이 대폭 줄어듦 (그룹 전체를 regex로 일괄 파싱 → 개별 LLM 호출 불필요).
+
+### 작업 내용
+
+#### 1. repair 1회 활성화
+- `REGEX_REPAIR_MAX_RETRIES = 0 → 1` — 기존에 repair 프롬프트가 잘 작성되어 있었으나 0으로 비활성 상태
+- 1회 수선 시도로 검증 실패 regex 구제 가능
+
+#### 2. 검증 일원화
+- `GeminiSmsExtractor.validateRegexResult()`에서 샘플 성공률 게이트(80% 기준) 제거
+- JSON 파싱 + regex 컴파일 + 필수필드 체크만 수행
+- 성공률 판정은 `SmsGroupClassifier.validateRegexAgainstSamples()` 60% 기준 1곳에서만
+- 이유: 0.5~0.79 사이 regex가 Extractor에서 버려지지 않고 Classifier 검증까지 도달 가능
+
+#### 3. 프롬프트 개선
+- 시스템 프롬프트: JSON escape 규칙(rule 8,9), 멀티라인 SMS 예시(예시2), 샘플 수 "1~5건"→"1~10건"
+- 유저 프롬프트: `buildRegexPrompt()`에서 날짜 prefix 제거 (LLM이 날짜를 패턴 일부로 오인 방지)
+- compact 프롬프트: cardRegex를 %3$s로 추가 (토큰 폴백 시 카드 정보 손실 방지)
+
+#### 4. ultraCompact 3차 폴백 활성화
+- `requestRegexWithTokenFallback()`: primary → compact → ultraCompact → 포기 (기존: compact에서 포기)
+
+#### 5. repair 프롬프트 인간 친화적 사유 매핑
+- `toHumanFriendlyReason()`: 기술적 코드(예: "amount_regex_compile_failed")를 LLM이 이해하기 쉬운 메시지로 변환
+- 문자열은 `strings.xml` + `values-en/strings.xml`에 리소스화 (하드코딩 금지 규칙 준수)
+
+#### 6. 미사용 코드 정리 (사용자 추가 작업)
+- 검증 일원화로 dead code가 된 항목 제거: `REGEX_MIN_AMOUNT`, `NON_DIGIT_PATTERN`, `STORE_*` 패턴/키워드, `isValidRegexStoreName()`, `tryExtractGroup1()`, `RegexValidationResult.successRatio`
+- `minSuccessRatio` 파라미터 제거 (`generateRegexForGroup`, `generateRegexForSms`)
+
+### 변경 파일
+- `core/sms2/GeminiSmsExtractor.kt` — 상수/검증/폴백/프롬프트/코드정리 (85 insertions, 109 deletions)
+- `res/values/string_prompt.xml` — 시스템 프롬프트 규칙 추가, compact 포맷 변경
+- `res/values/strings.xml` — sms_regex_reason_* 6개 키 추가
+- `res/values-en/strings.xml` — sms_regex_reason_* 6개 키 추가 (영문)
+
+### 결정 사항
+- `smsTimestamps` 파라미터는 public API 호환성 유지를 위해 `@Suppress("UNUSED_PARAMETER")`로 남김 (날짜 prefix 제거로 미사용이 되었으나, 호출자 변경 없이 유지)
+- 검증 기준을 1곳(Classifier)으로 통합한 이유: Classifier의 `parseWithRegex()`가 실제 런타임과 동일 경로를 타므로 더 정확한 검증
+
+---
+
+## 2026-02-26 - SMS 파싱 파이프라인 순서/효율 개선
+
+### 작업 내용
+
+#### P1 (Critical): SmsPreFilter 수입 SMS 누락 방지
+- `SmsPreFilter.isObviouslyNonPayment()`에 수입 보호 화이트리스트 추가
+- `INCOME_PROTECTION_KEYWORDS` ("입금","급여","월급","환급","송금","정산","지급","출금취소","승인취소","결제취소")
+- 수입 키워드가 포함된 SMS는 NON_PAYMENT_KEYWORDS 체크를 스킵하여 SmsIncomeFilter로 전달
+
+#### P5: 취소/환불 SMS 타입 정확도 개선
+- `SmsIncomeParser.extractIncomeType()`에 취소 분기 추가
+- "출금취소","승인취소","결제취소","취소승인","취소완료" → type="환불" (기존: "입금")
+
+#### P4: 미사용 fallbackCategory 파라미터 제거
+- `SmsPatternMatcher.parseWithRegex()`에서 `fallbackCategory` 파라미터 제거
+- 내부적으로 항상 `category="미분류"`로 하드코딩되어 파라미터가 실효 없었음
+- `SmsGroupClassifier`의 호출부 2곳 + `parseWithPatternRegex()` 1곳 정리
+
+#### classify() 순서 수정 (사용자 발견)
+- `SmsIncomeFilter.classify()`에서 incomeExcludeKeywords(step5)를 paymentKeywords(step6) 앞으로 이동
+- "자동이체출금"에 "출금"이 포함되어 PAYMENT로 오분류되던 문제 방지
+
+#### 중복 코드 정리 (P2/P3)
+- SmsIncomeFilter의 excludeKeywords, MAX_SMS_LENGTH가 SmsPreFilter와 중복 → 방어 코드 주석 추가
+- KDoc 번호 순서 정정 (classify() 내부 단계 번호)
+
+### 변경 파일
+- `core/sms2/SmsPreFilter.kt` — INCOME_PROTECTION_KEYWORDS + isObviouslyNonPayment() 화이트리스트
+- `core/sms2/SmsIncomeFilter.kt` — KDoc 정정, 방어 코드 주석, classify() 순서 수정
+- `core/sms2/SmsIncomeParser.kt` — extractIncomeType() 취소→"환불" 분기
+- `core/sms2/SmsPatternMatcher.kt` — parseWithRegex() fallbackCategory 제거
+- `core/sms2/SmsGroupClassifier.kt` — fallbackCategory 호출 인자 제거
+
+### 결정 사항
+- SmsIncomeFilter의 중복 키워드/길이체크는 "방어 코드"로 유지 (SmsIncomeFilter 단독 사용 시 안전망)
+- SmsPreFilter의 화이트리스트 방식 채택 (키워드 제거 방식보다 안전 — 새 비결제 키워드 추가 시 수입 누락 재발 방지)
+
+---
+
+## 2026-02-26 - SmsGroupClassifier 품질 개선
+
+### 작업 내용
+
+#### 소그룹 병합 유사도 상향 (0.70 → 0.90)
+- 서로 다른 SMS 형식(카드 승인 vs 카드 대금 출금)이 하나로 병합되는 문제 방지
+- 같은 발신번호(예: KB 16449999)의 "일반 출금"과 "신한카드 대금 출금"이 메인 그룹으로 합쳐져 전체가 "신한카드"로 태깅되는 근본 원인
+
+#### RTDB 표본 수집 품질 개선
+- template 필드 추가: 표본에 `embedded.template` 포함
+- regex 존재 가드: `amountRegex.isNotBlank() && storeRegex.isNotBlank()` 일 때만 수집 (무용 표본 제거)
+- 기존 `hasVerifiedRegex = source in listOf("llm_regex")` 방식이 "template_regex" 소스를 제외하고 "llm" 소스의 빈 regex 표본을 수집하는 버그 수정
+
+#### LLM 프롬프트 개선
+- buildContextualLlmInput: "이 SMS는 아래 발신번호의 예외 케이스입니다" → "같은 발신번호의 메인 케이스입니다. 아래를 참조하여 비슷한 형태로 분석하세요."
+- "예외 케이스"라는 표현이 LLM에게 다른 형태로 분석하라는 오해를 줄 수 있으므로 "메인 케이스 참조"로 변경
+
+#### MainCaseContext 확장
+- `sample: String` → `samples: List<String>` (3건까지 전달)
+- buildContextualLlmInput에 메인 템플릿 + 메인 샘플 3건을 포함하여 LLM 분석 정확도 향상
+- sampleBody 참조도 `mainContext.samples.firstOrNull()`로 갱신
+
+### 변경 파일
+- `SmsGroupClassifier.kt` — SMALL_GROUP_MERGE_MIN_SIMILARITY 0.70→0.90, RTDB template 추가, regex 가드, 프롬프트 개선, MainCaseContext.samples
+- `GeminiSmsExtractor.kt` — 프롬프트 디버깅 로그 추가
+- `AI_CONTEXT.md` — 임계값 레지스트리 수직 스케일 0.70→0.90 갱신
+
+### 결정 사항
+- "출금"만으로 PAYMENT 통과하는 것은 정상 로직 (은행 출금 알림도 실제 지출이므로)
+- KB 은행 SMS에 "신한카드"가 표시되는 것은 신한카드 대금이 KB 계좌에서 출금되는 정상 케이스
+- 근본 문제는 메인 그룹 대표 SMS가 "카드 대금 출금" 알림일 때 그 cardName이 전체 그룹에 전파되는 구조 — 유사도 상향으로 그룹 분리 유도
+
+---
+
+## 2026-02-25 - 임베딩 차원 축소 (3072 → 768)
+
+### 작업 내용
+
+#### 임베딩 차원 768 변경
+- Gemini Embedding API `outputDimensionality=768` 파라미터 설정
+- Matryoshka Representation Learning 활용 — 3072→768 축소 시 MTEB 품질 손실 0.26%
+- 변경 이유: 저장/전송 크기 75% 절감, 코사인 유사도 연산 75% 감소, RTDB 대역폭 절약
+
+#### 변경 파일 (코드 4개)
+- `SmsEmbeddingService.kt` — `EMBEDDING_DIMENSION=768` 상수 추가, embedContent/batchEmbedContents에 outputDimensionality 설정
+- `SmsTemplateEngine.kt` — batchEmbedContents에 outputDimensionality 설정
+- `DatabaseMigrations.kt` — v3→v4 마이그레이션 (sms_patterns, store_embeddings 데이터 삭제)
+- `AppDatabase.kt` — version 3→4, `DatabaseModule.kt` — MIGRATION_3_4 등록
+
+#### 코드 주석 갱신 (6개)
+- `RemoteSmsRule.kt`, `SmsGroupClassifier.kt`, `SmsPatternMatcher.kt`
+- `SmsPipeline.kt`, `SmsPipelineModels.kt`, `SmsTemplateEngine.kt`
+
+#### 문서 갱신 (6개)
+- `SMS_PARSING.md` — 6건 3072→768
+- `CATEGORY_CLASSIFICATION.md`, `PROJECT_CONTEXT.md` (2건), `SCREEN_REQUIREMENTS.md`
+- `AI_HANDOFF.md` — DB 버전 v3→v4, 완료 작업 추가
+
+### 결정 사항
+- 768차원 선택 이유: Gemini의 Matryoshka 지원으로 별도 모델 변경 없이 축소 가능, 0.26% 품질 손실은 SMS/가게명 유사도 매칭에 무시 가능한 수준
+- DB 마이그레이션 전략: DELETE (테이블 유지, 데이터만 삭제) — 재동기화 시 768차원으로 자동 재생성
+- RTDB 기존 표본 주의: sms_origin에 수집된 3072차원 임베딩은 새 768차원과 호환 불가. 추후 큐레이션 시 768차원으로 재임베딩 필요
+
+---
+
+## 2026-02-25 - PR #33 MainViewModel 리팩토링 리뷰 확인
+
+### 작업 내용
+
+#### PR #33 Codex 리뷰 확인
+- `refactor/main-viewmodel` 브랜치 PR #33에 Codex 봇 리뷰 1건 확인
+- P2: `onAppResume()`에서 SMS 권한 없을 때 `DataRefreshEvent`를 emit하지 않아 수동 입력 데이터 갱신 누락 가능성 지적
+- 분석: 편집 화면(카테고리 변경, 상세 편집 등)은 자체적으로 refresh 이벤트를 발행하므로 실질적 문제 발생 가능성 낮음
+
+#### 매 진입 시 권한 재요청 팝업 검토
+- 현재 PermissionScreen은 첫 실행 시 1회만 표시 (onboardingCompleted 마킹)
+- 매번 표시 방안 검토 → 기각
+  - UX 피로감: 거부한 사용자에게 반복 노출 시 이탈 유발
+  - Google Play 정책: "disruptive permissions request" 위반 가능성
+  - 시스템 제한: 2회 거부 시 "다시 묻지 않기"로 전환되어 팝업 자체가 안 뜸
+
+### 결정 사항
+- Codex P2 리뷰: 현행 유지 (코드 수정 없음)
+- 권한 재요청 UX: 현행 유지 (첫 실행 시 1회 + 기능 사용 시 시스템 다이얼로그)
+
+---
+
 ## 2026-02-24 - Vico 차트 수정 + 홈 UI 간소화
 
 ### 작업 내용

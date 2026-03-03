@@ -2,7 +2,6 @@ package com.sanha.moneytalk.core.util
 
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
@@ -94,7 +93,6 @@ class GoogleDriveHelper @Inject constructor() {
                 val account = task.result
                 if (account != null) {
                     initializeDriveService(context, account)
-                    Log.d("GoogleDriveHelper", "Silent sign-in 즉시 성공: ${account.email}")
                 }
                 return account
             }
@@ -104,16 +102,13 @@ class GoogleDriveHelper @Inject constructor() {
                 task.addOnSuccessListener { account ->
                     if (account != null) {
                         initializeDriveService(context, account)
-                        Log.d("GoogleDriveHelper", "Silent sign-in 성공: ${account.email}")
                     }
                     cont.resume(account)
                 }.addOnFailureListener { e ->
-                    Log.d("GoogleDriveHelper", "Silent sign-in 실패: ${e.message}")
                     cont.resume(null)
                 }
             }
         } catch (e: Exception) {
-            Log.d("GoogleDriveHelper", "Silent sign-in 예외: ${e.message}")
             null
         }
     }

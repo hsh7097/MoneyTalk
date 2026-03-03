@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.core.sms2
 
-import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,7 +21,6 @@ import javax.inject.Singleton
 class SmsPreFilter @Inject constructor() {
 
     companion object {
-        private const val TAG = "SmsPreFilter"
 
         /**
          * 비결제 SMS 키워드 (통합)
@@ -54,6 +52,10 @@ class SmsPreFilter @Inject constructor() {
             "결제내역", "명세서", "청구서", "이용대금", "결제예정", "결제일",
             "결제금액", "카드대금", "결제대금", "청구금액",
             "출금예정", "출금 예정", "자동이체", "납부안내", "납입일",
+            "실패",
+            // 비거래 패턴 (운영 로그 기반)
+            "민생회복 소비쿠폰", "승인거절", "정지카드", "가맹점이용취소",
+            "통지수수료", "카드발급", "발급완료",
             // 배송
             "배송", "택배", "운송장", "주문",
             // 기타
@@ -70,6 +72,26 @@ class SmsPreFilter @Inject constructor() {
          * filter() 호출 시 매번 keyword.lowercase() 생성 방지.
          */
         private val NON_PAYMENT_KEYWORDS_LOWER = NON_PAYMENT_KEYWORDS.map { it.lowercase() }
+
+        /**
+         * 수입 보호 키워드
+         *
+         * NON_PAYMENT_KEYWORDS와 수입 키워드가 동시에 포함된 SMS를 보호.
+         * 예: "보험금 입금", "자동이체입금", "보험금 지급" → "보험금"/"자동이체"로 필터되지 않도록
+         * 이 키워드가 하나라도 있으면 비결제 키워드 필터를 스킵 → SmsIncomeFilter에서 정확히 분류.
+         */
+        private val INCOME_PROTECTION_KEYWORDS = listOf(
+            "입금", "급여", "월급", "환급", "송금", "정산", "지급",
+            "출금취소", "승인취소", "결제취소"
+        )
+
+        private val HIGH_CONFIDENCE_NON_PAYMENT_PATTERNS = listOf(
+            Regex("""민생회복\s*소비쿠폰"""),
+            Regex("""승인거절"""),
+            Regex("""정지카드"""),
+            Regex("""가맹점이용취소[\s\S]{0,20}입금"""),
+            Regex("""통지수수료""")
+        )
 
         /** HTTP 링크 패턴 — 광고/안내 링크 포함 SMS 제외용 */
         private val HTTP_PATTERN = Regex("https?://", RegexOption.IGNORE_CASE)
@@ -124,7 +146,6 @@ class SmsPreFilter @Inject constructor() {
             true
         }
 
-        Log.d(TAG, "입력: ${smsList.size}건 → 통과: ${result.size}건 (제거: ${smsList.size - result.size}건)")
 
         return result
     }
@@ -138,8 +159,19 @@ class SmsPreFilter @Inject constructor() {
      * @return true = 비결제 (필터링 대상)
      */
     internal fun isObviouslyNonPayment(body: String): Boolean {
+        if (isHighConfidenceNonPayment(body)) return true
+
         val lowerBody = body.lowercase()
+
+        // 수입 보호: 수입 키워드가 포함된 SMS는 필터링하지 않고 SmsIncomeFilter로 전달
+        // 예: "보험금 입금 완료" → "보험금"(비결제)보다 "입금"(수입)이 우선
+        if (INCOME_PROTECTION_KEYWORDS.any { lowerBody.contains(it) }) return false
+
         return NON_PAYMENT_KEYWORDS_LOWER.any { lowerBody.contains(it) }
+    }
+
+    private fun isHighConfidenceNonPayment(body: String): Boolean {
+        return HIGH_CONFIDENCE_NON_PAYMENT_PATTERNS.any { it.containsMatchIn(body) }
     }
 
     /**

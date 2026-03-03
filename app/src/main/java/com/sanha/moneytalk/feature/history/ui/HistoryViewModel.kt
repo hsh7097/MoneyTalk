@@ -147,16 +147,7 @@ data class HistoryUiState(
     val showIncomes: Boolean = true,
     // 다이얼로그 상태 (Composable에서 remember 대신 ViewModel에서 관리)
     val selectedExpense: ExpenseEntity? = null,
-    val selectedIncome: IncomeEntity? = null,
-    // 월별 동기화 해제 여부
-    val syncedMonths: Set<String> = emptySet(),
-    val isLegacyFullSyncUnlocked: Boolean = false,
-    val showFullSyncAdDialog: Boolean = false,
-    // 동기화 진행 다이얼로그
-    val showSyncDialog: Boolean = false,
-    val syncProgress: String = "",
-    val syncProgressCurrent: Int = 0,
-    val syncProgressTotal: Int = 0
+    val selectedIncome: IncomeEntity? = null
 ) {
     /** 현재 선택 월의 페이지 데이터 (하위 호환용) */
     private val currentPageData: HistoryPageData
@@ -194,8 +185,7 @@ class HistoryViewModel @Inject constructor(
     private val snackbarBus: AppSnackbarBus,
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
     @ApplicationContext private val context: Context,
-    private val analyticsHelper: AnalyticsHelper,
-    val rewardAdManager: com.sanha.moneytalk.core.ad.RewardAdManager
+    private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HistoryUiState())
@@ -207,15 +197,11 @@ class HistoryViewModel @Inject constructor(
     /** 페이지 캐시 최대 허용 범위 (현재 월 ± 이 값) */
     private companion object {
         const val PAGE_CACHE_RANGE = 2
-
-        /** 초기 동기화 제한 기간 (2개월, 밀리초) — HomeViewModel과 동일값 */
-        const val DEFAULT_SYNC_PERIOD_MILLIS = 60L * 24 * 60 * 60 * 1000
     }
 
     init {
         loadSettings()
         observeDataRefreshEvents()
-        observeSyncProgress()
     }
 
     // ========== 페이지 캐시 관리 ==========
@@ -286,7 +272,11 @@ class HistoryViewModel @Inject constructor(
                     }
 
                     DataRefreshEvent.RefreshType.SMS_RECEIVED -> {
-                        // HomeViewModel이 증분 동기화 처리 → TRANSACTION_ADDED로 갱신됨
+                        // MainViewModel이 증분 동기화 처리 → TRANSACTION_ADDED로 갱신됨
+                    }
+
+                    DataRefreshEvent.RefreshType.DEBUG_FULL_SYNC_ALL_MESSAGES -> {
+                        // MainViewModel이 전체 동기화 수행 후 TRANSACTION_ADDED로 갱신됨
                     }
                 }
             }
@@ -320,18 +310,6 @@ class HistoryViewModel @Inject constructor(
                     clearAllPageCache()
                     loadCurrentAndAdjacentPages()
                 }
-        }
-        viewModelScope.launch {
-            settingsDataStore.syncedMonthsFlow.collect { months ->
-                _uiState.update { it.copy(syncedMonths = months) }
-            }
-        }
-        // 레거시 전역 동기화 해제 상태 (FULL_SYNC_UNLOCKED=true 마이그레이션 호환)
-        @Suppress("DEPRECATION")
-        viewModelScope.launch {
-            settingsDataStore.fullSyncUnlockedFlow.collect { unlocked ->
-                _uiState.update { it.copy(isLegacyFullSyncUnlocked = unlocked) }
-            }
         }
     }
 
@@ -1066,94 +1044,4 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
-    // ========== 전체 동기화 해제 (광고) ==========
-
-    /**
-     * 해당 페이지의 커스텀 월이 동기화 범위에 부분만 포함되는지 판단
-     *
-     * 해당 월이 이미 동기화(광고 시청) 되었으면 → false (완전 커버)
-     * 미동기화 시 → 커스텀 월 시작이 (현재 - DEFAULT_SYNC_PERIOD_MILLIS) 이전이면 부분 커버
-     */
-    fun isPagePartiallyCovered(year: Int, month: Int): Boolean {
-        val state = _uiState.value
-        // 레거시 전역 해제 또는 월별 해제 시 완전 커버로 처리
-        if (state.isLegacyFullSyncUnlocked) return false
-        val yearMonth = String.format("%04d-%02d", year, month)
-        if (yearMonth in state.syncedMonths) return false
-        val (customMonthStart, _) = DateUtils.getCustomMonthPeriod(
-            year, month, state.monthStartDay
-        )
-        val syncCoverageStart = System.currentTimeMillis() - DEFAULT_SYNC_PERIOD_MILLIS
-        return customMonthStart < syncCoverageStart
-    }
-
-    /** 해당 월이 이미 동기화(광고 시청) 되었는지 확인 */
-    fun isMonthSynced(year: Int, month: Int): Boolean {
-        val state = _uiState.value
-        // 레거시: 기존 FULL_SYNC_UNLOCKED=true 사용자는 모든 월 해제로 처리
-        if (state.isLegacyFullSyncUnlocked) return true
-        val yearMonth = String.format("%04d-%02d", year, month)
-        return yearMonth in state.syncedMonths
-    }
-
-    /** 전체 동기화 광고 프리로드 */
-    fun preloadFullSyncAd() {
-        rewardAdManager.preloadAd()
-    }
-
-    /** 전체 동기화 광고 다이얼로그 표시 */
-    fun showFullSyncAdDialog() {
-        rewardAdManager.preloadAd()
-        _uiState.update { it.copy(showFullSyncAdDialog = true) }
-    }
-
-    /** 전체 동기화 광고 다이얼로그 닫기 */
-    fun dismissFullSyncAdDialog() {
-        _uiState.update { it.copy(showFullSyncAdDialog = false) }
-    }
-
-    /** 동기화 진행 상태 관찰 (HomeViewModel → DataRefreshEvent → HistoryViewModel) */
-    private fun observeSyncProgress() {
-        viewModelScope.launch {
-            var wasActive = false
-            dataRefreshEvent.syncProgress.collect { progress ->
-                _uiState.update {
-                    it.copy(
-                        showSyncDialog = progress.isActive,
-                        syncProgress = progress.step,
-                        syncProgressCurrent = progress.current,
-                        syncProgressTotal = progress.total
-                    )
-                }
-                // 동기화 완료 시 데이터 갱신
-                if (wasActive && !progress.isActive) {
-                    clearAllPageCache()
-                    loadCurrentAndAdjacentPages()
-                }
-                wasActive = progress.isActive
-            }
-        }
-    }
-
-    /** 증분 동기화 요청 — HomeViewModel에 위임 (전월 1일부터 동기화) */
-    fun requestIncrementalSync() {
-        dataRefreshEvent.requestIncrementalSync()
-    }
-
-    /** 월별 동기화 해제 (광고 시청 완료 후 호출) — HomeViewModel에 월별 sync 요청 */
-    fun unlockFullSync() {
-        viewModelScope.launch {
-            val state = _uiState.value
-            val yearMonth = String.format("%04d-%02d", state.selectedYear, state.selectedMonth)
-            settingsDataStore.addSyncedMonth(yearMonth)
-            _uiState.update { it.copy(showFullSyncAdDialog = false) }
-            val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(state.monthStartDay)
-            val isCurrentMonth = state.selectedYear == effYear && state.selectedMonth == effMonth
-            val monthLabel = if (isCurrentMonth) "이번달" else "${state.selectedMonth}월"
-            snackbarBus.show(context.getString(R.string.full_sync_unlocked_message, monthLabel))
-
-            // HomeViewModel에 해당 달 SMS 동기화 요청
-            dataRefreshEvent.requestMonthSync(state.selectedYear, state.selectedMonth)
-        }
-    }
 }

@@ -2,6 +2,7 @@ package com.sanha.moneytalk.feature.settings.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +23,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Backup
-import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.ContentCopy
@@ -32,9 +32,11 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -72,6 +74,7 @@ import com.sanha.moneytalk.core.ui.component.settings.SettingsItemCompose
 import com.sanha.moneytalk.core.ui.component.settings.SettingsItemInfo
 import com.sanha.moneytalk.core.ui.component.settings.SettingsSectionCompose
 import com.sanha.moneytalk.core.util.DataBackupManager
+import com.sanha.moneytalk.feature.smssettings.ui.SmsSettingsActivity
 import kotlinx.coroutines.launch
 
 /** 설정 탭 메인 화면. API 키, 월 시작일, 카드 관리, 데이터 관리 등 앱 설정 항목을 표시 */
@@ -323,22 +326,30 @@ fun SettingsScreen(
 
             // 데이터 관리
             item {
-                val userKeywordCount = uiState.exclusionKeywords.count { it.source != "default" }
-                val defaultKeywordCount = uiState.exclusionKeywords.count { it.source == "default" }
-
                 SettingsSectionCompose(title = stringResource(R.string.settings_section_data)) {
                     SettingsItemCompose(
                         info = object : SettingsItemInfo {
-                            override val icon = Icons.Default.Block
-                            override val title = stringResource(R.string.settings_exclusion_title)
-                            override val subtitle = if (uiState.exclusionKeywords.isNotEmpty()) {
-                                stringResource(R.string.settings_exclusion_subtitle_count, userKeywordCount, defaultKeywordCount)
-                            } else {
-                                stringResource(R.string.settings_exclusion_subtitle_empty)
-                            }
+                            override val icon = Icons.Default.Sms
+                            override val title = stringResource(R.string.sms_settings_title)
+                            override val subtitle = stringResource(R.string.sms_settings_subtitle)
                         },
-                        onClick = { viewModel.onIntent(SettingsIntent.ShowExclusionKeywordDialog) }
+                        onClick = {
+                            context.startActivity(Intent(context, SmsSettingsActivity::class.java))
+                        }
                     )
+                    if (BuildConfig.DEBUG) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        SettingsItemCompose(
+                            info = object : SettingsItemInfo {
+                                override val icon = Icons.Default.Refresh
+                                override val title = stringResource(R.string.settings_debug_full_sync_title)
+                                override val subtitle = stringResource(R.string.settings_debug_full_sync_subtitle)
+                            },
+                            onClick = {
+                                viewModel.onIntent(SettingsIntent.DebugFullSyncAllMessages)
+                            }
+                        )
+                    }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SettingsItemCompose(
                         info = object : SettingsItemInfo {
@@ -642,21 +653,6 @@ fun SettingsScreen(
 
         SettingsDialog.PRIVACY -> {
             PrivacyPolicyDialog(onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) })
-        }
-
-        SettingsDialog.EXCLUSION_KEYWORD -> {
-            ExclusionKeywordDialog(
-                keywords = uiState.exclusionKeywords,
-                onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) },
-                onAdd = { keyword -> viewModel.onIntent(SettingsIntent.AddExclusionKeyword(keyword)) },
-                onRemove = { keyword ->
-                    viewModel.onIntent(
-                        SettingsIntent.RemoveExclusionKeyword(
-                            keyword
-                        )
-                    )
-                }
-            )
         }
 
         SettingsDialog.MONTHLY_BUDGET -> {

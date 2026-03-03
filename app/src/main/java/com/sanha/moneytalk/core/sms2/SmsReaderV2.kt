@@ -1,9 +1,11 @@
 package com.sanha.moneytalk.core.sms2
 
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.Telephony
-import android.util.Log
+import com.sanha.moneytalk.core.database.SmsBlockedSenderRepository
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -22,10 +24,11 @@ import javax.inject.Singleton
  * - RCS: content://im/chat (date 밀리초, 삼성 기기)
  */
 @Singleton
-class SmsReaderV2 @Inject constructor() {
+class SmsReaderV2 @Inject constructor(
+    private val smsBlockedSenderRepository: SmsBlockedSenderRepository
+) {
 
     companion object {
-        private const val TAG = "SmsReaderV2"
 
         // MMS URI
         private val MMS_INBOX_URI = Uri.parse("content://mms/inbox")
@@ -33,6 +36,9 @@ class SmsReaderV2 @Inject constructor() {
 
         // RCS (채팅+) URI — 삼성 메시지 앱에서 사용
         private val RCS_URI = Uri.parse("content://im/chat")
+
+        /** RCS JSON에서 텍스트를 찾을 키 목록 */
+        private val TEXT_KEYS = listOf("text", "description", "body", "title", "content", "message", "msg")
     }
 
     /**
@@ -46,24 +52,21 @@ class SmsReaderV2 @Inject constructor() {
      * @param endDate 종료 시간 (밀리초)
      * @return 모든 메시지의 SmsInput 리스트 (최신순 정렬, id 중복 제거)
      */
-    fun readAllMessagesByDateRange(
+    suspend fun readAllMessagesByDateRange(
         contentResolver: ContentResolver,
         startDate: Long,
         endDate: Long
     ): List<SmsInput> {
-        val sdfRange = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.KOREA)
-        Log.d(TAG, "readAllMessagesByDateRange: 요청 범위 ${sdfRange.format(java.util.Date(startDate))} ~ ${sdfRange.format(java.util.Date(endDate))}")
+        val blockedAddressSet = smsBlockedSenderRepository.getBlockedAddressSet()
+        val smsList = readAllSmsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
+        val mmsList = readAllMmsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
+        val rcsList = readAllRcsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
 
-        val smsList = readAllSmsByDateRange(contentResolver, startDate, endDate)
-        val mmsList = readAllMmsByDateRange(contentResolver, startDate, endDate)
-        val rcsList = readAllRcsByDateRange(contentResolver, startDate, endDate)
+        MoneyTalkLogger.i("[SmsReaderV2] 채널별 읽기 결과: SMS=${smsList.size}, MMS=${mmsList.size}, RCS=${rcsList.size}")
 
-        val combined = (smsList + mmsList + rcsList)
+        return (smsList + mmsList + rcsList)
             .distinctBy { it.id }
             .sortedByDescending { it.date }
-
-        Log.d(TAG, "readAllMessagesByDateRange: SMS ${smsList.size}건 + MMS ${mmsList.size}건 + RCS ${rcsList.size}건 = 총 ${combined.size}건")
-        return combined
     }
 
     // ========== SMS 읽기 ==========
@@ -71,10 +74,12 @@ class SmsReaderV2 @Inject constructor() {
     private fun readAllSmsByDateRange(
         contentResolver: ContentResolver,
         startDate: Long,
-        endDate: Long
+        endDate: Long,
+        blockedAddressSet: Set<String>
     ): List<SmsInput> {
         val result = mutableListOf<SmsInput>()
         var senderSkipCount = 0
+        var blockedSenderSkipCount = 0
         var totalCursorCount = 0
 
         val cursor = contentResolver.query(
@@ -103,6 +108,11 @@ class SmsReaderV2 @Inject constructor() {
                 val body = it.getString(bodyIndex) ?: continue
                 val date = it.getLong(dateIndex)
 
+                if (shouldSkipBlockedSender(address, blockedAddressSet)) {
+                    blockedSenderSkipCount++
+                    continue
+                }
+
                 if (SmsFilter.shouldSkipBySender(address, body)) {
                     senderSkipCount++
                     continue
@@ -119,7 +129,7 @@ class SmsReaderV2 @Inject constructor() {
             }
         }
 
-        Log.d(TAG, "SMS 읽기: cursor ${totalCursorCount}건 → 반환 ${result.size}건 (010/070 제외: ${senderSkipCount}건)")
+        MoneyTalkLogger.i("[SmsReaderV2][SMS] 총 ${totalCursorCount}건 조회, ${result.size}건 통과, sender스킵=${senderSkipCount}, blocked스킵=${blockedSenderSkipCount}")
         return result
     }
 
@@ -128,10 +138,13 @@ class SmsReaderV2 @Inject constructor() {
     private fun readAllMmsByDateRange(
         contentResolver: ContentResolver,
         startDate: Long,
-        endDate: Long
+        endDate: Long,
+        blockedAddressSet: Set<String>
     ): List<SmsInput> {
         val result = mutableListOf<SmsInput>()
         var senderSkipCount = 0
+        var blockedSenderSkipCount = 0
+        var totalCursorCount = 0
         val startSec = startDate / 1000
         val endSec = endDate / 1000
 
@@ -149,12 +162,18 @@ class SmsReaderV2 @Inject constructor() {
                 val dateIndex = it.getColumnIndex("date")
 
                 while (it.moveToNext()) {
+                    totalCursorCount++
                     val mmsId = it.getString(idIndex) ?: continue
                     val dateSec = it.getLong(dateIndex)
                     val dateMs = dateSec * 1000
 
                     val body = getMmsTextBody(contentResolver, mmsId) ?: continue
                     val address = getMmsAddress(contentResolver, mmsId)
+
+                    if (shouldSkipBlockedSender(address, blockedAddressSet)) {
+                        blockedSenderSkipCount++
+                        continue
+                    }
 
                     if (SmsFilter.shouldSkipBySender(address, body)) {
                         senderSkipCount++
@@ -172,10 +191,10 @@ class SmsReaderV2 @Inject constructor() {
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "MMS 읽기 실패: ${e.message}")
+            MoneyTalkLogger.e("MMS 읽기 실패: ${e.message}")
         }
 
-        Log.d(TAG, "MMS 읽기: ${result.size}건 (010/070 제외: ${senderSkipCount}건)")
+        MoneyTalkLogger.i("[SmsReaderV2][MMS] 총 ${totalCursorCount}건 조회, ${result.size}건 통과, sender스킵=${senderSkipCount}, blocked스킵=${blockedSenderSkipCount}")
         return result
     }
 
@@ -213,14 +232,14 @@ class SmsReaderV2 @Inject constructor() {
                                     sb.append(reader.readText())
                                 }
                             } catch (e: Exception) {
-                                Log.w(TAG, "MMS part 읽기 실패 (partId=$partId): ${e.message}")
+                                MoneyTalkLogger.w("MMS part 읽기 실패 (partId=$partId): ${e.message}")
                             }
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "MMS 본문 읽기 실패 (mmsId=$mmsId): ${e.message}")
+            MoneyTalkLogger.w("MMS 본문 읽기 실패 (mmsId=$mmsId): ${e.message}")
         }
         return sb.toString().takeIf { it.isNotBlank() }
     }
@@ -259,7 +278,7 @@ class SmsReaderV2 @Inject constructor() {
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "MMS 주소 읽기 실패 (mmsId=$mmsId): ${e.message}")
+            MoneyTalkLogger.w("MMS 주소 읽기 실패 (mmsId=$mmsId): ${e.message}")
         }
         return "unknown"
     }
@@ -269,11 +288,16 @@ class SmsReaderV2 @Inject constructor() {
     private fun readAllRcsByDateRange(
         contentResolver: ContentResolver,
         startDate: Long,
-        endDate: Long
+        endDate: Long,
+        blockedAddressSet: Set<String>
     ): List<SmsInput> {
         val result = mutableListOf<SmsInput>()
         var senderSkipCount = 0
-        if (!isRcsAvailable(contentResolver)) return result
+        var blockedSenderSkipCount = 0
+        var totalCursorCount = 0
+        val rcsAvailable = isRcsAvailable(contentResolver)
+        MoneyTalkLogger.i("[SmsReaderV2][RCS] 가용 여부: $rcsAvailable")
+        if (!rcsAvailable) return result
 
         try {
             val cursor = contentResolver.query(
@@ -291,6 +315,7 @@ class SmsReaderV2 @Inject constructor() {
                 val dateIndex = it.getColumnIndex("date")
 
                 while (it.moveToNext()) {
+                    totalCursorCount++
                     it.getString(idIndex) ?: continue
                     val address = it.getString(addressIndex) ?: continue
                     val rawBody = it.getString(bodyIndex) ?: continue
@@ -298,6 +323,11 @@ class SmsReaderV2 @Inject constructor() {
                     val body = extractRcsText(rawBody)
 
                     if (body.isBlank()) continue
+
+                    if (shouldSkipBlockedSender(address, blockedAddressSet)) {
+                        blockedSenderSkipCount++
+                        continue
+                    }
 
                     if (SmsFilter.shouldSkipBySender(address, body)) {
                         senderSkipCount++
@@ -315,11 +345,18 @@ class SmsReaderV2 @Inject constructor() {
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "RCS 읽기 실패: ${e.message}")
+            MoneyTalkLogger.e("RCS 읽기 실패: ${e.message}")
         }
 
-        Log.d(TAG, "RCS 읽기: ${result.size}건 (010/070 제외: ${senderSkipCount}건)")
+        MoneyTalkLogger.i("[SmsReaderV2][RCS] 총 ${totalCursorCount}건 조회, ${result.size}건 통과, sender스킵=${senderSkipCount}, blocked스킵=${blockedSenderSkipCount}")
         return result
+    }
+
+    /** 수신거부 발신번호 여부 확인 */
+    private fun shouldSkipBlockedSender(address: String, blockedAddressSet: Set<String>): Boolean {
+        if (blockedAddressSet.isEmpty()) return false
+        val normalized = SmsFilter.normalizeAddress(address)
+        return normalized in blockedAddressSet
     }
 
     /**
@@ -337,13 +374,19 @@ class SmsReaderV2 @Inject constructor() {
         return try {
             val json = JSONObject(trimmed)
 
-            for (key in listOf("text", "body", "message", "msg", "content")) {
+            // 1. 최상위에서 text 키 우선 탐색 (JSON 값은 스킵)
+            for (key in TEXT_KEYS) {
                 val value = json.optString(key, "")
-                if (value.isNotBlank()) {
+                if (value.isNotBlank() && !value.startsWith("{")) {
                     return value
                 }
             }
 
+            // 2. nested JSONObject 재귀 탐색 (generalPurposeCard 등)
+            val nested = extractTextFromNestedRcs(json)
+            if (nested.isNotBlank()) return nested
+
+            // 3. layout 기반 추출
             val layoutStr = json.optString("layout", "")
             if (layoutStr.isNotBlank() && layoutStr.startsWith("{")) {
                 val layoutJson = JSONObject(layoutStr)
@@ -358,6 +401,52 @@ class SmsReaderV2 @Inject constructor() {
         } catch (e: Exception) {
             rawBody
         }
+    }
+
+    /**
+     * nested RCS JSON에서 텍스트 재귀 추출
+     *
+     * generalPurposeCard 등 nested 구조에서 description/text/title 필드를 찾는다.
+     * TEXT_KEYS 값이 JSONObject인 경우(예: content가 JSONObject)도 재귀 처리.
+     * 최대 깊이 5로 제한하여 무한 재귀 방지.
+     */
+    private fun extractTextFromNestedRcs(json: JSONObject, depth: Int = 0): String {
+        if (depth > 5) return ""
+
+        // 현재 레벨에서 텍스트 필드 탐색 (plain string 우선, JSONObject는 재귀)
+        for (key in TEXT_KEYS) {
+            val raw = json.opt(key) ?: continue
+            when {
+                // plain string → 바로 반환
+                raw is String && raw.isNotBlank() && !raw.startsWith("{") -> return raw
+                // JSONObject → 재귀 추출
+                raw is JSONObject -> {
+                    val extracted = extractTextFromNestedRcs(raw, depth + 1)
+                    if (extracted.isNotBlank()) return extracted
+                }
+                // JSON 형태 문자열 → 파싱 후 재귀 추출
+                raw is String && raw.isNotBlank() && raw.startsWith("{") -> {
+                    try {
+                        val nested = JSONObject(raw)
+                        val extracted = extractTextFromNestedRcs(nested, depth + 1)
+                        if (extracted.isNotBlank()) return extracted
+                    } catch (_: Exception) { /* 유효하지 않은 JSON, 건너뜀 */ }
+                }
+            }
+        }
+
+        // 하위 JSONObject 재귀 탐색
+        val keys = json.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val child = json.optJSONObject(key)
+            if (child != null) {
+                val extracted = extractTextFromNestedRcs(child, depth + 1)
+                if (extracted.isNotBlank()) return extracted
+            }
+        }
+
+        return ""
     }
 
     /**

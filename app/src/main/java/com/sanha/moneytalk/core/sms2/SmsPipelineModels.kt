@@ -38,14 +38,14 @@ data class SmsInput(
  * - input.body: 원본 (파싱/LLM에 사용)
  * - template: 금액/날짜/가게명을 플레이스홀더로 치환한 텍스트 (임베딩 생성용)
  *   예: "[KB]{DATE} {TIME} {STORE} 체크카드출금 {AMOUNT} 잔액{AMOUNT}"
- * - embedding: template로부터 생성된 3072차원 벡터 (유사도 비교 + 그룹핑)
+ * - embedding: template로부터 생성된 768차원 벡터 (유사도 비교 + 그룹핑)
  */
 data class EmbeddedSms(
     /** ★ 원본 포함 (input.body로 접근) */
     val input: SmsInput,
     /** 템플릿화된 텍스트 (SmsTemplateEngine.templateize 결과) */
     val template: String,
-    /** 3072차원 임베딩 벡터 (SmsEmbeddingService.generateEmbeddings 결과) */
+    /** 768차원 임베딩 벡터 (SmsEmbeddingService.generateEmbeddings 결과) */
     val embedding: List<Float>
 )
 
@@ -109,10 +109,20 @@ data class SyncStats(
     val paymentCandidates: Int = 0,
     val incomeCandidates: Int = 0,
     val skipped: Int = 0,
+    /** Step 1.5 sender regex Fast Path 매칭 건수 */
+    val fastPathMatchCount: Int = 0,
+    /** Step 1.5에서 Fast Path 미매칭되어 파이프라인으로 전달된 건수 */
+    val fallbackToPipelineCount: Int = 0,
+    /** Step 2 파이프라인 벡터 매칭 건수 */
+    val pipelineVectorMatchCount: Int = 0,
     /** Step 4에서 벡터 매칭 성공 건수 (기존 패턴 재사용) */
     val vectorMatchCount: Int = 0,
     /** Step 5에서 LLM 처리 건수 (신규 패턴 생성) */
     val llmProcessCount: Int = 0,
     /** 새로 생성된 패턴 DB 수 (vectorMatchCount + llmProcessCount 합산 가능) */
-    val newPatternsCreated: Int = 0
+    val newPatternsCreated: Int = 0,
+    /** Step 4.5에서 regex 실패→LLM 복구된 건수 (기존 패턴, 신규 패턴 아님) */
+    val regexFailedRecoveredCount: Int = 0,
+    /** Step 2 파이프라인 처리 중 최종 파싱 누락 건수 */
+    val pipelineDroppedCount: Int = 0
 )
