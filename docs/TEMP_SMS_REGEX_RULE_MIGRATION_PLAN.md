@@ -40,6 +40,7 @@
 | 2026-03-03 | Fallback Trace | `codex/sms-regex-phase1-schema` | 폴백 추적 로그 강화: Step1.5 fallback 입력 preview, Step5-A/B 입력/결과/미확정(unresolved) SMS id/주소/본문 요약 로그 추가. 비결제 판정/추출 실패로 드랍된 케이스 식별 가능하도록 보강 | 완료 |
 | 2026-03-03 | Fallback Hotfix | `codex/sms-regex-phase1-schema` | `16449999` 출금 멀티라인 변형(중간 reference 줄 포함) 전용 asset 룰 추가, `processGroup` NON_PAYMENT 상세 로그(LLM 추출 필드+대표 본문 preview) 보강 | 완료 |
 | 2026-03-03 | Rule Guide | `codex/sms-regex-phase1-schema` | `SMS_RULE_JSON_UPDATE_GUIDE.md` 추가: CSV 기반 룰 추출, `ruleKey` 생성, priority 기준, 검증/반영 절차 문서화 | 완료 |
+| 2026-03-03 | Rule Guide V2 | `codex/sms-regex-phase1-schema` | 가이드 상세화: 런타임 병합 순서(Asset+RTDB), 속도 해석 기준, `sms_origin` 성공/실패 업로드 정책, JSON 주석 금지/INACTIVE 운영 원칙 추가 | 완료 |
 
 ## 3. 확정 설계 원칙
 
