@@ -18,6 +18,7 @@ import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.util.DataRefreshEvent
+import com.sanha.moneytalk.core.util.CardNameNormalizer
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.sms2.SmsIncomeParser
 import com.sanha.moneytalk.core.sms2.SmsInput
@@ -581,7 +582,7 @@ class MainViewModel @Inject constructor(
                     amount = parsed.analysis.amount,
                     storeName = parsed.analysis.storeName,
                     category = category,
-                    cardName = parsed.analysis.cardName,
+                    cardName = CardNameNormalizer.normalizeWithFallback(parsed.analysis.cardName, parsed.input.body),
                     dateTime = DateUtils.parseDateTime(parsed.analysis.dateTime),
                     originalSms = parsed.input.body,
                     smsId = parsed.input.id,
