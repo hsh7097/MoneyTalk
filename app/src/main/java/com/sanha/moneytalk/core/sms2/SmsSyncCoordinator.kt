@@ -40,7 +40,8 @@ class SmsSyncCoordinator @Inject constructor(
     private val incomeFilter: SmsIncomeFilter,
     private val pipeline: SmsPipeline,
     private val regexRuleMatcher: SmsRegexRuleMatcher,
-    private val regexRuleSyncService: SmsRegexRuleSyncService
+    private val regexRuleSyncService: SmsRegexRuleSyncService,
+    private val originSampleCollector: SmsOriginSampleCollector
 ) {
 
     /**
@@ -86,6 +87,7 @@ class SmsSyncCoordinator @Inject constructor(
             )
         }
         MoneyTalkLogger.i("SmsSyncCoordinator 시작: 입력 ${smsList.size}건")
+        originSampleCollector.resetSession()
 
         runCatching {
             regexRuleSyncService.syncRules()

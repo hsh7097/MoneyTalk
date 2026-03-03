@@ -36,6 +36,7 @@
 | 2026-03-03 | Phase 5 | `codex/sms-regex-phase1-schema` | `collectSampleToRtdb`를 sender/type 결정적 키 기반으로 전환: `/sms_origin/{sender}/{type}/{sampleKey}` 저장, `sampleKey=sha256(sender|type|template|regex...)`, 원본/마스킹/템플릿/타입/fingerprint 스키마 고정 | 완료 |
 | 2026-03-03 | Phase 6 | `codex/sms-regex-phase1-schema` | 룰 운영 최적화 적용: match/fail 카운트 기반 priority 자동 보정, 실패 누적 룰 자동 `INACTIVE`, sender/type 활성 룰 상한(5개) 초과 시 자동 비활성화, `assembleDebug` 검증 완료 | 완료 |
 | 2026-03-03 | Rule Seed | `codex/sms-regex-phase1-schema` | `moneytalk_backup_20260303_143330.csv` 기반 발신번호별 에셋 룰 16개 생성 후 `sms_rules_v1.json` 반영(8개 sender), 표본 기준 커버리지 3503/3505(99.94%), 비거래 안내 2건은 의도적으로 제외 | 완료 |
+| 2026-03-03 | Failure Loop | `codex/sms-regex-phase1-schema` | `SmsOriginSampleCollector` 추가: 성공 표본(sender/type/fingerprint) 3개 제한, 실패 표본(failStage/failReason/matchedRuleKey) 누적 저장, 동일 fingerprint는 `count/lastSeenAt` 업데이트. Fast Path 실패/LLM 성공 모두 `sms_origin`으로 통합 | 완료 |
 
 ## 3. 확정 설계 원칙
 

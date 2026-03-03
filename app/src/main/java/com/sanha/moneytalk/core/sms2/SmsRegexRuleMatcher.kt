@@ -19,7 +19,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class SmsRegexRuleMatcher @Inject constructor(
-    private val ruleRepository: SmsRegexRuleRepository
+    private val ruleRepository: SmsRegexRuleRepository,
+    private val originSampleCollector: SmsOriginSampleCollector
 ) {
     data class RuleMatchResult(
         val matched: List<SmsParseResult>,
@@ -49,6 +50,14 @@ class SmsRegexRuleMatcher @Inject constructor(
 
     private val regexCache = ConcurrentHashMap<String, Regex>()
 
+    private data class MatchAttemptResult(
+        val parsed: SmsParseResult? = null,
+        val failReason: String = "",
+        val failStage: String = "fast_path_regex",
+        val matchedRuleKey: String = "",
+        val ruleType: String = ""
+    )
+
     suspend fun matchPaymentCandidates(inputs: List<SmsInput>): RuleMatchResult {
         if (inputs.isEmpty()) return RuleMatchResult(emptyList(), emptyList())
 
@@ -63,14 +72,31 @@ class SmsRegexRuleMatcher @Inject constructor(
             }
 
             if (senderRules.isEmpty()) {
+                collectFastPathFailure(
+                    input = input,
+                    normalizedSender = sender,
+                    type = "expense",
+                    failReason = "no_active_rule",
+                    failStage = "fast_path_rule_lookup",
+                    matchedRuleKey = ""
+                )
                 unmatched.add(input)
                 continue
             }
 
-            val parsed = matchOne(input = input, sender = sender, rules = senderRules)
+            val attempt = matchOne(input = input, sender = sender, rules = senderRules)
+            val parsed = attempt.parsed
             if (parsed != null) {
                 matched.add(parsed)
             } else {
+                collectFastPathFailure(
+                    input = input,
+                    normalizedSender = sender,
+                    type = attempt.ruleType.ifBlank { "expense" },
+                    failReason = attempt.failReason.ifBlank { "no_regex_match" },
+                    failStage = attempt.failStage,
+                    matchedRuleKey = attempt.matchedRuleKey
+                )
                 unmatched.add(input)
             }
         }
@@ -200,13 +226,20 @@ class SmsRegexRuleMatcher @Inject constructor(
         input: SmsInput,
         sender: String,
         rules: List<SmsRegexRuleEntity>
-    ): SmsParseResult? {
+    ): MatchAttemptResult {
         val normalizedBody = normalizeBody(input.body)
+        var lastFailure = MatchAttemptResult(failReason = "no_regex_match")
 
         for (rule in rules) {
             val regex = compileRegex(rule.bodyRegex)
             if (regex == null) {
                 markRuleFailure(sender, rule)
+                lastFailure = MatchAttemptResult(
+                    failReason = "invalid_regex",
+                    failStage = "fast_path_regex_compile",
+                    matchedRuleKey = rule.ruleKey,
+                    ruleType = rule.type
+                )
                 continue
             }
             val match = regex.find(normalizedBody) ?: continue
@@ -214,6 +247,11 @@ class SmsRegexRuleMatcher @Inject constructor(
             val amount = extractAmount(match, rule.amountGroup)
             if (amount == null || amount <= 0) {
                 markRuleFailure(sender, rule)
+                lastFailure = MatchAttemptResult(
+                    failReason = "amount_extract_failed",
+                    matchedRuleKey = rule.ruleKey,
+                    ruleType = rule.type
+                )
                 continue
             }
 
@@ -222,6 +260,11 @@ class SmsRegexRuleMatcher @Inject constructor(
                 ?.takeIf(::isValidStoreCandidate)
             if (storeName.isNullOrBlank()) {
                 markRuleFailure(sender, rule)
+                lastFailure = MatchAttemptResult(
+                    failReason = "store_extract_failed",
+                    matchedRuleKey = rule.ruleKey,
+                    ruleType = rule.type
+                )
                 continue
             }
 
@@ -234,21 +277,23 @@ class SmsRegexRuleMatcher @Inject constructor(
             val dateTime = extractDateTime(match, normalizedBody, input.date, rule.dateGroup)
             ruleRepository.incrementMatchCount(sender, rule.type, rule.ruleKey)
 
-            return SmsParseResult(
-                input = input,
-                analysis = SmsAnalysisResult(
-                    amount = amount,
-                    storeName = storeName,
-                    category = "미분류",
-                    dateTime = dateTime,
-                    cardName = cardName
-                ),
-                tier = 1,
-                confidence = 1.0f
+            return MatchAttemptResult(
+                parsed = SmsParseResult(
+                    input = input,
+                    analysis = SmsAnalysisResult(
+                        amount = amount,
+                        storeName = storeName,
+                        category = "미분류",
+                        dateTime = dateTime,
+                        cardName = cardName
+                    ),
+                    tier = 1,
+                    confidence = 1.0f
+                )
             )
         }
 
-        return null
+        return lastFailure
     }
 
     private suspend fun markRuleFailure(
@@ -261,6 +306,32 @@ class SmsRegexRuleMatcher @Inject constructor(
             ruleKey = rule.ruleKey,
             inactiveThreshold = RULE_FAIL_INACTIVE_THRESHOLD
         )
+    }
+
+    private fun collectFastPathFailure(
+        input: SmsInput,
+        normalizedSender: String,
+        type: String,
+        failReason: String,
+        failStage: String,
+        matchedRuleKey: String
+    ) {
+        runCatching {
+            originSampleCollector.collectFailure(
+                SmsOriginSampleCollector.FailureSample(
+                    senderAddress = input.address,
+                    normalizedSenderAddress = normalizedSender,
+                    type = type,
+                    originBody = input.body,
+                    parseSource = "fast_path",
+                    failStage = failStage,
+                    failReason = failReason,
+                    matchedRuleKey = matchedRuleKey
+                )
+            )
+        }.onFailure { e ->
+            MoneyTalkLogger.w("Fast Path 실패 표본 수집 예외(무시): ${e.message}")
+        }
     }
 
     private fun isEligibleType(type: String): Boolean {

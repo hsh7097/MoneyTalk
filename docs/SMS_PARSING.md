@@ -885,6 +885,7 @@ ORDER BY matchCount DESC LIMIT 1
 ### 수집 시점
 `SmsGroupClassifier.registerPaymentPattern()` → `collectSampleToRtdb()` 호출.
 모든 parseSource (llm, llm_regex, template_regex)에서 수집. 단, regex는 `llm_regex`만 포함.
+`SmsRegexRuleMatcher` Fast Path 실패 건은 `SmsOriginSampleCollector.collectFailure()`로 별도 수집.
 
 ### RTDB 데이터 구조
 
@@ -904,10 +905,16 @@ sms_origin/
               ├── maskedBody: String
               ├── cardName: String
               ├── parseSource: String
+              ├── outcome: String                  # success | fail
+              ├── failStage: String?               # fail일 때만
+              ├── failReason: String?              # fail일 때만
+              ├── matchedRuleKey: String?          # 있는 경우만 저장
               ├── groupMemberCount: Int
               ├── amountRegex: String?
               ├── storeRegex: String?
               ├── cardRegex: String?
+              ├── count: Int                       # 동일 fingerprint 누적 횟수
+              ├── lastSeenAt: Long
               ├── createdAt: Long
               └── updatedAt: Long
 ```
@@ -916,7 +923,8 @@ sms_origin/
 
 ```
 sampleKey = sha256(sender|type|template|amountRegex|storeRegex|cardRegex)
-sentSampleKeys(Set) 캐시로 세션 내 동일 sampleKey 재전송 스킵
+success: sender+type별 고유 fingerprint 최대 3개 유지 (대표 표본)
+fail: fingerprint 단위 row upsert + count/lastSeenAt 누적
 ```
 
 ### PII 마스킹 — `maskSmsBody(smsBody)`

@@ -2,8 +2,6 @@ package com.sanha.moneytalk.core.sms2
 
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
-import com.google.firebase.database.FirebaseDatabase
-
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
@@ -17,7 +15,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
-import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
@@ -65,7 +62,7 @@ import javax.inject.Singleton
  *   ※ LLM 호출 자체는 독립적이므로 core/sms 참조 허용
  * - SmsPatternDao (core/database) — 패턴 DB 등록
  * - SmsPatternMatcher (sms2) — regex 파싱 + 코사인 유사도
- * - FirebaseDatabase — RTDB 표본 수집
+ * - SmsOriginSampleCollector — RTDB 표본 수집
  */
 @Singleton
 class SmsGroupClassifier @Inject constructor(
@@ -73,7 +70,7 @@ class SmsGroupClassifier @Inject constructor(
     private val smsExtractor: GeminiSmsExtractor,
     private val patternMatcher: SmsPatternMatcher,
     private val templateEngine: SmsTemplateEngine,
-    private val database: FirebaseDatabase?
+    private val originSampleCollector: SmsOriginSampleCollector
 ) {
 
     companion object {
@@ -117,12 +114,6 @@ class SmsGroupClassifier @Inject constructor(
 
         /** 그룹 대표 추출 시 LLM에 전달할 컨텍스트 샘플 수 */
         private const val GROUP_CONTEXT_MAX_SAMPLES = 10
-
-        /** RTDB 표본 전송 키 캐시 최대 크기 (세션 중복 전송 방지) */
-        private const val SAMPLE_KEY_CACHE_MAX_SIZE = 500
-
-        /** RTDB 표본 저장 경로 */
-        private const val SMS_SAMPLES_PATH = "sms_origin"
 
         /** sender IN 쿼리 chunk 크기 (SQLite bind limit 여유) */
         private const val MAIN_PATTERN_QUERY_CHUNK_SIZE = 500
@@ -383,9 +374,6 @@ class SmsGroupClassifier @Inject constructor(
 
     /** Step4.5 regex 실패 복구 쿨다운 추적 */
     private val regexFailedRecoveryStates = ConcurrentHashMap<String, RegexFailureState>()
-
-    /** RTDB 중복 방지용 전송 키 기록 */
-    private val sentSampleKeys = linkedSetOf<String>()
 
     /** Phase4: 백그라운드 학습 큐 */
     private val learningScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -825,9 +813,6 @@ class SmsGroupClassifier @Inject constructor(
         onProgress: ((step: String, current: Int, total: Int) -> Unit)? = null
     ): List<SmsParseResult> {
         if (unmatchedList.isEmpty()) return emptyList()
-
-        // 세션 간 메모리 누적 방지: 매 classifyUnmatched 호출마다 캐시 초기화
-        synchronized(sentSampleKeys) { sentSampleKeys.clear() }
 
         val results = mutableListOf<SmsParseResult>()
 
@@ -2054,17 +2039,6 @@ class SmsGroupClassifier @Inject constructor(
         }
     }
 
-    /**
-     * RTDB 결정적 키용 SHA-256 hex
-     */
-    private fun sha256Hex(value: String): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-            .digest(value.toByteArray(Charsets.UTF_8))
-        return digest.joinToString(separator = "") { byte ->
-            String.format(Locale.ROOT, "%02x", byte)
-        }
-    }
-
     // ===== [5-3] 패턴 등록 =====
 
     /**
@@ -2152,11 +2126,9 @@ class SmsGroupClassifier @Inject constructor(
     // ===== [5-3] RTDB 표본 수집 =====
 
     /**
-     * RTDB에 SMS 샘플 수집 (비동기, 실패해도 무시)
+     * RTDB에 SMS 성공 샘플 수집
      *
-     * 목적: sender/type 기준 룰 생성용 표본 축적.
-     * 중복 방지: sender + type + template + regex fingerprint 결정적 키 사용.
-     * RTDB 경로: /sms_origin/{sender}/{type}/{sampleKey}
+     * 실제 적재 정책은 SmsOriginSampleCollector에서 통합 관리한다.
      */
     private fun collectSampleToRtdb(
         embedded: EmbeddedSms,
@@ -2167,81 +2139,28 @@ class SmsGroupClassifier @Inject constructor(
         cardRegex: String,
         groupMemberCount: Int
     ) {
-        val db = database ?: run {
-            MoneyTalkLogger.w("RTDB 표본 수집 스킵: FirebaseDatabase가 null")
-            return
-        }
+        val normalizedSender = normalizeAddress(embedded.input.address)
+        if (normalizedSender.isBlank()) return
 
-        try {
-            val normalizedSender = normalizeAddress(embedded.input.address)
-            if (normalizedSender.isBlank()) return
-
-            val sampleType = inferSampleType(embedded.input.body)
-            val fingerprintPayload = buildString {
-                append(normalizedSender)
-                append('|')
-                append(sampleType)
-                append('|')
-                append(embedded.template.trim())
-                append('|')
-                append(amountRegex.trim())
-                append('|')
-                append(storeRegex.trim())
-                append('|')
-                append(cardRegex.trim())
-            }
-            val sampleKey = sha256Hex(fingerprintPayload)
-
-            synchronized(sentSampleKeys) {
-                if (sentSampleKeys.contains(sampleKey)) return
-                if (sentSampleKeys.size >= SAMPLE_KEY_CACHE_MAX_SIZE) {
-                    val oldestKey = sentSampleKeys.firstOrNull()
-                    if (!oldestKey.isNullOrBlank()) {
-                        sentSampleKeys.remove(oldestKey)
-                    }
-                }
-                sentSampleKeys.add(sampleKey)
-            }
-
-            val originBody = embedded.input.body
-            val maskedBody = maskSmsBody(originBody)
-            val now = System.currentTimeMillis()
-
-            val ref = db.getReference(SMS_SAMPLES_PATH)
-                .child(normalizedSender)
-                .child(sampleType)
-                .child(sampleKey)
-            val data = mutableMapOf<String, Any>(
-                "sampleKey" to sampleKey,
-                "schemaVersion" to 1,
-                "senderAddress" to embedded.input.address,
-                "normalizedSenderAddress" to normalizedSender,
-                "type" to sampleType,
-                "template" to embedded.template,
-                "originBody" to originBody,
-                "maskedBody" to maskedBody,
-                "cardName" to cardName.ifBlank { "UNKNOWN" },
-                "parseSource" to parseSource,
-                "groupMemberCount" to groupMemberCount,
-                "fingerprint" to sampleKey,
-                "updatedAt" to now,
-                "createdAt" to now
+        runCatching {
+            originSampleCollector.collectSuccess(
+                SmsOriginSampleCollector.SuccessSample(
+                    senderAddress = embedded.input.address,
+                    normalizedSenderAddress = normalizedSender,
+                    type = inferSampleType(embedded.input.body),
+                    template = embedded.template,
+                    originBody = embedded.input.body,
+                    maskedBody = maskSmsBody(embedded.input.body),
+                    parseSource = parseSource,
+                    cardName = cardName,
+                    groupMemberCount = groupMemberCount,
+                    amountRegex = amountRegex,
+                    storeRegex = storeRegex,
+                    cardRegex = cardRegex
+                )
             )
-            if (amountRegex.isNotBlank()) data["amountRegex"] = amountRegex
-            if (storeRegex.isNotBlank()) data["storeRegex"] = storeRegex
-            if (cardRegex.isNotBlank()) data["cardRegex"] = cardRegex
-
-            ref.updateChildren(data)
-                .addOnSuccessListener {
-                }
-                .addOnFailureListener { e ->
-                    MoneyTalkLogger.e(
-                        "RTDB 표본 수집 실패: ${e.javaClass.simpleName}: ${e.message} " +
-                            "[$SMS_SAMPLES_PATH/$normalizedSender/$sampleType/$sampleKey]"
-                    )
-                }
-        } catch (e: Exception) {
-            MoneyTalkLogger.w("RTDB 표본 수집 예외 (무시): ${e.message}")
+        }.onFailure { e ->
+            MoneyTalkLogger.w("RTDB 성공 표본 수집 예외(무시): ${e.message}")
         }
     }
 
