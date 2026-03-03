@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+### Added (2026-03-03)
+- **SMS Regex Fast Path (Step 1.5)**: sender 기반 regex 룰 1차 파싱 — 매칭 성공 시 Vector/LLM 파이프라인 스킵
+- **sms_regex_rules 테이블**: DB v6→v7 마이그레이션, 복합PK (senderAddress+type+ruleKey), 17필드
+- **Asset seed + RTDB overlay**: `sms_rules_v1.json` 기본 룰 (8 sender, 16룰) + RTDB 실시간 보정
+- **SmsRegexRuleMatcher**: sender 룰 로드 → priority DESC 순차 매칭 → 통계 자동 갱신
+- **SmsOriginSampleCollector**: 성공/실패 표본 분리 수집, SHA-256 결정적 키, RTDB `/sms_origin/` 통합
+- **룰 자동 최적화**: `computeAdaptivePriority()`, 저품질 룰 자동 비활성화, sender/type별 5개 상한
+- **SMS_RULE_JSON_UPDATE_GUIDE.md**: CSV 기반 룰 추출, ruleKey 생성, 검증/반영 절차 문서화
+
 ### Changed (2026-03-01)
 - **targetSdk 35 마이그레이션**: compileSdk/targetSdk 34→35, AGP 8.2.2→8.7.3, Gradle 8.5→8.9, versionCode 2→3
 - **AdMob 테스트→실제 ID 전환**: APPLICATION_ID, 리워드 광고, 배너 광고 3화면 (BannerAdIds object)

@@ -15,11 +15,11 @@ com.sanha.moneytalk/
 │
 ├── core/                                  # 공통 모듈
 │   ├── database/                          # Room 데이터베이스
-│   │   ├── AppDatabase.kt                 # Room Database 정의 (v6, 10 entities)
-│   │   ├── DatabaseMigrations.kt          # Room 마이그레이션 (v5→v6)
+│   │   ├── AppDatabase.kt                 # Room Database 정의 (v7, 11 entities)
+│   │   ├── DatabaseMigrations.kt          # Room 마이그레이션 (v5→v6, v6→v7)
 │   │   ├── converter/
 │   │   │   └── FloatListConverter.kt      # Float 리스트 타입 컨버터
-│   │   ├── dao/                           # Data Access Objects (9개)
+│   │   ├── dao/                           # Data Access Objects (10개)
 │   │   │   ├── BudgetDao.kt              # 예산 DAO
 │   │   │   ├── CategoryMappingDao.kt     # 카테고리 매핑 DAO
 │   │   │   ├── ChatDao.kt               # 채팅 DAO
@@ -28,8 +28,9 @@ com.sanha.moneytalk/
 │   │   │   ├── OwnedCardDao.kt          # 소유 카드 DAO
 │   │   │   ├── SmsExclusionKeywordDao.kt # SMS 제외 키워드 DAO
 │   │   │   ├── SmsPatternDao.kt         # SMS 패턴 캐시 DAO
+│   │   │   ├── SmsRegexRuleDao.kt      # SMS regex 룰 DAO (Fast Path)
 │   │   │   └── StoreEmbeddingDao.kt     # 가게명 임베딩 DAO
-│   │   ├── entity/                       # Room Entities (10개)
+│   │   ├── entity/                       # Room Entities (11개)
 │   │   │   ├── BudgetEntity.kt           # 예산 Entity
 │   │   │   ├── CategoryMappingEntity.kt  # 카테고리 매핑 Entity
 │   │   │   ├── ChatEntity.kt            # 채팅 메시지 Entity
@@ -39,6 +40,7 @@ com.sanha.moneytalk/
 │   │   │   ├── OwnedCardEntity.kt       # 소유 카드 Entity (화이트리스트)
 │   │   │   ├── SmsExclusionKeywordEntity.kt # SMS 제외 키워드 Entity (블랙리스트)
 │   │   │   ├── SmsPatternEntity.kt      # SMS 패턴 캐시 Entity
+│   │   │   ├── SmsRegexRuleEntity.kt   # SMS regex 룰 Entity (Fast Path)
 │   │   │   └── StoreEmbeddingEntity.kt  # 가게명 벡터 임베딩 Entity
 │   │   ├── OwnedCardRepository.kt        # 카드 화이트리스트 + CardNameNormalizer 연동
 │   │   └── SmsExclusionRepository.kt     # SMS 제외 키워드 관리
@@ -108,17 +110,27 @@ com.sanha.moneytalk/
 │   │   ├── SmsEmbeddingService.kt        # SMS 템플릿화 + 임베딩 생성
 │   │   └── VectorSearchEngine.kt         # 코사인 유사도 검색 엔진
 │   │
-│   ├── sms2/                             # SMS 통합 파이프라인 (배치 동기화 메인, 10개)
-│   │   ├── SmsSyncCoordinator.kt        # 유일한 외부 진입점 (process → PreFilter → IncomeFilter → Pipeline)
+│   ├── sms2/                             # SMS 통합 파이프라인 (배치 동기화 메인, 16개)
+│   │   ├── SmsSyncCoordinator.kt        # 유일한 외부 진입점 (process → PreFilter → IncomeFilter → Fast Path → Pipeline)
 │   │   ├── SmsReaderV2.kt               # SMS/MMS/RCS 통합 읽기 → List<SmsInput> 직접 반환
 │   │   ├── SmsIncomeFilter.kt           # PAYMENT/INCOME/SKIP 3분류 (financialKeywords 46개)
 │   │   ├── SmsIncomeParser.kt           # 수입 SMS 파싱 (금액/유형/출처/날짜시간)
-│   │   ├── SmsPipeline.kt               # 오케스트레이터 (Step 2→3→4→5)
+│   │   ├── SmsRegexRuleMatcher.kt       # Step 1.5: sender regex Fast Path 매칭
+│   │   ├── SmsOriginSampleCollector.kt  # RTDB 성공/실패 표본 수집
+│   │   ├── SmsPipeline.kt               # 오케스트레이터 (Step 2→3→4→4.5→5)
 │   │   ├── SmsPipelineModels.kt         # 데이터 클래스 (SmsInput, EmbeddedSms, SmsParseResult, SyncResult)
-│   │   ├── SmsPreFilter.kt              # Step 2: 사전 필터링 (키워드 + 구조)
+│   │   ├── SmsPreFilter.kt              # Step 0: 사전 필터링 (키워드 + 구조)
 │   │   ├── SmsTemplateEngine.kt         # Step 3: 템플릿화 + Gemini Embedding API
 │   │   ├── SmsPatternMatcher.kt         # Step 4: 벡터 매칭 + regex 파싱
-│   │   └── SmsGroupClassifier.kt        # Step 5: 그룹핑 + LLM + regex 생성
+│   │   ├── SmsGroupClassifier.kt        # Step 5: 그룹핑 + LLM + regex 생성
+│   │   ├── GeminiSmsExtractor.kt        # LLM 추출 (배치 + regex 생성)
+│   │   ├── RemoteSmsRule.kt             # 원격 SMS regex 룰 데이터 클래스
+│   │   ├── RemoteSmsRuleRepository.kt   # 원격 룰 리포지토리 (RTDB + 캐시)
+│   │   └── rules/                       # SMS regex 룰 관리 (4개)
+│   │       ├── SmsRegexRuleAssetLoader.kt   # Asset JSON 기본 룰 시드
+│   │       ├── SmsRegexRemoteRuleLoader.kt  # RTDB overlay 룰 로더
+│   │       ├── SmsRegexRuleSyncService.kt   # 병합 서비스
+│   │       └── SmsRegexRuleRepository.kt    # 룰 Repository
 │   │
 │   └── util/                             # 유틸리티 (12개)
 │       ├── CategoryReferenceProvider.kt  # 카테고리 참조 데이터 제공

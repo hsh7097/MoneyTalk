@@ -15,7 +15,7 @@
 - **AI**: Google Gemini (2.5-pro/2.5-flash/2.5-flash-lite)
 - **Min SDK**: 26 (Android 8.0)
 - **Package**: `com.sanha.moneytalk`
-- **DB 버전**: 6 (moneytalk_v4.db)
+- **DB 버전**: 7 (moneytalk_v4.db)
 
 ---
 
@@ -43,7 +43,8 @@ app/src/main/java/com/sanha/moneytalk/
 │   │       └── transaction/       # card/ (TransactionCard), header/ (GroupHeader)
 │   ├── similarity/        # 유사도 판정 정책 (SimilarityPolicy 구현체)
 │   ├── sms/               # SMS V1 — 실시간 수신 전용 (9개: SmsParser, SmsReader, SmsFilter, HybridSmsClassifier, SmsBatchProcessor, GeminiSmsExtractor, GeneratedSmsRegexParser, SmsEmbeddingService, VectorSearchEngine)
-│   ├── sms2/              # SMS 통합 파이프라인 — 배치 동기화 메인 (12개: SmsSyncCoordinator, SmsReaderV2, SmsIncomeFilter, SmsIncomeParser, SmsPipeline, SmsPipelineModels, SmsPreFilter, SmsTemplateEngine, SmsPatternMatcher, SmsGroupClassifier, RemoteSmsRule, RemoteSmsRuleRepository)
+│   ├── sms2/              # SMS 통합 파이프라인 — 배치 동기화 메인 (16개: SmsSyncCoordinator, SmsReaderV2, SmsIncomeFilter, SmsIncomeParser, SmsPipeline, SmsPipelineModels, SmsPreFilter, SmsTemplateEngine, SmsPatternMatcher, SmsGroupClassifier, RemoteSmsRule, RemoteSmsRuleRepository, SmsRegexRuleMatcher, SmsOriginSampleCollector, GeminiSmsExtractor)
+│   ├── sms2/rules/        # SMS regex 룰 관리 (4개: SmsRegexRuleAssetLoader, SmsRegexRemoteRuleLoader, SmsRegexRuleSyncService, SmsRegexRuleRepository)
 │   └── util/              # 유틸 (DateUtils, CardNameNormalizer, StoreNameGrouper 등)
 ├── feature/
 │   ├── home/              # 홈 화면 (월간 현황, SMS 동기화)
@@ -65,7 +66,7 @@ app/src/main/java/com/sanha/moneytalk/
 
 | 시스템 | 설명 | 핵심 파일 |
 |--------|------|-----------|
-| SMS 파싱 (sms2, 2-tier) | Vector → Gemini LLM (배치 동기화) | [SmsSyncCoordinator.kt](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsSyncCoordinator.kt), [SmsPipeline.kt](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipeline.kt) |
+| SMS 파싱 (sms2, 3-tier) | Regex Fast Path → Vector → Gemini LLM (배치 동기화) | [SmsSyncCoordinator.kt](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsSyncCoordinator.kt), [SmsRegexRuleMatcher.kt](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsRegexRuleMatcher.kt), [SmsPipeline.kt](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipeline.kt) |
 | SMS 파싱 (V1, 실시간) | Regex only (SmsProcessingService) | [HybridSmsClassifier.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/HybridSmsClassifier.kt), [SmsParser.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsParser.kt) |
 | SMS 필터링 (발신자) | 010/070 조건부 제외 + 금융 힌트 보존 | [SmsFilter.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsFilter.kt) |
 | 카테고리 분류 (4-tier) | Room → Vector → Keyword → Gemini Batch | [CategoryClassifierService.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt), [StoreEmbeddingRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreEmbeddingRepository.kt) |
@@ -73,7 +74,7 @@ app/src/main/java/com/sanha/moneytalk/
 | 카드 관리 | 소유 카드 화이트리스트 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
 | SMS 필터링 | 제외 키워드 블랙리스트 | [SmsExclusionRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/SmsExclusionRepository.kt) |
 
-### 2-3. DB 엔티티 (10개)
+### 2-3. DB 엔티티 (11개)
 
 | Entity | 테이블 | 용도 |
 |--------|--------|------|
@@ -87,6 +88,7 @@ app/src/main/java/com/sanha/moneytalk/
 | StoreEmbeddingEntity | store_embeddings | 가게명 벡터 임베딩 |
 | OwnedCardEntity | owned_cards | 소유 카드 화이트리스트 |
 | SmsExclusionKeywordEntity | sms_exclusion_keywords | SMS 제외 키워드 |
+| SmsRegexRuleEntity | sms_regex_rules | SMS regex 룰 (sender+type+ruleKey 복합키) |
 
 ### 2-4. DB 마이그레이션 히스토리
 
@@ -97,6 +99,7 @@ app/src/main/java/com/sanha/moneytalk/
 | v3→v4 | sms_exclusion_keywords 테이블 생성 (SMS 제외 키워드) |
 | v4→v5 | expenses/incomes 성능 인덱스 추가 (smsId UNIQUE, dateTime, category, cardName, storeName+dateTime) |
 | v5→v6 | sms_patterns 테이블에 amountRegex, storeRegex, cardRegex, parseSource 컬럼 추가 |
+| v6→v7 | sms_regex_rules 테이블 생성 (sender 기반 regex 룰, 복합PK: senderAddress+type+ruleKey, 4개 인덱스) |
 
 > **sms_patterns 내부 마이그레이션** (DatabaseMigrations.kt):
 > - MIGRATION_1_2: amountRegex, storeRegex, cardRegex 컬럼 추가
@@ -343,7 +346,13 @@ HomeViewModel.syncSmsV2(contentResolver, targetMonthRange)
    → processSmsPipeline(): SmsSyncCoordinator.process(smsInputs)
      → SmsPreFilter: 비결제 SMS 제거 (60+ 키워드, 100자 초과)
      → SmsIncomeFilter: PAYMENT/INCOME/SKIP 3분류 (financialKeywords 46개)
-     → SmsPipeline (결제 후보만):
+     → Step 1.5: SmsRegexRuleMatcher.matchPaymentCandidates() ★ Fast Path
+       - sender 기반 로컬 regex 룰 매칭 (Asset seed + RTDB overlay)
+       - 매칭 성공 → SmsParseResult (SmsPipeline 스킵)
+       - 미매칭 → SmsPipeline으로 fallback
+       - 룰 통계 자동 갱신 (matchCount/failCount/priority)
+       - 저품질 룰 자동 비활성화, sender/type별 5개 상한
+     → SmsPipeline (Fast Path 미매칭만):
        → SmsTemplateEngine: 템플릿화 + Gemini Embedding API (배치 100건)
        → SmsPatternMatcher: 기존 패턴 DB에서 코사인 유사도 매칭 + regex 파싱 → MatchResult(matched/regexFailed/unmatched)
        → SmsGroupClassifier.batchExtractRegexFailed(): regex 실패건 배치 LLM 추출 (Step4.5)

@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-03-01 (v1.1.0 출시 준비 — API 35, AdMob, STT 제거)
+> **최종 갱신**: 2026-03-03 (SMS regex Fast Path 전환 완료)
 
 ---
 
@@ -310,6 +310,16 @@
 - **TransactionCard 메모 표시**: memoText 필드 + buildAnnotatedString (alpha=0.72f)
 - **상수 추출**: DEBIT_FALLBACK_STORE_NAME (SmsPatternMatcher), outcome 코드 REGEX_FAILED_HEURISTIC_KB 구분
 
+**SMS Regex Fast Path 전환 (sms2)**: ✅ 완료 (2026-03-03)
+- `sms_regex_rules` 테이블 추가 (DB v6→v7, 복합PK: senderAddress+type+ruleKey)
+- 3-tier 파싱: Step 1.5 sender regex Fast Path → Vector → LLM
+- Asset seed (`sms_rules_v1.json`, 8 sender 16룰) + RTDB overlay
+- `SmsRegexRuleMatcher`: 매칭 통계 자동 갱신, 저품질 룰 자동 비활성화, sender/type별 5개 상한
+- `SmsOriginSampleCollector`: 성공/실패 표본 분리 수집 (SHA-256 결정적 키)
+- Fallback 안전 연결: `distinctBy { input.id }` 중복 제거, SyncStats 분리 지표
+- `docs/SMS_RULE_JSON_UPDATE_GUIDE.md` 운영 가이드 추가
+- 상세: `docs/TEMP_SMS_REGEX_RULE_MIGRATION_PLAN.md` (Phase 0~6 + 추가 작업 완료)
+
 **v1.1.0 출시 준비**: 🔄 진행 중 (2026-03-01)
 - **targetSdk 34→35 (API 35 마이그레이션)**: compileSdk/targetSdk 35, AGP 8.2.2→8.7.3, Gradle 8.5→8.9
   - 모든 Activity에 `enableEdgeToEdge()` 적용 확인됨
@@ -373,7 +383,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 ## 5. 주의사항
 
 ### 절대 금지
-- DB 스키마 변경 시 마이그레이션 필수 (현재 AppDatabase v5, sms_patterns v3)
+- DB 스키마 변경 시 마이그레이션 필수 (현재 AppDatabase v7, sms_patterns v3)
 - 임계값 수치 변경 시 [AI_CONTEXT.md](AI_CONTEXT.md) SSOT 먼저 업데이트
 - `!!` non-null assertion 사용 금지
 
@@ -392,6 +402,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-03-03 | SMS Regex Fast Path 전환: DB v7(sms_regex_rules), Step1.5 sender regex, Asset seed+RTDB overlay, 표본 수집, 룰 자동 최적화, 운영 가이드 — Phase 0~6 + 추가 작업 완료 | 완료 |
 | 2026-03-01 | v1.1.0 출시 준비: targetSdk 35, AdMob 실제 ID, STT/RECORD_AUDIO 제거, CTA 버그 수정, ForceUpdateDialog 백키 방어, versionCode 3 | 진행 중 |
 | 2026-02-27 | PR #42: 문자설정 Activity + 수신거부 번호 관리 + 영어 번역 보강 | 완료 |
 | 2026-02-27 | PR #41: Step4.5 복구 경로 최적화 — 병렬화+품질게이트, KB 휴리스틱, Step5 경로 분리(5-A/5-B), 프롬프트 강화, insight 재시도, 메모 표시, 상수 정리 | 완료 |
@@ -467,7 +478,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 파일 | 설명 |
 |------|------|
-| [`AppDatabase.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/AppDatabase.kt) | Room DB 정의 (v6, 10 entities, sms_patterns v3) |
+| [`AppDatabase.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/AppDatabase.kt) | Room DB 정의 (v7, 11 entities, sms_patterns v3) |
 | [`OwnedCardEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/OwnedCardEntity.kt) | 카드 화이트리스트 Entity |
 | [`SmsExclusionKeywordEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/SmsExclusionKeywordEntity.kt) | SMS 제외 키워드 Entity |
 | [`OwnedCardRepository.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt) | 카드 관리 + CardNameNormalizer 연동 |
@@ -508,6 +519,11 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | [`SmsGroupClassifier.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsGroupClassifier.kt) | Step 5: 그룹핑 + LLM + regex 생성 + RTDB 표본 수집 |
 | [`RemoteSmsRule.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/RemoteSmsRule.kt) | 원격 SMS regex 룰 데이터 클래스 |
 | [`RemoteSmsRuleRepository.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/RemoteSmsRuleRepository.kt) | 원격 룰 리포지토리 (RTDB + 메모리 캐시) |
+| [`SmsRegexRuleMatcher.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsRegexRuleMatcher.kt) | Step 1.5 Fast Path: sender regex 룰 매칭 + 통계 갱신 + 자동 최적화 |
+| [`SmsOriginSampleCollector.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsOriginSampleCollector.kt) | RTDB 성공/실패 표본 수집 (SHA-256 결정적 키) |
+| [`SmsRegexRuleAssetLoader.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/rules/SmsRegexRuleAssetLoader.kt) | Asset JSON 기본 룰 시드 로더 |
+| [`SmsRegexRemoteRuleLoader.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/rules/SmsRegexRemoteRuleLoader.kt) | RTDB overlay 룰 로더 (10분 캐시) |
+| [`SmsRegexRuleSyncService.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/rules/SmsRegexRuleSyncService.kt) | Asset seed + RTDB overlay 병합 서비스 |
 
 ### 유사도 정책
 

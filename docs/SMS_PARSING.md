@@ -1,14 +1,14 @@
 # SMS 파싱 시스템
 
-> SMS/MMS/RCS 문자에서 지출·수입 정보를 자동 추출하는 2-tier 벡터+LLM 파이프라인
+> SMS/MMS/RCS 문자에서 지출·수입 정보를 자동 추출하는 3-tier (Regex Fast Path → Vector → LLM) 파이프라인
 
 ---
 
 ## 1. 시스템 개요
 
 MoneyTalk은 **sms2 통합 파이프라인**으로 SMS에서 결제/수입 정보를 추출합니다.
-기존 3-tier (Regex → Vector → LLM) 구조에서 **Tier 1 로컬 Regex를 제거**하고,
-모든 SMS를 임베딩 경로(Vector → LLM)로 처리합니다.
+**3-tier 구조**: sender regex Fast Path → Vector → LLM.
+Step 1.5에서 sender 기반 regex 룰 매칭을 먼저 시도하고, 미매칭만 임베딩 경로(Vector → LLM)로 처리합니다.
 
 ```
 SMS/MMS/RCS 수신 (SmsReaderV2)
@@ -28,7 +28,13 @@ List<SmsInput> (원본 보존)
 │    금융기관 키워드 + 금액 패턴 기반 분류                    │
 │    → PAYMENT / INCOME / SKIP                              │
 │                                                          │
-│  Step 2~5: SmsPipeline.process(결제 후보)                 │
+│  Step 1.5: SmsRegexRuleMatcher.matchPaymentCandidates()  │
+│    sender 기반 로컬 regex 룰 매칭 (Fast Path) ★ 신규      │
+│    Asset seed + RTDB overlay → priority DESC 순차 매칭     │
+│    → 매칭 성공 → SmsParseResult (SmsPipeline 스킵)         │
+│    → 미매칭 → SmsPipeline fallback                        │
+│                                                          │
+│  Step 2~5: SmsPipeline.process(Fast Path 미매칭만)        │
 │    ┌──────────────────────────────────────────────────┐   │
 │    │ Step 3: batchEmbed()                              │   │
 │    │   SmsTemplateEngine.templateize() → 플레이스홀더    │   │
@@ -62,17 +68,18 @@ List<SmsInput> (원본 보존)
   └ incomes → SmsIncomeParser로 파싱 → IncomeEntity → DB 저장
 ```
 
-### 2-tier 구조의 이점
+### 3-tier 구조의 이점
 
 | 단계 | 커버리지 | 비용 | 속도 |
 |------|---------|------|------|
+| Regex Fast Path (sender 룰) | ~99% (룰 커버 발신번호) | 0 | ~0.1초 |
 | Vector (기존 패턴 재사용) | ~90% (유사 패턴) | 임베딩 API 1회 | ~1초 |
 | LLM (신규 패턴) | ~99% (비표준 포함) | Gemini API N회 | ~2초 |
 
-Tier 1 Regex 제거 이유:
-- 카드사별 형식이 너무 다양 → 정규식 유지보수 한계
-- 벡터 패턴이 축적되면 Regex 수준의 속도로 처리 가능
-- LLM이 생성한 regex를 패턴 DB에 캐시 → 재방문 시 regex 파싱
+Step 1.5 Regex Fast Path 도입 이유:
+- 발신번호별 regex 룰을 Asset seed + RTDB overlay로 관리
+- 룰이 커버하는 발신번호의 SMS는 임베딩/LLM 호출 없이 즉시 파싱
+- 룰 품질 자동 관리 (matchCount/failCount 통계, 저품질 룰 자동 비활성화)
 
 ---
 
@@ -80,11 +87,13 @@ Tier 1 Regex 제거 이유:
 
 ```
 core/sms2/                           ★ sms2 통합 파이프라인
-├── SmsSyncCoordinator.kt            # 외부 진입점 (process → PreFilter → IncomeFilter → Pipeline)
-├── SmsPipeline.kt                   # 오케스트레이터 (Step 2→3→4→5)
+├── SmsSyncCoordinator.kt            # 외부 진입점 (process → PreFilter → IncomeFilter → Fast Path → Pipeline)
+├── SmsPipeline.kt                   # 오케스트레이터 (Step 2→3→4→4.5→5)
 ├── SmsPipelineModels.kt             # 데이터 모델 (SmsInput, EmbeddedSms, SmsParseResult, SyncResult 등)
 ├── SmsPreFilter.kt                  # Step 0: 비결제 키워드+구조 필터
 ├── SmsIncomeFilter.kt               # Step 1: 결제/수입/스킵 분류
+├── SmsRegexRuleMatcher.kt           # Step 1.5: sender regex Fast Path ★ 신규
+├── SmsOriginSampleCollector.kt      # RTDB 성공/실패 표본 수집 ★ 신규
 ├── SmsTemplateEngine.kt             # Step 3: 템플릿화 + Gemini Embedding API
 ├── SmsPatternMatcher.kt             # Step 4: 벡터 매칭 + 원격 룰 매칭 + regex 파싱 (자체 코사인 유사도)
 ├── SmsGroupClassifier.kt            # Step 5: 그룹핑 + LLM + regex 생성 + 패턴 등록 + RTDB 표본 수집
@@ -92,7 +101,12 @@ core/sms2/                           ★ sms2 통합 파이프라인
 ├── SmsReaderV2.kt                   # SMS/MMS/RCS 통합 읽기 (ContentResolver → List<SmsInput>)
 ├── SmsIncomeParser.kt               # 수입 SMS 파싱 (금액/유형/출처/날짜 추출)
 ├── RemoteSmsRule.kt                 # 원격 SMS regex 룰 데이터 클래스 (RTDB → 로컬 매칭)
-└── RemoteSmsRuleRepository.kt       # 원격 룰 리포지토리 (RTDB 로드 + 메모리 캐시 + TTL)
+├── RemoteSmsRuleRepository.kt       # 원격 룰 리포지토리 (RTDB 로드 + 메모리 캐시 + TTL)
+└── rules/                           # SMS regex 룰 관리 ★ 신규
+    ├── SmsRegexRuleAssetLoader.kt   # Asset JSON 기본 룰 시드 로더
+    ├── SmsRegexRemoteRuleLoader.kt  # RTDB overlay 룰 로더 (10분 캐시)
+    ├── SmsRegexRuleSyncService.kt   # Asset seed + RTDB overlay 병합 서비스
+    └── SmsRegexRuleRepository.kt    # 룰 Repository (DAO 래핑)
 
 core/database/entity/
 └── SmsPatternEntity.kt              # 벡터 DB 엔티티 (18 필드, isMainGroup 포함)
@@ -172,8 +186,13 @@ process(smsList: List<SmsInput>, onProgress) → SyncResult
   ├── Step 1: SmsIncomeFilter.classifyAll(filtered)
   │   └ (paymentCandidates, incomeCandidates, skipped)
   │
-  └── Step 2~5: SmsPipeline.process(paymentCandidates, skipPreFilter=true)
-      └ → List<SmsParseResult>
+  ├── Step 1.5: SmsRegexRuleMatcher.matchPaymentCandidates(paymentCandidates) ★ Fast Path
+  │   └ (fastPathMatched, fastPathUnmatched)
+  │
+  ├── Step 2~5: SmsPipeline.process(fastPathUnmatched, skipPreFilter=true)
+  │   └ → List<SmsParseResult>
+  │
+  └── 결과 병합: (fastPathMatched + pipelineResult).distinctBy { it.input.id }
 ```
 
 ### 책임 분리
@@ -969,4 +988,43 @@ sms2가 배치 동기화를 담당하지만, 일부 V1 컴포넌트는 여전히
 
 ---
 
-*마지막 업데이트: 2026-02-20*
+## 20. DB 스키마 — sms_regex_rules (Step 1.5 Fast Path 전용)
+
+### 테이블 구조 (SmsRegexRuleEntity, DB v7)
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| senderAddress | String (PK) | 발신번호 |
+| type | String (PK) | 거래 유형 (expense, income 등) |
+| ruleKey | String (PK) | 결정적 해시 (SHA-256) |
+| bodyRegex | String | SMS 본문 매칭 정규식 |
+| amountGroup | String | 금액 캡처 그룹명 |
+| storeGroup | String | 가게명 캡처 그룹명 |
+| cardGroup | String | 카드명 캡처 그룹명 |
+| dateGroup | String | 날짜 캡처 그룹명 |
+| priority | Int | 매칭 우선순위 (DESC 정렬) |
+| status | String | ACTIVE / INACTIVE |
+| source | String | asset / rtdb / llm |
+| version | Int | 룰 버전 |
+| matchCount | Int | 매칭 성공 횟수 |
+| failCount | Int | 매칭 실패 횟수 |
+| lastMatchedAt | Long | 마지막 매칭 시간 |
+| updatedAt | Long | 마지막 업데이트 시간 |
+| createdAt | Long | 생성 시간 |
+
+### ruleKey 생성 규칙
+```
+ruleKey = sha256(sender|type|canonicalRegex|amountGroup|storeGroup|cardGroup|dateGroup|version)
+```
+- `canonicalRegex`: 공백/개행 정규화 후 사용
+- 동일 룰이면 어떤 기기에서 올라와도 같은 key로 upsert
+
+### 인덱스
+- `idx_sms_regex_rules_sender` (senderAddress)
+- `idx_sms_regex_rules_sender_type` (senderAddress, type)
+- `idx_sms_regex_rules_status` (status)
+- `idx_sms_regex_rules_updated` (updatedAt)
+
+---
+
+*마지막 업데이트: 2026-03-03*

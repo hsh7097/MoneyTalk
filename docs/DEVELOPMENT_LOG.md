@@ -4,6 +4,54 @@
 
 ---
 
+## 2026-03-03 - SMS Regex Fast Path 전환 (sender 기반 regex 1차 파싱)
+
+### 배경
+임베딩 기반 2-tier(Vector→LLM) 파이프라인의 속도/비용/누락률을 개선하기 위해, 전화번호(sender) 기반 regex 룰을 1차 파싱 경로(Step 1.5)로 삽입. 룰 소스는 앱 내 JSON(Asset seed) + RTDB overlay 2-tier로 운영.
+
+### 작업 내용
+
+#### Phase 0: 기준선 정리
+- `SmsGroupClassifier` 상수와 `SMS_PARSING.md` 문서 값 정합성 수정 (REGEX_MIN_SAMPLES=5, 소그룹 병합 0.90, regex 검증 0.80)
+
+#### Phase 1: 룰 전용 로컬 스키마
+- `SmsRegexRuleEntity` (17필드, 복합PK: senderAddress+type+ruleKey), `SmsRegexRuleDao`, `SmsRegexRuleRepository` 추가
+- DB v6→v7 마이그레이션, AppDatabase 등록
+
+#### Phase 2: 룰 로더 (Asset + RTDB)
+- `assets/sms_rules_v1.json` (8 sender, 16룰)
+- `SmsRegexRuleAssetLoader` + `SmsRegexRemoteRuleLoader` + `SmsRegexRuleSyncService`
+
+#### Phase 3: Fast Path 파서
+- `SmsRegexRuleMatcher`: sender 기반 regex 매칭, `SmsSyncCoordinator`에 Step 1.5로 삽입
+- 매칭 성공 → SmsPipeline 스킵, 미매칭만 기존 Vector/LLM 경로
+
+#### Phase 4: Fallback 안전 연결
+- `distinctBy { input.id }` 중복 제거, `SyncStats`에 fastPath/pipeline 분리 지표
+
+#### Phase 5: 표본 수집 파이프라인
+- `SmsOriginSampleCollector`: 성공 표본(sender/type/fingerprint 3개 제한), 실패 표본(failStage/failReason 누적)
+- RTDB 경로: `/sms_origin/{sender}/{type}/{sampleKey}`, sampleKey=SHA-256 결정적 해시
+
+#### Phase 6: 운영 최적화
+- `computeAdaptivePriority()`: match/fail/recency 기반 priority 자동 보정
+- 저품질 룰 자동 비활성화 (matchCount=0 && failCount≥12)
+- sender/type별 활성 룰 상한 5개
+
+#### 추가 작업
+- **Rule Seed**: CSV 기반 에셋 룰 16개 생성 (커버리지 99.94%)
+- **Failure Loop**: Fast Path 실패/LLM 성공 모두 `sms_origin`으로 통합
+- **Fallback Trace**: Step1.5/5-A/5-B 입력·결과·미확정 로그
+- **Fallback Hotfix**: KB 출금 멀티라인 변형 전용 룰 + NON_PAYMENT 상세 로그
+- **Rule Guide**: `SMS_RULE_JSON_UPDATE_GUIDE.md` 운영 가이드
+
+### 결정 사항
+- **ruleKey 결정적 해시**: `sha256(sender|type|canonicalRegex|amountGroup|storeGroup|cardGroup|dateGroup|version)` — 기기별 랜덤 키 방지, 동일 룰 중복 저장 방지
+- **2-source 병합**: Asset(seed, 1회) + RTDB(overlay, 10분 간격) → 동일 키 충돌 시 RTDB 우선
+- **Step 1.5 위치**: SmsPreFilter/SmsIncomeFilter 이후, SmsPipeline 이전 — 비결제 SMS를 먼저 제거한 뒤 regex 매칭
+
+---
+
 ## 2026-03-01 - v1.1.0 출시 준비 (API 35 + AdMob + STT 제거)
 
 ### 배경

@@ -1,7 +1,7 @@
 # AI_TASKS.md - 작업 목록 및 완료 기준
 
 > 작업 진행 상황 추적 문서
-> **최종 갱신**: 2026-02-25
+> **최종 갱신**: 2026-03-03
 
 ---
 
@@ -94,6 +94,25 @@
 - [x] 다크 테마 Green/Orange 기반 복원
 - [x] COMPOSABLE_MAP 동기화
 - [x] 빌드 성공 확인
+
+---
+
+## SMS Regex Fast Path 전환 ✅ 완료 (2026-03-03)
+
+> sender 기반 regex 룰을 1차 파싱 경로(Step 1.5)로 삽입하여 속도/비용/누락률 동시 개선.
+> 상세 계획: `docs/TEMP_SMS_REGEX_RULE_MIGRATION_PLAN.md`
+
+- [x] Phase 0: 기준선 정리 (상수/문서 정합성)
+- [x] Phase 1: `sms_regex_rules` 로컬 스키마 (DB v6→v7)
+- [x] Phase 2: 룰 로더 (Asset seed + RTDB overlay)
+- [x] Phase 3: Fast Path 파서 (`SmsRegexRuleMatcher` + SmsSyncCoordinator Step 1.5)
+- [x] Phase 4: Fallback 안전 연결 (중복 제거 + SyncStats 분리 지표)
+- [x] Phase 5: 표본 수집 (`SmsOriginSampleCollector`, SHA-256 결정적 키)
+- [x] Phase 6: 운영 최적화 (adaptive priority + 자동 비활성화 + 5개 상한)
+- [x] Rule Seed: CSV 기반 에셋 룰 16개 (커버리지 99.94%)
+- [x] Failure Loop: 성공/실패 표본 분리 수집
+- [x] Fallback Trace/Hotfix: 추적 로그 강화 + KB 출금 멀티라인 룰
+- [x] Rule Guide: `SMS_RULE_JSON_UPDATE_GUIDE.md`
 
 ---
 
