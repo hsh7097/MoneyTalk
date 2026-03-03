@@ -46,15 +46,18 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
-import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
+import com.sanha.moneytalk.feature.transactionedit.ui.TransactionEditActivity
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.feature.categorydetail.ui.model.CategorySpendingTrendInfo
+import com.sanha.moneytalk.feature.history.ui.FilterChipButton
 import com.sanha.moneytalk.feature.home.ui.component.SpendingTrendSection
 import kotlinx.coroutines.launch
 
@@ -74,6 +77,12 @@ fun CategoryDetailScreen(
 
     // 선택된 지출 항목 (상세보기용)
     var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
+
+    // 정렬 레이블
+    val sortLabel = when (uiState.sortOrder) {
+        CategorySortOrder.DATE_DESC -> stringResource(R.string.category_sort_date)
+        CategorySortOrder.AMOUNT_DESC -> stringResource(R.string.category_sort_amount)
+    }
 
     // HorizontalPager — Virtual Infinite Pager
     val initialPage = remember {
@@ -153,6 +162,8 @@ fun CategoryDetailScreen(
                 month = pageMonth,
                 monthStartDay = uiState.monthStartDay,
                 categoryName = uiState.categoryDisplayName,
+                sortLabel = sortLabel,
+                onToggleSort = { viewModel.toggleSortOrder() },
                 onPreviousMonth = {
                     coroutineScope.launch {
                         pagerState.animateScrollToPage(pagerState.currentPage - 1)
@@ -176,24 +187,17 @@ fun CategoryDetailScreen(
         }
     }
 
-    // 지출 상세 다이얼로그
+    // 거래 선택 시 편집 Activity로 이동
+    val context = LocalContext.current
     selectedExpense?.let { expense ->
-        ExpenseDetailDialog(
-            expense = expense,
-            onDismiss = { selectedExpense = null },
-            onDelete = {
-                viewModel.deleteExpense(expense)
-                selectedExpense = null
-            },
-            onCategoryChange = { newCategory ->
-                viewModel.updateExpenseCategory(expense.storeName, newCategory)
-                selectedExpense = null
-            },
-            onMemoChange = { memo ->
-                viewModel.updateExpenseMemo(expense.id, memo)
-                selectedExpense = null
-            }
-        )
+        LaunchedEffect(expense.id) {
+            context.startActivity(
+                Intent(context, TransactionEditActivity::class.java).apply {
+                    putExtra(TransactionEditActivity.EXTRA_EXPENSE_ID, expense.id)
+                }
+            )
+            selectedExpense = null
+        }
     }
 }
 
@@ -209,6 +213,8 @@ private fun CategoryDetailPageContent(
     month: Int,
     monthStartDay: Int,
     categoryName: String,
+    sortLabel: String = "",
+    onToggleSort: () -> Unit = {},
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onExpenseSelected: (ExpenseEntity) -> Unit
@@ -239,6 +245,22 @@ private fun CategoryDetailPageContent(
                 onPreviousMonth = onPreviousMonth,
                 onNextMonth = onNextMonth
             )
+        }
+
+        // 정렬 토글
+        item(key = "sort_toggle") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                FilterChipButton(
+                    label = sortLabel,
+                    isActive = true,
+                    onClick = onToggleSort
+                )
+            }
         }
 
         // 누적 추이 차트

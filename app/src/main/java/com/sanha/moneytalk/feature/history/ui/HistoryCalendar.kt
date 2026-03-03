@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -23,11 +24,9 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,15 +37,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
-import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
 import com.sanha.moneytalk.core.theme.moneyTalkColors
-import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
-import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
-import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
+import com.sanha.moneytalk.feature.transactionlist.ui.TransactionDetailListActivity
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
 /**
@@ -72,22 +69,14 @@ fun BillingCycleCalendarView(
     month: Int,
     monthStartDay: Int,
     dailyTotals: Map<String, Int>, // "yyyy-MM-dd" -> expense amount
-    dailyIncomeTotals: Map<String, Int> = emptyMap(), // "yyyy-MM-dd" -> income amount
-    expenses: List<ExpenseEntity> = emptyList(),
-    onDelete: (ExpenseEntity) -> Unit = {},
-    onCategoryChange: (ExpenseEntity, String) -> Unit = { _, _ -> },
-    onExpenseMemoChange: (Long, String?) -> Unit = { _, _ -> }
+    dailyIncomeTotals: Map<String, Int> = emptyMap() // "yyyy-MM-dd" -> income amount
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val context = LocalContext.current
     val today = Calendar.getInstance()
     val todayYear = today.get(Calendar.YEAR)
     val todayMonth = today.get(Calendar.MONTH) + 1
     val todayDay = today.get(Calendar.DAY_OF_MONTH)
-
-    // 선택된 날짜 (dateString)
-    var selectedDateString by remember { mutableStateOf<String?>(null) }
-    // 상세 다이얼로그용 선택된 지출
-    var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
 
     // 결제 기간에 해당하는 날짜 목록 생성
     val calendarDays = remember(year, month, monthStartDay) {
@@ -121,18 +110,6 @@ fun BillingCycleCalendarView(
     val noSpendDays = remember(calendarDays, dailyTotals) {
         calendarDays.count { day ->
             day.isCurrentPeriod && !day.isFuture && (dailyTotals[day.dateString] ?: 0) == 0
-        }
-    }
-
-    // 선택된 날짜의 지출 목록
-    val selectedDayExpenses = remember(selectedDateString, expenses) {
-        if (selectedDateString == null) emptyList()
-        else {
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
-            expenses.filter { expense ->
-                val expenseDate = dateFormat.format(Date(expense.dateTime))
-                expenseDate == selectedDateString
-            }.sortedByDescending { it.dateTime }
         }
     }
 
@@ -217,8 +194,8 @@ fun BillingCycleCalendarView(
                         // 주간 디바이더
                         if (weekIndex > 0) {
                             HorizontalDivider(
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                                thickness = 0.5.dp,
+                                color = MaterialTheme.moneyTalkColors.divider,
+                                thickness = 1.dp,
                                 modifier = Modifier.padding(horizontal = 4.dp)
                             )
                         }
@@ -254,22 +231,30 @@ fun BillingCycleCalendarView(
                         }
 
                         Row(
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(IntrinsicSize.Min)
                         ) {
-                            week.forEach { calendarDay ->
+                            week.forEachIndexed { index, calendarDay ->
+                                if (index > 0) {
+                                    VerticalDivider(
+                                        color = MaterialTheme.moneyTalkColors.divider,
+                                        thickness = 0.5.dp,
+                                        modifier = Modifier.fillMaxHeight()
+                                    )
+                                }
                                 CalendarDayCell(
                                     calendarDay = calendarDay,
                                     dayTotal = dailyTotals[calendarDay.dateString] ?: 0,
                                     dayIncome = dailyIncomeTotals[calendarDay.dateString] ?: 0,
-                                    isSelected = selectedDateString == calendarDay.dateString,
+                                    isSelected = false,
                                     onClick = {
                                         if (calendarDay.isCurrentPeriod && !calendarDay.isFuture) {
-                                            selectedDateString =
-                                                if (selectedDateString == calendarDay.dateString) {
-                                                    null // 토글: 같은 날짜 다시 클릭 시 닫기
-                                                } else {
-                                                    calendarDay.dateString
+                                            context.startActivity(
+                                                Intent(context, TransactionDetailListActivity::class.java).apply {
+                                                    putExtra(TransactionDetailListActivity.EXTRA_DATE, calendarDay.dateString)
                                                 }
+                                            )
                                         }
                                     },
                                     modifier = Modifier.weight(1f)
@@ -277,6 +262,11 @@ fun BillingCycleCalendarView(
                             }
                             // 부족한 셀 채우기
                             repeat(7 - week.size) {
+                                VerticalDivider(
+                                    color = MaterialTheme.moneyTalkColors.divider,
+                                    thickness = 0.5.dp,
+                                    modifier = Modifier.fillMaxHeight()
+                                )
                                 Spacer(modifier = Modifier.weight(1f))
                             }
                         }
@@ -284,79 +274,12 @@ fun BillingCycleCalendarView(
                 }
             }
 
-            // 선택된 날짜의 지출 목록
-            if (selectedDateString != null && selectedDayExpenses.isNotEmpty()) {
-                item {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        thickness = 1.dp
-                    )
-
-                    val dateStr = selectedDateString ?: ""
-                    val parts = dateStr.split("-")
-                    val dayNum = parts.getOrNull(2)?.toIntOrNull() ?: 0
-                    Text(
-                        text = stringResource(R.string.calendar_day_expense_title, parts.getOrNull(1) ?: "", dayNum),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                    )
-                }
-
-                items(
-                    items = selectedDayExpenses,
-                    key = { it.id }
-                ) { expense ->
-                    TransactionCardCompose(
-                        info = ExpenseTransactionCardInfo(expense),
-                        onClick = { selectedExpense = expense },
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-            } else if (selectedDateString != null && selectedDayExpenses.isEmpty()) {
-                item {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        thickness = 1.dp
-                    )
-                    Text(
-                        text = stringResource(R.string.calendar_no_expense_for_day),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
+            // 인라인 거래 목록 제거됨 — 날짜 클릭 시 TransactionDetailListActivity로 이동
 
             item {
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
-    }
-
-    // 지출 상세 다이얼로그 (삭제 및 카테고리 변경 기능 포함)
-    selectedExpense?.let { expense ->
-        ExpenseDetailDialog(
-            expense = expense,
-            onDismiss = { selectedExpense = null },
-            onDelete = {
-                onDelete(expense)
-                selectedExpense = null
-            },
-            onCategoryChange = { newCategory ->
-                onCategoryChange(expense, newCategory)
-                selectedExpense = null
-            },
-            onMemoChange = { memo ->
-                onExpenseMemoChange(expense.id, memo)
-                selectedExpense = null
-            }
-        )
     }
 }
 
