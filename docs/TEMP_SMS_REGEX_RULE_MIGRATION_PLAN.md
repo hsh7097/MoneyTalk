@@ -29,8 +29,8 @@
 | 날짜 | Phase | PR/브랜치 | 변경 요약 | 상태 |
 |------|-------|-----------|-----------|------|
 | 2026-03-03 | Phase 1 | `codex/sms-regex-phase1-schema` | `sms_regex_rules` 엔티티/DAO/Repository 추가, DB v7 마이그레이션(6→7) 추가, AppDatabase/DatabaseModule 연결, `assembleDebug` 검증 완료 | 완료 |
-| 2026-03-03 | Phase 2 | `codex/sms-regex-phase1-schema` | `assets/sms_rules_v1.json` 추가, `SmsRegexRuleAssetLoader` + `SmsRegexRemoteRuleLoader` + `SmsRegexRuleSyncService` 추가(Asset seed + RTDB overlay 기반) | 진행중 |
-| 2026-03-03 | Phase 3 | `codex/sms-regex-phase1-schema` | `SmsRegexRuleMatcher` 추가, `SmsSyncCoordinator`에 Step1.5 Fast Path(sender regex 매칭) 삽입, 미매칭만 기존 Pipeline 폴백 | 진행중 |
+| 2026-03-03 | Phase 2 | `codex/sms-regex-phase1-schema` | `assets/sms_rules_v1.json` 추가, `SmsRegexRuleAssetLoader` + `SmsRegexRemoteRuleLoader` + `SmsRegexRuleSyncService` 추가(Asset seed + RTDB overlay 기반), `assembleDebug` 검증 완료 | 완료 |
+| 2026-03-03 | Phase 3 | `codex/sms-regex-phase1-schema` | `SmsRegexRuleMatcher` 추가, `SmsSyncCoordinator`에 Step1.5 Fast Path(sender regex 매칭) 삽입, 미매칭만 기존 Pipeline 폴백, `assembleDebug` 검증 완료 | 완료 |
 
 ## 3. 확정 설계 원칙
 
@@ -241,8 +241,8 @@
 
 - [ ] Phase 0 완료
 - [x] Phase 1 완료
-- [ ] Phase 2 완료
-- [ ] Phase 3 완료
+- [x] Phase 2 완료
+- [x] Phase 3 완료
 - [ ] Phase 4 완료
 - [ ] Phase 5 완료
 - [ ] Phase 6 완료
