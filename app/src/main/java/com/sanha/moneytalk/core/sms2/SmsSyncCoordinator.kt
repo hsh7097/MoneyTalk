@@ -120,6 +120,19 @@ class SmsSyncCoordinator @Inject constructor(
         val fastPathMatched = regexMatchResult.matched
         val fastPathUnmatched = regexMatchResult.unmatched
         MoneyTalkLogger.i("Step1.5 SenderRegex: 매칭 ${fastPathMatched.size}건, 폴백 ${fastPathUnmatched.size}건")
+        if (fastPathUnmatched.isNotEmpty()) {
+            val preview = fastPathUnmatched.take(5)
+            preview.forEachIndexed { index, sms ->
+                MoneyTalkLogger.i(
+                    "[Step1.5 fallback] #${index + 1} id=${sms.id}, addr=${sms.address}, body=${sms.body.replace("\n", "↵").take(120)}"
+                )
+            }
+            if (fastPathUnmatched.size > preview.size) {
+                MoneyTalkLogger.i(
+                    "[Step1.5 fallback] ... ${fastPathUnmatched.size - preview.size}건 추가"
+                )
+            }
+        }
 
         // Step 2: Fast Path 미매칭 결제 후보만 SmsPipeline에 전달 (사전 필터링 스킵)
         val pipelineResult = if (fastPathUnmatched.isNotEmpty()) {

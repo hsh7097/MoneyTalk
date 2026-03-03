@@ -158,6 +158,17 @@ class SmsPipeline @Inject constructor(
 
         // Step 5-A: 순수 미매칭건은 기존 정책(그룹핑 + regex 생성 가능) 유지
         val unmatchedLlmResults = if (matchResult.unmatched.isNotEmpty()) {
+            val preview = matchResult.unmatched.take(5)
+            preview.forEachIndexed { index, embeddedSms ->
+                MoneyTalkLogger.i(
+                    "[Step5-A input] #${index + 1} id=${embeddedSms.input.id}, addr=${embeddedSms.input.address}, body=${embeddedSms.input.body.replace("\n", "↵").take(120)}"
+                )
+            }
+            if (matchResult.unmatched.size > preview.size) {
+                MoneyTalkLogger.i(
+                    "[Step5-A input] ... ${matchResult.unmatched.size - preview.size}건 추가"
+                )
+            }
             onProgress?.invoke(STEP_LLM, "AI가 결제 내역 분석 중...", matchResult.matched.size + regexFailedResults.size, embedded.size)
             groupClassifier.classifyUnmatched(matchResult.unmatched) { step, current, total ->
                 onProgress?.invoke(STEP_LLM, step, current, total)
@@ -165,9 +176,29 @@ class SmsPipeline @Inject constructor(
         } else {
             emptyList()
         }
+        if (matchResult.unmatched.isNotEmpty()) {
+            val unmatchedParsedIds = unmatchedLlmResults.map { it.input.id }.toHashSet()
+            val unresolvedFromUnmatched = matchResult.unmatched
+                .filter { it.input.id !in unmatchedParsedIds }
+            MoneyTalkLogger.i(
+                "Step5-A 결과: 입력 ${matchResult.unmatched.size}건 → 결제확정 ${unmatchedLlmResults.size}건, 미확정 ${unresolvedFromUnmatched.size}건"
+            )
+            unresolvedFromUnmatched.take(5).forEachIndexed { index, embeddedSms ->
+                MoneyTalkLogger.w(
+                    "[Step5-A unresolved] #${index + 1} id=${embeddedSms.input.id}, addr=${embeddedSms.input.address}, " +
+                        "body=${embeddedSms.input.body.replace("\n", "↵").take(120)} (비결제 판정 또는 추출 실패 가능)"
+                )
+            }
+        }
 
         // Step 5-B: Step4.5 fallback은 regex 재시도하지 않고 direct LLM만 수행
         val regexFallbackLlmResults = if (regexFailedFallback.isNotEmpty()) {
+            val preview = regexFailedFallback.take(5)
+            preview.forEachIndexed { index, embeddedSms ->
+                MoneyTalkLogger.i(
+                    "[Step5-B input] #${index + 1} id=${embeddedSms.input.id}, addr=${embeddedSms.input.address}, body=${embeddedSms.input.body.replace("\n", "↵").take(120)}"
+                )
+            }
             onProgress?.invoke(STEP_LLM, "AI가 결제 내역 분석 중...", matchResult.matched.size + regexFailedResults.size + unmatchedLlmResults.size, embedded.size)
             groupClassifier.classifyUnmatched(
                 unmatchedList = regexFailedFallback,
@@ -177,6 +208,20 @@ class SmsPipeline @Inject constructor(
             }
         } else {
             emptyList()
+        }
+        if (regexFailedFallback.isNotEmpty()) {
+            val fallbackParsedIds = regexFallbackLlmResults.map { it.input.id }.toHashSet()
+            val unresolvedFromRegexFallback = regexFailedFallback
+                .filter { it.input.id !in fallbackParsedIds }
+            MoneyTalkLogger.i(
+                "Step5-B 결과: 입력 ${regexFailedFallback.size}건 → 결제확정 ${regexFallbackLlmResults.size}건, 미확정 ${unresolvedFromRegexFallback.size}건"
+            )
+            unresolvedFromRegexFallback.take(5).forEachIndexed { index, embeddedSms ->
+                MoneyTalkLogger.w(
+                    "[Step5-B unresolved] #${index + 1} id=${embeddedSms.input.id}, addr=${embeddedSms.input.address}, " +
+                        "body=${embeddedSms.input.body.replace("\n", "↵").take(120)} (비결제 판정 또는 추출 실패 가능)"
+                )
+            }
         }
 
         val llmResults = unmatchedLlmResults + regexFallbackLlmResults

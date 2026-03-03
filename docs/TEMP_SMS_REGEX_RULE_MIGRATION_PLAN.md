@@ -37,6 +37,7 @@
 | 2026-03-03 | Phase 6 | `codex/sms-regex-phase1-schema` | 룰 운영 최적화 적용: match/fail 카운트 기반 priority 자동 보정, 실패 누적 룰 자동 `INACTIVE`, sender/type 활성 룰 상한(5개) 초과 시 자동 비활성화, `assembleDebug` 검증 완료 | 완료 |
 | 2026-03-03 | Rule Seed | `codex/sms-regex-phase1-schema` | `moneytalk_backup_20260303_143330.csv` 기반 발신번호별 에셋 룰 16개 생성 후 `sms_rules_v1.json` 반영(8개 sender), 표본 기준 커버리지 3503/3505(99.94%), 비거래 안내 2건은 의도적으로 제외 | 완료 |
 | 2026-03-03 | Failure Loop | `codex/sms-regex-phase1-schema` | `SmsOriginSampleCollector` 추가: 성공 표본(sender/type/fingerprint) 3개 제한, 실패 표본(failStage/failReason/matchedRuleKey) 누적 저장, 동일 fingerprint는 `count/lastSeenAt` 업데이트. Fast Path 실패/LLM 성공 모두 `sms_origin`으로 통합 | 완료 |
+| 2026-03-03 | Fallback Trace | `codex/sms-regex-phase1-schema` | 폴백 추적 로그 강화: Step1.5 fallback 입력 preview, Step5-A/B 입력/결과/미확정(unresolved) SMS id/주소/본문 요약 로그 추가. 비결제 판정/추출 실패로 드랍된 케이스 식별 가능하도록 보강 | 완료 |
 
 ## 3. 확정 설계 원칙
 
