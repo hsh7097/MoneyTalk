@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sms
@@ -247,7 +248,14 @@ private fun BlockedPhraseManageScreen(
                     onValueChange = { newKeyword = it },
                     modifier = Modifier.weight(1f),
                     placeholder = { Text(stringResource(R.string.settings_exclusion_input_hint)) },
-                    singleLine = true
+                    singleLine = true,
+                    trailingIcon = {
+                        if (newKeyword.isNotEmpty()) {
+                            IconButton(onClick = { newKeyword = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                            }
+                        }
+                    }
                 )
                 TextButton(
                     onClick = {
@@ -395,7 +403,14 @@ private fun BlockedSenderManageScreen(
                     onValueChange = { newAddress = it },
                     modifier = Modifier.weight(1f),
                     placeholder = { Text(stringResource(R.string.sms_settings_blocked_sender_input_hint)) },
-                    singleLine = true
+                    singleLine = true,
+                    trailingIcon = {
+                        if (newAddress.isNotEmpty()) {
+                            IconButton(onClick = { newAddress = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                            }
+                        }
+                    }
                 )
                 TextButton(
                     onClick = {

@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.List
@@ -81,6 +82,13 @@ fun AddExpenseDialog(
                     label = { Text(stringResource(R.string.history_amount)) },
                     suffix = { Text(stringResource(R.string.common_suffix_won)) },
                     singleLine = true,
+                    trailingIcon = {
+                        if (amountText.isNotEmpty()) {
+                            IconButton(onClick = { amountText = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                            }
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -90,6 +98,13 @@ fun AddExpenseDialog(
                     onValueChange = { storeName = it },
                     label = { Text(stringResource(R.string.history_store_name)) },
                     singleLine = true,
+                    trailingIcon = {
+                        if (storeName.isNotEmpty()) {
+                            IconButton(onClick = { storeName = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                            }
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -129,6 +144,13 @@ fun AddExpenseDialog(
                     onValueChange = { cardName = it },
                     label = { Text(stringResource(R.string.history_payment_method)) },
                     singleLine = true,
+                    trailingIcon = {
+                        if (cardName.isNotEmpty()) {
+                            IconButton(onClick = { cardName = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                            }
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -451,7 +473,14 @@ fun IncomeDetailDialog(
                     onValueChange = { memoText = it },
                     placeholder = { Text(stringResource(R.string.income_detail_memo_placeholder)) },
                     modifier = Modifier.fillMaxWidth(),
-                    maxLines = 3
+                    maxLines = 3,
+                    trailingIcon = {
+                        if (memoText.isNotEmpty()) {
+                            IconButton(onClick = { memoText = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                            }
+                        }
+                    }
                 )
             },
             confirmButton = {

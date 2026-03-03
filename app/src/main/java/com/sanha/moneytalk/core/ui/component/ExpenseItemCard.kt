@@ -19,11 +19,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -290,7 +292,14 @@ fun ExpenseDetailDialog(
                     onValueChange = { memoText = it },
                     placeholder = { Text("메모를 입력하세요") },
                     modifier = Modifier.fillMaxWidth(),
-                    maxLines = 3
+                    maxLines = 3,
+                    trailingIcon = {
+                        if (memoText.isNotEmpty()) {
+                            IconButton(onClick = { memoText = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                            }
+                        }
+                    }
                 )
             },
             confirmButton = {
