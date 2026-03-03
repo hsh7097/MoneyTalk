@@ -430,6 +430,8 @@
     <!-- 문자 설정 -->
     <string name="sms_settings_title">문자 설정</string>
     <string name="sms_settings_subtitle">문자 분석 및 수신 차단 관리</string>
+    <string name="settings_debug_full_sync_title">DEBUG 전체 문자 읽기</string>
+    <string name="settings_debug_full_sync_subtitle">기간 설정 없이 모든 문자를 다시 분석합니다</string>
     <string name="sms_settings_section_analysis">문자 분석</string>
     <string name="sms_settings_section_block">수신 차단</string>
     <string name="sms_settings_sync_title">문자분석 업데이트</string>

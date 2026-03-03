@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Settings
@@ -336,6 +337,19 @@ fun SettingsScreen(
                             context.startActivity(Intent(context, SmsSettingsActivity::class.java))
                         }
                     )
+                    if (BuildConfig.DEBUG) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        SettingsItemCompose(
+                            info = object : SettingsItemInfo {
+                                override val icon = Icons.Default.Refresh
+                                override val title = stringResource(R.string.settings_debug_full_sync_title)
+                                override val subtitle = stringResource(R.string.settings_debug_full_sync_subtitle)
+                            },
+                            onClick = {
+                                viewModel.onIntent(SettingsIntent.DebugFullSyncAllMessages)
+                            }
+                        )
+                    }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SettingsItemCompose(
                         info = object : SettingsItemInfo {

@@ -21,7 +21,8 @@ import androidx.room.PrimaryKey
     tableName = "incomes",
     indices = [
         Index(value = ["smsId"]),
-        Index(value = ["dateTime"])
+        Index(value = ["dateTime"]),
+        Index(value = ["senderAddress"])
     ]
 )
 data class IncomeEntity(
@@ -54,6 +55,9 @@ data class IncomeEntity(
 
     /** 원본 SMS 메시지 (자동 파싱인 경우) */
     val originalSms: String? = null,
+
+    /** 발신번호 (정규화값, 예: 15881688 / 01012345678) */
+    val senderAddress: String = "",
 
     /** 사용자 메모 (선택) */
     val memo: String? = null,
