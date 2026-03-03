@@ -185,6 +185,10 @@ class CategoryDetailViewModel @Inject constructor(
                     DataRefreshEvent.RefreshType.SMS_RECEIVED -> {
                         // SMS 동기화는 Home에서 처리 — 여기서는 무시
                     }
+
+                    DataRefreshEvent.RefreshType.DEBUG_FULL_SYNC_ALL_MESSAGES -> {
+                        // MainViewModel이 전체 동기화 수행 후 TRANSACTION_ADDED로 갱신됨
+                    }
                 }
             }
         }

@@ -69,4 +69,25 @@ object DatabaseMigrations {
             )
         }
     }
+
+    /**
+     * v5 -> v6
+     * expenses/incomes 테이블에 발신번호(senderAddress) 컬럼 및 인덱스 추가
+     */
+    val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE expenses ADD COLUMN senderAddress TEXT NOT NULL DEFAULT ''"
+            )
+            db.execSQL(
+                "ALTER TABLE incomes ADD COLUMN senderAddress TEXT NOT NULL DEFAULT ''"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_expenses_senderAddress ON expenses(senderAddress)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_incomes_senderAddress ON incomes(senderAddress)"
+            )
+        }
+    }
 }

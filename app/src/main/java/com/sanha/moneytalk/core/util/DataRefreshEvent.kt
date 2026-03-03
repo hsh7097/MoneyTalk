@@ -40,6 +40,9 @@ class DataRefreshEvent @Inject constructor() {
         TRANSACTION_ADDED,
 
         /** SMS 수신 감지 → 증분 동기화 트리거 */
-        SMS_RECEIVED
+        SMS_RECEIVED,
+
+        /** DEBUG 전용: 기간 제한 없이 전체 메시지 동기화 트리거 */
+        DEBUG_FULL_SYNC_ALL_MESSAGES
     }
 }

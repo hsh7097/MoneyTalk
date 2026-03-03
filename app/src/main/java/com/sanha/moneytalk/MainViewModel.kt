@@ -21,6 +21,7 @@ import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.sms2.SmsIncomeParser
 import com.sanha.moneytalk.core.sms2.SmsInput
+import com.sanha.moneytalk.core.sms2.SmsFilter
 import com.sanha.moneytalk.core.sms2.SmsReaderV2
 import com.sanha.moneytalk.core.sms2.SmsPipeline
 import com.sanha.moneytalk.core.sms2.SmsSyncCoordinator
@@ -224,6 +225,12 @@ class MainViewModel @Inject constructor(
                         MoneyTalkLogger.i("SMS 수신 이벤트 → silent 증분 동기화 시작")
                         val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
                         syncSmsV2(range, updateLastSyncTime = true, silent = true)
+                    }
+
+                    DataRefreshEvent.RefreshType.DEBUG_FULL_SYNC_ALL_MESSAGES -> {
+                        MoneyTalkLogger.i("DEBUG 전체 메시지 동기화 시작")
+                        val range = Pair(0L, System.currentTimeMillis())
+                        syncSmsV2(range, updateLastSyncTime = true, silent = false)
                     }
 
                     else -> { /* CATEGORY_UPDATED, OWNED_CARD_UPDATED, TRANSACTION_ADDED → HomeVM/HistoryVM이 처리 */ }
@@ -577,7 +584,8 @@ class MainViewModel @Inject constructor(
                     cardName = parsed.analysis.cardName,
                     dateTime = DateUtils.parseDateTime(parsed.analysis.dateTime),
                     originalSms = parsed.input.body,
-                    smsId = parsed.input.id
+                    smsId = parsed.input.id,
+                    senderAddress = SmsFilter.normalizeAddress(parsed.input.address)
                 )
             )
 
@@ -622,7 +630,8 @@ class MainViewModel @Inject constructor(
                             description = if (source.isNotBlank()) "${source}에서 $incomeType" else incomeType,
                             isRecurring = incomeType == "급여",
                             dateTime = DateUtils.parseDateTime(dateTime),
-                            originalSms = income.body
+                            originalSms = income.body,
+                            senderAddress = SmsFilter.normalizeAddress(income.address)
                         )
                     )
                     count++

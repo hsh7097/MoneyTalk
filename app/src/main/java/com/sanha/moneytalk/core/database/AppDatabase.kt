@@ -65,7 +65,7 @@ import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
         SmsExclusionKeywordEntity::class,
         SmsBlockedSenderEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(FloatListConverter::class)

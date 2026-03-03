@@ -59,6 +59,7 @@ data class ExpenseBackup(
     val cardName: String,
     val originalSms: String,
     val smsId: String,
+    val senderAddress: String = "",
     val memo: String?
 )
 
@@ -68,7 +69,9 @@ data class IncomeBackup(
     val description: String,
     val isRecurring: Boolean,
     val recurringDay: Int?,
-    val dateTime: Long
+    val dateTime: Long,
+    val senderAddress: String = "",
+    val originalSms: String? = null
 )
 
 /**
@@ -171,6 +174,7 @@ object DataBackupManager {
                     cardName = expense.cardName,
                     originalSms = expense.originalSms,
                     smsId = expense.smsId,
+                    senderAddress = expense.senderAddress,
                     memo = expense.memo
                 )
             },
@@ -181,7 +185,9 @@ object DataBackupManager {
                     description = income.description,
                     isRecurring = income.isRecurring,
                     recurringDay = income.recurringDay,
-                    dateTime = income.dateTime
+                    dateTime = income.dateTime,
+                    senderAddress = income.senderAddress,
+                    originalSms = income.originalSms
                 )
             }
         )
@@ -199,7 +205,7 @@ object DataBackupManager {
         sb.append('\uFEFF')
 
         // 헤더
-        sb.appendLine("날짜,가맹점,카테고리,카드,금액,메모,문자원본")
+        sb.appendLine("날짜,가맹점,카테고리,카드,전화번호,금액,메모,문자원본")
 
         // 데이터
         expenses.forEach { expense ->
@@ -208,6 +214,7 @@ object DataBackupManager {
                         "${escapeCsv(expense.storeName)}," +
                         "${escapeCsv(expense.category)}," +
                         "${escapeCsv(expense.cardName)}," +
+                        "${escapeCsv(expense.senderAddress)}," +
                         "${expense.amount}," +
                         "${escapeCsv(expense.memo ?: "")}," +
                         escapeCsv(expense.originalSms)
@@ -227,17 +234,19 @@ object DataBackupManager {
         sb.append('\uFEFF')
 
         // 헤더
-        sb.appendLine("날짜,유형,설명,고정수입,입금일,금액")
+        sb.appendLine("날짜,유형,설명,전화번호,고정수입,입금일,금액,문자원본")
 
         // 데이터
         incomes.forEach { income ->
             sb.appendLine(
-                "${escapeCsv(dateTimeFormat.format(Date(income.dateTime)))}," +
+                        "${escapeCsv(dateTimeFormat.format(Date(income.dateTime)))}," +
                         "${escapeCsv(income.type)}," +
                         "${escapeCsv(income.description)}," +
+                        "${escapeCsv(income.senderAddress)}," +
                         "${income.isRecurring}," +
                         "${income.recurringDay ?: ""}," +
-                        "${income.amount}"
+                        "${income.amount}," +
+                        escapeCsv(income.originalSms ?: "")
             )
         }
 
@@ -254,7 +263,7 @@ object DataBackupManager {
         sb.append('\uFEFF')
 
         // 헤더
-        sb.appendLine("유형,날짜,이름,카테고리,카드/출처,메모,금액,문자원본")
+        sb.appendLine("유형,날짜,이름,카테고리,카드/출처,전화번호,메모,금액,문자원본")
 
         // 지출 데이터
         expenses.forEach { expense ->
@@ -264,6 +273,7 @@ object DataBackupManager {
                         "${escapeCsv(expense.storeName)}," +
                         "${escapeCsv(expense.category)}," +
                         "${escapeCsv(expense.cardName)}," +
+                        "${escapeCsv(expense.senderAddress)}," +
                         "${escapeCsv(expense.memo ?: "")}," +
                         "-${expense.amount}," +
                         escapeCsv(expense.originalSms)
@@ -278,9 +288,10 @@ object DataBackupManager {
                         "${escapeCsv(income.type)}," +
                         "," +
                         "," +
+                        "${escapeCsv(income.senderAddress)}," +
                         "${escapeCsv(income.description)}," +
                         "+${income.amount}," +
-                        ""
+                        escapeCsv(income.originalSms ?: "")
             )
         }
 
@@ -348,6 +359,7 @@ object DataBackupManager {
                 dateTime = backup.dateTime,
                 originalSms = backup.originalSms,
                 smsId = backup.smsId,
+                senderAddress = backup.senderAddress,
                 memo = backup.memo,
                 createdAt = System.currentTimeMillis()
             )
@@ -364,6 +376,8 @@ object DataBackupManager {
                 isRecurring = backup.isRecurring,
                 recurringDay = backup.recurringDay,
                 dateTime = backup.dateTime,
+                senderAddress = backup.senderAddress,
+                originalSms = backup.originalSms,
                 createdAt = System.currentTimeMillis()
             )
         }

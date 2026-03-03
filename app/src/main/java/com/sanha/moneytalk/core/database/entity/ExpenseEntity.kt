@@ -25,6 +25,7 @@ import androidx.room.PrimaryKey
         Index(value = ["dateTime"]),
         Index(value = ["category"]),
         Index(value = ["cardName"]),
+        Index(value = ["senderAddress"]),
         Index(value = ["storeName", "dateTime"])
     ]
 )
@@ -52,6 +53,9 @@ data class ExpenseEntity(
 
     /** SMS 고유 ID (발신번호_시간_본문해시) - 중복 저장 방지 */
     val smsId: String,
+
+    /** 발신번호 (정규화값, 예: 15881688 / 01012345678) */
+    val senderAddress: String = "",
 
     /** 사용자 메모 (선택) */
     val memo: String? = null,
