@@ -18,6 +18,7 @@
 3. 결제 후보 SMS에 Step1.5 Fast Path 적용
    - 1차: `sms_regex_rules` (asset/rtdb/local_learned)
    - 2차: `sms_patterns`의 sender별 검증 regex (`amountRegex/storeRegex`) 로컬 보조 매칭
+     - 단, 템플릿이 일치하는 패턴에만 적용(오파싱 방지)
 4. Fast Path miss만 기존 임베딩/벡터/LLM 파이프라인 진입
 
 중요:

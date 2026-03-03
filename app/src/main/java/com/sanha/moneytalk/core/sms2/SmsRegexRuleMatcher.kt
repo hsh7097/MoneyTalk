@@ -23,6 +23,7 @@ import javax.inject.Singleton
 class SmsRegexRuleMatcher @Inject constructor(
     private val ruleRepository: SmsRegexRuleRepository,
     private val smsPatternDao: SmsPatternDao,
+    private val templateEngine: SmsTemplateEngine,
     private val originSampleCollector: SmsOriginSampleCollector
 ) {
     data class RuleMatchResult(
@@ -365,13 +366,25 @@ class SmsRegexRuleMatcher @Inject constructor(
         }
 
         val normalizedBody = normalizeBody(input.body)
+        val inputTemplate = normalizeTemplate(templateEngine.templateize(input.body))
+        val templateMatchedPatterns = patterns.filter { pattern ->
+            val patternTemplate = normalizeTemplate(pattern.smsTemplate)
+            patternTemplate == inputTemplate
+        }
+        if (templateMatchedPatterns.isEmpty()) {
+            return MatchAttemptResult(
+                failReason = "local_template_mismatch",
+                failStage = "fast_path_local_template",
+                ruleType = inferTypeFromBody(input.body)
+            )
+        }
         var lastFailure = MatchAttemptResult(
             failReason = "local_no_regex_match",
             failStage = "fast_path_local_regex",
             ruleType = inferTypeFromBody(input.body)
         )
 
-        for (pattern in patterns) {
+        for (pattern in templateMatchedPatterns) {
             val amountPattern = compileRegex(pattern.amountRegex)
             val storePattern = compileRegex(pattern.storeRegex)
             if (amountPattern == null || storePattern == null) {
@@ -559,6 +572,13 @@ class SmsRegexRuleMatcher @Inject constructor(
         return body
             .replace("\r\n", "\n")
             .replace('\r', '\n')
+    }
+
+    private fun normalizeTemplate(template: String): String {
+        return template
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+            .trim()
     }
 
     private fun extractBankTagFromBody(body: String): String? {

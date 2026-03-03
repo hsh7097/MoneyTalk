@@ -29,6 +29,11 @@ class SmsOriginSampleCollector @Inject constructor(
         private const val MAX_SUCCESS_FINGERPRINTS_PER_BUCKET = 3
         private const val SUCCESS_CACHE_MAX = 500
         private const val FAILURE_UPLOAD_GUARD_PREFS = "sms_origin_failure_upload_guard"
+        private const val FAILURE_GUARD_LAST_CLEANUP_AT_KEY = "failure_guard_last_cleanup_at"
+        private const val FAILURE_FINGERPRINT_KEY_PREFIX = "fp:"
+        private const val FAILURE_BUCKET_KEY_PREFIX = "bk:"
+        private const val FAILURE_FINGERPRINT_RETENTION_MS = 7L * 24L * 60L * 60L * 1000L
+        private const val FAILURE_GUARD_CLEANUP_INTERVAL_MS = 24L * 60L * 60L * 1000L
         private const val FAILURE_FINGERPRINT_COOLDOWN_MS = 24L * 60L * 60L * 1000L
         private const val MAX_FAILURE_UPLOADS_PER_BUCKET_PER_DAY = 5
     }
@@ -61,8 +66,16 @@ class SmsOriginSampleCollector @Inject constructor(
         val matchedRuleKey: String = ""
     )
 
+    private data class FailureUploadPermit(
+        val fingerprint: String,
+        val fingerprintKey: String,
+        val bucketKey: String,
+        val reservedAt: Long
+    )
+
     private val successFingerprintsByBucket = ConcurrentHashMap<String, LinkedHashSet<String>>()
     private val failureUploadLock = Any()
+    private val inFlightFailureFingerprints = mutableSetOf<String>()
     private val failureUploadPrefs by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         appContext.getSharedPreferences(FAILURE_UPLOAD_GUARD_PREFS, Context.MODE_PRIVATE)
     }
@@ -170,14 +183,13 @@ class SmsOriginSampleCollector @Inject constructor(
         )
         val sampleKey = fingerprint
 
-        if (!shouldUploadFailure(
+        val permit = acquireFailureUploadPermit(
                 normalizedSender = sample.normalizedSenderAddress,
                 normalizedType = normalizedType,
                 failStage = sample.failStage,
                 failReason = sample.failReason,
                 fingerprint = fingerprint
-            )
-        ) {
+            ) ?: run {
             return
         }
 
@@ -208,28 +220,35 @@ class SmsOriginSampleCollector @Inject constructor(
             payload["matchedRuleKey"] = sample.matchedRuleKey
         }
 
-        ref.updateChildren(payload).addOnFailureListener { e ->
-            MoneyTalkLogger.w(
-                "sms_origin failure 표본 업로드 실패: ${e.javaClass.simpleName} ${e.message}"
-            )
-        }
+        ref.updateChildren(payload)
+            .addOnSuccessListener {
+                markFailureUploadCommitted(permit)
+            }
+            .addOnFailureListener { e ->
+                releaseFailureUploadPermit(permit)
+                MoneyTalkLogger.w(
+                    "sms_origin failure 표본 업로드 실패: ${e.javaClass.simpleName} ${e.message}"
+                )
+            }
     }
 
-    private fun shouldUploadFailure(
+    private fun acquireFailureUploadPermit(
         normalizedSender: String,
         normalizedType: String,
         failStage: String,
         failReason: String,
         fingerprint: String
-    ): Boolean {
+    ): FailureUploadPermit? {
         val now = System.currentTimeMillis()
+        cleanupFailureGuardIfNeeded(now)
+
         val dayBucket = buildString {
             val calendar = java.util.Calendar.getInstance().apply { timeInMillis = now }
             append(calendar.get(java.util.Calendar.YEAR))
             append(String.format(Locale.ROOT, "%02d", calendar.get(java.util.Calendar.MONTH) + 1))
             append(String.format(Locale.ROOT, "%02d", calendar.get(java.util.Calendar.DAY_OF_MONTH)))
         }
-        val fingerprintKey = "fp:$fingerprint"
+        val fingerprintKey = "$FAILURE_FINGERPRINT_KEY_PREFIX$fingerprint"
         val bucketHash = sha256Hex(
             buildString {
                 append(normalizedSender)
@@ -243,25 +262,74 @@ class SmsOriginSampleCollector @Inject constructor(
                 append(dayBucket)
             }
         ).take(24)
-        val bucketKey = "bk:$bucketHash"
+        val bucketKey = "$FAILURE_BUCKET_KEY_PREFIX$dayBucket:$bucketHash"
 
         synchronized(failureUploadLock) {
+            if (!inFlightFailureFingerprints.add(fingerprint)) {
+                return null
+            }
+
             val lastUploadedAt = failureUploadPrefs.getLong(fingerprintKey, 0L)
             if (lastUploadedAt > 0L && now - lastUploadedAt < FAILURE_FINGERPRINT_COOLDOWN_MS) {
-                return false
+                inFlightFailureFingerprints.remove(fingerprint)
+                return null
             }
 
             val bucketCount = failureUploadPrefs.getInt(bucketKey, 0)
             if (bucketCount >= MAX_FAILURE_UPLOADS_PER_BUCKET_PER_DAY) {
-                return false
+                inFlightFailureFingerprints.remove(fingerprint)
+                return null
+            }
+            return FailureUploadPermit(
+                fingerprint = fingerprint,
+                fingerprintKey = fingerprintKey,
+                bucketKey = bucketKey,
+                reservedAt = now
+            )
+        }
+    }
+
+    private fun markFailureUploadCommitted(permit: FailureUploadPermit) {
+        synchronized(failureUploadLock) {
+            val currentBucketCount = failureUploadPrefs.getInt(permit.bucketKey, 0)
+            failureUploadPrefs.edit()
+                .putLong(permit.fingerprintKey, permit.reservedAt)
+                .putInt(permit.bucketKey, currentBucketCount + 1)
+                .apply()
+            inFlightFailureFingerprints.remove(permit.fingerprint)
+        }
+    }
+
+    private fun releaseFailureUploadPermit(permit: FailureUploadPermit) {
+        synchronized(failureUploadLock) {
+            inFlightFailureFingerprints.remove(permit.fingerprint)
+        }
+    }
+
+    private fun cleanupFailureGuardIfNeeded(now: Long) {
+        synchronized(failureUploadLock) {
+            val lastCleanupAt =
+                failureUploadPrefs.getLong(FAILURE_GUARD_LAST_CLEANUP_AT_KEY, 0L)
+            if (lastCleanupAt > 0L && now - lastCleanupAt < FAILURE_GUARD_CLEANUP_INTERVAL_MS) {
+                return
             }
 
-            failureUploadPrefs.edit()
-                .putLong(fingerprintKey, now)
-                .putInt(bucketKey, bucketCount + 1)
-                .apply()
+            val editor = failureUploadPrefs.edit()
+            failureUploadPrefs.all.forEach { (key, value) ->
+                when {
+                    key.startsWith(FAILURE_BUCKET_KEY_PREFIX) -> {
+                        editor.remove(key)
+                    }
+                    key.startsWith(FAILURE_FINGERPRINT_KEY_PREFIX) -> {
+                        val timestamp = (value as? Number)?.toLong() ?: 0L
+                        if (timestamp <= 0L || now - timestamp > FAILURE_FINGERPRINT_RETENTION_MS) {
+                            editor.remove(key)
+                        }
+                    }
+                }
+            }
+            editor.putLong(FAILURE_GUARD_LAST_CLEANUP_AT_KEY, now).apply()
         }
-        return true
     }
 
     private fun trimSuccessCacheIfNeeded() {
