@@ -419,12 +419,12 @@ regex 없거나 파싱 실패:
 
 ```
 [Step 5 LLM 처리]
-  → collectSampleToRtdb() → /sms_samples/{sender}_{hash}/
-    (PII 마스킹된 SMS + 임베딩 + regex + 카드명 + 발신번호)
+  → collectSampleToRtdb() → /sms_samples/{sender}/{type}/{sampleKey}/
+    (원본/마스킹 SMS + 템플릿 + regex + 카드명 + 발신번호)
 
 [관리자 수동 처리] ← 아직 미자동화
-  → sms_samples에서 임베딩 유사도 98%+ 그룹핑
-  → 검증된 regex를 /sms_regex_rules/v1/{sender}/{ruleId}/ 에 배포
+  → sms_samples에서 sender/type 단위 표본 검토
+  → 검증된 regex를 /sms_rules/{sender}/{type}/{ruleKey}/ 에 배포
 
 [다음 동기화 시 Step 4]
   → RemoteSmsRuleRepository.loadRules() — RTDB에서 전체 룰 로드
@@ -453,7 +453,7 @@ data class RemoteSmsRule(
 
 | 속성 | 값 | 설명 |
 |------|---|------|
-| RTDB 경로 | `sms_regex_rules/v1` | sender별 룰 그룹핑 |
+| RTDB 경로 | `sms_rules/{sender}/{type}/{ruleKey}` | sender/type별 룰 그룹핑 |
 | 캐시 TTL | 10분 | 동기화 중 반복 네트워크 호출 방지 |
 | 안정성 | RTDB 실패 시 빈 맵 반환 | 예외 전파 금지, main thread 블로킹 없음 |
 | 필터링 | `enabled=true` 룰만 로드 | 비활성 룰 자동 제외 |
@@ -489,7 +489,7 @@ isMainGroup = false
 | `REGEX_FAILURE_THRESHOLD` | 2 | regex 실패 쿨다운 기준 |
 | `REGEX_FAILURE_COOLDOWN_MS` | 30분 | regex 실패 쿨다운 시간 |
 | `REGEX_VALIDATION_MIN_PASS_RATIO` | 0.80 | regex 검증 최소 파싱 성공률 |
-| `RTDB_DEDUP_SIMILARITY` | 0.99 | RTDB 표본 중복 판정 |
+| `SAMPLE_KEY_CACHE_MAX_SIZE` | 500 | RTDB 표본 세션 중복 전송 방지 캐시 상한 |
 
 ### classifyUnmatched() 전체 흐름
 
@@ -890,25 +890,33 @@ ORDER BY matchCount DESC LIMIT 1
 
 ```
 sms_samples/
-  └── {normalizedSenderAddress}_{templateHashCode}/
-      ├── maskedBody: String                # PII 마스킹된 SMS 본문 (regex 작성/검증용)
-      ├── cardName: String                  # 카드사명 (발신번호 내 카드 식별)
-      ├── senderAddress: String             # 원본 발신번호 (표본 추적용)
-      ├── normalizedSenderAddress: String   # 정규화된 발신번호 (룰 그룹핑 키)
-      ├── parseSource: String               # 파싱 소스 (llm_regex만 regex 신뢰 가능)
-      ├── embedding: List<Float>            # 768차원 임베딩 (코사인 유사도 매칭 핵심)
-      ├── groupMemberCount: Int             # 관측 SMS 수 (신뢰도 판단)
-      ├── amountRegex: String?              # 검증된 금액 regex (llm_regex인 경우)
-      ├── storeRegex: String?               # 검증된 가게명 regex
-      └── cardRegex: String?                # 검증된 카드명 regex
+  └── {normalizedSenderAddress}/
+      └── {type}/
+          └── {sampleKey(sha256)}/
+              ├── schemaVersion: Int
+              ├── sampleKey: String
+              ├── fingerprint: String
+              ├── senderAddress: String
+              ├── normalizedSenderAddress: String
+              ├── type: String
+              ├── template: String
+              ├── originBody: String
+              ├── maskedBody: String
+              ├── cardName: String
+              ├── parseSource: String
+              ├── groupMemberCount: Int
+              ├── amountRegex: String?
+              ├── storeRegex: String?
+              ├── cardRegex: String?
+              ├── createdAt: Long
+              └── updatedAt: Long
 ```
 
 ### 중복 방지
 
 ```
-sentSampleEmbeddings: MutableList<List<Float>>
-
-새 SMS 임베딩 vs 기존 전송 임베딩 → 코사인 유사도 ≥ 0.99이면 스킵
+sampleKey = sha256(sender|type|template|amountRegex|storeRegex|cardRegex)
+sentSampleKeys(Set) 캐시로 세션 내 동일 sampleKey 재전송 스킵
 ```
 
 ### PII 마스킹 — `maskSmsBody(smsBody)`

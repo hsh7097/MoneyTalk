@@ -14,6 +14,9 @@ import javax.inject.Singleton
 class SmsRegexRuleRepository @Inject constructor(
     private val dao: SmsRegexRuleDao
 ) {
+    companion object {
+        private const val DEFAULT_FAIL_INACTIVE_THRESHOLD = 12
+    }
 
     suspend fun upsertRule(rule: SmsRegexRuleEntity) {
         dao.insert(rule)
@@ -59,8 +62,29 @@ class SmsRegexRuleRepository @Inject constructor(
         senderAddress: String,
         type: String,
         ruleKey: String,
+        inactiveThreshold: Int = DEFAULT_FAIL_INACTIVE_THRESHOLD,
         timestamp: Long = System.currentTimeMillis()
     ) {
-        dao.incrementFailCount(senderAddress, type, ruleKey, timestamp)
+        dao.incrementFailCount(senderAddress, type, ruleKey, inactiveThreshold, timestamp)
+    }
+
+    suspend fun updateStatus(
+        senderAddress: String,
+        type: String,
+        ruleKey: String,
+        status: String,
+        timestamp: Long = System.currentTimeMillis()
+    ) {
+        dao.updateStatus(senderAddress, type, ruleKey, status, timestamp)
+    }
+
+    suspend fun updatePriority(
+        senderAddress: String,
+        type: String,
+        ruleKey: String,
+        priority: Int,
+        timestamp: Long = System.currentTimeMillis()
+    ) {
+        dao.updatePriority(senderAddress, type, ruleKey, priority, timestamp)
     }
 }

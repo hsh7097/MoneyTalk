@@ -161,7 +161,7 @@ SimilarityPolicy (판단 인터페이스)
 | `UNSTABLE_P20_MIN_SIMILARITY` | 0.88 | unstable 그룹 판정 P20 기준 | SmsGroupClassifier |
 | `UNSTABLE_DIRECT_LLM_MAX_SIZE` | 10 | unstable 해체 시 직접 LLM 최대 수 | SmsGroupClassifier |
 | `TEMPLATE_SEED_MIN_BUCKET_SIZE` | 2 | 템플릿 시드 최소 버킷 크기 | SmsGroupClassifier |
-| `RTDB_DEDUP_SIMILARITY` | 0.99 | RTDB 표본 중복 판정 유사도 | SmsGroupClassifier |
+| `SAMPLE_KEY_CACHE_MAX_SIZE` | 500 | RTDB 표본 세션 중복 전송 방지 캐시 상한 | SmsGroupClassifier |
 | `LEARNING_QUEUE_MAX_SIZE` | 1000 | 백그라운드 학습 큐 최대 크기 | SmsGroupClassifier |
 
 #### SmsGroupClassifier Step4.5 복구 상수

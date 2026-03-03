@@ -3,9 +3,9 @@ package com.sanha.moneytalk.core.sms2
 import com.sanha.moneytalk.core.database.SmsRegexRuleRepository
 import com.sanha.moneytalk.core.database.entity.SmsRegexRuleEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -34,6 +34,9 @@ class SmsRegexRuleMatcher @Inject constructor(
             """\[(KB|신한카드|신한|우리|하나|삼성카드|삼성|현대카드|현대|롯데카드|롯데|IBK|NH|농협|BC|카카오뱅크|토스뱅크|토스|SC|씨티|수협|대구|부산|광주|전북|경남|제주)\]"""
         )
         private val STORE_NUMBER_ONLY_PATTERN = Regex("""^[\d,.:/\-\s]+$""")
+        private const val MAX_ACTIVE_RULES_PER_TYPE = 5
+        private const val RULE_FAIL_INACTIVE_THRESHOLD = 12
+        private const val RULE_STALE_INACTIVE_DAYS = 120L
 
         private val ELIGIBLE_TYPES = setOf(
             "expense",
@@ -55,9 +58,8 @@ class SmsRegexRuleMatcher @Inject constructor(
 
         for (input in inputs) {
             val sender = SmsFilter.normalizeAddress(input.address)
-            val senderRules = rulesBySender.getOrPut(sender) {
-                ruleRepository.getActiveRulesBySender(sender)
-                    .filter { isEligibleType(it.type) }
+            val senderRules = rulesBySender[sender] ?: loadSenderRules(sender).also {
+                rulesBySender[sender] = it
             }
 
             if (senderRules.isEmpty()) {
@@ -65,7 +67,7 @@ class SmsRegexRuleMatcher @Inject constructor(
                 continue
             }
 
-            val parsed = matchOne(input, senderRules)
+            val parsed = matchOne(input = input, sender = sender, rules = senderRules)
             if (parsed != null) {
                 matched.add(parsed)
             } else {
@@ -76,20 +78,152 @@ class SmsRegexRuleMatcher @Inject constructor(
         return RuleMatchResult(matched = matched, unmatched = unmatched)
     }
 
-    private fun matchOne(input: SmsInput, rules: List<SmsRegexRuleEntity>): SmsParseResult? {
+    private suspend fun loadSenderRules(sender: String): List<SmsRegexRuleEntity> {
+        if (sender.isBlank()) return emptyList()
+
+        var rules = ruleRepository.getActiveRulesBySender(sender)
+            .filter { isEligibleType(it.type) }
+        if (rules.isEmpty()) return emptyList()
+
+        val optimized = optimizeRulesForSender(sender, rules)
+        if (optimized) {
+            rules = ruleRepository.getActiveRulesBySender(sender)
+                .filter { isEligibleType(it.type) }
+        }
+        return rules
+    }
+
+    private suspend fun optimizeRulesForSender(
+        sender: String,
+        rules: List<SmsRegexRuleEntity>
+    ): Boolean {
+        val now = System.currentTimeMillis()
+        var changed = false
+
+        for (rule in rules) {
+            if (shouldDeactivateLowQuality(rule, now)) {
+                ruleRepository.updateStatus(
+                    senderAddress = sender,
+                    type = rule.type,
+                    ruleKey = rule.ruleKey,
+                    status = "INACTIVE",
+                    timestamp = now
+                )
+                changed = true
+                continue
+            }
+
+            val tunedPriority = computeAdaptivePriority(rule, now)
+            if (tunedPriority != rule.priority) {
+                ruleRepository.updatePriority(
+                    senderAddress = sender,
+                    type = rule.type,
+                    ruleKey = rule.ruleKey,
+                    priority = tunedPriority,
+                    timestamp = now
+                )
+                changed = true
+            }
+        }
+
+        val baselineRules = if (changed) {
+            ruleRepository.getActiveRulesBySender(sender).filter { isEligibleType(it.type) }
+        } else {
+            rules
+        }
+
+        for ((type, typeRules) in baselineRules.groupBy { it.type.lowercase(Locale.ROOT) }) {
+            val overflowRules = typeRules
+                .sortedWith(
+                    compareByDescending<SmsRegexRuleEntity> { it.priority }
+                        .thenByDescending { it.lastMatchedAt }
+                        .thenByDescending { it.updatedAt }
+                )
+                .drop(MAX_ACTIVE_RULES_PER_TYPE)
+
+            if (overflowRules.isEmpty()) continue
+            overflowRules.forEach { overflow ->
+                ruleRepository.updateStatus(
+                    senderAddress = sender,
+                    type = overflow.type,
+                    ruleKey = overflow.ruleKey,
+                    status = "INACTIVE",
+                    timestamp = now
+                )
+            }
+            MoneyTalkLogger.i(
+                "[SmsRegexRuleMatcher] sender=$sender type=$type 활성 룰 상한 초과(${typeRules.size}) → ${overflowRules.size}건 INACTIVE"
+            )
+            changed = true
+        }
+
+        return changed
+    }
+
+    private fun shouldDeactivateLowQuality(rule: SmsRegexRuleEntity, now: Long): Boolean {
+        if (rule.status != "ACTIVE") return false
+
+        val noSuccessAndManyFailures =
+            rule.matchCount == 0 && rule.failCount >= RULE_FAIL_INACTIVE_THRESHOLD
+        if (noSuccessAndManyFailures) return true
+
+        if (rule.lastMatchedAt <= 0L) return false
+        val staleMs = RULE_STALE_INACTIVE_DAYS * 24L * 60L * 60L * 1000L
+        val isStale = (now - rule.lastMatchedAt) >= staleMs
+        val failureDominant = rule.failCount >= (rule.matchCount + 8)
+        return isStale && failureDominant
+    }
+
+    private fun computeAdaptivePriority(rule: SmsRegexRuleEntity, now: Long): Int {
+        val basePriority = maxOf(rule.priority, defaultPriorityByType(rule.type))
+        val performanceScore = (rule.matchCount * 8) - (rule.failCount * 9)
+        val recencyBonus = when {
+            rule.lastMatchedAt <= 0L -> 0
+            (now - rule.lastMatchedAt) <= 7L * 24L * 60L * 60L * 1000L -> 40
+            (now - rule.lastMatchedAt) <= 30L * 24L * 60L * 60L * 1000L -> 20
+            (now - rule.lastMatchedAt) <= 90L * 24L * 60L * 60L * 1000L -> 5
+            else -> -20
+        }
+        return (basePriority + performanceScore + recencyBonus).coerceIn(0, 1000)
+    }
+
+    private fun defaultPriorityByType(type: String): Int {
+        return when (type.lowercase(Locale.ROOT)) {
+            "expense", "payment", "debit" -> 700
+            "cancel" -> 650
+            "overseas" -> 620
+            else -> 600
+        }
+    }
+
+    private suspend fun matchOne(
+        input: SmsInput,
+        sender: String,
+        rules: List<SmsRegexRuleEntity>
+    ): SmsParseResult? {
         val normalizedBody = normalizeBody(input.body)
 
         for (rule in rules) {
-            val regex = compileRegex(rule.bodyRegex) ?: continue
+            val regex = compileRegex(rule.bodyRegex)
+            if (regex == null) {
+                markRuleFailure(sender, rule)
+                continue
+            }
             val match = regex.find(normalizedBody) ?: continue
 
-            val amount = extractAmount(match, rule.amountGroup) ?: continue
-            if (amount <= 0) continue
+            val amount = extractAmount(match, rule.amountGroup)
+            if (amount == null || amount <= 0) {
+                markRuleFailure(sender, rule)
+                continue
+            }
 
             val storeName = extractGroupValue(match, rule.storeGroup)
                 ?.trim()
                 ?.takeIf(::isValidStoreCandidate)
-                ?: continue
+            if (storeName.isNullOrBlank()) {
+                markRuleFailure(sender, rule)
+                continue
+            }
 
             val cardName = extractGroupValue(match, rule.cardGroup)
                 ?.trim()
@@ -98,6 +232,7 @@ class SmsRegexRuleMatcher @Inject constructor(
                 ?: "기타"
 
             val dateTime = extractDateTime(match, normalizedBody, input.date, rule.dateGroup)
+            ruleRepository.incrementMatchCount(sender, rule.type, rule.ruleKey)
 
             return SmsParseResult(
                 input = input,
@@ -114,6 +249,18 @@ class SmsRegexRuleMatcher @Inject constructor(
         }
 
         return null
+    }
+
+    private suspend fun markRuleFailure(
+        sender: String,
+        rule: SmsRegexRuleEntity
+    ) {
+        ruleRepository.incrementFailCount(
+            senderAddress = sender,
+            type = rule.type,
+            ruleKey = rule.ruleKey,
+            inactiveThreshold = RULE_FAIL_INACTIVE_THRESHOLD
+        )
     }
 
     private fun isEligibleType(type: String): Boolean {

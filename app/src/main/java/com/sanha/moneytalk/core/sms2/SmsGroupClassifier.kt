@@ -17,6 +17,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
+import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
@@ -117,11 +118,11 @@ class SmsGroupClassifier @Inject constructor(
         /** 그룹 대표 추출 시 LLM에 전달할 컨텍스트 샘플 수 */
         private const val GROUP_CONTEXT_MAX_SAMPLES = 10
 
-        /** RTDB 표본 중복 판정 유사도 (0.99 = 동일 형식만 스킵) */
-        private const val RTDB_DEDUP_SIMILARITY = 0.99f
+        /** RTDB 표본 전송 키 캐시 최대 크기 (세션 중복 전송 방지) */
+        private const val SAMPLE_KEY_CACHE_MAX_SIZE = 500
 
-        /** RTDB 중복방지 캐시 최대 크기 (메모리 릭 방지) */
-        private const val RTDB_DEDUP_MAX_SAMPLES = 200
+        /** RTDB 표본 저장 경로 */
+        private const val SMS_SAMPLES_PATH = "sms_samples"
 
         /** sender IN 쿼리 chunk 크기 (SQLite bind limit 여유) */
         private const val MAIN_PATTERN_QUERY_CHUNK_SIZE = 500
@@ -383,8 +384,8 @@ class SmsGroupClassifier @Inject constructor(
     /** Step4.5 regex 실패 복구 쿨다운 추적 */
     private val regexFailedRecoveryStates = ConcurrentHashMap<String, RegexFailureState>()
 
-    /** RTDB 중복 방지용 전송 기록 */
-    private val sentSampleEmbeddings = mutableListOf<List<Float>>()
+    /** RTDB 중복 방지용 전송 키 기록 */
+    private val sentSampleKeys = linkedSetOf<String>()
 
     /** Phase4: 백그라운드 학습 큐 */
     private val learningScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -826,7 +827,7 @@ class SmsGroupClassifier @Inject constructor(
         if (unmatchedList.isEmpty()) return emptyList()
 
         // 세션 간 메모리 누적 방지: 매 classifyUnmatched 호출마다 캐시 초기화
-        synchronized(sentSampleEmbeddings) { sentSampleEmbeddings.clear() }
+        synchronized(sentSampleKeys) { sentSampleKeys.clear() }
 
         val results = mutableListOf<SmsParseResult>()
 
@@ -2035,6 +2036,35 @@ class SmsGroupClassifier @Inject constructor(
         return normalized
     }
 
+    /**
+     * 표본 타입 추론
+     *
+     * sender별 룰 생성 입력을 단순화하기 위해 본문 키워드로 1차 타입을 추론합니다.
+     */
+    private fun inferSampleType(body: String): String {
+        val normalized = body.lowercase(Locale.ROOT)
+        return when {
+            normalized.contains("취소") -> "cancel"
+            normalized.contains("해외") ||
+                normalized.contains("usd") ||
+                normalized.contains("jpy") ||
+                normalized.contains("eur") -> "overseas"
+            normalized.contains("입금") || normalized.contains("이체입금") -> "income"
+            else -> "expense"
+        }
+    }
+
+    /**
+     * RTDB 결정적 키용 SHA-256 hex
+     */
+    private fun sha256Hex(value: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+        return digest.joinToString(separator = "") { byte ->
+            String.format(Locale.ROOT, "%02x", byte)
+        }
+    }
+
     // ===== [5-3] 패턴 등록 =====
 
     /**
@@ -2122,13 +2152,11 @@ class SmsGroupClassifier @Inject constructor(
     // ===== [5-3] RTDB 표본 수집 =====
 
     /**
-     * RTDB에 마스킹된 SMS 샘플 수집 (비동기, 실패해도 무시)
+     * RTDB에 SMS 샘플 수집 (비동기, 실패해도 무시)
      *
-     * 목적: 향후 원격 regex 룰 배포용 표본 축적
-     * 중복 방지: 기존 전송 표본과 유사도 ≥ 0.99면 스킵
-     * PII 마스킹: 숫자→*, 가게명→*, 날짜→*
-     *
-     * RTDB 경로: /sms_samples/{sampleKey}
+     * 목적: sender/type 기준 룰 생성용 표본 축적.
+     * 중복 방지: sender + type + template + regex fingerprint 결정적 키 사용.
+     * RTDB 경로: /sms_samples/{sender}/{type}/{sampleKey}
      */
     private fun collectSampleToRtdb(
         embedded: EmbeddedSms,
@@ -2144,44 +2172,73 @@ class SmsGroupClassifier @Inject constructor(
             return
         }
 
-        // 유사도 기반 중복 방지 (캐시 상한 초과 시 수집 중단)
-        synchronized(sentSampleEmbeddings) {
-            if (sentSampleEmbeddings.size >= RTDB_DEDUP_MAX_SAMPLES) return
-            for (sentEmbedding in sentSampleEmbeddings) {
-                val similarity = patternMatcher.cosineSimilarity(embedded.embedding, sentEmbedding)
-                if (similarity >= RTDB_DEDUP_SIMILARITY) {
-                    return
-                }
-            }
-            sentSampleEmbeddings.add(embedded.embedding)
-        }
-
         try {
-            val originBody = embedded.input.body
-            val maskedBody = maskSmsBody(embedded.input.body)
-            val sampleKey = "${normalizeAddress(embedded.input.address)}_${embedded.template.hashCode().toUInt()}"
+            val normalizedSender = normalizeAddress(embedded.input.address)
+            if (normalizedSender.isBlank()) return
 
-            val ref = db.getReference("sms_origin").child(sampleKey)
+            val sampleType = inferSampleType(embedded.input.body)
+            val fingerprintPayload = buildString {
+                append(normalizedSender)
+                append('|')
+                append(sampleType)
+                append('|')
+                append(embedded.template.trim())
+                append('|')
+                append(amountRegex.trim())
+                append('|')
+                append(storeRegex.trim())
+                append('|')
+                append(cardRegex.trim())
+            }
+            val sampleKey = sha256Hex(fingerprintPayload)
+
+            synchronized(sentSampleKeys) {
+                if (sentSampleKeys.contains(sampleKey)) return
+                if (sentSampleKeys.size >= SAMPLE_KEY_CACHE_MAX_SIZE) {
+                    val oldestKey = sentSampleKeys.firstOrNull()
+                    if (!oldestKey.isNullOrBlank()) {
+                        sentSampleKeys.remove(oldestKey)
+                    }
+                }
+                sentSampleKeys.add(sampleKey)
+            }
+
+            val originBody = embedded.input.body
+            val maskedBody = maskSmsBody(originBody)
+            val now = System.currentTimeMillis()
+
+            val ref = db.getReference(SMS_SAMPLES_PATH)
+                .child(normalizedSender)
+                .child(sampleType)
+                .child(sampleKey)
             val data = mutableMapOf<String, Any>(
-                "originBody" to originBody,                                     // PII 마스킹된 원본 (regex 작성/검증용)
-                "maskedBody" to maskedBody,                                     // PII 마스킹된 원본 (regex 작성/검증용)
-                "template" to embedded.template,                                // 템플릿 (플레이스홀더 치환 텍스트, 유사도 비교/패턴 재생성용)
-                "cardName" to cardName.ifBlank { "UNKNOWN" },                   // 카드명 (발신번호 내 카드 식별)
-                "senderAddress" to embedded.input.address,                      // 원본 발신번호 (표본 추적용)
-                "normalizedSenderAddress" to normalizeAddress(embedded.input.address), // 룰 그룹핑 키 (/sms_regex_rules/v1/{sender}/)
-                "parseSource" to parseSource,                                   // 파싱 소스 (llm_regex만 regex 신뢰 가능)
-//                "embedding" to embedded.embedding,                              // 768차원 임베딩 (코사인 유사도 매칭 핵심)
-                "groupMemberCount" to groupMemberCount                          // 이 패턴의 관측 SMS 수 (신뢰도 판단)
+                "sampleKey" to sampleKey,
+                "schemaVersion" to 1,
+                "senderAddress" to embedded.input.address,
+                "normalizedSenderAddress" to normalizedSender,
+                "type" to sampleType,
+                "template" to embedded.template,
+                "originBody" to originBody,
+                "maskedBody" to maskedBody,
+                "cardName" to cardName.ifBlank { "UNKNOWN" },
+                "parseSource" to parseSource,
+                "groupMemberCount" to groupMemberCount,
+                "fingerprint" to sampleKey,
+                "updatedAt" to now,
+                "createdAt" to now
             )
-            if (amountRegex.isNotBlank()) data["amountRegex"] = amountRegex     // 검증된 금액 regex (llm_regex인 경우)
-            if (storeRegex.isNotBlank()) data["storeRegex"] = storeRegex        // 검증된 가게명 regex
-            if (cardRegex.isNotBlank()) data["cardRegex"] = cardRegex           // 검증된 카드명 regex
+            if (amountRegex.isNotBlank()) data["amountRegex"] = amountRegex
+            if (storeRegex.isNotBlank()) data["storeRegex"] = storeRegex
+            if (cardRegex.isNotBlank()) data["cardRegex"] = cardRegex
 
             ref.updateChildren(data)
                 .addOnSuccessListener {
                 }
                 .addOnFailureListener { e ->
-                    MoneyTalkLogger.e("RTDB 표본 수집 실패: ${e.javaClass.simpleName}: ${e.message} [sms_samples/$sampleKey]")
+                    MoneyTalkLogger.e(
+                        "RTDB 표본 수집 실패: ${e.javaClass.simpleName}: ${e.message} " +
+                            "[$SMS_SAMPLES_PATH/$normalizedSender/$sampleType/$sampleKey]"
+                    )
                 }
         } catch (e: Exception) {
             MoneyTalkLogger.w("RTDB 표본 수집 예외 (무시): ${e.message}")

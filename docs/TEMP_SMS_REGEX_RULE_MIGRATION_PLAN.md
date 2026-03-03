@@ -33,6 +33,8 @@
 | 2026-03-03 | Phase 2 | `codex/sms-regex-phase1-schema` | `assets/sms_rules_v1.json` 추가, `SmsRegexRuleAssetLoader` + `SmsRegexRemoteRuleLoader` + `SmsRegexRuleSyncService` 추가(Asset seed + RTDB overlay 기반), `assembleDebug` 검증 완료 | 완료 |
 | 2026-03-03 | Phase 3 | `codex/sms-regex-phase1-schema` | `SmsRegexRuleMatcher` 추가, `SmsSyncCoordinator`에 Step1.5 Fast Path(sender regex 매칭) 삽입, 미매칭만 기존 Pipeline 폴백, `assembleDebug` 검증 완료 | 완료 |
 | 2026-03-03 | Phase 4 | `codex/sms-regex-phase1-schema` | Fast Path miss→Pipeline fallback 안전 연결 보강: 결과 `id` 기준 중복 제거, 파이프라인 drop 카운트 노출, SyncStats에 fastPath/pipeline 분리 지표 추가, 누락 경고 로그 추가, `assembleDebug` 검증 완료 | 완료 |
+| 2026-03-03 | Phase 5 | `codex/sms-regex-phase1-schema` | `collectSampleToRtdb`를 sender/type 결정적 키 기반으로 전환: `/sms_samples/{sender}/{type}/{sampleKey}` 저장, `sampleKey=sha256(sender|type|template|regex...)`, 원본/마스킹/템플릿/타입/fingerprint 스키마 고정 | 완료 |
+| 2026-03-03 | Phase 6 | `codex/sms-regex-phase1-schema` | 룰 운영 최적화 적용: match/fail 카운트 기반 priority 자동 보정, 실패 누적 룰 자동 `INACTIVE`, sender/type 활성 룰 상한(5개) 초과 시 자동 비활성화, `assembleDebug` 검증 완료 | 완료 |
 
 ## 3. 확정 설계 원칙
 
@@ -200,6 +202,18 @@
 - 같은 샘플 중복 업로드 크게 감소
 - 룰 생성 입력이 sender/type 기준으로 정리됨
 
+### Phase 5 결과 (완료)
+
+- RTDB 표본 경로를 `/sms_samples/{sender}/{type}/{sampleKey}`로 고정
+- `sampleKey`를 결정적 해시로 전환:
+- `sha256(sender|type|template|amountRegex|storeRegex|cardRegex)`
+- 세션 중복 전송은 `sentSampleKeys` 캐시로 억제
+- 표본 스키마 고정 필드:
+- `schemaVersion`, `senderAddress`, `normalizedSenderAddress`, `type`
+- `template`, `originBody`, `maskedBody`, `parseSource`
+- `cardName`, `groupMemberCount`, `fingerprint`, `updatedAt`, `createdAt`
+- 임베딩 벡터 RTDB 전송 제거 유지 (비용/용량 절감)
+
 ## Phase 6. 운영 최적화
 
 - 목표:
@@ -211,6 +225,18 @@
 - 완료 기준:
 - fallback 비율 감소 추세
 - 동기화 시간 개선 확인
+
+### Phase 6 결과 (완료)
+
+- `SmsRegexRuleMatcher`에서 sender 로드 시 자동 최적화 수행:
+- `computeAdaptivePriority()`로 룰 우선순위 재계산 (match/fail/recency 반영)
+- 저품질 룰 자동 비활성화:
+- `matchCount=0 && failCount>=12`
+- 또는 장기 미매칭 + 실패 우세 룰
+- sender/type별 활성 룰 상한 `5개` 적용 (초과분 `INACTIVE`)
+- 매칭 결과에 따라 룰 통계 자동 누적:
+- success → `matchCount++`, `lastMatchedAt` 갱신, priority 가산
+- fail → `failCount++`, priority 감산, 임계치 도달 시 `INACTIVE`
 
 ## 7. 파일 영향 범위 (예상)
 
@@ -273,8 +299,8 @@
 - [x] Phase 2 완료
 - [x] Phase 3 완료
 - [x] Phase 4 완료
-- [ ] Phase 5 완료
-- [ ] Phase 6 완료
+- [x] Phase 5 완료
+- [x] Phase 6 완료
 - [ ] 문서 최종 정리 후 본 문서 삭제
 
 ## 12. 진행 로그 템플릿
