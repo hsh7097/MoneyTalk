@@ -2157,18 +2157,20 @@ class SmsGroupClassifier @Inject constructor(
         }
 
         try {
+            val originBody = embedded.input.body
             val maskedBody = maskSmsBody(embedded.input.body)
             val sampleKey = "${normalizeAddress(embedded.input.address)}_${embedded.template.hashCode().toUInt()}"
 
-            val ref = db.getReference("sms_samples").child(sampleKey)
+            val ref = db.getReference("sms_origin").child(sampleKey)
             val data = mutableMapOf<String, Any>(
+                "originBody" to originBody,                                     // PII 마스킹된 원본 (regex 작성/검증용)
                 "maskedBody" to maskedBody,                                     // PII 마스킹된 원본 (regex 작성/검증용)
                 "template" to embedded.template,                                // 템플릿 (플레이스홀더 치환 텍스트, 유사도 비교/패턴 재생성용)
                 "cardName" to cardName.ifBlank { "UNKNOWN" },                   // 카드명 (발신번호 내 카드 식별)
                 "senderAddress" to embedded.input.address,                      // 원본 발신번호 (표본 추적용)
                 "normalizedSenderAddress" to normalizeAddress(embedded.input.address), // 룰 그룹핑 키 (/sms_regex_rules/v1/{sender}/)
                 "parseSource" to parseSource,                                   // 파싱 소스 (llm_regex만 regex 신뢰 가능)
-                "embedding" to embedded.embedding,                              // 768차원 임베딩 (코사인 유사도 매칭 핵심)
+//                "embedding" to embedded.embedding,                              // 768차원 임베딩 (코사인 유사도 매칭 핵심)
                 "groupMemberCount" to groupMemberCount                          // 이 패턴의 관측 SMS 수 (신뢰도 판단)
             )
             if (amountRegex.isNotBlank()) data["amountRegex"] = amountRegex     // 검증된 금액 regex (llm_regex인 경우)
