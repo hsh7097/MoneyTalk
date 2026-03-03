@@ -66,6 +66,18 @@
           "status": "ACTIVE",
           "source": "asset",
           "version": 1
+        },
+        "edf33275a7a1edd209939b31": {
+          "type": "expense",
+          "priority": 915,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>KB)\\](?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\d+\\*+\\d+\\s*\\n\\d{8,}\\s*\\n(?<store>\\ucd9c\\uae08)\\s*\\n(?<amount>[\\d,]+)\\s*\\n\\uc794\\uc561[\\d,]+",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
         }
       }
     },

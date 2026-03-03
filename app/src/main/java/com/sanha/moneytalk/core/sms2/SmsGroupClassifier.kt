@@ -1217,6 +1217,11 @@ class SmsGroupClassifier @Inject constructor(
 
         // 비결제 판정 → 비결제 패턴으로 DB 등록 후 종료
         if (!llmResult.isPayment) {
+            MoneyTalkLogger.w(
+                "[processGroup] NON_PAYMENT 상세: addr=*$addr, amount=${llmResult.amount}, " +
+                    "store=${llmResult.storeName}, card=${llmResult.cardName}, category=${llmResult.category}, " +
+                    "date=${llmResult.dateTime}, representative=${representative.input.body.replace("\n", "↵").take(180)}"
+            )
             if (!skipLearning) {
                 registerNonPaymentPattern(representative)
             } else {
