@@ -29,6 +29,7 @@
 | 날짜 | Phase | PR/브랜치 | 변경 요약 | 상태 |
 |------|-------|-----------|-----------|------|
 | 2026-03-03 | Phase 1 | `codex/sms-regex-phase1-schema` | `sms_regex_rules` 엔티티/DAO/Repository 추가, DB v7 마이그레이션(6→7) 추가, AppDatabase/DatabaseModule 연결, `assembleDebug` 검증 완료 | 완료 |
+| 2026-03-03 | Phase 2 | `codex/sms-regex-phase1-schema` | `assets/sms_rules_v1.json` 추가, `SmsRegexRuleAssetLoader` 추가(Asset JSON → `SmsRegexRuleEntity` 파싱) | 진행중 |
 
 ## 3. 확정 설계 원칙
 
