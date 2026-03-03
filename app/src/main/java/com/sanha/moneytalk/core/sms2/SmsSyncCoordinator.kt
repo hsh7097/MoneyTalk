@@ -126,17 +126,37 @@ class SmsSyncCoordinator @Inject constructor(
             SmsPipeline.PipelineResult(emptyList(), 0, 0)
         }
 
-        val expenses = fastPathMatched + pipelineResult.results
+        val expenses = (fastPathMatched + pipelineResult.results)
+            .distinctBy { it.input.id }
+        val duplicateExpenseCount = fastPathMatched.size + pipelineResult.results.size - expenses.size
+        if (duplicateExpenseCount > 0) {
+            MoneyTalkLogger.w("중복 파싱 결과 감지: ${duplicateExpenseCount}건 (동일 SMS id 기준)")
+        }
+
+        val unresolvedPayments = (paymentCandidates.size - expenses.size - pipelineResult.droppedCount)
+            .coerceAtLeast(0)
+        if (unresolvedPayments > 0) {
+            MoneyTalkLogger.w(
+                "결제 후보 대비 미해결 건 감지: ${unresolvedPayments}건 " +
+                    "(candidates=${paymentCandidates.size}, parsed=${expenses.size}, dropped=${pipelineResult.droppedCount})"
+            )
+        }
+
         val preFilterSkipped = smsList.size - filtered.size
+        val totalVectorMatchCount = fastPathMatched.size + pipelineResult.vectorMatchCount
         val stats = SyncStats(
             totalInput = smsList.size,
             paymentCandidates = paymentCandidates.size,
             incomeCandidates = incomeCandidates.size,
             skipped = skipped.size + preFilterSkipped,
-            vectorMatchCount = fastPathMatched.size + pipelineResult.vectorMatchCount,
+            fastPathMatchCount = fastPathMatched.size,
+            fallbackToPipelineCount = fastPathUnmatched.size,
+            pipelineVectorMatchCount = pipelineResult.vectorMatchCount,
+            vectorMatchCount = totalVectorMatchCount,
             llmProcessCount = pipelineResult.llmProcessCount,
             newPatternsCreated = pipelineResult.llmProcessCount,
-            regexFailedRecoveredCount = pipelineResult.regexFailedRecoveredCount
+            regexFailedRecoveredCount = pipelineResult.regexFailedRecoveredCount,
+            pipelineDroppedCount = pipelineResult.droppedCount
         )
         MoneyTalkLogger.i("SmsSyncCoordinator 완료: 지출 ${expenses.size}건, 수입 ${incomeCandidates.size}건"
         )

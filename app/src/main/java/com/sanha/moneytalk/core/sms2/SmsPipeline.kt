@@ -95,7 +95,9 @@ class SmsPipeline @Inject constructor(
         val vectorMatchCount: Int,
         val llmProcessCount: Int,
         /** Step 4.5에서 regex 실패→LLM 복구된 건수 */
-        val regexFailedRecoveredCount: Int = 0
+        val regexFailedRecoveredCount: Int = 0,
+        /** 파이프라인 처리 중 최종 파싱 누락된 건수 */
+        val droppedCount: Int = 0
     )
 
     /**
@@ -181,6 +183,7 @@ class SmsPipeline @Inject constructor(
 
         val total = matchResult.matched + regexFailedResults + llmResults
         val parsedIds = total.map { it.input.id }.toHashSet()
+        val droppedCount = (embedded.size - parsedIds.size).coerceAtLeast(0)
         if (parsedIds.size < embedded.size) {
             val regexFailedFallbackIds = regexFailedFallback.map { it.input.id }.toHashSet()
             val unmatchedIds = matchResult.unmatched.map { it.input.id }.toHashSet()
@@ -206,7 +209,8 @@ class SmsPipeline @Inject constructor(
             results = total,
             vectorMatchCount = matchResult.matched.size,
             llmProcessCount = llmResults.size,
-            regexFailedRecoveredCount = regexFailedResults.size
+            regexFailedRecoveredCount = regexFailedResults.size,
+            droppedCount = droppedCount
         )
     }
 

@@ -32,6 +32,7 @@
 | 2026-03-03 | Phase 1 | `codex/sms-regex-phase1-schema` | `sms_regex_rules` 엔티티/DAO/Repository 추가, DB v7 마이그레이션(6→7) 추가, AppDatabase/DatabaseModule 연결, `assembleDebug` 검증 완료 | 완료 |
 | 2026-03-03 | Phase 2 | `codex/sms-regex-phase1-schema` | `assets/sms_rules_v1.json` 추가, `SmsRegexRuleAssetLoader` + `SmsRegexRemoteRuleLoader` + `SmsRegexRuleSyncService` 추가(Asset seed + RTDB overlay 기반), `assembleDebug` 검증 완료 | 완료 |
 | 2026-03-03 | Phase 3 | `codex/sms-regex-phase1-schema` | `SmsRegexRuleMatcher` 추가, `SmsSyncCoordinator`에 Step1.5 Fast Path(sender regex 매칭) 삽입, 미매칭만 기존 Pipeline 폴백, `assembleDebug` 검증 완료 | 완료 |
+| 2026-03-03 | Phase 4 | `codex/sms-regex-phase1-schema` | Fast Path miss→Pipeline fallback 안전 연결 보강: 결과 `id` 기준 중복 제거, 파이프라인 drop 카운트 노출, SyncStats에 fastPath/pipeline 분리 지표 추가, 누락 경고 로그 추가, `assembleDebug` 검증 완료 | 완료 |
 
 ## 3. 확정 설계 원칙
 
@@ -174,6 +175,19 @@
 - 파싱 누락/중복 저장 없음
 - 기존 회귀 테스트 시나리오 통과
 
+### Phase 4 결과 (완료)
+
+- `SmsPipeline.PipelineResult`에 `droppedCount` 추가
+- `SmsSyncCoordinator`에서 Fast Path + Pipeline 결과 결합 시 `input.id` 기준 중복 제거 적용
+- `SyncStats`에 분리 지표 추가:
+- `fastPathMatchCount`
+- `fallbackToPipelineCount`
+- `pipelineVectorMatchCount`
+- `pipelineDroppedCount`
+- 경고 로그 추가:
+- 중복 파싱 결과 감지
+- 결제 후보 대비 미해결 건 감지
+
 ## Phase 5. 샘플 수집/룰 생성 파이프라인 정리
 
 - 목표:
@@ -258,7 +272,7 @@
 - [x] Phase 1 완료
 - [x] Phase 2 완료
 - [x] Phase 3 완료
-- [ ] Phase 4 완료
+- [x] Phase 4 완료
 - [ ] Phase 5 완료
 - [ ] Phase 6 완료
 - [ ] 문서 최종 정리 후 본 문서 삭제
