@@ -28,6 +28,7 @@
 
 | 날짜 | Phase | PR/브랜치 | 변경 요약 | 상태 |
 |------|-------|-----------|-----------|------|
+| 2026-03-03 | Phase 0 | `codex/sms-regex-phase1-schema` | `SmsGroupClassifier` 상수와 `SMS_PARSING.md` 문서 값 정합성 수정(정규식 최소 샘플 5, 소그룹 병합 0.90, regex 검증 통과율 0.80), baseline 지표 포맷 확정 | 완료 |
 | 2026-03-03 | Phase 1 | `codex/sms-regex-phase1-schema` | `sms_regex_rules` 엔티티/DAO/Repository 추가, DB v7 마이그레이션(6→7) 추가, AppDatabase/DatabaseModule 연결, `assembleDebug` 검증 완료 | 완료 |
 | 2026-03-03 | Phase 2 | `codex/sms-regex-phase1-schema` | `assets/sms_rules_v1.json` 추가, `SmsRegexRuleAssetLoader` + `SmsRegexRemoteRuleLoader` + `SmsRegexRuleSyncService` 추가(Asset seed + RTDB overlay 기반), `assembleDebug` 검증 완료 | 완료 |
 | 2026-03-03 | Phase 3 | `codex/sms-regex-phase1-schema` | `SmsRegexRuleMatcher` 추가, `SmsSyncCoordinator`에 Step1.5 Fast Path(sender regex 매칭) 삽입, 미매칭만 기존 Pipeline 폴백, `assembleDebug` 검증 완료 | 완료 |
@@ -108,6 +109,20 @@
 - 완료 기준:
 - baseline 측정 방법 문서화
 - 회귀 비교 가능한 기준값 저장
+
+### Phase 0 결과 (완료)
+
+- 코드 기준 상수:
+- `REGEX_MIN_SAMPLES = 5`
+- `SMALL_GROUP_MERGE_MIN_SIMILARITY = 0.90`
+- `REGEX_VALIDATION_MIN_PASS_RATIO = 0.80`
+- baseline 로그 포맷(집계 키):
+- `totalCandidates`, `fastPathMatched`, `fastPathUnmatched`
+- `pipelineVectorMatched`, `pipelineLlmParsed`, `fallbackCount`
+- `bySender(sender).hit/fail/fallback`
+- `byType(type).hit/fail`
+- 측정 구간:
+- 동일 기간(예: 최근 30일)에서 Full Sync 3회 반복 후 평균값 비교
 
 ## Phase 1. 룰 전용 로컬 스키마 추가
 
@@ -239,7 +254,7 @@
 
 ## 11. 작업 추적 체크리스트
 
-- [ ] Phase 0 완료
+- [x] Phase 0 완료
 - [x] Phase 1 완료
 - [x] Phase 2 완료
 - [x] Phase 3 완료

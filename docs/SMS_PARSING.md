@@ -482,13 +482,13 @@ isMainGroup = false
 | `LLM_BATCH_SIZE` | 20 | 한 번에 LLM에 보내는 그룹 수 |
 | `LLM_CONCURRENCY` | 5 | LLM 병렬 동시 실행 수 |
 | `REGEX_SAMPLE_SIZE` | 5 | regex 생성 시 사용할 샘플 수 |
-| `REGEX_MIN_SAMPLES` | 3 | regex 생성 최소 멤버 수 |
+| `REGEX_MIN_SAMPLES` | 5 | regex 생성 최소 멤버 수 |
 | `GROUPING_SIMILARITY` | 0.95 | 벡터 클러스터링 임계값 |
 | `SMALL_GROUP_MERGE_THRESHOLD` | 5 | 소그룹 병합 기준 멤버 수 |
-| `SMALL_GROUP_MERGE_MIN_SIMILARITY` | 0.70 | 소그룹 병합 최소 유사도 |
+| `SMALL_GROUP_MERGE_MIN_SIMILARITY` | 0.90 | 소그룹 병합 최소 유사도 |
 | `REGEX_FAILURE_THRESHOLD` | 2 | regex 실패 쿨다운 기준 |
 | `REGEX_FAILURE_COOLDOWN_MS` | 30분 | regex 실패 쿨다운 시간 |
-| `REGEX_VALIDATION_MIN_PASS_RATIO` | 0.50 | regex 검증 최소 파싱 성공률 |
+| `REGEX_VALIDATION_MIN_PASS_RATIO` | 0.80 | regex 검증 최소 파싱 성공률 |
 | `RTDB_DEDUP_SIMILARITY` | 0.99 | RTDB 표본 중복 판정 |
 
 ### classifyUnmatched() 전체 흐름
@@ -502,7 +502,7 @@ classifyUnmatched(unmatchedList)
   │   ├ Level 2: 같은 발신번호 내 벡터 유사도 ≥ 0.95 그리디 클러스터링
   │   │   └ groupBySimilarityInternal() — 50건마다 yield()
   │   └ Level 3: 소그룹 병합 — mergeSmallGroups()
-  │       └ 멤버 ≤ 5 + 유사도 ≥ 0.70 → 최대 그룹에 흡수
+  │       └ 멤버 ≤ 5 + 유사도 ≥ 0.90 → 최대 그룹에 흡수
   │
   ├── [5-1.5] 발신번호 단위 재집계 → SourceGroup
   │   └ 서브그룹을 발신번호별로 묶어서 메인/예외 분리
@@ -525,14 +525,14 @@ classifyUnmatched(unmatchedList)
   │   ├ 비결제 → registerNonPaymentPattern() → 종료
   │   ├ 결제 → regex 생성 시도:
   │   │   ├ mainContext에 regex 있으면 → MainRegexContext 구성 → 참조 전달
-  │   │   ├ 멤버 ≥ 3 + 쿨다운 아님 → smsExtractor.generateRegexForGroup(mainRegexContext)
+  │   │   ├ 멤버 ≥ 5 + 쿨다운 아님 → smsExtractor.generateRegexForGroup(mainRegexContext)
   │   │   │   ├ 생성 성공 → validateRegexAgainstSamples() ★ 샘플 검증
-  │   │   │   │   ├ 검증 통과 (50%+ 파싱 성공) → parseSource = "llm_regex"
+  │   │   │   │   ├ 검증 통과 (80%+ 파싱 성공) → parseSource = "llm_regex"
   │   │   │   │   └ 검증 실패 → buildTemplateFallbackRegex()
   │   │   │   └ 생성 실패 → buildTemplateFallbackRegex()
   │   │   │       ├ 성공 → parseSource = "template_regex"
   │   │   │       └ 실패 → parseSource = "llm"
-  │   │   └ 멤버 < 3 → 템플릿 폴백 시도
+  │   │   └ 멤버 < 5 → 템플릿 폴백 시도
   │   ├ registerPaymentPattern(isMainGroup=true/false) → DB 등록
   │   └ collectSampleToRtdb() → RTDB 표본 수집
   │
