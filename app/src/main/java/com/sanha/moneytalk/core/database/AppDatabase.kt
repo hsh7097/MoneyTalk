@@ -13,6 +13,7 @@ import com.sanha.moneytalk.core.database.dao.OwnedCardDao
 import com.sanha.moneytalk.core.database.dao.SmsBlockedSenderDao
 import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
+import com.sanha.moneytalk.core.database.dao.SmsRegexRuleDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import com.sanha.moneytalk.core.database.entity.CategoryMappingEntity
@@ -24,6 +25,7 @@ import com.sanha.moneytalk.core.database.entity.OwnedCardEntity
 import com.sanha.moneytalk.core.database.entity.SmsBlockedSenderEntity
 import com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
+import com.sanha.moneytalk.core.database.entity.SmsRegexRuleEntity
 import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
 
 /**
@@ -63,9 +65,10 @@ import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
         StoreEmbeddingEntity::class,
         OwnedCardEntity::class,
         SmsExclusionKeywordEntity::class,
-        SmsBlockedSenderEntity::class
+        SmsBlockedSenderEntity::class,
+        SmsRegexRuleEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(FloatListConverter::class)
@@ -100,6 +103,9 @@ abstract class AppDatabase : RoomDatabase() {
 
     /** SMS 수신거부 발신번호 DAO */
     abstract fun smsBlockedSenderDao(): SmsBlockedSenderDao
+
+    /** sender 기반 regex 룰 DAO */
+    abstract fun smsRegexRuleDao(): SmsRegexRuleDao
 
     companion object {
         /** 데이터베이스 파일명 */

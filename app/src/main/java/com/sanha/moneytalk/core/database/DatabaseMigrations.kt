@@ -90,4 +90,49 @@ object DatabaseMigrations {
             )
         }
     }
+
+    /**
+     * v6 -> v7
+     * sender 기반 regex 룰 테이블 추가
+     */
+    val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS sms_regex_rules (
+                    senderAddress TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    ruleKey TEXT NOT NULL,
+                    bodyRegex TEXT NOT NULL,
+                    amountGroup TEXT NOT NULL DEFAULT '',
+                    storeGroup TEXT NOT NULL DEFAULT '',
+                    cardGroup TEXT NOT NULL DEFAULT '',
+                    dateGroup TEXT NOT NULL DEFAULT '',
+                    priority INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'ACTIVE',
+                    source TEXT NOT NULL DEFAULT 'asset',
+                    version INTEGER NOT NULL DEFAULT 1,
+                    matchCount INTEGER NOT NULL DEFAULT 0,
+                    failCount INTEGER NOT NULL DEFAULT 0,
+                    lastMatchedAt INTEGER NOT NULL DEFAULT 0,
+                    updatedAt INTEGER NOT NULL DEFAULT 0,
+                    createdAt INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(senderAddress, type, ruleKey)
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_sms_regex_rules_senderAddress ON sms_regex_rules(senderAddress)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_sms_regex_rules_senderAddress_type ON sms_regex_rules(senderAddress, type)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_sms_regex_rules_status ON sms_regex_rules(status)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_sms_regex_rules_updatedAt ON sms_regex_rules(updatedAt)"
+            )
+        }
+    }
 }

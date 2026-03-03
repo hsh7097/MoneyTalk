@@ -13,6 +13,7 @@ import com.sanha.moneytalk.core.database.dao.OwnedCardDao
 import com.sanha.moneytalk.core.database.dao.SmsBlockedSenderDao
 import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
+import com.sanha.moneytalk.core.database.dao.SmsRegexRuleDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import dagger.Module
 import dagger.Provides
@@ -54,7 +55,8 @@ object DatabaseModule {
                 DatabaseMigrations.MIGRATION_2_3,
                 DatabaseMigrations.MIGRATION_3_4,
                 DatabaseMigrations.MIGRATION_4_5,
-                DatabaseMigrations.MIGRATION_5_6
+                DatabaseMigrations.MIGRATION_5_6,
+                DatabaseMigrations.MIGRATION_6_7
             )
             .build()
     }
@@ -127,5 +129,12 @@ object DatabaseModule {
     @Singleton
     fun provideSmsBlockedSenderDao(database: AppDatabase): SmsBlockedSenderDao {
         return database.smsBlockedSenderDao()
+    }
+
+    /** sender 기반 regex 룰 DAO 제공 */
+    @Provides
+    @Singleton
+    fun provideSmsRegexRuleDao(database: AppDatabase): SmsRegexRuleDao {
+        return database.smsRegexRuleDao()
     }
 }
