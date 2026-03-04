@@ -45,7 +45,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
@@ -452,39 +451,6 @@ fun FilterTabRow(
                 onApplyFilter(newSort, newShowExp, newShowInc, newCategory, newFixedFilter)
                 showBottomSheet = false
             }
-        )
-    }
-}
-
-/**
- * 필터 칩 버튼 (일관된 스타일)
- */
-@Composable
-fun FilterChipButton(
-    label: String,
-    isActive: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(
-                if (isActive) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.surfaceVariant
-            )
-            .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            fontSize = 14.toDpTextUnit,
-            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
         )
     }
 }

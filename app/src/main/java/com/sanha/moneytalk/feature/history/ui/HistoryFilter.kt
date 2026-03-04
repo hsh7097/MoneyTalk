@@ -42,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupCompose
+import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupOption
 
 private fun isFilterDefault(
     sortOrder: SortOrder,
@@ -138,22 +140,19 @@ fun FilterBottomSheet(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val sortOptions = listOf(
-                        SortOrder.DATE_DESC to stringResource(R.string.history_sort_date),
-                        SortOrder.AMOUNT_DESC to stringResource(R.string.history_sort_amount_short),
-                        SortOrder.STORE_FREQ to stringResource(R.string.history_sort_store)
-                    )
-                    sortOptions.forEach { (order, label) ->
-                        FilterChipButton(
-                            label = label,
-                            isActive = tempSortOrder == order,
-                            onClick = { tempSortOrder = order }
-                        )
+                val sortOptions = listOf(
+                    SortOrder.DATE_DESC to stringResource(R.string.history_sort_date),
+                    SortOrder.AMOUNT_DESC to stringResource(R.string.history_sort_amount_short),
+                    SortOrder.STORE_FREQ to stringResource(R.string.history_sort_store)
+                )
+                RadioGroupCompose(
+                    options = sortOptions.map { (order, label) ->
+                        RadioGroupOption(label = label, isSelected = tempSortOrder == order)
+                    },
+                    onOptionSelected = { index ->
+                        tempSortOrder = sortOptions[index].first
                     }
-                }
+                )
 
                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -164,22 +163,19 @@ fun FilterBottomSheet(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val fixedOptions = listOf(
-                        FixedExpenseFilter.ALL to stringResource(R.string.history_filter_fixed_all),
-                        FixedExpenseFilter.FIXED_ONLY to stringResource(R.string.history_filter_fixed_only),
-                        FixedExpenseFilter.EXCLUDE_FIXED to stringResource(R.string.history_filter_fixed_exclude)
-                    )
-                    fixedOptions.forEach { (filter, label) ->
-                        FilterChipButton(
-                            label = label,
-                            isActive = tempFixedFilter == filter,
-                            onClick = { tempFixedFilter = filter }
-                        )
+                val fixedOptions = listOf(
+                    FixedExpenseFilter.ALL to stringResource(R.string.history_filter_fixed_all),
+                    FixedExpenseFilter.FIXED_ONLY to stringResource(R.string.history_filter_fixed_only),
+                    FixedExpenseFilter.EXCLUDE_FIXED to stringResource(R.string.history_filter_fixed_exclude)
+                )
+                RadioGroupCompose(
+                    options = fixedOptions.map { (filter, label) ->
+                        RadioGroupOption(label = label, isSelected = tempFixedFilter == filter)
+                    },
+                    onOptionSelected = { index ->
+                        tempFixedFilter = fixedOptions[index].first
                     }
-                }
+                )
 
                 Spacer(modifier = Modifier.height(20.dp))
 
