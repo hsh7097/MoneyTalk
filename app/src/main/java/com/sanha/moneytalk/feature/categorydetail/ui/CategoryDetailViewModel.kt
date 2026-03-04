@@ -218,13 +218,10 @@ class CategoryDetailViewModel @Inject constructor(
 
     // ========== 정렬 ==========
 
-    /** 정렬 순서 토글 */
-    fun toggleSortOrder() {
-        val newOrder = when (_uiState.value.sortOrder) {
-            CategorySortOrder.DATE_DESC -> CategorySortOrder.AMOUNT_DESC
-            CategorySortOrder.AMOUNT_DESC -> CategorySortOrder.DATE_DESC
-        }
-        _uiState.update { it.copy(sortOrder = newOrder) }
+    /** 정렬 순서 설정 */
+    fun setSortOrder(order: CategorySortOrder) {
+        if (_uiState.value.sortOrder == order) return
+        _uiState.update { it.copy(sortOrder = order) }
         // 캐시 내 transactionItems 재빌드
         clearAllPageCache()
         loadCurrentAndAdjacentPages()

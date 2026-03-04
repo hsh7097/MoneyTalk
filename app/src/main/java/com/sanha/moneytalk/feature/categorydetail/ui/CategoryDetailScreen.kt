@@ -56,8 +56,9 @@ import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
 import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabInfo
+import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabRowCompose
 import com.sanha.moneytalk.feature.categorydetail.ui.model.CategorySpendingTrendInfo
-import com.sanha.moneytalk.feature.history.ui.FilterChipButton
 import com.sanha.moneytalk.feature.home.ui.component.SpendingTrendSection
 import kotlinx.coroutines.launch
 
@@ -77,12 +78,6 @@ fun CategoryDetailScreen(
 
     // 선택된 지출 항목 (상세보기용)
     var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
-
-    // 정렬 레이블
-    val sortLabel = when (uiState.sortOrder) {
-        CategorySortOrder.DATE_DESC -> stringResource(R.string.category_sort_date)
-        CategorySortOrder.AMOUNT_DESC -> stringResource(R.string.category_sort_amount)
-    }
 
     // HorizontalPager — Virtual Infinite Pager
     val initialPage = remember {
@@ -162,8 +157,8 @@ fun CategoryDetailScreen(
                 month = pageMonth,
                 monthStartDay = uiState.monthStartDay,
                 categoryName = uiState.categoryDisplayName,
-                sortLabel = sortLabel,
-                onToggleSort = { viewModel.toggleSortOrder() },
+                sortOrder = uiState.sortOrder,
+                onSortOrderChange = { viewModel.setSortOrder(it) },
                 onPreviousMonth = {
                     coroutineScope.launch {
                         pagerState.animateScrollToPage(pagerState.currentPage - 1)
@@ -213,8 +208,8 @@ private fun CategoryDetailPageContent(
     month: Int,
     monthStartDay: Int,
     categoryName: String,
-    sortLabel: String = "",
-    onToggleSort: () -> Unit = {},
+    sortOrder: CategorySortOrder = CategorySortOrder.DATE_DESC,
+    onSortOrderChange: (CategorySortOrder) -> Unit = {},
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onExpenseSelected: (ExpenseEntity) -> Unit
@@ -247,18 +242,45 @@ private fun CategoryDetailPageContent(
             )
         }
 
-        // 정렬 토글
+        // 정렬 토글 (세그먼트 탭)
         item(key = "sort_toggle") {
+            val primaryColor = MaterialTheme.colorScheme.primary
+            val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
+            val dateSortLabel = stringResource(R.string.category_sort_date)
+            val amountSortLabel = stringResource(R.string.category_sort_amount)
+
+            val sortTabs = remember(sortOrder, primaryColor, onPrimaryColor) {
+                listOf(
+                    object : SegmentedTabInfo {
+                        override val label = dateSortLabel
+                        override val isSelected = sortOrder == CategorySortOrder.DATE_DESC
+                        override val selectedColor = primaryColor
+                        override val selectedTextColor = onPrimaryColor
+                    },
+                    object : SegmentedTabInfo {
+                        override val label = amountSortLabel
+                        override val isSelected = sortOrder == CategorySortOrder.AMOUNT_DESC
+                        override val selectedColor = primaryColor
+                        override val selectedTextColor = onPrimaryColor
+                    }
+                )
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.End
             ) {
-                FilterChipButton(
-                    label = sortLabel,
-                    isActive = true,
-                    onClick = onToggleSort
+                SegmentedTabRowCompose(
+                    tabs = sortTabs,
+                    onTabClick = { index ->
+                        val newOrder = when (index) {
+                            0 -> CategorySortOrder.DATE_DESC
+                            else -> CategorySortOrder.AMOUNT_DESC
+                        }
+                        onSortOrderChange(newOrder)
+                    }
                 )
             }
         }
