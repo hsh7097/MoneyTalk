@@ -345,6 +345,7 @@ fun TransactionListView(
     scrollResetKey: Any? = null,
     onIntent: (HistoryIntent) -> Unit
 ) {
+    val context = LocalContext.current
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
@@ -466,7 +467,9 @@ fun TransactionListView(
                     is TransactionListItem.IncomeItem -> {
                         TransactionCardCompose(
                             info = item.cardInfo,
-                            onClick = { onIntent(HistoryIntent.SelectIncome(item.income)) }
+                            onClick = {
+                                TransactionEditActivity.open(context, incomeId = item.income.id)
+                            }
                         )
                     }
                 }

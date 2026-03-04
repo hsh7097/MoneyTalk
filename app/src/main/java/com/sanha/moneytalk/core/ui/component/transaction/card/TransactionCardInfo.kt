@@ -79,4 +79,5 @@ class IncomeTransactionCardInfo(
     override val iconEmoji: String = "\uD83D\uDCB0"
     override val categoryTag: String = income.type
     override val time: String = timeFormat.format(Date(income.dateTime))
+    override val memoText: String? = income.memo?.takeIf { it.isNotBlank() }
 }
