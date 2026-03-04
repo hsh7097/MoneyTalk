@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.feature.transactionedit.ui
+package com.sanha.moneytalk.feature.transactionedit
 
 import android.content.Context
 import androidx.compose.runtime.Stable
@@ -61,6 +61,10 @@ data class TransactionEditUiState(
  * - 지출/이체 → 수입: 저장 시 ExpenseEntity 삭제 + IncomeEntity 생성
  * - 수입 → 지출/이체: 저장 시 IncomeEntity 삭제 + ExpenseEntity 생성
  */
+private const val EXTRA_EXPENSE_ID = "extra_expense_id"
+private const val EXTRA_INCOME_ID = "extra_income_id"
+private const val EXTRA_INITIAL_DATE = "extra_initial_date"
+
 @HiltViewModel
 class TransactionEditViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
@@ -71,9 +75,9 @@ class TransactionEditViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    private val expenseId: Long = savedStateHandle[TransactionEditActivity.EXTRA_EXPENSE_ID] ?: -1L
-    private val incomeId: Long = savedStateHandle[TransactionEditActivity.EXTRA_INCOME_ID] ?: -1L
-    private val initialDate: Long = savedStateHandle[TransactionEditActivity.EXTRA_INITIAL_DATE]
+    private val expenseId: Long = savedStateHandle[EXTRA_EXPENSE_ID] ?: -1L
+    private val incomeId: Long = savedStateHandle[EXTRA_INCOME_ID] ?: -1L
+    private val initialDate: Long = savedStateHandle[EXTRA_INITIAL_DATE]
         ?: System.currentTimeMillis()
 
     private val _uiState = MutableStateFlow(TransactionEditUiState())

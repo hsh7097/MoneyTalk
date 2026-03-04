@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.feature.transactionlist.ui
 
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,10 +36,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.feature.transactionlist.TransactionDetailListUiState
+import com.sanha.moneytalk.feature.transactionlist.TransactionDetailListViewModel
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
-import com.sanha.moneytalk.feature.transactionedit.ui.TransactionEditActivity
+import com.sanha.moneytalk.feature.transactionedit.TransactionEditActivity
 
 /**
  * 날짜별 거래 상세 목록 화면.
@@ -134,11 +135,7 @@ fun TransactionDetailListScreen(
                 TransactionCardCompose(
                     info = IncomeTransactionCardInfo(income),
                     onClick = {
-                        context.startActivity(
-                            Intent(context, TransactionEditActivity::class.java).apply {
-                                putExtra(TransactionEditActivity.EXTRA_INCOME_ID, income.id)
-                            }
-                        )
+                        TransactionEditActivity.open(context, incomeId = income.id)
                     }
                 )
             }
@@ -151,11 +148,7 @@ fun TransactionDetailListScreen(
                 TransactionCardCompose(
                     info = ExpenseTransactionCardInfo(expense),
                     onClick = {
-                        context.startActivity(
-                            Intent(context, TransactionEditActivity::class.java).apply {
-                                putExtra(TransactionEditActivity.EXTRA_EXPENSE_ID, expense.id)
-                            }
-                        )
+                        TransactionEditActivity.open(context, expenseId = expense.id)
                     }
                 )
             }

@@ -1,13 +1,11 @@
 package com.sanha.moneytalk.feature.transactionedit.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -68,8 +66,13 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.feature.transactionedit.TransactionEditUiState
+import com.sanha.moneytalk.feature.transactionedit.TransactionEditViewModel
+import com.sanha.moneytalk.feature.transactionedit.TransactionType
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.CategorySelectDialog
+import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupCompose
+import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupOption
 import com.sanha.moneytalk.core.util.DateUtils
 import java.text.NumberFormat
 import java.util.Locale
@@ -505,7 +508,7 @@ private fun TransactionBottomButtons(
 
 /**
  * 수입/지출/이체 분류 탭.
- * 개별 OutlinedButton 형태 (선택 시 primary 테두리 + 텍스트).
+ * RadioGroupCompose 기반 균등 너비 라디오 그룹.
  */
 @Composable
 private fun TransactionTypeTab(
@@ -525,32 +528,17 @@ private fun TransactionTypeTab(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.width(72.dp)
             )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                TransactionType.entries.forEach { type ->
-                    val isSelected = type == currentType
-                    OutlinedButton(
-                        onClick = { onTypeChange(type) },
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(
-                            width = if (isSelected) 1.5.dp else 1.dp,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.outlineVariant
-                        ),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = if (isSelected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = stringResource(type.labelResId),
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
+            RadioGroupCompose(
+                options = TransactionType.entries.map { type ->
+                    RadioGroupOption(
+                        label = stringResource(type.labelResId),
+                        isSelected = type == currentType
+                    )
+                },
+                onOptionSelected = { index ->
+                    onTypeChange(TransactionType.entries[index])
                 }
-            }
+            )
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }

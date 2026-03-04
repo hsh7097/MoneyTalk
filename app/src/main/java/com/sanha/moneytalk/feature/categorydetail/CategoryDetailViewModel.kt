@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.feature.categorydetail.ui
+package com.sanha.moneytalk.feature.categorydetail
 
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
@@ -38,6 +38,10 @@ import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
 import javax.inject.Inject
+
+private const val EXTRA_CATEGORY = "extra_category"
+private const val EXTRA_YEAR = "extra_year"
+private const val EXTRA_MONTH = "extra_month"
 
 /**
  * 카테고리 상세 정렬 방식
@@ -96,11 +100,11 @@ class CategoryDetailViewModel @Inject constructor(
 
     // Intent extras (SavedStateHandle로 주입)
     private val categoryDisplayName: String =
-        savedStateHandle[CategoryDetailActivity.EXTRA_CATEGORY] ?: ""
+        savedStateHandle[EXTRA_CATEGORY] ?: ""
     private val initialYear: Int =
-        savedStateHandle[CategoryDetailActivity.EXTRA_YEAR] ?: DateUtils.getCurrentYear()
+        savedStateHandle[EXTRA_YEAR] ?: DateUtils.getCurrentYear()
     private val initialMonth: Int =
-        savedStateHandle[CategoryDetailActivity.EXTRA_MONTH] ?: DateUtils.getCurrentMonth()
+        savedStateHandle[EXTRA_MONTH] ?: DateUtils.getCurrentMonth()
 
     // Category enum → displayNamesIncludingSub (소 카테고리 포함 필터)
     private val category: Category = Category.fromDisplayName(categoryDisplayName)

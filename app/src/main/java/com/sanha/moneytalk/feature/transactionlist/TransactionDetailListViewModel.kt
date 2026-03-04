@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.feature.transactionlist.ui
+package com.sanha.moneytalk.feature.transactionlist
 
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.SavedStateHandle
@@ -19,6 +19,8 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import javax.inject.Inject
+
+private const val EXTRA_DATE = "extra_date"
 
 @Stable
 data class TransactionDetailListUiState(
@@ -45,7 +47,7 @@ class TransactionDetailListViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val dateString: String =
-        savedStateHandle[TransactionDetailListActivity.EXTRA_DATE] ?: ""
+        savedStateHandle[EXTRA_DATE] ?: ""
 
     private val _uiState = MutableStateFlow(TransactionDetailListUiState())
     val uiState: StateFlow<TransactionDetailListUiState> = _uiState.asStateFlow()

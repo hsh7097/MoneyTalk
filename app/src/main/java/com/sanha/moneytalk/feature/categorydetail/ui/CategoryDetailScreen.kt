@@ -46,11 +46,15 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
-import android.content.Intent
+import com.sanha.moneytalk.feature.categorydetail.CategoryDetailPageData
+import com.sanha.moneytalk.feature.categorydetail.CategoryDetailUiState
+import com.sanha.moneytalk.feature.categorydetail.CategoryDetailViewModel
+import com.sanha.moneytalk.feature.categorydetail.CategorySortOrder
+import com.sanha.moneytalk.feature.categorydetail.CategoryTransactionItem
 import androidx.compose.ui.platform.LocalContext
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
-import com.sanha.moneytalk.feature.transactionedit.ui.TransactionEditActivity
+import com.sanha.moneytalk.feature.transactionedit.TransactionEditActivity
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
@@ -186,11 +190,7 @@ fun CategoryDetailScreen(
     val context = LocalContext.current
     selectedExpense?.let { expense ->
         LaunchedEffect(expense.id) {
-            context.startActivity(
-                Intent(context, TransactionEditActivity::class.java).apply {
-                    putExtra(TransactionEditActivity.EXTRA_EXPENSE_ID, expense.id)
-                }
-            )
+            TransactionEditActivity.open(context, expenseId = expense.id)
             selectedExpense = null
         }
     }
