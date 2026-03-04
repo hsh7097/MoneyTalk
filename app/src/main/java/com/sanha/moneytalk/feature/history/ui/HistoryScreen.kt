@@ -46,12 +46,13 @@ import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
+import android.content.Intent
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.activity.ComponentActivity
+import com.sanha.moneytalk.feature.transactionedit.ui.TransactionEditActivity
 import com.sanha.moneytalk.MainViewModel
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
@@ -87,7 +88,7 @@ fun HistoryScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
-    var showAddDialog by remember { mutableStateOf(false) }
+    // showAddDialog 제거됨 — "+" 버튼은 TransactionEditActivity로 직접 이동
 
     // Activity-scoped MainViewModel (동기화/권한/광고 상태)
     val mainViewModel: MainViewModel = hiltViewModel(
@@ -195,8 +196,15 @@ fun HistoryScreen(
                 onApplyFilter = { sortOrder, showExp, showInc, category ->
                     viewModel.applyFilter(sortOrder, showExp, showInc, category)
                 },
+                onResetFilter = { viewModel.resetFilters() },
                 onSearchClick = { viewModel.enterSearchMode() },
-                onAddClick = { showAddDialog = true }
+                onAddClick = {
+                    context.startActivity(
+                        Intent(context, TransactionEditActivity::class.java).apply {
+                            putExtra(TransactionEditActivity.EXTRA_EXPENSE_ID, -1L)
+                        }
+                    )
+                }
             )
         }
 
@@ -279,13 +287,7 @@ fun HistoryScreen(
                         month = pageMonth,
                         monthStartDay = uiState.monthStartDay,
                         dailyTotals = pageData.dailyTotals,
-                        dailyIncomeTotals = pageData.dailyIncomeTotals,
-                        expenses = pageData.expenses,
-                        onDelete = { viewModel.deleteExpense(it) },
-                        onCategoryChange = { expense, newCategory ->
-                            viewModel.updateExpenseCategory(expense.storeName, newCategory)
-                        },
-                        onExpenseMemoChange = { id, memo -> viewModel.updateExpenseMemo(id, memo) }
+                        dailyIncomeTotals = pageData.dailyIncomeTotals
                     )
                 }
             }
@@ -297,25 +299,16 @@ fun HistoryScreen(
         }
     }
 
-    // 다이얼로그 상태는 ViewModel에서 관리
+    // 거래 선택 시 편집 Activity로 이동
     uiState.selectedExpense?.let { expense ->
-
-        ExpenseDetailDialog(
-            expense = expense,
-            onDismiss = { viewModel.onIntent(HistoryIntent.DismissDialog) },
-            onDelete = { viewModel.onIntent(HistoryIntent.DeleteExpense(expense)) },
-            onCategoryChange = { newCategory ->
-                viewModel.onIntent(
-                    HistoryIntent.ChangeCategory(
-                        expense.storeName,
-                        newCategory
-                    )
-                )
-            },
-            onMemoChange = { memo ->
-                viewModel.onIntent(HistoryIntent.UpdateExpenseMemo(expense.id, memo))
-            }
-        )
+        LaunchedEffect(expense.id) {
+            context.startActivity(
+                Intent(context, TransactionEditActivity::class.java).apply {
+                    putExtra(TransactionEditActivity.EXTRA_EXPENSE_ID, expense.id)
+                }
+            )
+            viewModel.onIntent(HistoryIntent.DismissDialog)
+        }
     }
 
     uiState.selectedIncome?.let { income ->
@@ -329,16 +322,7 @@ fun HistoryScreen(
         )
     }
 
-    // 수동 지출 추가 다이얼로그
-    if (showAddDialog) {
-        AddExpenseDialog(
-            onDismiss = { showAddDialog = false },
-            onConfirm = { amount, storeName, category, cardName ->
-                viewModel.addManualExpense(amount, storeName, category, cardName)
-                showAddDialog = false
-            }
-        )
-    }
+    // AddExpenseDialog 제거됨 — TransactionEditActivity로 대체
 
     // 동기화/광고 다이얼로그는 Activity 레벨(MoneyTalkApp)에서 전역 관리
 }

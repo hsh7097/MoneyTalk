@@ -40,6 +40,14 @@ import java.util.Date
 import javax.inject.Inject
 
 /**
+ * 카테고리 상세 정렬 방식
+ */
+enum class CategorySortOrder {
+    DATE_DESC,     // 최신순
+    AMOUNT_DESC    // 가격순
+}
+
+/**
  * 카테고리 상세 화면 UI 상태
  */
 @Stable
@@ -49,7 +57,8 @@ data class CategoryDetailUiState(
     val selectedMonth: Int = DateUtils.getCurrentMonth(),
     val monthStartDay: Int = 1,
     val categoryDisplayName: String = "",
-    val categoryEmoji: String = ""
+    val categoryEmoji: String = "",
+    val sortOrder: CategorySortOrder = CategorySortOrder.DATE_DESC
 )
 
 /**
@@ -207,6 +216,20 @@ class CategoryDetailViewModel @Inject constructor(
         }
     }
 
+    // ========== 정렬 ==========
+
+    /** 정렬 순서 토글 */
+    fun toggleSortOrder() {
+        val newOrder = when (_uiState.value.sortOrder) {
+            CategorySortOrder.DATE_DESC -> CategorySortOrder.AMOUNT_DESC
+            CategorySortOrder.AMOUNT_DESC -> CategorySortOrder.DATE_DESC
+        }
+        _uiState.update { it.copy(sortOrder = newOrder) }
+        // 캐시 내 transactionItems 재빌드
+        clearAllPageCache()
+        loadCurrentAndAdjacentPages()
+    }
+
     // ========== 월 변경 ==========
 
     /** 페이지 스와이프 시 호출 */
@@ -337,8 +360,10 @@ class CategoryDetailViewModel @Inject constructor(
                             expenses, monthStart, daysInMonth
                         )
 
-                        // 날짜별 그룹핑 거래 목록
-                        val transactionItems = buildTransactionItems(expenses)
+                        // 날짜별 그룹핑 거래 목록 (정렬 적용)
+                        val transactionItems = buildTransactionItems(
+                            expenses, _uiState.value.sortOrder
+                        )
 
                         val current =
                             _uiState.value.pageCache[key] ?: CategoryDetailPageData()
@@ -367,10 +392,21 @@ class CategoryDetailViewModel @Inject constructor(
 
     /** 지출 목록을 날짜별 그룹핑된 플랫 리스트로 변환 */
     private fun buildTransactionItems(
-        expenses: List<ExpenseEntity>
+        expenses: List<ExpenseEntity>,
+        sortOrder: CategorySortOrder = CategorySortOrder.DATE_DESC
     ): List<CategoryTransactionItem> {
         if (expenses.isEmpty()) return emptyList()
 
+        return when (sortOrder) {
+            CategorySortOrder.DATE_DESC -> buildDateGroupedItems(expenses)
+            CategorySortOrder.AMOUNT_DESC -> buildAmountSortedItems(expenses)
+        }
+    }
+
+    /** 날짜별 그룹핑 (최신순) */
+    private fun buildDateGroupedItems(
+        expenses: List<ExpenseEntity>
+    ): List<CategoryTransactionItem> {
         val items = mutableListOf<CategoryTransactionItem>()
         val grouped = expenses.groupBy { it.dateTime.toDateKey() }
         val sortedDates = grouped.keys.sortedDescending()
@@ -395,6 +431,15 @@ class CategoryDetailViewModel @Inject constructor(
         }
 
         return items
+    }
+
+    /** 금액순 정렬 (높은 금액 → 낮은 금액) */
+    private fun buildAmountSortedItems(
+        expenses: List<ExpenseEntity>
+    ): List<CategoryTransactionItem> {
+        return expenses.sortedByDescending { it.amount }.map { expense ->
+            CategoryTransactionItem.ExpenseItem(expense)
+        }
     }
 
     /** timestamp → 날짜 키 (시분초 제거) */

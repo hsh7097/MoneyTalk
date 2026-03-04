@@ -279,6 +279,8 @@
     <!-- Synced translations from values/strings.xml -->
     <string name="calendar_day_expense_title">%1$s %2$d Expense History</string>
     <string name="calendar_no_expense_for_day">No expense history for this date</string>
+    <string name="calendar_day_transaction_title">%1$s %2$d Transaction History</string>
+    <string name="calendar_no_transaction_for_day">No transaction history for this date</string>
     <string name="chat_retry">Retry</string>
     <string name="common_apply">Apply</string>
     <string name="common_suffix_day">day</string>
@@ -414,4 +416,33 @@
     <string name="sms_regex_reason_amount_compile_failed" translatable="false">amountRegex is not a valid regex. Check JSON escaping.</string>
     <string name="sms_regex_reason_store_compile_failed" translatable="false">storeRegex is not a valid regex. Check JSON escaping.</string>
     <string name="sms_regex_reason_card_compile_failed" translatable="false">cardRegex is not a valid regex. Check JSON escaping.</string>
+
+    <!-- Category detail sort -->
+    <string name="category_sort_date">Latest</string>
+    <string name="category_sort_amount">By Price</string>
+
+    <!-- Transaction edit Activity -->
+    <string name="transaction_edit_title">Transaction Detail</string>
+    <string name="transaction_add_title">Add Transaction</string>
+    <string name="transaction_edit_amount">Amount</string>
+    <string name="transaction_edit_store">Store Name</string>
+    <string name="transaction_edit_card">Payment Method</string>
+    <string name="transaction_edit_date">Date</string>
+    <string name="transaction_edit_time">Time</string>
+    <string name="transaction_edit_memo">Memo</string>
+    <string name="transaction_edit_original_sms">Original SMS</string>
+    <string name="transaction_edit_save">Save</string>
+    <string name="transaction_edit_saved">Saved</string>
+    <string name="transaction_edit_deleted">Deleted</string>
+    <string name="transaction_edit_input_required">Please enter amount and store name</string>
+    <string name="transaction_edit_save_failed">Failed to save</string>
+    <string name="transaction_edit_delete_failed">Failed to delete</string>
+    <string name="income_type_default">Deposit</string>
+
+    <!-- Daily transaction list Activity -->
+    <string name="transaction_list_title">%1$s %2$d Transaction History</string>
+    <string name="transaction_list_empty">No transactions</string>
+
+    <!-- Common -->
+    <string name="common_clear_input">Clear input</string>
 </resources>

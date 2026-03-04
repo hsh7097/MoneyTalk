@@ -14,11 +14,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -266,6 +270,13 @@ private fun TotalBudgetInput(
         },
         placeholder = { Text(stringResource(R.string.budget_total_hint)) },
         suffix = { Text(stringResource(R.string.common_suffix_won)) },
+        trailingIcon = {
+            if (amountText.isNotEmpty()) {
+                IconButton(onClick = { onAmountChange("") }) {
+                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                }
+            }
+        },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.fillMaxWidth()
@@ -372,6 +383,13 @@ private fun CategoryBudgetRow(
                 onAmountChange(input.filter { it.isDigit() })
             },
             suffix = { Text(stringResource(R.string.common_suffix_won)) },
+            trailingIcon = {
+                if (amountText.isNotEmpty()) {
+                    IconButton(onClick = { onAmountChange("") }) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                    }
+                }
+            },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             textStyle = MaterialTheme.typography.bodyMedium,
@@ -437,6 +455,13 @@ private fun CategoryBudgetPercentRow(
                 }
             },
             suffix = { Text("%") },
+            trailingIcon = {
+                if (percentText.isNotEmpty()) {
+                    IconButton(onClick = { onPercentChange("") }) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                    }
+                }
+            },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             textStyle = MaterialTheme.typography.bodyMedium,

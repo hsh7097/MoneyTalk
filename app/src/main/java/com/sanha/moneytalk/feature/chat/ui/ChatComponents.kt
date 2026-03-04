@@ -28,12 +28,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -385,6 +387,13 @@ fun ApiKeyDialog(
                     onValueChange = { apiKey = it },
                     label = { Text(stringResource(R.string.dialog_api_key_label)) },
                     placeholder = { Text(stringResource(R.string.dialog_api_key_placeholder)) },
+                    trailingIcon = {
+                        if (apiKey.isNotEmpty()) {
+                            IconButton(onClick = { apiKey = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                            }
+                        }
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

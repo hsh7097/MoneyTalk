@@ -438,13 +438,14 @@ buildBudgetCumulativePoints(monthlyBudget, daysInMonth):
 |------|------|
 | 기간 | monthStartDay 기반 (예: 19일~18일) |
 | 그리드 | 일~토 주간 그리드, 이전/다음 달 날짜로 패딩 |
-| 셀 구성 | 날짜(원형) + 일별 지출 합계(빨강 소텍스트) |
+| 셀 구성 | 날짜(원형) + 일별 수입(초록)/지출(빨강) 소텍스트 |
 | 오늘 | 파랑 배경 원형 |
 | 선택 | 연한 파랑 배경, 미래/범위외 클릭 불가 |
-| 주간 합계 | 주 우측에 합계 (빨강, >0일 때만) |
+| 주간 합계 | 주 우측에 수입(초록)+지출(빨강) (>0일 때만) |
 | 무지출 배너 | surfaceVariant 카드, "N월 무지출" + "총 N일 >" (오늘까지 기준) |
-| 상세 패널 | 날짜 클릭 → 해당 일 지출 인라인 표시 (토글) |
-| 카드 | TransactionCardCompose → 클릭 시 ExpenseDetailDialog |
+| 상세 | 날짜 클릭 → TransactionDetailListActivity 이동 (해당 일 수입+지출 목록) |
+| 카드 | TransactionCardCompose → 클릭 시 TransactionEditActivity 이동 |
+| 디바이더 | 주간 가로(1dp, divider 색상) + 셀 간 세로(0.5dp, divider 색상) |
 
 ### 3.7 수동 지출 추가 (AddExpenseDialog)
 
@@ -453,6 +454,8 @@ buildBudgetCumulativePoints(monthlyBudget, daysInMonth):
 | 필드 | 금액(숫자만), 가게명(자유텍스트), 카테고리(드롭다운), 결제수단(기본="현금") |
 | 기본 카테고리 | Category.ETC |
 | 확인 조건 | 금액 > 0 AND 가게명 입력 |
+
+> **Note**: "+" 버튼은 현재 TransactionEditActivity(새 거래 모드)로 직접 이동. AddExpenseDialog는 하위 호환용으로 유지.
 
 ### 3.8 수입 상세 (IncomeDetailDialog)
 
@@ -875,7 +878,8 @@ Step 1 프롬프트에 포함:
 | 그룹핑 | 날짜별 역순 |
 | 헤더 | 날짜 + 요일 + 일별 소계 |
 | 카드 | TransactionCardCompose |
-| 클릭 | ExpenseDetailDialog |
+| 클릭 | TransactionEditActivity 이동 |
+| 정렬 | 최신순(DATE_DESC) / 가격순(AMOUNT_DESC) 토글 칩 |
 
 ### 6.5 CRUD
 
@@ -941,6 +945,60 @@ SpendingTrendInfo (interface)
   CumulativeTrendSection → VicoCumulativeChart
   (Y축 고정, 토글 애니메이션, 라벨 모두 동일 공유)
 ```
+
+---
+
+## 6-1. 거래 편집 화면
+
+**파일**: `feature/transactionedit/ui/TransactionEditActivity.kt`, `TransactionEditScreen.kt`, `TransactionEditViewModel.kt`
+
+### 진입
+
+| 항목 | 스펙 |
+|------|------|
+| 방식 | Intent (내역/달력/카테고리 상세에서 지출 클릭, "+" 버튼 클릭) |
+| 파라미터 | EXTRA_EXPENSE_ID (Long, -1이면 새 거래), EXTRA_INITIAL_DATE (Long, optional) |
+
+### 레이아웃
+
+| 항목 | 스펙 |
+|------|------|
+| TopAppBar | ← 뒤로 + "거래 추가" / "거래 상세" |
+| 편집 필드 | 금액(숫자), 가게명, 카테고리(CategorySelectDialog), 결제수단, 날짜(DatePicker), 시간(TimePicker), 메모 |
+| X 클리어 | 모든 편집 가능 필드에 클리어 버튼 |
+| 원본 SMS | 기존 거래만 (읽기전용 카드) |
+| 하단 | 저장 버튼 + 삭제 버튼(기존 거래만) |
+
+### CRUD
+
+| 동작 | 스펙 |
+|------|------|
+| 새 거래 | smsId="manual_" + timestamp, originalSms="" |
+| 수정 | 원본 entity의 smsId/originalSms 보존 |
+| 삭제 | 확인 다이얼로그 후 Room 삭제 |
+| 동기화 | DataRefreshEvent.TRANSACTION_ADDED emit |
+
+## 6-2. 날짜별 거래 목록 화면
+
+**파일**: `feature/transactionlist/ui/TransactionDetailListActivity.kt`, `TransactionDetailListScreen.kt`, `TransactionDetailListViewModel.kt`
+
+### 진입
+
+| 항목 | 스펙 |
+|------|------|
+| 방식 | Intent (달력 날짜 클릭) |
+| 파라미터 | EXTRA_DATE ("yyyy-MM-dd" 형식) |
+
+### 레이아웃
+
+| 항목 | 스펙 |
+|------|------|
+| TopAppBar | ← 뒤로 + "N월 DD일 거래내역" |
+| 목록 | LazyColumn (수입 먼저, 지출 나중, 각각 시간 역순) |
+| 빈 상태 | 중앙 "해당 날짜에 거래가 없습니다" 메시지 |
+| 지출 클릭 | TransactionEditActivity 이동 |
+| 수입 클릭 | 미지원 (편집 Activity 없음) |
+| 데이터 갱신 | DataRefreshEvent 구독으로 실시간 반영 |
 
 ---
 
