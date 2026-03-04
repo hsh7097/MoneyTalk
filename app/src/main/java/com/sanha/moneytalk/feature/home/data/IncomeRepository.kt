@@ -73,4 +73,16 @@ class IncomeRepository @Inject constructor(
     suspend fun searchIncomes(query: String): List<IncomeEntity> =
         incomeDao.searchIncomes(query)
 
+    /** 미분류 수입 조회 (분류 파이프라인용) */
+    suspend fun getUnclassifiedIncomes(): List<IncomeEntity> =
+        incomeDao.getUnclassifiedIncomes()
+
+    /** 미분류 수입 수 조회 */
+    suspend fun getUnclassifiedIncomeCount(): Int =
+        incomeDao.getUnclassifiedIncomeCount()
+
+    /** source 기준 카테고리 일괄 변경 (미분류 항목만) */
+    suspend fun updateCategoryBySource(source: String, newCategory: String): Int =
+        incomeDao.updateCategoryBySource(source, newCategory)
+
 }

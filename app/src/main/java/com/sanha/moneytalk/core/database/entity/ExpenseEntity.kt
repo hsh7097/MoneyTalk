@@ -65,6 +65,14 @@ data class ExpenseEntity(
     @ColumnInfo(name = "is_fixed", defaultValue = "0")
     val isFixed: Boolean = false,
 
+    /** 거래 유형 (EXPENSE 또는 TRANSFER) */
+    @ColumnInfo(name = "transaction_type", defaultValue = "EXPENSE")
+    val transactionType: String = "EXPENSE",
+
+    /** 이체 방향 (WITHDRAWAL=출금, DEPOSIT=입금, 이체가 아니면 빈 문자열) */
+    @ColumnInfo(name = "transfer_direction", defaultValue = "")
+    val transferDirection: String = "",
+
     /** 레코드 생성 시간 */
     val createdAt: Long = System.currentTimeMillis()
 )

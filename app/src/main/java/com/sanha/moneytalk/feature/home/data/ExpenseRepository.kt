@@ -214,6 +214,14 @@ class ExpenseRepository @Inject constructor(
     suspend fun getExpensesByCategoryOnce(category: String): List<ExpenseEntity> =
         expenseDao.getExpensesByCategoryOnce(category)
 
+    /** 가게명 기준 이체 일괄 업데이트 (미분류 항목만) */
+    suspend fun updateTransferByStoreName(
+        storeName: String,
+        category: String,
+        transactionType: String,
+        transferDirection: String
+    ): Int = expenseDao.updateTransferByStoreName(storeName, category, transactionType, transferDirection)
+
     // ========================
     // 중복 데이터 관리 메소드
     // ========================

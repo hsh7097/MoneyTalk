@@ -104,6 +104,70 @@ object DatabaseMigrations {
     }
 
     /**
+     * v8 -> v9
+     * 카테고리 시스템 재작업:
+     * - expenses: transaction_type 컬럼 추가 (EXPENSE/TRANSFER 구분)
+     * - incomes: category 컬럼 추가 (수입 카테고리)
+     * - 지출 카테고리 이름 변경 (카페→카페/간식, 교육→교육/학습 등)
+     * - 계좌이체 → 이체 타입 전환
+     * - 수입 type → category 초기 매핑
+     * - category_mappings 테이블 카테고리명도 갱신
+     * - store_embeddings 카테고리 변경분 갱신
+     */
+    val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // 1. expenses에 transaction_type, transfer_direction 컬럼 추가
+            db.execSQL(
+                "ALTER TABLE expenses ADD COLUMN transaction_type TEXT NOT NULL DEFAULT 'EXPENSE'"
+            )
+            db.execSQL(
+                "ALTER TABLE expenses ADD COLUMN transfer_direction TEXT NOT NULL DEFAULT ''"
+            )
+
+            // 2. incomes에 category 컬럼 추가
+            db.execSQL(
+                "ALTER TABLE incomes ADD COLUMN category TEXT NOT NULL DEFAULT '미분류'"
+            )
+
+            // 3. 지출 카테고리 이름 변경
+            db.execSQL("UPDATE expenses SET category = '카페/간식' WHERE category = '카페'")
+            db.execSQL("UPDATE expenses SET category = '교육/학습' WHERE category = '교육'")
+            db.execSQL("UPDATE expenses SET category = '주거/통신' WHERE category = '주거'")
+            db.execSQL("UPDATE expenses SET category = '경조/선물' WHERE category = '경조'")
+            db.execSQL("UPDATE expenses SET category = '온라인쇼핑' WHERE category = '쇼핑'")
+            db.execSQL("UPDATE expenses SET category = '식비' WHERE category = '배달'")
+
+            // 4. 계좌이체 → 이체 타입 전환 (기존 계좌이체는 출금으로 간주)
+            db.execSQL(
+                "UPDATE expenses SET transaction_type = 'TRANSFER', category = '이체', transfer_direction = 'WITHDRAWAL' WHERE category = '계좌이체'"
+            )
+
+            // 5. 수입 type → category 초기 매핑
+            db.execSQL("UPDATE incomes SET category = '급여' WHERE type = '급여'")
+            db.execSQL("UPDATE incomes SET category = '상여금' WHERE type = '보너스'")
+            db.execSQL(
+                "UPDATE incomes SET category = '기타수입' WHERE type IN ('이체','송금','환급','정산','입금','환불')"
+            )
+
+            // 6. CategoryMapping 테이블도 카테고리명 변경
+            db.execSQL("UPDATE category_mappings SET category = '카페/간식' WHERE category = '카페'")
+            db.execSQL("UPDATE category_mappings SET category = '교육/학습' WHERE category = '교육'")
+            db.execSQL("UPDATE category_mappings SET category = '주거/통신' WHERE category = '주거'")
+            db.execSQL("UPDATE category_mappings SET category = '경조/선물' WHERE category = '경조'")
+            db.execSQL("UPDATE category_mappings SET category = '온라인쇼핑' WHERE category = '쇼핑'")
+            db.execSQL("UPDATE category_mappings SET category = '식비' WHERE category = '배달'")
+
+            // 7. store_embeddings 카테고리명 변경
+            db.execSQL("UPDATE store_embeddings SET category = '카페/간식' WHERE category = '카페'")
+            db.execSQL("UPDATE store_embeddings SET category = '교육/학습' WHERE category = '교육'")
+            db.execSQL("UPDATE store_embeddings SET category = '주거/통신' WHERE category = '주거'")
+            db.execSQL("UPDATE store_embeddings SET category = '경조/선물' WHERE category = '경조'")
+            db.execSQL("UPDATE store_embeddings SET category = '온라인쇼핑' WHERE category = '쇼핑'")
+            db.execSQL("UPDATE store_embeddings SET category = '식비' WHERE category = '배달'")
+        }
+    }
+
+    /**
      * v6 -> v7
      * sender 기반 regex 룰 테이블 추가
      */

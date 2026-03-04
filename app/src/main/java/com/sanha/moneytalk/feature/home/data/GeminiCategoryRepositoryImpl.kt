@@ -108,8 +108,8 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 return@withContext emptyMap()
             }
 
-            // 사용 가능한 카테고리 목록
-            val categories = Category.entries.map { it.displayName }
+            // 사용 가능한 카테고리 목록 (지출 카테고리만)
+            val categories = Category.expenseEntries.map { it.displayName }
 
             // 참조 리스트 미리 로드 (배치마다 중복 호출 방지)
             val referenceText = try {
@@ -260,7 +260,8 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
         storeNames: List<String>
     ): Map<String, String> {
         val results = mutableMapOf<String, String>()
-        val validCategories = Category.entries.map { it.displayName }.toSet()
+        val validCategories = Category.expenseEntries.map { it.displayName }.toSet() +
+                setOf(Category.UNCLASSIFIED.displayName)
 
         // 잘못된 카테고리명을 올바른 카테고리명으로 매핑
         val categoryMapping = mapOf(
@@ -269,7 +270,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             "건강" to "의료/건강",
             "병원" to "의료/건강",
             "약국" to "의료/건강",
-            // 보험 (SmsParser의 "보험" 카테고리와 일치)
+            // 보험
             "보험료" to "보험",
             // 문화/여가 관련
             "문화" to "문화/여가",
@@ -286,29 +287,46 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             // 교통 관련
             "대중교통" to "교통",
             "택시" to "교통",
-            "주유" to "교통",
+            "주유" to "자동차",
             // 쇼핑 관련
-            "마트" to "쇼핑",
-            "온라인쇼핑" to "쇼핑",
-            "편의점" to "쇼핑",
+            "마트" to "온라인쇼핑",
+            "쇼핑" to "온라인쇼핑",
+            "편의점" to "식비",
+            // 패션 관련
+            "패션" to "패션/쇼핑",
+            "의류" to "패션/쇼핑",
+            // 뷰티 관련
+            "뷰티" to "뷰티/미용",
+            "미용" to "뷰티/미용",
+            "화장품" to "뷰티/미용",
             // 운동 관련
             "헬스" to "운동",
             "피트니스" to "운동",
             "스포츠" to "운동",
             "체육" to "운동",
-            // 주거 관련
-            "부동산" to "주거",
-            "임대" to "주거",
-            "월세" to "주거",
-            "전세" to "주거",
-            // 생활 관련
-            "공과금" to "생활",
-            "통신" to "생활",
-            // 경조 관련
-            "경조사" to "경조",
-            "축의금" to "경조",
-            "조의금" to "경조",
-            "부조" to "경조",
+            // 주거/통신 관련
+            "주거" to "주거/통신",
+            "부동산" to "주거/통신",
+            "임대" to "주거/통신",
+            "월세" to "주거/통신",
+            "전세" to "주거/통신",
+            "공과금" to "주거/통신",
+            "통신" to "주거/통신",
+            // 교육/학습 관련
+            "교육" to "교육/학습",
+            "학습" to "교육/학습",
+            // 여행/숙박 관련
+            "여행" to "여행/숙박",
+            "숙박" to "여행/숙박",
+            // 경조/선물 관련
+            "경조" to "경조/선물",
+            "경조사" to "경조/선물",
+            "축의금" to "경조/선물",
+            "조의금" to "경조/선물",
+            "부조" to "경조/선물",
+            "선물" to "경조/선물",
+            // 카페 관련 (레거시)
+            "카페" to "카페/간식",
             // 기타 표현들
             "미분류" to "기타",
             "알수없음" to "기타",
@@ -389,5 +407,135 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
     override suspend fun classifySingleStore(storeName: String): String? {
         val result = classifyStoreNames(listOf(storeName))
         return result[storeName]
+    }
+
+    /**
+     * 수입 출처 목록을 수입 카테고리로 분류
+     */
+    override suspend fun classifyIncomeSources(
+        incomeDescriptions: Map<String, String>
+    ): Map<String, String> = withContext(Dispatchers.IO) {
+        val apiKey = apiKeyProvider.getApiKey()
+        if (apiKey.isBlank()) {
+            MoneyTalkLogger.e("API 키가 설정되지 않음 (수입 분류)")
+            return@withContext emptyMap()
+        }
+
+        val currentModelConfig = apiKeyProvider.modelConfig
+        if (generativeModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
+            cachedApiKey = apiKey
+            cachedModelConfig = currentModelConfig
+            initModel(apiKey, currentModelConfig.categoryClassifier)
+        }
+
+        val model = generativeModel ?: return@withContext emptyMap()
+
+        val incomeCategories = Category.incomeEntries.map { it.displayName }
+        val items = incomeDescriptions.entries.toList()
+        val results = mutableMapOf<String, String>()
+        val batches = items.chunked(BATCH_SIZE)
+
+        val llmSemaphore = Semaphore(LLM_CONCURRENCY)
+        val batchResults = coroutineScope {
+            batches.mapIndexed { index, batch ->
+                async {
+                    llmSemaphore.withPermit {
+                        processIncomeBatchWithRetry(model, batch, incomeCategories, index, batches.size)
+                    }
+                }
+            }.awaitAll()
+        }
+
+        for ((batchResult, _) in batchResults) {
+            if (batchResult != null) {
+                results.putAll(batchResult)
+            }
+        }
+
+        results
+    }
+
+    private suspend fun processIncomeBatchWithRetry(
+        model: GenerativeModel,
+        batch: List<Map.Entry<String, String>>,
+        categories: List<String>,
+        batchIndex: Int,
+        totalBatches: Int
+    ): Pair<Map<String, String>?, Boolean> {
+        var lastException: Exception? = null
+        var currentDelay = RETRY_BASE_DELAY_MS
+        var hitRateLimit = false
+
+        for (attempt in 1..MAX_RETRIES) {
+            try {
+                val prompt = buildIncomeClassificationPrompt(batch, categories)
+                val response = model.generateContent(prompt)
+                val text = response.text
+
+                if (text != null) {
+                    val parsed = parseIncomeClassificationResponse(text, batch.map { it.key })
+                    return parsed to hitRateLimit
+                }
+            } catch (e: Exception) {
+                lastException = e
+                val errorMessage = e.message ?: ""
+                val isRateLimitError = errorMessage.contains("429") ||
+                        errorMessage.contains("RESOURCE_EXHAUSTED") ||
+                        errorMessage.contains("rate limit", ignoreCase = true)
+
+                if (isRateLimitError) {
+                    hitRateLimit = true
+                    if (attempt < MAX_RETRIES) {
+                        val jitter = Random.nextLong(0, 500)
+                        val actualDelay = min(currentDelay + jitter, MAX_RETRY_DELAY_MS)
+                        MoneyTalkLogger.w("429 Rate Limit (수입분류 배치 ${batchIndex + 1}/$totalBatches) ${actualDelay}ms 후 재시도")
+                        delay(actualDelay)
+                        currentDelay *= 2
+                    }
+                } else {
+                    break
+                }
+            }
+        }
+
+        MoneyTalkLogger.e("수입 분류 배치 ${batchIndex + 1} 최종 실패: ${lastException?.message}")
+        return null to hitRateLimit
+    }
+
+    private fun buildIncomeClassificationPrompt(
+        items: List<Map.Entry<String, String>>,
+        categories: List<String>
+    ): String {
+        val categoriesText = categories.mapIndexed { idx, cat -> "${idx + 1}. $cat" }.joinToString("\n")
+        val itemsText = items.mapIndexed { idx, (source, desc) ->
+            "${idx + 1}. $source: $desc"
+        }.joinToString("\n")
+        return context.getString(R.string.prompt_income_classification, categoriesText, itemsText)
+    }
+
+    private fun parseIncomeClassificationResponse(
+        response: String,
+        sources: List<String>
+    ): Map<String, String> {
+        val results = mutableMapOf<String, String>()
+        val validCategories = Category.incomeEntries.map { it.displayName }.toSet() +
+                setOf(Category.INCOME_UNCLASSIFIED.displayName)
+
+        response.lines().forEach { line ->
+            val parts = line.split(Regex("[:\\-]"), limit = 2)
+            if (parts.size >= 2) {
+                val source = parts[0].trim().replace(Regex("^\\d+\\.\\s*"), "")
+                val category = parts[1].trim().replace(Regex("\\s*\\([^)]*\\)"), "").trim()
+
+                if (category in validCategories) {
+                    val originalSource = sources.find { it == source }
+                        ?: sources.find { it.contains(source) || source.contains(it) }
+                    if (originalSource != null) {
+                        results[originalSource] = category
+                    }
+                }
+            }
+        }
+        return results
     }
 }

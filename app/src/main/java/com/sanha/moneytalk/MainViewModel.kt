@@ -622,6 +622,7 @@ class MainViewModel @Inject constructor(
                 val dateTime = SmsIncomeParser.extractDateTime(income.body, income.date)
 
                 if (amount > 0) {
+                    val category = mapIncomeTypeToCategory(incomeType)
                     batch.add(
                         IncomeEntity(
                             smsId = income.id,
@@ -632,7 +633,8 @@ class MainViewModel @Inject constructor(
                             isRecurring = incomeType == "급여",
                             dateTime = DateUtils.parseDateTime(dateTime),
                             originalSms = income.body,
-                            senderAddress = SmsFilter.normalizeAddress(income.address)
+                            senderAddress = SmsFilter.normalizeAddress(income.address),
+                            category = category
                         )
                     )
                     count++
@@ -651,6 +653,16 @@ class MainViewModel @Inject constructor(
         }
 
         return count
+    }
+
+    /** 수입 type → category 초기 매핑 */
+    private fun mapIncomeTypeToCategory(type: String): String {
+        return when (type) {
+            "급여" -> "급여"
+            "보너스" -> "상여금"
+            "정산" -> "더치페이"
+            else -> "미분류"
+        }
     }
 
     /**
@@ -1044,6 +1056,17 @@ class MainViewModel @Inject constructor(
                     withContext(Dispatchers.Main) {
                         dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
                         snackbarBus.show(message)
+                    }
+                }
+            }
+
+            // ===== 수입 분류 =====
+            val incomeCount = categoryClassifierService.getUnclassifiedIncomeCount()
+            if (incomeCount > 0) {
+                val incomeClassified = categoryClassifierService.classifyUnclassifiedIncomes()
+                if (incomeClassified > 0) {
+                    withContext(Dispatchers.Main) {
+                        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
                     }
                 }
             }

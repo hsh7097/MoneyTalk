@@ -99,6 +99,25 @@ interface CategoryClassifierService {
     suspend fun getVectorCacheCount(): Int
 
     /**
+     * 미분류 수입을 Gemini로 일괄 분류
+     *
+     * 1. type 기반 사전 분류 (급여→급여, 보너스→상여금)
+     * 2. 나머지 → source별 그룹핑 → Gemini API
+     * 3. 결과를 IncomeDao에 저장
+     *
+     * @param onStepProgress 세부 진행 콜백 (단계명, 현재, 전체)
+     * @return 분류된 항목 수
+     */
+    suspend fun classifyUnclassifiedIncomes(
+        onStepProgress: (suspend (step: String, current: Int, total: Int) -> Unit)? = null
+    ): Int
+
+    /**
+     * 미분류 수입 수 조회
+     */
+    suspend fun getUnclassifiedIncomeCount(): Int
+
+    /**
      * 미분류 항목이 없을 때까지 반복 분류
      * @param onProgress 진행 상황 콜백 (현재 라운드, 분류된 수, 남은 미분류 수)
      * @param onStepProgress 세부 단계 진행 콜백 (단계명, 현재, 전체)
