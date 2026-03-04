@@ -833,7 +833,24 @@ Step 1 프롬프트에 포함:
 | 리셋 | monthlyIncome=0, monthStartDay=1, syncedMonths 초기화 |
 | 이벤트 | ALL_DATA_DELETED 전파 |
 
-### 5.5 앱 정보 섹션
+### 5.5 카테고리 설정 (CategorySettingsActivity)
+
+**파일**: `feature/categorysettings/CategorySettingsActivity.kt`, `ui/CategorySettingsScreen.kt`, `CategorySettingsViewModel.kt`
+
+| 항목 | 스펙 |
+|------|------|
+| 진입 | 설정 → 데이터 관리 → "카테고리 설정" |
+| 화면 | Scaffold + TopAppBar (← 뒤로가기 + "카테고리 설정") |
+| 탭 | FilterChip 3개 (지출/수입/이체), 기본=지출 |
+| 기본 카테고리 | 읽기 전용 목록 (이모지 + 이름, 편집/삭제 불가) |
+| 커스텀 카테고리 | 삭제 가능 (이모지 + 이름 + 삭제 아이콘) |
+| 추가 | 하단 "카테고리 추가" 버튼 → AddCategoryDialog |
+| AddCategoryDialog | EmojiPickerCompose(5열 그리드, 80개 프리셋) + 이름 TextField |
+| 중복 검증 | enum + DB displayName 중복 확인 |
+| 삭제 확인 | AlertDialog (삭제 시 해당 거래 "미분류"로 변경 경고) |
+| 저장 | CustomCategoryEntity (Room) + CategoryProvider 캐시 무효화 |
+
+### 5.6 앱 정보 섹션
 
 | 항목 | 스펙 |
 |------|------|
@@ -968,6 +985,8 @@ SpendingTrendInfo (interface)
 | X 클리어 | 모든 편집 가능 필드에 클리어 버튼 |
 | 원본 SMS | 기존 거래만 (읽기전용 카드) |
 | 하단 | 저장 버튼 + 삭제 버튼(기존 거래만) |
+| 일괄 적용 (카테고리) | 기존 거래 편집 시 "동일 거래처에 카테고리 일괄 적용" 체크박스 표시 |
+| 일괄 적용 (고정지출) | 기존 거래 편집 시 "동일 거래처에 고정지출 일괄 적용" 체크박스 표시 |
 
 ### CRUD
 
