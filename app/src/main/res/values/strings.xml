@@ -217,7 +217,7 @@
     <string name="history_filter_active_fixed_only">고정지출만 표시 중</string>
     <string name="history_filter_active_fixed_exclude">고정지출 제외 중</string>
     <string name="history_filter_fixed">고정지출</string>
-    <string name="history_filter_fixed_all">포함</string>
+    <string name="history_filter_fixed_all">전체</string>
     <string name="history_filter_fixed_only">고정만</string>
     <string name="history_filter_fixed_exclude">제외</string>
     <string name="history_delete_title">삭제 확인</string>
