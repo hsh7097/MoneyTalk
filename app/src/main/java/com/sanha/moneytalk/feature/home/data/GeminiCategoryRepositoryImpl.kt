@@ -9,6 +9,7 @@ import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
 import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.CategoryProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -34,7 +35,8 @@ import kotlin.random.Random
 class GeminiCategoryRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider,
-    private val apiKeyProvider: GeminiApiKeyProvider
+    private val apiKeyProvider: GeminiApiKeyProvider,
+    private val categoryProvider: CategoryProvider
 ) : GeminiCategoryRepository {
     companion object {
         private const val BATCH_SIZE = 50
@@ -108,8 +110,8 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 return@withContext emptyMap()
             }
 
-            // 사용 가능한 카테고리 목록 (지출 카테고리만)
-            val categories = Category.expenseEntries.map { it.displayName }
+            // 사용 가능한 카테고리 목록 (지출 카테고리 + 커스텀)
+            val categories = categoryProvider.getExpenseDisplayNames()
 
             // 참조 리스트 미리 로드 (배치마다 중복 호출 방지)
             val referenceText = try {
@@ -195,7 +197,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 val text = response.text
 
                 if (text != null) {
-                    val parsed = parseClassificationResponse(text, batch)
+                    val parsed = parseClassificationResponse(text, batch, categories.toSet())
                     return parsed to hitRateLimit
                 }
             } catch (e: Exception) {
@@ -257,10 +259,11 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
 
     private fun parseClassificationResponse(
         response: String,
-        storeNames: List<String>
+        storeNames: List<String>,
+        expenseCategoryNames: Set<String>
     ): Map<String, String> {
         val results = mutableMapOf<String, String>()
-        val validCategories = Category.expenseEntries.map { it.displayName }.toSet() +
+        val validCategories = expenseCategoryNames +
                 setOf(Category.UNCLASSIFIED.displayName)
 
         // 잘못된 카테고리명을 올바른 카테고리명으로 매핑
@@ -430,7 +433,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
 
         val model = generativeModel ?: return@withContext emptyMap()
 
-        val incomeCategories = Category.incomeEntries.map { it.displayName }
+        val incomeCategories = categoryProvider.getIncomeDisplayNames()
         val items = incomeDescriptions.entries.toList()
         val results = mutableMapOf<String, String>()
         val batches = items.chunked(BATCH_SIZE)
@@ -473,7 +476,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 val text = response.text
 
                 if (text != null) {
-                    val parsed = parseIncomeClassificationResponse(text, batch.map { it.key })
+                    val parsed = parseIncomeClassificationResponse(text, batch.map { it.key }, categories.toSet())
                     return parsed to hitRateLimit
                 }
             } catch (e: Exception) {
@@ -515,10 +518,11 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
 
     private fun parseIncomeClassificationResponse(
         response: String,
-        sources: List<String>
+        sources: List<String>,
+        incomeCategoryNames: Set<String>
     ): Map<String, String> {
         val results = mutableMapOf<String, String>()
-        val validCategories = Category.incomeEntries.map { it.displayName }.toSet() +
+        val validCategories = incomeCategoryNames +
                 setOf(Category.INCOME_UNCLASSIFIED.displayName)
 
         response.lines().forEach { line ->

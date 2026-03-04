@@ -168,6 +168,30 @@ object DatabaseMigrations {
     }
 
     /**
+     * v9 -> v10
+     * 커스텀 카테고리 테이블 추가
+     */
+    val MIGRATION_9_10 = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS custom_categories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    displayName TEXT NOT NULL,
+                    emoji TEXT NOT NULL,
+                    categoryType TEXT NOT NULL,
+                    displayOrder INTEGER NOT NULL DEFAULT 0,
+                    createdAt INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS index_custom_categories_displayName_categoryType ON custom_categories(displayName, categoryType)"
+            )
+        }
+    }
+
+    /**
      * v6 -> v7
      * sender 기반 regex 룰 테이블 추가
      */

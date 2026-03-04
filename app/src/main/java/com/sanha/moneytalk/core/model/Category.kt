@@ -7,11 +7,11 @@ package com.sanha.moneytalk.core.model
  * parentCategory가 null이면 대 카테고리, non-null이면 소 카테고리.
  */
 enum class Category(
-    val emoji: String,
-    val displayName: String,
-    val categoryType: CategoryType,
+    override val emoji: String,
+    override val displayName: String,
+    override val categoryType: CategoryType,
     val parentCategory: Category? = null
-) {
+) : CategoryInfo {
     // ===== 지출 (EXPENSE) — 22개 =====
     FOOD("\uD83C\uDF7D\uFE0F", "식비", CategoryType.EXPENSE),
     CAFE_SNACK("☕", "카페/간식", CategoryType.EXPENSE),
@@ -25,7 +25,7 @@ enum class Category(
     HOUSING_TELECOM("\uD83C\uDFE0", "주거/통신", CategoryType.EXPENSE),
     HEALTH("\uD83C\uDFE5", "의료/건강", CategoryType.EXPENSE),
     FINANCE("\uD83D\uDCB0", "금융", CategoryType.EXPENSE),
-    CULTURE("⭐", "문화/여가", CategoryType.EXPENSE),
+    CULTURE("\uD83C\uDFAC", "문화/여가", CategoryType.EXPENSE),
     TRAVEL("✈\uFE0F", "여행/숙박", CategoryType.EXPENSE),
     EDUCATION_LEARNING("\uD83D\uDCDA", "교육/학습", CategoryType.EXPENSE),
     CHILDREN("\uD83D\uDC76", "자녀/육아", CategoryType.EXPENSE),

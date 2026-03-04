@@ -7,6 +7,7 @@ import com.sanha.moneytalk.core.database.DatabaseMigrations
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
+import com.sanha.moneytalk.core.database.dao.CustomCategoryDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
 import com.sanha.moneytalk.core.database.dao.OwnedCardDao
@@ -58,7 +59,8 @@ object DatabaseModule {
                 DatabaseMigrations.MIGRATION_5_6,
                 DatabaseMigrations.MIGRATION_6_7,
                 DatabaseMigrations.MIGRATION_7_8,
-                DatabaseMigrations.MIGRATION_8_9
+                DatabaseMigrations.MIGRATION_8_9,
+                DatabaseMigrations.MIGRATION_9_10
             )
             .build()
     }
@@ -138,5 +140,12 @@ object DatabaseModule {
     @Singleton
     fun provideSmsRegexRuleDao(database: AppDatabase): SmsRegexRuleDao {
         return database.smsRegexRuleDao()
+    }
+
+    /** 커스텀 카테고리 DAO 제공 */
+    @Provides
+    @Singleton
+    fun provideCustomCategoryDao(database: AppDatabase): CustomCategoryDao {
+        return database.customCategoryDao()
     }
 }
