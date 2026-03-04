@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
@@ -29,7 +30,7 @@ data class TransactionEditUiState(
     val isLoading: Boolean = true,
     val amount: String = "",
     val storeName: String = "",
-    val category: String = "기타",
+    val category: String = Category.ETC.displayName,
     val cardName: String = "",
     val incomeType: String = "",
     val source: String = "",
@@ -249,16 +250,31 @@ class TransactionEditViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val orig = originalIncomeEntity ?: return@launch
-                val updated = orig.copy(
-                    amount = amount,
-                    type = state.incomeType.trim().ifBlank { orig.type },
-                    source = state.source.trim(),
-                    description = state.storeName.trim(),
-                    dateTime = dateTime,
-                    memo = state.memo.ifBlank { null }
-                )
-                incomeRepository.update(updated)
+                if (state.isNew) {
+                    val entity = IncomeEntity(
+                        amount = amount,
+                        type = state.incomeType.trim().ifBlank {
+                            context.getString(R.string.income_type_default)
+                        },
+                        source = state.source.trim(),
+                        description = state.storeName.trim(),
+                        isRecurring = false,
+                        dateTime = dateTime,
+                        memo = state.memo.ifBlank { null }
+                    )
+                    incomeRepository.insert(entity)
+                } else {
+                    val orig = originalIncomeEntity ?: return@launch
+                    val updated = orig.copy(
+                        amount = amount,
+                        type = state.incomeType.trim().ifBlank { orig.type },
+                        source = state.source.trim(),
+                        description = state.storeName.trim(),
+                        dateTime = dateTime,
+                        memo = state.memo.ifBlank { null }
+                    )
+                    incomeRepository.update(updated)
+                }
                 dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
                 snackbarBus.show(context.getString(R.string.transaction_edit_saved))
                 _uiState.update { it.copy(isSaved = true) }
@@ -288,9 +304,22 @@ class TransactionEditViewModel @Inject constructor(
         }
     }
 
+    /**
+     * dateMillis(DatePicker 반환값, UTC 자정 기준)에서 년/월/일만 추출하여
+     * 로컬 타임존의 hour/minute과 조합.
+     * DatePicker.selectedDateMillis는 UTC 기반이므로 직접 timeInMillis에 넣으면
+     * UTC 서쪽 타임존에서 날짜가 하루 밀릴 수 있다.
+     */
     private fun buildDateTime(dateMillis: Long, hour: Int, minute: Int): Long {
-        return Calendar.getInstance().apply {
+        // UTC 기준 Calendar로 년/월/일만 추출
+        val utcCal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
             timeInMillis = dateMillis
+        }
+        // 로컬 Calendar에 년/월/일 + 시/분 설정
+        return Calendar.getInstance().apply {
+            set(Calendar.YEAR, utcCal.get(Calendar.YEAR))
+            set(Calendar.MONTH, utcCal.get(Calendar.MONTH))
+            set(Calendar.DAY_OF_MONTH, utcCal.get(Calendar.DAY_OF_MONTH))
             set(Calendar.HOUR_OF_DAY, hour)
             set(Calendar.MINUTE, minute)
             set(Calendar.SECOND, 0)

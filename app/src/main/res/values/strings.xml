@@ -529,6 +529,7 @@
     <string name="transaction_edit_income_input_required">금액을 입력해주세요</string>
     <string name="transaction_edit_save_failed">저장에 실패했습니다</string>
     <string name="transaction_edit_delete_failed">삭제에 실패했습니다</string>
+    <string name="income_type_default">입금</string>
     <string name="transaction_edit_income_type">유형</string>
     <string name="transaction_edit_source">출처</string>
     <string name="transaction_edit_description">내용</string>
