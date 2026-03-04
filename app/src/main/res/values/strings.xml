@@ -214,6 +214,12 @@
     <string name="history_filter_active_type">유형 필터 적용 중</string>
     <string name="history_filter_active_sort">정렬 필터 적용 중</string>
     <string name="history_filter_active_combined">필터 적용 중</string>
+    <string name="history_filter_active_fixed_only">고정지출만 표시 중</string>
+    <string name="history_filter_active_fixed_exclude">고정지출 제외 중</string>
+    <string name="history_filter_fixed">고정지출</string>
+    <string name="history_filter_fixed_all">포함</string>
+    <string name="history_filter_fixed_only">고정만</string>
+    <string name="history_filter_fixed_exclude">제외</string>
     <string name="history_delete_title">삭제 확인</string>
     <string name="history_delete_message">%s 지출 내역을 삭제할까요?</string>
     <string name="history_no_spend_month">%d월 무지출</string>
@@ -516,7 +522,7 @@
     <string name="transaction_edit_title">거래 상세</string>
     <string name="transaction_add_title">거래 추가</string>
     <string name="transaction_edit_amount">금액</string>
-    <string name="transaction_edit_store">가게명</string>
+    <string name="transaction_edit_store">거래처</string>
     <string name="transaction_edit_card">결제수단</string>
     <string name="transaction_edit_date">날짜</string>
     <string name="transaction_edit_time">시간</string>
@@ -533,6 +539,15 @@
     <string name="transaction_edit_income_type">유형</string>
     <string name="transaction_edit_source">출처</string>
     <string name="transaction_edit_description">내용</string>
+    <string name="transaction_type_expense">지출</string>
+    <string name="transaction_type_income">수입</string>
+    <string name="transaction_type_transfer">이체</string>
+    <string name="transaction_edit_store_hint">거래처를 입력하세요</string>
+    <string name="transaction_edit_amount_hint">0원</string>
+    <string name="transaction_edit_amount_suffix">원</string>
+    <string name="transaction_edit_date_time">날짜-시간</string>
+    <string name="transaction_edit_fixed_expense">고정지출에 추가</string>
+    <string name="transaction_edit_type_label">분류</string>
 
     <!-- 날짜별 거래 목록 Activity -->
     <string name="transaction_list_title">%1$s월 %2$d일 거래 내역</string>

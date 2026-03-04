@@ -26,7 +26,7 @@ import javax.inject.Inject
 @Stable
 data class TransactionEditUiState(
     val isNew: Boolean = true,
-    val isIncome: Boolean = false,
+    val transactionType: TransactionType = TransactionType.EXPENSE,
     val isLoading: Boolean = true,
     val amount: String = "",
     val storeName: String = "",
@@ -39,9 +39,14 @@ data class TransactionEditUiState(
     val minute: Int = Calendar.getInstance().get(Calendar.MINUTE),
     val memo: String = "",
     val originalSms: String = "",
+    val isFixed: Boolean = false,
     val isSaved: Boolean = false,
     val isDeleted: Boolean = false
-)
+) {
+    /** 하위 호환용 계산 프로퍼티 */
+    val isIncome: Boolean get() = transactionType == TransactionType.INCOME
+    val isTransfer: Boolean get() = transactionType == TransactionType.TRANSFER
+}
 
 /**
  * 거래 편집/추가 ViewModel.
@@ -50,6 +55,11 @@ data class TransactionEditUiState(
  * - extra_expense_id: 기존 지출 편집 시 ID, -1이면 새 거래
  * - extra_income_id: 기존 수입 편집 시 ID, -1이면 무시
  * - extra_initial_date: 새 거래 추가 시 기본 날짜 (Long)
+ *
+ * 수입/지출/이체 전환:
+ * - 지출 ↔ 이체: category만 변경 (같은 ExpenseEntity)
+ * - 지출/이체 → 수입: 저장 시 ExpenseEntity 삭제 + IncomeEntity 생성
+ * - 수입 → 지출/이체: 저장 시 IncomeEntity 삭제 + ExpenseEntity 생성
  */
 @HiltViewModel
 class TransactionEditViewModel @Inject constructor(
@@ -73,6 +83,9 @@ class TransactionEditViewModel @Inject constructor(
     private var originalExpenseEntity: ExpenseEntity? = null
     private var originalIncomeEntity: IncomeEntity? = null
 
+    /** 최초 로드 시 타입 (크로스 테이블 이동 판단용) */
+    private var originalTransactionType: TransactionType = TransactionType.EXPENSE
+
     init {
         when {
             incomeId > 0 -> loadIncome(incomeId)
@@ -87,10 +100,16 @@ class TransactionEditViewModel @Inject constructor(
             if (expense != null) {
                 originalExpenseEntity = expense
                 val cal = Calendar.getInstance().apply { timeInMillis = expense.dateTime }
+                val type = if (expense.category == Category.TRANSFER.displayName) {
+                    TransactionType.TRANSFER
+                } else {
+                    TransactionType.EXPENSE
+                }
+                originalTransactionType = type
                 _uiState.update {
                     it.copy(
                         isNew = false,
-                        isIncome = false,
+                        transactionType = type,
                         isLoading = false,
                         amount = expense.amount.toString(),
                         storeName = expense.storeName,
@@ -100,7 +119,8 @@ class TransactionEditViewModel @Inject constructor(
                         hour = cal.get(Calendar.HOUR_OF_DAY),
                         minute = cal.get(Calendar.MINUTE),
                         memo = expense.memo ?: "",
-                        originalSms = expense.originalSms
+                        originalSms = expense.originalSms,
+                        isFixed = expense.isFixed
                     )
                 }
             } else {
@@ -115,10 +135,11 @@ class TransactionEditViewModel @Inject constructor(
             if (income != null) {
                 originalIncomeEntity = income
                 val cal = Calendar.getInstance().apply { timeInMillis = income.dateTime }
+                originalTransactionType = TransactionType.INCOME
                 _uiState.update {
                     it.copy(
                         isNew = false,
-                        isIncome = true,
+                        transactionType = TransactionType.INCOME,
                         isLoading = false,
                         amount = income.amount.toString(),
                         storeName = income.description,
@@ -139,14 +160,47 @@ class TransactionEditViewModel @Inject constructor(
 
     private fun initNewExpense() {
         val cal = Calendar.getInstance().apply { timeInMillis = initialDate }
+        originalTransactionType = TransactionType.EXPENSE
         _uiState.update {
             it.copy(
                 isNew = true,
+                transactionType = TransactionType.EXPENSE,
                 isLoading = false,
                 dateMillis = initialDate,
                 hour = cal.get(Calendar.HOUR_OF_DAY),
                 minute = cal.get(Calendar.MINUTE)
             )
+        }
+    }
+
+    /**
+     * 거래 유형 변경.
+     * 이체 선택 시 category를 자동으로 TRANSFER로 설정.
+     */
+    fun setTransactionType(type: TransactionType) {
+        val currentType = _uiState.value.transactionType
+        if (currentType == type) return
+
+        _uiState.update { state ->
+            when (type) {
+                TransactionType.TRANSFER -> state.copy(
+                    transactionType = type,
+                    category = Category.TRANSFER.displayName
+                )
+                TransactionType.EXPENSE -> {
+                    // 이체에서 지출로 돌아올 때 카테고리 복원
+                    val restoreCategory = if (state.category == Category.TRANSFER.displayName) {
+                        Category.ETC.displayName
+                    } else {
+                        state.category
+                    }
+                    state.copy(
+                        transactionType = type,
+                        category = restoreCategory
+                    )
+                }
+                TransactionType.INCOME -> state.copy(transactionType = type)
+            }
         }
     }
 
@@ -160,10 +214,6 @@ class TransactionEditViewModel @Inject constructor(
 
     fun updateCategory(value: String) {
         _uiState.update { it.copy(category = value) }
-    }
-
-    fun updateCardName(value: String) {
-        _uiState.update { it.copy(cardName = value) }
     }
 
     fun updateIncomeType(value: String) {
@@ -186,16 +236,23 @@ class TransactionEditViewModel @Inject constructor(
         _uiState.update { it.copy(memo = value) }
     }
 
+    fun updateIsFixed(value: Boolean) {
+        _uiState.update { it.copy(isFixed = value) }
+    }
+
     fun save() {
         val state = _uiState.value
-        if (state.isIncome) {
-            saveIncome(state)
-        } else {
-            saveExpense(state)
+        when (state.transactionType) {
+            TransactionType.INCOME -> saveAsIncome(state)
+            TransactionType.EXPENSE, TransactionType.TRANSFER -> saveAsExpense(state)
         }
     }
 
-    private fun saveExpense(state: TransactionEditUiState) {
+    /**
+     * 지출/이체로 저장.
+     * 원래 수입이었던 거래를 지출/이체로 전환하는 경우 IncomeEntity 삭제 후 ExpenseEntity 생성.
+     */
+    private fun saveAsExpense(state: TransactionEditUiState) {
         val amount = state.amount.replace(",", "").toIntOrNull()
         if (amount == null || amount <= 0 || state.storeName.isBlank()) {
             snackbarBus.show(context.getString(R.string.transaction_edit_input_required))
@@ -206,7 +263,25 @@ class TransactionEditViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                if (state.isNew) {
+                // 수입 → 지출/이체 크로스 테이블 이동 (insert 먼저, delete 후 — 원자성 보장)
+                if (originalTransactionType == TransactionType.INCOME && !state.isNew) {
+                    val entity = ExpenseEntity(
+                        amount = amount,
+                        storeName = state.storeName.trim(),
+                        category = state.category,
+                        cardName = state.cardName.trim(),
+                        dateTime = dateTime,
+                        originalSms = state.originalSms,
+                        smsId = originalIncomeEntity?.smsId ?: "manual_${System.currentTimeMillis()}",
+                        senderAddress = originalIncomeEntity?.senderAddress ?: "",
+                        memo = state.memo.ifBlank { null },
+                        isFixed = state.isFixed
+                    )
+                    expenseRepository.insert(entity)
+                    if (incomeId > 0) {
+                        incomeRepository.deleteById(incomeId)
+                    }
+                } else if (state.isNew) {
                     val entity = ExpenseEntity(
                         amount = amount,
                         storeName = state.storeName.trim(),
@@ -215,7 +290,8 @@ class TransactionEditViewModel @Inject constructor(
                         dateTime = dateTime,
                         originalSms = "",
                         smsId = "manual_${System.currentTimeMillis()}",
-                        memo = state.memo.ifBlank { null }
+                        memo = state.memo.ifBlank { null },
+                        isFixed = state.isFixed
                     )
                     expenseRepository.insert(entity)
                 } else {
@@ -226,6 +302,7 @@ class TransactionEditViewModel @Inject constructor(
                         category = state.category,
                         cardName = state.cardName.trim(),
                         dateTime = dateTime,
+                        isFixed = state.isFixed,
                         memo = state.memo.ifBlank { null }
                     )
                     expenseRepository.update(updated)
@@ -239,7 +316,11 @@ class TransactionEditViewModel @Inject constructor(
         }
     }
 
-    private fun saveIncome(state: TransactionEditUiState) {
+    /**
+     * 수입으로 저장.
+     * 원래 지출/이체였던 거래를 수입으로 전환하는 경우 ExpenseEntity 삭제 후 IncomeEntity 생성.
+     */
+    private fun saveAsIncome(state: TransactionEditUiState) {
         val amount = state.amount.replace(",", "").toIntOrNull()
         if (amount == null || amount <= 0) {
             snackbarBus.show(context.getString(R.string.transaction_edit_income_input_required))
@@ -250,7 +331,27 @@ class TransactionEditViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                if (state.isNew) {
+                // 지출/이체 → 수입 크로스 테이블 이동 (insert 먼저, delete 후 — 원자성 보장)
+                if (originalTransactionType != TransactionType.INCOME && !state.isNew) {
+                    val entity = IncomeEntity(
+                        amount = amount,
+                        type = state.incomeType.trim().ifBlank {
+                            context.getString(R.string.income_type_default)
+                        },
+                        source = state.source.trim(),
+                        description = state.storeName.trim(),
+                        isRecurring = false,
+                        dateTime = dateTime,
+                        originalSms = state.originalSms.ifBlank { null },
+                        smsId = originalExpenseEntity?.smsId,
+                        senderAddress = originalExpenseEntity?.senderAddress ?: "",
+                        memo = state.memo.ifBlank { null }
+                    )
+                    incomeRepository.insert(entity)
+                    if (expenseId > 0) {
+                        expenseRepository.deleteById(expenseId)
+                    }
+                } else if (state.isNew) {
                     val entity = IncomeEntity(
                         amount = amount,
                         type = state.incomeType.trim().ifBlank {
@@ -285,15 +386,18 @@ class TransactionEditViewModel @Inject constructor(
     }
 
     fun delete() {
-        val state = _uiState.value
         viewModelScope.launch {
             try {
-                if (state.isIncome) {
-                    if (incomeId <= 0) return@launch
-                    incomeRepository.deleteById(incomeId)
-                } else {
-                    if (expenseId <= 0) return@launch
-                    expenseRepository.deleteById(expenseId)
+                // 원래 타입 기준으로 삭제 (전환 전 원본 삭제)
+                when (originalTransactionType) {
+                    TransactionType.INCOME -> {
+                        if (incomeId <= 0) return@launch
+                        incomeRepository.deleteById(incomeId)
+                    }
+                    TransactionType.EXPENSE, TransactionType.TRANSFER -> {
+                        if (expenseId <= 0) return@launch
+                        expenseRepository.deleteById(expenseId)
+                    }
                 }
                 dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
                 snackbarBus.show(context.getString(R.string.transaction_edit_deleted))

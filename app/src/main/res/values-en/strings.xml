@@ -301,6 +301,16 @@
     <string name="history_sort_store">By Store</string>
     <string name="history_visit_suffix">times</string>
     <string name="history_visit_with_unit">%d times</string>
+    <string name="history_filter_active_category">Category filter active</string>
+    <string name="history_filter_active_type">Type filter active</string>
+    <string name="history_filter_active_sort">Sort filter active</string>
+    <string name="history_filter_active_combined">Filter active</string>
+    <string name="history_filter_active_fixed_only">Fixed only</string>
+    <string name="history_filter_active_fixed_exclude">Fixed excluded</string>
+    <string name="history_filter_fixed">Fixed Expense</string>
+    <string name="history_filter_fixed_all">All</string>
+    <string name="history_filter_fixed_only">Fixed Only</string>
+    <string name="history_filter_fixed_exclude">Exclude</string>
     <string name="home_expense_top3">Top 3 Expenses</string>
     <string name="home_income_badge">Income %s won</string>
     <string name="home_no_today_transactions">No transactions yet today</string>
@@ -438,6 +448,19 @@
     <string name="transaction_edit_save_failed">Failed to save</string>
     <string name="transaction_edit_delete_failed">Failed to delete</string>
     <string name="income_type_default">Deposit</string>
+    <string name="transaction_edit_income_type">Type</string>
+    <string name="transaction_edit_source">Source</string>
+    <string name="transaction_edit_description">Description</string>
+    <string name="transaction_type_expense">Expense</string>
+    <string name="transaction_type_income">Income</string>
+    <string name="transaction_type_transfer">Transfer</string>
+    <string name="transaction_edit_store_hint">Enter store name</string>
+    <string name="transaction_edit_amount_hint">0</string>
+    <string name="transaction_edit_amount_suffix">KRW</string>
+    <string name="transaction_edit_date_time">Date/Time</string>
+    <string name="transaction_edit_income_input_required">Please enter amount</string>
+    <string name="transaction_edit_fixed_expense">Add to fixed expenses</string>
+    <string name="transaction_edit_type_label">Type</string>
 
     <!-- Daily transaction list Activity -->
     <string name="transaction_list_title">%1$s %2$d Transaction History</string>
