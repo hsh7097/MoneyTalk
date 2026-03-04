@@ -11,6 +11,7 @@ import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionCardInfo
@@ -170,18 +171,41 @@ data class HistoryUiState(
     /** 필터 적용된 지출 총합 (고정지출 필터 반영) */
     val filteredExpenseTotal: Int
         get() {
-            if (!showExpenses) return 0
             val expenses = currentPageData.expenses
-            return when (fixedExpenseFilter) {
+            val fixedFiltered = when (fixedExpenseFilter) {
                 FixedExpenseFilter.ALL -> expenses
                 FixedExpenseFilter.FIXED_ONLY -> expenses.filter { it.isFixed }
                 FixedExpenseFilter.EXCLUDE_FIXED -> expenses.filter { !it.isFixed }
+            }
+            return fixedFiltered.filter { expense ->
+                if (expense.transactionType == "TRANSFER") {
+                    showTransfers && expense.transferDirection != TransferDirection.DEPOSIT.dbValue
+                } else {
+                    showExpenses
+                }
             }.sumOf { it.amount }
         }
 
-    /** 필터 적용된 수입 총합 (카테고리 필터 시 수입 숨김) */
+    /** 필터 적용된 수입 총합 (수입 + 이체 입금) */
     val filteredIncomeTotal: Int
-        get() = if (showIncomes) currentPageData.incomes.sumOf { it.amount } else 0
+        get() {
+            val expenses = currentPageData.expenses
+            val fixedFiltered = when (fixedExpenseFilter) {
+                FixedExpenseFilter.ALL -> expenses
+                FixedExpenseFilter.FIXED_ONLY -> expenses.filter { it.isFixed }
+                FixedExpenseFilter.EXCLUDE_FIXED -> expenses.filter { !it.isFixed }
+            }
+            val incomeTotal = if (showIncomes) currentPageData.incomes.sumOf { it.amount } else 0
+            val transferDepositTotal = if (showTransfers) {
+                fixedFiltered.filter {
+                    it.transactionType == "TRANSFER" &&
+                            it.transferDirection == TransferDirection.DEPOSIT.dbValue
+                }.sumOf { it.amount }
+            } else {
+                0
+            }
+            return incomeTotal + transferDepositTotal
+        }
 
     /** 카테고리 필터 활성 여부 */
     val hasCategoryFilter: Boolean
