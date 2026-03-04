@@ -292,6 +292,90 @@ class CategoryClassifierServiceImpl @Inject constructor(
     }
 
     /**
+     * DB INSERT 전 가게명 목록을 인메모리에서 분류
+     *
+     * classifyUnclassifiedExpenses()와 동일한 파이프라인(이체 감지 → 로컬 룰 → 시맨틱 그룹핑 → Gemini)을
+     * DB 조회/업데이트 없이 인메모리로 실행합니다.
+     * 분류 결과는 Room 매핑 + 벡터 DB에 저장하여 다음 분류에 재사용됩니다.
+     */
+    override suspend fun classifyStoreNamesInMemory(
+        storeNames: List<String>,
+        onStepProgress: (suspend (step: String, current: Int, total: Int) -> Unit)?
+    ): Map<String, String> {
+        if (storeNames.isEmpty()) return emptyMap()
+
+        val result = mutableMapOf<String, String>()
+
+        // 1. 이체 패턴 감지
+        val transferNames = storeNames.filter {
+            isTransferPattern(it) && it !in PERSON_NAME_EXCEPTIONS
+        }
+        for (name in transferNames) {
+            result[name] = Category.TRANSFER_GENERAL.displayName
+        }
+
+        val remaining = storeNames.filter { it !in result }
+        if (remaining.isEmpty()) return result
+
+        // 2. 로컬 룰 사전 분류
+        onStepProgress?.invoke("기본 규칙으로 분류 중...", 0, remaining.size)
+        val (ruleClassified, storeNamesForGemini) = preClassifyByRules(remaining)
+        result.putAll(ruleClassified)
+
+        if (storeNamesForGemini.isEmpty()) {
+            saveMappingsIfNeeded(result, storeNames)
+            return result
+        }
+
+        // 3. 시맨틱 그룹핑
+        onStepProgress?.invoke("비슷한 가게 묶는 중...", 0, storeNamesForGemini.size)
+        val groups = try {
+            storeNameGrouper.groupStoreNames(storeNamesForGemini)
+        } catch (e: Exception) {
+            MoneyTalkLogger.w("시맨틱 그룹핑 실패, 개별 처리로 폴백: ${e.message}")
+            storeNamesForGemini.map {
+                StoreNameGrouper.StoreGroup(representative = it, members = listOf(it))
+            }
+        }
+
+        // 4. Gemini 배치 분류
+        val representatives = groups.map { it.representative }
+        if (representatives.isNotEmpty()) {
+            onStepProgress?.invoke("AI가 분류하는 중...", 0, representatives.size)
+            val classifications = geminiRepository.classifyStoreNames(representatives)
+
+            for (group in groups) {
+                val category = classifications[group.representative] ?: continue
+                for (member in group.members) {
+                    result[member] = category
+                }
+            }
+        }
+
+        // 5. Room 매핑 + 벡터 DB 저장 (다음 분류 시 재사용)
+        saveMappingsIfNeeded(result, storeNames)
+
+        return result
+    }
+
+    /** 분류 결과를 Room 매핑 + 벡터 DB에 저장 */
+    private suspend fun saveMappingsIfNeeded(
+        classifications: Map<String, String>,
+        originalStoreNames: List<String>
+    ) {
+        val toSave = classifications.filter { it.key in originalStoreNames }
+        if (toSave.isEmpty()) return
+
+        val mappings = toSave.map { (store, category) -> store to category }
+        categoryRepository.saveMappings(mappings, "gemini")
+        try {
+            storeEmbeddingRepository.saveStoreEmbeddings(toSave, "gemini")
+        } catch (e: Exception) {
+            MoneyTalkLogger.w("벡터 DB 캐싱 실패 (무시): ${e.message}")
+        }
+    }
+
+    /**
      * 미분류("기타") 항목들을 Gemini로 일괄 분류 (시맨틱 그룹핑 최적화)
      *
      * 1. 가게명을 총 지출액 기준 내림차순 정렬 (중요도 우선)

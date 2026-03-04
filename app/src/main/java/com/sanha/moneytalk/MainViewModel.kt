@@ -12,6 +12,8 @@ import com.sanha.moneytalk.core.database.OwnedCardRepository
 import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
@@ -555,6 +557,11 @@ class MainViewModel @Inject constructor(
 
     /**
      * 지출 파싱 결과를 ExpenseEntity로 변환하여 DB에 배치 저장
+     *
+     * 카테고리 분류를 DB INSERT 전에 완료하여 UI 깜빡임을 방지합니다.
+     * Phase 1: 로컬 분류 (캐시 + 키워드)
+     * Phase 2: Gemini 사전 분류 ("미분류" 항목을 API로 분류)
+     * Phase 3: 분류 완료된 엔티티를 DB에 배치 저장
      */
     private suspend fun saveExpenses(
         expenses: List<com.sanha.moneytalk.core.sms2.SmsParseResult>
@@ -562,10 +569,11 @@ class MainViewModel @Inject constructor(
         if (expenses.isEmpty()) return 0
 
         _uiState.update { it.copy(syncStepIndex = SmsPipeline.STEP_SAVE, syncProgress = "지출 저장 중...") }
-        val batch = mutableListOf<ExpenseEntity>()
 
+        // Phase 1: 엔티티 빌드 + 로컬 분류
+        val entities = ArrayList<ExpenseEntity>(expenses.size)
         for (parsed in expenses) {
-            val category = if (parsed.analysis.category.isNotBlank() &&
+            val localCategory = if (parsed.analysis.category.isNotBlank() &&
                 parsed.analysis.category != "미분류" &&
                 parsed.analysis.category != "기타"
             ) {
@@ -577,11 +585,11 @@ class MainViewModel @Inject constructor(
                 )
             }
 
-            batch.add(
+            entities.add(
                 ExpenseEntity(
                     amount = parsed.analysis.amount,
                     storeName = parsed.analysis.storeName,
-                    category = category,
+                    category = localCategory,
                     cardName = CardNameNormalizer.normalizeWithFallback(parsed.analysis.cardName, parsed.input.body),
                     dateTime = DateUtils.parseDateTime(parsed.analysis.dateTime),
                     originalSms = parsed.input.body,
@@ -589,14 +597,57 @@ class MainViewModel @Inject constructor(
                     senderAddress = SmsFilter.normalizeAddress(parsed.input.address)
                 )
             )
+        }
 
-            if (batch.size >= DB_BATCH_INSERT_SIZE) {
-                expenseRepository.insertAll(batch)
-                batch.clear()
+        // Phase 2: "미분류" 가게명을 Gemini로 사전 분류 (DB INSERT 전)
+        val unclassifiedStores = entities
+            .filter { it.category == "미분류" }
+            .map { it.storeName }
+            .distinct()
+
+        if (unclassifiedStores.isNotEmpty() && geminiRepository.hasApiKey()) {
+            _uiState.update {
+                it.copy(syncProgress = "AI가 카테고리 분류 중...")
+            }
+            try {
+                val geminiResults = categoryClassifierService.classifyStoreNamesInMemory(
+                    storeNames = unclassifiedStores,
+                    onStepProgress = { step, current, total ->
+                        _uiState.update {
+                            it.copy(
+                                syncProgress = "AI가 카테고리 분류 중...\n$step",
+                                syncProgressCurrent = current,
+                                syncProgressTotal = total
+                            )
+                        }
+                    }
+                )
+
+                if (geminiResults.isNotEmpty()) {
+                    for (i in entities.indices) {
+                        val entity = entities[i]
+                        if (entity.category == "미분류") {
+                            val newCategory = geminiResults[entity.storeName]
+                            if (newCategory != null) {
+                                val isTransfer = newCategory == Category.TRANSFER_GENERAL.displayName
+                                entities[i] = entity.copy(
+                                    category = newCategory,
+                                    transactionType = if (isTransfer) "TRANSFER" else entity.transactionType,
+                                    transferDirection = if (isTransfer) TransferDirection.WITHDRAWAL.dbValue else entity.transferDirection
+                                )
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                MoneyTalkLogger.w("사전 카테고리 분류 실패 (무시): ${e.message}")
             }
         }
-        if (batch.isNotEmpty()) {
-            expenseRepository.insertAll(batch)
+
+        // Phase 3: 분류 완료된 엔티티를 DB에 배치 저장
+        _uiState.update { it.copy(syncProgress = "지출 저장 중...") }
+        for (chunk in entities.chunked(DB_BATCH_INSERT_SIZE)) {
+            expenseRepository.insertAll(chunk)
         }
 
         return expenses.size
@@ -666,7 +717,10 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * 동기화 후처리 (카테고리 캐시 정리, 패턴 정리, lastSyncTime 갱신, 카테고리 분류)
+     * 동기화 후처리 (카테고리 캐시 정리, lastSyncTime 갱신)
+     *
+     * 카테고리 분류는 saveExpenses()에서 DB INSERT 전에 완료하므로 여기서는 생략합니다.
+     * 잔여 미분류 항목은 tryResumeClassification()에서 백그라운드로 처리됩니다.
      */
     private suspend fun postSyncCleanup(
         updateLastSyncTime: Boolean,
@@ -682,37 +736,9 @@ class MainViewModel @Inject constructor(
 
         val allCardNames = expenseRepository.getAllCardNamesWithDuplicates()
 
-        // 카테고리 분류 (Gemini)
-        var classifiedCount = 0
-        val hasGeminiKey = geminiRepository.hasApiKey()
-        if (hasGeminiKey) {
-            val unclassifiedCount = categoryClassifierService.getUnclassifiedCount()
-            if (unclassifiedCount > 0) {
-                _uiState.update {
-                    it.copy(
-                        syncProgress = "AI가 카테고리 분류 중...",
-                        syncProgressCurrent = 0,
-                        syncProgressTotal = unclassifiedCount
-                    )
-                }
-                classifiedCount = categoryClassifierService.classifyUnclassifiedExpenses(
-                    onStepProgress = { step, current, total ->
-                        _uiState.update {
-                            it.copy(
-                                syncProgress = "AI가 카테고리 분류 중...\n$step",
-                                syncProgressCurrent = current,
-                                syncProgressTotal = total
-                            )
-                        }
-                    },
-                    maxStoreCount = 50
-                )
-            }
-        }
-
         return PostSyncResult(
             cardNames = allCardNames,
-            classifiedCount = classifiedCount
+            classifiedCount = 0
         )
     }
 
