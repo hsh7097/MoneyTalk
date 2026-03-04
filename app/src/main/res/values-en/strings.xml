@@ -460,6 +460,8 @@
     <string name="transaction_edit_date_time">Date/Time</string>
     <string name="transaction_edit_income_input_required">Please enter amount</string>
     <string name="transaction_edit_fixed_expense">Add to fixed expenses</string>
+    <string name="transaction_edit_apply_category_to_all">Apply to all same store</string>
+    <string name="transaction_edit_apply_fixed_to_all">Apply to all same store</string>
     <string name="transaction_edit_type_label">Type</string>
 
     <!-- Daily transaction list Activity -->

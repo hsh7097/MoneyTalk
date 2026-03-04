@@ -465,6 +465,22 @@
     <string name="sms_settings_blocked_sender_input_hint">전화번호 입력</string>
     <string name="sms_settings_blocked_sender_empty">등록된 차단 번호가 없습니다</string>
 
+    <!-- 카테고리 설정 -->
+    <string name="category_settings_title">카테고리 설정</string>
+    <string name="category_settings_subtitle">카테고리 관리 및 커스텀 카테고리 추가</string>
+    <string name="category_settings_default_header">기본 카테고리</string>
+    <string name="category_settings_custom_header">커스텀 카테고리</string>
+    <string name="category_settings_custom_empty">추가한 커스텀 카테고리가 없습니다</string>
+    <string name="category_settings_add">카테고리 추가</string>
+    <string name="category_settings_add_title">카테고리 추가</string>
+    <string name="category_settings_emoji_label">아이콘</string>
+    <string name="category_settings_name_label">카테고리 이름</string>
+    <string name="category_settings_delete_title">카테고리 삭제</string>
+    <string name="category_settings_delete_message">이 카테고리를 삭제하시겠습니까?\n해당 카테고리로 분류된 거래는 미분류로 변경됩니다.</string>
+    <string name="category_type_expense">지출</string>
+    <string name="category_type_income">수입</string>
+    <string name="category_type_transfer">이체</string>
+
     <!-- 공통 suffix -->
     <string name="common_suffix_won">원</string>
     <string name="common_suffix_day">일</string>
@@ -555,6 +571,8 @@
     <string name="transaction_edit_amount_suffix">원</string>
     <string name="transaction_edit_date_time">날짜-시간</string>
     <string name="transaction_edit_fixed_expense">고정지출에 추가</string>
+    <string name="transaction_edit_apply_category_to_all">동일 거래처에 모두 적용</string>
+    <string name="transaction_edit_apply_fixed_to_all">동일 거래처에 모두 적용</string>
     <string name="transaction_edit_type_label">분류</string>
     <string name="transaction_edit_exit_confirm_title">내역을 수정 중이에요.</string>
     <string name="transaction_edit_exit_confirm_message">지금 나가면 변경 사항이 저장되지 않습니다.</string>

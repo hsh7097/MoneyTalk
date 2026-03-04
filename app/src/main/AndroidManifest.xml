@@ -90,6 +90,13 @@
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- 카테고리 설정 -->
+        <activity
+            android:name=".feature.categorysettings.CategorySettingsActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.MoneyTalk"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- SMS Receiver -->
         <receiver
             android:name=".receiver.SmsReceiver"

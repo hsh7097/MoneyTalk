@@ -73,6 +73,7 @@ import com.sanha.moneytalk.core.ui.component.settings.SettingsItemCompose
 import com.sanha.moneytalk.core.ui.component.settings.SettingsItemInfo
 import com.sanha.moneytalk.core.ui.component.settings.SettingsSectionCompose
 import com.sanha.moneytalk.core.util.DataBackupManager
+import com.sanha.moneytalk.feature.categorysettings.CategorySettingsActivity
 import com.sanha.moneytalk.feature.smssettings.SmsSettingsActivity
 import kotlinx.coroutines.launch
 
@@ -334,6 +335,17 @@ fun SettingsScreen(
                         },
                         onClick = {
                             SmsSettingsActivity.open(context)
+                        }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = Icons.Default.Settings
+                            override val title = stringResource(R.string.category_settings_title)
+                            override val subtitle = stringResource(R.string.category_settings_subtitle)
+                        },
+                        onClick = {
+                            CategorySettingsActivity.open(context)
                         }
                     )
                     if (BuildConfig.DEBUG) {
