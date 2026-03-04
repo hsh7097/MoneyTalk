@@ -360,7 +360,8 @@ private fun MonthNavigationHeader(
         IconButton(onClick = onPreviousMonth) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                contentDescription = stringResource(R.string.home_previous_month)
+                contentDescription = stringResource(R.string.home_previous_month),
+                tint = MaterialTheme.colorScheme.onSurface
             )
         }
 

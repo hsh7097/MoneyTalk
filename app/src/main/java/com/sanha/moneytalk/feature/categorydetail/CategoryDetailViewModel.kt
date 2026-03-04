@@ -222,13 +222,20 @@ class CategoryDetailViewModel @Inject constructor(
 
     // ========== 정렬 ==========
 
-    /** 정렬 순서 설정 */
+    /** 정렬 순서 설정 (캐시 내 거래 목록만 재정렬, 로딩 없음) */
     fun setSortOrder(order: CategorySortOrder) {
         if (_uiState.value.sortOrder == order) return
-        _uiState.update { it.copy(sortOrder = order) }
-        // 캐시 내 transactionItems 재빌드
-        clearAllPageCache()
-        loadCurrentAndAdjacentPages()
+        _uiState.update { state ->
+            val resortedCache = state.pageCache.mapValues { (_, pageData) ->
+                val expenses = pageData.transactionItems
+                    .filterIsInstance<CategoryTransactionItem.ExpenseItem>()
+                    .map { it.expense }
+                pageData.copy(
+                    transactionItems = buildTransactionItems(expenses, order)
+                )
+            }
+            state.copy(sortOrder = order, pageCache = resortedCache)
+        }
     }
 
     // ========== 월 변경 ==========
