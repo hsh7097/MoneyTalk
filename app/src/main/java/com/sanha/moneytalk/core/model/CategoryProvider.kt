@@ -142,11 +142,16 @@ class CategoryProvider @Inject constructor(
     }
 
     private fun CustomCategoryEntity.toCategoryInfo(): CustomCategoryInfo {
+        val type = try {
+            CategoryType.valueOf(categoryType)
+        } catch (e: IllegalArgumentException) {
+            CategoryType.EXPENSE
+        }
         return CustomCategoryInfo(
             id = id,
             displayName = displayName,
             emoji = emoji,
-            categoryType = CategoryType.valueOf(categoryType),
+            categoryType = type,
             displayOrder = displayOrder
         )
     }

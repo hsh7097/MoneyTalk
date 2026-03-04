@@ -355,9 +355,13 @@ class TransactionEditViewModel @Inject constructor(
                     }
                 }
                 if (state.applyFixedToAll && trimmedStore.isNotBlank()) {
-                    expenseRepository.updateFixedByStoreName(
-                        trimmedStore, state.isFixed
-                    )
+                    try {
+                        expenseRepository.updateFixedByStoreName(
+                            trimmedStore, state.isFixed
+                        )
+                    } catch (e: Exception) {
+                        MoneyTalkLogger.w("고정지출 일괄 변경 실패: ${e.message}")
+                    }
                 }
 
                 dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)

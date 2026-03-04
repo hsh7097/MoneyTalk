@@ -728,7 +728,7 @@ private fun ApplyToAllCheckbox(
     ) {
         Checkbox(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = null,
             modifier = Modifier.size(36.dp)
         )
         Text(
