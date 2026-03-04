@@ -12,6 +12,8 @@ import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.util.DataRefreshEvent
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -42,6 +44,10 @@ data class TransactionEditUiState(
     val originalSms: String = "",
     val isFixed: Boolean = false,
     val transferDirection: TransferDirection? = null,
+    /** 카테고리 변경을 동일 거래처에 일괄 적용 */
+    val applyCategoryToAll: Boolean = false,
+    /** 고정지출 변경을 동일 거래처에 일괄 적용 */
+    val applyFixedToAll: Boolean = false,
     val isSaved: Boolean = false,
     val isDeleted: Boolean = false
 ) {
@@ -72,6 +78,7 @@ class TransactionEditViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
+    private val categoryClassifierService: CategoryClassifierService,
     private val dataRefreshEvent: DataRefreshEvent,
     private val snackbarBus: AppSnackbarBus,
     @ApplicationContext private val context: Context
@@ -251,6 +258,14 @@ class TransactionEditViewModel @Inject constructor(
         _uiState.update { it.copy(isFixed = value) }
     }
 
+    fun updateApplyCategoryToAll(value: Boolean) {
+        _uiState.update { it.copy(applyCategoryToAll = value) }
+    }
+
+    fun updateApplyFixedToAll(value: Boolean) {
+        _uiState.update { it.copy(applyFixedToAll = value) }
+    }
+
     fun save() {
         val state = _uiState.value
         when (state.transactionType) {
@@ -327,6 +342,24 @@ class TransactionEditViewModel @Inject constructor(
                     )
                     expenseRepository.update(updated)
                 }
+
+                // 동일 거래처 일괄 적용
+                val trimmedStore = state.storeName.trim()
+                if (state.applyCategoryToAll && trimmedStore.isNotBlank()) {
+                    try {
+                        categoryClassifierService.updateCategoryForAllSameStore(
+                            trimmedStore, state.category
+                        )
+                    } catch (e: Exception) {
+                        MoneyTalkLogger.w("카테고리 일괄 변경 실패: ${e.message}")
+                    }
+                }
+                if (state.applyFixedToAll && trimmedStore.isNotBlank()) {
+                    expenseRepository.updateFixedByStoreName(
+                        trimmedStore, state.isFixed
+                    )
+                }
+
                 dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
                 snackbarBus.show(context.getString(R.string.transaction_edit_saved))
                 _uiState.update { it.copy(isSaved = true) }

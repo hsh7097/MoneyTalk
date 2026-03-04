@@ -210,6 +210,10 @@ class ExpenseRepository @Inject constructor(
     suspend fun updateCategoryById(expenseId: Long, newCategory: String): Int =
         expenseDao.updateCategoryById(expenseId, newCategory)
 
+    /** 가게명으로 고정지출 일괄 변경 (정확 일치) */
+    suspend fun updateFixedByStoreName(storeName: String, isFixed: Boolean): Int =
+        expenseDao.updateFixedByStoreName(storeName, isFixed)
+
     /** 특정 카테고리의 지출 조회 (일회성) */
     suspend fun getExpensesByCategoryOnce(category: String): List<ExpenseEntity> =
         expenseDao.getExpensesByCategoryOnce(category)

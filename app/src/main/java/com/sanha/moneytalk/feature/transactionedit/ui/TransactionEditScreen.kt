@@ -30,6 +30,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -233,6 +234,15 @@ fun TransactionEditScreen(
                 onClick = { showCategoryPicker = true }
             )
 
+            // 동일 거래처 카테고리 일괄 적용 (기존 거래만)
+            if (!uiState.isNew) {
+                ApplyToAllCheckbox(
+                    checked = uiState.applyCategoryToAll,
+                    label = stringResource(R.string.transaction_edit_apply_category_to_all),
+                    onCheckedChange = { viewModel.updateApplyCategoryToAll(it) }
+                )
+            }
+
             // 거래처
             CompactEditRow(
                 label = stringResource(R.string.transaction_edit_store),
@@ -298,6 +308,15 @@ fun TransactionEditScreen(
                     isFixed = uiState.isFixed,
                     onToggle = { viewModel.updateIsFixed(it) }
                 )
+
+                // 동일 거래처 고정지출 일괄 적용 (기존 거래만)
+                if (!uiState.isNew) {
+                    ApplyToAllCheckbox(
+                        checked = uiState.applyFixedToAll,
+                        label = stringResource(R.string.transaction_edit_apply_fixed_to_all),
+                        onCheckedChange = { viewModel.updateApplyFixedToAll(it) }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -688,6 +707,36 @@ private fun FixedExpenseToggle(
         )
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+/**
+ * 동일 거래처 일괄 적용 체크박스.
+ * 카테고리/고정지출 변경 시 동일한 거래처(storeName 정확 일치)에 모두 적용.
+ */
+@Composable
+private fun ApplyToAllCheckbox(
+    checked: Boolean,
+    label: String,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.size(36.dp)
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 /**

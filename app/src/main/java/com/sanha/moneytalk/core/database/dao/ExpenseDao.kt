@@ -177,6 +177,10 @@ interface ExpenseDao {
     @Query("UPDATE expenses SET category = :newCategory WHERE id = :expenseId")
     suspend fun updateCategoryById(expenseId: Long, newCategory: String): Int
 
+    // 가게명으로 고정지출 일괄 변경 (정확 일치)
+    @Query("UPDATE expenses SET is_fixed = :isFixed WHERE storeName = :storeName")
+    suspend fun updateFixedByStoreName(storeName: String, isFixed: Boolean): Int
+
     // 중복 데이터 조회 (금액, 가게명, 날짜시간이 동일한 항목)
     @Query(
         """
