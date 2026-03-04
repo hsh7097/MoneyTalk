@@ -196,6 +196,7 @@ fun HistoryScreen(
                 onApplyFilter = { sortOrder, showExp, showInc, category ->
                     viewModel.applyFilter(sortOrder, showExp, showInc, category)
                 },
+                onResetFilter = { viewModel.resetFilters() },
                 onSearchClick = { viewModel.enterSearchMode() },
                 onAddClick = {
                     context.startActivity(

@@ -183,101 +183,101 @@ fun BillingCycleCalendarView(
             }
         }
 
-        // 달력 그리드
-        LazyColumn {
+        // 달력 그리드 — 남은 공간을 균등 분배하여 화면 하단까지 채움
+        Column(modifier = Modifier.weight(1f)) {
             weeks.forEachIndexed { weekIndex, week ->
                 val weekTotal = weeklyTotals.getOrNull(weekIndex) ?: 0
                 val weekIncomeTotal = weeklyIncomeTotals.getOrNull(weekIndex) ?: 0
 
-                item {
-                    Column {
-                        // 주간 디바이더
-                        if (weekIndex > 0) {
-                            HorizontalDivider(
-                                color = MaterialTheme.moneyTalkColors.divider,
-                                thickness = 1.dp,
-                                modifier = Modifier.padding(horizontal = 4.dp)
-                            )
-                        }
+                Column(modifier = Modifier.weight(1f)) {
+                    // 주간 디바이더
+                    if (weekIndex > 0) {
+                        HorizontalDivider(
+                            color = MaterialTheme.moneyTalkColors.divider,
+                            thickness = 1.dp,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                    }
 
-                        // 주간 합계 (오른쪽 정렬, 수입+지출)
-                        if (weekTotal > 0 || weekIncomeTotal > 0) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(end = 4.dp, top = 4.dp, bottom = 2.dp),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                if (weekIncomeTotal > 0) {
-                                    Text(
-                                        text = "+${numberFormat.format(weekIncomeTotal)}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.moneyTalkColors.income
-                                    )
-                                    if (weekTotal > 0) {
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                    }
-                                }
-                                if (weekTotal > 0) {
-                                    Text(
-                                        text = "-${numberFormat.format(weekTotal)}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                            }
-                        } else {
-                            Spacer(modifier = Modifier.height(18.dp))
-                        }
-
+                    // 주간 합계 (오른쪽 정렬, 수입+지출)
+                    if (weekTotal > 0 || weekIncomeTotal > 0) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(IntrinsicSize.Min)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(end = 4.dp, top = 4.dp, bottom = 2.dp),
+                            horizontalArrangement = Arrangement.End
                         ) {
-                            week.forEachIndexed { index, calendarDay ->
-                                if (index > 0) {
-                                    VerticalDivider(
-                                        color = MaterialTheme.moneyTalkColors.divider,
-                                        thickness = 0.5.dp,
-                                        modifier = Modifier.fillMaxHeight()
-                                    )
+                            if (weekIncomeTotal > 0) {
+                                Text(
+                                    text = "+${numberFormat.format(weekIncomeTotal)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.moneyTalkColors.income
+                                )
+                                if (weekTotal > 0) {
+                                    Spacer(modifier = Modifier.width(8.dp))
                                 }
-                                CalendarDayCell(
-                                    calendarDay = calendarDay,
-                                    dayTotal = dailyTotals[calendarDay.dateString] ?: 0,
-                                    dayIncome = dailyIncomeTotals[calendarDay.dateString] ?: 0,
-                                    isSelected = false,
-                                    onClick = {
-                                        if (calendarDay.isCurrentPeriod && !calendarDay.isFuture) {
-                                            context.startActivity(
-                                                Intent(context, TransactionDetailListActivity::class.java).apply {
-                                                    putExtra(TransactionDetailListActivity.EXTRA_DATE, calendarDay.dateString)
-                                                }
-                                            )
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f)
+                            }
+                            if (weekTotal > 0) {
+                                Text(
+                                    text = "-${numberFormat.format(weekTotal)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
                                 )
                             }
-                            // 부족한 셀 채우기
-                            repeat(7 - week.size) {
+                        }
+                    } else {
+                        Spacer(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(18.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        week.forEachIndexed { index, calendarDay ->
+                            if (index > 0) {
                                 VerticalDivider(
                                     color = MaterialTheme.moneyTalkColors.divider,
                                     thickness = 0.5.dp,
                                     modifier = Modifier.fillMaxHeight()
                                 )
-                                Spacer(modifier = Modifier.weight(1f))
                             }
+                            CalendarDayCell(
+                                calendarDay = calendarDay,
+                                dayTotal = dailyTotals[calendarDay.dateString] ?: 0,
+                                dayIncome = dailyIncomeTotals[calendarDay.dateString] ?: 0,
+                                isSelected = false,
+                                onClick = {
+                                    if (calendarDay.isCurrentPeriod && !calendarDay.isFuture) {
+                                        context.startActivity(
+                                            Intent(context, TransactionDetailListActivity::class.java).apply {
+                                                putExtra(TransactionDetailListActivity.EXTRA_DATE, calendarDay.dateString)
+                                            }
+                                        )
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                            )
+                        }
+                        // 부족한 셀 채우기
+                        repeat(7 - week.size) {
+                            VerticalDivider(
+                                color = MaterialTheme.moneyTalkColors.divider,
+                                thickness = 0.5.dp,
+                                modifier = Modifier.fillMaxHeight()
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
                         }
                     }
                 }
-            }
-
-            // 인라인 거래 목록 제거됨 — 날짜 클릭 시 TransactionDetailListActivity로 이동
-
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -308,8 +308,7 @@ fun CalendarDayCell(
             )
             .clickable(
                 enabled = calendarDay.isCurrentPeriod && !calendarDay.isFuture
-            ) { onClick() }
-            .aspectRatio(0.8f),
+            ) { onClick() },
         contentAlignment = Alignment.TopCenter
     ) {
         Column(
