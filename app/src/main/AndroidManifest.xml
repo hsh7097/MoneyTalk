@@ -64,28 +64,28 @@
 
         <!-- 카테고리 상세 -->
         <activity
-            android:name=".feature.categorydetail.ui.CategoryDetailActivity"
+            android:name=".feature.categorydetail.CategoryDetailActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 
         <!-- 거래 편집/추가 -->
         <activity
-            android:name=".feature.transactionedit.ui.TransactionEditActivity"
+            android:name=".feature.transactionedit.TransactionEditActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 
         <!-- 날짜별 거래 목록 -->
         <activity
-            android:name=".feature.transactionlist.ui.TransactionDetailListActivity"
+            android:name=".feature.transactionlist.TransactionDetailListActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 
         <!-- 문자 설정 -->
         <activity
-            android:name=".feature.smssettings.ui.SmsSettingsActivity"
+            android:name=".feature.smssettings.SmsSettingsActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />

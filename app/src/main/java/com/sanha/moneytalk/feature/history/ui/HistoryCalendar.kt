@@ -37,10 +37,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
-import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import com.sanha.moneytalk.core.theme.moneyTalkColors
-import com.sanha.moneytalk.feature.transactionlist.ui.TransactionDetailListActivity
+import com.sanha.moneytalk.feature.transactionlist.TransactionDetailListActivity
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -255,11 +254,7 @@ fun BillingCycleCalendarView(
                                 isSelected = false,
                                 onClick = {
                                     if (calendarDay.isCurrentPeriod && !calendarDay.isFuture) {
-                                        context.startActivity(
-                                            Intent(context, TransactionDetailListActivity::class.java).apply {
-                                                putExtra(TransactionDetailListActivity.EXTRA_DATE, calendarDay.dateString)
-                                            }
-                                        )
+                                        TransactionDetailListActivity.open(context, calendarDay.dateString)
                                     }
                                 },
                                 modifier = Modifier

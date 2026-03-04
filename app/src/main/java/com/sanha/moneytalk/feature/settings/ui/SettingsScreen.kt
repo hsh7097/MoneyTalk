@@ -2,7 +2,6 @@ package com.sanha.moneytalk.feature.settings.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -74,7 +73,7 @@ import com.sanha.moneytalk.core.ui.component.settings.SettingsItemCompose
 import com.sanha.moneytalk.core.ui.component.settings.SettingsItemInfo
 import com.sanha.moneytalk.core.ui.component.settings.SettingsSectionCompose
 import com.sanha.moneytalk.core.util.DataBackupManager
-import com.sanha.moneytalk.feature.smssettings.ui.SmsSettingsActivity
+import com.sanha.moneytalk.feature.smssettings.SmsSettingsActivity
 import kotlinx.coroutines.launch
 
 /** 설정 탭 메인 화면. API 키, 월 시작일, 카드 관리, 데이터 관리 등 앱 설정 항목을 표시 */
@@ -334,7 +333,7 @@ fun SettingsScreen(
                             override val subtitle = stringResource(R.string.sms_settings_subtitle)
                         },
                         onClick = {
-                            context.startActivity(Intent(context, SmsSettingsActivity::class.java))
+                            SmsSettingsActivity.open(context)
                         }
                     )
                     if (BuildConfig.DEBUG) {

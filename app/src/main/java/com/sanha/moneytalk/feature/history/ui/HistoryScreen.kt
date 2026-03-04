@@ -46,13 +46,12 @@ import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import android.content.Intent
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.activity.ComponentActivity
-import com.sanha.moneytalk.feature.transactionedit.ui.TransactionEditActivity
+import com.sanha.moneytalk.feature.transactionedit.TransactionEditActivity
 import com.sanha.moneytalk.MainViewModel
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
@@ -200,11 +199,7 @@ fun HistoryScreen(
                 onResetFilter = { viewModel.resetFilters() },
                 onSearchClick = { viewModel.enterSearchMode() },
                 onAddClick = {
-                    context.startActivity(
-                        Intent(context, TransactionEditActivity::class.java).apply {
-                            putExtra(TransactionEditActivity.EXTRA_EXPENSE_ID, -1L)
-                        }
-                    )
+                    TransactionEditActivity.open(context)
                 }
             )
         }
@@ -303,11 +298,7 @@ fun HistoryScreen(
     // 거래 선택 시 편집 Activity로 이동
     uiState.selectedExpense?.let { expense ->
         LaunchedEffect(expense.id) {
-            context.startActivity(
-                Intent(context, TransactionEditActivity::class.java).apply {
-                    putExtra(TransactionEditActivity.EXTRA_EXPENSE_ID, expense.id)
-                }
-            )
+            TransactionEditActivity.open(context, expenseId = expense.id)
             viewModel.onIntent(HistoryIntent.DismissDialog)
         }
     }

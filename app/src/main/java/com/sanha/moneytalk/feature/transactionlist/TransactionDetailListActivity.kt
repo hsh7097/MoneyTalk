@@ -1,5 +1,7 @@
-package com.sanha.moneytalk.feature.transactionedit.ui
+package com.sanha.moneytalk.feature.transactionlist
 
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -9,23 +11,29 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.theme.MoneyTalkTheme
 import com.sanha.moneytalk.core.theme.ThemeMode
+import com.sanha.moneytalk.feature.transactionlist.ui.TransactionDetailListScreen
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 /**
- * 거래 편집/추가 Activity.
+ * 날짜별 거래 상세 목록 Activity.
  *
- * - EXTRA_EXPENSE_ID: 기존 지출 편집 시 expense ID, -1L이면 무시
- * - EXTRA_INCOME_ID: 기존 수입 편집 시 income ID, -1L이면 무시
- * - EXTRA_INITIAL_DATE: 새 거래 추가 시 기본 날짜 (Long, optional)
+ * 달력에서 특정 날짜 클릭 시 해당 날짜의 지출+수입 목록을 표시.
+ * - EXTRA_DATE: "yyyy-MM-dd" 형식의 날짜 문자열
  */
 @AndroidEntryPoint
-class TransactionEditActivity : ComponentActivity() {
+class TransactionDetailListActivity : ComponentActivity() {
 
     companion object {
-        const val EXTRA_EXPENSE_ID = "extra_expense_id"
-        const val EXTRA_INCOME_ID = "extra_income_id"
-        const val EXTRA_INITIAL_DATE = "extra_initial_date"
+        private const val EXTRA_DATE = "extra_date"
+
+        fun open(context: Context, date: String) {
+            context.startActivity(
+                Intent(context, TransactionDetailListActivity::class.java).apply {
+                    putExtra(EXTRA_DATE, date)
+                }
+            )
+        }
     }
 
     @Inject
@@ -45,7 +53,7 @@ class TransactionEditActivity : ComponentActivity() {
             }
 
             MoneyTalkTheme(themeMode = themeMode) {
-                TransactionEditScreen(onBack = { finish() })
+                TransactionDetailListScreen(onBack = { finish() })
             }
         }
     }

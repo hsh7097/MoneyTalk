@@ -229,24 +229,12 @@ fun HomeScreen(
                 },
                 onCategorySelected = { category ->
                     if (category != null) {
-                        val intent = android.content.Intent(
+                        com.sanha.moneytalk.feature.categorydetail.CategoryDetailActivity.open(
                             context,
-                            com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity::class.java
-                        ).apply {
-                            putExtra(
-                                com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_CATEGORY,
-                                category
-                            )
-                            putExtra(
-                                com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_YEAR,
-                                uiState.selectedYear
-                            )
-                            putExtra(
-                                com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_MONTH,
-                                uiState.selectedMonth
-                            )
-                        }
-                        context.startActivity(intent)
+                            category,
+                            uiState.selectedYear,
+                            uiState.selectedMonth
+                        )
                     }
                 },
                 onExpenseSelected = { expense -> selectedExpense = expense },
