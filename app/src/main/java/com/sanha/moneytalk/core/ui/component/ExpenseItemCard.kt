@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.CategoryInfo
 import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.util.DateUtils
@@ -384,7 +385,7 @@ fun CategorySelectDialog(
     onTransferDirectionChanged: ((TransferDirection) -> Unit)? = null
 ) {
     val type = categoryType ?: CategoryType.EXPENSE
-    val categories = when (type) {
+    val categories: List<CategoryInfo> = when (type) {
         CategoryType.EXPENSE -> Category.expenseEntries
         CategoryType.INCOME -> Category.incomeEntries
         CategoryType.TRANSFER -> Category.transferEntries

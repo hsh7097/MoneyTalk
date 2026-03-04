@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.CategoryInfo
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupCompose
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupOption
 
@@ -78,7 +79,7 @@ private fun isFilterDefault(
 
 private fun buildCategorySummary(
     selectedCategories: Set<String>,
-    allCategories: List<Category>,
+    allCategories: List<CategoryInfo>,
     allText: String,
     multiFormat: String
 ): String {
@@ -372,11 +373,14 @@ private fun FilterCategoryTypeRow(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onCheckedChange(!checked) }
         ) {
             Checkbox(
                 checked = checked,
-                onCheckedChange = onCheckedChange
+                onCheckedChange = { onCheckedChange(!checked) }
             )
             Text(
                 text = label,
@@ -415,7 +419,7 @@ private fun CategoryFilterListBottomSheet(
     onSelectionChanged: (Set<String>) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val categories = when (sheetType) {
+    val categories: List<CategoryInfo> = when (sheetType) {
         CategorySheetType.EXPENSE -> Category.expenseEntries
         CategorySheetType.INCOME -> Category.incomeEntries
         CategorySheetType.TRANSFER -> Category.transferEntries
@@ -461,10 +465,10 @@ private fun CategoryFilterListBottomSheet(
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        top = 4.dp,
-                        bottom = 16.dp
+                        top = 0.dp,
+                        bottom = 8.dp
                     ),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
                     item {
                         CategoryFilterListRow(
@@ -475,7 +479,7 @@ private fun CategoryFilterListBottomSheet(
                         )
                     }
 
-                    items(categories, key = { it.name }) { category ->
+                    items(categories, key = { it.displayName }) { category ->
                         val isChecked = selectedCategories.contains(category.displayName)
                         CategoryFilterListRow(
                             emoji = category.emoji,
@@ -537,7 +541,7 @@ private fun CategoryFilterListRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .clickable { onCheckedChange() }
-            .padding(horizontal = 4.dp, vertical = 6.dp),
+            .padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Checkbox(
