@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.feature.transactionedit.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,14 +18,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Sms
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -33,10 +35,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -52,6 +54,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -61,13 +65,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.CategorySelectDialog
-import androidx.compose.material3.AlertDialog
 import com.sanha.moneytalk.core.util.DateUtils
 
 /**
  * 거래 편집/추가 화면.
  *
- * 전체 화면 편집 UI: 금액, 가게명, 카테고리, 결제수단, 날짜, 시간, 메모.
+ * 컴팩트 행 기반 편집 UI: 날짜, 시간, 금액, 카테고리, 결제수단, 가게명, 메모.
  * 기존 거래: 원본 SMS 표시 + 삭제 버튼.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -139,155 +142,102 @@ fun TransactionEditScreen(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Spacer(modifier = Modifier.height(4.dp))
+            // 날짜
+            CompactReadOnlyRow(
+                label = stringResource(R.string.transaction_edit_date),
+                value = DateUtils.formatDisplayDate(uiState.dateMillis),
+                onClick = { showDatePicker = true }
+            )
+
+            // 시간
+            CompactReadOnlyRow(
+                label = stringResource(R.string.transaction_edit_time),
+                value = String.format("%02d:%02d", uiState.hour, uiState.minute),
+                onClick = { showTimePicker = true }
+            )
 
             // 금액
-            OutlinedTextField(
+            CompactEditRow(
+                label = stringResource(R.string.transaction_edit_amount),
                 value = uiState.amount,
                 onValueChange = { value ->
                     viewModel.updateAmount(value.filter { it.isDigit() })
                 },
-                label = { Text(stringResource(R.string.transaction_edit_amount)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                trailingIcon = {
-                    if (uiState.amount.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.updateAmount("") }) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = stringResource(R.string.common_clear_input)
-                            )
-                        }
-                    }
-                },
-                suffix = { Text("원") },
-                modifier = Modifier.fillMaxWidth()
+                suffix = "원",
+                placeholder = "0"
             )
 
-            // 가게명
-            OutlinedTextField(
-                value = uiState.storeName,
-                onValueChange = { viewModel.updateStoreName(it) },
-                label = { Text(stringResource(R.string.transaction_edit_store)) },
-                singleLine = true,
-                trailingIcon = {
-                    if (uiState.storeName.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.updateStoreName("") }) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = stringResource(R.string.common_clear_input)
-                            )
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
+            if (uiState.isIncome) {
+                // 수입: 유형
+                CompactEditRow(
+                    label = stringResource(R.string.transaction_edit_income_type),
+                    value = uiState.incomeType,
+                    onValueChange = { viewModel.updateIncomeType(it) }
+                )
 
-            // 카테고리
-            val category = Category.fromDisplayName(uiState.category)
-            OutlinedTextField(
-                value = "${category.emoji} ${category.displayName}",
-                onValueChange = {},
-                label = { Text(stringResource(R.string.detail_category)) },
-                readOnly = true,
-                singleLine = true,
-                trailingIcon = {
-                    IconButton(onClick = { showCategoryPicker = true }) {
-                        Icon(
-                            Icons.Default.DateRange,
-                            contentDescription = stringResource(R.string.detail_edit_category)
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
+                // 수입: 출처
+                CompactEditRow(
+                    label = stringResource(R.string.transaction_edit_source),
+                    value = uiState.source,
+                    onValueChange = { viewModel.updateSource(it) }
+                )
 
-            // 결제수단
-            OutlinedTextField(
-                value = uiState.cardName,
-                onValueChange = { viewModel.updateCardName(it) },
-                label = { Text(stringResource(R.string.transaction_edit_card)) },
-                singleLine = true,
-                trailingIcon = {
-                    if (uiState.cardName.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.updateCardName("") }) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = stringResource(R.string.common_clear_input)
-                            )
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
+                // 수입: 내용 (description)
+                CompactEditRow(
+                    label = stringResource(R.string.transaction_edit_description),
+                    value = uiState.storeName,
+                    onValueChange = { viewModel.updateStoreName(it) }
+                )
+            } else {
+                // 지출: 카테고리
+                val category = Category.fromDisplayName(uiState.category)
+                CompactReadOnlyRow(
+                    label = stringResource(R.string.detail_category),
+                    value = "${category.emoji} ${category.displayName}",
+                    onClick = { showCategoryPicker = true }
+                )
 
-            // 날짜
-            OutlinedTextField(
-                value = DateUtils.formatDisplayDate(uiState.dateMillis),
-                onValueChange = {},
-                label = { Text(stringResource(R.string.transaction_edit_date)) },
-                readOnly = true,
-                singleLine = true,
-                trailingIcon = {
-                    IconButton(onClick = { showDatePicker = true }) {
-                        Icon(
-                            Icons.Default.DateRange,
-                            contentDescription = stringResource(R.string.transaction_edit_date)
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
+                // 지출: 결제수단
+                CompactEditRow(
+                    label = stringResource(R.string.transaction_edit_card),
+                    value = uiState.cardName,
+                    onValueChange = { viewModel.updateCardName(it) }
+                )
 
-            // 시간
-            OutlinedTextField(
-                value = String.format("%02d:%02d", uiState.hour, uiState.minute),
-                onValueChange = {},
-                label = { Text(stringResource(R.string.transaction_edit_time)) },
-                readOnly = true,
-                singleLine = true,
-                trailingIcon = {
-                    IconButton(onClick = { showTimePicker = true }) {
-                        Icon(
-                            Icons.Default.DateRange,
-                            contentDescription = stringResource(R.string.transaction_edit_time)
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
+                // 지출: 가게명
+                CompactEditRow(
+                    label = stringResource(R.string.transaction_edit_store),
+                    value = uiState.storeName,
+                    onValueChange = { viewModel.updateStoreName(it) }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             // 메모
-            OutlinedTextField(
+            CompactEditRow(
+                label = stringResource(R.string.transaction_edit_memo),
                 value = uiState.memo,
                 onValueChange = { viewModel.updateMemo(it) },
-                label = { Text(stringResource(R.string.transaction_edit_memo)) },
                 maxLines = 3,
-                trailingIcon = {
-                    if (uiState.memo.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.updateMemo("") }) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = stringResource(R.string.common_clear_input)
-                            )
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
+                singleLine = false
             )
 
             // 원본 SMS (기존 거래만)
             if (!uiState.isNew && uiState.originalSms.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = stringResource(R.string.transaction_edit_original_sms),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 )
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
                     shape = RoundedCornerShape(8.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -444,6 +394,129 @@ fun TransactionEditScreen(
                 }
             }
         )
+    }
+}
+
+/**
+ * 편집 가능한 컴팩트 필드 행.
+ * 포커스 시에만 X 클리어 버튼 표시.
+ */
+@Composable
+private fun CompactEditRow(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    suffix: String? = null,
+    singleLine: Boolean = true,
+    maxLines: Int = 1,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+) {
+    var isFocused by remember { mutableStateOf(false) }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = if (singleLine) Alignment.CenterVertically else Alignment.Top
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(64.dp)
+            )
+
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = singleLine,
+                maxLines = maxLines,
+                keyboardOptions = keyboardOptions,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    color = MaterialTheme.colorScheme.onSurface
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                modifier = Modifier
+                    .weight(1f)
+                    .onFocusChanged { isFocused = it.isFocused },
+                decorationBox = { innerTextField ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            if (value.isEmpty() && placeholder.isNotEmpty()) {
+                                Text(
+                                    text = placeholder,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                        alpha = 0.5f
+                                    )
+                                )
+                            }
+                            innerTextField()
+                        }
+                        if (suffix != null && value.isNotEmpty()) {
+                            Text(
+                                text = suffix,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            )
+
+            if (isFocused && value.isNotEmpty()) {
+                IconButton(
+                    onClick = { onValueChange("") },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = stringResource(R.string.common_clear_input),
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+}
+
+/**
+ * 읽기 전용 컴팩트 필드 행 (클릭 시 Picker 열림).
+ */
+@Composable
+private fun CompactReadOnlyRow(
+    label: String,
+    value: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(64.dp)
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 

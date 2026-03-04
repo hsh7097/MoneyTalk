@@ -15,7 +15,8 @@ import javax.inject.Inject
 /**
  * 거래 편집/추가 Activity.
  *
- * - EXTRA_EXPENSE_ID: 기존 거래 편집 시 expense ID, 새 거래 추가 시 -1L
+ * - EXTRA_EXPENSE_ID: 기존 지출 편집 시 expense ID, -1L이면 무시
+ * - EXTRA_INCOME_ID: 기존 수입 편집 시 income ID, -1L이면 무시
  * - EXTRA_INITIAL_DATE: 새 거래 추가 시 기본 날짜 (Long, optional)
  */
 @AndroidEntryPoint
@@ -23,6 +24,7 @@ class TransactionEditActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_EXPENSE_ID = "extra_expense_id"
+        const val EXTRA_INCOME_ID = "extra_income_id"
         const val EXTRA_INITIAL_DATE = "extra_initial_date"
     }
 

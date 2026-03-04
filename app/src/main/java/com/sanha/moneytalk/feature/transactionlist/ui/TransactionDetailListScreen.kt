@@ -46,7 +46,7 @@ import com.sanha.moneytalk.feature.transactionedit.ui.TransactionEditActivity
  * 날짜별 거래 상세 목록 화면.
  *
  * 달력에서 특정 날짜 클릭 시 해당 날짜의 지출+수입 목록을 표시.
- * 아이템 클릭 시 TransactionEditActivity로 이동 (지출만 편집 가능).
+ * 아이템 클릭 시 TransactionEditActivity로 이동 (지출/수입 모두 편집 가능).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,7 +133,13 @@ fun TransactionDetailListScreen(
             ) { income ->
                 TransactionCardCompose(
                     info = IncomeTransactionCardInfo(income),
-                    onClick = { /* 수입은 편집 Activity 미지원 */ }
+                    onClick = {
+                        context.startActivity(
+                            Intent(context, TransactionEditActivity::class.java).apply {
+                                putExtra(TransactionEditActivity.EXTRA_INCOME_ID, income.id)
+                            }
+                        )
+                    }
                 )
             }
 
