@@ -68,7 +68,7 @@ import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
         SmsBlockedSenderEntity::class,
         SmsRegexRuleEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 @TypeConverters(FloatListConverter::class)

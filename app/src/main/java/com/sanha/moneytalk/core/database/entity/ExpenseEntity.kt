@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.core.database.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -59,6 +60,10 @@ data class ExpenseEntity(
 
     /** 사용자 메모 (선택) */
     val memo: String? = null,
+
+    /** 고정 지출 여부 (매월 반복되는 지출) */
+    @ColumnInfo(name = "is_fixed", defaultValue = "0")
+    val isFixed: Boolean = false,
 
     /** 레코드 생성 시간 */
     val createdAt: Long = System.currentTimeMillis()

@@ -50,6 +50,15 @@ enum class SortOrder {
 }
 
 /**
+ * 고정지출 필터
+ */
+enum class FixedExpenseFilter {
+    ALL,            // 포함 (기본값)
+    FIXED_ONLY,     // 고정지출만 표시
+    EXCLUDE_FIXED   // 고정지출 제외
+}
+
+/**
  * History 화면의 모든 사용자 인터랙션을 표현하는 Intent
  */
 sealed interface HistoryIntent {
@@ -145,6 +154,7 @@ data class HistoryUiState(
     val sortOrder: SortOrder = SortOrder.DATE_DESC,
     val showExpenses: Boolean = true,
     val showIncomes: Boolean = true,
+    val fixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL,
     // 다이얼로그 상태 (Composable에서 remember 대신 ViewModel에서 관리)
     val selectedExpense: ExpenseEntity? = null,
     val selectedIncome: IncomeEntity? = null
@@ -153,9 +163,17 @@ data class HistoryUiState(
     private val currentPageData: HistoryPageData
         get() = pageCache[MonthKey(selectedYear, selectedMonth)] ?: HistoryPageData()
 
-    /** 필터 적용된 지출 총합 */
+    /** 필터 적용된 지출 총합 (고정지출 필터 반영) */
     val filteredExpenseTotal: Int
-        get() = if (showExpenses) currentPageData.expenses.sumOf { it.amount } else 0
+        get() {
+            if (!showExpenses) return 0
+            val expenses = currentPageData.expenses
+            return when (fixedExpenseFilter) {
+                FixedExpenseFilter.ALL -> expenses
+                FixedExpenseFilter.FIXED_ONLY -> expenses.filter { it.isFixed }
+                FixedExpenseFilter.EXCLUDE_FIXED -> expenses.filter { !it.isFixed }
+            }.sumOf { it.amount }
+        }
 
     /** 필터 적용된 수입 총합 (카테고리 필터 시 수입 숨김) */
     val filteredIncomeTotal: Int
@@ -460,7 +478,8 @@ class HistoryViewModel @Inject constructor(
                         expenses = sortedExpenses,
                         transactionListItems = buildTransactionListItems(
                             sortedExpenses, incomesForList, currentState.sortOrder,
-                            currentState.showExpenses, currentState.showIncomes
+                            currentState.showExpenses, currentState.showIncomes,
+                            currentState.fixedExpenseFilter
                         )
                     ))
                 }
@@ -651,7 +670,8 @@ class HistoryViewModel @Inject constructor(
                     monthlyTotal = results.sumOf { e -> e.amount },
                     transactionListItems = buildTransactionListItems(
                         sortedResults, emptyList(), currentState.sortOrder,
-                        currentState.showExpenses, currentState.showIncomes
+                        currentState.showExpenses, currentState.showIncomes,
+                        currentState.fixedExpenseFilter
                     )
                 ))
             } catch (e: Exception) {
@@ -739,14 +759,16 @@ class HistoryViewModel @Inject constructor(
         sortOrder: SortOrder,
         showExpenses: Boolean,
         showIncomes: Boolean,
-        category: String?
+        category: String?,
+        fixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL
     ) {
         _uiState.update {
             it.copy(
                 sortOrder = sortOrder,
                 showExpenses = showExpenses,
                 showIncomes = showIncomes,
-                selectedCategory = category
+                selectedCategory = category,
+                fixedExpenseFilter = fixedExpenseFilter
             )
         }
         clearAllPageCache()
@@ -761,7 +783,8 @@ class HistoryViewModel @Inject constructor(
                 state.searchQuery.isNotEmpty() ||
                 state.sortOrder != SortOrder.DATE_DESC ||
                 !state.showExpenses ||
-                !state.showIncomes
+                !state.showIncomes ||
+                state.fixedExpenseFilter != FixedExpenseFilter.ALL
         if (!needsReload) return
 
         _uiState.update {
@@ -771,7 +794,8 @@ class HistoryViewModel @Inject constructor(
                 searchQuery = "",
                 sortOrder = SortOrder.DATE_DESC,
                 showExpenses = true,
-                showIncomes = true
+                showIncomes = true,
+                fixedExpenseFilter = FixedExpenseFilter.ALL
             )
         }
         clearAllPageCache()
@@ -834,7 +858,7 @@ class HistoryViewModel @Inject constructor(
                 expenses = sortedExpenses,
                 transactionListItems = buildTransactionListItems(
                     sortedExpenses, incomesForList, state.sortOrder,
-                    state.showExpenses, state.showIncomes
+                    state.showExpenses, state.showIncomes, state.fixedExpenseFilter
                 )
             )
         }
@@ -850,9 +874,15 @@ class HistoryViewModel @Inject constructor(
         incomes: List<IncomeEntity>,
         sortOrder: SortOrder,
         showExpenses: Boolean,
-        showIncomes: Boolean
+        showIncomes: Boolean,
+        fixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL
     ): List<TransactionListItem> {
-        val filteredExpenses = if (showExpenses) expenses else emptyList()
+        val fixedFiltered = when (fixedExpenseFilter) {
+            FixedExpenseFilter.ALL -> expenses
+            FixedExpenseFilter.FIXED_ONLY -> expenses.filter { it.isFixed }
+            FixedExpenseFilter.EXCLUDE_FIXED -> expenses.filter { !it.isFixed }
+        }
+        val filteredExpenses = if (showExpenses) fixedFiltered else emptyList()
         val filteredIncomes = if (showIncomes) incomes else emptyList()
 
         // 둘 다 해제된 경우 빈 리스트

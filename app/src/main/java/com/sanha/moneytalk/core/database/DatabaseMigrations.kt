@@ -92,6 +92,18 @@ object DatabaseMigrations {
     }
 
     /**
+     * v7 -> v8
+     * expenses 테이블에 고정지출 여부(is_fixed) 컬럼 추가
+     */
+    val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE expenses ADD COLUMN is_fixed INTEGER NOT NULL DEFAULT 0"
+            )
+        }
+    }
+
+    /**
      * v6 -> v7
      * sender 기반 regex 룰 테이블 추가
      */

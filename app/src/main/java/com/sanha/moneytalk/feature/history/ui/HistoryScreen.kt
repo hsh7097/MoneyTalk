@@ -193,8 +193,9 @@ fun HistoryScreen(
                 selectedCategory = uiState.selectedCategory,
                 showExpenses = uiState.showExpenses,
                 showIncomes = uiState.showIncomes,
-                onApplyFilter = { sortOrder, showExp, showInc, category ->
-                    viewModel.applyFilter(sortOrder, showExp, showInc, category)
+                fixedExpenseFilter = uiState.fixedExpenseFilter,
+                onApplyFilter = { sortOrder, showExp, showInc, category, fixedFilter ->
+                    viewModel.applyFilter(sortOrder, showExp, showInc, category, fixedFilter)
                 },
                 onResetFilter = { viewModel.resetFilters() },
                 onSearchClick = { viewModel.enterSearchMode() },

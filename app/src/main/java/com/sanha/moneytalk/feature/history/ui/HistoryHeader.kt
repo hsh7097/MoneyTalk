@@ -266,7 +266,8 @@ fun FilterTabRow(
     selectedCategory: String? = null,
     showExpenses: Boolean = true,
     showIncomes: Boolean = true,
-    onApplyFilter: (SortOrder, Boolean, Boolean, String?) -> Unit = { _, _, _, _ -> },
+    fixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL,
+    onApplyFilter: (SortOrder, Boolean, Boolean, String?, FixedExpenseFilter) -> Unit = { _, _, _, _, _ -> },
     onResetFilter: () -> Unit = {},
     onSearchClick: () -> Unit = {},
     onAddClick: () -> Unit = {}
@@ -277,6 +278,7 @@ fun FilterTabRow(
             || sortOrder != SortOrder.DATE_DESC
             || !showExpenses
             || !showIncomes
+            || fixedExpenseFilter != FixedExpenseFilter.ALL
 
     val primaryColor = MaterialTheme.colorScheme.primary
     val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
@@ -319,13 +321,24 @@ fun FilterTabRow(
         ) {
             if (hasActiveFilter) {
                 // 필터 활성: 초록 outline 칩 (필터 설명 + X)
+                val hasMultipleFilters = listOf(
+                    selectedCategory != null,
+                    sortOrder != SortOrder.DATE_DESC,
+                    !showExpenses || !showIncomes,
+                    fixedExpenseFilter != FixedExpenseFilter.ALL
+                ).count { it } > 1
+
                 val filterDescription = when {
-                    selectedCategory != null && (sortOrder != SortOrder.DATE_DESC || !showExpenses || !showIncomes) ->
+                    hasMultipleFilters ->
                         stringResource(R.string.history_filter_active_combined)
                     selectedCategory != null ->
                         stringResource(R.string.history_filter_active_category)
                     !showExpenses || !showIncomes ->
                         stringResource(R.string.history_filter_active_type)
+                    fixedExpenseFilter == FixedExpenseFilter.FIXED_ONLY ->
+                        stringResource(R.string.history_filter_active_fixed_only)
+                    fixedExpenseFilter == FixedExpenseFilter.EXCLUDE_FIXED ->
+                        stringResource(R.string.history_filter_active_fixed_exclude)
                     else ->
                         stringResource(R.string.history_filter_active_sort)
                 }
@@ -433,9 +446,10 @@ fun FilterTabRow(
             currentShowExpenses = showExpenses,
             currentShowIncomes = showIncomes,
             currentCategory = selectedCategory,
+            currentFixedExpenseFilter = fixedExpenseFilter,
             onDismiss = { showBottomSheet = false },
-            onApply = { newSort, newShowExp, newShowInc, newCategory ->
-                onApplyFilter(newSort, newShowExp, newShowInc, newCategory)
+            onApply = { newSort, newShowExp, newShowInc, newCategory, newFixedFilter ->
+                onApplyFilter(newSort, newShowExp, newShowInc, newCategory, newFixedFilter)
                 showBottomSheet = false
             }
         )

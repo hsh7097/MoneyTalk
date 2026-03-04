@@ -47,11 +47,13 @@ private fun isFilterDefault(
     sortOrder: SortOrder,
     showExpenses: Boolean,
     showIncomes: Boolean,
-    category: String?
+    category: String?,
+    fixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL
 ): Boolean = sortOrder == SortOrder.DATE_DESC
         && showExpenses
         && showIncomes
         && category == null
+        && fixedExpenseFilter == FixedExpenseFilter.ALL
 
 /**
  * 필터 BottomSheet.
@@ -66,14 +68,16 @@ fun FilterBottomSheet(
     currentShowExpenses: Boolean,
     currentShowIncomes: Boolean,
     currentCategory: String?,
+    currentFixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL,
     onDismiss: () -> Unit,
-    onApply: (SortOrder, Boolean, Boolean, String?) -> Unit
+    onApply: (SortOrder, Boolean, Boolean, String?, FixedExpenseFilter) -> Unit
 ) {
     // BottomSheet 내부 임시 상태 (적용 누르기 전까지 외부에 반영하지 않음)
     var tempSortOrder by remember { mutableStateOf(currentSortOrder) }
     var tempShowExpenses by remember { mutableStateOf(currentShowExpenses) }
     var tempShowIncomes by remember { mutableStateOf(currentShowIncomes) }
     var tempCategory by remember { mutableStateOf(currentCategory) }
+    var tempFixedFilter by remember { mutableStateOf(currentFixedExpenseFilter) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val maxSheetHeight = LocalConfiguration.current.screenHeightDp.dp - 100.dp
@@ -108,7 +112,7 @@ fun FilterBottomSheet(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    if (!isFilterDefault(tempSortOrder, tempShowExpenses, tempShowIncomes, tempCategory)) {
+                    if (!isFilterDefault(tempSortOrder, tempShowExpenses, tempShowIncomes, tempCategory, tempFixedFilter)) {
                         Text(
                             text = stringResource(R.string.history_filter_reset),
                             style = MaterialTheme.typography.bodyMedium,
@@ -120,6 +124,7 @@ fun FilterBottomSheet(
                                     tempShowExpenses = true
                                     tempShowIncomes = true
                                     tempCategory = null
+                                    tempFixedFilter = FixedExpenseFilter.ALL
                                 }
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         )
@@ -146,6 +151,32 @@ fun FilterBottomSheet(
                             label = label,
                             isActive = tempSortOrder == order,
                             onClick = { tempSortOrder = order }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // ── 고정지출 ──
+                Text(
+                    text = stringResource(R.string.history_filter_fixed),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val fixedOptions = listOf(
+                        FixedExpenseFilter.ALL to stringResource(R.string.history_filter_fixed_all),
+                        FixedExpenseFilter.FIXED_ONLY to stringResource(R.string.history_filter_fixed_only),
+                        FixedExpenseFilter.EXCLUDE_FIXED to stringResource(R.string.history_filter_fixed_exclude)
+                    )
+                    fixedOptions.forEach { (filter, label) ->
+                        FilterChipButton(
+                            label = label,
+                            isActive = tempFixedFilter == filter,
+                            onClick = { tempFixedFilter = filter }
                         )
                     }
                 }
@@ -261,7 +292,8 @@ fun FilterBottomSheet(
                         tempSortOrder,
                         tempShowExpenses,
                         tempShowIncomes,
-                        tempCategory
+                        tempCategory,
+                        tempFixedFilter
                     )
                 },
                 modifier = Modifier
