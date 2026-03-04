@@ -1,25 +1,32 @@
 package com.sanha.moneytalk.feature.history.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -32,57 +39,98 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupCompose
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupOption
 
+private enum class CategorySheetType(
+    @StringRes val titleResId: Int
+) {
+    EXPENSE(R.string.history_filter_expense_category_title),
+    INCOME(R.string.history_filter_income_category_title),
+    TRANSFER(R.string.history_filter_transfer_category_title)
+}
+
 private fun isFilterDefault(
     sortOrder: SortOrder,
     showExpenses: Boolean,
     showIncomes: Boolean,
-    category: String?,
+    showTransfers: Boolean,
+    expenseCategories: Set<String>,
+    incomeCategories: Set<String>,
+    transferCategories: Set<String>,
     fixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL
-): Boolean = sortOrder == SortOrder.DATE_DESC
-        && showExpenses
-        && showIncomes
-        && category == null
-        && fixedExpenseFilter == FixedExpenseFilter.ALL
+): Boolean = sortOrder == SortOrder.DATE_DESC &&
+        showExpenses &&
+        showIncomes &&
+        showTransfers &&
+        expenseCategories.isEmpty() &&
+        incomeCategories.isEmpty() &&
+        transferCategories.isEmpty() &&
+        fixedExpenseFilter == FixedExpenseFilter.ALL
+
+private fun buildCategorySummary(
+    selectedCategories: Set<String>,
+    allCategories: List<Category>,
+    allText: String,
+    multiFormat: String
+): String {
+    if (selectedCategories.isEmpty()) return allText
+    val firstCategory = allCategories.firstOrNull { selectedCategories.contains(it.displayName) }
+        ?.displayName ?: selectedCategories.first()
+    val remainCount = selectedCategories.size - 1
+    return if (remainCount <= 0) firstCategory else String.format(multiFormat, firstCategory, remainCount)
+}
 
 /**
  * 필터 BottomSheet.
  *
- * 정렬 / 거래 유형 / 카테고리 선택 후 적용.
- * 상단 100dp 마진 유지 (배경 항상 노출), 적용 버튼 하단 고정, 그 위 스크롤.
+ * 정렬 / 고정지출 / 타입별 카테고리 선택 후 적용.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilterBottomSheet(
     currentSortOrder: SortOrder,
     currentShowExpenses: Boolean,
     currentShowIncomes: Boolean,
-    currentCategory: String?,
+    currentShowTransfers: Boolean = true,
+    currentExpenseCategories: Set<String> = emptySet(),
+    currentIncomeCategories: Set<String> = emptySet(),
+    currentTransferCategories: Set<String> = emptySet(),
     currentFixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL,
     onDismiss: () -> Unit,
-    onApply: (SortOrder, Boolean, Boolean, String?, FixedExpenseFilter) -> Unit
+    onApply: (
+        SortOrder,
+        Boolean,
+        Boolean,
+        Boolean,
+        Set<String>,
+        Set<String>,
+        Set<String>,
+        FixedExpenseFilter
+    ) -> Unit
 ) {
-    // BottomSheet 내부 임시 상태 (적용 누르기 전까지 외부에 반영하지 않음)
     var tempSortOrder by remember { mutableStateOf(currentSortOrder) }
     var tempShowExpenses by remember { mutableStateOf(currentShowExpenses) }
     var tempShowIncomes by remember { mutableStateOf(currentShowIncomes) }
-    var tempCategory by remember { mutableStateOf(currentCategory) }
+    var tempShowTransfers by remember { mutableStateOf(currentShowTransfers) }
+    var tempExpenseCategories by remember { mutableStateOf(currentExpenseCategories) }
+    var tempIncomeCategories by remember { mutableStateOf(currentIncomeCategories) }
+    var tempTransferCategories by remember { mutableStateOf(currentTransferCategories) }
     var tempFixedFilter by remember { mutableStateOf(currentFixedExpenseFilter) }
+    var categorySheetType by remember { mutableStateOf<CategorySheetType?>(null) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val maxSheetHeight = LocalConfiguration.current.screenHeightDp.dp - 100.dp
+    val allText = stringResource(R.string.common_all)
+    val summaryFormat = stringResource(R.string.history_filter_category_summary_multiple)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -94,14 +142,12 @@ fun FilterBottomSheet(
                 .fillMaxWidth()
                 .heightIn(max = maxSheetHeight)
         ) {
-            // 스크롤 영역
             Column(
                 modifier = Modifier
                     .weight(1f, fill = false)
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp)
             ) {
-                // 제목 + 초기화
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -114,7 +160,17 @@ fun FilterBottomSheet(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    if (!isFilterDefault(tempSortOrder, tempShowExpenses, tempShowIncomes, tempCategory, tempFixedFilter)) {
+                    if (!isFilterDefault(
+                            tempSortOrder,
+                            tempShowExpenses,
+                            tempShowIncomes,
+                            tempShowTransfers,
+                            tempExpenseCategories,
+                            tempIncomeCategories,
+                            tempTransferCategories,
+                            tempFixedFilter
+                        )
+                    ) {
                         Text(
                             text = stringResource(R.string.history_filter_reset),
                             style = MaterialTheme.typography.bodyMedium,
@@ -125,7 +181,10 @@ fun FilterBottomSheet(
                                     tempSortOrder = SortOrder.DATE_DESC
                                     tempShowExpenses = true
                                     tempShowIncomes = true
-                                    tempCategory = null
+                                    tempShowTransfers = true
+                                    tempExpenseCategories = emptySet()
+                                    tempIncomeCategories = emptySet()
+                                    tempTransferCategories = emptySet()
                                     tempFixedFilter = FixedExpenseFilter.ALL
                                 }
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -133,7 +192,6 @@ fun FilterBottomSheet(
                     }
                 }
 
-                // ── 정렬 ──
                 Text(
                     text = stringResource(R.string.history_filter_sort),
                     style = MaterialTheme.typography.labelLarge,
@@ -156,7 +214,6 @@ fun FilterBottomSheet(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // ── 고정지출 ──
                 Text(
                     text = stringResource(R.string.history_filter_fixed),
                     style = MaterialTheme.typography.labelLarge,
@@ -179,67 +236,6 @@ fun FilterBottomSheet(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // ── 거래 유형 ──
-                Text(
-                    text = stringResource(R.string.history_filter_type),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // 지출 체크박스 (수입이 꺼져 있으면 해제 불가)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                if (tempShowExpenses && !tempShowIncomes) return@clickable
-                                tempShowExpenses = !tempShowExpenses
-                            }
-                            .padding(vertical = 4.dp, horizontal = 4.dp)
-                    ) {
-                        Checkbox(
-                            checked = tempShowExpenses,
-                            onCheckedChange = {
-                                if (!it && !tempShowIncomes) return@Checkbox
-                                tempShowExpenses = it
-                            }
-                        )
-                        Text(
-                            text = stringResource(R.string.home_expense),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                    // 수입 체크박스 (지출이 꺼져 있으면 해제 불가)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                if (tempShowIncomes && !tempShowExpenses) return@clickable
-                                tempShowIncomes = !tempShowIncomes
-                            }
-                            .padding(vertical = 4.dp, horizontal = 4.dp)
-                    ) {
-                        Checkbox(
-                            checked = tempShowIncomes,
-                            onCheckedChange = {
-                                if (!it && !tempShowExpenses) return@Checkbox
-                                tempShowIncomes = it
-                            }
-                        )
-                        Text(
-                            text = stringResource(R.string.home_income),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // ── 카테고리 ──
                 Text(
                     text = stringResource(R.string.history_filter_category),
                     style = MaterialTheme.typography.labelLarge,
@@ -247,40 +243,67 @@ fun FilterBottomSheet(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                // FlowRow 기반 카테고리 그리드 (LazyVerticalGrid 대신 — 스크롤 부모와 호환)
-                val categories = Category.parentEntries
-                val allItems = listOf<Pair<String, String?>>(
-                    "\uD83D\uDCCB" to null // "전체" 옵션
-                ) + categories.map { it.emoji to it.displayName }
-
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    maxItemsInEachRow = 3
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(vertical = 6.dp)
                 ) {
-                    allItems.forEach { (emoji, categoryName) ->
-                        FilterCategoryGridItem(
-                            emoji = emoji,
-                            label = categoryName ?: stringResource(R.string.common_all),
-                            isSelected = tempCategory == categoryName,
-                            onClick = { tempCategory = categoryName },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    // 마지막 행 남은 공간 채우기 (3열 그리드 맞춤)
-                    val remainder = allItems.size % 3
-                    if (remainder != 0) {
-                        repeat(3 - remainder) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
+                    FilterCategoryTypeRow(
+                        label = stringResource(R.string.home_expense),
+                        checked = tempShowExpenses,
+                        summary = buildCategorySummary(
+                            selectedCategories = tempExpenseCategories,
+                            allCategories = Category.expenseEntries,
+                            allText = allText,
+                            multiFormat = summaryFormat
+                        ),
+                        onCheckedChange = { checked ->
+                            if (!checked && !tempShowIncomes && !tempShowTransfers) return@FilterCategoryTypeRow
+                            tempShowExpenses = checked
+                        },
+                        onCategoryClick = { categorySheetType = CategorySheetType.EXPENSE }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    FilterCategoryTypeRow(
+                        label = stringResource(R.string.home_income),
+                        checked = tempShowIncomes,
+                        summary = buildCategorySummary(
+                            selectedCategories = tempIncomeCategories,
+                            allCategories = Category.incomeEntries,
+                            allText = allText,
+                            multiFormat = summaryFormat
+                        ),
+                        onCheckedChange = { checked ->
+                            if (!checked && !tempShowExpenses && !tempShowTransfers) return@FilterCategoryTypeRow
+                            tempShowIncomes = checked
+                        },
+                        onCategoryClick = { categorySheetType = CategorySheetType.INCOME }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    FilterCategoryTypeRow(
+                        label = stringResource(R.string.transaction_type_transfer),
+                        checked = tempShowTransfers,
+                        summary = buildCategorySummary(
+                            selectedCategories = tempTransferCategories,
+                            allCategories = Category.transferEntries,
+                            allText = allText,
+                            multiFormat = summaryFormat
+                        ),
+                        onCheckedChange = { checked ->
+                            if (!checked && !tempShowExpenses && !tempShowIncomes) return@FilterCategoryTypeRow
+                            tempShowTransfers = checked
+                        },
+                        onCategoryClick = { categorySheetType = CategorySheetType.TRANSFER }
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // 고정 적용 버튼
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Button(
                 onClick = {
@@ -288,7 +311,10 @@ fun FilterBottomSheet(
                         tempSortOrder,
                         tempShowExpenses,
                         tempShowIncomes,
-                        tempCategory,
+                        tempShowTransfers,
+                        tempExpenseCategories,
+                        tempIncomeCategories,
+                        tempTransferCategories,
                         tempFixedFilter
                     )
                 },
@@ -306,44 +332,224 @@ fun FilterBottomSheet(
             }
         }
     }
+
+    categorySheetType?.let { type ->
+        val selected = when (type) {
+            CategorySheetType.EXPENSE -> tempExpenseCategories
+            CategorySheetType.INCOME -> tempIncomeCategories
+            CategorySheetType.TRANSFER -> tempTransferCategories
+        }
+
+        CategoryFilterListBottomSheet(
+            sheetType = type,
+            selectedCategories = selected,
+            onSelectionChanged = { updated ->
+                when (type) {
+                    CategorySheetType.EXPENSE -> tempExpenseCategories = updated
+                    CategorySheetType.INCOME -> tempIncomeCategories = updated
+                    CategorySheetType.TRANSFER -> tempTransferCategories = updated
+                }
+            },
+            onDismiss = { categorySheetType = null }
+        )
+    }
 }
 
-/**
- * BottomSheet 내 카테고리 그리드 아이템
- */
 @Composable
-internal fun FilterCategoryGridItem(
-    emoji: String,
+private fun FilterCategoryTypeRow(
     label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    checked: Boolean,
+    summary: String,
+    onCheckedChange: (Boolean) -> Unit,
+    onCategoryClick: () -> Unit
 ) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(
-                if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                else Color.Transparent
-            )
-            .clickable { onClick() }
-            .padding(vertical = 8.dp, horizontal = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            text = emoji,
-            fontSize = 28.sp
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
+            Checkbox(
+                checked = checked,
+                onCheckedChange = onCheckedChange
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onCategoryClick)
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CategoryFilterListBottomSheet(
+    sheetType: CategorySheetType,
+    selectedCategories: Set<String>,
+    onSelectionChanged: (Set<String>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val categories = when (sheetType) {
+        CategorySheetType.EXPENSE -> Category.expenseEntries
+        CategorySheetType.INCOME -> Category.incomeEntries
+        CategorySheetType.TRANSFER -> Category.transferEntries
+    }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.58f).dp
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = maxSheetHeight)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(sheetType.titleResId),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.common_close)
+                        )
+                    }
+                }
+
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        top = 4.dp,
+                        bottom = 16.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    item {
+                        CategoryFilterListRow(
+                            emoji = null,
+                            label = stringResource(R.string.history_filter_all_categories),
+                            checked = selectedCategories.isEmpty(),
+                            onCheckedChange = { onSelectionChanged(emptySet()) }
+                        )
+                    }
+
+                    items(categories, key = { it.name }) { category ->
+                        val isChecked = selectedCategories.contains(category.displayName)
+                        CategoryFilterListRow(
+                            emoji = category.emoji,
+                            label = category.displayName,
+                            checked = isChecked,
+                            onCheckedChange = {
+                                val next = if (isChecked) {
+                                    selectedCategories - category.displayName
+                                } else {
+                                    selectedCategories + category.displayName
+                                }
+                                onSelectionChanged(next)
+                            }
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.surface
+                            )
+                        )
+                    )
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            ) {
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.common_confirm),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryFilterListRow(
+    emoji: String?,
+    label: String,
+    checked: Boolean,
+    onCheckedChange: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { onCheckedChange() }
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = { onCheckedChange() }
         )
+        if (emoji != null) {
+            Text(text = emoji, modifier = Modifier.padding(end = 6.dp))
+        }
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
-            else MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            style = MaterialTheme.typography.bodyLarge
         )
     }
 }
