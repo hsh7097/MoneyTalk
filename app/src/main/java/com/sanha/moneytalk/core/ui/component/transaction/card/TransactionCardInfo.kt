@@ -3,6 +3,7 @@ package com.sanha.moneytalk.core.ui.component.transaction.card
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.TransferDirection
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -54,11 +55,14 @@ class ExpenseTransactionCardInfo(
     private val expense: ExpenseEntity
 ) : TransactionCardInfo {
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    private val isTransferDeposit =
+        expense.transactionType == "TRANSFER" &&
+                expense.transferDirection == TransferDirection.DEPOSIT.dbValue
 
     override val title: String = expense.storeName
     override val subtitle: String = "${expense.category} | ${expense.cardName}"
     override val amount: Int = expense.amount
-    override val isIncome: Boolean = false
+    override val isIncome: Boolean = isTransferDeposit
     override val category: Category = Category.fromDisplayName(expense.category)
     override val categoryTag: String = expense.category
     override val time: String = timeFormat.format(Date(expense.dateTime))

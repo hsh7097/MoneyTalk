@@ -9,6 +9,7 @@ import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
@@ -40,6 +41,7 @@ data class TransactionEditUiState(
     val memo: String = "",
     val originalSms: String = "",
     val isFixed: Boolean = false,
+    val transferDirection: TransferDirection? = null,
     val isSaved: Boolean = false,
     val isDeleted: Boolean = false
 ) {
@@ -104,11 +106,12 @@ class TransactionEditViewModel @Inject constructor(
             if (expense != null) {
                 originalExpenseEntity = expense
                 val cal = Calendar.getInstance().apply { timeInMillis = expense.dateTime }
-                val type = if (expense.category == Category.TRANSFER.displayName) {
+                val type = if (expense.transactionType == "TRANSFER") {
                     TransactionType.TRANSFER
                 } else {
                     TransactionType.EXPENSE
                 }
+                val direction = TransferDirection.fromDbValue(expense.transferDirection)
                 originalTransactionType = type
                 _uiState.update {
                     it.copy(
@@ -124,7 +127,8 @@ class TransactionEditViewModel @Inject constructor(
                         minute = cal.get(Calendar.MINUTE),
                         memo = expense.memo ?: "",
                         originalSms = expense.originalSms,
-                        isFixed = expense.isFixed
+                        isFixed = expense.isFixed,
+                        transferDirection = direction
                     )
                 }
             } else {
@@ -147,6 +151,7 @@ class TransactionEditViewModel @Inject constructor(
                         isLoading = false,
                         amount = income.amount.toString(),
                         storeName = income.description,
+                        category = income.category,
                         incomeType = income.type,
                         source = income.source,
                         dateMillis = income.dateTime,
@@ -179,7 +184,7 @@ class TransactionEditViewModel @Inject constructor(
 
     /**
      * 거래 유형 변경.
-     * 이체 선택 시 category를 자동으로 TRANSFER로 설정.
+     * 타입 변경 시 카테고리를 미분류로 리셋.
      */
     fun setTransactionType(type: TransactionType) {
         val currentType = _uiState.value.transactionType
@@ -189,23 +194,25 @@ class TransactionEditViewModel @Inject constructor(
             when (type) {
                 TransactionType.TRANSFER -> state.copy(
                     transactionType = type,
-                    category = Category.TRANSFER.displayName
+                    category = Category.UNCLASSIFIED.displayName,
+                    transferDirection = TransferDirection.WITHDRAWAL
                 )
-                TransactionType.EXPENSE -> {
-                    // 이체에서 지출로 돌아올 때 카테고리 복원
-                    val restoreCategory = if (state.category == Category.TRANSFER.displayName) {
-                        Category.ETC.displayName
-                    } else {
-                        state.category
-                    }
-                    state.copy(
-                        transactionType = type,
-                        category = restoreCategory
-                    )
-                }
-                TransactionType.INCOME -> state.copy(transactionType = type)
+                TransactionType.EXPENSE -> state.copy(
+                    transactionType = type,
+                    category = Category.UNCLASSIFIED.displayName,
+                    transferDirection = null
+                )
+                TransactionType.INCOME -> state.copy(
+                    transactionType = type,
+                    category = Category.INCOME_UNCLASSIFIED.displayName,
+                    transferDirection = null
+                )
             }
         }
+    }
+
+    fun updateTransferDirection(direction: TransferDirection) {
+        _uiState.update { it.copy(transferDirection = direction) }
     }
 
     fun updateAmount(value: String) {
@@ -267,6 +274,9 @@ class TransactionEditViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
+                val txType = if (state.transactionType == TransactionType.TRANSFER) "TRANSFER" else "EXPENSE"
+                val txDirection = state.transferDirection?.dbValue ?: ""
+
                 // 수입 → 지출/이체 크로스 테이블 이동 (insert 먼저, delete 후 — 원자성 보장)
                 if (originalTransactionType == TransactionType.INCOME && !state.isNew) {
                     val entity = ExpenseEntity(
@@ -279,7 +289,9 @@ class TransactionEditViewModel @Inject constructor(
                         smsId = originalIncomeEntity?.smsId ?: "manual_${System.currentTimeMillis()}",
                         senderAddress = originalIncomeEntity?.senderAddress ?: "",
                         memo = state.memo.ifBlank { null },
-                        isFixed = state.isFixed
+                        isFixed = state.isFixed,
+                        transactionType = txType,
+                        transferDirection = txDirection
                     )
                     expenseRepository.insert(entity)
                     if (incomeId > 0) {
@@ -295,7 +307,9 @@ class TransactionEditViewModel @Inject constructor(
                         originalSms = "",
                         smsId = "manual_${System.currentTimeMillis()}",
                         memo = state.memo.ifBlank { null },
-                        isFixed = state.isFixed
+                        isFixed = state.isFixed,
+                        transactionType = txType,
+                        transferDirection = txDirection
                     )
                     expenseRepository.insert(entity)
                 } else {
@@ -307,7 +321,9 @@ class TransactionEditViewModel @Inject constructor(
                         cardName = state.cardName.trim(),
                         dateTime = dateTime,
                         isFixed = state.isFixed,
-                        memo = state.memo.ifBlank { null }
+                        memo = state.memo.ifBlank { null },
+                        transactionType = txType,
+                        transferDirection = txDirection
                     )
                     expenseRepository.update(updated)
                 }
@@ -349,7 +365,8 @@ class TransactionEditViewModel @Inject constructor(
                         originalSms = state.originalSms.ifBlank { null },
                         smsId = originalExpenseEntity?.smsId,
                         senderAddress = originalExpenseEntity?.senderAddress ?: "",
-                        memo = state.memo.ifBlank { null }
+                        memo = state.memo.ifBlank { null },
+                        category = state.category
                     )
                     incomeRepository.insert(entity)
                     if (expenseId > 0) {
@@ -365,7 +382,8 @@ class TransactionEditViewModel @Inject constructor(
                         description = state.storeName.trim(),
                         isRecurring = false,
                         dateTime = dateTime,
-                        memo = state.memo.ifBlank { null }
+                        memo = state.memo.ifBlank { null },
+                        category = state.category
                     )
                     incomeRepository.insert(entity)
                 } else {
@@ -376,7 +394,8 @@ class TransactionEditViewModel @Inject constructor(
                         source = state.source.trim(),
                         description = state.storeName.trim(),
                         dateTime = dateTime,
-                        memo = state.memo.ifBlank { null }
+                        memo = state.memo.ifBlank { null },
+                        category = state.category
                     )
                     incomeRepository.update(updated)
                 }

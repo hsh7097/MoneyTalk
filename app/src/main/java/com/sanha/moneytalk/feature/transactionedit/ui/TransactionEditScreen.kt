@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.feature.transactionedit.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +48,7 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,12 +72,47 @@ import com.sanha.moneytalk.feature.transactionedit.TransactionEditUiState
 import com.sanha.moneytalk.feature.transactionedit.TransactionEditViewModel
 import com.sanha.moneytalk.feature.transactionedit.TransactionType
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.ui.component.CategorySelectDialog
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupCompose
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupOption
 import com.sanha.moneytalk.core.util.DateUtils
 import java.text.NumberFormat
 import java.util.Locale
+
+private data class TransactionEditSnapshot(
+    val transactionType: TransactionType,
+    val amount: String,
+    val storeName: String,
+    val category: String,
+    val cardName: String,
+    val incomeType: String,
+    val source: String,
+    val dateMillis: Long,
+    val hour: Int,
+    val minute: Int,
+    val memo: String,
+    val isFixed: Boolean,
+    val transferDirection: String?
+)
+
+private fun TransactionEditUiState.toSnapshot(): TransactionEditSnapshot {
+    return TransactionEditSnapshot(
+        transactionType = transactionType,
+        amount = amount,
+        storeName = storeName,
+        category = category,
+        cardName = cardName,
+        incomeType = incomeType,
+        source = source,
+        dateMillis = dateMillis,
+        hour = hour,
+        minute = minute,
+        memo = memo,
+        isFixed = isFixed,
+        transferDirection = transferDirection?.dbValue
+    )
+}
 
 /**
  * 거래 편집/추가 화면 (뱅크셀러드 스타일).
@@ -103,6 +140,47 @@ fun TransactionEditScreen(
     var showTimePicker by remember { mutableStateOf(false) }
     var showCategoryPicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showExitConfirm by remember { mutableStateOf(false) }
+    var initialSnapshot by remember { mutableStateOf<TransactionEditSnapshot?>(null) }
+
+    LaunchedEffect(uiState.isLoading) {
+        if (!uiState.isLoading && initialSnapshot == null) {
+            initialSnapshot = uiState.toSnapshot()
+        }
+    }
+
+    val hasPendingChanges by remember(uiState, initialSnapshot) {
+        derivedStateOf {
+            val snapshot = initialSnapshot ?: return@derivedStateOf false
+            !uiState.isSaved && !uiState.isDeleted && uiState.toSnapshot() != snapshot
+        }
+    }
+
+    val onRequestClose = remember(
+        hasPendingChanges,
+        showDatePicker,
+        showTimePicker,
+        showCategoryPicker,
+        showDeleteConfirm
+    ) {
+        {
+            if (hasPendingChanges) {
+                showExitConfirm = true
+            } else {
+                onBack()
+            }
+        }
+    }
+
+    BackHandler(
+        enabled = !showDatePicker &&
+                !showTimePicker &&
+                !showCategoryPicker &&
+                !showDeleteConfirm &&
+                !showExitConfirm
+    ) {
+        onRequestClose()
+    }
 
     Column(
         modifier = Modifier
@@ -126,7 +204,7 @@ fun TransactionEditScreen(
             storeName = uiState.storeName,
             amount = uiState.amount,
             isNew = uiState.isNew,
-            onClose = onBack,
+            onClose = onRequestClose,
             onStoreNameChange = { viewModel.updateStoreName(it) },
             onAmountChange = { value ->
                 viewModel.updateAmount(value.filter { it.isDigit() })
@@ -280,15 +358,25 @@ fun TransactionEditScreen(
 
     // Category Picker Dialog
     if (showCategoryPicker) {
+        val categoryType = when (uiState.transactionType) {
+            TransactionType.INCOME -> CategoryType.INCOME
+            TransactionType.TRANSFER -> CategoryType.TRANSFER
+            TransactionType.EXPENSE -> CategoryType.EXPENSE
+        }
         CategorySelectDialog(
             currentCategory = uiState.category,
+            categoryType = categoryType,
             showAllOption = false,
+            transferDirection = uiState.transferDirection,
             onDismiss = { showCategoryPicker = false },
             onCategorySelected = { selected ->
                 if (selected != null) {
                     viewModel.updateCategory(selected)
                 }
                 showCategoryPicker = false
+            },
+            onTransferDirectionChanged = { direction ->
+                viewModel.updateTransferDirection(direction)
             }
         )
     }
@@ -320,6 +408,29 @@ fun TransactionEditScreen(
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
                     Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
+    }
+
+    if (showExitConfirm) {
+        AlertDialog(
+            onDismissRequest = { showExitConfirm = false },
+            title = { Text(text = stringResource(R.string.transaction_edit_exit_confirm_title)) },
+            text = { Text(text = stringResource(R.string.transaction_edit_exit_confirm_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showExitConfirm = false
+                        onBack()
+                    }
+                ) {
+                    Text(text = stringResource(R.string.transaction_edit_exit_confirm_exit))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitConfirm = false }) {
+                    Text(text = stringResource(R.string.transaction_edit_exit_confirm_keep))
                 }
             }
         )

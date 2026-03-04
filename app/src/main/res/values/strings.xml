@@ -259,6 +259,11 @@
     <string name="history_filter_sort">정렬</string>
     <string name="history_filter_type">거래 유형</string>
     <string name="history_filter_category">카테고리</string>
+    <string name="history_filter_category_summary_multiple">%1$s 외 %2$d개</string>
+    <string name="history_filter_all_categories">모든 카테고리</string>
+    <string name="history_filter_expense_category_title">지출 카테고리 선택</string>
+    <string name="history_filter_income_category_title">수입 카테고리 선택</string>
+    <string name="history_filter_transfer_category_title">이체 카테고리 선택</string>
     <string name="history_count_suffix">건</string>
     <string name="history_visit_suffix">회</string>
     <string name="history_count_with_unit">%d건</string>
@@ -542,12 +547,19 @@
     <string name="transaction_type_expense">지출</string>
     <string name="transaction_type_income">수입</string>
     <string name="transaction_type_transfer">이체</string>
+    <string name="transfer_direction_withdrawal">출금</string>
+    <string name="transfer_direction_deposit">입금</string>
+    <string name="transfer_category_picker_title">이체 카테고리 선택</string>
     <string name="transaction_edit_store_hint">거래처를 입력하세요</string>
     <string name="transaction_edit_amount_hint">0원</string>
     <string name="transaction_edit_amount_suffix">원</string>
     <string name="transaction_edit_date_time">날짜-시간</string>
     <string name="transaction_edit_fixed_expense">고정지출에 추가</string>
     <string name="transaction_edit_type_label">분류</string>
+    <string name="transaction_edit_exit_confirm_title">내역을 수정 중이에요.</string>
+    <string name="transaction_edit_exit_confirm_message">지금 나가면 변경 사항이 저장되지 않습니다.</string>
+    <string name="transaction_edit_exit_confirm_keep">계속 수정</string>
+    <string name="transaction_edit_exit_confirm_exit">나가기</string>
 
     <!-- 날짜별 거래 목록 Activity -->
     <string name="transaction_list_title">%1$s월 %2$d일 거래 내역</string>

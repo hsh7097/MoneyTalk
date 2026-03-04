@@ -28,19 +28,16 @@ class TransactionEditActivity : ComponentActivity() {
     companion object {
         private const val EXTRA_EXPENSE_ID = "extra_expense_id"
         private const val EXTRA_INCOME_ID = "extra_income_id"
-        private const val EXTRA_INITIAL_DATE = "extra_initial_date"
 
         fun open(
             context: Context,
             expenseId: Long = -1L,
-            incomeId: Long = -1L,
-            initialDate: Long? = null
+            incomeId: Long = -1L
         ) {
             context.startActivity(
                 Intent(context, TransactionEditActivity::class.java).apply {
                     putExtra(EXTRA_EXPENSE_ID, expenseId)
                     putExtra(EXTRA_INCOME_ID, incomeId)
-                    initialDate?.let { putExtra(EXTRA_INITIAL_DATE, it) }
                 }
             )
         }
