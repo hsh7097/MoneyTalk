@@ -500,7 +500,12 @@ class HomeViewModel @Inject constructor(
                         val categories = expenses
                             .groupBy { expense ->
                                 val cat = Category.fromDisplayName(expense.category)
-                                cat.parentCategory?.displayName ?: cat.displayName
+                                // 커스텀 카테고리는 원래 이름 유지 (기타로 합치지 않음)
+                                if (cat == Category.ETC && expense.category != Category.ETC.displayName) {
+                                    expense.category
+                                } else {
+                                    cat.parentCategory?.displayName ?: cat.displayName
+                                }
                             }
                             .map { (category, items) ->
                                 CategorySum(category = category, total = items.sumOf { it.amount })
