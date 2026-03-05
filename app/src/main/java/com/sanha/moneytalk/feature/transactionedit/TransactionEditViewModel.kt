@@ -125,7 +125,7 @@ class TransactionEditViewModel @Inject constructor(
                 val direction = TransferDirection.fromDbValue(expense.transferDirection)
                 originalTransactionType = type
 
-                // StoreRule이 있으면 "동일 거래처 일괄 적용" 체크박스 사전 체크
+                // StoreRule이 있으면 "동일 거래처 일괄 적용" 체크박스 및 값 사전 체크
                 val matchedRule = storeRuleRepository.findMatchingRule(expense.storeName)
                 val hasCategoryRule = matchedRule?.category != null
                 val hasFixedRule = matchedRule?.isFixed != null
@@ -137,14 +137,14 @@ class TransactionEditViewModel @Inject constructor(
                         isLoading = false,
                         amount = expense.amount.toString(),
                         storeName = expense.storeName,
-                        category = expense.category,
+                        category = if (hasCategoryRule) matchedRule?.category ?: expense.category else expense.category,
                         cardName = expense.cardName,
                         dateMillis = expense.dateTime,
                         hour = cal.get(Calendar.HOUR_OF_DAY),
                         minute = cal.get(Calendar.MINUTE),
                         memo = expense.memo ?: "",
                         originalSms = expense.originalSms,
-                        isFixed = expense.isFixed,
+                        isFixed = if (matchedRule?.isFixed == true) true else expense.isFixed,
                         transferDirection = direction,
                         applyCategoryToAll = hasCategoryRule,
                         applyFixedToAll = hasFixedRule
