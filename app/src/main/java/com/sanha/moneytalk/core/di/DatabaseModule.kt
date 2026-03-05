@@ -3,7 +3,6 @@ package com.sanha.moneytalk.core.di
 import android.content.Context
 import androidx.room.Room
 import com.sanha.moneytalk.core.database.AppDatabase
-import com.sanha.moneytalk.core.database.DatabaseMigrations
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
@@ -52,18 +51,6 @@ object DatabaseModule {
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
-            .addMigrations(
-                DatabaseMigrations.MIGRATION_1_2,
-                DatabaseMigrations.MIGRATION_2_3,
-                DatabaseMigrations.MIGRATION_3_4,
-                DatabaseMigrations.MIGRATION_4_5,
-                DatabaseMigrations.MIGRATION_5_6,
-                DatabaseMigrations.MIGRATION_6_7,
-                DatabaseMigrations.MIGRATION_7_8,
-                DatabaseMigrations.MIGRATION_8_9,
-                DatabaseMigrations.MIGRATION_9_10,
-                DatabaseMigrations.MIGRATION_10_11
-            )
             .build()
     }
 

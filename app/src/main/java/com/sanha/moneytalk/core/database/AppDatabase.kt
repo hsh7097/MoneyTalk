@@ -74,7 +74,7 @@ import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
         CustomCategoryEntity::class,
         StoreRuleEntity::class
     ],
-    version = 11,
+    version = 1,
     exportSchema = false
 )
 @TypeConverters(FloatListConverter::class)
