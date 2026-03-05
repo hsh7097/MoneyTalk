@@ -357,42 +357,41 @@ class TransactionEditViewModel @Inject constructor(
                     expenseRepository.update(updated)
                 }
 
-                // 동일 거래처 일괄 적용
+                // 동일 거래처 일괄 적용 + StoreRule 생성/업데이트
                 val trimmedStore = state.storeName.trim()
-                if (state.applyCategoryToAll && trimmedStore.isNotBlank()) {
-                    try {
-                        categoryClassifierService.updateCategoryForAllSameStore(
-                            trimmedStore, state.category
-                        )
-                    } catch (e: Exception) {
-                        MoneyTalkLogger.w("카테고리 일괄 변경 실패: ${e.message}")
-                    }
-                }
-                if (state.applyFixedToAll && trimmedStore.isNotBlank()) {
-                    try {
-                        expenseRepository.updateFixedByStoreName(
-                            trimmedStore, state.isFixed
-                        )
-                    } catch (e: Exception) {
-                        MoneyTalkLogger.w("고정지출 일괄 변경 실패: ${e.message}")
-                    }
-                }
-
-                // 일괄 적용 시 StoreRule 자동 생성 (향후 새 거래에도 자동 적용)
                 if ((state.applyCategoryToAll || state.applyFixedToAll) && trimmedStore.isNotBlank()) {
                     try {
+                        // 1. 기존 StoreRule 조회 → 있으면 기존 keyword 사용 (broader match)
                         val existingRule = storeRuleRepository.findMatchingRule(trimmedStore)
+                        val keyword = existingRule?.keyword ?: trimmedStore
+
+                        // 2. StoreRule 생성/업데이트
                         val rule = StoreRuleEntity(
-                            id = if (existingRule?.keyword.equals(trimmedStore, ignoreCase = true)) {
-                                existingRule?.id ?: 0
-                            } else 0,
-                            keyword = trimmedStore,
+                            id = existingRule?.id ?: 0,
+                            keyword = keyword,
                             category = if (state.applyCategoryToAll) state.category else existingRule?.category,
                             isFixed = if (state.applyFixedToAll) state.isFixed else existingRule?.isFixed
                         )
                         storeRuleRepository.upsert(rule)
+
+                        // 3. 기존 DB 레코드에 소급 적용 (contains 매칭)
+                        if (rule.category != null) {
+                            expenseRepository.updateCategoryByStoreNameContaining(
+                                keyword, rule.category
+                            )
+                        }
+                        if (rule.isFixed == true) {
+                            expenseRepository.updateFixedByStoreNameContaining(keyword, true)
+                        }
+
+                        // 4. 자가 학습 (매핑 캐시 + 벡터 DB)
+                        if (state.applyCategoryToAll) {
+                            categoryClassifierService.updateCategoryForAllSameStore(
+                                trimmedStore, state.category
+                            )
+                        }
                     } catch (e: Exception) {
-                        MoneyTalkLogger.w("StoreRule 자동 생성 실패: ${e.message}")
+                        MoneyTalkLogger.w("일괄 적용 실패: ${e.message}")
                     }
                 }
 
