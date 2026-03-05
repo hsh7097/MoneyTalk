@@ -13,6 +13,7 @@ import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
@@ -108,14 +109,21 @@ class CategoryDetailViewModel @Inject constructor(
 
     // Category enum → displayNamesIncludingSub (소 카테고리 포함 필터)
     private val category: Category = Category.fromDisplayName(categoryDisplayName)
-    private val categoryNames: List<String> = category.displayNamesIncludingSub
+    private val isCustomCategory: Boolean =
+        category == Category.ETC && categoryDisplayName != Category.ETC.displayName
+    private val categoryNames: List<String> =
+        if (isCustomCategory) listOf(categoryDisplayName) else category.displayNamesIncludingSub
 
     private val _uiState = MutableStateFlow(
         CategoryDetailUiState(
             selectedYear = initialYear,
             selectedMonth = initialMonth,
-            categoryDisplayName = category.displayName,
-            categoryEmoji = category.emoji
+            categoryDisplayName = if (isCustomCategory) categoryDisplayName else category.displayName,
+            categoryEmoji = if (isCustomCategory) {
+                CategoryProvider.resolveEmoji(categoryDisplayName)
+            } else {
+                category.emoji
+            }
         )
     )
     val uiState: StateFlow<CategoryDetailUiState> = _uiState.asStateFlow()
