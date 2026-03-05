@@ -48,8 +48,14 @@ import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryInfo
+import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupCompose
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupOption
+import dagger.hilt.android.EntryPointAccessors
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private enum class CategorySheetType(
     @StringRes val titleResId: Int
@@ -127,6 +133,29 @@ fun FilterBottomSheet(
     var tempTransferCategories by remember { mutableStateOf(currentTransferCategories) }
     var tempFixedFilter by remember { mutableStateOf(currentFixedExpenseFilter) }
     var categorySheetType by remember { mutableStateOf<CategorySheetType?>(null) }
+    // 3개 타입 모두 체크(기본) 상태에서 첫 카테고리 세부 선택 시 나머지 타입 자동 해제
+    var hasAutoCollapsed by remember {
+        mutableStateOf(!(currentShowExpenses && currentShowIncomes && currentShowTransfers))
+    }
+
+    val context = LocalContext.current
+    val provider = remember {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            CategoryProvider.Provider::class.java
+        ).categoryProvider()
+    }
+    var allExpenseCategories by remember { mutableStateOf<List<CategoryInfo>>(Category.expenseEntries) }
+    var allIncomeCategories by remember { mutableStateOf<List<CategoryInfo>>(Category.incomeEntries) }
+    var allTransferCategories by remember { mutableStateOf<List<CategoryInfo>>(Category.transferEntries) }
+    LaunchedEffect(Unit) {
+        val expense = withContext(Dispatchers.IO) { provider.getExpenseEntries() }
+        val income = withContext(Dispatchers.IO) { provider.getIncomeEntries() }
+        val transfer = withContext(Dispatchers.IO) { provider.getTransferEntries() }
+        allExpenseCategories = expense
+        allIncomeCategories = income
+        allTransferCategories = transfer
+    }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val maxSheetHeight = LocalConfiguration.current.screenHeightDp.dp - 100.dp
@@ -187,6 +216,7 @@ fun FilterBottomSheet(
                                     tempIncomeCategories = emptySet()
                                     tempTransferCategories = emptySet()
                                     tempFixedFilter = FixedExpenseFilter.ALL
+                                    hasAutoCollapsed = false
                                 }
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         )
@@ -256,13 +286,15 @@ fun FilterBottomSheet(
                         checked = tempShowExpenses,
                         summary = buildCategorySummary(
                             selectedCategories = tempExpenseCategories,
-                            allCategories = Category.expenseEntries,
+                            allCategories = allExpenseCategories,
                             allText = allText,
                             multiFormat = summaryFormat
                         ),
                         onCheckedChange = { checked ->
                             if (!checked && !tempShowIncomes && !tempShowTransfers) return@FilterCategoryTypeRow
                             tempShowExpenses = checked
+                            if (!checked) tempExpenseCategories = emptySet()
+                            hasAutoCollapsed = true
                         },
                         onCategoryClick = { categorySheetType = CategorySheetType.EXPENSE }
                     )
@@ -273,13 +305,15 @@ fun FilterBottomSheet(
                         checked = tempShowIncomes,
                         summary = buildCategorySummary(
                             selectedCategories = tempIncomeCategories,
-                            allCategories = Category.incomeEntries,
+                            allCategories = allIncomeCategories,
                             allText = allText,
                             multiFormat = summaryFormat
                         ),
                         onCheckedChange = { checked ->
                             if (!checked && !tempShowExpenses && !tempShowTransfers) return@FilterCategoryTypeRow
                             tempShowIncomes = checked
+                            if (!checked) tempIncomeCategories = emptySet()
+                            hasAutoCollapsed = true
                         },
                         onCategoryClick = { categorySheetType = CategorySheetType.INCOME }
                     )
@@ -290,13 +324,15 @@ fun FilterBottomSheet(
                         checked = tempShowTransfers,
                         summary = buildCategorySummary(
                             selectedCategories = tempTransferCategories,
-                            allCategories = Category.transferEntries,
+                            allCategories = allTransferCategories,
                             allText = allText,
                             multiFormat = summaryFormat
                         ),
                         onCheckedChange = { checked ->
                             if (!checked && !tempShowExpenses && !tempShowIncomes) return@FilterCategoryTypeRow
                             tempShowTransfers = checked
+                            if (!checked) tempTransferCategories = emptySet()
+                            hasAutoCollapsed = true
                         },
                         onCategoryClick = { categorySheetType = CategorySheetType.TRANSFER }
                     )
@@ -340,15 +376,54 @@ fun FilterBottomSheet(
             CategorySheetType.INCOME -> tempIncomeCategories
             CategorySheetType.TRANSFER -> tempTransferCategories
         }
+        val isTypeChecked = when (type) {
+            CategorySheetType.EXPENSE -> tempShowExpenses
+            CategorySheetType.INCOME -> tempShowIncomes
+            CategorySheetType.TRANSFER -> tempShowTransfers
+        }
 
         CategoryFilterListBottomSheet(
             sheetType = type,
+            isTypeChecked = isTypeChecked,
             selectedCategories = selected,
             onSelectionChanged = { updated ->
                 when (type) {
                     CategorySheetType.EXPENSE -> tempExpenseCategories = updated
                     CategorySheetType.INCOME -> tempIncomeCategories = updated
                     CategorySheetType.TRANSFER -> tempTransferCategories = updated
+                }
+                // 체크되지 않은 타입에서 카테고리 선택 시 자동 체크
+                val isCurrentlyChecked = when (type) {
+                    CategorySheetType.EXPENSE -> tempShowExpenses
+                    CategorySheetType.INCOME -> tempShowIncomes
+                    CategorySheetType.TRANSFER -> tempShowTransfers
+                }
+                if (!isCurrentlyChecked) {
+                    when (type) {
+                        CategorySheetType.EXPENSE -> tempShowExpenses = true
+                        CategorySheetType.INCOME -> tempShowIncomes = true
+                        CategorySheetType.TRANSFER -> tempShowTransfers = true
+                    }
+                }
+                // 기본 상태(3개 모두 체크)에서 첫 카테고리 세부 선택 시 나머지 타입 자동 해제
+                if (!hasAutoCollapsed && updated.isNotEmpty() &&
+                    tempShowExpenses && tempShowIncomes && tempShowTransfers
+                ) {
+                    when (type) {
+                        CategorySheetType.EXPENSE -> {
+                            tempShowIncomes = false
+                            tempShowTransfers = false
+                        }
+                        CategorySheetType.INCOME -> {
+                            tempShowExpenses = false
+                            tempShowTransfers = false
+                        }
+                        CategorySheetType.TRANSFER -> {
+                            tempShowExpenses = false
+                            tempShowIncomes = false
+                        }
+                    }
+                    hasAutoCollapsed = true
                 }
             },
             onDismiss = { categorySheetType = null }
@@ -415,14 +490,33 @@ private fun FilterCategoryTypeRow(
 @Composable
 private fun CategoryFilterListBottomSheet(
     sheetType: CategorySheetType,
+    isTypeChecked: Boolean,
     selectedCategories: Set<String>,
     onSelectionChanged: (Set<String>) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val categories: List<CategoryInfo> = when (sheetType) {
+    val context = LocalContext.current
+    val provider = remember {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            CategoryProvider.Provider::class.java
+        ).categoryProvider()
+    }
+    val defaultCategories: List<CategoryInfo> = when (sheetType) {
         CategorySheetType.EXPENSE -> Category.expenseEntries
         CategorySheetType.INCOME -> Category.incomeEntries
         CategorySheetType.TRANSFER -> Category.transferEntries
+    }
+    var categories by remember { mutableStateOf(defaultCategories) }
+    LaunchedEffect(sheetType) {
+        val loaded = withContext(Dispatchers.IO) {
+            when (sheetType) {
+                CategorySheetType.EXPENSE -> provider.getExpenseEntries()
+                CategorySheetType.INCOME -> provider.getIncomeEntries()
+                CategorySheetType.TRANSFER -> provider.getTransferEntries()
+            }
+        }
+        categories = loaded
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.58f).dp
@@ -466,7 +560,7 @@ private fun CategoryFilterListBottomSheet(
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
                         top = 0.dp,
-                        bottom = 8.dp
+                        bottom = 72.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
@@ -474,7 +568,7 @@ private fun CategoryFilterListBottomSheet(
                         CategoryFilterListRow(
                             emoji = null,
                             label = stringResource(R.string.history_filter_all_categories),
-                            checked = selectedCategories.isEmpty(),
+                            checked = isTypeChecked && selectedCategories.isEmpty(),
                             onCheckedChange = { onSelectionChanged(emptySet()) }
                         )
                     }
