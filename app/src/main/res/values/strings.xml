@@ -300,7 +300,7 @@
     <string name="budget_subtitle_total_and_category">월 %1$s원 + %2$d개 카테고리</string>
     <string name="budget_subtitle_category_only">%d개 카테고리 예산 설정</string>
 
-    <string name="settings_section_ai">AI 설정</string>
+    <string name="settings_section_category">카테고리 관리</string>
     <string name="settings_api_key_title">Gemini API 키</string>
     <string name="settings_api_key_set">설정됨: %s</string>
     <string name="settings_api_key_not_set">AI 상담을 위한 API 키 설정 (무료)</string>

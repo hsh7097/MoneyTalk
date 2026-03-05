@@ -179,7 +179,7 @@
     <string name="dialog_monthly_budget_label">Monthly Budget</string>
     <string name="dialog_monthly_budget_hint">Enter 0 to remove the budget</string>
 
-    <string name="settings_section_ai">AI Settings</string>
+    <string name="settings_section_category">Category Management</string>
     <string name="settings_api_key_title">Gemini API Key</string>
     <string name="settings_api_key_set">Set: %s</string>
     <string name="settings_api_key_not_set">Set up API key for AI chat (free)</string>

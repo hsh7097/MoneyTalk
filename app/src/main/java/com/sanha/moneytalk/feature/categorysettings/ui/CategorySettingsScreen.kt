@@ -316,6 +316,19 @@ private fun AddCategoryDialog(
         title = { Text(stringResource(R.string.category_settings_add_title)) },
         text = {
             Column {
+                // 이름 입력
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = onNameChange,
+                    label = { Text(stringResource(R.string.category_settings_name_label)) },
+                    isError = error != null,
+                    supportingText = error?.let { { Text(it) } },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 // 선택된 이모지 표시
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -335,19 +348,6 @@ private fun AddCategoryDialog(
                     selectedEmoji = emoji,
                     onEmojiSelected = onEmojiChange,
                     modifier = Modifier.height(200.dp)
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 이름 입력
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = onNameChange,
-                    label = { Text(stringResource(R.string.category_settings_name_label)) },
-                    isError = error != null,
-                    supportingText = error?.let { { Text(it) } },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
                 )
             }
         },

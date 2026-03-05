@@ -252,10 +252,10 @@ fun SettingsScreen(
                 }
             }
 
-            // AI 설정
+            // 카테고리 관리
             item {
-                SettingsSectionCompose(title = stringResource(R.string.settings_section_ai)) {
-                    // 카테고리 정리 버튼 (커스텀 레이아웃 - 공통 컴포넌트 미적용)
+                SettingsSectionCompose(title = stringResource(R.string.settings_section_category)) {
+                    // 카테고리 정리 (AI 분류)
                     val isClassifyEnabled = uiState.hasApiKey &&
                             uiState.unclassifiedCount > 0 &&
                             !uiState.isBackgroundClassifying &&
@@ -321,6 +321,18 @@ fun SettingsScreen(
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                         )
                     }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    // 카테고리 설정
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = Icons.Default.Settings
+                            override val title = stringResource(R.string.category_settings_title)
+                            override val subtitle = stringResource(R.string.category_settings_subtitle)
+                        },
+                        onClick = {
+                            CategorySettingsActivity.open(context)
+                        }
+                    )
                 }
             }
 
@@ -335,17 +347,6 @@ fun SettingsScreen(
                         },
                         onClick = {
                             SmsSettingsActivity.open(context)
-                        }
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    SettingsItemCompose(
-                        info = object : SettingsItemInfo {
-                            override val icon = Icons.Default.Settings
-                            override val title = stringResource(R.string.category_settings_title)
-                            override val subtitle = stringResource(R.string.category_settings_subtitle)
-                        },
-                        onClick = {
-                            CategorySettingsActivity.open(context)
                         }
                     )
                     if (BuildConfig.DEBUG) {
