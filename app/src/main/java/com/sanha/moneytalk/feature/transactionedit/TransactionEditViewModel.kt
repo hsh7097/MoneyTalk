@@ -124,6 +124,12 @@ class TransactionEditViewModel @Inject constructor(
                 }
                 val direction = TransferDirection.fromDbValue(expense.transferDirection)
                 originalTransactionType = type
+
+                // StoreRule이 있으면 "동일 거래처 일괄 적용" 체크박스 사전 체크
+                val matchedRule = storeRuleRepository.findMatchingRule(expense.storeName)
+                val hasCategoryRule = matchedRule?.category != null
+                val hasFixedRule = matchedRule?.isFixed != null
+
                 _uiState.update {
                     it.copy(
                         isNew = false,
@@ -139,7 +145,9 @@ class TransactionEditViewModel @Inject constructor(
                         memo = expense.memo ?: "",
                         originalSms = expense.originalSms,
                         isFixed = expense.isFixed,
-                        transferDirection = direction
+                        transferDirection = direction,
+                        applyCategoryToAll = hasCategoryRule,
+                        applyFixedToAll = hasFixedRule
                     )
                 }
             } else {
