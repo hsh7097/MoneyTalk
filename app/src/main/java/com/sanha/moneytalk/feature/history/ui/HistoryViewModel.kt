@@ -195,7 +195,12 @@ data class HistoryUiState(
                 FixedExpenseFilter.FIXED_ONLY -> expenses.filter { it.isFixed }
                 FixedExpenseFilter.EXCLUDE_FIXED -> expenses.filter { !it.isFixed }
             }
-            val incomeTotal = if (showIncomes) currentPageData.incomes.sumOf { it.amount } else 0
+            // 고정만 필터 시 수입은 고정 개념이 없으므로 합계에서 제외
+            val incomeTotal = if (showIncomes && fixedExpenseFilter != FixedExpenseFilter.FIXED_ONLY) {
+                currentPageData.incomes.sumOf { it.amount }
+            } else {
+                0
+            }
             val transferDepositTotal = if (showTransfers) {
                 fixedFiltered.filter {
                     it.transactionType == "TRANSFER" &&
@@ -956,7 +961,12 @@ class HistoryViewModel @Inject constructor(
         val filteredExpenses = fixedFiltered.filter { expense ->
             if (expense.transactionType == "TRANSFER") showTransfers else showExpenses
         }
-        val filteredIncomes = if (showIncomes) incomes else emptyList()
+        // 고정만 필터 시 수입은 고정 개념이 없으므로 제외
+        val filteredIncomes = if (fixedExpenseFilter == FixedExpenseFilter.FIXED_ONLY) {
+            emptyList()
+        } else {
+            if (showIncomes) incomes else emptyList()
+        }
 
         // 둘 다 해제된 경우 빈 리스트
         if (!showExpenses && !showIncomes && !showTransfers) {

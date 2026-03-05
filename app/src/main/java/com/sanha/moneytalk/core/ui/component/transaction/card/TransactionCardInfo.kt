@@ -49,6 +49,10 @@ interface TransactionCardInfo {
     /** 거래 메모 (사용처 옆 보조 표기용) */
     val memoText: String?
         get() = null
+
+    /** 고정지출 여부 */
+    val isFixed: Boolean
+        get() = false
 }
 
 /** ExpenseEntity → TransactionCardInfo 변환 */
@@ -74,6 +78,7 @@ class ExpenseTransactionCardInfo(
     override val time: String = timeFormat.format(Date(expense.dateTime))
     override val cardNameText: String = expense.cardName
     override val memoText: String? = expense.memo?.takeIf { it.isNotBlank() }
+    override val isFixed: Boolean = expense.isFixed
 }
 
 /** IncomeEntity → TransactionCardInfo 변환 */

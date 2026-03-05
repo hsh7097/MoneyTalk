@@ -137,7 +137,7 @@ fun TransactionCardCompose(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    // 카테고리 칩 + 시간 + 카드명
+                    // 카테고리 칩 + 시간 + 카드명 + 고정
                     val tag = info.categoryTag
                     val time = info.time
                     val cardName = info.cardNameText
@@ -174,6 +174,20 @@ fun TransactionCardCompose(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            // 고정지출 태그
+                            if (info.isFixed) {
+                                Text(
+                                    text = stringResource(R.string.transaction_card_fixed_tag),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
                         }
