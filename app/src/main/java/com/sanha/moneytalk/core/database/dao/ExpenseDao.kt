@@ -100,7 +100,7 @@ interface ExpenseDao {
         endTime: Long
     ): Flow<List<ExpenseEntity>>
 
-    // 대 카테고리 필터 (소 카테고리 포함, 예: "식비" 선택 시 "배달"도 포함)
+    // 카테고리 목록 필터 (다중 카테고리 선택 시 사용)
     @Query("SELECT * FROM expenses WHERE (:cardName IS NULL OR cardName = :cardName) AND category IN (:categories) AND dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
     fun getExpensesFilteredByCategories(
         cardName: String?,
@@ -177,6 +177,14 @@ interface ExpenseDao {
     @Query("UPDATE expenses SET category = :newCategory WHERE id = :expenseId")
     suspend fun updateCategoryById(expenseId: Long, newCategory: String): Int
 
+    // 가게명으로 고정지출 일괄 변경 (정확 일치)
+    @Query("UPDATE expenses SET is_fixed = :isFixed WHERE storeName = :storeName")
+    suspend fun updateFixedByStoreName(storeName: String, isFixed: Boolean): Int
+
+    // 키워드 포함 가게명의 고정지출 일괄 변경
+    @Query("UPDATE expenses SET is_fixed = :isFixed WHERE storeName LIKE '%' || :keyword || '%'")
+    suspend fun updateFixedByStoreNameContaining(keyword: String, isFixed: Boolean): Int
+
     // 중복 데이터 조회 (금액, 가게명, 날짜시간이 동일한 항목)
     @Query(
         """
@@ -237,6 +245,21 @@ interface ExpenseDao {
     /** 금액 업데이트 */
     @Query("UPDATE expenses SET amount = :newAmount WHERE id = :expenseId")
     suspend fun updateAmount(expenseId: Long, newAmount: Int): Int
+
+    /** 가게명 기준 이체 일괄 업데이트 (미분류 항목만) */
+    @Query(
+        """
+        UPDATE expenses SET category = :category, transaction_type = :transactionType,
+        transfer_direction = :transferDirection
+        WHERE storeName = :storeName AND category = '미분류'
+    """
+    )
+    suspend fun updateTransferByStoreName(
+        storeName: String,
+        category: String,
+        transactionType: String,
+        transferDirection: String
+    ): Int
 
     // ========== OwnedCard 필터링 쿼리 ==========
 

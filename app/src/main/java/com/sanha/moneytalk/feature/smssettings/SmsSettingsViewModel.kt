@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.feature.smssettings.ui
+package com.sanha.moneytalk.feature.smssettings
 
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel

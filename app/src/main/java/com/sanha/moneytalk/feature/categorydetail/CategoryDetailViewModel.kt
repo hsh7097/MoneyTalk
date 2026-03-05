@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.feature.categorydetail.ui
+package com.sanha.moneytalk.feature.categorydetail
 
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
@@ -13,6 +13,7 @@ import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
@@ -39,6 +40,18 @@ import java.util.Calendar
 import java.util.Date
 import javax.inject.Inject
 
+private const val EXTRA_CATEGORY = "extra_category"
+private const val EXTRA_YEAR = "extra_year"
+private const val EXTRA_MONTH = "extra_month"
+
+/**
+ * 카테고리 상세 정렬 방식
+ */
+enum class CategorySortOrder {
+    DATE_DESC,     // 최신순
+    AMOUNT_DESC    // 가격순
+}
+
 /**
  * 카테고리 상세 화면 UI 상태
  */
@@ -49,7 +62,8 @@ data class CategoryDetailUiState(
     val selectedMonth: Int = DateUtils.getCurrentMonth(),
     val monthStartDay: Int = 1,
     val categoryDisplayName: String = "",
-    val categoryEmoji: String = ""
+    val categoryEmoji: String = "",
+    val sortOrder: CategorySortOrder = CategorySortOrder.DATE_DESC
 )
 
 /**
@@ -87,22 +101,29 @@ class CategoryDetailViewModel @Inject constructor(
 
     // Intent extras (SavedStateHandle로 주입)
     private val categoryDisplayName: String =
-        savedStateHandle[CategoryDetailActivity.EXTRA_CATEGORY] ?: ""
+        savedStateHandle[EXTRA_CATEGORY] ?: ""
     private val initialYear: Int =
-        savedStateHandle[CategoryDetailActivity.EXTRA_YEAR] ?: DateUtils.getCurrentYear()
+        savedStateHandle[EXTRA_YEAR] ?: DateUtils.getCurrentYear()
     private val initialMonth: Int =
-        savedStateHandle[CategoryDetailActivity.EXTRA_MONTH] ?: DateUtils.getCurrentMonth()
+        savedStateHandle[EXTRA_MONTH] ?: DateUtils.getCurrentMonth()
 
     // Category enum → displayNamesIncludingSub (소 카테고리 포함 필터)
     private val category: Category = Category.fromDisplayName(categoryDisplayName)
-    private val categoryNames: List<String> = category.displayNamesIncludingSub
+    private val isCustomCategory: Boolean =
+        category == Category.ETC && categoryDisplayName != Category.ETC.displayName
+    private val categoryNames: List<String> =
+        if (isCustomCategory) listOf(categoryDisplayName) else category.displayNamesIncludingSub
 
     private val _uiState = MutableStateFlow(
         CategoryDetailUiState(
             selectedYear = initialYear,
             selectedMonth = initialMonth,
-            categoryDisplayName = category.displayName,
-            categoryEmoji = category.emoji
+            categoryDisplayName = if (isCustomCategory) categoryDisplayName else category.displayName,
+            categoryEmoji = if (isCustomCategory) {
+                CategoryProvider.resolveEmoji(categoryDisplayName)
+            } else {
+                category.emoji
+            }
         )
     )
     val uiState: StateFlow<CategoryDetailUiState> = _uiState.asStateFlow()
@@ -204,6 +225,24 @@ class CategoryDetailViewModel @Inject constructor(
                     clearAllPageCache()
                     loadCurrentAndAdjacentPages()
                 }
+        }
+    }
+
+    // ========== 정렬 ==========
+
+    /** 정렬 순서 설정 (캐시 내 거래 목록만 재정렬, 로딩 없음) */
+    fun setSortOrder(order: CategorySortOrder) {
+        if (_uiState.value.sortOrder == order) return
+        _uiState.update { state ->
+            val resortedCache = state.pageCache.mapValues { (_, pageData) ->
+                val expenses = pageData.transactionItems
+                    .filterIsInstance<CategoryTransactionItem.ExpenseItem>()
+                    .map { it.expense }
+                pageData.copy(
+                    transactionItems = buildTransactionItems(expenses, order)
+                )
+            }
+            state.copy(sortOrder = order, pageCache = resortedCache)
         }
     }
 
@@ -337,8 +376,10 @@ class CategoryDetailViewModel @Inject constructor(
                             expenses, monthStart, daysInMonth
                         )
 
-                        // 날짜별 그룹핑 거래 목록
-                        val transactionItems = buildTransactionItems(expenses)
+                        // 날짜별 그룹핑 거래 목록 (정렬 적용)
+                        val transactionItems = buildTransactionItems(
+                            expenses, _uiState.value.sortOrder
+                        )
 
                         val current =
                             _uiState.value.pageCache[key] ?: CategoryDetailPageData()
@@ -367,10 +408,21 @@ class CategoryDetailViewModel @Inject constructor(
 
     /** 지출 목록을 날짜별 그룹핑된 플랫 리스트로 변환 */
     private fun buildTransactionItems(
-        expenses: List<ExpenseEntity>
+        expenses: List<ExpenseEntity>,
+        sortOrder: CategorySortOrder = CategorySortOrder.DATE_DESC
     ): List<CategoryTransactionItem> {
         if (expenses.isEmpty()) return emptyList()
 
+        return when (sortOrder) {
+            CategorySortOrder.DATE_DESC -> buildDateGroupedItems(expenses)
+            CategorySortOrder.AMOUNT_DESC -> buildAmountSortedItems(expenses)
+        }
+    }
+
+    /** 날짜별 그룹핑 (최신순) */
+    private fun buildDateGroupedItems(
+        expenses: List<ExpenseEntity>
+    ): List<CategoryTransactionItem> {
         val items = mutableListOf<CategoryTransactionItem>()
         val grouped = expenses.groupBy { it.dateTime.toDateKey() }
         val sortedDates = grouped.keys.sortedDescending()
@@ -395,6 +447,15 @@ class CategoryDetailViewModel @Inject constructor(
         }
 
         return items
+    }
+
+    /** 금액순 정렬 (높은 금액 → 낮은 금액) */
+    private fun buildAmountSortedItems(
+        expenses: List<ExpenseEntity>
+    ): List<CategoryTransactionItem> {
+        return expenses.sortedByDescending { it.amount }.map { expense ->
+            CategoryTransactionItem.ExpenseItem(expense)
+        }
     }
 
     /** timestamp → 날짜 키 (시분초 제거) */

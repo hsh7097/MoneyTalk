@@ -542,7 +542,6 @@ class SmsRegexRuleMatcher @Inject constructor(
         runCatching {
             originSampleCollector.collectFailure(
                 SmsOriginSampleCollector.FailureSample(
-                    senderAddress = input.address,
                     normalizedSenderAddress = normalizedSender,
                     type = type,
                     originBody = input.body,

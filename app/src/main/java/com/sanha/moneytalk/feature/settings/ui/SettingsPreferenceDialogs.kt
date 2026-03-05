@@ -12,11 +12,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -139,6 +141,13 @@ fun ApiKeySettingDialog(
                     onValueChange = { apiKey = it },
                     label = { Text(stringResource(R.string.dialog_api_key_label)) },
                     placeholder = { Text(stringResource(R.string.dialog_api_key_placeholder)) },
+                    trailingIcon = {
+                        if (apiKey.isNotEmpty()) {
+                            IconButton(onClick = { apiKey = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                            }
+                        }
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -192,6 +201,13 @@ fun MonthStartDayDialog(
                     },
                     label = { Text(stringResource(R.string.dialog_month_start_label)) },
                     suffix = { Text(stringResource(R.string.common_suffix_day)) },
+                    trailingIcon = {
+                        if (dayText.isNotEmpty()) {
+                            IconButton(onClick = { dayText = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                            }
+                        }
+                    },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
@@ -251,6 +267,13 @@ fun MonthlyBudgetDialog(
                     },
                     label = { Text(stringResource(R.string.dialog_monthly_budget_label)) },
                     suffix = { Text(stringResource(R.string.common_suffix_won)) },
+                    trailingIcon = {
+                        if (amountText.isNotEmpty()) {
+                            IconButton(onClick = { amountText = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                            }
+                        }
+                    },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()

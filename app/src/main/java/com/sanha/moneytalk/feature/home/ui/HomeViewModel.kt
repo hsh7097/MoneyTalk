@@ -500,7 +500,12 @@ class HomeViewModel @Inject constructor(
                         val categories = expenses
                             .groupBy { expense ->
                                 val cat = Category.fromDisplayName(expense.category)
-                                cat.parentCategory?.displayName ?: cat.displayName
+                                // 커스텀 카테고리는 원래 이름 유지 (기타로 합치지 않음)
+                                if (cat == Category.ETC && expense.category != Category.ETC.displayName) {
+                                    expense.category
+                                } else {
+                                    cat.parentCategory?.displayName ?: cat.displayName
+                                }
                             }
                             .map { (category, items) ->
                                 CategorySum(category = category, total = items.sumOf { it.amount })
@@ -775,16 +780,28 @@ class HomeViewModel @Inject constructor(
                     )
                 }
 
+                // 수입 분류
+                val incomeClassified = withContext(Dispatchers.IO) {
+                    val incomeCount = categoryClassifierService.getUnclassifiedIncomeCount()
+                    if (incomeCount > 0) {
+                        _uiState.update {
+                            it.copy(classifyProgress = "수입 항목 분류 중...")
+                        }
+                        categoryClassifierService.classifyUnclassifiedIncomes()
+                    } else 0
+                }
+
                 clearAllPageCache()
                 loadCurrentAndAdjacentPages()
 
+                val totalAll = totalClassified + incomeClassified
                 val finalRemaining = withContext(Dispatchers.IO) {
                     categoryClassifierService.getUnclassifiedCount()
                 }
                 val resultMessage = if (finalRemaining > 0) {
-                    "${totalClassified}건 정리 완료. ${finalRemaining}건은 직접 확인이 필요합니다."
+                    "${totalAll}건 정리 완료. ${finalRemaining}건은 직접 확인이 필요합니다."
                 } else {
-                    "${totalClassified}건 정리 완료!"
+                    "${totalAll}건 정리 완료!"
                 }
 
                 _uiState.update {

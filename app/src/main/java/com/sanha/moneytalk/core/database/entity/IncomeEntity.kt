@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.core.database.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -61,6 +62,10 @@ data class IncomeEntity(
 
     /** 사용자 메모 (선택) */
     val memo: String? = null,
+
+    /** 수입 카테고리 (급여, 상여금, 사업수입, 아르바이트 등) */
+    @ColumnInfo(name = "category", defaultValue = "미분류")
+    val category: String = "미분류",
 
     /** 레코드 생성 시간 */
     val createdAt: Long = System.currentTimeMillis()

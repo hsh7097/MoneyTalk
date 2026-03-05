@@ -99,13 +99,30 @@ interface IncomeDao {
     @Query("UPDATE incomes SET memo = :memo WHERE id = :incomeId")
     suspend fun updateMemo(incomeId: Long, memo: String?)
 
-    /** 검색 (설명, 유형, 출처, 메모에서 검색) */
+    /** 카테고리 업데이트 */
+    @Query("UPDATE incomes SET category = :category WHERE id = :incomeId")
+    suspend fun updateCategory(incomeId: Long, category: String)
+
+    /** 미분류 수입 조회 (분류 파이프라인용) */
+    @Query("SELECT * FROM incomes WHERE category = '미분류' ORDER BY dateTime DESC")
+    suspend fun getUnclassifiedIncomes(): List<IncomeEntity>
+
+    /** 미분류 수입 수 조회 */
+    @Query("SELECT COUNT(*) FROM incomes WHERE category = '미분류'")
+    suspend fun getUnclassifiedIncomeCount(): Int
+
+    /** source 기준 카테고리 일괄 변경 (미분류 항목만) */
+    @Query("UPDATE incomes SET category = :newCategory WHERE source = :source AND category = '미분류'")
+    suspend fun updateCategoryBySource(source: String, newCategory: String): Int
+
+    /** 검색 (설명, 유형, 출처, 카테고리, 메모에서 검색) */
     @Query(
         """
         SELECT * FROM incomes
         WHERE description LIKE '%' || :query || '%'
            OR type LIKE '%' || :query || '%'
            OR source LIKE '%' || :query || '%'
+           OR category LIKE '%' || :query || '%'
            OR memo LIKE '%' || :query || '%'
         ORDER BY dateTime DESC
     """

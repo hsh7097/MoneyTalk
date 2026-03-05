@@ -179,7 +179,7 @@
     <string name="dialog_monthly_budget_label">Monthly Budget</string>
     <string name="dialog_monthly_budget_hint">Enter 0 to remove the budget</string>
 
-    <string name="settings_section_ai">AI Settings</string>
+    <string name="settings_section_category">Category Management</string>
     <string name="settings_api_key_title">Gemini API Key</string>
     <string name="settings_api_key_set">Set: %s</string>
     <string name="settings_api_key_not_set">Set up API key for AI chat (free)</string>
@@ -279,6 +279,8 @@
     <!-- Synced translations from values/strings.xml -->
     <string name="calendar_day_expense_title">%1$s %2$d Expense History</string>
     <string name="calendar_no_expense_for_day">No expense history for this date</string>
+    <string name="calendar_day_transaction_title">%1$s %2$d Transaction History</string>
+    <string name="calendar_no_transaction_for_day">No transaction history for this date</string>
     <string name="chat_retry">Retry</string>
     <string name="common_apply">Apply</string>
     <string name="common_suffix_day">day</string>
@@ -299,6 +301,16 @@
     <string name="history_sort_store">By Store</string>
     <string name="history_visit_suffix">times</string>
     <string name="history_visit_with_unit">%d times</string>
+    <string name="history_filter_active_category">Category filter active</string>
+    <string name="history_filter_active_type">Type filter active</string>
+    <string name="history_filter_active_sort">Sort filter active</string>
+    <string name="history_filter_active_combined">Filter active</string>
+    <string name="history_filter_active_fixed_only">Fixed only</string>
+    <string name="history_filter_active_fixed_exclude">Fixed excluded</string>
+    <string name="history_filter_fixed">Fixed Expense</string>
+    <string name="history_filter_fixed_all">All</string>
+    <string name="history_filter_fixed_only">Fixed Only</string>
+    <string name="history_filter_fixed_exclude">Exclude</string>
     <string name="home_expense_top3">Top 3 Expenses</string>
     <string name="home_income_badge">Income %s won</string>
     <string name="home_no_today_transactions">No transactions yet today</string>
@@ -414,4 +426,71 @@
     <string name="sms_regex_reason_amount_compile_failed" translatable="false">amountRegex is not a valid regex. Check JSON escaping.</string>
     <string name="sms_regex_reason_store_compile_failed" translatable="false">storeRegex is not a valid regex. Check JSON escaping.</string>
     <string name="sms_regex_reason_card_compile_failed" translatable="false">cardRegex is not a valid regex. Check JSON escaping.</string>
+
+    <!-- Category detail sort -->
+    <string name="category_sort_date">Latest</string>
+    <string name="category_sort_amount">By Price</string>
+
+    <!-- Transaction edit Activity -->
+    <string name="transaction_edit_title">Transaction Detail</string>
+    <string name="transaction_add_title">Add Transaction</string>
+    <string name="transaction_edit_amount">Amount</string>
+    <string name="transaction_edit_store">Store Name</string>
+    <string name="transaction_edit_card">Payment Method</string>
+    <string name="transaction_edit_date">Date</string>
+    <string name="transaction_edit_time">Time</string>
+    <string name="transaction_edit_memo">Memo</string>
+    <string name="transaction_edit_original_sms">Original SMS</string>
+    <string name="transaction_edit_save">Save</string>
+    <string name="transaction_edit_saved">Saved</string>
+    <string name="transaction_edit_deleted">Deleted</string>
+    <string name="transaction_edit_input_required">Please enter amount and store name</string>
+    <string name="transaction_edit_save_failed">Failed to save</string>
+    <string name="transaction_edit_delete_failed">Failed to delete</string>
+    <string name="income_type_default">Deposit</string>
+    <string name="transaction_edit_income_type">Type</string>
+    <string name="transaction_edit_source">Source</string>
+    <string name="transaction_edit_description">Description</string>
+    <string name="transaction_type_expense">Expense</string>
+    <string name="transaction_type_income">Income</string>
+    <string name="transaction_type_transfer">Transfer</string>
+    <string name="transaction_edit_store_hint">Enter store name</string>
+    <string name="transaction_edit_amount_hint">0</string>
+    <string name="transaction_edit_amount_suffix">KRW</string>
+    <string name="transaction_edit_date_time">Date/Time</string>
+    <string name="transaction_edit_income_input_required">Please enter amount</string>
+    <string name="transaction_edit_fixed_expense">Add to fixed expenses</string>
+    <string name="transaction_card_fixed_tag">Fixed</string>
+    <string name="transaction_edit_apply_category_to_all">Apply to all same store</string>
+    <string name="transaction_edit_apply_fixed_to_all">Apply to all same store</string>
+    <string name="transaction_edit_type_label">Type</string>
+
+    <!-- Daily transaction list Activity -->
+    <string name="transaction_list_title">%1$s %2$d Transaction History</string>
+    <string name="transaction_list_empty">No transactions</string>
+
+    <!-- Store Rule Settings -->
+    <string name="store_rule_settings_title">Store Rules</string>
+    <string name="store_rule_settings_subtitle">Auto-apply category/fixed expense by store</string>
+    <string name="store_rule_settings_description">Automatically applies category and fixed expense to stores containing the keyword.\nAuto-created when using \"Apply to all same store\" in transaction edit.</string>
+    <string name="store_rule_settings_empty">No store rules registered</string>
+    <string name="store_rule_settings_add">Add Rule</string>
+    <string name="store_rule_settings_add_title">Add Rule</string>
+    <string name="store_rule_settings_edit_title">Edit Rule</string>
+    <string name="store_rule_settings_delete_title">Delete Rule</string>
+    <string name="store_rule_settings_delete_message">Delete this store rule?</string>
+    <string name="store_rule_settings_keyword_label">Keyword</string>
+    <string name="store_rule_settings_keyword_hint">Keyword to match in store name</string>
+    <string name="store_rule_settings_category_section">Category</string>
+    <string name="store_rule_settings_category_not_set">Not set</string>
+    <string name="store_rule_settings_category_reset">Clear</string>
+    <string name="store_rule_settings_category_select">Select</string>
+    <string name="store_rule_settings_category_label">Category: %s</string>
+    <string name="store_rule_settings_fixed_label">Fixed Expense</string>
+    <string name="store_rule_settings_fixed_toggle">Set as fixed expense</string>
+    <string name="store_rule_error_keyword_required">Please enter a keyword</string>
+    <string name="store_rule_error_no_rule">Please set either category or fixed expense</string>
+
+    <!-- Common -->
+    <string name="common_clear_input">Clear input</string>
 </resources>

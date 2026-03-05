@@ -1,5 +1,7 @@
-package com.sanha.moneytalk.feature.smssettings.ui
+package com.sanha.moneytalk.feature.storerulesettings
 
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -9,14 +11,21 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.theme.MoneyTalkTheme
 import com.sanha.moneytalk.core.theme.ThemeMode
+import com.sanha.moneytalk.feature.storerulesettings.ui.StoreRuleSettingsScreen
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 /**
- * 문자설정 전용 Activity
+ * 거래처 규칙 설정 전용 Activity.
  */
 @AndroidEntryPoint
-class SmsSettingsActivity : ComponentActivity() {
+class StoreRuleSettingsActivity : ComponentActivity() {
+
+    companion object {
+        fun open(context: Context) {
+            context.startActivity(Intent(context, StoreRuleSettingsActivity::class.java))
+        }
+    }
 
     @Inject
     lateinit var settingsDataStore: SettingsDataStore
@@ -35,7 +44,7 @@ class SmsSettingsActivity : ComponentActivity() {
             }
 
             MoneyTalkTheme(themeMode = themeMode) {
-                SmsSettingsScreen(onBack = { finish() })
+                StoreRuleSettingsScreen(onBack = { finish() })
             }
         }
     }

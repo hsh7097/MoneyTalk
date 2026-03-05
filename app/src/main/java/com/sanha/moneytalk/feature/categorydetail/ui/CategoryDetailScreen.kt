@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,10 +32,8 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -46,14 +44,22 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.feature.categorydetail.CategoryDetailPageData
+import com.sanha.moneytalk.feature.categorydetail.CategoryDetailUiState
+import com.sanha.moneytalk.feature.categorydetail.CategoryDetailViewModel
+import com.sanha.moneytalk.feature.categorydetail.CategorySortOrder
+import com.sanha.moneytalk.feature.categorydetail.CategoryTransactionItem
+import androidx.compose.ui.platform.LocalContext
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
-import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
+import com.sanha.moneytalk.feature.transactionedit.TransactionEditActivity
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
 import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabInfo
+import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabRowCompose
 import com.sanha.moneytalk.feature.categorydetail.ui.model.CategorySpendingTrendInfo
 import com.sanha.moneytalk.feature.home.ui.component.SpendingTrendSection
 import kotlinx.coroutines.launch
@@ -72,8 +78,7 @@ fun CategoryDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // 선택된 지출 항목 (상세보기용)
-    var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
+    val context = LocalContext.current
 
     // HorizontalPager — Virtual Infinite Pager
     val initialPage = remember {
@@ -105,7 +110,7 @@ fun CategoryDetailScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .windowInsetsPadding(WindowInsets.statusBars)
+            .windowInsetsPadding(WindowInsets.systemBars)
     ) {
         // TopBar: 뒤로가기 + 카테고리 이모지 + 이름
         TopAppBar(
@@ -153,6 +158,8 @@ fun CategoryDetailScreen(
                 month = pageMonth,
                 monthStartDay = uiState.monthStartDay,
                 categoryName = uiState.categoryDisplayName,
+                sortOrder = uiState.sortOrder,
+                onSortOrderChange = { viewModel.setSortOrder(it) },
                 onPreviousMonth = {
                     coroutineScope.launch {
                         pagerState.animateScrollToPage(pagerState.currentPage - 1)
@@ -166,7 +173,9 @@ fun CategoryDetailScreen(
                         }
                     }
                 },
-                onExpenseSelected = { expense -> selectedExpense = expense }
+                onExpenseSelected = { expense ->
+                    TransactionEditActivity.open(context, expenseId = expense.id)
+                }
             )
         }
 
@@ -176,25 +185,6 @@ fun CategoryDetailScreen(
         }
     }
 
-    // 지출 상세 다이얼로그
-    selectedExpense?.let { expense ->
-        ExpenseDetailDialog(
-            expense = expense,
-            onDismiss = { selectedExpense = null },
-            onDelete = {
-                viewModel.deleteExpense(expense)
-                selectedExpense = null
-            },
-            onCategoryChange = { newCategory ->
-                viewModel.updateExpenseCategory(expense.storeName, newCategory)
-                selectedExpense = null
-            },
-            onMemoChange = { memo ->
-                viewModel.updateExpenseMemo(expense.id, memo)
-                selectedExpense = null
-            }
-        )
-    }
 }
 
 /**
@@ -209,6 +199,8 @@ private fun CategoryDetailPageContent(
     month: Int,
     monthStartDay: Int,
     categoryName: String,
+    sortOrder: CategorySortOrder = CategorySortOrder.DATE_DESC,
+    onSortOrderChange: (CategorySortOrder) -> Unit = {},
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onExpenseSelected: (ExpenseEntity) -> Unit
@@ -239,6 +231,49 @@ private fun CategoryDetailPageContent(
                 onPreviousMonth = onPreviousMonth,
                 onNextMonth = onNextMonth
             )
+        }
+
+        // 정렬 토글 (세그먼트 탭)
+        item(key = "sort_toggle") {
+            val primaryColor = MaterialTheme.colorScheme.primary
+            val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
+            val dateSortLabel = stringResource(R.string.category_sort_date)
+            val amountSortLabel = stringResource(R.string.category_sort_amount)
+
+            val sortTabs = remember(sortOrder, primaryColor, onPrimaryColor) {
+                listOf(
+                    object : SegmentedTabInfo {
+                        override val label = dateSortLabel
+                        override val isSelected = sortOrder == CategorySortOrder.DATE_DESC
+                        override val selectedColor = primaryColor
+                        override val selectedTextColor = onPrimaryColor
+                    },
+                    object : SegmentedTabInfo {
+                        override val label = amountSortLabel
+                        override val isSelected = sortOrder == CategorySortOrder.AMOUNT_DESC
+                        override val selectedColor = primaryColor
+                        override val selectedTextColor = onPrimaryColor
+                    }
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                SegmentedTabRowCompose(
+                    tabs = sortTabs,
+                    onTabClick = { index ->
+                        val newOrder = when (index) {
+                            0 -> CategorySortOrder.DATE_DESC
+                            else -> CategorySortOrder.AMOUNT_DESC
+                        }
+                        onSortOrderChange(newOrder)
+                    }
+                )
+            }
         }
 
         // 누적 추이 차트
@@ -316,7 +351,8 @@ private fun MonthNavigationHeader(
         IconButton(onClick = onPreviousMonth) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                contentDescription = stringResource(R.string.home_previous_month)
+                contentDescription = stringResource(R.string.home_previous_month),
+                tint = MaterialTheme.colorScheme.onSurface
             )
         }
 

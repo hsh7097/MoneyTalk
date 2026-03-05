@@ -3,10 +3,10 @@ package com.sanha.moneytalk.core.di
 import android.content.Context
 import androidx.room.Room
 import com.sanha.moneytalk.core.database.AppDatabase
-import com.sanha.moneytalk.core.database.DatabaseMigrations
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
+import com.sanha.moneytalk.core.database.dao.CustomCategoryDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
 import com.sanha.moneytalk.core.database.dao.OwnedCardDao
@@ -15,6 +15,7 @@ import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.dao.SmsRegexRuleDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
+import com.sanha.moneytalk.core.database.dao.StoreRuleDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -50,14 +51,6 @@ object DatabaseModule {
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
-            .addMigrations(
-                DatabaseMigrations.MIGRATION_1_2,
-                DatabaseMigrations.MIGRATION_2_3,
-                DatabaseMigrations.MIGRATION_3_4,
-                DatabaseMigrations.MIGRATION_4_5,
-                DatabaseMigrations.MIGRATION_5_6,
-                DatabaseMigrations.MIGRATION_6_7
-            )
             .build()
     }
 
@@ -136,5 +129,19 @@ object DatabaseModule {
     @Singleton
     fun provideSmsRegexRuleDao(database: AppDatabase): SmsRegexRuleDao {
         return database.smsRegexRuleDao()
+    }
+
+    /** 커스텀 카테고리 DAO 제공 */
+    @Provides
+    @Singleton
+    fun provideCustomCategoryDao(database: AppDatabase): CustomCategoryDao {
+        return database.customCategoryDao()
+    }
+
+    /** 거래처 규칙 DAO 제공 */
+    @Provides
+    @Singleton
+    fun provideStoreRuleDao(database: AppDatabase): StoreRuleDao {
+        return database.storeRuleDao()
     }
 }

@@ -46,12 +46,12 @@ import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.activity.ComponentActivity
+import com.sanha.moneytalk.feature.transactionedit.TransactionEditActivity
 import com.sanha.moneytalk.MainViewModel
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
@@ -87,7 +87,7 @@ fun HistoryScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
-    var showAddDialog by remember { mutableStateOf(false) }
+    // showAddDialog 제거됨 — "+" 버튼은 TransactionEditActivity로 직접 이동
 
     // Activity-scoped MainViewModel (동기화/권한/광고 상태)
     val mainViewModel: MainViewModel = hiltViewModel(
@@ -189,14 +189,30 @@ fun HistoryScreen(
                 currentMode = viewMode,
                 onModeChange = { viewMode = it },
                 sortOrder = uiState.sortOrder,
-                selectedCategory = uiState.selectedCategory,
                 showExpenses = uiState.showExpenses,
                 showIncomes = uiState.showIncomes,
-                onApplyFilter = { sortOrder, showExp, showInc, category ->
-                    viewModel.applyFilter(sortOrder, showExp, showInc, category)
+                showTransfers = uiState.showTransfers,
+                selectedExpenseCategories = uiState.selectedExpenseCategories,
+                selectedIncomeCategories = uiState.selectedIncomeCategories,
+                selectedTransferCategories = uiState.selectedTransferCategories,
+                fixedExpenseFilter = uiState.fixedExpenseFilter,
+                onApplyFilter = { sortOrder, showExp, showInc, showTransfer, expenseCategories, incomeCategories, transferCategories, fixedFilter ->
+                    viewModel.applyFilter(
+                        sortOrder = sortOrder,
+                        showExpenses = showExp,
+                        showIncomes = showInc,
+                        showTransfers = showTransfer,
+                        expenseCategories = expenseCategories,
+                        incomeCategories = incomeCategories,
+                        transferCategories = transferCategories,
+                        fixedExpenseFilter = fixedFilter
+                    )
                 },
+                onResetFilter = { viewModel.resetFilters() },
                 onSearchClick = { viewModel.enterSearchMode() },
-                onAddClick = { showAddDialog = true }
+                onAddClick = {
+                    TransactionEditActivity.open(context)
+                }
             )
         }
 
@@ -232,7 +248,7 @@ fun HistoryScreen(
                         isLoading = pageData.isLoading,
                         showExpenses = uiState.showExpenses,
                         showIncomes = uiState.showIncomes,
-                        hasActiveFilter = uiState.selectedCategory != null,
+                        hasActiveFilter = uiState.hasCategoryFilter,
                         isCurrentMonth = isCurrentMonth,
                         isMonthSynced = mainViewModel.isMonthSynced(pageYear, pageMonth),
                         isPartiallyCovered = mainViewModel.isPagePartiallyCovered(pageYear, pageMonth),
@@ -265,7 +281,11 @@ fun HistoryScreen(
                             }
                         },
                         scrollResetKey = Triple(
-                            uiState.selectedCategory,
+                            Triple(
+                                uiState.selectedExpenseCategories,
+                                uiState.selectedIncomeCategories,
+                                uiState.selectedTransferCategories
+                            ),
                             uiState.sortOrder,
                             pageYear to pageMonth
                         ),
@@ -279,13 +299,7 @@ fun HistoryScreen(
                         month = pageMonth,
                         monthStartDay = uiState.monthStartDay,
                         dailyTotals = pageData.dailyTotals,
-                        dailyIncomeTotals = pageData.dailyIncomeTotals,
-                        expenses = pageData.expenses,
-                        onDelete = { viewModel.deleteExpense(it) },
-                        onCategoryChange = { expense, newCategory ->
-                            viewModel.updateExpenseCategory(expense.storeName, newCategory)
-                        },
-                        onExpenseMemoChange = { id, memo -> viewModel.updateExpenseMemo(id, memo) }
+                        dailyIncomeTotals = pageData.dailyIncomeTotals
                     )
                 }
             }
@@ -295,27 +309,6 @@ fun HistoryScreen(
         if (isBannerAdEnabled) {
             BannerAdCompose(adUnitId = BannerAdIds.HISTORY)
         }
-    }
-
-    // 다이얼로그 상태는 ViewModel에서 관리
-    uiState.selectedExpense?.let { expense ->
-
-        ExpenseDetailDialog(
-            expense = expense,
-            onDismiss = { viewModel.onIntent(HistoryIntent.DismissDialog) },
-            onDelete = { viewModel.onIntent(HistoryIntent.DeleteExpense(expense)) },
-            onCategoryChange = { newCategory ->
-                viewModel.onIntent(
-                    HistoryIntent.ChangeCategory(
-                        expense.storeName,
-                        newCategory
-                    )
-                )
-            },
-            onMemoChange = { memo ->
-                viewModel.onIntent(HistoryIntent.UpdateExpenseMemo(expense.id, memo))
-            }
-        )
     }
 
     uiState.selectedIncome?.let { income ->
@@ -329,16 +322,7 @@ fun HistoryScreen(
         )
     }
 
-    // 수동 지출 추가 다이얼로그
-    if (showAddDialog) {
-        AddExpenseDialog(
-            onDismiss = { showAddDialog = false },
-            onConfirm = { amount, storeName, category, cardName ->
-                viewModel.addManualExpense(amount, storeName, category, cardName)
-                showAddDialog = false
-            }
-        )
-    }
+    // AddExpenseDialog 제거됨 — TransactionEditActivity로 대체
 
     // 동기화/광고 다이얼로그는 Activity 레벨(MoneyTalkApp)에서 전역 관리
 }
@@ -369,6 +353,7 @@ fun TransactionListView(
     scrollResetKey: Any? = null,
     onIntent: (HistoryIntent) -> Unit
 ) {
+    val context = LocalContext.current
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
@@ -483,14 +468,18 @@ fun TransactionListView(
                     is TransactionListItem.ExpenseItem -> {
                         TransactionCardCompose(
                             info = item.cardInfo,
-                            onClick = { onIntent(HistoryIntent.SelectExpense(item.expense)) }
+                            onClick = {
+                                TransactionEditActivity.open(context, expenseId = item.expense.id)
+                            }
                         )
                     }
 
                     is TransactionListItem.IncomeItem -> {
                         TransactionCardCompose(
                             info = item.cardInfo,
-                            onClick = { onIntent(HistoryIntent.SelectIncome(item.income)) }
+                            onClick = {
+                                TransactionEditActivity.open(context, incomeId = item.income.id)
+                            }
                         )
                     }
                 }

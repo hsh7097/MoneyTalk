@@ -69,6 +69,7 @@ import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
@@ -78,6 +79,8 @@ import com.sanha.moneytalk.feature.history.ui.IncomeDetailDialog
 import com.sanha.moneytalk.feature.home.ui.component.ImportDataCtaSection
 import com.sanha.moneytalk.feature.home.ui.component.SpendingTrendSection
 import com.sanha.moneytalk.feature.home.ui.model.HomeSpendingTrendInfo
+import com.sanha.moneytalk.core.ui.component.getCustomCategoryBackgroundColor
+import com.sanha.moneytalk.core.ui.component.getCustomCategoryChartColor
 import com.sanha.moneytalk.core.ui.component.getCategoryChartColor
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
@@ -229,24 +232,12 @@ fun HomeScreen(
                 },
                 onCategorySelected = { category ->
                     if (category != null) {
-                        val intent = android.content.Intent(
+                        com.sanha.moneytalk.feature.categorydetail.CategoryDetailActivity.open(
                             context,
-                            com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity::class.java
-                        ).apply {
-                            putExtra(
-                                com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_CATEGORY,
-                                category
-                            )
-                            putExtra(
-                                com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_YEAR,
-                                uiState.selectedYear
-                            )
-                            putExtra(
-                                com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.EXTRA_MONTH,
-                                uiState.selectedMonth
-                            )
-                        }
-                        context.startActivity(intent)
+                            category,
+                            uiState.selectedYear,
+                            uiState.selectedMonth
+                        )
                     }
                 },
                 onExpenseSelected = { expense -> selectedExpense = expense },
@@ -845,6 +836,9 @@ fun CategoryExpenseSection(
         } else {
             displayList.forEachIndexed { index, item ->
                 val category = Category.fromDisplayName(item.category)
+                val categoryEmoji = CategoryProvider.resolveEmoji(item.category)
+                val isCustomCategory = category == Category.ETC
+                        && item.category != Category.ETC.displayName
                 val budget = categoryBudgets[item.category]
                 val budgetAmount = budget ?: 0
                 val hasBudget = budget != null && budgetAmount > 0
@@ -872,6 +866,7 @@ fun CategoryExpenseSection(
                     isOverBudget -> MaterialTheme.colorScheme.error
                     isWarningBudget -> warningColor
                     isFirst && !hasBudget -> MaterialTheme.colorScheme.primary
+                    isCustomCategory -> getCustomCategoryChartColor(item.category)
                     else -> getCategoryChartColor(category)
                 }
 
@@ -897,11 +892,14 @@ fun CategoryExpenseSection(
                         ) {
                             CategoryIcon(
                                 category = category,
+                                emojiOverride = categoryEmoji,
+                                backgroundColorOverride = if (isCustomCategory)
+                                    getCustomCategoryBackgroundColor(item.category) else null,
                                 containerSize = 40.dp,
                                 fontSize = 20.sp
                             )
                             Text(
-                                text = category.displayName,
+                                text = item.category,
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface

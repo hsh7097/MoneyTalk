@@ -2,6 +2,7 @@ package com.sanha.moneytalk.core.ui.component.tab
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -15,6 +16,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,8 +39,9 @@ fun SegmentedTabRowCompose(
     Row(
         modifier = modifier
             .width(IntrinsicSize.Max)
-            .clip(RoundedCornerShape(6.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         tabs.forEachIndexed { index, tab ->
@@ -63,13 +66,17 @@ private fun SegmentedTab(
 
     Box(
         modifier = Modifier
+            .padding(3.dp)
             .clip(RoundedCornerShape(6.dp))
             .background(
                 if (info.isSelected) info.selectedColor
                 else Color.Transparent
             )
-            .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onClick() }
+            .padding(horizontal = 10.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(

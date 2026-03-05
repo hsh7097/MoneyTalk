@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.feature.history.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -8,6 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupCompose
+import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupOption
 
 // ========== SearchBar Preview ==========
 
@@ -90,30 +93,49 @@ private fun FilterTabRowCalendarWithFilterPreview() {
             currentMode = ViewMode.CALENDAR,
             onModeChange = {},
             sortOrder = SortOrder.AMOUNT_DESC,
-            selectedCategory = "식비"
+            selectedExpenseCategories = setOf("식비")
         )
     }
 }
 
-// ========== FilterChipButton Preview ==========
+// ========== RadioGroupCompose Preview ==========
 
-@Preview(showBackground = true, name = "필터 칩 모음")
+@Preview(showBackground = true, name = "라디오 그룹 - 정렬")
 @Composable
-private fun FilterChipButtonPreview() {
+private fun RadioGroupSortPreview() {
     MaterialTheme {
         Surface {
-            Column(modifier = Modifier.padding(16.dp)) {
-                FilterChipButton(
-                    label = "최신순",
-                    isActive = true,
-                    onClick = {}
-                )
-                FilterChipButton(
-                    label = "금액순",
-                    isActive = false,
-                    onClick = {}
-                )
-            }
+            RadioGroupCompose(
+                options = listOf(
+                    RadioGroupOption("최신순", isSelected = true),
+                    RadioGroupOption("금액순", isSelected = false),
+                    RadioGroupOption("사용처별", isSelected = false)
+                ),
+                onOptionSelected = {},
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "라디오 그룹 - 분류")
+@Composable
+private fun RadioGroupTypePreview() {
+    MaterialTheme {
+        Surface {
+            RadioGroupCompose(
+                options = listOf(
+                    RadioGroupOption("지출", isSelected = true),
+                    RadioGroupOption("수입", isSelected = false),
+                    RadioGroupOption("이체", isSelected = false)
+                ),
+                onOptionSelected = {},
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            )
         }
     }
 }

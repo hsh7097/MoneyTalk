@@ -27,7 +27,6 @@ class SmsOriginSampleCollector @Inject constructor(
     }
 
     data class SuccessSample(
-        val senderAddress: String,
         val normalizedSenderAddress: String,
         val type: String,
         val template: String,
@@ -36,15 +35,10 @@ class SmsOriginSampleCollector @Inject constructor(
         val parseSource: String,
         val cardName: String,
         val groupMemberCount: Int,
-        val amountRegex: String = "",
-        val storeRegex: String = "",
-        val cardRegex: String = "",
-        val dateRegex: String = "",
         val matchedRuleKey: String = ""
     )
 
     data class FailureSample(
-        val senderAddress: String,
         val normalizedSenderAddress: String,
         val type: String,
         val originBody: String,
@@ -72,17 +66,8 @@ class SmsOriginSampleCollector @Inject constructor(
                 append(sample.type)
                 append('|')
                 append(sample.template.trim())
-                append('|')
-                append(sample.amountRegex.trim())
-                append('|')
-                append(sample.storeRegex.trim())
-                append('|')
-                append(sample.cardRegex.trim())
-                append('|')
-                append(sample.dateRegex.trim())
             }
         )
-        val sampleKey = fingerprint
         val bucketKey = "${sample.normalizedSenderAddress}|${sample.type.lowercase(Locale.ROOT)}"
 
         val isNewInSession = synchronized(successFingerprintsByBucket) {
@@ -97,14 +82,12 @@ class SmsOriginSampleCollector @Inject constructor(
         val ref = db.getReference(SMS_ORIGIN_PATH)
             .child(sample.normalizedSenderAddress)
             .child(sample.type.lowercase(Locale.ROOT))
-            .child(sampleKey)
+            .child(fingerprint)
 
         val payload = mutableMapOf<String, Any>(
             "schemaVersion" to 2,
-            "sampleKey" to sampleKey,
             "fingerprint" to fingerprint,
             "outcome" to "success",
-            "senderAddress" to sample.senderAddress,
             "normalizedSenderAddress" to sample.normalizedSenderAddress,
             "type" to sample.type.lowercase(Locale.ROOT),
             "template" to sample.template,
@@ -120,14 +103,6 @@ class SmsOriginSampleCollector @Inject constructor(
         if (isNewInSession) {
             payload["createdAt"] = now
         }
-        val normalizedAmountRegex = normalizeRegexForStorage(sample.amountRegex)
-        val normalizedStoreRegex = normalizeRegexForStorage(sample.storeRegex)
-        val normalizedCardRegex = normalizeRegexForStorage(sample.cardRegex)
-        val normalizedDateRegex = normalizeRegexForStorage(sample.dateRegex)
-        if (normalizedAmountRegex.isNotBlank()) payload["amountRegex"] = normalizedAmountRegex
-        if (normalizedStoreRegex.isNotBlank()) payload["storeRegex"] = normalizedStoreRegex
-        if (normalizedCardRegex.isNotBlank()) payload["cardRegex"] = normalizedCardRegex
-        if (normalizedDateRegex.isNotBlank()) payload["dateRegex"] = normalizedDateRegex
         if (sample.matchedRuleKey.isNotBlank()) payload["matchedRuleKey"] = sample.matchedRuleKey
         appendRuleShapeFields(
             payload = payload,
@@ -135,6 +110,7 @@ class SmsOriginSampleCollector @Inject constructor(
             parseSource = sample.parseSource,
             groupMemberCount = sample.groupMemberCount,
             template = sample.template,
+            cardName = sample.cardName,
             status = "ACTIVE"
         )
 
@@ -167,19 +143,15 @@ class SmsOriginSampleCollector @Inject constructor(
                 append(failureTemplate)
             }
         )
-        val sampleKey = fingerprint
-
         val ref = db.getReference(SMS_ORIGIN_PATH)
             .child(sample.normalizedSenderAddress)
             .child(normalizedType)
-            .child(sampleKey)
+            .child(fingerprint)
 
         val payload = mutableMapOf<String, Any>(
             "schemaVersion" to 2,
-            "sampleKey" to sampleKey,
             "fingerprint" to fingerprint,
             "outcome" to "fail",
-            "senderAddress" to sample.senderAddress,
             "normalizedSenderAddress" to sample.normalizedSenderAddress,
             "type" to normalizedType,
             "originBody" to sample.originBody,
@@ -245,20 +217,42 @@ class SmsOriginSampleCollector @Inject constructor(
         parseSource: String,
         groupMemberCount: Int,
         template: String,
+        cardName: String = "",
         status: String
     ) {
-        val bodyRegex = normalizeRegexForStorage(buildBodyRegexFromTemplate(template))
+        val bodyRegex = normalizeRegexForStorage(buildBodyRegexFromTemplate(template, cardName))
+        val amountGroup = if (containsNamedGroup(bodyRegex, "amount")) "amount" else ""
+        val storeGroup = if (containsNamedGroup(bodyRegex, "store")) "store" else ""
+        val cardGroup = if (containsNamedGroup(bodyRegex, "card")) "card" else ""
+        val dateGroup = if (containsNamedGroup(bodyRegex, "date")) "date" else ""
+
         payload["type"] = normalizedType
         payload["priority"] = deriveRulePriority(parseSource, groupMemberCount)
         payload["status"] = status
         payload["source"] = "sms_origin"
         payload["version"] = 1
-        payload["amountGroup"] = if (containsNamedGroup(bodyRegex, "amount")) "amount" else ""
-        payload["storeGroup"] = if (containsNamedGroup(bodyRegex, "store")) "store" else ""
-        payload["cardGroup"] = if (containsNamedGroup(bodyRegex, "card")) "card" else ""
-        payload["dateGroup"] = if (containsNamedGroup(bodyRegex, "date")) "date" else ""
+        payload["amountGroup"] = amountGroup
+        payload["storeGroup"] = storeGroup
+        payload["cardGroup"] = cardGroup
+        payload["dateGroup"] = dateGroup
         if (!bodyRegex.isNullOrBlank()) {
             payload["bodyRegex"] = bodyRegex
+
+            // sms_rules 호환 ruleKey 생성
+            val senderAddress = (payload["normalizedSenderAddress"] as? String).orEmpty()
+            val ruleKey = sha256Hex(
+                buildString {
+                    append(senderAddress); append('|')
+                    append(normalizedType); append('|')
+                    append(bodyRegex); append('|')
+                    append(amountGroup); append('|')
+                    append(storeGroup); append('|')
+                    append(cardGroup); append('|')
+                    append(dateGroup); append('|')
+                    append(1) // version
+                }
+            ).take(24)
+            payload["ruleKey"] = ruleKey
         }
     }
 
@@ -312,14 +306,22 @@ class SmsOriginSampleCollector @Inject constructor(
         return bodyRegex.contains("(?<$groupName>")
     }
 
-    private fun buildBodyRegexFromTemplate(template: String): String? {
-        val normalizedTemplate = template
+    private fun buildBodyRegexFromTemplate(template: String, cardName: String = ""): String? {
+        var normalizedTemplate = template
             .replace("\r\n", "\n")
             .replace('\r', '\n')
             .trim()
         if (normalizedTemplate.isBlank()) return null
         if (!normalizedTemplate.contains("{AMOUNT}")) {
             return null
+        }
+
+        // cardName literal → {CARD_NAME} placeholder 치환 (첫 번째 출현만)
+        if (cardName.isNotBlank() && normalizedTemplate.contains(cardName)) {
+            val idx = normalizedTemplate.indexOf(cardName)
+            normalizedTemplate = normalizedTemplate.substring(0, idx) +
+                "{CARD_NAME}" +
+                normalizedTemplate.substring(idx + cardName.length)
         }
 
         val enrichedTemplate = injectStorePlaceholderIfNeeded(normalizedTemplate)
@@ -348,6 +350,8 @@ class SmsOriginSampleCollector @Inject constructor(
     private fun injectStorePlaceholderIfNeeded(template: String): String {
         if (template.contains("{STORE}")) return template
 
+        // 패턴 1: placeholder 뒤 같은 줄에 literal + 키워드
+        // 예: {CARD_NUM} 가맹점 출금 → {CARD_NUM} {STORE} 출금
         val withFlowKeyword = Regex(
             """(\{CARD_NUM\}|\{CARD_NO\}|\{TIME\}|\{DATE\})\s+([^\{\}\n]{2,40}?)\s+(출금|입금|승인|취소|결제)"""
         )
@@ -356,6 +360,27 @@ class SmsOriginSampleCollector @Inject constructor(
             return template.replaceRange(match.range, replacement)
         }
 
+        // 패턴 2: {CARD_NUM} 다음 줄에 literal store + 그 다음 줄에 키워드
+        // 예: {CARD_NUM}\nKB카드출금\n출금 → {CARD_NUM}\n{STORE}\n출금
+        val afterCardNumLine = Regex(
+            """(\{CARD_NUM\}|\{CARD_NO\})\s*\n([^\{\}\n]{2,40})\n(출금|입금|승인|취소|결제)"""
+        )
+        afterCardNumLine.find(template)?.let { match ->
+            val replacement = "${match.groupValues[1]}\n{STORE}\n${match.groupValues[3]}"
+            return template.replaceRange(match.range, replacement)
+        }
+
+        // 패턴 3: {DATE} {TIME} 다음 줄에 literal store + 그 다음 줄에 잔액/누적
+        // 예: {DATE} {TIME}\n가맹점\n잔액 → {DATE} {TIME}\n{STORE}\n잔액
+        val afterDateLine = Regex(
+            """(\{DATE\}(?:\s+\{TIME\})?)\s*\n([^\{\}\n]{2,40})\n(.*(?:잔액|누적|합계))"""
+        )
+        afterDateLine.find(template)?.let { match ->
+            val replacement = "${match.groupValues[1]}\n{STORE}\n${match.groupValues[3]}"
+            return template.replaceRange(match.range, replacement)
+        }
+
+        // 패턴 4: 끝에 trailing store
         val trailingStore = Regex("""(\{DATE\}(?:\s+\{TIME\})?)\s+([^\{\}\n]{2,40})$""")
         trailingStore.find(template)?.let { match ->
             val replacement = "${match.groupValues[1]} {STORE}"
@@ -389,7 +414,8 @@ class SmsOriginSampleCollector @Inject constructor(
             "{STORE}" -> namedOrRaw("store", """.+?""", usedNamedGroups)
             "{DATE}" -> namedOrRaw("date", """\d{1,2}[/.-]\d{1,2}""", usedNamedGroups)
             "{TIME}" -> """\d{1,2}:\d{2}"""
-            "{CARD_NUM}", "{CARD_NO}" -> namedOrRaw("card", """\d+\*+\d+""", usedNamedGroups)
+            "{CARD_NAME}" -> namedOrRaw("card", """\S+""", usedNamedGroups)
+            "{CARD_NUM}", "{CARD_NO}" -> """\d+\*+\d+"""
             "{USER_NAME}" -> """\S+"""
             "{BALANCE}" -> """[\d,]+"""
             "{N}" -> """\d+"""

@@ -14,8 +14,11 @@ import com.sanha.moneytalk.core.database.dao.SmsBlockedSenderDao
 import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.dao.SmsRegexRuleDao
+import com.sanha.moneytalk.core.database.dao.CustomCategoryDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
+import com.sanha.moneytalk.core.database.dao.StoreRuleDao
 import com.sanha.moneytalk.core.database.entity.BudgetEntity
+import com.sanha.moneytalk.core.database.entity.CustomCategoryEntity
 import com.sanha.moneytalk.core.database.entity.CategoryMappingEntity
 import com.sanha.moneytalk.core.database.entity.ChatEntity
 import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
@@ -27,6 +30,7 @@ import com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.database.entity.SmsRegexRuleEntity
 import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
+import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
 
 /**
  * MoneyTalk 앱의 Room 데이터베이스 정의
@@ -66,9 +70,11 @@ import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
         OwnedCardEntity::class,
         SmsExclusionKeywordEntity::class,
         SmsBlockedSenderEntity::class,
-        SmsRegexRuleEntity::class
+        SmsRegexRuleEntity::class,
+        CustomCategoryEntity::class,
+        StoreRuleEntity::class
     ],
-    version = 7,
+    version = 1,
     exportSchema = false
 )
 @TypeConverters(FloatListConverter::class)
@@ -106,6 +112,12 @@ abstract class AppDatabase : RoomDatabase() {
 
     /** sender 기반 regex 룰 DAO */
     abstract fun smsRegexRuleDao(): SmsRegexRuleDao
+
+    /** 커스텀 카테고리 DAO */
+    abstract fun customCategoryDao(): CustomCategoryDao
+
+    /** 거래처 규칙 DAO */
+    abstract fun storeRuleDao(): StoreRuleDao
 
     companion object {
         /** 데이터베이스 파일명 */

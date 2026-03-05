@@ -2096,9 +2096,6 @@ class SmsGroupClassifier @Inject constructor(
                     embedded = embedded,
                     cardName = analysis.cardName,
                     parseSource = source,
-                    amountRegex = amountRegex,
-                    storeRegex = storeRegex,
-                    cardRegex = cardRegex,
                     groupMemberCount = groupMemberCount
                 )
             }
@@ -2139,9 +2136,6 @@ class SmsGroupClassifier @Inject constructor(
         embedded: EmbeddedSms,
         cardName: String,
         parseSource: String,
-        amountRegex: String,
-        storeRegex: String,
-        cardRegex: String,
         groupMemberCount: Int
     ) {
         val normalizedSender = normalizeAddress(embedded.input.address)
@@ -2150,7 +2144,6 @@ class SmsGroupClassifier @Inject constructor(
         runCatching {
             originSampleCollector.collectSuccess(
                 SmsOriginSampleCollector.SuccessSample(
-                    senderAddress = embedded.input.address,
                     normalizedSenderAddress = normalizedSender,
                     type = inferSampleType(embedded.input.body),
                     template = embedded.template,
@@ -2158,10 +2151,7 @@ class SmsGroupClassifier @Inject constructor(
                     maskedBody = maskSmsBody(embedded.input.body),
                     parseSource = parseSource,
                     cardName = cardName,
-                    groupMemberCount = groupMemberCount,
-                    amountRegex = amountRegex,
-                    storeRegex = storeRegex,
-                    cardRegex = cardRegex
+                    groupMemberCount = groupMemberCount
                 )
             )
         }.onFailure { e ->

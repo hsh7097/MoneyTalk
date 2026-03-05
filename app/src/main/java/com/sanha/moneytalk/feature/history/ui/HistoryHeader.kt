@@ -8,11 +8,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -23,7 +26,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -42,7 +45,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
@@ -260,19 +262,37 @@ fun FilterTabRow(
     currentMode: ViewMode,
     onModeChange: (ViewMode) -> Unit,
     sortOrder: SortOrder = SortOrder.DATE_DESC,
-    selectedCategory: String? = null,
     showExpenses: Boolean = true,
     showIncomes: Boolean = true,
-    onApplyFilter: (SortOrder, Boolean, Boolean, String?) -> Unit = { _, _, _, _ -> },
+    showTransfers: Boolean = true,
+    selectedExpenseCategories: Set<String> = emptySet(),
+    selectedIncomeCategories: Set<String> = emptySet(),
+    selectedTransferCategories: Set<String> = emptySet(),
+    fixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL,
+    onApplyFilter: (
+        SortOrder,
+        Boolean,
+        Boolean,
+        Boolean,
+        Set<String>,
+        Set<String>,
+        Set<String>,
+        FixedExpenseFilter
+    ) -> Unit = { _, _, _, _, _, _, _, _ -> },
+    onResetFilter: () -> Unit = {},
     onSearchClick: () -> Unit = {},
     onAddClick: () -> Unit = {}
 ) {
     var showBottomSheet by remember { mutableStateOf(false) }
 
-    val hasActiveFilter = selectedCategory != null
+    val hasActiveFilter = selectedExpenseCategories.isNotEmpty()
+            || selectedIncomeCategories.isNotEmpty()
+            || selectedTransferCategories.isNotEmpty()
             || sortOrder != SortOrder.DATE_DESC
             || !showExpenses
             || !showIncomes
+            || !showTransfers
+            || fixedExpenseFilter != FixedExpenseFilter.ALL
 
     val primaryColor = MaterialTheme.colorScheme.primary
     val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
@@ -304,59 +324,108 @@ fun FilterTabRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+            .height(48.dp)
+            .padding(start = 16.dp, end = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 왼쪽: 탭 (목록 / 달력) + 필터 버튼 (마진 8dp)
+        // 왼쪽: 필터 비활성 → 탭 + 필터 버튼 / 필터 활성 → 필터 칩
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
-            SegmentedTabRowCompose(
-                tabs = tabs,
-                onTabClick = { index ->
-                    when (index) {
-                        0 -> onModeChange(ViewMode.LIST)
-                        1 -> onModeChange(ViewMode.CALENDAR)
+            if (hasActiveFilter) {
+                // 필터 활성: 초록 outline 칩 (필터 설명 + X)
+                val hasMultipleFilters = listOf(
+                    selectedExpenseCategories.isNotEmpty() ||
+                            selectedIncomeCategories.isNotEmpty() ||
+                            selectedTransferCategories.isNotEmpty(),
+                    sortOrder != SortOrder.DATE_DESC,
+                    !showExpenses || !showIncomes || !showTransfers,
+                    fixedExpenseFilter != FixedExpenseFilter.ALL
+                ).count { it } > 1
+
+                val filterDescription = when {
+                    hasMultipleFilters ->
+                        stringResource(R.string.history_filter_active_combined)
+                    selectedExpenseCategories.isNotEmpty() ||
+                            selectedIncomeCategories.isNotEmpty() ||
+                            selectedTransferCategories.isNotEmpty() ->
+                        stringResource(R.string.history_filter_active_category)
+                    !showExpenses || !showIncomes || !showTransfers ->
+                        stringResource(R.string.history_filter_active_type)
+                    fixedExpenseFilter == FixedExpenseFilter.FIXED_ONLY ->
+                        stringResource(R.string.history_filter_active_fixed_only)
+                    fixedExpenseFilter == FixedExpenseFilter.EXCLUDE_FIXED ->
+                        stringResource(R.string.history_filter_active_fixed_exclude)
+                    else ->
+                        stringResource(R.string.history_filter_active_sort)
+                }
+                val chipColor = MaterialTheme.moneyTalkColors.income
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .border(1.dp, chipColor, RoundedCornerShape(16.dp))
+                        .clickable { onResetFilter() }
+                        .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = filterDescription,
+                            fontSize = 13.toDpTextUnit,
+                            fontWeight = FontWeight.Medium,
+                            color = chipColor
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.common_clear),
+                            modifier = Modifier.size(16.dp),
+                            tint = chipColor
+                        )
                     }
                 }
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            // 필터 버튼 (아이콘 + 텍스트)
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(
-                        if (hasActiveFilter) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    )
-                    .clickable { showBottomSheet = true }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+            } else {
+                // 필터 비활성: 탭 + 필터 버튼
+                SegmentedTabRowCompose(
+                    tabs = tabs,
+                    onTabClick = { index ->
+                        when (index) {
+                            0 -> onModeChange(ViewMode.LIST)
+                            1 -> onModeChange(ViewMode.CALENDAR)
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                // 필터 버튼 (텍스트 + ∨) — 탭 박스와 동일 높이
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { showBottomSheet = true }
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.FilterList,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = if (hasActiveFilter)
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.width(2.dp))
-                    Text(
-                        text = stringResource(R.string.common_filter),
-                        fontSize = 14.toDpTextUnit,
-                        fontWeight = if (hasActiveFilter) FontWeight.Bold else FontWeight.Normal,
-                        color = if (hasActiveFilter)
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.common_filter),
+                            fontSize = 14.toDpTextUnit,
+                            fontWeight = FontWeight.Normal,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -394,45 +463,25 @@ fun FilterTabRow(
             currentSortOrder = sortOrder,
             currentShowExpenses = showExpenses,
             currentShowIncomes = showIncomes,
-            currentCategory = selectedCategory,
+            currentShowTransfers = showTransfers,
+            currentExpenseCategories = selectedExpenseCategories,
+            currentIncomeCategories = selectedIncomeCategories,
+            currentTransferCategories = selectedTransferCategories,
+            currentFixedExpenseFilter = fixedExpenseFilter,
             onDismiss = { showBottomSheet = false },
-            onApply = { newSort, newShowExp, newShowInc, newCategory ->
-                onApplyFilter(newSort, newShowExp, newShowInc, newCategory)
+            onApply = { newSort, newShowExp, newShowInc, newShowTransfer, expCats, incCats, transferCats, newFixedFilter ->
+                onApplyFilter(
+                    newSort,
+                    newShowExp,
+                    newShowInc,
+                    newShowTransfer,
+                    expCats,
+                    incCats,
+                    transferCats,
+                    newFixedFilter
+                )
                 showBottomSheet = false
             }
-        )
-    }
-}
-
-/**
- * 필터 칩 버튼 (일관된 스타일)
- */
-@Composable
-fun FilterChipButton(
-    label: String,
-    isActive: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(
-                if (isActive) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.surfaceVariant
-            )
-            .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            fontSize = 14.toDpTextUnit,
-            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
         )
     }
 }

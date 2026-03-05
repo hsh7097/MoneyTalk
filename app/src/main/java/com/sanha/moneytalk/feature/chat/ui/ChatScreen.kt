@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledIconButton
@@ -308,6 +309,13 @@ fun ChatRoomView(
                     onValueChange = { messageText = it },
                     modifier = Modifier.weight(1f),
                     placeholder = { Text(stringResource(R.string.chat_input_placeholder)) },
+                    trailingIcon = {
+                        if (messageText.isNotEmpty()) {
+                            IconButton(onClick = { messageText = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                            }
+                        }
+                    },
                     shape = RoundedCornerShape(24.dp),
                     maxLines = 3,
                     enabled = hasApiKey && !uiState.isLoading

@@ -2,7 +2,6 @@ package com.sanha.moneytalk.feature.settings.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -74,7 +73,9 @@ import com.sanha.moneytalk.core.ui.component.settings.SettingsItemCompose
 import com.sanha.moneytalk.core.ui.component.settings.SettingsItemInfo
 import com.sanha.moneytalk.core.ui.component.settings.SettingsSectionCompose
 import com.sanha.moneytalk.core.util.DataBackupManager
-import com.sanha.moneytalk.feature.smssettings.ui.SmsSettingsActivity
+import com.sanha.moneytalk.feature.categorysettings.CategorySettingsActivity
+import com.sanha.moneytalk.feature.smssettings.SmsSettingsActivity
+import com.sanha.moneytalk.feature.storerulesettings.StoreRuleSettingsActivity
 import kotlinx.coroutines.launch
 
 /** 설정 탭 메인 화면. API 키, 월 시작일, 카드 관리, 데이터 관리 등 앱 설정 항목을 표시 */
@@ -252,10 +253,10 @@ fun SettingsScreen(
                 }
             }
 
-            // AI 설정
+            // 카테고리 관리
             item {
-                SettingsSectionCompose(title = stringResource(R.string.settings_section_ai)) {
-                    // 카테고리 정리 버튼 (커스텀 레이아웃 - 공통 컴포넌트 미적용)
+                SettingsSectionCompose(title = stringResource(R.string.settings_section_category)) {
+                    // 카테고리 정리 (AI 분류)
                     val isClassifyEnabled = uiState.hasApiKey &&
                             uiState.unclassifiedCount > 0 &&
                             !uiState.isBackgroundClassifying &&
@@ -321,6 +322,30 @@ fun SettingsScreen(
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                         )
                     }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    // 카테고리 설정
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = Icons.Default.Settings
+                            override val title = stringResource(R.string.category_settings_title)
+                            override val subtitle = stringResource(R.string.category_settings_subtitle)
+                        },
+                        onClick = {
+                            CategorySettingsActivity.open(context)
+                        }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    // 거래처 규칙
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = Icons.Default.Settings
+                            override val title = stringResource(R.string.store_rule_settings_title)
+                            override val subtitle = stringResource(R.string.store_rule_settings_subtitle)
+                        },
+                        onClick = {
+                            StoreRuleSettingsActivity.open(context)
+                        }
+                    )
                 }
             }
 
@@ -334,7 +359,7 @@ fun SettingsScreen(
                             override val subtitle = stringResource(R.string.sms_settings_subtitle)
                         },
                         onClick = {
-                            context.startActivity(Intent(context, SmsSettingsActivity::class.java))
+                            SmsSettingsActivity.open(context)
                         }
                     )
                     if (BuildConfig.DEBUG) {
