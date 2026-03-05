@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
+import com.sanha.moneytalk.core.ui.component.getCustomCategoryBackgroundColor
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -87,11 +88,16 @@ fun TransactionCardCompose(
                         fontSize = 22.sp
                     )
                 } else if (iconEmoji != null) {
+                    val bgColor = if (info.isIncome) {
+                        MaterialTheme.moneyTalkColors.income.copy(alpha = 0.15f)
+                    } else {
+                        getCustomCategoryBackgroundColor(info.categoryTag.orEmpty())
+                    }
                     Box(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.moneyTalkColors.income.copy(alpha = 0.15f)),
+                            .background(bgColor),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(text = iconEmoji, fontSize = 20.sp)

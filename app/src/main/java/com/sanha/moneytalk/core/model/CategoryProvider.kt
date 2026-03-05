@@ -2,6 +2,9 @@ package com.sanha.moneytalk.core.model
 
 import com.sanha.moneytalk.core.database.CustomCategoryRepository
 import com.sanha.moneytalk.core.database.entity.CustomCategoryEntity
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,6 +21,10 @@ import javax.inject.Singleton
 class CategoryProvider @Inject constructor(
     private val customCategoryRepository: CustomCategoryRepository
 ) {
+    init {
+        instance = this
+    }
+
     /** 인메모리 캐시 */
     @Volatile
     private var cachedCustomCategories: List<CustomCategoryInfo>? = null
@@ -139,6 +146,41 @@ class CategoryProvider @Inject constructor(
      */
     fun invalidateCache() {
         cachedCustomCategories = null
+    }
+
+    /** Composable에서 Hilt 주입 없이 CategoryProvider 접근용 EntryPoint */
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface Provider {
+        fun categoryProvider(): CategoryProvider
+    }
+
+    companion object {
+        @Volatile
+        private var instance: CategoryProvider? = null
+
+        /**
+         * displayName으로 이모지 조회 (enum + 캐시).
+         * 동기 접근 전용. 커스텀 카테고리 이모지도 정확히 반환.
+         */
+        fun resolveEmoji(displayName: String): String {
+            val enumMatch = Category.entries.find { it.displayName == displayName }
+            if (enumMatch != null) return enumMatch.emoji
+            val customMatch = instance?.getCachedCustomCategories()
+                ?.find { it.displayName == displayName }
+            return customMatch?.emoji ?: Category.ETC.emoji
+        }
+
+        /**
+         * displayName으로 CategoryInfo 조회 (enum + 캐시, 동기).
+         * 못 찾으면 null 반환.
+         */
+        fun resolveCategoryInfo(displayName: String): CategoryInfo? {
+            val enumMatch = Category.entries.find { it.displayName == displayName }
+            if (enumMatch != null) return enumMatch
+            return instance?.getCachedCustomCategories()
+                ?.find { it.displayName == displayName }
+        }
     }
 
     private fun CustomCategoryEntity.toCategoryInfo(): CustomCategoryInfo {

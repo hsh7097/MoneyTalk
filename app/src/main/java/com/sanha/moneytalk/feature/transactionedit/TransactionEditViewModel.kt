@@ -9,8 +9,6 @@ import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
-import com.sanha.moneytalk.core.model.CategoryInfo
-import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
@@ -82,7 +80,6 @@ class TransactionEditViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val categoryClassifierService: CategoryClassifierService,
-    private val categoryProvider: CategoryProvider,
     private val dataRefreshEvent: DataRefreshEvent,
     private val snackbarBus: AppSnackbarBus,
     @ApplicationContext private val context: Context
@@ -102,15 +99,6 @@ class TransactionEditViewModel @Inject constructor(
 
     /** 최초 로드 시 타입 (크로스 테이블 이동 판단용) */
     private var originalTransactionType: TransactionType = TransactionType.EXPENSE
-
-    /** 타입별 카테고리 목록 (커스텀 카테고리 포함) */
-    fun getCategoriesForType(type: CategoryType): List<CategoryInfo> {
-        return when (type) {
-            CategoryType.EXPENSE -> categoryProvider.getCachedExpenseEntries()
-            CategoryType.INCOME -> categoryProvider.getCachedIncomeEntries()
-            CategoryType.TRANSFER -> categoryProvider.getCachedTransferEntries()
-        }
-    }
 
     init {
         when {

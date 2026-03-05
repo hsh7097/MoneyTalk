@@ -72,7 +72,7 @@ import com.sanha.moneytalk.R
 import com.sanha.moneytalk.feature.transactionedit.TransactionEditUiState
 import com.sanha.moneytalk.feature.transactionedit.TransactionEditViewModel
 import com.sanha.moneytalk.feature.transactionedit.TransactionType
-import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.ui.component.CategorySelectDialog
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupCompose
@@ -227,10 +227,10 @@ fun TransactionEditScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // 카테고리 (모든 거래 유형에서 동일하게 표시)
-            val category = Category.fromDisplayName(uiState.category)
+            val categoryEmoji = CategoryProvider.resolveEmoji(uiState.category)
             CompactReadOnlyRow(
                 label = stringResource(R.string.detail_category),
-                value = "${category.emoji} ${category.displayName}",
+                value = "$categoryEmoji ${uiState.category}",
                 onClick = { showCategoryPicker = true }
             )
 
@@ -387,7 +387,6 @@ fun TransactionEditScreen(
             categoryType = categoryType,
             showAllOption = false,
             transferDirection = uiState.transferDirection,
-            customCategories = viewModel.getCategoriesForType(categoryType),
             onDismiss = { showCategoryPicker = false },
             onCategorySelected = { selected ->
                 if (selected != null) {

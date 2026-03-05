@@ -43,10 +43,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,8 +66,10 @@ import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryInfo
+import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.model.TransferDirection
+import dagger.hilt.android.EntryPointAccessors
 import com.sanha.moneytalk.core.util.DateUtils
 import java.text.NumberFormat
 import java.util.Locale
@@ -88,7 +93,11 @@ fun ExpenseDetailDialog(
     onMemoChange: ((String?) -> Unit)? = null
 ) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
-    val category = Category.fromDisplayName(expense.category)
+    val categoryEnum = Category.fromDisplayName(expense.category)
+    val categoryEmoji = CategoryProvider.resolveEmoji(expense.category)
+    val categoryDisplayName = expense.category
+    val isCustomCategory = categoryEnum == Category.ETC
+            && expense.category != Category.ETC.displayName
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCategoryPicker by remember { mutableStateOf(false) }
     var isEditingMemo by remember { mutableStateOf(false) }
@@ -98,7 +107,10 @@ fun ExpenseDetailDialog(
         onDismissRequest = onDismiss,
         icon = {
             CategoryIcon(
-                category = category,
+                category = categoryEnum,
+                emojiOverride = categoryEmoji,
+                backgroundColorOverride = if (isCustomCategory)
+                    getCustomCategoryBackgroundColor(expense.category) else null,
                 containerSize = 48.dp,
                 fontSize = 28.sp
             )
@@ -146,7 +158,7 @@ fun ExpenseDetailDialog(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = "${category.emoji} ${category.displayName}",
+                                text = "$categoryEmoji $categoryDisplayName",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.primary
@@ -162,7 +174,7 @@ fun ExpenseDetailDialog(
                 } else {
                     DetailRow(
                         label = stringResource(R.string.detail_category),
-                        value = "${category.emoji} ${category.displayName}"
+                        value = "$categoryEmoji $categoryDisplayName"
                     )
                 }
 
@@ -387,10 +399,37 @@ fun CategorySelectDialog(
     onTransferDirectionChanged: ((TransferDirection) -> Unit)? = null
 ) {
     val type = categoryType ?: CategoryType.EXPENSE
-    val categories: List<CategoryInfo> = customCategories ?: when (type) {
-        CategoryType.EXPENSE -> Category.expenseEntries
-        CategoryType.INCOME -> Category.incomeEntries
-        CategoryType.TRANSFER -> Category.transferEntries
+    // customCategories가 명시적으로 제공되면 사용, 아니면 DB에서 로드하여 커스텀 카테고리 포함
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val provider = remember {
+        if (customCategories != null) null
+        else EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            CategoryProvider.Provider::class.java
+        ).categoryProvider()
+    }
+    // 캐시 기반 초기값 + 비동기 로드로 갱신
+    var categories by remember {
+        mutableStateOf(
+            customCategories ?: when (type) {
+                CategoryType.EXPENSE -> provider?.getCachedExpenseEntries() ?: Category.expenseEntries
+                CategoryType.INCOME -> provider?.getCachedIncomeEntries() ?: Category.incomeEntries
+                CategoryType.TRANSFER -> provider?.getCachedTransferEntries() ?: Category.transferEntries
+            }
+        )
+    }
+    // 캐시가 비어있을 수 있으므로 DB에서 로드하여 확실하게 채움
+    if (customCategories == null && provider != null) {
+        LaunchedEffect(type) {
+            val loaded = withContext(Dispatchers.IO) {
+                when (type) {
+                    CategoryType.EXPENSE -> provider.getExpenseEntries()
+                    CategoryType.INCOME -> provider.getIncomeEntries()
+                    CategoryType.TRANSFER -> provider.getTransferEntries()
+                }
+            }
+            categories = loaded
+        }
     }
     val sheetTitleResId = if (type == CategoryType.TRANSFER) {
         R.string.transfer_category_picker_title

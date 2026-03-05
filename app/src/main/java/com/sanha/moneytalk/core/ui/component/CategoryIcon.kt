@@ -24,6 +24,8 @@ import com.sanha.moneytalk.core.model.Category
  *
  * @param category 표시할 카테고리
  * @param modifier 외부 Modifier
+ * @param emojiOverride 이모지 override (커스텀 카테고리용, null이면 category.emoji 사용)
+ * @param backgroundColorOverride 배경색 override (커스텀 카테고리용, null이면 category 기반 배경색)
  * @param containerSize 컨테이너 크기 (기본 40dp)
  * @param fontSize 이모지 텍스트 크기 (기본 22sp)
  */
@@ -31,6 +33,8 @@ import com.sanha.moneytalk.core.model.Category
 fun CategoryIcon(
     category: Category,
     modifier: Modifier = Modifier,
+    emojiOverride: String? = null,
+    backgroundColorOverride: Color? = null,
     containerSize: Dp = 40.dp,
     fontSize: TextUnit = 22.sp
 ) {
@@ -38,11 +42,11 @@ fun CategoryIcon(
         modifier = modifier
             .size(containerSize)
             .clip(CircleShape)
-            .background(getCategoryBackgroundColor(category)),
+            .background(backgroundColorOverride ?: getCategoryBackgroundColor(category)),
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = category.emoji,
+            text = emojiOverride ?: category.emoji,
             fontSize = fontSize
         )
     }
@@ -107,6 +111,67 @@ fun getCategoryChartColor(category: Category): Color {
         Category.TRANSFER_LOAN -> Color(0xFFF97316)              // Orange 500
         Category.TRANSFER_INSURANCE -> Color(0xFF0EA5E9)         // Sky 500
     }
+}
+
+/**
+ * 커스텀 카테고리 배경색 팔레트.
+ * displayName의 해시를 기반으로 결정적(deterministic)으로 색상을 선택한다.
+ * 기본 enum 배경색과 겹치지 않는 파스텔 톤 16색.
+ */
+private val CUSTOM_CATEGORY_PALETTE = listOf(
+    Color(0xFFE8F5E9),  // Mint Green
+    Color(0xFFE3F2FD),  // Light Blue
+    Color(0xFFFFF3E0),  // Light Orange
+    Color(0xFFF3E5F5),  // Light Purple
+    Color(0xFFE0F7FA),  // Light Cyan
+    Color(0xFFFBE9E7),  // Light Deep Orange
+    Color(0xFFE8EAF6),  // Light Indigo
+    Color(0xFFF1F8E9),  // Light Lime
+    Color(0xFFFFF8E1),  // Light Amber
+    Color(0xFFE1F5FE),  // Lighter Blue
+    Color(0xFFFCE4EC),  // Light Pink
+    Color(0xFFE0F2F1),  // Light Teal
+    Color(0xFFF9FBE7),  // Light Lime Yellow
+    Color(0xFFEDE7F6),  // Light Deep Purple
+    Color(0xFFFFFDE7),  // Light Yellow
+    Color(0xFFEFEBE9),  // Light Brown
+)
+
+/**
+ * 커스텀 카테고리용 배경색 반환.
+ * displayName 해시 기반으로 팔레트에서 결정적으로 선택.
+ */
+fun getCustomCategoryBackgroundColor(displayName: String): Color {
+    val index = (displayName.hashCode() and 0x7FFFFFFF) % CUSTOM_CATEGORY_PALETTE.size
+    return CUSTOM_CATEGORY_PALETTE[index]
+}
+
+/**
+ * 커스텀 카테고리용 차트 색상 반환.
+ * 배경색과 동일한 해시 기반이지만 채도 높은 색상.
+ */
+private val CUSTOM_CATEGORY_CHART_PALETTE = listOf(
+    Color(0xFF4CAF50),  // Green
+    Color(0xFF2196F3),  // Blue
+    Color(0xFFFF9800),  // Orange
+    Color(0xFF9C27B0),  // Purple
+    Color(0xFF00BCD4),  // Cyan
+    Color(0xFFFF5722),  // Deep Orange
+    Color(0xFF3F51B5),  // Indigo
+    Color(0xFF8BC34A),  // Light Green
+    Color(0xFFFFC107),  // Amber
+    Color(0xFF03A9F4),  // Light Blue
+    Color(0xFFE91E63),  // Pink
+    Color(0xFF009688),  // Teal
+    Color(0xFFCDDC39),  // Lime
+    Color(0xFF673AB7),  // Deep Purple
+    Color(0xFFFFEB3B),  // Yellow
+    Color(0xFF795548),  // Brown
+)
+
+fun getCustomCategoryChartColor(displayName: String): Color {
+    val index = (displayName.hashCode() and 0x7FFFFFFF) % CUSTOM_CATEGORY_CHART_PALETTE.size
+    return CUSTOM_CATEGORY_CHART_PALETTE[index]
 }
 
 /**
