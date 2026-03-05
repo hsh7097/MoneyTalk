@@ -1,7 +1,7 @@
 # AI_TASKS.md - 작업 목록 및 완료 기준
 
 > 작업 진행 상황 추적 문서
-> **최종 갱신**: 2026-03-03
+> **최종 갱신**: 2026-03-05
 
 ---
 
@@ -85,7 +85,6 @@
 ## 홈 화면 Phase1 리디자인 + 디자인 시스템 ✅ 완료 (2026-02-24)
 
 > 디자인 시스템 정립 + 홈 Hero 카드 리디자인 + Vico 차트 도입 + 다크 테마 복원.
-> DESIGN_PLAN.md 계획서 기반 Phase1 실행.
 
 - [x] 디자인 시스템 정립 (Color 4색 팔레트 + Typography 9단계 + Dimens 여백 체계)
 - [x] MonthlyOverviewSection Hero 카드 리디자인 (큰 숫자 강조 + 전월 비교 뱃지)
@@ -100,7 +99,6 @@
 ## SMS Regex Fast Path 전환 ✅ 완료 (2026-03-03)
 
 > sender 기반 regex 룰을 1차 파싱 경로(Step 1.5)로 삽입하여 속도/비용/누락률 동시 개선.
-> 상세 계획: `docs/TEMP_SMS_REGEX_RULE_MIGRATION_PLAN.md`
 
 - [x] Phase 0: 기준선 정리 (상수/문서 정합성)
 - [x] Phase 1: `sms_regex_rules` 로컬 스키마 (DB v6→v7)
@@ -113,6 +111,42 @@
 - [x] Failure Loop: 성공/실패 표본 분리 수집
 - [x] Fallback Trace/Hotfix: 추적 로그 강화 + KB 출금 멀티라인 룰
 - [x] Rule Guide: `SMS_RULE_JSON_UPDATE_GUIDE.md`
+
+---
+
+## 카테고리 시스템 리디자인 + StoreRule ✅ 완료 (2026-03-04~05)
+
+> 커스텀 카테고리 지원 + 거래처 규칙(StoreRule) DB 시스템 도입.
+> 브랜치: `feature/category-system-redesign`, 27 커밋
+
+### 커스텀 카테고리 ✅
+- [x] CategoryProvider 도입 (기본 Category enum + 사용자 정의 카테고리 통합)
+- [x] 커스텀 카테고리 이모지/배경색 표시
+- [x] CategorySettingsActivity (카테고리 추가/수정/삭제/재정렬)
+- [x] 카테고리 필터 UX 개선 + 설정 화면 섹션 통합
+
+### StoreRule DB 시스템 ✅
+- [x] StoreRuleEntity + DAO + Repository (DB v10→v11)
+- [x] SMS 파이프라인 Tier 0 적용 (MainViewModel, CategoryClassifierService)
+- [x] 거래 편집 시 일괄 적용 → StoreRule 자동 생성
+- [x] StoreRuleSettingsActivity (규칙 목록/추가/편집/삭제)
+- [x] 규칙 저장 시 기존 레코드 소급 적용 + 해제 시 소급 원복
+
+### 거래 편집 화면 ✅
+- [x] TransactionEditActivity (뱅크셀러드 스타일)
+- [x] StoreRule 존재 시 체크박스 사전 체크
+
+### 고정지출 개선 ✅
+- [x] FIXED_ONLY 필터에서 수입/이체 제외
+- [x] TransactionCard에 "고정" 태그 표시
+
+### 버그 수정 ✅
+- [x] 홈 카테고리별 지출에서 커스텀 카테고리가 "기타"로 합쳐지는 문제
+- [x] 커스텀 카테고리 클릭 시 기타 상세가 아닌 해당 카테고리 상세 표시
+- [x] 리뷰 Warning 2건 반영 (DB 값 우선 + 소급 원복)
+
+### 빌드 ✅
+- [x] `./gradlew assembleDebug` 성공
 
 ---
 

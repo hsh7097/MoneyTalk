@@ -1,7 +1,7 @@
 # AI_CONTEXT.md - MoneyTalk 프로젝트 컨텍스트
 
 > AI 에이전트가 MoneyTalk 프로젝트를 이해하고 작업하기 위한 핵심 컨텍스트 문서
-> **최종 갱신**: 2026-02-27
+> **최종 갱신**: 2026-03-05
 
 ---
 
@@ -15,7 +15,7 @@
 - **AI**: Google Gemini (2.5-pro/2.5-flash/2.5-flash-lite)
 - **Min SDK**: 26 (Android 8.0)
 - **Package**: `com.sanha.moneytalk`
-- **DB 버전**: 7 (moneytalk_v4.db)
+- **DB 버전**: 11 (moneytalk_v4.db)
 
 ---
 
@@ -56,6 +56,10 @@ app/src/main/java/com/sanha/moneytalk/
 │   │   ├── data/          # GeminiRepository, ChatRepository, ChatPrompts
 │   │   └── ui/            # ChatScreen, ChatViewModel
 │   ├── settings/          # 설정 (백업, 카드관리, SMS 제외 등)
+│   ├── categorysettings/  # 카테고리 설정 (커스텀 카테고리 추가/수정/삭제)
+│   ├── storerulesettings/ # 거래처 규칙 설정 (StoreRule 추가/편집/삭제)
+│   ├── transactionedit/   # 거래 편집/추가 (뱅크셀러드 스타일)
+│   ├── categorydetail/    # 카테고리 상세 (월간 추이 + 거래 리스트)
 │   └── splash/            # 스플래시
 ├── navigation/            # NavGraph, Screen, BottomNavItem
 ├── receiver/              # SmsReceiver (BroadcastReceiver)
@@ -73,8 +77,9 @@ app/src/main/java/com/sanha/moneytalk/
 | AI 채팅 (3-step) | 쿼리분석 → DB조회/액션 → 답변생성 | [ChatViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt), [GeminiRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) |
 | 카드 관리 | 소유 카드 화이트리스트 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
 | SMS 필터링 | 제외 키워드 블랙리스트 | [SmsExclusionRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/SmsExclusionRepository.kt) |
+| 거래처 규칙 (StoreRule) | 거래처 키워드→카테고리/고정지출 자동 적용 (Tier 0) | [StoreRuleRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreRuleRepository.kt), [StoreRuleSettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/StoreRuleSettingsViewModel.kt) |
 
-### 2-3. DB 엔티티 (11개)
+### 2-3. DB 엔티티 (12개)
 
 | Entity | 테이블 | 용도 |
 |--------|--------|------|
@@ -89,21 +94,13 @@ app/src/main/java/com/sanha/moneytalk/
 | OwnedCardEntity | owned_cards | 소유 카드 화이트리스트 |
 | SmsExclusionKeywordEntity | sms_exclusion_keywords | SMS 제외 키워드 |
 | SmsRegexRuleEntity | sms_regex_rules | SMS regex 룰 (sender+type+ruleKey 복합키) |
+| StoreRuleEntity | store_rules | 거래처 규칙 (keyword→category/isFixed 자동 적용) |
 
-### 2-4. DB 마이그레이션 히스토리
+### 2-4. DB 버전 정보
 
-| 버전 | 변경 내용 |
-|------|----------|
-| v1→v2 | incomes 테이블에 memo 컬럼 추가 |
-| v2→v3 | owned_cards 테이블 생성 (카드 화이트리스트) |
-| v3→v4 | sms_exclusion_keywords 테이블 생성 (SMS 제외 키워드) |
-| v4→v5 | expenses/incomes 성능 인덱스 추가 (smsId UNIQUE, dateTime, category, cardName, storeName+dateTime) |
-| v5→v6 | sms_patterns 테이블에 amountRegex, storeRegex, cardRegex, parseSource 컬럼 추가 |
-| v6→v7 | sms_regex_rules 테이블 생성 (sender 기반 regex 룰, 복합PK: senderAddress+type+ruleKey, 4개 인덱스) |
-
-> **sms_patterns 내부 마이그레이션** (DatabaseMigrations.kt):
-> - MIGRATION_1_2: amountRegex, storeRegex, cardRegex 컬럼 추가
-> - MIGRATION_2_3: isMainGroup 컬럼 추가 (메인 그룹 패턴 식별, AppDatabase v3)
+- **현재 버전**: v1 (미출시 상태에서 리셋, 2026-03-05)
+- **Migration 코드**: 없음 (Entity 어노테이션 기반 스키마 자동 생성)
+- 향후 출시 후 스키마 변경 시 v2부터 Migration 추가 필요
 
 ---
 
@@ -387,6 +384,7 @@ SMS 수신 → SmsReceiver → SmsProcessingService → SmsParser (Regex only)
 ### 5-2. 카테고리 자동 분류 흐름
 ```
 CategoryClassifierService.getCategory(storeName)
+   → Tier 0: StoreRule contains 매칭 (storeName에 keyword 포함 → category/isFixed 즉시 적용)
    → Tier 1: Room DB 정확 매칭 (storeName → category)
    → Tier 1.5: 임베딩 1회 생성 → 1.5a/b 모두에서 재사용
       → 1.5a: findCategoryByStoreName(storeName, queryVector)
@@ -426,10 +424,10 @@ ChatViewModel.sendMessage(message)
 ## 6. UI 공통 컴포넌트 (core/ui/component/, 11개 파일)
 
 ### 6-1. TransactionCard (거래 카드)
-- **Interface**: `TransactionCardInfo` — title, subtitle, amount, isIncome, category, iconEmoji
+- **Interface**: `TransactionCardInfo` — title, subtitle, amount, isIncome, category, iconEmoji, categoryTag, time, cardNameText, memoText, isFixed
 - **구현체**: `ExpenseTransactionCardInfo`, `IncomeTransactionCardInfo`
-- **Composable**: `TransactionCardCompose` — 지출/수입 통합 카드 렌더링
-- **사용처**: HomeScreen, HistoryScreen
+- **Composable**: `TransactionCardCompose` — 지출/수입 통합 카드 렌더링 (고정지출 태그 포함)
+- **사용처**: HomeScreen, HistoryScreen, CategoryDetailScreen
 
 ### 6-2. TransactionGroupHeader (그룹 헤더)
 - **Interface**: `TransactionGroupHeaderInfo` — title, expenseTotal, incomeTotal
