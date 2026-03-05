@@ -17,6 +17,8 @@ import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
+import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
+import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -82,6 +84,7 @@ class TransactionEditViewModel @Inject constructor(
     private val categoryClassifierService: CategoryClassifierService,
     private val dataRefreshEvent: DataRefreshEvent,
     private val snackbarBus: AppSnackbarBus,
+    private val storeRuleRepository: StoreRuleRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -362,6 +365,24 @@ class TransactionEditViewModel @Inject constructor(
                         )
                     } catch (e: Exception) {
                         MoneyTalkLogger.w("고정지출 일괄 변경 실패: ${e.message}")
+                    }
+                }
+
+                // 일괄 적용 시 StoreRule 자동 생성 (향후 새 거래에도 자동 적용)
+                if ((state.applyCategoryToAll || state.applyFixedToAll) && trimmedStore.isNotBlank()) {
+                    try {
+                        val existingRule = storeRuleRepository.findMatchingRule(trimmedStore)
+                        val rule = StoreRuleEntity(
+                            id = if (existingRule?.keyword.equals(trimmedStore, ignoreCase = true)) {
+                                existingRule?.id ?: 0
+                            } else 0,
+                            keyword = trimmedStore,
+                            category = if (state.applyCategoryToAll) state.category else existingRule?.category,
+                            isFixed = if (state.applyFixedToAll) state.isFixed else existingRule?.isFixed
+                        )
+                        storeRuleRepository.upsert(rule)
+                    } catch (e: Exception) {
+                        MoneyTalkLogger.w("StoreRule 자동 생성 실패: ${e.message}")
                     }
                 }
 
