@@ -16,6 +16,7 @@ import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.dao.SmsRegexRuleDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
+import com.sanha.moneytalk.core.database.dao.StoreRuleDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -60,7 +61,8 @@ object DatabaseModule {
                 DatabaseMigrations.MIGRATION_6_7,
                 DatabaseMigrations.MIGRATION_7_8,
                 DatabaseMigrations.MIGRATION_8_9,
-                DatabaseMigrations.MIGRATION_9_10
+                DatabaseMigrations.MIGRATION_9_10,
+                DatabaseMigrations.MIGRATION_10_11
             )
             .build()
     }
@@ -147,5 +149,12 @@ object DatabaseModule {
     @Singleton
     fun provideCustomCategoryDao(database: AppDatabase): CustomCategoryDao {
         return database.customCategoryDao()
+    }
+
+    /** 거래처 규칙 DAO 제공 */
+    @Provides
+    @Singleton
+    fun provideStoreRuleDao(database: AppDatabase): StoreRuleDao {
+        return database.storeRuleDao()
     }
 }

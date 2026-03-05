@@ -192,6 +192,29 @@ object DatabaseMigrations {
     }
 
     /**
+     * v10 -> v11
+     * 거래처 규칙 테이블 추가 (카테고리/고정지출 자동 적용)
+     */
+    val MIGRATION_10_11 = object : Migration(10, 11) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS store_rules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    keyword TEXT NOT NULL,
+                    category TEXT,
+                    is_fixed INTEGER,
+                    createdAt INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS index_store_rules_keyword ON store_rules(keyword)"
+            )
+        }
+    }
+
+    /**
      * v6 -> v7
      * sender 기반 regex 룰 테이블 추가
      */
