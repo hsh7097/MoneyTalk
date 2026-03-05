@@ -585,6 +585,28 @@
     <string name="transaction_list_title">%1$s월 %2$d일 거래 내역</string>
     <string name="transaction_list_empty">거래 내역이 없습니다</string>
 
+    <!-- 거래처 규칙 설정 -->
+    <string name="store_rule_settings_title">거래처 규칙</string>
+    <string name="store_rule_settings_subtitle">거래처별 카테고리/고정지출 자동 적용</string>
+    <string name="store_rule_settings_description">키워드가 포함된 거래처에 카테고리와 고정지출을 자동으로 적용합니다.\n거래 편집에서 \"동일 거래처 일괄 적용\" 시 자동 생성됩니다.</string>
+    <string name="store_rule_settings_empty">등록된 거래처 규칙이 없습니다</string>
+    <string name="store_rule_settings_add">규칙 추가</string>
+    <string name="store_rule_settings_add_title">규칙 추가</string>
+    <string name="store_rule_settings_edit_title">규칙 편집</string>
+    <string name="store_rule_settings_delete_title">규칙 삭제</string>
+    <string name="store_rule_settings_delete_message">이 거래처 규칙을 삭제하시겠습니까?</string>
+    <string name="store_rule_settings_keyword_label">키워드</string>
+    <string name="store_rule_settings_keyword_hint">거래처명에 포함될 키워드</string>
+    <string name="store_rule_settings_category_section">카테고리</string>
+    <string name="store_rule_settings_category_not_set">미설정</string>
+    <string name="store_rule_settings_category_reset">해제</string>
+    <string name="store_rule_settings_category_select">선택</string>
+    <string name="store_rule_settings_category_label">카테고리: %s</string>
+    <string name="store_rule_settings_fixed_label">고정지출</string>
+    <string name="store_rule_settings_fixed_toggle">고정지출로 설정</string>
+    <string name="store_rule_error_keyword_required">키워드를 입력해주세요</string>
+    <string name="store_rule_error_no_rule">카테고리 또는 고정지출 중 하나는 설정해주세요</string>
+
     <!-- 공통 -->
     <string name="common_clear_input">입력 내용 지우기</string>
 </resources>

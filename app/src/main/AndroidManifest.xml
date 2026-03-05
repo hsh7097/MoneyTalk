@@ -97,6 +97,13 @@
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- 거래처 규칙 설정 -->
+        <activity
+            android:name=".feature.storerulesettings.StoreRuleSettingsActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.MoneyTalk"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- SMS Receiver -->
         <receiver
             android:name=".receiver.SmsReceiver"

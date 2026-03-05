@@ -468,6 +468,28 @@
     <string name="transaction_list_title">%1$s %2$d Transaction History</string>
     <string name="transaction_list_empty">No transactions</string>
 
+    <!-- Store Rule Settings -->
+    <string name="store_rule_settings_title">Store Rules</string>
+    <string name="store_rule_settings_subtitle">Auto-apply category/fixed expense by store</string>
+    <string name="store_rule_settings_description">Automatically applies category and fixed expense to stores containing the keyword.\nAuto-created when using \"Apply to all same store\" in transaction edit.</string>
+    <string name="store_rule_settings_empty">No store rules registered</string>
+    <string name="store_rule_settings_add">Add Rule</string>
+    <string name="store_rule_settings_add_title">Add Rule</string>
+    <string name="store_rule_settings_edit_title">Edit Rule</string>
+    <string name="store_rule_settings_delete_title">Delete Rule</string>
+    <string name="store_rule_settings_delete_message">Delete this store rule?</string>
+    <string name="store_rule_settings_keyword_label">Keyword</string>
+    <string name="store_rule_settings_keyword_hint">Keyword to match in store name</string>
+    <string name="store_rule_settings_category_section">Category</string>
+    <string name="store_rule_settings_category_not_set">Not set</string>
+    <string name="store_rule_settings_category_reset">Clear</string>
+    <string name="store_rule_settings_category_select">Select</string>
+    <string name="store_rule_settings_category_label">Category: %s</string>
+    <string name="store_rule_settings_fixed_label">Fixed Expense</string>
+    <string name="store_rule_settings_fixed_toggle">Set as fixed expense</string>
+    <string name="store_rule_error_keyword_required">Please enter a keyword</string>
+    <string name="store_rule_error_no_rule">Please set either category or fixed expense</string>
+
     <!-- Common -->
     <string name="common_clear_input">Clear input</string>
 </resources>

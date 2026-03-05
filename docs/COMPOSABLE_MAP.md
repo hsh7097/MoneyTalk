@@ -349,6 +349,26 @@ CategorySettingsActivity               ← 카테고리 설정 (별도 Activity,
 
 ---
 
+## 9-1. 거래처 규칙 설정 화면 (StoreRuleSettingsScreen)
+
+```
+StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Activity)
+└── StoreRuleSettingsScreen             ← 거래처 규칙 메인 화면
+    ├── LazyColumn                      ← 규칙 목록
+    │   ├── 설명 텍스트
+    │   ├── StoreRuleListItem × N       ← 키워드 + 카테고리/고정지출 표시 + 삭제
+    │   └── "+ 규칙 추가" 버튼
+    ├── [AlertDialog: 추가/편집]         ← 키워드 입력 + 카테고리 선택 + 고정지출 토글
+    ├── [CategorySelectDialog]           ← 카테고리 선택 (공통 재사용)
+    └── [AlertDialog: 삭제 확인]         ← 규칙 삭제 시
+```
+
+| 함수 | 설명 | 참조 |
+|------|------|------|
+| StoreRuleSettingsScreen | 거래처 규칙 관리 메인 화면 | [StoreRuleSettingsScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/ui/StoreRuleSettingsScreen.kt) |
+
+---
+
 ## 10. 공통 컴포넌트
 
 | 함수 | 설명 | 사용 화면 | 참조 |
