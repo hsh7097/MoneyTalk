@@ -33,6 +33,7 @@ import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
+import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -80,6 +81,7 @@ class MainViewModel @Inject constructor(
     private val analyticsHelper: AnalyticsHelper,
     private val rewardAdManager: com.sanha.moneytalk.core.ad.RewardAdManager,
     private val smsSyncCoordinator: SmsSyncCoordinator,
+    private val storeRuleRepository: StoreRuleRepository,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
 
@@ -597,6 +599,22 @@ class MainViewModel @Inject constructor(
                     senderAddress = SmsFilter.normalizeAddress(parsed.input.address)
                 )
             )
+        }
+
+        // Phase 1.5: StoreRule 적용 (최우선 = Tier 0)
+        val allRules = storeRuleRepository.getAllOnce()
+        if (allRules.isNotEmpty()) {
+            for (i in entities.indices) {
+                val entity = entities[i]
+                val lowerStore = entity.storeName.lowercase()
+                val matchedRule = allRules.firstOrNull { lowerStore.contains(it.keyword.lowercase()) }
+                if (matchedRule != null) {
+                    entities[i] = entity.copy(
+                        category = matchedRule.category ?: entity.category,
+                        isFixed = matchedRule.isFixed ?: entity.isFixed
+                    )
+                }
+            }
         }
 
         // Phase 2: "미분류" 가게명을 Gemini로 사전 분류 (DB INSERT 전)

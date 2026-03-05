@@ -38,7 +38,8 @@ class CategoryClassifierServiceImpl @Inject constructor(
     private val incomeRepository: IncomeRepository,
     private val storeEmbeddingRepository: StoreEmbeddingRepository,
     private val storeNameGrouper: StoreNameGrouper,
-    private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider
+    private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider,
+    private val storeRuleRepository: StoreRuleRepository
 ) : CategoryClassifierService {
     companion object {
 
@@ -167,6 +168,11 @@ class CategoryClassifierServiceImpl @Inject constructor(
         }
 
         // ===== 일반 모드 (개별 조회) =====
+        // Tier 0: StoreRule 매칭 (사용자 정의 규칙, 최우선)
+        storeRuleRepository.findMatchingRule(storeName)?.category?.let {
+            return it
+        }
+
         // Tier 1: Room DB에서 저장된 매핑 확인 (비용 0)
         categoryRepository.getCategoryByStoreName(storeName)?.let {
             return it
