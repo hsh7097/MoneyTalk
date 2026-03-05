@@ -181,6 +181,10 @@ interface ExpenseDao {
     @Query("UPDATE expenses SET is_fixed = :isFixed WHERE storeName = :storeName")
     suspend fun updateFixedByStoreName(storeName: String, isFixed: Boolean): Int
 
+    // 키워드 포함 가게명의 고정지출 일괄 변경
+    @Query("UPDATE expenses SET is_fixed = :isFixed WHERE storeName LIKE '%' || :keyword || '%'")
+    suspend fun updateFixedByStoreNameContaining(keyword: String, isFixed: Boolean): Int
+
     // 중복 데이터 조회 (금액, 가게명, 날짜시간이 동일한 항목)
     @Query(
         """

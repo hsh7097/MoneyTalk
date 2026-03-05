@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
+import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +31,8 @@ data class StoreRuleSettingsUiState(
 
 @HiltViewModel
 class StoreRuleSettingsViewModel @Inject constructor(
-    private val storeRuleRepository: StoreRuleRepository
+    private val storeRuleRepository: StoreRuleRepository,
+    private val expenseRepository: ExpenseRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(StoreRuleSettingsUiState())
@@ -120,6 +122,15 @@ class StoreRuleSettingsViewModel @Inject constructor(
                 isFixed = if (state.addIsFixed) true else null
             )
             storeRuleRepository.upsert(rule)
+
+            // 기존 DB 레코드에 규칙 소급 적용 (contains 매칭)
+            if (rule.category != null) {
+                expenseRepository.updateCategoryByStoreNameContaining(keyword, rule.category)
+            }
+            if (rule.isFixed == true) {
+                expenseRepository.updateFixedByStoreNameContaining(keyword, true)
+            }
+
             _uiState.update { it.copy(showAddDialog = false, editingRule = null) }
         }
     }

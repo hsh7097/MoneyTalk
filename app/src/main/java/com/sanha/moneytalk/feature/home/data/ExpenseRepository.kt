@@ -214,6 +214,10 @@ class ExpenseRepository @Inject constructor(
     suspend fun updateFixedByStoreName(storeName: String, isFixed: Boolean): Int =
         expenseDao.updateFixedByStoreName(storeName, isFixed)
 
+    /** 키워드 포함 가게명의 고정지출 일괄 변경 */
+    suspend fun updateFixedByStoreNameContaining(keyword: String, isFixed: Boolean): Int =
+        expenseDao.updateFixedByStoreNameContaining(keyword, isFixed)
+
     /** 특정 카테고리의 지출 조회 (일회성) */
     suspend fun getExpensesByCategoryOnce(category: String): List<ExpenseEntity> =
         expenseDao.getExpensesByCategoryOnce(category)
