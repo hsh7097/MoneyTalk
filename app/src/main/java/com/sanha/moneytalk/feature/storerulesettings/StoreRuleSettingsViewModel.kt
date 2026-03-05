@@ -115,8 +115,9 @@ class StoreRuleSettingsViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            val oldRule = state.editingRule
             val rule = StoreRuleEntity(
-                id = state.editingRule?.id ?: 0,
+                id = oldRule?.id ?: 0,
                 keyword = keyword,
                 category = state.addCategory,
                 isFixed = if (state.addIsFixed) true else null
@@ -129,6 +130,24 @@ class StoreRuleSettingsViewModel @Inject constructor(
             }
             if (rule.isFixed == true) {
                 expenseRepository.updateFixedByStoreNameContaining(keyword, true)
+            }
+
+            // 규칙 해제 시 소급 원복: 기존에 설정되어 있던 값이 해제되면 기존 레코드도 원복
+            if (oldRule != null) {
+                // 고정지출 해제: true → null
+                if (oldRule.isFixed == true && rule.isFixed == null) {
+                    expenseRepository.updateFixedByStoreNameContaining(
+                        oldRule.keyword, false
+                    )
+                }
+                // 키워드 변경 시 이전 키워드 매칭 레코드 원복
+                if (!oldRule.keyword.equals(keyword, ignoreCase = true)) {
+                    if (oldRule.isFixed == true) {
+                        expenseRepository.updateFixedByStoreNameContaining(
+                            oldRule.keyword, false
+                        )
+                    }
+                }
             }
 
             _uiState.update { it.copy(showAddDialog = false, editingRule = null) }
@@ -145,6 +164,13 @@ class StoreRuleSettingsViewModel @Inject constructor(
 
     fun deleteRule(id: Long) {
         viewModelScope.launch {
+            // 삭제 전 규칙 조회 → 소급 원복
+            val ruleToDelete = _uiState.value.rules.find { it.id == id }
+            if (ruleToDelete?.isFixed == true) {
+                expenseRepository.updateFixedByStoreNameContaining(
+                    ruleToDelete.keyword, false
+                )
+            }
             storeRuleRepository.deleteById(id)
             _uiState.update { it.copy(showDeleteConfirm = null) }
         }
