@@ -1,10 +1,11 @@
 package com.sanha.moneytalk.feature.categorysettings
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.CustomCategoryRepository
-import com.sanha.moneytalk.core.database.entity.CustomCategoryEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryInfo
 import com.sanha.moneytalk.core.model.CategoryProvider
@@ -26,7 +27,7 @@ data class CategorySettingsUiState(
     val showAddDialog: Boolean = false,
     val addEmoji: String = "\uD83D\uDCE6",
     val addName: String = "",
-    val addError: String? = null,
+    @StringRes val addErrorResId: Int? = null,
     val showDeleteConfirm: Long? = null
 )
 
@@ -54,7 +55,7 @@ class CategorySettingsViewModel @Inject constructor(
                 showAddDialog = true,
                 addEmoji = "\uD83D\uDCE6",
                 addName = "",
-                addError = null
+                addErrorResId = null
             )
         }
     }
@@ -68,7 +69,7 @@ class CategorySettingsViewModel @Inject constructor(
     }
 
     fun updateAddName(name: String) {
-        _uiState.update { it.copy(addName = name, addError = null) }
+        _uiState.update { it.copy(addName = name, addErrorResId = null) }
     }
 
     fun addCategory() {
@@ -76,14 +77,14 @@ class CategorySettingsViewModel @Inject constructor(
         val name = state.addName.trim()
 
         if (name.isBlank()) {
-            _uiState.update { it.copy(addError = "카테고리 이름을 입력해주세요") }
+            _uiState.update { it.copy(addErrorResId = R.string.category_settings_error_name_required) }
             return
         }
 
         viewModelScope.launch {
             val isDuplicate = customCategoryRepository.isDuplicate(name, state.selectedTab)
             if (isDuplicate) {
-                _uiState.update { it.copy(addError = "이미 존재하는 카테고리입니다") }
+                _uiState.update { it.copy(addErrorResId = R.string.category_settings_error_duplicate) }
                 return@launch
             }
 
@@ -120,11 +121,16 @@ class CategorySettingsViewModel @Inject constructor(
                 CategoryType.TRANSFER -> Category.transferEntries
             }
             val customs = customCategoryRepository.getByType(type).map { entity ->
+                val entityType = try {
+                    CategoryType.valueOf(entity.categoryType)
+                } catch (e: IllegalArgumentException) {
+                    CategoryType.EXPENSE
+                }
                 CustomCategoryInfo(
                     id = entity.id,
                     displayName = entity.displayName,
                     emoji = entity.emoji,
-                    categoryType = CategoryType.valueOf(entity.categoryType),
+                    categoryType = entityType,
                     displayOrder = entity.displayOrder
                 )
             }

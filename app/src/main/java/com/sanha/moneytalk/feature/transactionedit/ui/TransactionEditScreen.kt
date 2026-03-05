@@ -387,6 +387,7 @@ fun TransactionEditScreen(
             categoryType = categoryType,
             showAllOption = false,
             transferDirection = uiState.transferDirection,
+            customCategories = viewModel.getCategoriesForType(categoryType),
             onDismiss = { showCategoryPicker = false },
             onCategorySelected = { selected ->
                 if (selected != null) {

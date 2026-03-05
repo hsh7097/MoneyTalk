@@ -203,7 +203,7 @@ fun CategorySettingsScreen(
         AddCategoryDialog(
             emoji = uiState.addEmoji,
             name = uiState.addName,
-            error = uiState.addError,
+            error = uiState.addErrorResId?.let { stringResource(it) },
             onEmojiChange = { viewModel.updateAddEmoji(it) },
             onNameChange = { viewModel.updateAddName(it) },
             onConfirm = { viewModel.addCategory() },

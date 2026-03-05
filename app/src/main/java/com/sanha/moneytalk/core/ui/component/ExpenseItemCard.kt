@@ -369,6 +369,7 @@ fun ExpenseDetailDialog(
  * @param categoryType 표시할 카테고리 타입 (null이면 지출 기본)
  * @param showAllOption true면 "전체" 항목 표시 (필터용)
  * @param transferDirection 이체 방향 (이체 타입일 때만 사용)
+ * @param customCategories 커스텀 카테고리 목록 (외부에서 주입, null이면 기본 enum만 사용)
  * @param onDismiss 닫기
  * @param onCategorySelected 카테고리 선택 콜백 (null이면 "전체" 선택)
  * @param onTransferDirectionChanged 이체 방향 변경 콜백
@@ -380,12 +381,13 @@ fun CategorySelectDialog(
     categoryType: CategoryType? = null,
     showAllOption: Boolean = false,
     transferDirection: TransferDirection? = null,
+    customCategories: List<CategoryInfo>? = null,
     onDismiss: () -> Unit,
     onCategorySelected: (String?) -> Unit,
     onTransferDirectionChanged: ((TransferDirection) -> Unit)? = null
 ) {
     val type = categoryType ?: CategoryType.EXPENSE
-    val categories: List<CategoryInfo> = when (type) {
+    val categories: List<CategoryInfo> = customCategories ?: when (type) {
         CategoryType.EXPENSE -> Category.expenseEntries
         CategoryType.INCOME -> Category.incomeEntries
         CategoryType.TRANSFER -> Category.transferEntries

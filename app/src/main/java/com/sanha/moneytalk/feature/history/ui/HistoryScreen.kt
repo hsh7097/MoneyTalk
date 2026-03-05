@@ -311,14 +311,6 @@ fun HistoryScreen(
         }
     }
 
-    // 거래 선택 시 편집 Activity로 이동
-    uiState.selectedExpense?.let { expense ->
-        LaunchedEffect(expense.id) {
-            TransactionEditActivity.open(context, expenseId = expense.id)
-            viewModel.onIntent(HistoryIntent.DismissDialog)
-        }
-    }
-
     uiState.selectedIncome?.let { income ->
         IncomeDetailDialog(
             income = income,
@@ -476,7 +468,9 @@ fun TransactionListView(
                     is TransactionListItem.ExpenseItem -> {
                         TransactionCardCompose(
                             info = item.cardInfo,
-                            onClick = { onIntent(HistoryIntent.SelectExpense(item.expense)) }
+                            onClick = {
+                                TransactionEditActivity.open(context, expenseId = item.expense.id)
+                            }
                         )
                     }
 

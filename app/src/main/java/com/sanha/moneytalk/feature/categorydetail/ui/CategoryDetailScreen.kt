@@ -32,10 +32,8 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -80,8 +78,7 @@ fun CategoryDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // 선택된 지출 항목 (상세보기용)
-    var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
+    val context = LocalContext.current
 
     // HorizontalPager — Virtual Infinite Pager
     val initialPage = remember {
@@ -176,7 +173,9 @@ fun CategoryDetailScreen(
                         }
                     }
                 },
-                onExpenseSelected = { expense -> selectedExpense = expense }
+                onExpenseSelected = { expense ->
+                    TransactionEditActivity.open(context, expenseId = expense.id)
+                }
             )
         }
 
@@ -186,14 +185,6 @@ fun CategoryDetailScreen(
         }
     }
 
-    // 거래 선택 시 편집 Activity로 이동
-    val context = LocalContext.current
-    selectedExpense?.let { expense ->
-        LaunchedEffect(expense.id) {
-            TransactionEditActivity.open(context, expenseId = expense.id)
-            selectedExpense = null
-        }
-    }
 }
 
 /**
