@@ -36,4 +36,12 @@ interface GeminiCategoryRepository {
      * 단일 가게명 분류
      */
     suspend fun classifySingleStore(storeName: String): String?
+
+    /**
+     * 수입 출처 목록을 수입 카테고리로 분류
+     *
+     * @param incomeDescriptions Map<출처(source), 설명(description)>
+     * @return Map<출처, 수입카테고리>
+     */
+    suspend fun classifyIncomeSources(incomeDescriptions: Map<String, String>): Map<String, String>
 }

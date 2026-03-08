@@ -36,7 +36,7 @@ private val highAmountExpenseInfo = object : TransactionCardInfo {
     override val subtitle = "주거 | 국민은행"
     override val amount = 850000
     override val isIncome = false
-    override val category = Category.HOUSING
+    override val category = Category.HOUSING_TELECOM
 }
 
 private val longNameInfo = object : TransactionCardInfo {

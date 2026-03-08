@@ -262,6 +262,7 @@ TransactionEditActivity               ← 거래 편집/추가 (별도 Activity,
     ├── CompactReadOnlyRow            ← 읽기 전용 행 (날짜-시간/카테고리 등 picker용)
     ├── CompactEditRow                ← 편집 가능 행 (BasicTextField + 포커스 X버튼)
     ├── FixedExpenseToggle            ← 고정지출 토글 (Switch, 지출/이체만 표시)
+    ├── ApplyToAllCheckbox            ← 동일 거래처 일괄 적용 체크박스 (카테고리/고정지출, 기존 거래만)
     ├── CategorySelectDialog          ← 카테고리 선택 (공통)
     ├── DatePickerDialog              ← 날짜 선택 (Material3)
     ├── TimePickerDialog              ← 시간 선택 (AlertDialog 래퍼)
@@ -275,6 +276,7 @@ TransactionEditActivity               ← 거래 편집/추가 (별도 Activity,
 | TransactionHeader | 헤더 (X 닫기 + 거래처명 + 금액 인라인 편집) | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
 | TransactionTypeTab | 수입/지출/이체 분류 탭 (SegmentedTabRowCompose) | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
 | FixedExpenseToggle | 고정지출 토글 (Switch + 라벨) | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
+| ApplyToAllCheckbox | 동일 거래처 일괄 적용 체크박스 | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
 | TransactionBottomButtons | 하단 삭제+저장 버튼 | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
 | CompactEditRow | 편집 가능 컴팩트 행 (BasicTextField + 포커스 X버튼) | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
 | CompactReadOnlyRow | 읽기 전용 컴팩트 행 (클릭 → picker) | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
@@ -324,7 +326,50 @@ SmsSettingsScreen                    ← 문자 설정 (Activity, 설정에서 "
 
 ---
 
-## 9. 공통 컴포넌트
+## 9. 카테고리 설정 화면 (CategorySettingsScreen)
+
+```
+CategorySettingsActivity               ← 카테고리 설정 (별도 Activity, SmsSettings 패턴)
+└── CategorySettingsScreen             ← 카테고리 설정 메인 화면
+    ├── FilterChip × 3                 ← 지출/수입/이체 탭 전환
+    ├── LazyColumn                     ← 기본 + 커스텀 카테고리 목록
+    │   ├── 기본 카테고리 (읽기 전용)   ← 이모지 + 이름
+    │   ├── 커스텀 카테고리 (삭제 가능)  ← 이모지 + 이름 + 삭제 아이콘
+    │   └── "+ 카테고리 추가" 버튼
+    ├── AddCategoryDialog              ← 커스텀 카테고리 추가 다이얼로그
+    │   ├── EmojiPickerCompose         ← 5열 이모지 그리드 (80개 프리셋)
+    │   └── TextField                  ← 카테고리 이름 입력
+    └── [AlertDialog: 삭제 확인]        ← 커스텀 카테고리 삭제 시
+```
+
+| 함수 | 설명 | 참조 |
+|------|------|------|
+| CategorySettingsScreen | 카테고리 설정 메인 화면 | [CategorySettingsScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/categorysettings/ui/CategorySettingsScreen.kt) |
+| EmojiPickerCompose | 이모지 선택 5열 그리드 (공통) | [EmojiPickerComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/EmojiPickerCompose.kt) |
+
+---
+
+## 9-1. 거래처 규칙 설정 화면 (StoreRuleSettingsScreen)
+
+```
+StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Activity)
+└── StoreRuleSettingsScreen             ← 거래처 규칙 메인 화면
+    ├── LazyColumn                      ← 규칙 목록
+    │   ├── 설명 텍스트
+    │   ├── StoreRuleListItem × N       ← 키워드 + 카테고리/고정지출 표시 + 삭제
+    │   └── "+ 규칙 추가" 버튼
+    ├── [AlertDialog: 추가/편집]         ← 키워드 입력 + 카테고리 선택 + 고정지출 토글
+    ├── [CategorySelectDialog]           ← 카테고리 선택 (공통 재사용)
+    └── [AlertDialog: 삭제 확인]         ← 규칙 삭제 시
+```
+
+| 함수 | 설명 | 참조 |
+|------|------|------|
+| StoreRuleSettingsScreen | 거래처 규칙 관리 메인 화면 | [StoreRuleSettingsScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/ui/StoreRuleSettingsScreen.kt) |
+
+---
+
+## 10. 공통 컴포넌트
 
 | 함수 | 설명 | 사용 화면 | 참조 |
 |------|------|----------|------|
@@ -344,6 +389,7 @@ SmsSettingsScreen                    ← 문자 설정 (Activity, 설정에서 "
 | SettingsItemCompose | 설정 아이템 (아이콘 + 텍스트) | 설정 | [SettingsItemComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsItemCompose.kt) |
 | BannerAdCompose | 하단 고정 배너 광고 (AdMob, RTDB 연동) | 홈, 내역, 카테고리 상세 | [BannerAdComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/BannerAdCompose.kt) |
 | MonthPagerUtils | HorizontalPager 페이지↔월 변환 유틸 | 홈, 내역 | [MonthPagerUtilsKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/MonthPagerUtils.kt) |
+| EmojiPickerCompose | 이모지 선택 5열 그리드 (80개 프리셋) | 카테고리 설정 | [EmojiPickerComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/EmojiPickerCompose.kt) |
 
 ---
 

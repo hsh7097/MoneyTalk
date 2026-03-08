@@ -93,7 +93,7 @@ private fun FilterTabRowCalendarWithFilterPreview() {
             currentMode = ViewMode.CALENDAR,
             onModeChange = {},
             sortOrder = SortOrder.AMOUNT_DESC,
-            selectedCategory = "식비"
+            selectedExpenseCategories = setOf("식비")
         )
     }
 }

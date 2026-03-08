@@ -189,12 +189,24 @@ fun HistoryScreen(
                 currentMode = viewMode,
                 onModeChange = { viewMode = it },
                 sortOrder = uiState.sortOrder,
-                selectedCategory = uiState.selectedCategory,
                 showExpenses = uiState.showExpenses,
                 showIncomes = uiState.showIncomes,
+                showTransfers = uiState.showTransfers,
+                selectedExpenseCategories = uiState.selectedExpenseCategories,
+                selectedIncomeCategories = uiState.selectedIncomeCategories,
+                selectedTransferCategories = uiState.selectedTransferCategories,
                 fixedExpenseFilter = uiState.fixedExpenseFilter,
-                onApplyFilter = { sortOrder, showExp, showInc, category, fixedFilter ->
-                    viewModel.applyFilter(sortOrder, showExp, showInc, category, fixedFilter)
+                onApplyFilter = { sortOrder, showExp, showInc, showTransfer, expenseCategories, incomeCategories, transferCategories, fixedFilter ->
+                    viewModel.applyFilter(
+                        sortOrder = sortOrder,
+                        showExpenses = showExp,
+                        showIncomes = showInc,
+                        showTransfers = showTransfer,
+                        expenseCategories = expenseCategories,
+                        incomeCategories = incomeCategories,
+                        transferCategories = transferCategories,
+                        fixedExpenseFilter = fixedFilter
+                    )
                 },
                 onResetFilter = { viewModel.resetFilters() },
                 onSearchClick = { viewModel.enterSearchMode() },
@@ -236,7 +248,7 @@ fun HistoryScreen(
                         isLoading = pageData.isLoading,
                         showExpenses = uiState.showExpenses,
                         showIncomes = uiState.showIncomes,
-                        hasActiveFilter = uiState.selectedCategory != null,
+                        hasActiveFilter = uiState.hasCategoryFilter,
                         isCurrentMonth = isCurrentMonth,
                         isMonthSynced = mainViewModel.isMonthSynced(pageYear, pageMonth),
                         isPartiallyCovered = mainViewModel.isPagePartiallyCovered(pageYear, pageMonth),
@@ -269,7 +281,11 @@ fun HistoryScreen(
                             }
                         },
                         scrollResetKey = Triple(
-                            uiState.selectedCategory,
+                            Triple(
+                                uiState.selectedExpenseCategories,
+                                uiState.selectedIncomeCategories,
+                                uiState.selectedTransferCategories
+                            ),
                             uiState.sortOrder,
                             pageYear to pageMonth
                         ),
@@ -292,14 +308,6 @@ fun HistoryScreen(
         // 배너 광고 (RTDB reward_ad_enabled 연동)
         if (isBannerAdEnabled) {
             BannerAdCompose(adUnitId = BannerAdIds.HISTORY)
-        }
-    }
-
-    // 거래 선택 시 편집 Activity로 이동
-    uiState.selectedExpense?.let { expense ->
-        LaunchedEffect(expense.id) {
-            TransactionEditActivity.open(context, expenseId = expense.id)
-            viewModel.onIntent(HistoryIntent.DismissDialog)
         }
     }
 
@@ -460,7 +468,9 @@ fun TransactionListView(
                     is TransactionListItem.ExpenseItem -> {
                         TransactionCardCompose(
                             info = item.cardInfo,
-                            onClick = { onIntent(HistoryIntent.SelectExpense(item.expense)) }
+                            onClick = {
+                                TransactionEditActivity.open(context, expenseId = item.expense.id)
+                            }
                         )
                     }
 

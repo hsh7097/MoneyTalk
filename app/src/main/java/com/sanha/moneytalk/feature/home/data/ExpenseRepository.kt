@@ -210,9 +210,25 @@ class ExpenseRepository @Inject constructor(
     suspend fun updateCategoryById(expenseId: Long, newCategory: String): Int =
         expenseDao.updateCategoryById(expenseId, newCategory)
 
+    /** 가게명으로 고정지출 일괄 변경 (정확 일치) */
+    suspend fun updateFixedByStoreName(storeName: String, isFixed: Boolean): Int =
+        expenseDao.updateFixedByStoreName(storeName, isFixed)
+
+    /** 키워드 포함 가게명의 고정지출 일괄 변경 */
+    suspend fun updateFixedByStoreNameContaining(keyword: String, isFixed: Boolean): Int =
+        expenseDao.updateFixedByStoreNameContaining(keyword, isFixed)
+
     /** 특정 카테고리의 지출 조회 (일회성) */
     suspend fun getExpensesByCategoryOnce(category: String): List<ExpenseEntity> =
         expenseDao.getExpensesByCategoryOnce(category)
+
+    /** 가게명 기준 이체 일괄 업데이트 (미분류 항목만) */
+    suspend fun updateTransferByStoreName(
+        storeName: String,
+        category: String,
+        transactionType: String,
+        transferDirection: String
+    ): Int = expenseDao.updateTransferByStoreName(storeName, category, transactionType, transferDirection)
 
     // ========================
     // 중복 데이터 관리 메소드
