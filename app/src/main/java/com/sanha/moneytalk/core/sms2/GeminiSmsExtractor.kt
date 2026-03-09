@@ -56,8 +56,10 @@ class GeminiSmsExtractor @Inject constructor(
         private const val FALLBACK_SINGLE_DELAY_MS = 50L
 
         /** A/B 비교용 프롬프트 버전 태그 */
-        private const val SMS_EXTRACT_PROMPT_VERSION = "sms_extract_v2026_02_27_r3"
-        private const val SMS_BATCH_PROMPT_VERSION = "sms_batch_extract_v2026_02_27_r3"
+        private const val SMS_EXTRACT_PROMPT_VERSION = "sms_extract_v2026_03_09_r4"
+        private const val SMS_BATCH_PROMPT_VERSION = "sms_batch_extract_v2026_03_09_r4"
+        private const val SMS_CONTEXT_EXTRACT_PROMPT_VERSION = "sms_context_extract_v2026_03_09_r1"
+        private const val SMS_CONTEXT_BATCH_PROMPT_VERSION = "sms_context_batch_extract_v2026_03_09_r1"
 
         /** 정규식 생성 재시도(수선) 최대 횟수 */
         private const val REGEX_REPAIR_MAX_RETRIES = 1
@@ -84,36 +86,47 @@ class GeminiSmsExtractor @Inject constructor(
          */
         private val CATEGORY_MAPPING = mapOf(
             // 쇼핑 관련
-            "온라인쇼핑" to "쇼핑", "편의점" to "식비", "마트" to "쇼핑",
-            "인터넷쇼핑" to "쇼핑", "온라인" to "쇼핑",
+            "쇼핑" to "온라인쇼핑", "편의점" to "식비", "마트" to "온라인쇼핑",
+            "인터넷쇼핑" to "온라인쇼핑", "온라인" to "온라인쇼핑",
+            "패션" to "패션/쇼핑", "의류" to "패션/쇼핑",
             // 의료/건강 관련
             "의료" to "의료/건강", "건강" to "의료/건강", "병원" to "의료/건강",
             "약국" to "의료/건강",
-            // 보험 (SmsParser/CategoryClassifierService의 "보험" 카테고리와 일치)
-            "보험" to "보험", "보험료" to "보험",
+            // 보험
+            "보험료" to "보험",
             // 문화/여가 관련
-            "문화" to "문화/여가", "여가" to "문화/여가", "여행" to "문화/여가",
+            "문화" to "문화/여가", "여가" to "문화/여가",
             "엔터테인먼트" to "문화/여가", "오락" to "문화/여가", "레저" to "문화/여가",
+            // 여행/숙박 관련
+            "여행" to "여행/숙박", "숙박" to "여행/숙박",
             // 술/유흥 관련
             "술" to "술/유흥", "유흥" to "술/유흥", "음주" to "술/유흥",
             "바" to "술/유흥", "호프" to "술/유흥",
             // 교통 관련
-            "대중교통" to "교통", "택시" to "교통", "주유" to "교통",
+            "대중교통" to "교통", "택시" to "교통",
+            // 자동차 관련
+            "주유" to "자동차", "주차" to "자동차",
             // 운동 관련
             "헬스" to "운동", "피트니스" to "운동", "스포츠" to "운동", "체육" to "운동",
-            // 주거 관련
-            "부동산" to "주거", "임대" to "주거", "월세" to "주거", "전세" to "주거",
-            // 생활 관련
-            "공과금" to "생활", "통신" to "생활",
-            // 경조 관련
-            "경조사" to "경조", "축의금" to "경조", "조의금" to "경조", "부조" to "경조",
-            // 계좌이체 관련 ("출금"은 일반 카드 결제에도 쓰이므로 제외)
-            "이체" to "계좌이체", "송금" to "계좌이체",
+            // 주거/통신 관련
+            "주거" to "주거/통신", "부동산" to "주거/통신", "임대" to "주거/통신",
+            "월세" to "주거/통신", "전세" to "주거/통신",
+            "공과금" to "주거/통신", "통신" to "주거/통신",
+            // 뷰티/미용 관련
+            "뷰티" to "뷰티/미용", "미용" to "뷰티/미용", "화장품" to "뷰티/미용",
+            // 교육/학습 관련
+            "교육" to "교육/학습", "학습" to "교육/학습",
+            // 경조/선물 관련
+            "경조" to "경조/선물", "경조사" to "경조/선물",
+            "축의금" to "경조/선물", "조의금" to "경조/선물", "부조" to "경조/선물",
+            // 카페/간식 관련
+            "카페" to "카페/간식", "커피" to "카페/간식", "디저트" to "카페/간식",
+            // 이체 → 기타 (SMS 추출에서는 이체를 별도 처리하므로 기타로)
+            "이체" to "기타", "송금" to "기타", "계좌이체" to "기타",
             // 기타 변환
             "미분류" to "기타", "알수없음" to "기타", "불명" to "기타",
             "음식" to "식비", "식사" to "식비",
-            "배달음식" to "배달", "배민" to "배달", "요기요" to "배달",
-            "커피" to "카페", "디저트" to "카페"
+            "배달음식" to "식비", "배달" to "식비", "배민" to "식비", "요기요" to "식비"
         )
 
         /**
@@ -149,9 +162,19 @@ class GeminiSmsExtractor @Inject constructor(
 
     private var extractorModel: GenerativeModel? = null
     private var batchExtractorModel: GenerativeModel? = null
+    private var contextualExtractorModel: GenerativeModel? = null
+    private var contextualBatchExtractorModel: GenerativeModel? = null
     private var regexExtractorModel: GenerativeModel? = null
     private var cachedApiKey: String? = null
     private var cachedModelConfig: GeminiModelConfig? = null
+
+    private fun invalidateModelCache() {
+        extractorModel = null
+        batchExtractorModel = null
+        contextualExtractorModel = null
+        contextualBatchExtractorModel = null
+        regexExtractorModel = null
+    }
 
     private suspend fun getModel(): GenerativeModel? {
         val apiKey = apiKeyProvider.getApiKey()
@@ -161,10 +184,7 @@ class GeminiSmsExtractor @Inject constructor(
         if (extractorModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
             cachedApiKey = apiKey
             cachedModelConfig = currentModelConfig
-            // 모델 설정 변경 시 다른 모델들도 함께 재생성
-            extractorModel = null
-            batchExtractorModel = null
-            regexExtractorModel = null
+            invalidateModelCache()
             extractorModel = GenerativeModel(
                 modelName = currentModelConfig.smsExtractor,
                 apiKey = apiKey,
@@ -189,10 +209,7 @@ class GeminiSmsExtractor @Inject constructor(
         if (batchExtractorModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
             cachedApiKey = apiKey
             cachedModelConfig = currentModelConfig
-            // 모델 설정 변경 시 다른 모델들도 함께 재생성
-            extractorModel = null
-            batchExtractorModel = null
-            regexExtractorModel = null
+            invalidateModelCache()
             batchExtractorModel = GenerativeModel(
                 modelName = currentModelConfig.smsBatchExtractor,
                 apiKey = apiKey,
@@ -207,6 +224,58 @@ class GeminiSmsExtractor @Inject constructor(
         return batchExtractorModel
     }
 
+    /** 컨텍스트 포함 단건 추출용 모델 */
+    private suspend fun getContextModel(): GenerativeModel? {
+        val apiKey = apiKeyProvider.getApiKey()
+        if (apiKey.isBlank()) return null
+
+        val currentModelConfig = apiKeyProvider.modelConfig
+        if (contextualExtractorModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
+            cachedApiKey = apiKey
+            cachedModelConfig = currentModelConfig
+            invalidateModelCache()
+            contextualExtractorModel = GenerativeModel(
+                modelName = currentModelConfig.smsExtractor,
+                apiKey = apiKey,
+                generationConfig = generationConfig {
+                    temperature = 0.1f
+                    maxOutputTokens = 1024
+                },
+                requestOptions = RequestOptions(timeout = LLM_REQUEST_TIMEOUT_SECONDS * 1000),
+                systemInstruction = content {
+                    text(context.getString(R.string.prompt_sms_context_extract_system))
+                }
+            )
+        }
+        return contextualExtractorModel
+    }
+
+    /** 컨텍스트 포함 배치 추출용 모델 */
+    private suspend fun getContextBatchModel(): GenerativeModel? {
+        val apiKey = apiKeyProvider.getApiKey()
+        if (apiKey.isBlank()) return null
+
+        val currentModelConfig = apiKeyProvider.modelConfig
+        if (contextualBatchExtractorModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
+            cachedApiKey = apiKey
+            cachedModelConfig = currentModelConfig
+            invalidateModelCache()
+            contextualBatchExtractorModel = GenerativeModel(
+                modelName = currentModelConfig.smsBatchExtractor,
+                apiKey = apiKey,
+                generationConfig = generationConfig {
+                    temperature = 0.1f
+                    maxOutputTokens = 4096
+                },
+                requestOptions = RequestOptions(timeout = LLM_REQUEST_TIMEOUT_SECONDS * 1000),
+                systemInstruction = content {
+                    text(context.getString(R.string.prompt_sms_context_batch_extract_system))
+                }
+            )
+        }
+        return contextualBatchExtractorModel
+    }
+
     /** 정규식 생성용 모델 */
     private suspend fun getRegexModel(): GenerativeModel? {
         val apiKey = apiKeyProvider.getApiKey()
@@ -216,9 +285,7 @@ class GeminiSmsExtractor @Inject constructor(
         if (regexExtractorModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
             cachedApiKey = apiKey
             cachedModelConfig = currentModelConfig
-            extractorModel = null
-            batchExtractorModel = null
-            regexExtractorModel = null
+            invalidateModelCache()
             regexExtractorModel = GenerativeModel(
                 modelName = currentModelConfig.smsRegexExtractor,
                 apiKey = apiKey,
@@ -285,6 +352,34 @@ class GeminiSmsExtractor @Inject constructor(
 
     private val smsDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
 
+    private fun buildDateInfo(smsTimestamp: Long): String {
+        return if (smsTimestamp > 0) {
+            "\n(SMS 수신 날짜: ${smsDateFormat.format(Date(smsTimestamp))})"
+        } else {
+            ""
+        }
+    }
+
+    private fun buildBatchSmsListText(
+        smsMessages: List<String>,
+        smsTimestamps: List<Long>
+    ): String {
+        return smsMessages.mapIndexed { idx, body ->
+            val dateInfo = smsTimestamps.getOrNull(idx)?.let { ts ->
+                if (ts > 0) " (수신: ${smsDateFormat.format(Date(ts))})" else ""
+            } ?: ""
+            "${idx + 1}번$dateInfo: $body"
+        }.joinToString("\n\n")
+    }
+
+    private suspend fun getReferenceText(): String {
+        return try {
+            categoryReferenceProvider.getSmsExtractionReference()
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
     /**
      * SMS에서 결제 정보 추출 (Gemini LLM 사용)
      *
@@ -301,16 +396,8 @@ class GeminiSmsExtractor @Inject constructor(
                     return@withContext null
                 }
 
-                val dateInfo = if (smsTimestamp > 0) {
-                    "\n(SMS 수신 날짜: ${smsDateFormat.format(Date(smsTimestamp))})"
-                } else ""
-
-                // 참조 리스트 추가
-                val referenceText = try {
-                    categoryReferenceProvider.getSmsExtractionReference()
-                } catch (e: Exception) {
-                    ""
-                }
+                val dateInfo = buildDateInfo(smsTimestamp)
+                val referenceText = getReferenceText()
 
                 val prompt = context.getString(
                     R.string.prompt_sms_extract_user,
@@ -319,9 +406,7 @@ class GeminiSmsExtractor @Inject constructor(
                     smsBody
                 )
 
-                val startTime = System.currentTimeMillis()
                 val response = model.generateContent(prompt)
-                val elapsed = System.currentTimeMillis() - startTime
                 val responseText = response.text ?: run {
                     MoneyTalkLogger.w("[extractSingle] 응답 text=null (promptVersion=$SMS_EXTRACT_PROMPT_VERSION)")
                     return@withContext null
@@ -337,6 +422,52 @@ class GeminiSmsExtractor @Inject constructor(
                 null
             }
         }
+
+    /**
+     * 참고 컨텍스트를 함께 사용하여 SMS에서 결제 정보 추출
+     *
+     * target SMS의 근거를 우선 사용하고, referenceContext는 형식/카드명 보조 정보로만 활용한다.
+     */
+    suspend fun extractFromSmsWithReference(
+        smsBody: String,
+        smsTimestamp: Long = 0L,
+        referenceContext: String = ""
+    ): LlmExtractionResult? = withContext(Dispatchers.IO) {
+        if (referenceContext.isBlank()) {
+            return@withContext extractFromSms(smsBody, smsTimestamp)
+        }
+
+        try {
+            val model = getContextModel()
+            if (model == null) {
+                MoneyTalkLogger.e("API 키가 설정되지 않음")
+                return@withContext null
+            }
+
+            val prompt = context.getString(
+                R.string.prompt_sms_context_extract_user,
+                buildDateInfo(smsTimestamp),
+                getReferenceText(),
+                referenceContext,
+                smsBody
+            )
+
+            val responseText = model.generateContent(prompt).text ?: run {
+                MoneyTalkLogger.w("[extractSingleContext] 응답 text=null (promptVersion=$SMS_CONTEXT_EXTRACT_PROMPT_VERSION)")
+                return@withContext null
+            }
+
+            parseExtractionResponse(responseText)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            MoneyTalkLogger.e(
+                "컨텍스트 포함 LLM 추출 실패: ${e.message} (promptVersion=$SMS_CONTEXT_EXTRACT_PROMPT_VERSION)",
+                e
+            )
+            null
+        }
+    }
 
     /**
      * 결제 SMS용 정규식 생성
@@ -434,8 +565,16 @@ class GeminiSmsExtractor @Inject constructor(
                         previousResponse = previousResponseText,
                         failureReason = validation.reason
                     ),
-                    compactPrompt = buildRegexCompactPrompt(samples),
-                    ultraCompactPrompt = buildRegexUltraCompactPrompt(samples)
+                    compactPrompt = buildRegexRepairCompactPrompt(
+                        samples = samples,
+                        previousResponse = previousResponseText,
+                        failureReason = validation.reason
+                    ),
+                    ultraCompactPrompt = buildRegexRepairUltraCompactPrompt(
+                        samples = samples,
+                        previousResponse = previousResponseText,
+                        failureReason = validation.reason
+                    )
                 ) ?: continue
 
                 previousResponseText = repairResponse
@@ -511,8 +650,16 @@ class GeminiSmsExtractor @Inject constructor(
             val responseText = requestRegexWithTokenFallback(
                 model = model,
                 primaryPrompt = repairPrompt,
-                compactPrompt = buildRegexCompactPrompt(allSamples),
-                ultraCompactPrompt = buildRegexUltraCompactPrompt(allSamples)
+                compactPrompt = buildRegexRepairCompactPrompt(
+                    samples = allSamples,
+                    previousResponse = previousJson.toString(),
+                    failureReason = failureReason
+                ),
+                ultraCompactPrompt = buildRegexRepairUltraCompactPrompt(
+                    samples = allSamples,
+                    previousResponse = previousJson.toString(),
+                    failureReason = failureReason
+                )
             ) ?: return@withContext null
 
             val candidate = parseRegexResponse(responseText)
@@ -670,7 +817,7 @@ class GeminiSmsExtractor @Inject constructor(
     ): String? {
         // 토큰 디버깅: 프롬프트 길이 + countTokens
         try {
-            val tokenCount = model.countTokens(primaryPrompt)
+            model.countTokens(primaryPrompt)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -759,6 +906,39 @@ class GeminiSmsExtractor @Inject constructor(
             humanReason,
             previousShort,
             sampleText
+        )
+    }
+
+    private fun buildRegexRepairCompactPrompt(
+        samples: List<String>,
+        previousResponse: String,
+        failureReason: String
+    ): String {
+        val sampleText = samples.mapIndexed { index, body ->
+            "${index + 1}: ${toCompactRegexSample(body, 140)}"
+        }.joinToString("\n")
+        return context.getString(
+            R.string.prompt_sms_regex_repair_compact,
+            toHumanFriendlyReason(failureReason),
+            previousResponse.replace("\n", " ").take(180),
+            sampleText
+        )
+    }
+
+    private fun buildRegexRepairUltraCompactPrompt(
+        samples: List<String>,
+        previousResponse: String,
+        failureReason: String
+    ): String {
+        val shortest = samples
+            .map { toCompactRegexSample(it, 120) }
+            .minByOrNull { it.length }
+            .orEmpty()
+        return context.getString(
+            R.string.prompt_sms_regex_repair_ultra_compact,
+            toHumanFriendlyReason(failureReason),
+            previousResponse.replace("\n", " ").take(120),
+            shortest
         )
     }
 
@@ -1019,20 +1199,8 @@ class GeminiSmsExtractor @Inject constructor(
                 MoneyTalkLogger.e("API 키가 설정되지 않음")
                 return@withContext smsMessages.map { null }
             }
-            // 번호를 매겨서 프롬프트 구성 (수신 날짜 포함)
-            val smsListText = smsMessages.mapIndexed { idx, body ->
-                val dateInfo = smsTimestamps.getOrNull(idx)?.let { ts ->
-                    if (ts > 0) " (수신: ${smsDateFormat.format(Date(ts))})" else ""
-                } ?: ""
-                "${idx + 1}번$dateInfo: $body"
-            }.joinToString("\n\n")
-
-            // 참조 리스트 추가
-            val referenceText = try {
-                categoryReferenceProvider.getSmsExtractionReference()
-            } catch (e: Exception) {
-                ""
-            }
+            val smsListText = buildBatchSmsListText(smsMessages, smsTimestamps)
+            val referenceText = getReferenceText()
 
             val prompt = context.getString(
                 R.string.prompt_sms_batch_extract_user,
@@ -1084,9 +1252,7 @@ class GeminiSmsExtractor @Inject constructor(
             smsMessages.mapIndexed { idx, sms ->
                 try {
                     val ts = smsTimestamps.getOrNull(idx) ?: 0L
-                    val startTime = System.currentTimeMillis()
                     val result = extractFromSms(sms, ts)
-                    val elapsed = System.currentTimeMillis() - startTime
                     if (idx < smsMessages.lastIndex) {
                         delay(FALLBACK_SINGLE_DELAY_MS)
                     }
@@ -1102,6 +1268,106 @@ class GeminiSmsExtractor @Inject constructor(
             throw e
         } catch (e: Exception) {
             MoneyTalkLogger.e("LLM 배치 추출 전체 실패: ${e.message}", e)
+            smsMessages.map { null }
+        }
+    }
+
+    /**
+     * 공유 참조 컨텍스트를 함께 사용하여 여러 SMS를 일괄 추출
+     */
+    suspend fun extractFromSmsBatchWithReference(
+        smsMessages: List<String>,
+        smsTimestamps: List<Long> = emptyList(),
+        referenceContext: String = ""
+    ): List<LlmExtractionResult?> = withContext(Dispatchers.IO) {
+        if (referenceContext.isBlank()) {
+            return@withContext extractFromSmsBatch(smsMessages, smsTimestamps)
+        }
+        if (smsMessages.isEmpty()) return@withContext emptyList()
+
+        if (smsMessages.size == 1) {
+            val ts = smsTimestamps.firstOrNull() ?: 0L
+            return@withContext listOf(
+                extractFromSmsWithReference(
+                    smsBody = smsMessages[0],
+                    smsTimestamp = ts,
+                    referenceContext = referenceContext
+                )
+            )
+        }
+
+        try {
+            val model = getContextBatchModel()
+            if (model == null) {
+                MoneyTalkLogger.e("API 키가 설정되지 않음")
+                return@withContext smsMessages.map { null }
+            }
+
+            val prompt = context.getString(
+                R.string.prompt_sms_context_batch_extract_user,
+                smsMessages.size.toString(),
+                getReferenceText(),
+                referenceContext,
+                buildBatchSmsListText(smsMessages, smsTimestamps)
+            )
+
+            for (attempt in 0 until BATCH_MAX_RETRIES) {
+                try {
+                    val responseText = model.generateContent(prompt).text
+                    if (responseText == null) {
+                        MoneyTalkLogger.e(
+                            "[extractBatchContext] LLM 배치 응답 없음 (시도 ${attempt + 1}, promptVersion=$SMS_CONTEXT_BATCH_PROMPT_VERSION)"
+                        )
+                        continue
+                    }
+
+                    val parsed = parseBatchExtractionResponse(responseText, smsMessages.size)
+                    if (parsed != null) {
+                        return@withContext parsed
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    val isRateLimit = e.message?.contains("429") == true ||
+                        e.message?.contains("RESOURCE_EXHAUSTED") == true
+                    if (isRateLimit && attempt < BATCH_MAX_RETRIES - 1) {
+                        val retryDelayMs = BATCH_RETRY_BASE_DELAY_MS * (attempt + 1)
+                        MoneyTalkLogger.w(
+                            "[extractBatchContext] 429 Rate Limit 발생 ${retryDelayMs}ms 후 재시도"
+                        )
+                        delay(retryDelayMs)
+                        continue
+                    }
+                    MoneyTalkLogger.e(
+                        "[extractBatchContext] LLM 배치 추출 실패 (시도 ${attempt + 1}, promptVersion=$SMS_CONTEXT_BATCH_PROMPT_VERSION): ${e.message}"
+                    )
+                }
+            }
+
+            MoneyTalkLogger.w("[extractBatchContext] LLM 배치 실패, 컨텍스트 단건 추출로 폴백 (${smsMessages.size}건)")
+            smsMessages.mapIndexed { idx, sms ->
+                try {
+                    val ts = smsTimestamps.getOrNull(idx) ?: 0L
+                    val result = extractFromSmsWithReference(
+                        smsBody = sms,
+                        smsTimestamp = ts,
+                        referenceContext = referenceContext
+                    )
+                    if (idx < smsMessages.lastIndex) {
+                        delay(FALLBACK_SINGLE_DELAY_MS)
+                    }
+                    result
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    MoneyTalkLogger.e("[extractBatchContext→fallback] 개별 LLM ${idx + 1} 실패: ${e.message}")
+                    null
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            MoneyTalkLogger.e("컨텍스트 포함 LLM 배치 추출 전체 실패: ${e.message}", e)
             smsMessages.map { null }
         }
     }

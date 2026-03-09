@@ -1,7 +1,7 @@
 # AI_HANDOFF.md - AI 에이전트 인수인계 문서
 
 > AI 에이전트가 교체되거나 세션이 끊겼을 때, 새 에이전트가 즉시 작업을 이어받을 수 있도록 하는 문서
-> **최종 갱신**: 2026-03-03 (SMS regex Fast Path 전환 완료)
+> **최종 갱신**: 2026-03-05 (카테고리 시스템 리디자인 + StoreRule 완료)
 
 ---
 
@@ -318,7 +318,26 @@
 - `SmsOriginSampleCollector`: 성공/실패 표본 분리 수집 (SHA-256 결정적 키)
 - Fallback 안전 연결: `distinctBy { input.id }` 중복 제거, SyncStats 분리 지표
 - `docs/SMS_RULE_JSON_UPDATE_GUIDE.md` 운영 가이드 추가
-- 상세: `docs/TEMP_SMS_REGEX_RULE_MIGRATION_PLAN.md` (Phase 0~6 + 추가 작업 완료)
+
+**카테고리 시스템 리디자인 + StoreRule**: ✅ 완료 (2026-03-04~05)
+- **커스텀 카테고리 지원**: CategoryProvider 도입, 이모지/배경색 표시, 카테고리 설정 화면
+- **카테고리 설정 화면**: CategorySettingsActivity — 사용자 정의 카테고리 추가/수정/삭제/재정렬
+- **StoreRule DB 시스템 (DB v7→v11)**:
+  - StoreRuleEntity (keyword, category, isFixed) + DAO + Repository
+  - SMS 파이프라인 Tier 0 적용 (MainViewModel.saveExpenses, CategoryClassifierService.getCategory)
+  - 거래 편집 시 동일 거래처 일괄 적용 → StoreRule 자동 생성
+  - 설정 화면: StoreRuleSettingsActivity (규칙 목록/추가/편집/삭제)
+  - 규칙 저장 시 기존 레코드 소급 적용 + 해제 시 소급 원복
+- **거래 편집 개선**: 뱅크셀러드 스타일 TransactionEditActivity + StoreRule 체크박스 사전 체크
+- **고정지출 개선**:
+  - 고정지출 필터에서 수입/이체 제외 (FIXED_ONLY → incomes 빈 목록)
+  - TransactionCard에 "고정" 태그 표시 (primary 색상 Bold 텍스트)
+- **커스텀 카테고리 버그 수정**:
+  - 홈 카테고리별 지출에서 커스텀 카테고리가 "기타"로 합쳐지는 문제 수정
+  - 커스텀 카테고리 클릭 시 기타 상세가 아닌 해당 카테고리 상세 표시
+- **리뷰 Warning 반영**:
+  - StoreRule이 개별 DB 수정을 덮어쓰는 문제 → DB 값 우선, 체크박스만 사전 체크
+  - 규칙 해제/삭제 시 소급 원복 (isFixed=true→null, 키워드 변경, 규칙 삭제)
 
 **v1.1.0 출시 준비**: 🔄 진행 중 (2026-03-01)
 - **targetSdk 34→35 (API 35 마이그레이션)**: compileSdk/targetSdk 35, AGP 8.2.2→8.7.3, Gradle 8.5→8.9
@@ -383,7 +402,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 ## 5. 주의사항
 
 ### 절대 금지
-- DB 스키마 변경 시 마이그레이션 필수 (현재 AppDatabase v7, sms_patterns v3)
+- DB 스키마 변경 시 마이그레이션 필수 (현재 AppDatabase v11, sms_patterns v3)
 - 임계값 수치 변경 시 [AI_CONTEXT.md](AI_CONTEXT.md) SSOT 먼저 업데이트
 - `!!` non-null assertion 사용 금지
 
@@ -402,6 +421,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 날짜 | 작업 | 상태 |
 |------|------|------|
+| 2026-03-05 | 카테고리 시스템 리디자인 + StoreRule: 커스텀 카테고리, CategoryProvider, StoreRule DB(v7→v11), SMS Tier 0, 거래편집 일괄적용, 설정화면, 고정지출 필터/태그, 커스텀 카테고리 버그 수정, 리뷰 Warning 반영 | 완료 |
 | 2026-03-03 | SMS Regex Fast Path 전환: DB v7(sms_regex_rules), Step1.5 sender regex, Asset seed+RTDB overlay, 표본 수집, 룰 자동 최적화, 운영 가이드 — Phase 0~6 + 추가 작업 완료 | 완료 |
 | 2026-03-01 | v1.1.0 출시 준비: targetSdk 35, AdMob 실제 ID, STT/RECORD_AUDIO 제거, CTA 버그 수정, ForceUpdateDialog 백키 방어, versionCode 3 | 진행 중 |
 | 2026-02-27 | PR #42: 문자설정 Activity + 수신거부 번호 관리 + 영어 번역 보강 | 완료 |
@@ -478,7 +498,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 파일 | 설명 |
 |------|------|
-| [`AppDatabase.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/AppDatabase.kt) | Room DB 정의 (v7, 11 entities, sms_patterns v3) |
+| [`AppDatabase.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/AppDatabase.kt) | Room DB 정의 (v11, 12 entities, sms_patterns v3) |
 | [`OwnedCardEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/OwnedCardEntity.kt) | 카드 화이트리스트 Entity |
 | [`SmsExclusionKeywordEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/SmsExclusionKeywordEntity.kt) | SMS 제외 키워드 Entity |
 | [`OwnedCardRepository.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt) | 카드 관리 + CardNameNormalizer 연동 |

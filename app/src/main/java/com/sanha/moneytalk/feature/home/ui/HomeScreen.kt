@@ -78,9 +78,12 @@ import com.sanha.moneytalk.feature.history.ui.IncomeDetailDialog
 import com.sanha.moneytalk.feature.home.ui.component.ImportDataCtaSection
 import com.sanha.moneytalk.feature.home.ui.component.SpendingTrendSection
 import com.sanha.moneytalk.feature.home.ui.model.HomeSpendingTrendInfo
+import com.sanha.moneytalk.core.ui.component.getCustomCategoryBackgroundColor
+import com.sanha.moneytalk.core.ui.component.getCustomCategoryChartColor
 import com.sanha.moneytalk.core.ui.component.getCategoryChartColor
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
+import com.sanha.moneytalk.core.ui.component.rememberCategoryEmoji
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
@@ -833,6 +836,9 @@ fun CategoryExpenseSection(
         } else {
             displayList.forEachIndexed { index, item ->
                 val category = Category.fromDisplayName(item.category)
+                val categoryEmoji = rememberCategoryEmoji(item.category)
+                val isCustomCategory = category == Category.ETC
+                        && item.category != Category.ETC.displayName
                 val budget = categoryBudgets[item.category]
                 val budgetAmount = budget ?: 0
                 val hasBudget = budget != null && budgetAmount > 0
@@ -860,6 +866,7 @@ fun CategoryExpenseSection(
                     isOverBudget -> MaterialTheme.colorScheme.error
                     isWarningBudget -> warningColor
                     isFirst && !hasBudget -> MaterialTheme.colorScheme.primary
+                    isCustomCategory -> getCustomCategoryChartColor(item.category)
                     else -> getCategoryChartColor(category)
                 }
 
@@ -885,11 +892,14 @@ fun CategoryExpenseSection(
                         ) {
                             CategoryIcon(
                                 category = category,
+                                emojiOverride = categoryEmoji,
+                                backgroundColorOverride = if (isCustomCategory)
+                                    getCustomCategoryBackgroundColor(item.category) else null,
                                 containerSize = 40.dp,
                                 fontSize = 20.sp
                             )
                             Text(
-                                text = category.displayName,
+                                text = item.category,
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface

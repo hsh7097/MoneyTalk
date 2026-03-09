@@ -47,6 +47,21 @@ interface CategoryClassifierService {
     suspend fun getCategory(storeName: String, originalSms: String = ""): String
 
     /**
+     * DB INSERT 전 가게명 목록을 인메모리에서 분류 (이체 감지 + 로컬 룰 + 시맨틱 그룹핑 + Gemini)
+     *
+     * SMS 동기화 시 DB INSERT 전에 호출하여, 미분류 상태로 저장되는 것을 방지합니다.
+     * 분류 결과는 Room 매핑 + 벡터 DB에도 저장합니다.
+     *
+     * @param storeNames 분류할 가게명 목록
+     * @param onStepProgress 세부 진행 콜백
+     * @return 가게명 → 카테고리 매핑 (분류된 항목만 포함)
+     */
+    suspend fun classifyStoreNamesInMemory(
+        storeNames: List<String>,
+        onStepProgress: (suspend (step: String, current: Int, total: Int) -> Unit)? = null
+    ): Map<String, String>
+
+    /**
      * 미분류("기타") 항목들을 Gemini로 일괄 분류 (시맨틱 그룹핑 최적화)
      *
      * 1. 가게명을 총 지출액 기준 내림차순 정렬 (중요도 우선)
@@ -97,6 +112,25 @@ interface CategoryClassifierService {
      * 벡터 DB 학습 현황 조회
      */
     suspend fun getVectorCacheCount(): Int
+
+    /**
+     * 미분류 수입을 Gemini로 일괄 분류
+     *
+     * 1. type 기반 사전 분류 (급여→급여, 보너스→상여금)
+     * 2. 나머지 → source별 그룹핑 → Gemini API
+     * 3. 결과를 IncomeDao에 저장
+     *
+     * @param onStepProgress 세부 진행 콜백 (단계명, 현재, 전체)
+     * @return 분류된 항목 수
+     */
+    suspend fun classifyUnclassifiedIncomes(
+        onStepProgress: (suspend (step: String, current: Int, total: Int) -> Unit)? = null
+    ): Int
+
+    /**
+     * 미분류 수입 수 조회
+     */
+    suspend fun getUnclassifiedIncomeCount(): Int
 
     /**
      * 미분류 항목이 없을 때까지 반복 분류

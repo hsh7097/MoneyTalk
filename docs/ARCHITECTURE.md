@@ -15,11 +15,10 @@ com.sanha.moneytalk/
 │
 ├── core/                                  # 공통 모듈
 │   ├── database/                          # Room 데이터베이스
-│   │   ├── AppDatabase.kt                 # Room Database 정의 (v7, 11 entities)
-│   │   ├── DatabaseMigrations.kt          # Room 마이그레이션 (v5→v6, v6→v7)
+│   │   ├── AppDatabase.kt                 # Room Database 정의 (v1, 14 entities)
 │   │   ├── converter/
 │   │   │   └── FloatListConverter.kt      # Float 리스트 타입 컨버터
-│   │   ├── dao/                           # Data Access Objects (10개)
+│   │   ├── dao/                           # Data Access Objects (13개)
 │   │   │   ├── BudgetDao.kt              # 예산 DAO
 │   │   │   ├── CategoryMappingDao.kt     # 카테고리 매핑 DAO
 │   │   │   ├── ChatDao.kt               # 채팅 DAO

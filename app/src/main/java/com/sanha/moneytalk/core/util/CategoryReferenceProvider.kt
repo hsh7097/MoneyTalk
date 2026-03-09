@@ -1,8 +1,11 @@
 package com.sanha.moneytalk.core.util
 
 import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * 카테고리 참조 리스트 제공자
@@ -33,13 +36,18 @@ class CategoryReferenceProvider @Inject constructor(
     }
 
     /** 인메모리 캐시 */
+    @Volatile
     private var cachedReferenceMap: Map<String, List<String>>? = null
+    @Volatile
     private var cachedReferenceText: String? = null
+    private val cacheMutex = Mutex()
+    private val cacheVersion = AtomicLong(0)
 
     /**
      * 캐시 무효화 (카테고리 매핑 변경 시 호출)
      */
     fun invalidateCache() {
+        cacheVersion.incrementAndGet()
         cachedReferenceMap = null
         cachedReferenceText = null
     }
@@ -54,35 +62,18 @@ class CategoryReferenceProvider @Inject constructor(
      */
     suspend fun getCategoryReferenceMap(): Map<String, List<String>> {
         cachedReferenceMap?.let { return it }
+        return cacheMutex.withLock {
+            cachedReferenceMap?.let { return@withLock it }
 
-        val allMappings = categoryMappingDao.getAllMappingsOnce()
+            val version = cacheVersion.get()
+            val result = buildReferenceMap()
 
-        // source="user"를 우선으로 정렬, 카테고리별 그룹핑
-        val userMappings = allMappings.filter { it.source == "user" }
-        val otherMappings = allMappings.filter { it.source != "user" }
-
-        val referenceMap = mutableMapOf<String, MutableList<String>>()
-
-        // 사용자 매핑 우선 추가
-        for (mapping in userMappings) {
-            referenceMap.getOrPut(mapping.category) { mutableListOf() }
-                .add(mapping.storeName)
-        }
-
-        // 나머지 매핑으로 보충 (카테고리별 최대 개수까지)
-        for (mapping in otherMappings) {
-            val list = referenceMap.getOrPut(mapping.category) { mutableListOf() }
-            if (list.size < MAX_EXAMPLES_PER_CATEGORY) {
-                list.add(mapping.storeName)
+            if (version == cacheVersion.get()) {
+                cachedReferenceMap = result
             }
-        }
 
-        val result = referenceMap.mapValues { (_, stores) ->
-            stores.take(MAX_EXAMPLES_PER_CATEGORY)
+            cachedReferenceMap ?: result
         }
-
-        cachedReferenceMap = result
-        return result
     }
 
     /**
@@ -94,17 +85,35 @@ class CategoryReferenceProvider @Inject constructor(
      * @return 프롬프트에 삽입할 참조 리스트 텍스트 (없으면 빈 문자열)
      */
     suspend fun getSmsExtractionReference(): String {
-        val refMap = getCategoryReferenceMap()
-        if (refMap.isEmpty()) return ""
+        cachedReferenceText?.let { return it }
+        return cacheMutex.withLock {
+            cachedReferenceText?.let { return@withLock it }
 
-        val sb = StringBuilder()
-        sb.appendLine("\n[추가 참고: 사용자 설정 가게-카테고리 매핑]")
-        for ((category, stores) in refMap) {
-            if (stores.isNotEmpty()) {
-                sb.appendLine("- $category: ${stores.joinToString(", ")}")
+            val version = cacheVersion.get()
+            val refMap = cachedReferenceMap ?: buildReferenceMap().also { built ->
+                if (version == cacheVersion.get()) {
+                    cachedReferenceMap = built
+                }
+            }
+            if (refMap.isEmpty()) return@withLock ""
+
+            val sb = StringBuilder()
+            sb.appendLine("\n[추가 참고: 사용자 설정 가게-카테고리 매핑]")
+            var remainingItems = MAX_REFERENCE_ITEMS
+            for ((category, stores) in refMap) {
+                if (remainingItems <= 0) break
+                val limitedStores = stores.take(remainingItems)
+                if (limitedStores.isNotEmpty()) {
+                    sb.appendLine("- $category: ${limitedStores.joinToString(", ")}")
+                    remainingItems -= limitedStores.size
+                }
+            }
+            sb.toString().also { text ->
+                if (version == cacheVersion.get()) {
+                    cachedReferenceText = text
+                }
             }
         }
-        return sb.toString()
     }
 
     /**
@@ -143,5 +152,31 @@ class CategoryReferenceProvider @Inject constructor(
         // CategoryClassifierService.updateExpenseCategory()에서 이미 수행
         // 여기서는 캐시만 무효화
         invalidateCache()
+    }
+
+    private suspend fun buildReferenceMap(): Map<String, List<String>> {
+        val allMappings = categoryMappingDao.getAllMappingsOnce()
+
+        // source="user"를 우선으로 정렬, 카테고리별 그룹핑
+        val userMappings = allMappings.filter { it.source == "user" }
+        val otherMappings = allMappings.filter { it.source != "user" }
+
+        val referenceMap = mutableMapOf<String, MutableList<String>>()
+
+        for (mapping in userMappings) {
+            referenceMap.getOrPut(mapping.category) { mutableListOf() }
+                .add(mapping.storeName)
+        }
+
+        for (mapping in otherMappings) {
+            val list = referenceMap.getOrPut(mapping.category) { mutableListOf() }
+            if (list.size < MAX_EXAMPLES_PER_CATEGORY) {
+                list.add(mapping.storeName)
+            }
+        }
+
+        return referenceMap.mapValues { (_, stores) ->
+            stores.take(MAX_EXAMPLES_PER_CATEGORY)
+        }
     }
 }

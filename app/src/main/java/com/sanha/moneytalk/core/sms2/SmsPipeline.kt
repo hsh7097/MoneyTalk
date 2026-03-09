@@ -93,7 +93,10 @@ class SmsPipeline @Inject constructor(
     data class PipelineResult(
         val results: List<SmsParseResult>,
         val vectorMatchCount: Int,
+        /** Step 4.5/5에서 LLM으로 최종 파싱된 SMS 건수 */
         val llmProcessCount: Int,
+        /** Step 5에서 새로 등록했거나 학습 큐에 적재한 결제 패턴 수 */
+        val newPatternCount: Int = 0,
         /** Step 4.5에서 regex 실패→LLM 복구된 건수 */
         val regexFailedRecoveredCount: Int = 0,
         /** 파이프라인 처리 중 최종 파싱 누락된 건수 */
@@ -157,7 +160,7 @@ class SmsPipeline @Inject constructor(
         }
 
         // Step 5-A: 순수 미매칭건은 기존 정책(그룹핑 + regex 생성 가능) 유지
-        val unmatchedLlmResults = if (matchResult.unmatched.isNotEmpty()) {
+        val unmatchedClassification = if (matchResult.unmatched.isNotEmpty()) {
             val preview = matchResult.unmatched.take(5)
             preview.forEachIndexed { index, embeddedSms ->
                 MoneyTalkLogger.i(
@@ -174,14 +177,14 @@ class SmsPipeline @Inject constructor(
                 onProgress?.invoke(STEP_LLM, step, current, total)
             }
         } else {
-            emptyList()
+            SmsGroupClassifier.ClassificationResult(emptyList(), 0)
         }
         if (matchResult.unmatched.isNotEmpty()) {
-            val unmatchedParsedIds = unmatchedLlmResults.map { it.input.id }.toHashSet()
+            val unmatchedParsedIds = unmatchedClassification.results.map { it.input.id }.toHashSet()
             val unresolvedFromUnmatched = matchResult.unmatched
                 .filter { it.input.id !in unmatchedParsedIds }
             MoneyTalkLogger.i(
-                "Step5-A 결과: 입력 ${matchResult.unmatched.size}건 → 결제확정 ${unmatchedLlmResults.size}건, 미확정 ${unresolvedFromUnmatched.size}건"
+                "Step5-A 결과: 입력 ${matchResult.unmatched.size}건 → 결제확정 ${unmatchedClassification.results.size}건, 미확정 ${unresolvedFromUnmatched.size}건"
             )
             unresolvedFromUnmatched.take(5).forEachIndexed { index, embeddedSms ->
                 MoneyTalkLogger.w(
@@ -192,14 +195,14 @@ class SmsPipeline @Inject constructor(
         }
 
         // Step 5-B: Step4.5 fallback은 regex 재시도하지 않고 direct LLM만 수행
-        val regexFallbackLlmResults = if (regexFailedFallback.isNotEmpty()) {
+        val regexFallbackClassification = if (regexFailedFallback.isNotEmpty()) {
             val preview = regexFailedFallback.take(5)
             preview.forEachIndexed { index, embeddedSms ->
                 MoneyTalkLogger.i(
                     "[Step5-B input] #${index + 1} id=${embeddedSms.input.id}, addr=${embeddedSms.input.address}, body=${embeddedSms.input.body.replace("\n", "↵").take(120)}"
                 )
             }
-            onProgress?.invoke(STEP_LLM, "AI가 결제 내역 분석 중...", matchResult.matched.size + regexFailedResults.size + unmatchedLlmResults.size, embedded.size)
+            onProgress?.invoke(STEP_LLM, "AI가 결제 내역 분석 중...", matchResult.matched.size + regexFailedResults.size + unmatchedClassification.results.size, embedded.size)
             groupClassifier.classifyUnmatched(
                 unmatchedList = regexFailedFallback,
                 forceSkipRegexAll = true
@@ -207,14 +210,14 @@ class SmsPipeline @Inject constructor(
                 onProgress?.invoke(STEP_LLM, step, current, total)
             }
         } else {
-            emptyList()
+            SmsGroupClassifier.ClassificationResult(emptyList(), 0)
         }
         if (regexFailedFallback.isNotEmpty()) {
-            val fallbackParsedIds = regexFallbackLlmResults.map { it.input.id }.toHashSet()
+            val fallbackParsedIds = regexFallbackClassification.results.map { it.input.id }.toHashSet()
             val unresolvedFromRegexFallback = regexFailedFallback
                 .filter { it.input.id !in fallbackParsedIds }
             MoneyTalkLogger.i(
-                "Step5-B 결과: 입력 ${regexFailedFallback.size}건 → 결제확정 ${regexFallbackLlmResults.size}건, 미확정 ${unresolvedFromRegexFallback.size}건"
+                "Step5-B 결과: 입력 ${regexFailedFallback.size}건 → 결제확정 ${regexFallbackClassification.results.size}건, 미확정 ${unresolvedFromRegexFallback.size}건"
             )
             unresolvedFromRegexFallback.take(5).forEachIndexed { index, embeddedSms ->
                 MoneyTalkLogger.w(
@@ -224,7 +227,9 @@ class SmsPipeline @Inject constructor(
             }
         }
 
-        val llmResults = unmatchedLlmResults + regexFallbackLlmResults
+        val llmResults = unmatchedClassification.results + regexFallbackClassification.results
+        val newPatternCount =
+            unmatchedClassification.learnedPatternCount + regexFallbackClassification.learnedPatternCount
 
         val total = matchResult.matched + regexFailedResults + llmResults
         val parsedIds = total.map { it.input.id }.toHashSet()
@@ -254,6 +259,7 @@ class SmsPipeline @Inject constructor(
             results = total,
             vectorMatchCount = matchResult.matched.size,
             llmProcessCount = llmResults.size,
+            newPatternCount = newPatternCount,
             regexFailedRecoveredCount = regexFailedResults.size,
             droppedCount = droppedCount
         )

@@ -262,21 +262,36 @@ fun FilterTabRow(
     currentMode: ViewMode,
     onModeChange: (ViewMode) -> Unit,
     sortOrder: SortOrder = SortOrder.DATE_DESC,
-    selectedCategory: String? = null,
     showExpenses: Boolean = true,
     showIncomes: Boolean = true,
+    showTransfers: Boolean = true,
+    selectedExpenseCategories: Set<String> = emptySet(),
+    selectedIncomeCategories: Set<String> = emptySet(),
+    selectedTransferCategories: Set<String> = emptySet(),
     fixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL,
-    onApplyFilter: (SortOrder, Boolean, Boolean, String?, FixedExpenseFilter) -> Unit = { _, _, _, _, _ -> },
+    onApplyFilter: (
+        SortOrder,
+        Boolean,
+        Boolean,
+        Boolean,
+        Set<String>,
+        Set<String>,
+        Set<String>,
+        FixedExpenseFilter
+    ) -> Unit = { _, _, _, _, _, _, _, _ -> },
     onResetFilter: () -> Unit = {},
     onSearchClick: () -> Unit = {},
     onAddClick: () -> Unit = {}
 ) {
     var showBottomSheet by remember { mutableStateOf(false) }
 
-    val hasActiveFilter = selectedCategory != null
+    val hasActiveFilter = selectedExpenseCategories.isNotEmpty()
+            || selectedIncomeCategories.isNotEmpty()
+            || selectedTransferCategories.isNotEmpty()
             || sortOrder != SortOrder.DATE_DESC
             || !showExpenses
             || !showIncomes
+            || !showTransfers
             || fixedExpenseFilter != FixedExpenseFilter.ALL
 
     val primaryColor = MaterialTheme.colorScheme.primary
@@ -321,18 +336,22 @@ fun FilterTabRow(
             if (hasActiveFilter) {
                 // 필터 활성: 초록 outline 칩 (필터 설명 + X)
                 val hasMultipleFilters = listOf(
-                    selectedCategory != null,
+                    selectedExpenseCategories.isNotEmpty() ||
+                            selectedIncomeCategories.isNotEmpty() ||
+                            selectedTransferCategories.isNotEmpty(),
                     sortOrder != SortOrder.DATE_DESC,
-                    !showExpenses || !showIncomes,
+                    !showExpenses || !showIncomes || !showTransfers,
                     fixedExpenseFilter != FixedExpenseFilter.ALL
                 ).count { it } > 1
 
                 val filterDescription = when {
                     hasMultipleFilters ->
                         stringResource(R.string.history_filter_active_combined)
-                    selectedCategory != null ->
+                    selectedExpenseCategories.isNotEmpty() ||
+                            selectedIncomeCategories.isNotEmpty() ||
+                            selectedTransferCategories.isNotEmpty() ->
                         stringResource(R.string.history_filter_active_category)
-                    !showExpenses || !showIncomes ->
+                    !showExpenses || !showIncomes || !showTransfers ->
                         stringResource(R.string.history_filter_active_type)
                     fixedExpenseFilter == FixedExpenseFilter.FIXED_ONLY ->
                         stringResource(R.string.history_filter_active_fixed_only)
@@ -444,11 +463,23 @@ fun FilterTabRow(
             currentSortOrder = sortOrder,
             currentShowExpenses = showExpenses,
             currentShowIncomes = showIncomes,
-            currentCategory = selectedCategory,
+            currentShowTransfers = showTransfers,
+            currentExpenseCategories = selectedExpenseCategories,
+            currentIncomeCategories = selectedIncomeCategories,
+            currentTransferCategories = selectedTransferCategories,
             currentFixedExpenseFilter = fixedExpenseFilter,
             onDismiss = { showBottomSheet = false },
-            onApply = { newSort, newShowExp, newShowInc, newCategory, newFixedFilter ->
-                onApplyFilter(newSort, newShowExp, newShowInc, newCategory, newFixedFilter)
+            onApply = { newSort, newShowExp, newShowInc, newShowTransfer, expCats, incCats, transferCats, newFixedFilter ->
+                onApplyFilter(
+                    newSort,
+                    newShowExp,
+                    newShowInc,
+                    newShowTransfer,
+                    expCats,
+                    incCats,
+                    transferCats,
+                    newFixedFilter
+                )
                 showBottomSheet = false
             }
         )

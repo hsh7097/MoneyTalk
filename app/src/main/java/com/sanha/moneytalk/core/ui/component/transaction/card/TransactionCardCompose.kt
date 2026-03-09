@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
+import com.sanha.moneytalk.core.ui.component.getCustomCategoryBackgroundColor
+import com.sanha.moneytalk.core.ui.component.rememberCategoryEmoji
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -52,6 +54,7 @@ fun TransactionCardCompose(
     modifier: Modifier = Modifier
 ) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
+    val resolvedCategoryEmoji = rememberCategoryEmoji(info.categoryTag.orEmpty())
     val amountPrefix = if (info.isIncome) "+" else "-"
     val formattedAmount =
         "${amountPrefix}${stringResource(R.string.common_won, numberFormat.format(info.amount))}"
@@ -79,7 +82,7 @@ fun TransactionCardCompose(
             ) {
                 // 아이콘: 지출=카테고리 아이콘 (원형 배경), 수입=이모지
                 val category = info.category
-                val iconEmoji = info.iconEmoji
+                val iconEmoji = info.iconEmoji ?: info.categoryTag?.let { resolvedCategoryEmoji }
                 if (category != null) {
                     CategoryIcon(
                         category = category,
@@ -87,11 +90,16 @@ fun TransactionCardCompose(
                         fontSize = 22.sp
                     )
                 } else if (iconEmoji != null) {
+                    val bgColor = if (info.isIncome) {
+                        MaterialTheme.moneyTalkColors.income.copy(alpha = 0.15f)
+                    } else {
+                        getCustomCategoryBackgroundColor(info.categoryTag.orEmpty())
+                    }
                     Box(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.moneyTalkColors.income.copy(alpha = 0.15f)),
+                            .background(bgColor),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(text = iconEmoji, fontSize = 20.sp)
@@ -131,7 +139,7 @@ fun TransactionCardCompose(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    // 카테고리 칩 + 시간 + 카드명
+                    // 카테고리 칩 + 시간 + 카드명 + 고정
                     val tag = info.categoryTag
                     val time = info.time
                     val cardName = info.cardNameText
@@ -168,6 +176,16 @@ fun TransactionCardCompose(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            // 고정지출 태그
+                            if (info.isFixed) {
+                                Text(
+                                    text = stringResource(R.string.transaction_card_fixed_tag),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }

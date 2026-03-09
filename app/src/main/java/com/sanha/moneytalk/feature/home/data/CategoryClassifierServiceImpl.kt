@@ -2,6 +2,9 @@ package com.sanha.moneytalk.feature.home.data
 
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
+import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.IncomeCategoryMapper
+import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.sms2.SmsParser
 import com.sanha.moneytalk.core.util.StoreNameGrouper
 import javax.inject.Inject
@@ -33,11 +36,44 @@ class CategoryClassifierServiceImpl @Inject constructor(
     private val categoryRepository: CategoryRepository,
     private val geminiRepository: GeminiCategoryRepository,
     private val expenseRepository: ExpenseRepository,
+    private val incomeRepository: IncomeRepository,
     private val storeEmbeddingRepository: StoreEmbeddingRepository,
     private val storeNameGrouper: StoreNameGrouper,
-    private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider
+    private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider,
+    private val storeRuleRepository: StoreRuleRepository
 ) : CategoryClassifierService {
     companion object {
+
+        /** 마스킹된 한국 이름 패턴: "하*현", "김**", "이*수" 등 */
+        private val MASKED_NAME_PATTERN = Regex("^[가-힣][*]+[가-힣]?$")
+
+        /** 이체 키워드 */
+        private val TRANSFER_KEYWORDS = listOf("이체", "송금", "자동이체", "내계좌", "계좌출금")
+
+        /** 2글자 한글이지만 가게명인 예외 목록 */
+        private val PERSON_NAME_EXCEPTIONS = setOf(
+            "쿠팡", "배민", "카카오", "네이버", "토스", "당근",
+            "요기요", "야놀자", "무신사", "다이소", "올리브",
+            "스벅", "이마트", "롯데", "현대", "삼성",
+            "신세계", "홈플", "마켓", "위메프", "티몬",
+            "오늘의", "오아시스", "컬리", "번개", "중고나라"
+        )
+
+        /** 이체 패턴 감지 (마스킹된 인명 또는 이체 키워드) */
+        fun isTransferPattern(storeName: String): Boolean {
+            val trimmed = storeName.trim()
+
+            // 마스킹된 이름 패턴 (하*현, 김**, 이*수)
+            if (MASKED_NAME_PATTERN.matches(trimmed)) return true
+
+            // 이체 키워드 포함
+            if (TRANSFER_KEYWORDS.any { trimmed.contains(it) }) return true
+
+            return false
+        }
+
+        /** 수입 type 기반 사전 분류 */
+        private val INCOME_PRE_CLASSIFY = IncomeCategoryMapper.preClassifyMap()
 
         /**
          * Gemini 호출 전 로컬 룰로 사전 분류 가능한 패턴
@@ -129,6 +165,11 @@ class CategoryClassifierServiceImpl @Inject constructor(
         }
 
         // ===== 일반 모드 (개별 조회) =====
+        // Tier 0: StoreRule 매칭 (사용자 정의 규칙, 최우선)
+        storeRuleRepository.findMatchingRule(storeName)?.category?.let {
+            return it
+        }
+
         // Tier 1: Room DB에서 저장된 매핑 확인 (비용 0)
         categoryRepository.getCategoryByStoreName(storeName)?.let {
             return it
@@ -254,6 +295,90 @@ class CategoryClassifierServiceImpl @Inject constructor(
     }
 
     /**
+     * DB INSERT 전 가게명 목록을 인메모리에서 분류
+     *
+     * classifyUnclassifiedExpenses()와 동일한 파이프라인(이체 감지 → 로컬 룰 → 시맨틱 그룹핑 → Gemini)을
+     * DB 조회/업데이트 없이 인메모리로 실행합니다.
+     * 분류 결과는 Room 매핑 + 벡터 DB에 저장하여 다음 분류에 재사용됩니다.
+     */
+    override suspend fun classifyStoreNamesInMemory(
+        storeNames: List<String>,
+        onStepProgress: (suspend (step: String, current: Int, total: Int) -> Unit)?
+    ): Map<String, String> {
+        if (storeNames.isEmpty()) return emptyMap()
+
+        val result = mutableMapOf<String, String>()
+
+        // 1. 이체 패턴 감지
+        val transferNames = storeNames.filter {
+            isTransferPattern(it) && it !in PERSON_NAME_EXCEPTIONS
+        }
+        for (name in transferNames) {
+            result[name] = Category.TRANSFER_GENERAL.displayName
+        }
+
+        val remaining = storeNames.filter { it !in result }
+        if (remaining.isEmpty()) return result
+
+        // 2. 로컬 룰 사전 분류
+        onStepProgress?.invoke("기본 규칙으로 분류 중...", 0, remaining.size)
+        val (ruleClassified, storeNamesForGemini) = preClassifyByRules(remaining)
+        result.putAll(ruleClassified)
+
+        if (storeNamesForGemini.isEmpty()) {
+            saveMappingsIfNeeded(result, storeNames)
+            return result
+        }
+
+        // 3. 시맨틱 그룹핑
+        onStepProgress?.invoke("비슷한 가게 묶는 중...", 0, storeNamesForGemini.size)
+        val groups = try {
+            storeNameGrouper.groupStoreNames(storeNamesForGemini)
+        } catch (e: Exception) {
+            MoneyTalkLogger.w("시맨틱 그룹핑 실패, 개별 처리로 폴백: ${e.message}")
+            storeNamesForGemini.map {
+                StoreNameGrouper.StoreGroup(representative = it, members = listOf(it))
+            }
+        }
+
+        // 4. Gemini 배치 분류
+        val representatives = groups.map { it.representative }
+        if (representatives.isNotEmpty()) {
+            onStepProgress?.invoke("AI가 분류하는 중...", 0, representatives.size)
+            val classifications = geminiRepository.classifyStoreNames(representatives)
+
+            for (group in groups) {
+                val category = classifications[group.representative] ?: continue
+                for (member in group.members) {
+                    result[member] = category
+                }
+            }
+        }
+
+        // 5. Room 매핑 + 벡터 DB 저장 (다음 분류 시 재사용)
+        saveMappingsIfNeeded(result, storeNames)
+
+        return result
+    }
+
+    /** 분류 결과를 Room 매핑 + 벡터 DB에 저장 */
+    private suspend fun saveMappingsIfNeeded(
+        classifications: Map<String, String>,
+        originalStoreNames: List<String>
+    ) {
+        val toSave = classifications.filter { it.key in originalStoreNames }
+        if (toSave.isEmpty()) return
+
+        val mappings = toSave.map { (store, category) -> store to category }
+        categoryRepository.saveMappings(mappings, "gemini")
+        try {
+            storeEmbeddingRepository.saveStoreEmbeddings(toSave, "gemini")
+        } catch (e: Exception) {
+            MoneyTalkLogger.w("벡터 DB 캐싱 실패 (무시): ${e.message}")
+        }
+    }
+
+    /**
      * 미분류("기타") 항목들을 Gemini로 일괄 분류 (시맨틱 그룹핑 최적화)
      *
      * 1. 가게명을 총 지출액 기준 내림차순 정렬 (중요도 우선)
@@ -281,8 +406,41 @@ class CategoryClassifierServiceImpl @Inject constructor(
             return 0
         }
 
+        // ===== [1.5/6] 이체 감지 (마스킹 인명 패턴) =====
+        val transferStoreNames = unclassifiedExpenses
+            .filter { expense ->
+                expense.transactionType == "TRANSFER" ||
+                        (isTransferPattern(expense.storeName) &&
+                                expense.storeName !in PERSON_NAME_EXCEPTIONS)
+            }
+            .map { it.storeName }
+            .distinct()
+
+        var transferCount = 0
+        if (transferStoreNames.isNotEmpty()) {
+            onStepProgress?.invoke("이체 패턴 감지 중...", 0, transferStoreNames.size)
+            for (storeName in transferStoreNames) {
+                val updated = expenseRepository.updateTransferByStoreName(
+                    storeName = storeName,
+                    category = Category.TRANSFER_GENERAL.displayName,
+                    transactionType = "TRANSFER",
+                    transferDirection = TransferDirection.WITHDRAWAL.dbValue
+                )
+                transferCount += updated
+            }
+        }
+
+        // 이체로 처리된 항목 제외하고 재조회
+        val expensesForClassification = if (transferCount > 0) {
+            expenseRepository.getExpensesByCategoryOnce("미분류")
+        } else {
+            unclassifiedExpenses
+        }
+
+        if (expensesForClassification.isEmpty()) return transferCount
+
         // 가게명별 총 지출액 기준으로 정렬 (중요도 높은 것 우선 처리)
-        val storeAmountMap = unclassifiedExpenses
+        val storeAmountMap = expensesForClassification
             .groupBy { it.storeName }
             .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
 
@@ -376,7 +534,7 @@ class CategoryClassifierServiceImpl @Inject constructor(
 
         // ===== [6/6] 지출 항목 카테고리 업데이트 =====
         val step6Start = System.currentTimeMillis()
-        val storeNamesToUpdate = unclassifiedExpenses.map { it.storeName }.distinct()
+        val storeNamesToUpdate = expensesForClassification.map { it.storeName }.distinct()
             .filter { allClassifications.containsKey(it) }
         for ((idx, store) in storeNamesToUpdate.withIndex()) {
             allClassifications[store]?.let { newCategory ->
@@ -388,10 +546,10 @@ class CategoryClassifierServiceImpl @Inject constructor(
         }
         val step6Elapsed = System.currentTimeMillis() - step6Start
         val updatedCount =
-            unclassifiedExpenses.count { allClassifications.containsKey(it.storeName) }
+            expensesForClassification.count { allClassifications.containsKey(it.storeName) }
 
         val totalElapsed = System.currentTimeMillis() - totalStartTime
-        return updatedCount
+        return updatedCount + transferCount
     }
 
     /**
@@ -504,6 +662,92 @@ class CategoryClassifierServiceImpl @Inject constructor(
      */
     override suspend fun getVectorCacheCount(): Int {
         return storeEmbeddingRepository.getEmbeddingCount()
+    }
+
+    /**
+     * 미분류 수입을 Gemini로 일괄 분류
+     */
+    override suspend fun classifyUnclassifiedIncomes(
+        onStepProgress: (suspend (step: String, current: Int, total: Int) -> Unit)?
+    ): Int {
+        onStepProgress?.invoke("미분류 수입 확인 중...", 0, 0)
+        val unclassified = incomeRepository.getUnclassifiedIncomes()
+        if (unclassified.isEmpty()) return 0
+
+        var classifiedCount = 0
+
+        // 0단계: 이체 감지 (마스킹 인명 패턴)
+        val transferSources = unclassified
+            .map { it.source }
+            .distinct()
+            .filter { isTransferPattern(it) && it !in PERSON_NAME_EXCEPTIONS }
+
+        if (transferSources.isNotEmpty()) {
+            for (source in transferSources) {
+                val updated = incomeRepository.updateCategoryBySource(source, "이체")
+                classifiedCount += updated
+            }
+        }
+
+        // 이체 처리 후 남은 미분류 재조회
+        val afterTransfer = if (transferSources.isNotEmpty()) {
+            incomeRepository.getUnclassifiedIncomes()
+        } else {
+            unclassified
+        }
+        if (afterTransfer.isEmpty()) return classifiedCount
+
+        // 1단계: type 기반 사전 분류
+        val preClassified = mutableMapOf<String, String>() // source → category
+        val remaining = mutableListOf<com.sanha.moneytalk.core.database.entity.IncomeEntity>()
+
+        for (income in afterTransfer) {
+            val preCategory = INCOME_PRE_CLASSIFY[income.type]
+            if (preCategory != null) {
+                preClassified[income.source] = preCategory
+            } else {
+                remaining.add(income)
+            }
+        }
+
+        // 사전 분류 결과 적용
+        for ((source, category) in preClassified) {
+            val updated = incomeRepository.updateCategoryBySource(source, category)
+            classifiedCount += updated
+        }
+
+        if (remaining.isEmpty()) return classifiedCount
+
+        // 2단계: source별 그룹핑 → Gemini 분류
+        onStepProgress?.invoke("AI가 수입을 분류하는 중...", classifiedCount, unclassified.size)
+        val sourceDescriptions = remaining
+            .groupBy { it.source }
+            .mapValues { (_, incomes) ->
+                val description = incomes.first().description
+                val type = incomes.first().type
+                if (description.isNotBlank()) "$type - $description" else type
+            }
+
+        try {
+            val classifications = geminiRepository.classifyIncomeSources(sourceDescriptions)
+
+            for ((source, category) in classifications) {
+                if (category == "미분류") continue
+                val updated = incomeRepository.updateCategoryBySource(source, category)
+                classifiedCount += updated
+            }
+        } catch (e: Exception) {
+            MoneyTalkLogger.e("수입 Gemini 분류 실패: ${e.message}", e)
+        }
+
+        return classifiedCount
+    }
+
+    /**
+     * 미분류 수입 수 조회
+     */
+    override suspend fun getUnclassifiedIncomeCount(): Int {
+        return incomeRepository.getUnclassifiedIncomeCount()
     }
 
     /**

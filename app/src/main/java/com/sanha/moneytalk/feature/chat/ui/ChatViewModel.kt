@@ -1179,7 +1179,7 @@ class ChatViewModel @Inject constructor(
                     val expenseCategory = expense.category
                     val targetValue = filter.value
                     if (filter.includeSubcategories && targetValue is String) {
-                        // 하위 카테고리 포함: "식비" → ["식비", "배달"]
+                        // 하위 카테고리 포함 (displayNamesIncludingSub)
                         val cat = Category.fromDisplayName(targetValue)
                         val names = cat.displayNamesIncludingSub
                         when (filter.op) {

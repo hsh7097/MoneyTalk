@@ -4,6 +4,54 @@
 
 ---
 
+## 2026-03-04~05 - 카테고리 시스템 리디자인 + StoreRule
+
+### 배경
+커스텀 카테고리 지원과 거래처 규칙(StoreRule) 시스템을 도입하여, 사용자가 새 카테고리를 추가하고 거래처별 카테고리/고정지출 규칙을 영구 저장하여 새 SMS 수신 시 자동 적용되도록 개선.
+
+### 작업 내용
+
+#### 커스텀 카테고리 시스템
+- CategoryProvider 도입: 기본 Category enum + 사용자 정의 카테고리 통합 관리
+- 커스텀 카테고리 이모지/배경색 표시 (CategoryIcon, getCustomCategoryBackgroundColor)
+- CategorySettingsActivity: 카테고리 추가/수정/삭제/재정렬 설정 화면
+- 카테고리 필터 UX 개선: 설정 화면 섹션 통합
+
+#### StoreRule DB 시스템 (DB v7→v11)
+- `StoreRuleEntity` (keyword, category, isFixed) + `StoreRuleDao` + `StoreRuleRepository`
+- DB v10→v11 마이그레이션 (store_rules 테이블 생성, keyword UNIQUE 인덱스)
+- SMS 파이프라인 Tier 0 적용: `MainViewModel.saveExpenses()`, `CategoryClassifierService.getCategory()`
+- 거래 편집 시 "동일 거래처 일괄 적용" → StoreRule 자동 생성 (upsert)
+- 거래처 규칙 설정 화면: StoreRuleSettingsActivity (규칙 목록/추가/편집/삭제, CategorySelectDialog 재사용)
+- 규칙 저장 시 기존 DB 레코드 소급 적용 (`updateCategoryByStoreNameContaining`, `updateFixedByStoreNameContaining`)
+- 규칙 해제/삭제 시 소급 원복 (isFixed true→null, 키워드 변경, 규칙 삭제)
+
+#### 거래 편집 화면 개선
+- TransactionEditActivity: 뱅크셀러드 스타일 편집 화면 (CompactEditRow, CompactReadOnlyRow)
+- StoreRule 존재 시 "동일 거래처 일괄 적용" 체크박스 사전 체크 (DB 값은 override하지 않음)
+- 수입/지출/이체 분류 탭 (SegmentedTabRowCompose)
+
+#### 고정지출 개선
+- 고정지출 필터(FIXED_ONLY)에서 수입/이체 제외 → incomes 빈 목록, incomeTotal 0
+- TransactionCard에 "고정" 태그 표시 (bodySmall + FontWeight.Bold + primary 색상)
+- `TransactionCardInfo` interface에 `isFixed: Boolean` 필드 추가
+
+#### 커스텀 카테고리 버그 수정
+- 홈 카테고리별 지출: `Category.fromDisplayName()` → `ETC`로 합쳐지던 문제 수정 (커스텀 카테고리는 원래 이름 유지)
+- 카테고리 상세: 커스텀 카테고리 클릭 시 "기타" 상세가 아닌 해당 카테고리 상세 표시 (isCustomCategory flag + CategoryProvider.resolveEmoji)
+
+#### 리뷰 Warning 반영
+- Warning 1: StoreRule이 개별 DB 수정을 덮어쓰는 문제 → DB 값 우선, StoreRule은 체크박스만 사전 체크
+- Warning 2: 규칙 해제/삭제 시 소급 원복 미처리 → saveRule/deleteRule에서 소급 원복 로직 추가
+
+### 결정 사항
+- **StoreRule은 contains 매칭만 지원**: equals는 YAGNI — 나중에 필요 시 추가
+- **StoreRule은 Tier 0 (최우선)**: SMS 파이프라인에서 Gemini 분류 전에 먼저 적용
+- **DB 값 우선 원칙**: loadExpense()에서 StoreRule로 category/isFixed를 덮어쓰지 않음 (소급 적용 시 이미 DB에 반영되어 있으므로)
+- **커스텀 카테고리 감지 패턴**: `cat == Category.ETC && displayName != Category.ETC.displayName`
+
+---
+
 ## 2026-03-03 - SMS Regex Fast Path 전환 (sender 기반 regex 1차 파싱)
 
 ### 배경

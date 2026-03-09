@@ -4,6 +4,26 @@
 
 ## [Unreleased]
 
+### Added (2026-03-04~05)
+- **커스텀 카테고리 시스템**: CategoryProvider 도입, 사용자 정의 카테고리 추가/수정/삭제/재정렬, 이모지/배경색 표시
+- **CategorySettingsActivity**: 카테고리 설정 전용 화면 (SmsSettings 패턴)
+- **StoreRule DB 시스템**: store_rules 테이블 (DB v10→v11, keyword UNIQUE), `StoreRuleEntity`/`StoreRuleDao`/`StoreRuleRepository`
+- **StoreRule SMS Tier 0**: MainViewModel.saveExpenses() + CategoryClassifierService.getCategory()에 최우선 매칭
+- **거래처 규칙 설정 화면**: StoreRuleSettingsActivity — 규칙 목록/추가/편집/삭제, CategorySelectDialog 재사용
+- **거래 편집 StoreRule 연동**: "동일 거래처 일괄 적용" 시 StoreRule 자동 생성 (upsert), StoreRule 존재 시 체크박스 사전 체크
+- **TransactionCard 고정 태그**: `isFixed` 필드 + primary 색상 Bold 텍스트 표시
+- **TransactionEditActivity**: 뱅크셀러드 스타일 거래 편집/추가 화면
+
+### Changed (2026-03-04~05)
+- **StoreRule 소급 적용**: 규칙 저장 시 기존 DB 레코드에 카테고리/고정지출 일괄 업데이트 (LIKE 매칭)
+- **StoreRule 소급 원복**: 규칙 해제(isFixed true→null) / 키워드 변경 / 규칙 삭제 시 기존 레코드 원복
+- **고정지출 필터**: FIXED_ONLY 선택 시 수입/이체 제외 (incomes 빈 목록, incomeTotal 0)
+
+### Fixed (2026-03-04~05)
+- **커스텀 카테고리 홈 차트**: `Category.fromDisplayName()` → `ETC`로 합쳐지던 문제 수정 (커스텀 카테고리는 원래 이름 유지)
+- **커스텀 카테고리 상세 진입**: 클릭 시 "기타" 상세가 아닌 해당 카테고리 상세 표시
+- **StoreRule DB 값 우선**: loadExpense()에서 StoreRule로 category/isFixed를 덮어쓰지 않도록 수정 (리뷰 Warning 반영)
+
 ### Added (2026-03-03)
 - **SMS Regex Fast Path (Step 1.5)**: sender 기반 regex 룰 1차 파싱 — 매칭 성공 시 Vector/LLM 파이프라인 스킵
 - **sms_regex_rules 테이블**: DB v6→v7 마이그레이션, 복합PK (senderAddress+type+ruleKey), 17필드

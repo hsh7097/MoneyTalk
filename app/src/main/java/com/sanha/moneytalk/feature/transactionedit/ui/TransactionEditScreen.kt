@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.feature.transactionedit.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +30,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -47,6 +49,7 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,13 +72,48 @@ import com.sanha.moneytalk.R
 import com.sanha.moneytalk.feature.transactionedit.TransactionEditUiState
 import com.sanha.moneytalk.feature.transactionedit.TransactionEditViewModel
 import com.sanha.moneytalk.feature.transactionedit.TransactionType
-import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.CategoryType
+import com.sanha.moneytalk.core.ui.component.rememberCategoryEmoji
 import com.sanha.moneytalk.core.ui.component.CategorySelectDialog
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupCompose
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupOption
 import com.sanha.moneytalk.core.util.DateUtils
 import java.text.NumberFormat
 import java.util.Locale
+
+private data class TransactionEditSnapshot(
+    val transactionType: TransactionType,
+    val amount: String,
+    val storeName: String,
+    val category: String,
+    val cardName: String,
+    val incomeType: String,
+    val source: String,
+    val dateMillis: Long,
+    val hour: Int,
+    val minute: Int,
+    val memo: String,
+    val isFixed: Boolean,
+    val transferDirection: String?
+)
+
+private fun TransactionEditUiState.toSnapshot(): TransactionEditSnapshot {
+    return TransactionEditSnapshot(
+        transactionType = transactionType,
+        amount = amount,
+        storeName = storeName,
+        category = category,
+        cardName = cardName,
+        incomeType = incomeType,
+        source = source,
+        dateMillis = dateMillis,
+        hour = hour,
+        minute = minute,
+        memo = memo,
+        isFixed = isFixed,
+        transferDirection = transferDirection?.dbValue
+    )
+}
 
 /**
  * 거래 편집/추가 화면 (뱅크셀러드 스타일).
@@ -103,6 +141,47 @@ fun TransactionEditScreen(
     var showTimePicker by remember { mutableStateOf(false) }
     var showCategoryPicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showExitConfirm by remember { mutableStateOf(false) }
+    var initialSnapshot by remember { mutableStateOf<TransactionEditSnapshot?>(null) }
+
+    LaunchedEffect(uiState.isLoading) {
+        if (!uiState.isLoading && initialSnapshot == null) {
+            initialSnapshot = uiState.toSnapshot()
+        }
+    }
+
+    val hasPendingChanges by remember(uiState, initialSnapshot) {
+        derivedStateOf {
+            val snapshot = initialSnapshot ?: return@derivedStateOf false
+            !uiState.isSaved && !uiState.isDeleted && uiState.toSnapshot() != snapshot
+        }
+    }
+
+    val onRequestClose = remember(
+        hasPendingChanges,
+        showDatePicker,
+        showTimePicker,
+        showCategoryPicker,
+        showDeleteConfirm
+    ) {
+        {
+            if (hasPendingChanges) {
+                showExitConfirm = true
+            } else {
+                onBack()
+            }
+        }
+    }
+
+    BackHandler(
+        enabled = !showDatePicker &&
+                !showTimePicker &&
+                !showCategoryPicker &&
+                !showDeleteConfirm &&
+                !showExitConfirm
+    ) {
+        onRequestClose()
+    }
 
     Column(
         modifier = Modifier
@@ -126,7 +205,7 @@ fun TransactionEditScreen(
             storeName = uiState.storeName,
             amount = uiState.amount,
             isNew = uiState.isNew,
-            onClose = onBack,
+            onClose = onRequestClose,
             onStoreNameChange = { viewModel.updateStoreName(it) },
             onAmountChange = { value ->
                 viewModel.updateAmount(value.filter { it.isDigit() })
@@ -148,12 +227,21 @@ fun TransactionEditScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // 카테고리 (모든 거래 유형에서 동일하게 표시)
-            val category = Category.fromDisplayName(uiState.category)
+            val categoryEmoji = rememberCategoryEmoji(uiState.category)
             CompactReadOnlyRow(
                 label = stringResource(R.string.detail_category),
-                value = "${category.emoji} ${category.displayName}",
+                value = "$categoryEmoji ${uiState.category}",
                 onClick = { showCategoryPicker = true }
             )
+
+            // 동일 거래처 카테고리 일괄 적용 (기존 지출만)
+            if (!uiState.isNew && uiState.transactionType == TransactionType.EXPENSE) {
+                ApplyToAllCheckbox(
+                    checked = uiState.applyCategoryToAll,
+                    label = stringResource(R.string.transaction_edit_apply_category_to_all),
+                    onCheckedChange = { viewModel.updateApplyCategoryToAll(it) }
+                )
+            }
 
             // 거래처
             CompactEditRow(
@@ -214,12 +302,21 @@ fun TransactionEditScreen(
                 }
             }
 
-            // 고정지출 토글 (수입이 아닐 때만 표시, 원본 SMS 하단 고정 위치)
-            if (!uiState.isIncome) {
+            // 고정지출 토글 (지출만 표시, 원본 SMS 하단 고정 위치)
+            if (uiState.transactionType == TransactionType.EXPENSE) {
                 FixedExpenseToggle(
                     isFixed = uiState.isFixed,
                     onToggle = { viewModel.updateIsFixed(it) }
                 )
+
+                // 동일 거래처 고정지출 일괄 적용 (기존 지출만)
+                if (!uiState.isNew) {
+                    ApplyToAllCheckbox(
+                        checked = uiState.applyFixedToAll,
+                        label = stringResource(R.string.transaction_edit_apply_fixed_to_all),
+                        onCheckedChange = { viewModel.updateApplyFixedToAll(it) }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -280,15 +377,25 @@ fun TransactionEditScreen(
 
     // Category Picker Dialog
     if (showCategoryPicker) {
+        val categoryType = when (uiState.transactionType) {
+            TransactionType.INCOME -> CategoryType.INCOME
+            TransactionType.TRANSFER -> CategoryType.TRANSFER
+            TransactionType.EXPENSE -> CategoryType.EXPENSE
+        }
         CategorySelectDialog(
             currentCategory = uiState.category,
+            categoryType = categoryType,
             showAllOption = false,
+            transferDirection = uiState.transferDirection,
             onDismiss = { showCategoryPicker = false },
             onCategorySelected = { selected ->
                 if (selected != null) {
                     viewModel.updateCategory(selected)
                 }
                 showCategoryPicker = false
+            },
+            onTransferDirectionChanged = { direction ->
+                viewModel.updateTransferDirection(direction)
             }
         )
     }
@@ -320,6 +427,29 @@ fun TransactionEditScreen(
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
                     Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
+    }
+
+    if (showExitConfirm) {
+        AlertDialog(
+            onDismissRequest = { showExitConfirm = false },
+            title = { Text(text = stringResource(R.string.transaction_edit_exit_confirm_title)) },
+            text = { Text(text = stringResource(R.string.transaction_edit_exit_confirm_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showExitConfirm = false
+                        onBack()
+                    }
+                ) {
+                    Text(text = stringResource(R.string.transaction_edit_exit_confirm_exit))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitConfirm = false }) {
+                    Text(text = stringResource(R.string.transaction_edit_exit_confirm_keep))
                 }
             }
         )
@@ -577,6 +707,36 @@ private fun FixedExpenseToggle(
         )
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+/**
+ * 동일 거래처 일괄 적용 체크박스.
+ * 카테고리/고정지출 변경 시 동일한 거래처(storeName 정확 일치)에 모두 적용.
+ */
+@Composable
+private fun ApplyToAllCheckbox(
+    checked: Boolean,
+    label: String,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = null,
+            modifier = Modifier.size(36.dp)
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 /**
