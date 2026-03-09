@@ -22,6 +22,9 @@ class StoreRuleRepository @Inject constructor(
     /** 모든 규칙 (1회성) */
     suspend fun getAllOnce(): List<StoreRuleEntity> = storeRuleDao.getAllOnce()
 
+    /** keyword 기준 정확 일치 규칙 조회 */
+    suspend fun getByKeyword(keyword: String): StoreRuleEntity? = storeRuleDao.getByKeyword(keyword)
+
     /** 규칙 추가/갱신 */
     suspend fun upsert(rule: StoreRuleEntity) = storeRuleDao.upsert(rule)
 
@@ -32,13 +35,17 @@ class StoreRuleRepository @Inject constructor(
     suspend fun deleteById(id: Long) = storeRuleDao.deleteById(id)
 
     /**
-     * storeName에 매칭되는 첫 번째 규칙 반환 (contains 매칭).
-     * 규칙이 없거나 매칭되지 않으면 null 반환.
+     * storeName에 매칭되는 가장 구체적인 규칙 반환 (contains 매칭).
+     * keyword 길이가 긴 규칙을 우선하고, 길이가 같으면 최신 규칙을 선택한다.
      */
     suspend fun findMatchingRule(storeName: String): StoreRuleEntity? {
         val rules = getAllOnce()
         if (rules.isEmpty()) return null
         val lowerStore = storeName.lowercase()
-        return rules.firstOrNull { lowerStore.contains(it.keyword.lowercase()) }
+        return rules
+            .filter { lowerStore.contains(it.keyword.lowercase()) }
+            .maxWithOrNull(
+                compareBy<StoreRuleEntity>({ it.keyword.length }, { it.createdAt })
+            )
     }
 }

@@ -3,7 +3,6 @@ package com.sanha.moneytalk.core.ui.component.transaction.card
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
-import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.model.TransferDirection
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -72,8 +71,7 @@ class ExpenseTransactionCardInfo(
     override val amount: Int = expense.amount
     override val isIncome: Boolean = isTransferDeposit
     override val category: Category? = if (isCustomCategory) null else resolvedCategory
-    override val iconEmoji: String? =
-        if (isCustomCategory) CategoryProvider.resolveEmoji(expense.category) else null
+    override val iconEmoji: String? = null
     override val categoryTag: String = expense.category
     override val time: String = timeFormat.format(Date(expense.dateTime))
     override val cardNameText: String = expense.cardName

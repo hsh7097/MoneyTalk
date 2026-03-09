@@ -14,10 +14,10 @@ import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
-import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
+import com.sanha.moneytalk.feature.home.data.StoreRuleSyncService
 import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -81,10 +81,10 @@ class TransactionEditViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
-    private val categoryClassifierService: CategoryClassifierService,
     private val dataRefreshEvent: DataRefreshEvent,
     private val snackbarBus: AppSnackbarBus,
     private val storeRuleRepository: StoreRuleRepository,
+    private val storeRuleSyncService: StoreRuleSyncService,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -128,9 +128,13 @@ class TransactionEditViewModel @Inject constructor(
                 // StoreRule이 있으면 "동일 거래처 일괄 적용" 체크박스만 사전 체크
                 // DB 값(category, isFixed)은 소급 적용 시 이미 반영되어 있으므로 override하지 않음
                 // → 사용자가 개별 변경한 DB 값을 존중
-                val matchedRule = storeRuleRepository.findMatchingRule(expense.storeName)
-                val hasCategoryRule = matchedRule?.category != null
-                val hasFixedRule = matchedRule?.isFixed != null
+                val exactRule = if (type == TransactionType.EXPENSE) {
+                    storeRuleRepository.getByKeyword(expense.storeName.trim())
+                } else {
+                    null
+                }
+                val hasCategoryRule = exactRule?.category != null
+                val hasFixedRule = exactRule?.isFixed != null
 
                 _uiState.update {
                     it.copy(
@@ -216,17 +220,25 @@ class TransactionEditViewModel @Inject constructor(
                 TransactionType.TRANSFER -> state.copy(
                     transactionType = type,
                     category = Category.UNCLASSIFIED.displayName,
-                    transferDirection = TransferDirection.WITHDRAWAL
+                    transferDirection = TransferDirection.WITHDRAWAL,
+                    isFixed = false,
+                    applyCategoryToAll = false,
+                    applyFixedToAll = false
                 )
                 TransactionType.EXPENSE -> state.copy(
                     transactionType = type,
                     category = Category.UNCLASSIFIED.displayName,
-                    transferDirection = null
+                    transferDirection = null,
+                    applyCategoryToAll = false,
+                    applyFixedToAll = false
                 )
                 TransactionType.INCOME -> state.copy(
                     transactionType = type,
                     category = Category.INCOME_UNCLASSIFIED.displayName,
-                    transferDirection = null
+                    transferDirection = null,
+                    isFixed = false,
+                    applyCategoryToAll = false,
+                    applyFixedToAll = false
                 )
             }
         }
@@ -305,6 +317,7 @@ class TransactionEditViewModel @Inject constructor(
             try {
                 val txType = if (state.transactionType == TransactionType.TRANSFER) "TRANSFER" else "EXPENSE"
                 val txDirection = state.transferDirection?.dbValue ?: ""
+                val effectiveIsFixed = state.isFixed && state.transactionType == TransactionType.EXPENSE
 
                 // 수입 → 지출/이체 크로스 테이블 이동 (insert 먼저, delete 후 — 원자성 보장)
                 if (originalTransactionType == TransactionType.INCOME && !state.isNew) {
@@ -318,7 +331,7 @@ class TransactionEditViewModel @Inject constructor(
                         smsId = originalIncomeEntity?.smsId ?: "manual_${System.currentTimeMillis()}",
                         senderAddress = originalIncomeEntity?.senderAddress ?: "",
                         memo = state.memo.ifBlank { null },
-                        isFixed = state.isFixed,
+                        isFixed = effectiveIsFixed,
                         transactionType = txType,
                         transferDirection = txDirection
                     )
@@ -336,7 +349,7 @@ class TransactionEditViewModel @Inject constructor(
                         originalSms = "",
                         smsId = "manual_${System.currentTimeMillis()}",
                         memo = state.memo.ifBlank { null },
-                        isFixed = state.isFixed,
+                        isFixed = effectiveIsFixed,
                         transactionType = txType,
                         transferDirection = txDirection
                     )
@@ -349,7 +362,7 @@ class TransactionEditViewModel @Inject constructor(
                         category = state.category,
                         cardName = state.cardName.trim(),
                         dateTime = dateTime,
-                        isFixed = state.isFixed,
+                        isFixed = effectiveIsFixed,
                         memo = state.memo.ifBlank { null },
                         transactionType = txType,
                         transferDirection = txDirection
@@ -357,39 +370,26 @@ class TransactionEditViewModel @Inject constructor(
                     expenseRepository.update(updated)
                 }
 
-                // 동일 거래처 일괄 적용 + StoreRule 생성/업데이트
                 val trimmedStore = state.storeName.trim()
-                if ((state.applyCategoryToAll || state.applyFixedToAll) && trimmedStore.isNotBlank()) {
+                if (!state.isNew && state.transactionType == TransactionType.EXPENSE && trimmedStore.isNotBlank()) {
                     try {
-                        // 1. 기존 StoreRule 조회 → 있으면 기존 keyword 사용 (broader match)
-                        val existingRule = storeRuleRepository.findMatchingRule(trimmedStore)
-                        val keyword = existingRule?.keyword ?: trimmedStore
+                        val existingRule = storeRuleRepository.getByKeyword(trimmedStore)
+                        val newRule = if (state.applyCategoryToAll || state.applyFixedToAll) {
+                            StoreRuleEntity(
+                                id = existingRule?.id ?: 0,
+                                keyword = trimmedStore,
+                                category = if (state.applyCategoryToAll) state.category else null,
+                                isFixed = if (state.applyFixedToAll) effectiveIsFixed else null,
+                                createdAt = existingRule?.createdAt ?: System.currentTimeMillis()
+                            )
+                        } else {
+                            null
+                        }
 
-                        // 2. StoreRule 생성/업데이트
-                        val rule = StoreRuleEntity(
-                            id = existingRule?.id ?: 0,
-                            keyword = keyword,
-                            category = if (state.applyCategoryToAll) state.category else existingRule?.category,
-                            isFixed = if (state.applyFixedToAll) state.isFixed else existingRule?.isFixed
+                        storeRuleSyncService.applyRuleChange(
+                            previousRule = existingRule,
+                            newRule = newRule
                         )
-                        storeRuleRepository.upsert(rule)
-
-                        // 3. 기존 DB 레코드에 소급 적용 (contains 매칭)
-                        if (rule.category != null) {
-                            expenseRepository.updateCategoryByStoreNameContaining(
-                                keyword, rule.category
-                            )
-                        }
-                        if (rule.isFixed == true) {
-                            expenseRepository.updateFixedByStoreNameContaining(keyword, true)
-                        }
-
-                        // 4. 자가 학습 (매핑 캐시 + 벡터 DB)
-                        if (state.applyCategoryToAll) {
-                            categoryClassifierService.updateCategoryForAllSameStore(
-                                trimmedStore, state.category
-                            )
-                        }
                     } catch (e: Exception) {
                         MoneyTalkLogger.w("일괄 적용 실패: ${e.message}")
                     }

@@ -69,7 +69,6 @@ import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
-import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
@@ -84,6 +83,7 @@ import com.sanha.moneytalk.core.ui.component.getCustomCategoryChartColor
 import com.sanha.moneytalk.core.ui.component.getCategoryChartColor
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
+import com.sanha.moneytalk.core.ui.component.rememberCategoryEmoji
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
@@ -836,7 +836,7 @@ fun CategoryExpenseSection(
         } else {
             displayList.forEachIndexed { index, item ->
                 val category = Category.fromDisplayName(item.category)
-                val categoryEmoji = CategoryProvider.resolveEmoji(item.category)
+                val categoryEmoji = rememberCategoryEmoji(item.category)
                 val isCustomCategory = category == Category.ETC
                         && item.category != Category.ETC.displayName
                 val budget = categoryBudgets[item.category]

@@ -94,7 +94,7 @@ fun ExpenseDetailDialog(
 ) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
     val categoryEnum = Category.fromDisplayName(expense.category)
-    val categoryEmoji = CategoryProvider.resolveEmoji(expense.category)
+    val categoryEmoji = rememberCategoryEmoji(expense.category)
     val categoryDisplayName = expense.category
     val isCustomCategory = categoryEnum == Category.ETC
             && expense.category != Category.ETC.displayName

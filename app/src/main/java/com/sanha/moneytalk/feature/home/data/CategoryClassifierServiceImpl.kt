@@ -3,6 +3,7 @@ package com.sanha.moneytalk.feature.home.data
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.IncomeCategoryMapper
 import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.sms2.SmsParser
 import com.sanha.moneytalk.core.util.StoreNameGrouper
@@ -72,11 +73,7 @@ class CategoryClassifierServiceImpl @Inject constructor(
         }
 
         /** 수입 type 기반 사전 분류 */
-        private val INCOME_PRE_CLASSIFY = mapOf(
-            "급여" to "급여",
-            "보너스" to "상여금",
-            "정산" to "더치페이"
-        )
+        private val INCOME_PRE_CLASSIFY = IncomeCategoryMapper.preClassifyMap()
 
         /**
          * Gemini 호출 전 로컬 룰로 사전 분류 가능한 패턴

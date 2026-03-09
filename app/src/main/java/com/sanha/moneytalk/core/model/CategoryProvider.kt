@@ -5,8 +5,11 @@ import com.sanha.moneytalk.core.database.entity.CustomCategoryEntity
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * 카테고리 통합 제공자.
@@ -21,23 +24,30 @@ import javax.inject.Singleton
 class CategoryProvider @Inject constructor(
     private val customCategoryRepository: CustomCategoryRepository
 ) {
-    init {
-        instance = this
-    }
-
     /** 인메모리 캐시 */
     @Volatile
     private var cachedCustomCategories: List<CustomCategoryInfo>? = null
+    private val cacheMutex = Mutex()
+    private val cacheVersion = AtomicLong(0)
 
     /**
      * 커스텀 카테고리 목록 로드 (캐시 우선).
      */
     suspend fun getCustomCategories(): List<CustomCategoryInfo> {
         cachedCustomCategories?.let { return it }
-        val entities = customCategoryRepository.getAll()
-        val result = entities.map { it.toCategoryInfo() }
-        cachedCustomCategories = result
-        return result
+        return cacheMutex.withLock {
+            cachedCustomCategories?.let { return@withLock it }
+
+            val version = cacheVersion.get()
+            val entities = customCategoryRepository.getAll()
+            val result = entities.map { it.toCategoryInfo() }
+
+            if (version == cacheVersion.get()) {
+                cachedCustomCategories = result
+            }
+
+            cachedCustomCategories ?: result
+        }
     }
 
     /**
@@ -145,7 +155,29 @@ class CategoryProvider @Inject constructor(
      * 캐시 무효화 (카테고리 추가/삭제 시 호출).
      */
     fun invalidateCache() {
+        cacheVersion.incrementAndGet()
         cachedCustomCategories = null
+    }
+
+    /**
+     * displayName으로 이모지 조회 (enum + 캐시).
+     * 캐시에 없는 커스텀 카테고리는 기본 기타 이모지로 fallback한다.
+     */
+    fun resolveEmoji(displayName: String): String {
+        val enumMatch = Category.entries.find { it.displayName == displayName }
+        if (enumMatch != null) return enumMatch.emoji
+        val customMatch = getCachedCustomCategories().find { it.displayName == displayName }
+        return customMatch?.emoji ?: Category.ETC.emoji
+    }
+
+    /**
+     * displayName으로 CategoryInfo 조회 (enum + 캐시, 동기).
+     * 못 찾으면 null 반환.
+     */
+    fun resolveCategoryInfo(displayName: String): CategoryInfo? {
+        val enumMatch = Category.entries.find { it.displayName == displayName }
+        if (enumMatch != null) return enumMatch
+        return getCachedCustomCategories().find { it.displayName == displayName }
     }
 
     /** Composable에서 Hilt 주입 없이 CategoryProvider 접근용 EntryPoint */
@@ -153,34 +185,6 @@ class CategoryProvider @Inject constructor(
     @InstallIn(SingletonComponent::class)
     interface Provider {
         fun categoryProvider(): CategoryProvider
-    }
-
-    companion object {
-        @Volatile
-        private var instance: CategoryProvider? = null
-
-        /**
-         * displayName으로 이모지 조회 (enum + 캐시).
-         * 동기 접근 전용. 커스텀 카테고리 이모지도 정확히 반환.
-         */
-        fun resolveEmoji(displayName: String): String {
-            val enumMatch = Category.entries.find { it.displayName == displayName }
-            if (enumMatch != null) return enumMatch.emoji
-            val customMatch = instance?.getCachedCustomCategories()
-                ?.find { it.displayName == displayName }
-            return customMatch?.emoji ?: Category.ETC.emoji
-        }
-
-        /**
-         * displayName으로 CategoryInfo 조회 (enum + 캐시, 동기).
-         * 못 찾으면 null 반환.
-         */
-        fun resolveCategoryInfo(displayName: String): CategoryInfo? {
-            val enumMatch = Category.entries.find { it.displayName == displayName }
-            if (enumMatch != null) return enumMatch
-            return instance?.getCachedCustomCategories()
-                ?.find { it.displayName == displayName }
-        }
     }
 
     private fun CustomCategoryEntity.toCategoryInfo(): CustomCategoryInfo {

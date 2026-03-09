@@ -6,8 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
-import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
+import com.sanha.moneytalk.feature.home.data.StoreRuleSyncService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,7 +32,7 @@ data class StoreRuleSettingsUiState(
 @HiltViewModel
 class StoreRuleSettingsViewModel @Inject constructor(
     private val storeRuleRepository: StoreRuleRepository,
-    private val expenseRepository: ExpenseRepository
+    private val storeRuleSyncService: StoreRuleSyncService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(StoreRuleSettingsUiState())
@@ -122,33 +122,10 @@ class StoreRuleSettingsViewModel @Inject constructor(
                 category = state.addCategory,
                 isFixed = if (state.addIsFixed) true else null
             )
-            storeRuleRepository.upsert(rule)
-
-            // 기존 DB 레코드에 규칙 소급 적용 (contains 매칭)
-            if (rule.category != null) {
-                expenseRepository.updateCategoryByStoreNameContaining(keyword, rule.category)
-            }
-            if (rule.isFixed == true) {
-                expenseRepository.updateFixedByStoreNameContaining(keyword, true)
-            }
-
-            // 규칙 해제 시 소급 원복: 기존에 설정되어 있던 값이 해제되면 기존 레코드도 원복
-            if (oldRule != null) {
-                // 고정지출 해제: true → null
-                if (oldRule.isFixed == true && rule.isFixed == null) {
-                    expenseRepository.updateFixedByStoreNameContaining(
-                        oldRule.keyword, false
-                    )
-                }
-                // 키워드 변경 시 이전 키워드 매칭 레코드 원복
-                if (!oldRule.keyword.equals(keyword, ignoreCase = true)) {
-                    if (oldRule.isFixed == true) {
-                        expenseRepository.updateFixedByStoreNameContaining(
-                            oldRule.keyword, false
-                        )
-                    }
-                }
-            }
+            storeRuleSyncService.applyRuleChange(
+                previousRule = oldRule,
+                newRule = rule
+            )
 
             _uiState.update { it.copy(showAddDialog = false, editingRule = null) }
         }
@@ -164,14 +141,11 @@ class StoreRuleSettingsViewModel @Inject constructor(
 
     fun deleteRule(id: Long) {
         viewModelScope.launch {
-            // 삭제 전 규칙 조회 → 소급 원복
             val ruleToDelete = _uiState.value.rules.find { it.id == id }
-            if (ruleToDelete?.isFixed == true) {
-                expenseRepository.updateFixedByStoreNameContaining(
-                    ruleToDelete.keyword, false
-                )
-            }
-            storeRuleRepository.deleteById(id)
+            storeRuleSyncService.applyRuleChange(
+                previousRule = ruleToDelete,
+                newRule = null
+            )
             _uiState.update { it.copy(showDeleteConfirm = null) }
         }
     }

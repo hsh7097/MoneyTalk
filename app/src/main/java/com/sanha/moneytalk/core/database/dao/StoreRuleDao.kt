@@ -26,6 +26,10 @@ interface StoreRuleDao {
     @Query("SELECT * FROM store_rules ORDER BY createdAt DESC")
     suspend fun getAllOnce(): List<StoreRuleEntity>
 
+    /** keyword로 규칙 조회 (정확 매칭) */
+    @Query("SELECT * FROM store_rules WHERE keyword = :keyword LIMIT 1")
+    suspend fun getByKeyword(keyword: String): StoreRuleEntity?
+
     /** 규칙 추가/갱신 (keyword unique → REPLACE) */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(rule: StoreRuleEntity)

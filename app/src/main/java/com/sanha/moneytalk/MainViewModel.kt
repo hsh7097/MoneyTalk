@@ -13,6 +13,7 @@ import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.IncomeCategoryMapper
 import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
@@ -691,7 +692,7 @@ class MainViewModel @Inject constructor(
                 val dateTime = SmsIncomeParser.extractDateTime(income.body, income.date)
 
                 if (amount > 0) {
-                    val category = mapIncomeTypeToCategory(incomeType)
+                    val category = IncomeCategoryMapper.categoryForType(incomeType)
                     batch.add(
                         IncomeEntity(
                             smsId = income.id,
@@ -723,17 +724,6 @@ class MainViewModel @Inject constructor(
 
         return count
     }
-
-    /** 수입 type → category 초기 매핑 */
-    private fun mapIncomeTypeToCategory(type: String): String {
-        return when (type) {
-            "급여" -> "급여"
-            "보너스" -> "상여금"
-            "정산" -> "더치페이"
-            else -> "미분류"
-        }
-    }
-
     /**
      * 동기화 후처리 (카테고리 캐시 정리, lastSyncTime 갱신)
      *

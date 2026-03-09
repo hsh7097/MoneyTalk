@@ -84,6 +84,7 @@ class CategoryDetailViewModel @Inject constructor(
     private val dataRefreshEvent: DataRefreshEvent,
     private val smsExclusionRepository: SmsExclusionRepository,
     private val categoryClassifierService: CategoryClassifierService,
+    private val categoryProvider: CategoryProvider,
     private val budgetDao: BudgetDao,
     private val premiumManager: com.sanha.moneytalk.core.firebase.PremiumManager,
     @ApplicationContext private val appContext: Context
@@ -120,7 +121,7 @@ class CategoryDetailViewModel @Inject constructor(
             selectedMonth = initialMonth,
             categoryDisplayName = if (isCustomCategory) categoryDisplayName else category.displayName,
             categoryEmoji = if (isCustomCategory) {
-                CategoryProvider.resolveEmoji(categoryDisplayName)
+                categoryProvider.resolveEmoji(categoryDisplayName)
             } else {
                 category.emoji
             }
@@ -132,6 +133,9 @@ class CategoryDetailViewModel @Inject constructor(
     private val pageLoadJobs = mutableMapOf<MonthKey, Job>()
 
     init {
+        if (isCustomCategory) {
+            loadCustomCategoryEmoji()
+        }
         loadSettings()
         observeDataRefreshEvents()
     }
@@ -142,6 +146,15 @@ class CategoryDetailViewModel @Inject constructor(
     private fun updatePageCache(key: MonthKey, data: CategoryDetailPageData) {
         _uiState.update { state ->
             state.copy(pageCache = state.pageCache + (key to data))
+        }
+    }
+
+    private fun loadCustomCategoryEmoji() {
+        viewModelScope.launch {
+            categoryProvider.getCustomCategories()
+            _uiState.update { state ->
+                state.copy(categoryEmoji = categoryProvider.resolveEmoji(categoryDisplayName))
+            }
         }
     }
 

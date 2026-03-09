@@ -34,6 +34,7 @@ import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.getCustomCategoryBackgroundColor
+import com.sanha.moneytalk.core.ui.component.rememberCategoryEmoji
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -53,6 +54,7 @@ fun TransactionCardCompose(
     modifier: Modifier = Modifier
 ) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
+    val resolvedCategoryEmoji = rememberCategoryEmoji(info.categoryTag.orEmpty())
     val amountPrefix = if (info.isIncome) "+" else "-"
     val formattedAmount =
         "${amountPrefix}${stringResource(R.string.common_won, numberFormat.format(info.amount))}"
@@ -80,7 +82,7 @@ fun TransactionCardCompose(
             ) {
                 // 아이콘: 지출=카테고리 아이콘 (원형 배경), 수입=이모지
                 val category = info.category
-                val iconEmoji = info.iconEmoji
+                val iconEmoji = info.iconEmoji ?: info.categoryTag?.let { resolvedCategoryEmoji }
                 if (category != null) {
                     CategoryIcon(
                         category = category,
