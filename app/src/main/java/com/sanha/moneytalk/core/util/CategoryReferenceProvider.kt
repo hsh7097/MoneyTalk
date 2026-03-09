@@ -94,17 +94,23 @@ class CategoryReferenceProvider @Inject constructor(
      * @return 프롬프트에 삽입할 참조 리스트 텍스트 (없으면 빈 문자열)
      */
     suspend fun getSmsExtractionReference(): String {
+        cachedReferenceText?.let { return it }
+
         val refMap = getCategoryReferenceMap()
         if (refMap.isEmpty()) return ""
 
         val sb = StringBuilder()
         sb.appendLine("\n[추가 참고: 사용자 설정 가게-카테고리 매핑]")
+        var remainingItems = MAX_REFERENCE_ITEMS
         for ((category, stores) in refMap) {
-            if (stores.isNotEmpty()) {
-                sb.appendLine("- $category: ${stores.joinToString(", ")}")
+            if (remainingItems <= 0) break
+            val limitedStores = stores.take(remainingItems)
+            if (limitedStores.isNotEmpty()) {
+                sb.appendLine("- $category: ${limitedStores.joinToString(", ")}")
+                remainingItems -= limitedStores.size
             }
         }
-        return sb.toString()
+        return sb.toString().also { cachedReferenceText = it }
     }
 
     /**

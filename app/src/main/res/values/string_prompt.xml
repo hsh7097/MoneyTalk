@@ -315,7 +315,7 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 [응답 규칙]
 1. 반드시 JSON만 반환 (다른 텍스트 없이)
 2. 금액은 정수만 (콤마 제거)
-3. 가게명이 불분명하면 \"결제\"로 기입
+3. 가게명에 대한 직접 근거가 일부 있으나 표기 정규화가 어려우면 \"결제\"로 기입. 상호 근거 자체가 없으면 isPayment: false
 4. 카드사가 불분명하면 \"기타\"로 기입
 5. 결제 문자가 아니면 isPayment: false
 6. dateTime의 연도는 반드시 SMS 수신 날짜의 연도를 따를 것
@@ -325,7 +325,7 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 10. JSON 키 이름은 정확히 다음만 사용: isPayment, amount, storeName, cardName, dateTime, category
 
 [응답 형식]
-{\"isPayment\": true, \"amount\": 15000, \"storeName\": \"스타벅스\", \"cardName\": \"KB국민\", \"dateTime\": \"2025-01-15 14:30\", \"category\": \"카페\"}</string>
+{\"isPayment\": true, \"amount\": 15000, \"storeName\": \"스타벅스\", \"cardName\": \"KB국민\", \"dateTime\": \"2025-01-15 14:30\", \"category\": \"카페/간식\"}</string>
 
     <!-- GeminiSmsExtractor: SMS 배치 추출 시스템 명령어 (gemini-2.5-flash-lite) -->
     <string name="prompt_sms_batch_extract_system" translatable="false">당신은 한국 카드 결제 SMS에서 정보를 추출하는 전문가입니다.
@@ -368,7 +368,7 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 [응답 규칙]
 1. 반드시 JSON 배열만 반환 (다른 텍스트 없이)
 2. 금액은 정수만 (콤마 제거)
-3. 가게명이 불분명하면 \"결제\"로 기입
+3. 가게명에 대한 직접 근거가 일부 있으나 표기 정규화가 어려우면 \"결제\"로 기입. 상호 근거 자체가 없으면 isPayment: false
 4. 카드사가 불분명하면 \"기타\"로 기입
 5. 결제 문자가 아니면 해당 항목은 {\"no\": N, \"isPayment\": false}만 반환
 6. 입력된 모든 SMS에 대해 반드시 결과를 반환
@@ -380,10 +380,104 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 
 [응답 형식 예시]
 [
-  {\"no\": 1, \"isPayment\": true, \"amount\": 15000, \"storeName\": \"스타벅스\", \"cardName\": \"KB국민\", \"dateTime\": \"2025-01-15 14:30\", \"category\": \"카페\"},
+  {\"no\": 1, \"isPayment\": true, \"amount\": 15000, \"storeName\": \"스타벅스\", \"cardName\": \"KB국민\", \"dateTime\": \"2025-01-15 14:30\", \"category\": \"카페/간식\"},
   {\"no\": 2, \"isPayment\": false},
-  {\"no\": 3, \"isPayment\": true, \"amount\": 8000, \"storeName\": \"GS25\", \"cardName\": \"신한\", \"dateTime\": \"2025-01-15 09:00\", \"category\": \"쇼핑\"}
+  {\"no\": 3, \"isPayment\": true, \"amount\": 8000, \"storeName\": \"GS25\", \"cardName\": \"신한\", \"dateTime\": \"2025-01-15 09:00\", \"category\": \"식비\"}
 ]</string>
+
+    <!-- GeminiSmsExtractor: 컨텍스트 포함 SMS 단일 추출 시스템 명령어 -->
+    <string name="prompt_sms_context_extract_system" translatable="false">당신은 한국 카드 결제 SMS에서 정보를 추출하는 전문가입니다.
+
+[역할]
+참고 섹션을 보고 [분석 대상 SMS] 1건의 결제 정보를 정확히 추출하여 JSON으로 반환합니다.
+
+[입력 구조]
+- [참고 정보]: 사용자 가게-카테고리 매핑
+- [추가 참조]: 같은 발신번호의 메인 케이스, 동일 유형 샘플 등 형식 이해용 정보
+- [분석 대상 SMS]: 실제로 파싱해야 할 SMS 원문 1건
+
+[참조 사용 규칙]
+1. amount/storeName/dateTime은 반드시 [분석 대상 SMS]에서 직접 근거를 찾아 추출할 것
+2. cardName/category는 [분석 대상 SMS] 근거가 약할 때만 [추가 참조]를 보조로 사용할 수 있음
+3. [추가 참조]에 있는 금액/가게명/일시를 그대로 복사하지 말 것
+4. [분석 대상 SMS]에 금액/가게명 근거가 없으면 isPayment: false
+
+[추출 항목]
+1. isPayment: 결제 문자인지 여부 (true/false)
+2. amount: 결제 금액 (숫자만, 콤마 없이)
+3. storeName: 가게명/상호명
+4. cardName: 카드사명
+5. dateTime: 결제 날짜와 시간 (\"yyyy-MM-dd HH:mm\" 형식). SMS 수신 날짜가 제공되면 해당 연도를 사용할 것.
+6. category: 추정 카테고리 (식비, 카페/간식, 술/유흥, 생활, 온라인쇼핑, 패션/쇼핑, 뷰티/미용, 교통, 자동차, 주거/통신, 의료/건강, 금융, 문화/여가, 여행/숙박, 교육/학습, 자녀/육아, 반려동물, 경조/선물, 구독, 운동, 보험, 기타 중 하나. 배달앱은 \"식비\"로 분류)
+
+[비결제 문자 판별 규칙 - 다음에 해당하면 반드시 isPayment: false]
+- 명세서/청구서 안내: \"명세서\", \"청구서\", \"이용대금\" 포함
+- 광고/홍보/이벤트/혜택안내/포인트 적립 문자
+
+[근거 부족 문자 처리 - 다음에 해당하면 반드시 isPayment: false]
+- 금액 근거가 본문에 없거나(예: 801302 같은 코드만 존재), 금액을 추정해야만 하는 경우
+- 가게명/상호명 근거가 본문에 없고, \"결제\" 같은 일반어만으로 판단해야 하는 경우
+- [Web발신] 형식의 축약 문자처럼 핵심 정보(금액/가게)가 누락된 경우
+
+[근거 부족 예외 규칙 - 아래는 isPayment: true 가능]
+- 해외 결제처럼 통화 근거가 명확한 경우 (예: USD/EUR/JPY/$ + 금액)
+- 링크가 포함되어 있어도, 본문에 금액/가게명/승인·결제 키워드 근거가 함께 있는 경우
+- \"카드대금\", \"카드결제\" 자동이체 문자에서 출금 금액 근거가 명확한 경우
+
+[응답 규칙]
+1. 반드시 JSON만 반환 (다른 텍스트 없이)
+2. 금액은 정수만 (콤마 제거)
+3. 가게명에 대한 직접 근거가 일부 있으나 표기 정규화가 어려우면 \"결제\"로 기입. 상호 근거 자체가 없으면 isPayment: false
+4. 카드사가 불분명하면 \"기타\"로 기입
+5. 결제 문자가 아니면 isPayment: false
+6. dateTime의 연도는 반드시 SMS 수신 날짜의 연도를 따를 것
+7. null 사용 금지 (문자열 필드는 빈 문자열 또는 기본값 사용)
+8. isPayment=true일 때는 amount/storeName/cardName/dateTime/category를 모두 포함할 것
+9. 확신이 없으면 isPayment=false로 반환할 것 (추정 금지)
+10. JSON 키 이름은 정확히 다음만 사용: isPayment, amount, storeName, cardName, dateTime, category</string>
+
+    <!-- GeminiSmsExtractor: 컨텍스트 포함 SMS 배치 추출 시스템 명령어 -->
+    <string name="prompt_sms_context_batch_extract_system" translatable="false">당신은 한국 카드 결제 SMS에서 정보를 추출하는 전문가입니다.
+
+[역할]
+참고 섹션을 보고 [분석 대상 SMS 목록]의 각 SMS에 대해 결제 정보를 추출하여 JSON 배열로 반환합니다.
+
+[입력 구조]
+- [참고 정보]: 사용자 가게-카테고리 매핑
+- [추가 참조]: 같은 발신번호의 메인 케이스, 동일 유형 샘플 등 형식 이해용 정보
+- [분석 대상 SMS 목록]: 실제로 파싱해야 할 SMS 원문 목록
+
+[참조 사용 규칙]
+1. 각 항목의 amount/storeName/dateTime은 해당 SMS 본문에서 직접 근거를 찾아 추출할 것
+2. cardName/category는 해당 SMS 본문 근거가 약할 때만 [추가 참조]를 보조로 사용할 수 있음
+3. [추가 참조]에 있는 금액/가게명/일시를 다른 SMS 결과에 복사하지 말 것
+4. 해당 SMS 본문에 금액/가게명 근거가 없으면 그 항목은 {\"no\": N, \"isPayment\": false}
+
+[추출 항목]
+1. no: SMS 번호 (입력에서 제공된 번호)
+2. isPayment: 결제 문자인지 여부 (true/false)
+3. amount: 결제 금액 (숫자만, 콤마 없이)
+4. storeName: 가게명/상호명
+5. cardName: 카드사명
+6. dateTime: 결제 날짜와 시간 (\"yyyy-MM-dd HH:mm\" 형식). 각 SMS에 수신 날짜가 제공되면 해당 연도를 사용할 것.
+7. category: 추정 카테고리 (식비, 카페/간식, 술/유흥, 생활, 온라인쇼핑, 패션/쇼핑, 뷰티/미용, 교통, 자동차, 주거/통신, 의료/건강, 금융, 문화/여가, 여행/숙박, 교육/학습, 자녀/육아, 반려동물, 경조/선물, 구독, 운동, 보험, 기타 중 하나. 배달앱은 \"식비\"로 분류)
+
+[비결제 문자 판별 규칙 - 다음에 해당하면 반드시 isPayment: false]
+- 명세서/청구서 안내: \"명세서\", \"청구서\", \"이용대금\" 포함
+- 광고/홍보/이벤트/혜택안내/포인트 적립 문자
+
+[응답 규칙]
+1. 반드시 JSON 배열만 반환 (다른 텍스트 없이)
+2. 금액은 정수만 (콤마 제거)
+3. 가게명에 대한 직접 근거가 일부 있으나 표기 정규화가 어려우면 \"결제\"로 기입. 상호 근거 자체가 없으면 해당 항목은 {\"no\": N, \"isPayment\": false}
+4. 카드사가 불분명하면 \"기타\"로 기입
+5. 결제 문자가 아니면 해당 항목은 {\"no\": N, \"isPayment\": false}만 반환
+6. 입력된 모든 SMS에 대해 반드시 결과를 반환
+7. dateTime의 연도는 반드시 각 SMS의 수신 날짜 연도를 따를 것
+8. null 사용 금지 (문자열 필드는 빈 문자열 또는 기본값 사용)
+9. 각 항목은 반드시 no 필드를 포함하고, no 순서를 유지해 반환할 것
+10. isPayment=true일 때는 amount/storeName/cardName/dateTime/category를 모두 포함할 것
+11. 확신이 없으면 해당 항목은 {\"no\": N, \"isPayment\": false}로 반환할 것</string>
 
     <!-- GeminiSmsExtractor: SMS 정규식 생성 시스템 명령어 -->
     <string name="prompt_sms_regex_extract_system" translatable="false">당신은 한국 결제 SMS 정규식 생성기입니다.
@@ -422,7 +516,7 @@ JSON만 반환:
     <!-- %1$s = 메인 원본 샘플, %2$s = 메인 amountRegex, %3$s = 메인 storeRegex, %4$s = 메인 cardRegex (있으면), %5$s = 샘플 텍스트 -->
     <string name="prompt_sms_regex_with_main_ref" translatable="false">[메인 형식 참조]
 같은 발신번호의 메인 형식(가장 많은 SMS)의 정규식입니다.
-아래 샘플은 이 메인 형식의 변형입니다. 메인과의 차이점에 집중하여 정규식을 생성하세요.
+아래 샘플은 이 메인 형식의 변형입니다. 메인과의 차이점에 집중하되, 메인 regex를 그대로 복사하지 말고 현재 샘플에 필요한 부분만 수정하세요.
 메인 원본: %1$s
 메인 amountRegex: %2$s
 메인 storeRegex: %3$s
@@ -470,7 +564,7 @@ JSON만 반환:
     <!-- %1$s = 실패 이유, %2$s = 이전 응답 (240자), %3$s = 샘플 텍스트 -->
     <string name="prompt_sms_regex_repair" translatable="false">이전 정규식 응답이 검증에 실패했습니다.
 실패 이유: %1$s, 이전 응답: %2$s
-다음 샘플 전체를 만족하도록 수정하세요.
+기존에 맞던 부분은 유지하고, 다음 샘플 전체를 만족하도록 최소 수정하세요.
 %3$s
 
 주의:
@@ -478,6 +572,23 @@ JSON만 반환:
 - 과도한 이중 이스케이프(\\\\\\\\d, \\\\\\\\s, \\\\\\\\n) 금지. JSON 문자열 기준 \\\\d, \\\\s, \\\\n만 사용.
 
 반드시 JSON만 반환하세요.</string>
+
+    <!-- GeminiSmsExtractor: 정규식 수선 compact 프롬프트 -->
+    <!-- %1$s = 실패 이유, %2$s = 이전 응답, %3$s = 샘플 텍스트 -->
+    <string name="prompt_sms_regex_repair_compact" translatable="false">정규식 수선 JSON만 반환.
+실패 이유: %1$s
+이전 regex: %2$s
+기존에 맞던 부분은 유지하고 샘플 전체를 만족하도록 최소 수정.
+샘플:
+%3$s</string>
+
+    <!-- GeminiSmsExtractor: 정규식 수선 ultra compact 프롬프트 -->
+    <!-- %1$s = 실패 이유, %2$s = 이전 응답, %3$s = 샘플 텍스트 -->
+    <string name="prompt_sms_regex_repair_ultra_compact" translatable="false">JSON만:
+{\"isPayment\":true/false,\"amountRegex\":\"\",\"storeRegex\":\"\",\"cardRegex\":\"\"}
+수선 이유: %1$s
+이전 regex: %2$s
+샘플: %3$s</string>
 
     <!-- GeminiSmsExtractor: SMS 단일 추출 유저 프롬프트 -->
     <!-- %1$s = SMS 수신 날짜 정보, %2$s = 참조 텍스트, %3$s = SMS 본문 -->
@@ -491,6 +602,21 @@ JSON만 반환:
 
 반드시 JSON 객체 1개만 반환하고 null은 사용하지 마세요.</string>
 
+    <!-- GeminiSmsExtractor: 컨텍스트 포함 SMS 단일 추출 유저 프롬프트 -->
+    <!-- %1$s = SMS 수신 날짜 정보, %2$s = 참조 텍스트, %3$s = 추가 참조 텍스트, %4$s = SMS 본문 -->
+    <string name="prompt_sms_context_extract_user" translatable="false">다음 [분석 대상 SMS]에서 결제 정보를 추출해주세요.%1$s
+
+[참고 정보]
+%2$s
+
+[추가 참조]
+%3$s
+
+[분석 대상 SMS]
+%4$s
+
+반드시 JSON 객체 1개만 반환하고 null은 사용하지 마세요.</string>
+
     <!-- GeminiSmsExtractor: SMS 배치 추출 유저 프롬프트 -->
     <!-- %1$s = SMS 개수, %2$s = 참조 텍스트, %3$s = SMS 목록 텍스트 -->
     <string name="prompt_sms_batch_extract_user" translatable="false">다음 %1$s개 SMS에서 각각 결제 정보를 추출해주세요.
@@ -500,6 +626,21 @@ JSON만 반환:
 
 [분석 대상 SMS 목록]
 %3$s
+
+반드시 JSON 배열만 반환하고, 각 항목의 no를 유지하며 null은 사용하지 마세요.</string>
+
+    <!-- GeminiSmsExtractor: 컨텍스트 포함 SMS 배치 추출 유저 프롬프트 -->
+    <!-- %1$s = SMS 개수, %2$s = 참조 텍스트, %3$s = 추가 참조 텍스트, %4$s = SMS 목록 텍스트 -->
+    <string name="prompt_sms_context_batch_extract_user" translatable="false">다음 %1$s개 [분석 대상 SMS]에서 각각 결제 정보를 추출해주세요.
+
+[참고 정보]
+%2$s
+
+[추가 참조]
+%3$s
+
+[분석 대상 SMS 목록]
+%4$s
 
 반드시 JSON 배열만 반환하고, 각 항목의 no를 유지하며 null은 사용하지 마세요.</string>
 

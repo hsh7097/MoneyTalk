@@ -1195,21 +1195,26 @@ class SmsGroupClassifier @Inject constructor(
         MoneyTalkLogger.i("[processGroup] 시작: addr=*$addr, members=${group.members.size}, isMain=$isMainGroup")
 
         // --- [5-2] LLM 배치 추출 ---
-        // 그룹 멤버 최대 10건을 컨텍스트로 포함하여 LLM이 그룹 패턴을 파악하도록 함
-        val groupContextBody = buildGroupContextLlmInput(group.members)
-        val smsBodyForLlm = if (mainContext != null && distributionSummary != null) {
-            buildContextualLlmInput(groupContextBody, mainContext, distributionSummary)
+        // 대표 SMS는 실제 분석 대상으로 분리하고, 같은 형식 샘플/메인 케이스는 참고 컨텍스트로만 전달
+        val groupReferenceContext = buildGroupReferenceContext(
+            representative = representative,
+            members = group.members
+        )
+        val mainReferenceContext = if (mainContext != null && distributionSummary != null) {
+            buildMainCaseReferenceContext(mainContext, distributionSummary)
         } else {
-            groupContextBody
+            ""
         }
+        val referenceContext = mergeReferenceContexts(groupReferenceContext, mainReferenceContext)
         var llmResult: GeminiSmsExtractor.LlmExtractionResult? = null
         var llmAttempts = 0
         while (llmResult == null && llmAttempts <= GROUP_LLM_NULL_RETRY_MAX) {
             llmAttempts++
-            llmResult = smsExtractor.extractFromSmsBatch(
-                smsMessages = listOf(smsBodyForLlm),
-                smsTimestamps = listOf(representative.input.date)
-            ).firstOrNull()
+            llmResult = smsExtractor.extractFromSmsWithReference(
+                smsBody = representative.input.body,
+                smsTimestamp = representative.input.date,
+                referenceContext = referenceContext
+            )
             if (llmResult == null && llmAttempts <= GROUP_LLM_NULL_RETRY_MAX) {
                 MoneyTalkLogger.w(
                     "[processGroup] LLM 응답 null → 재시도 ${llmAttempts}/${GROUP_LLM_NULL_RETRY_MAX} " +
@@ -1590,18 +1595,26 @@ class SmsGroupClassifier @Inject constructor(
                 }
                 MoneyTalkLogger.i("[processGroup] $skipReason → LLM 개별 추출: addr=*$addr, remaining=${remainingMembers.size}")
                 val chunks = remainingMembers.chunked(LLM_FALLBACK_MAX_SAMPLES)
+                val sharedReferenceContext = if (mainContext != null && distributionSummary != null) {
+                    buildMainCaseReferenceContext(mainContext, distributionSummary)
+                } else {
+                    ""
+                }
                 for (chunk in chunks) {
-                    val memberBodies = chunk.map { member ->
-                        if (mainContext != null && distributionSummary != null) {
-                            buildContextualLlmInput(member.input.body, mainContext, distributionSummary)
-                        } else {
-                            member.input.body
-                        }
+                    val memberBodies = chunk.map { it.input.body }
+                    val memberTimestamps = chunk.map { it.input.date }
+                    val memberLlmResults = if (sharedReferenceContext.isNotBlank()) {
+                        smsExtractor.extractFromSmsBatchWithReference(
+                            smsMessages = memberBodies,
+                            smsTimestamps = memberTimestamps,
+                            referenceContext = sharedReferenceContext
+                        )
+                    } else {
+                        smsExtractor.extractFromSmsBatch(
+                            smsMessages = memberBodies,
+                            smsTimestamps = memberTimestamps
+                        )
                     }
-                    val memberLlmResults = smsExtractor.extractFromSmsBatch(
-                        smsMessages = memberBodies,
-                        smsTimestamps = chunk.map { it.input.date }
-                    )
 
                     chunk.forEachIndexed { index, member ->
                         val memberResult = memberLlmResults.getOrNull(index)
@@ -1669,75 +1682,64 @@ class SmsGroupClassifier @Inject constructor(
     }
 
     /**
-     * 그룹 대표 추출용 LLM 입력 구성
+     * 대표 SMS 분석 시 참고용으로 전달할 같은 형식 샘플 컨텍스트
      *
-     * 동일 유형 SMS 샘플(최대 10건)을 컨텍스트로 포함하여
-     * LLM이 그룹 전체 패턴을 파악한 뒤 최적의 결제 정보를 추출하도록 함.
-     * 1건만 보내면 이례적 SMS(예: 카드 대금 자동이체)가 대표일 때 cardName 등이 왜곡되는 문제를 방지.
-     *
-     * @param members 그룹 멤버 전체
-     * @return 컨텍스트 포함 SMS body 문자열
+     * 대표 SMS는 별도로 분석 대상으로 전달하고, 나머지 샘플은 형식 이해용 참고로만 사용한다.
      */
-    private fun buildGroupContextLlmInput(members: List<EmbeddedSms>): String {
-        if (members.size <= 1) return members.first().input.body
+    private fun buildGroupReferenceContext(
+        representative: EmbeddedSms,
+        members: List<EmbeddedSms>
+    ): String {
+        if (members.size <= 1) return ""
 
-        val samples = members.take(GROUP_CONTEXT_MAX_SAMPLES)
+        val samples = members
+            .asSequence()
+            .filter { it.input.id != representative.input.id }
+            .take(GROUP_CONTEXT_MAX_SAMPLES - 1)
+            .toList()
+        if (samples.isEmpty()) return ""
+
         val sampleText = samples.mapIndexed { idx, member ->
-            "${idx + 1}. ${member.input.body.replace("\n", " ")}"
+            "${idx + 1}. ${member.input.body.replace("\n", " ").take(120)}"
         }.joinToString("\n")
 
         return buildString {
-            appendLine("[동일 유형 SMS 목록 (${samples.size}건)]")
-            appendLine("아래 SMS들은 동일 발신자의 유사한 형태의 결제 문자입니다.")
-            appendLine("한 건의 결제 데이터로 해석하되, 각 데이터를 참조하여 최적의 결제 정보(isPayment, amount, storeName, cardName, dateTime, category)를 추출해주세요.")
-            appendLine()
+            appendLine("[추가 참조 - 동일 유형 샘플]")
+            appendLine("아래 SMS들은 분석 대상과 같은 발신자의 유사한 형식 예시입니다. 형식과 카드사 판단 보조용으로만 사용하세요.")
             append(sampleText)
         }
     }
 
     /**
-     * 서브그룹 LLM 호출을 위한 컨텍스트 포함 입력 구성
+     * 메인 케이스 참조 정보 구성
      *
-     * 원본 SMS 본문 앞에 메인 케이스의 참조 정보(카드명, 템플릿, 샘플 3건)와
-     * 분포도 요약을 추가. LLM이 메인 케이스를 참조하여 동일한 방식으로 분석하도록 유도.
-     *
-     * 예:
-     * "[참조 정보 - 메인 케이스]
-     *  같은 발신번호의 메인 케이스입니다. 아래를 참조하여 비슷한 형태로 분석하세요.
-     *  발신번호 15881688 총 85건:
-     *    - 서브그룹1 (메인): 80건(94%) | 원본: [KB]02/05 14:30 스타벅스 11,940원 승인
-     *    - 서브그룹2: 3건(4%) | 원본: [KB]해외승인 02/05 STARBUCKS USD12.00
-     *  메인 케이스 카드: KB국민
-     *  메인 템플릿: [KB]{DATE} {TIME} {STORE} {AMOUNT}원 승인
-     *  메인 샘플1: [KB]02/05 14:30 스타벅스 11,940원 승인
-     *  메인 샘플2: [KB]02/06 09:15 GS25강남점 3,200원 승인
-     *  메인 샘플3: [KB]02/07 18:00 쿠팡 45,000원 승인
-     *
-     *  [분석 대상 SMS]
-     *  [KB]해외승인 02/05 STARBUCKS USD12.00"
+     * 메인 케이스의 카드명/템플릿/샘플을 참고 정보로만 전달하여
+     * 현재 분석 대상 SMS의 형식 해석을 돕는다.
      */
-    private fun buildContextualLlmInput(
-        smsBody: String,
+    private fun buildMainCaseReferenceContext(
         mainContext: MainCaseContext,
         distributionSummary: String
     ): String {
-        val contextInfo = StringBuilder()
-        contextInfo.appendLine("[참조 정보 - 메인 케이스]")
-        contextInfo.appendLine("같은 발신번호의 메인 케이스입니다. 아래를 참조하여 비슷한 형태로 분석하세요.")
-        contextInfo.appendLine(distributionSummary)
-        if (mainContext.isPayment && mainContext.cardName.isNotBlank()) {
-            contextInfo.appendLine("메인 케이스 카드: ${mainContext.cardName}")
+        return buildString {
+            appendLine("[추가 참조 - 메인 케이스]")
+            appendLine("같은 발신번호의 메인 케이스입니다. 아래 내용은 형식 이해용 참고 정보입니다.")
+            appendLine(distributionSummary)
+            if (mainContext.isPayment && mainContext.cardName.isNotBlank()) {
+                appendLine("메인 케이스 카드: ${mainContext.cardName}")
+            }
+            if (mainContext.template.isNotBlank()) {
+                appendLine("메인 템플릿: ${mainContext.template}")
+            }
+            mainContext.samples.forEachIndexed { idx, sample ->
+                appendLine("메인 샘플${idx + 1}: ${sample.replace("\n", " ").take(100)}")
+            }
         }
-        if (mainContext.template.isNotBlank()) {
-            contextInfo.appendLine("메인 템플릿: ${mainContext.template}")
-        }
-        mainContext.samples.forEachIndexed { idx, sample ->
-            contextInfo.appendLine("메인 샘플${idx + 1}: ${sample.replace("\n", " ").take(100)}")
-        }
-        contextInfo.appendLine()
-        contextInfo.appendLine("[분석 대상 SMS]")
-        contextInfo.append(smsBody)
-        return contextInfo.toString()
+    }
+
+    private fun mergeReferenceContexts(vararg contexts: String): String {
+        return contexts
+            .filter { it.isNotBlank() }
+            .joinToString(separator = "\n\n")
     }
 
     // ===== [5-1] 그룹핑 =====
