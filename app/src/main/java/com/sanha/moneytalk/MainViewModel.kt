@@ -319,7 +319,7 @@ class MainViewModel @Inject constructor(
                                 showSyncDialog = false,
                                 showEngineSummary = true,
                                 engineSummaryTotalSms = result.stats.totalInput,
-                                engineSummaryPatterns = result.stats.vectorMatchCount + result.stats.newPatternsCreated + result.stats.regexFailedRecoveredCount,
+                                engineSummaryPatterns = result.stats.newPatternsCreated,
                                 engineSummaryExpenses = result.expenseCount,
                                 engineSummaryIncomes = result.incomeCount
                             )

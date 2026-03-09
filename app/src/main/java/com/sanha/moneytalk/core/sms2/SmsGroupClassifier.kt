@@ -182,6 +182,11 @@ class SmsGroupClassifier @Inject constructor(
         private val MASK_SINGLE_DIGIT = Regex("""\d""")
     }
 
+    data class ClassificationResult(
+        val results: List<SmsParseResult>,
+        val learnedPatternCount: Int = 0
+    )
+
     // ===== 내부 데이터 =====
 
     /**
@@ -200,7 +205,13 @@ class SmsGroupClassifier @Inject constructor(
         val amountRegex: String = "",
         val storeRegex: String = "",
         val cardRegex: String = "",
-        val outcomeCode: String = ""
+        val outcomeCode: String = "",
+        val learnedPatternCount: Int = 0
+    )
+
+    private data class SourceProcessResult(
+        val results: List<SmsParseResult>,
+        val learnedPatternCount: Int = 0
     )
 
     /**
@@ -805,16 +816,17 @@ class SmsGroupClassifier @Inject constructor(
      * @param unmatchedList Step 4에서 미매칭된 EmbeddedSms 리스트
      * @param forceSkipRegexAll true면 Step5 전체에서 regex 생성/검증을 생략하고 direct LLM 경로로만 처리
      * @param onProgress 진행률 콜백
-     * @return 결제로 확인되고 파싱 성공한 결과 리스트
+     * @return 결제로 확인되고 파싱 성공한 결과 + 학습/지연학습 패턴 수
      */
     suspend fun classifyUnmatched(
         unmatchedList: List<EmbeddedSms>,
         forceSkipRegexAll: Boolean = false,
         onProgress: ((step: String, current: Int, total: Int) -> Unit)? = null
-    ): List<SmsParseResult> {
-        if (unmatchedList.isEmpty()) return emptyList()
+    ): ClassificationResult {
+        if (unmatchedList.isEmpty()) return ClassificationResult(emptyList(), 0)
 
         val results = mutableListOf<SmsParseResult>()
+        var learnedPatternCount = 0
 
         // [5-1] 그룹핑 (Level 1~3: 발신번호 → 벡터 유사도 → 소그룹 병합)
         onProgress?.invoke("비슷한 문자 묶는 중...", 0, unmatchedList.size)
@@ -879,7 +891,10 @@ class SmsGroupClassifier @Inject constructor(
                     }
                 }
             }.awaitAll()
-            results.addAll(allResults.flatten())
+            allResults.forEach { sourceResult ->
+                results.addAll(sourceResult.results)
+                learnedPatternCount += sourceResult.learnedPatternCount
+            }
         }
 
         val outcomeSummary = outcomeCounts.entries
@@ -895,7 +910,10 @@ class SmsGroupClassifier @Inject constructor(
                 "outcomes=[$outcomeSummary], elapsed=${step5TotalElapsed}ms"
         )
 
-        return results
+        return ClassificationResult(
+            results = results,
+            learnedPatternCount = learnedPatternCount
+        )
     }
 
     /**
@@ -948,8 +966,9 @@ class SmsGroupClassifier @Inject constructor(
         forceSkipRegex: Boolean = false,
         forceSkipRegexAll: Boolean = false,
         onGroupOutcome: ((String) -> Unit)? = null
-    ): List<SmsParseResult> {
+    ): SourceProcessResult {
         val results = mutableListOf<SmsParseResult>()
+        var learnedPatternCount = 0
         MoneyTalkLogger.i("[processSourceGroup_$index] 시작: addr=${sourceGroup.address}, subGroups=${sourceGroup.subGroups.size}")
 
         // DB 메인 패턴에서 MainCaseContext 구성 (현재 세션 메인 결과가 없을 때 fallback)
@@ -977,7 +996,11 @@ class SmsGroupClassifier @Inject constructor(
                 onGroupOutcome = onGroupOutcome
             )
             results.addAll(singleResult.results)
-            return results
+            learnedPatternCount += singleResult.learnedPatternCount
+            return SourceProcessResult(
+                results = results,
+                learnedPatternCount = learnedPatternCount
+            )
         }
 
 
@@ -990,6 +1013,7 @@ class SmsGroupClassifier @Inject constructor(
             onGroupOutcome = onGroupOutcome
         )
         results.addAll(mainProcessResult.results)
+        learnedPatternCount += mainProcessResult.learnedPatternCount
 
         // Step 2: 메인 결과로 컨텍스트 생성 (regex 참조 + 샘플 3건 포함)
         val mainSamples = sourceGroup.mainGroup.members
@@ -1026,10 +1050,14 @@ class SmsGroupClassifier @Inject constructor(
                 onGroupOutcome = onGroupOutcome
             )
             results.addAll(exResults.results)
+            learnedPatternCount += exResults.learnedPatternCount
         }
 
         MoneyTalkLogger.i("[processSourceGroup_$index] 완료: addr=${sourceGroup.address}, results=${results.size}건")
-        return results
+        return SourceProcessResult(
+            results = results,
+            learnedPatternCount = learnedPatternCount
+        )
     }
 
     /**
@@ -1040,7 +1068,8 @@ class SmsGroupClassifier @Inject constructor(
      * - unstable + size>10: 1회 re-split 후 하위 그룹 처리
      *
      * E-lite:
-     * - forceSkipRegex/unstable direct 경로는 동기화 결과만 저장하고 패턴 학습은 생략
+     * - forceSkipRegex/unstable direct 경로는 동기화 중 즉시 학습을 생략하고
+     *   필요 시 백그라운드 큐로 지연 등록
      */
     private suspend fun processGroupWithPolicy(
         group: VectorGroup,
@@ -1084,6 +1113,7 @@ class SmsGroupClassifier @Inject constructor(
                 )
 
                 val mergedResults = mutableListOf<SmsParseResult>()
+                var learnedPatternCount = 0
                 var seedRegex: GroupProcessResult? = null
 
                 reSplitGroups.forEachIndexed { idx, subGroup ->
@@ -1101,6 +1131,7 @@ class SmsGroupClassifier @Inject constructor(
                         seedRegex = subResult
                     }
                     mergedResults.addAll(subResult.results)
+                    learnedPatternCount += subResult.learnedPatternCount
                 }
 
                 return GroupProcessResult(
@@ -1108,7 +1139,8 @@ class SmsGroupClassifier @Inject constructor(
                     amountRegex = seedRegex?.amountRegex.orEmpty(),
                     storeRegex = seedRegex?.storeRegex.orEmpty(),
                     cardRegex = seedRegex?.cardRegex.orEmpty(),
-                    outcomeCode = seedRegex?.outcomeCode.orEmpty()
+                    outcomeCode = seedRegex?.outcomeCode.orEmpty(),
+                    learnedPatternCount = learnedPatternCount
                 )
             }
         }
@@ -1201,14 +1233,20 @@ class SmsGroupClassifier @Inject constructor(
                     MoneyTalkLogger.e(
                         "[processGroup] 완료: addr=*$addr, outcome=$fallbackOutcome, source=heuristic, results=${heuristicResults.size}건, members=${group.members.size}, elapsed=${elapsed}ms"
                     )
-                    return GroupProcessResult(results = heuristicResults, outcomeCode = fallbackOutcome)
+                    return GroupProcessResult(
+                        results = heuristicResults,
+                        outcomeCode = fallbackOutcome
+                    )
                 }
             }
             val elapsed = System.currentTimeMillis() - groupStartTime
             val failOutcome = "LLM_FAILED"
             onGroupOutcome?.invoke(failOutcome)
             MoneyTalkLogger.e("[processGroup] 완료: addr=*$addr, outcome=$failOutcome, results=0건, elapsed=${elapsed}ms")
-            return GroupProcessResult(emptyList(), outcomeCode = failOutcome)
+            return GroupProcessResult(
+                results = emptyList(),
+                outcomeCode = failOutcome
+            )
         }
         MoneyTalkLogger.i(
             "[processGroup] LLM 추출 완료: addr=*$addr, isPayment=${llmResult.isPayment}, " +
@@ -1238,7 +1276,10 @@ class SmsGroupClassifier @Inject constructor(
             val nonPaymentOutcome = "NON_PAYMENT"
             onGroupOutcome?.invoke(nonPaymentOutcome)
             MoneyTalkLogger.e("[processGroup] 완료: addr=*$addr, outcome=$nonPaymentOutcome, results=0건, elapsed=${elapsed}ms")
-            return GroupProcessResult(emptyList(), outcomeCode = nonPaymentOutcome)
+            return GroupProcessResult(
+                results = emptyList(),
+                outcomeCode = nonPaymentOutcome
+            )
         }
 
         // LLM이 추출한 결제 정보
@@ -1512,12 +1553,6 @@ class SmsGroupClassifier @Inject constructor(
             }
         } else {
             // regex 미생성 → 대표는 llmAnalysis 재사용, 나머지만 추가 처리
-            val limitedMembers = if (directLlmOnly || forceSkipRegex) {
-                group.members
-            } else {
-                group.members.take(LLM_FALLBACK_MAX_SAMPLES)
-            }
-
             // 대표 멤버는 이미 LLM 추출 완료 → llmAnalysis 재사용 (중복 LLM 호출 방지)
             if (llmAnalysis.amount > 0) {
                 results.add(
@@ -1540,7 +1575,7 @@ class SmsGroupClassifier @Inject constructor(
             }
 
             // 대표 제외 나머지 멤버 (representative는 항상 members[0])
-            val remainingMembers = limitedMembers.drop(1)
+            val remainingMembers = group.members.drop(1)
 
             if (remainingMembers.isNotEmpty()) {
                 // regex 미생성 → 나머지 멤버 개별 LLM 추출
@@ -1628,7 +1663,8 @@ class SmsGroupClassifier @Inject constructor(
             amountRegex = amountRegex,
             storeRegex = storeRegex,
             cardRegex = cardRegex,
-            outcomeCode = outcome
+            outcomeCode = outcome,
+            learnedPatternCount = 1
         )
     }
 

@@ -117,9 +117,9 @@ data class SyncStats(
     val pipelineVectorMatchCount: Int = 0,
     /** Step 4에서 벡터 매칭 성공 건수 (기존 패턴 재사용) */
     val vectorMatchCount: Int = 0,
-    /** Step 5에서 LLM 처리 건수 (신규 패턴 생성) */
+    /** Step 4.5/5에서 LLM으로 최종 파싱된 SMS 건수 */
     val llmProcessCount: Int = 0,
-    /** 새로 생성된 패턴 DB 수 (vectorMatchCount + llmProcessCount 합산 가능) */
+    /** Step 5에서 새로 등록했거나 학습 큐에 적재한 결제 패턴 수 */
     val newPatternsCreated: Int = 0,
     /** Step 4.5에서 regex 실패→LLM 복구된 건수 (기존 패턴, 신규 패턴 아님) */
     val regexFailedRecoveredCount: Int = 0,

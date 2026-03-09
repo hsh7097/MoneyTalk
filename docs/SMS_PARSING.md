@@ -63,7 +63,7 @@ List<SmsInput> (원본 보존)
 └─────────────────────────────────────────────────────────┘
   │
   ▼
-호출자(HomeViewModel.syncSmsV2)
+호출자(MainViewModel.syncSmsV2)
   ├ expenses → ExpenseEntity → DB 저장
   └ incomes → SmsIncomeParser로 파싱 → IncomeEntity → DB 저장
 ```
@@ -140,7 +140,7 @@ sms2에서는 `SmsFilter.shouldSkipBySender()` (SmsReaderV2 발신자 필터)만
 | `readAllMessagesByDateRange(cr, start, end)` | `List<SmsInput>` | SMS+MMS+RCS 통합 읽기 |
 
 V1의 `SmsReader`는 `SmsMessage`를 반환했지만, **SmsReaderV2는 `SmsInput`을 직접 반환**합니다.
-중간 변환 단계가 없어 호출자(HomeViewModel)가 바로 SmsSyncCoordinator에 전달 가능.
+중간 변환 단계가 없어 호출자(MainViewModel)가 바로 SmsSyncCoordinator에 전달 가능.
 
 ### SMS ID 생성
 `발신번호_수신시간_본문해시코드` → 중복 저장 방지
@@ -197,7 +197,7 @@ process(smsList: List<SmsInput>, onProgress) → SyncResult
 
 ### 책임 분리
 
-| SmsSyncCoordinator가 하는 것 | 호출자(HomeViewModel)가 하는 것 |
+| SmsSyncCoordinator가 하는 것 | 호출자(MainViewModel)가 하는 것 |
 |-----------------------------|-------------------------------|
 | 사전 필터링 | SMS 읽기 (ContentResolver) |
 | 수입/결제 분류 | 중복 제거 (기존 SMS ID) |
@@ -438,12 +438,12 @@ regex 없거나 파싱 실패:
 
 ```
 [Step 5 LLM 처리]
-  → collectSampleToRtdb() → /sms_origin/{sender}/{type}/{sampleKey}/
+  → collectSampleToRtdb() → /sms_origin/{sender}/{type}/{fingerprint}/
     (원본/마스킹 SMS + 템플릿 + regex + 카드명 + 발신번호)
 
 [관리자 수동 처리] ← 아직 미자동화
   → sms_origin에서 sender/type 단위 표본 검토
-  → 검증된 regex를 /sms_rules/{sender}/{type}/{ruleKey}/ 에 배포
+  → 검증된 regex를 /sms_regex_rules/v1/{sender}/{ruleId}/ 에 배포
 
 [다음 동기화 시 Step 4]
   → RemoteSmsRuleRepository.loadRules() — RTDB에서 전체 룰 로드
@@ -472,7 +472,7 @@ data class RemoteSmsRule(
 
 | 속성 | 값 | 설명 |
 |------|---|------|
-| RTDB 경로 | `sms_rules/{sender}/{type}/{ruleKey}` | sender/type별 룰 그룹핑 |
+| RTDB 경로 | `sms_regex_rules/v1/{sender}/{ruleId}` | sender별 룰 그룹핑 |
 | 캐시 TTL | 10분 | 동기화 중 반복 네트워크 호출 방지 |
 | 안정성 | RTDB 실패 시 빈 맵 반환 | 예외 전파 금지, main thread 블로킹 없음 |
 | 필터링 | `enabled=true` 룰만 로드 | 비활성 룰 자동 제외 |
@@ -498,17 +498,20 @@ isMainGroup = false
 
 | 상수 | 값 | 설명 |
 |------|---|------|
-| `LLM_BATCH_SIZE` | 20 | 한 번에 LLM에 보내는 그룹 수 |
 | `LLM_CONCURRENCY` | 5 | LLM 병렬 동시 실행 수 |
+| `LLM_FALLBACK_MAX_SAMPLES` | 10 | regex 미생성 시 개별 LLM 추출 chunk 크기 |
+| `GROUP_CONTEXT_MAX_SAMPLES` | 10 | 그룹 대표 추출 시 LLM 컨텍스트 샘플 수 |
 | `REGEX_SAMPLE_SIZE` | 5 | regex 생성 시 사용할 샘플 수 |
 | `REGEX_MIN_SAMPLES` | 5 | regex 생성 최소 멤버 수 |
+| `GROUP_TIME_BUDGET_MS` | 10초 | 단일 그룹 regex 생성/검증 시간 예산 |
+| `STEP5_TIME_BUDGET_MS` | 20초 | Step5 전체 soft budget |
 | `GROUPING_SIMILARITY` | 0.95 | 벡터 클러스터링 임계값 |
 | `SMALL_GROUP_MERGE_THRESHOLD` | 5 | 소그룹 병합 기준 멤버 수 |
 | `SMALL_GROUP_MERGE_MIN_SIMILARITY` | 0.90 | 소그룹 병합 최소 유사도 |
 | `REGEX_FAILURE_THRESHOLD` | 2 | regex 실패 쿨다운 기준 |
 | `REGEX_FAILURE_COOLDOWN_MS` | 30분 | regex 실패 쿨다운 시간 |
 | `REGEX_VALIDATION_MIN_PASS_RATIO` | 0.80 | regex 검증 최소 파싱 성공률 |
-| `SAMPLE_KEY_CACHE_MAX_SIZE` | 500 | RTDB 표본 세션 중복 전송 방지 캐시 상한 |
+| `UNSTABLE_DIRECT_LLM_MAX_SIZE` | 10 | unstable 소그룹 direct LLM 상한 |
 
 ### classifyUnmatched() 전체 흐름
 
@@ -716,10 +719,10 @@ LLM이 반환한 비표준 카테고리를 앱 17개 카테고리로 매핑:
 
 ---
 
-## 13. 동기화 흐름 — HomeViewModel.syncSmsV2
+## 13. 동기화 흐름 — MainViewModel.syncSmsV2
 
 ### 파일 위치
-[`feature/home/ui/HomeViewModel.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeViewModel.kt)
+[`MainViewModel.kt`](../app/src/main/java/com/sanha/moneytalk/MainViewModel.kt)
 
 ### syncSmsV2 오케스트레이터 (5 Phase)
 
@@ -744,9 +747,8 @@ syncSmsV2(contentResolver, targetMonthRange, updateLastSyncTime)
   │
   └── postSyncCleanup()
       ├ categoryClassifierService.flushPendingMappings() + clearCategoryCache()
-      ├ hybridSmsClassifier.cleanupStalePatterns()
       ├ updateLastSyncTime이면 settingsDataStore.saveLastSyncTime()
-      └ Gemini 카테고리 분류 (미분류 항목)
+      └ 잔여 미분류 항목은 tryResumeClassification()에서 백그라운드 처리
 ```
 
 ### 호출 경로
@@ -755,8 +757,8 @@ syncSmsV2(contentResolver, targetMonthRange, updateLastSyncTime)
 |--------|--------|------|
 | HomeScreen (버튼) | `syncIncremental(cr)` | 증분 동기화 (lastSyncTime~now) |
 | HomeScreen (자동) | `syncIncremental(cr)` | 자동 증분 동기화 |
-| HomeViewModel (월별) | `syncSmsV2(cr, monthRange, false)` | 광고 시청 후 월별 동기화 |
-| HomeViewModel (resume) | `syncSmsV2(cr, range, true, silent=true)` | 앱 재진입 시 silent 증분 동기화 |
+| MainViewModel (월별) | `syncSmsV2(cr, monthRange, false)` | 광고 시청 후 월별 동기화 |
+| MainViewModel (resume) | `syncSmsV2(cr, range, true, silent=true)` | 앱 재진입 시 silent 증분 동기화 |
 
 `syncIncremental()`은 `calculateIncrementalRange()`로 시작~종료 시간을 계산한 뒤 `syncSmsV2()`를 호출합니다.
 
@@ -903,7 +905,8 @@ ORDER BY matchCount DESC LIMIT 1
 
 ### 수집 시점
 `SmsGroupClassifier.registerPaymentPattern()` → `collectSampleToRtdb()` 호출.
-모든 parseSource (llm, llm_regex, template_regex)에서 수집. 단, regex는 `llm_regex`만 포함.
+성공 표본은 **regex가 존재하는 결제 패턴**일 때만 수집합니다.
+현재 코드 기준으로는 `amountRegex`와 `storeRegex`가 있는 `llm_regex`/`template_regex` 경로가 대상입니다.
 `SmsRegexRuleMatcher` Fast Path 실패 건은 `SmsOriginSampleCollector.collectFailure()`로 별도 수집.
 
 ### RTDB 데이터 구조
@@ -912,38 +915,45 @@ ORDER BY matchCount DESC LIMIT 1
 sms_origin/
   └── {normalizedSenderAddress}/
       └── {type}/
-          └── {sampleKey(sha256)}/
+          └── {fingerprint(sha256)}/
               ├── schemaVersion: Int
-              ├── sampleKey: String
               ├── fingerprint: String
-              ├── senderAddress: String
               ├── normalizedSenderAddress: String
               ├── type: String
-              ├── template: String
+              ├── template: String?                # success일 때
+              ├── failureTemplate: String?         # fail일 때
               ├── originBody: String
               ├── maskedBody: String
-              ├── cardName: String
+              ├── cardName: String?                # success일 때
               ├── parseSource: String
               ├── outcome: String                  # success | fail
               ├── failStage: String?               # fail일 때만
               ├── failReason: String?              # fail일 때만
               ├── matchedRuleKey: String?          # 있는 경우만 저장
               ├── groupMemberCount: Int
-              ├── amountRegex: String?
-              ├── storeRegex: String?
-              ├── cardRegex: String?
+              ├── bodyRegex: String?               # rule shape 유도값
+              ├── amountGroup: String
+              ├── storeGroup: String
+              ├── cardGroup: String
+              ├── dateGroup: String
+              ├── ruleKey: String?
+              ├── priority: Int
+              ├── status: String
+              ├── source: String
+              ├── version: Int
               ├── count: Int                       # 동일 fingerprint 누적 횟수
               ├── lastSeenAt: Long
-              ├── createdAt: Long
+              ├── createdAt: Long?                 # 세션 내 신규 fingerprint일 때만
               └── updatedAt: Long
 ```
 
 ### 중복 방지
 
-```
-sampleKey = sha256(sender|type|template|amountRegex|storeRegex|cardRegex)
-success: sender+type별 고유 fingerprint 최대 3개 유지 (대표 표본)
-fail: fingerprint 단위 row upsert + count/lastSeenAt 누적
+```text
+success fingerprint = sha256(sender|type|template.trim())
+fail fingerprint = sha256(sender|type|failStage|failReason|matchedRuleKey|failureTemplate)
+
+success/fail 모두 fingerprint 단위 row upsert + count/lastSeenAt 누적
 ```
 
 ### PII 마스킹 — `maskSmsBody(smsBody)`
@@ -967,7 +977,7 @@ sms2가 배치 동기화를 담당하지만, 일부 V1 컴포넌트는 여전히
 |------------|----------|--------|
 | SmsReader | **V1 only** | SmsProcessingService (실시간 수신) |
 | SmsParser | **V1 only** | SmsProcessingService (실시간 파싱) |
-| HybridSmsClassifier | **V1 only** + `cleanupStalePatterns()` | 실시간 + 30일 미사용 패턴 정리 |
+| HybridSmsClassifier | **삭제됨/미사용** | — |
 | SmsFilter | **V1+sms2 공유** | 발신자 필터 (shouldSkipBySender) |
 | SmsBatchProcessor | **미사용** (삭제 대기) | — |
 | VectorSearchEngine | **V1 only** | HybridSmsClassifier |

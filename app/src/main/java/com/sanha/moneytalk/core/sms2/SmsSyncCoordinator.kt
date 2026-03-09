@@ -184,7 +184,7 @@ class SmsSyncCoordinator @Inject constructor(
             pipelineVectorMatchCount = pipelineResult.vectorMatchCount,
             vectorMatchCount = totalVectorMatchCount,
             llmProcessCount = pipelineResult.llmProcessCount,
-            newPatternsCreated = pipelineResult.llmProcessCount,
+            newPatternsCreated = pipelineResult.newPatternCount,
             regexFailedRecoveredCount = pipelineResult.regexFailedRecoveredCount,
             pipelineDroppedCount = pipelineResult.droppedCount
         )
