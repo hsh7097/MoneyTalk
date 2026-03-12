@@ -1123,6 +1123,20 @@ SpendingTrendInfo (interface)
 | 스레드 | thread-safe, 어디서든 호출 가능 |
 | 자동 해제 | 3초 |
 
+### 8.3-1 SMS 즉시 저장 + 알림
+
+| 항목 | 스펙 |
+|------|------|
+| 트리거 | `SmsReceiver` (BroadcastReceiver, SMS_RECEIVED_ACTION) |
+| 처리 | `SmsInstantProcessor.processAndSave()` — goAsync() + IO 코루틴 |
+| 파이프라인 | 발신번호필터 → SmsPreFilter → 제외키워드 → 수입/지출분류 → Regex매칭 → StoreRule → DB저장 |
+| 알림 | `SmsNotificationManager` — 채널 `sms_transaction`, IMPORTANCE_DEFAULT |
+| 알림 형식 (지출) | "{이모지} {가맹점} {금액}원 ({카드}" |
+| 알림 형식 (수입) | "💰 {출처} {금액}원" |
+| Dedup | smsId 형식 `${address}_${date}_${body.hashCode()}` (SmsReaderV2 동일) |
+| 후속 동기화 | 즉시 처리 후 항상 `DataRefreshEvent.SMS_RECEIVED` 발행 → MainViewModel 증분 동기화 |
+| 제한 | Regex 미매칭 SMS는 Skipped → 전체 동기화에서 벡터/LLM으로 처리 |
+
 ### 8.4 SMS 파싱 파이프라인
 
 | 단계 | 설명 |

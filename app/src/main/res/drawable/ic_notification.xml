@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <!-- 원형 코인 아이콘 (₩ 모양) -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12.5,6.9c1.78,0.2 2.88,1.07 3.12,2.59h-1.75c-0.16,-0.73 -0.72,-1.19 -1.37,-1.29v2.69l0.52,0.12c1.55,0.35 2.48,1.1 2.48,2.52 0,1.7 -1.34,2.77 -3,2.97v1.5h-1v-1.52c-1.94,-0.22 -3.14,-1.28 -3.3,-2.97h1.76c0.16,0.89 0.78,1.38 1.54,1.49v-2.82l-0.44,-0.1C9.52,11.83 8.64,11 8.64,9.6c0,-1.6 1.2,-2.57 2.86,-2.7v-1.4h1v1.4zM11.5,11.13V8.42c-0.75,0.12 -1.2,0.6 -1.2,1.22 0,0.61 0.35,1.07 1.2,1.49zM12.5,12.87v2.82c0.83,-0.12 1.36,-0.63 1.36,-1.33 0,-0.72 -0.42,-1.16 -1.36,-1.49z" />
+</vector>

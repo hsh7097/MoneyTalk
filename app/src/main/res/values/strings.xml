@@ -610,4 +610,10 @@
 
     <!-- 공통 -->
     <string name="common_clear_input">입력 내용 지우기</string>
+
+    <!-- SMS 거래 알림 -->
+    <string name="notification_channel_name">거래 알림</string>
+    <string name="notification_channel_description">SMS 수신 시 거래 내역 알림</string>
+    <string name="notification_expense_title">카드 결제</string>
+    <string name="notification_income_title">입금</string>
 </resources>
