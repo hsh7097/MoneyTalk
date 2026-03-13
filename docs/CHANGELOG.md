@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### Added (2026-03-13)
+- **코치마크 온보딩 시스템**: Canvas BlendMode.Clear 기반 스포트라이트 오버레이 (CoachMarkOverlay, CoachMarkState, CoachMarkStep, OnboardingTargetModifier)
+- **7개 화면 온보딩 통합**: 홈(2스텝), 내역(2스텝), 설정(3스텝), 채팅(2스텝), 필터(1스텝), 거래편집(2스텝), 거래처규칙(1스텝)
+- **DataStore 기반 온보딩 상태 관리**: 화면별 `has_seen_{screen}_onboarding_v1` 키로 최초 1회만 표시
+- **설정 > 가이드 초기화**: 온보딩 가이드를 다시 볼 수 있는 초기화 기능
+
+### Changed (2026-03-13)
+- **필터 BottomSheet 레이아웃**: 정렬+고정지출 고정영역 / 카테고리 스크롤영역 분리 (코치마크 좌표 안정성)
+- **거래편집 코치마크 조건**: 신규생성(isNew) 시 미노출, 기존 거래 편집 시에만 표시
+- **홈 코치마크 조건**: 데이터 없을 때(권한 미설정/첫 실행) 미노출
+
 ### Added (2026-03-04~05)
 - **커스텀 카테고리 시스템**: CategoryProvider 도입, 사용자 정의 카테고리 추가/수정/삭제/재정렬, 이모지/배경색 표시
 - **CategorySettingsActivity**: 카테고리 설정 전용 화면 (SmsSettings 패턴)
