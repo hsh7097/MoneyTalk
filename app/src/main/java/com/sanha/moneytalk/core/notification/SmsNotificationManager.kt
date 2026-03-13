@@ -12,7 +12,6 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import com.sanha.moneytalk.MainActivity
 import com.sanha.moneytalk.R
-import com.sanha.moneytalk.core.model.Category
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.text.NumberFormat
 import java.util.Locale
@@ -59,10 +58,9 @@ class SmsNotificationManager @Inject constructor(
         cardName: String,
         category: String
     ) {
-        val emoji = Category.entries.find { it.displayName == category }?.emoji ?: "💳"
         val title = context.getString(R.string.notification_expense_title)
         val cardSuffix = if (cardName.isNotBlank()) " ($cardName)" else ""
-        val body = "$emoji $storeName ${numberFormat.format(amount)}원$cardSuffix"
+        val body = "$storeName ${numberFormat.format(amount)}원$cardSuffix"
         showNotification(title, body)
     }
 
@@ -74,7 +72,7 @@ class SmsNotificationManager @Inject constructor(
     ) {
         val title = context.getString(R.string.notification_income_title)
         val sourceDisplay = source.ifBlank { incomeType }
-        val body = "💰 $sourceDisplay ${numberFormat.format(amount)}원"
+        val body = "$sourceDisplay ${numberFormat.format(amount)}원"
         showNotification(title, body)
     }
 
