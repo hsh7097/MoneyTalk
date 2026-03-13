@@ -2,7 +2,7 @@
 
 > 각 화면의 Composable 계층 구조를 트리로 정리한 문서
 > 함수 참조 클릭 시 IDE에서 해당 파일로 이동 가능
-> **최종 갱신**: 2026-03-04
+> **최종 갱신**: 2026-03-13
 
 ---
 
@@ -72,6 +72,7 @@ HomeScreen                           ← 홈 탭 메인 화면
 ├── ExpenseDetailDialog              ← 지출 상세/수정/삭제 다이얼로그 (공통)
 │   └── CategorySelectDialog         ← 카테고리 변경 다이얼로그 (공통)
 ├── [AlertDialog]                    ← 분류 확인/진행률 다이얼로그
+├── CoachMarkOverlay                 ← 화면별 온보딩 스포트라이트 오버레이 (첫 진입 시)
 └── BannerAdCompose                  ← 하단 고정 배너 광고 (RTDB reward_ad_enabled 연동, 공통)
 ```
 
@@ -111,12 +112,14 @@ HistoryScreen                        ← 내역 탭 메인 화면
 │   └── BillingCycleCalendarView     ← 결제 기간 기준 달력 (날짜 클릭 → TransactionDetailListActivity)
 │       └── CalendarDayCell          ← 날짜 셀 (날짜 + 수입/지출 2줄)
 │
-├── FilterBottomSheet                ← 정렬/거래유형/카테고리 필터
-│   └── FilterCategoryGridItem       ← 카테고리 선택 그리드 아이템
+├── FilterBottomSheet                ← 정렬/거래유형/카테고리 필터 + 코치마크
+│   ├── FilterCategoryGridItem       ← 카테고리 선택 그리드 아이템
+│   └── CoachMarkOverlay             ← 필터 온보딩 오버레이 (첫 진입 시)
 │
 ├── [지출 선택 시]                    → TransactionEditActivity 이동
 ├── IncomeDetailDialog               ← 수입 상세 + 원본 SMS 표시
 ├── [+ 버튼]                          → TransactionEditActivity (새 거래 모드) 이동
+├── CoachMarkOverlay                 ← 화면별 온보딩 스포트라이트 오버레이 (첫 진입 시)
 └── BannerAdCompose                  ← 하단 고정 배너 광고 (RTDB reward_ad_enabled 연동, 공통)
 ```
 
@@ -156,6 +159,7 @@ ChatScreen                           ← 채팅 탭 메인 (목록 ↔ 채팅방
 │       ├── GuideQuestionsOverlay    ← 빈 채팅방 예시 질문 칩
 │       └── RewardAdDialog           ← 리워드 광고 시청 안내 다이얼로그
 │
+├── CoachMarkOverlay                 ← 화면별 온보딩 스포트라이트 오버레이 (첫 진입 시)
 └── ApiKeyDialog                     ← Gemini API 키 입력 (채팅 시작 시)
 ```
 
@@ -187,7 +191,7 @@ SettingsScreen                       ← 설정 탭 메인 화면
 ├── SettingsSectionCompose("데이터 관리")
 │   └── SettingsItemCompose × 6      ← 문자설정/내보내기/Drive/복원/중복제거/삭제
 ├── SettingsSectionCompose("앱 정보")
-│   └── SettingsItemCompose × 2      ← 버전/개인정보
+│   └── SettingsItemCompose × 3      ← 버전/개인정보/가이드 초기화
 │
 ├── [BottomSheet]
 │   └── BudgetBottomSheet            ← 전체+카테고리별 예산 설정
@@ -204,6 +208,8 @@ SettingsScreen                       ← 설정 탭 메인 화면
 │   ├── ExportDialog                 ← JSON/CSV 내보내기
 │   └── GoogleDriveDialog            ← Drive 백업 목록/업로드/복원
 │       └── DriveBackupFileItem      ← Drive 백업 파일 아이템
+│
+├── CoachMarkOverlay                 ← 화면별 온보딩 스포트라이트 오버레이 (첫 진입 시)
 │
 └── [다이얼로그 — 앱 정보]
     ├── AppInfoDialog                ← 앱 버전/빌드 정보
@@ -267,6 +273,7 @@ TransactionEditActivity               ← 거래 편집/추가 (별도 Activity,
     ├── DatePickerDialog              ← 날짜 선택 (Material3)
     ├── TimePickerDialog              ← 시간 선택 (AlertDialog 래퍼)
     ├── TransactionBottomButtons      ← 하단 버튼 (삭제 + 저장, 나란히 배치)
+    ├── CoachMarkOverlay              ← 거래 편집 온보딩 오버레이 (첫 진입 시)
     └── [AlertDialog: 삭제 확인]       ← 기존 거래 삭제 시
 ```
 
@@ -358,6 +365,7 @@ StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Acti
     │   ├── 설명 텍스트
     │   ├── StoreRuleListItem × N       ← 키워드 + 카테고리/고정지출 표시 + 삭제
     │   └── "+ 규칙 추가" 버튼
+    ├── CoachMarkOverlay               ← 거래처 규칙 온보딩 오버레이 (첫 진입 시)
     ├── [AlertDialog: 추가/편집]         ← 키워드 입력 + 카테고리 선택 + 고정지출 토글
     ├── [CategorySelectDialog]           ← 카테고리 선택 (공통 재사용)
     └── [AlertDialog: 삭제 확인]         ← 규칙 삭제 시
@@ -390,6 +398,25 @@ StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Acti
 | BannerAdCompose | 하단 고정 배너 광고 (AdMob, RTDB 연동) | 홈, 내역, 카테고리 상세 | [BannerAdComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/BannerAdCompose.kt) |
 | MonthPagerUtils | HorizontalPager 페이지↔월 변환 유틸 | 홈, 내역 | [MonthPagerUtilsKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/MonthPagerUtils.kt) |
 | EmojiPickerCompose | 이모지 선택 5열 그리드 (80개 프리셋) | 카테고리 설정 | [EmojiPickerComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/EmojiPickerCompose.kt) |
+| CoachMarkOverlay | 스포트라이트 + 툴팁 온보딩 오버레이 | 홈, 내역, 필터, 거래편집, 거래처규칙, 채팅, 설정 | [CoachMarkOverlayKt](../app/src/main/java/com/sanha/moneytalk/core/ui/coachmark/CoachMarkOverlay.kt) |
+
+---
+
+## 코치마크 (화면별 온보딩 오버레이)
+
+| 파일 | 설명 | 참조 |
+|------|------|------|
+| CoachMarkOverlay | 스포트라이트 + 툴팁 오버레이 (Canvas BlendMode.Clear) | [CoachMarkOverlayKt](../app/src/main/java/com/sanha/moneytalk/core/ui/coachmark/CoachMarkOverlay.kt) |
+| CoachMarkState | 스텝 상태 관리 (@Stable) | [CoachMarkStateKt](../app/src/main/java/com/sanha/moneytalk/core/ui/coachmark/CoachMarkState.kt) |
+| CoachMarkStep | 스텝 정의 (타겟키, 제목, 설명, 위치) | [CoachMarkStepKt](../app/src/main/java/com/sanha/moneytalk/core/ui/coachmark/CoachMarkStep.kt) |
+| OnboardingTargetModifier | `Modifier.onboardingTarget()` + CoachMarkTargetRegistry | [OnboardingTargetModifierKt](../app/src/main/java/com/sanha/moneytalk/core/ui/coachmark/OnboardingTargetModifier.kt) |
+| homeCoachMarkSteps | 홈 화면 2스텝 정의 | [HomeCoachMarkKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/coachmark/HomeCoachMark.kt) |
+| historyCoachMarkSteps | 내역 화면 2스텝 정의 | [HistoryCoachMarkKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/coachmark/HistoryCoachMark.kt) |
+| chatCoachMarkSteps | 채팅 화면 2스텝 정의 | [ChatCoachMarkKt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/coachmark/ChatCoachMark.kt) |
+| settingsCoachMarkSteps | 설정 화면 3스텝 정의 | [SettingsCoachMarkKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/coachmark/SettingsCoachMark.kt) |
+| filterCoachMarkSteps | 필터 BottomSheet 2스텝 정의 | [FilterCoachMarkKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/coachmark/FilterCoachMark.kt) |
+| transactionEditCoachMarkSteps | 거래 편집 2스텝 정의 | [TransactionEditCoachMarkKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/coachmark/TransactionEditCoachMark.kt) |
+| storeRuleCoachMarkSteps | 거래처 규칙 1스텝 정의 | [StoreRuleCoachMarkKt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/ui/coachmark/StoreRuleCoachMark.kt) |
 
 ---
 

@@ -621,4 +621,55 @@
     <string name="notification_channel_description">SMS 수신 시 거래 내역 알림</string>
     <string name="notification_expense_title">카드 결제</string>
     <string name="notification_income_title">입금</string>
+
+    <!-- Coach Mark 공통 -->
+    <string name="coach_mark_next">다음</string>
+    <string name="coach_mark_skip">건너뛰기</string>
+    <string name="coach_mark_finish">완료</string>
+    <string name="coach_mark_step_format">%1$d / %2$d</string>
+
+    <!-- Coach Mark — 홈 -->
+    <string name="coach_mark_home_sync_alt_title">월간 현황</string>
+    <string name="coach_mark_home_sync_alt_desc">이번 달 수입과 지출을 한눈에 확인하세요. 좌우 스와이프로 월을 이동할 수 있어요.</string>
+    <string name="coach_mark_home_trend_title">소비 추이</string>
+    <string name="coach_mark_home_trend_desc">이번 달 소비 흐름과 전월 비교를 여기서 확인하세요.</string>
+
+    <!-- Coach Mark — 내역 -->
+    <string name="coach_mark_history_period_title">기간 탐색</string>
+    <string name="coach_mark_history_period_desc">현재 보고 있는 월의 지출과 수입을 한눈에 확인하세요.</string>
+    <string name="coach_mark_history_view_mode_title">보기 전환</string>
+    <string name="coach_mark_history_view_mode_desc">리스트로 상세를 보고, 달력으로 날짜별 흐름을 볼 수 있어요.</string>
+
+    <!-- Coach Mark — 채팅 -->
+    <string name="coach_mark_chat_start_title">대화 시작</string>
+    <string name="coach_mark_chat_start_desc">무엇을 물어볼지 모르겠다면 추천 질문으로 바로 시작해보세요.</string>
+    <string name="coach_mark_chat_sessions_title">대화 관리</string>
+    <string name="coach_mark_chat_sessions_desc">질문 주제별로 대화를 나눠서 저장할 수 있어요.</string>
+
+    <!-- Coach Mark — 설정 -->
+    <string name="coach_mark_settings_period_title">정산 기준</string>
+    <string name="coach_mark_settings_period_desc">급여일에 맞춰 시작일과 예산을 설정하면 화면 해석이 쉬워져요.</string>
+    <string name="coach_mark_settings_category_title">분류 관리</string>
+    <string name="coach_mark_settings_category_desc">자동 분류가 마음에 안 들면 여기서 직접 규칙을 고정할 수 있어요.</string>
+    <string name="coach_mark_settings_data_title">데이터 관리</string>
+    <string name="coach_mark_settings_data_desc">문자 분석, 알림, 백업·복원을 한 곳에서 관리합니다.</string>
+
+    <!-- Coach Mark — 필터 -->
+    <string name="coach_mark_filter_sort_title">정렬과 필터</string>
+    <string name="coach_mark_filter_sort_desc">최신순·과거순·금액순으로 정렬하고, 고정지출만 따로 볼 수도 있어요.</string>
+
+    <!-- Coach Mark — 거래 편집 -->
+    <string name="coach_mark_edit_category_title">카테고리 변경</string>
+    <string name="coach_mark_edit_category_desc">카테고리를 변경하고, 같은 거래처의 다른 거래에도 일괄 적용할 수 있어요.</string>
+    <string name="coach_mark_edit_fixed_title">고정 거래</string>
+    <string name="coach_mark_edit_fixed_desc">매달 반복되는 거래를 고정으로 표시하면 소비 분석이 더 정확해져요.</string>
+
+    <!-- Coach Mark — 거래처 규칙 -->
+    <string name="coach_mark_store_rule_add_title">규칙 추가</string>
+    <string name="coach_mark_store_rule_add_desc">키워드가 포함된 모든 거래처에 규칙이 적용됩니다. 예: \'삼성화\'로 등록하면 \'삼성화재\', \'삼성화2026\' 등 보험·구독 거래를 한번에 관리할 수 있어요.</string>
+
+    <!-- 설정 > 가이드 초기화 -->
+    <string name="settings_reset_guide">가이드 초기화</string>
+    <string name="settings_reset_guide_subtitle">앱 사용 가이드를 다시 볼 수 있어요</string>
+    <string name="settings_reset_guide_done">가이드가 초기화되었습니다</string>
 </resources>

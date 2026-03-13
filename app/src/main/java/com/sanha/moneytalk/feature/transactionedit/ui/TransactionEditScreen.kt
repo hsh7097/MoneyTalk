@@ -74,10 +74,16 @@ import com.sanha.moneytalk.feature.transactionedit.TransactionEditViewModel
 import com.sanha.moneytalk.feature.transactionedit.TransactionType
 import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.ui.component.rememberCategoryEmoji
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkState
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
+import com.sanha.moneytalk.core.ui.coachmark.onboardingTarget
 import com.sanha.moneytalk.core.ui.component.CategorySelectDialog
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupCompose
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupOption
 import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.feature.transactionedit.ui.coachmark.transactionEditCoachMarkSteps
+import kotlinx.coroutines.delay
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -173,6 +179,23 @@ fun TransactionEditScreen(
         }
     }
 
+    // ===== 코치마크 (거래 편집 온보딩) =====
+    val coachMarkRegistry = remember { CoachMarkTargetRegistry() }
+    val coachMarkState = remember { CoachMarkState() }
+    val allEditSteps = remember { transactionEditCoachMarkSteps() }
+    val hasSeenEditOnboarding by viewModel.hasSeenScreenOnboardingFlow("transaction_edit")
+        .collectAsStateWithLifecycle(initialValue = true)
+
+    LaunchedEffect(hasSeenEditOnboarding, uiState.isLoading, uiState.isNew) {
+        if (!hasSeenEditOnboarding && !uiState.isLoading && !uiState.isNew) {
+            delay(500)
+            val visibleSteps = allEditSteps.filter { it.targetKey in coachMarkRegistry.targets }
+            if (visibleSteps.isNotEmpty()) {
+                coachMarkState.show(visibleSteps)
+            }
+        }
+    }
+
     BackHandler(
         enabled = !showDatePicker &&
                 !showTimePicker &&
@@ -183,6 +206,7 @@ fun TransactionEditScreen(
         onRequestClose()
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -227,20 +251,22 @@ fun TransactionEditScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // 카테고리 (모든 거래 유형에서 동일하게 표시)
-            val categoryEmoji = rememberCategoryEmoji(uiState.category)
-            CompactReadOnlyRow(
-                label = stringResource(R.string.detail_category),
-                value = "$categoryEmoji ${uiState.category}",
-                onClick = { showCategoryPicker = true }
-            )
-
-            // 동일 거래처 카테고리 일괄 적용 (기존 지출만)
-            if (!uiState.isNew && uiState.transactionType == TransactionType.EXPENSE) {
-                ApplyToAllCheckbox(
-                    checked = uiState.applyCategoryToAll,
-                    label = stringResource(R.string.transaction_edit_apply_category_to_all),
-                    onCheckedChange = { viewModel.updateApplyCategoryToAll(it) }
+            Column(modifier = Modifier.onboardingTarget("edit_category", coachMarkRegistry)) {
+                val categoryEmoji = rememberCategoryEmoji(uiState.category)
+                CompactReadOnlyRow(
+                    label = stringResource(R.string.detail_category),
+                    value = "$categoryEmoji ${uiState.category}",
+                    onClick = { showCategoryPicker = true }
                 )
+
+                // 동일 거래처 카테고리 일괄 적용 (기존 지출만)
+                if (!uiState.isNew && uiState.transactionType == TransactionType.EXPENSE) {
+                    ApplyToAllCheckbox(
+                        checked = uiState.applyCategoryToAll,
+                        label = stringResource(R.string.transaction_edit_apply_category_to_all),
+                        onCheckedChange = { viewModel.updateApplyCategoryToAll(it) }
+                    )
+                }
             }
 
             // 거래처
@@ -306,24 +332,26 @@ fun TransactionEditScreen(
             if (uiState.transactionType == TransactionType.EXPENSE ||
                 uiState.transactionType == TransactionType.INCOME
             ) {
-                val fixedLabel = if (uiState.transactionType == TransactionType.INCOME) {
-                    stringResource(R.string.transaction_edit_fixed_income)
-                } else {
-                    stringResource(R.string.transaction_edit_fixed_expense)
-                }
-                FixedExpenseToggle(
-                    isFixed = uiState.isFixed,
-                    onToggle = { viewModel.updateIsFixed(it) },
-                    label = fixedLabel
-                )
-
-                // 동일 거래처 고정지출 일괄 적용 (기존 지출만)
-                if (!uiState.isNew && uiState.transactionType == TransactionType.EXPENSE) {
-                    ApplyToAllCheckbox(
-                        checked = uiState.applyFixedToAll,
-                        label = stringResource(R.string.transaction_edit_apply_fixed_to_all),
-                        onCheckedChange = { viewModel.updateApplyFixedToAll(it) }
+                Column(modifier = Modifier.onboardingTarget("edit_fixed", coachMarkRegistry)) {
+                    val fixedLabel = if (uiState.transactionType == TransactionType.INCOME) {
+                        stringResource(R.string.transaction_edit_fixed_income)
+                    } else {
+                        stringResource(R.string.transaction_edit_fixed_expense)
+                    }
+                    FixedExpenseToggle(
+                        isFixed = uiState.isFixed,
+                        onToggle = { viewModel.updateIsFixed(it) },
+                        label = fixedLabel
                     )
+
+                    // 동일 거래처 고정지출 일괄 적용 (기존 지출만)
+                    if (!uiState.isNew && uiState.transactionType == TransactionType.EXPENSE) {
+                        ApplyToAllCheckbox(
+                            checked = uiState.applyFixedToAll,
+                            label = stringResource(R.string.transaction_edit_apply_fixed_to_all),
+                            onCheckedChange = { viewModel.updateApplyFixedToAll(it) }
+                        )
+                    }
                 }
             }
 
@@ -337,6 +365,13 @@ fun TransactionEditScreen(
             onDelete = { showDeleteConfirm = true }
         )
     }
+
+    CoachMarkOverlay(
+        state = coachMarkState,
+        targetRegistry = coachMarkRegistry,
+        onComplete = { viewModel.markScreenOnboardingSeen("transaction_edit") }
+    )
+    } // Box
 
     // DatePicker Dialog
     if (showDatePicker) {

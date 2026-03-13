@@ -281,7 +281,9 @@ fun FilterTabRow(
     ) -> Unit = { _, _, _, _, _, _, _, _ -> },
     onResetFilter: () -> Unit = {},
     onSearchClick: () -> Unit = {},
-    onAddClick: () -> Unit = {}
+    onAddClick: () -> Unit = {},
+    hasSeenFilterOnboarding: Boolean = true,
+    onFilterCoachMarkComplete: () -> Unit = {}
 ) {
     var showBottomSheet by remember { mutableStateOf(false) }
 
@@ -468,6 +470,8 @@ fun FilterTabRow(
             currentIncomeCategories = selectedIncomeCategories,
             currentTransferCategories = selectedTransferCategories,
             currentFixedExpenseFilter = fixedExpenseFilter,
+            hasSeenFilterOnboarding = hasSeenFilterOnboarding,
+            onCoachMarkComplete = onFilterCoachMarkComplete,
             onDismiss = { showBottomSheet = false },
             onApply = { newSort, newShowExp, newShowInc, newShowTransfer, expCats, incCats, transferCats, newFixedFilter ->
                 onApplyFilter(

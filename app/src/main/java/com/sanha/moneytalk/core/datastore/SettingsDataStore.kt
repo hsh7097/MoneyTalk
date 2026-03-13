@@ -15,6 +15,7 @@ import com.sanha.moneytalk.core.firebase.ServiceTier
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -39,6 +40,17 @@ class SettingsDataStore @Inject constructor(
         private val FREE_SYNC_USED_COUNT = intPreferencesKey("free_sync_used_count")
         private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         private val NOTIFICATION_ENABLED = booleanPreferencesKey("notification_enabled")
+
+        // ===== 화면별 온보딩 (코치마크) =====
+        private val SCREEN_ONBOARDING_KEYS = mapOf(
+            "home" to booleanPreferencesKey("has_seen_home_onboarding_v1"),
+            "history" to booleanPreferencesKey("has_seen_history_onboarding_v1"),
+            "chat" to booleanPreferencesKey("has_seen_chat_onboarding_v1"),
+            "settings" to booleanPreferencesKey("has_seen_settings_onboarding_v1"),
+            "store_rule" to booleanPreferencesKey("has_seen_store_rule_onboarding_v1"),
+            "history_filter" to booleanPreferencesKey("has_seen_history_filter_onboarding_v1"),
+            "transaction_edit" to booleanPreferencesKey("has_seen_transaction_edit_onboarding_v1")
+        )
     }
 
     // API 키 저장
@@ -293,6 +305,29 @@ class SettingsDataStore @Inject constructor(
         context.dataStore.edit { preferences ->
             val current = preferences[FREE_SYNC_USED_COUNT] ?: 0
             preferences[FREE_SYNC_USED_COUNT] = current + 1
+        }
+    }
+
+    // ===== 화면별 온보딩 (코치마크) =====
+
+    /** 특정 화면의 온보딩 완료 여부 Flow */
+    fun hasSeenScreenOnboardingFlow(screenId: String): Flow<Boolean> {
+        val key = SCREEN_ONBOARDING_KEYS[screenId] ?: return flowOf(true)
+        return context.dataStore.data.map { preferences ->
+            preferences[key] ?: false
+        }
+    }
+
+    /** 특정 화면의 온보딩 완료 마킹 */
+    suspend fun setScreenOnboardingSeen(screenId: String) {
+        val key = SCREEN_ONBOARDING_KEYS[screenId] ?: return
+        context.dataStore.edit { it[key] = true }
+    }
+
+    /** 모든 화면 온보딩 리셋 (설정 > 가이드 초기화) */
+    suspend fun resetAllScreenOnboardings() {
+        context.dataStore.edit { prefs ->
+            SCREEN_ONBOARDING_KEYS.values.forEach { prefs.remove(it) }
         }
     }
 }

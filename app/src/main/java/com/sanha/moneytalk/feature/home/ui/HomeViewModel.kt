@@ -916,4 +916,17 @@ class HomeViewModel @Inject constructor(
             }
         }
     }
+
+    // ===== 화면별 온보딩 =====
+
+    /** 특정 화면의 온보딩 완료 여부 Flow */
+    fun hasSeenScreenOnboardingFlow(screenId: String) =
+        settingsDataStore.hasSeenScreenOnboardingFlow(screenId)
+
+    /** 특정 화면의 온보딩 완료 처리 */
+    fun markScreenOnboardingSeen(screenId: String) {
+        viewModelScope.launch {
+            settingsDataStore.setScreenOnboardingSeen(screenId)
+        }
+    }
 }

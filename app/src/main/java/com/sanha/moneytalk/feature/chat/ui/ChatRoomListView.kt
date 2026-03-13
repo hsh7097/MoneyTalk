@@ -37,6 +37,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
+import com.sanha.moneytalk.core.ui.coachmark.onboardingTarget
 import com.sanha.moneytalk.core.util.DateUtils
 
 /** 채팅방 목록 화면. 기존 대화 세션 목록과 새 채팅 시작 버튼을 표시 */
@@ -47,7 +49,8 @@ fun ChatRoomListView(
     onSessionSelect: (Long) -> Unit,
     onSessionDelete: (Long) -> Unit,
     onNewSession: () -> Unit,
-    onApiKeyClick: () -> Unit
+    onApiKeyClick: () -> Unit,
+    coachMarkRegistry: CoachMarkTargetRegistry? = null
 ) {
     Column(
         modifier = Modifier
@@ -63,7 +66,13 @@ fun ChatRoomListView(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(
+                modifier = if (coachMarkRegistry != null) {
+                    Modifier.onboardingTarget("chat_sessions", coachMarkRegistry)
+                } else {
+                    Modifier
+                }
+            ) {
                 Text(
                     text = stringResource(R.string.chat_title),
                     style = MaterialTheme.typography.titleLarge,
@@ -84,11 +93,19 @@ fun ChatRoomListView(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 // 새 대화 버튼
-                IconButton(onClick = onNewSession) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = stringResource(R.string.chat_new_session)
-                    )
+                Box(
+                    modifier = if (coachMarkRegistry != null) {
+                        Modifier.onboardingTarget("chat_start", coachMarkRegistry)
+                    } else {
+                        Modifier
+                    }
+                ) {
+                    IconButton(onClick = onNewSession) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = stringResource(R.string.chat_new_session)
+                        )
+                    }
                 }
 
                 if (!hasApiKey) {

@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
+import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
 import com.sanha.moneytalk.feature.home.data.StoreRuleSyncService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,7 +33,8 @@ data class StoreRuleSettingsUiState(
 @HiltViewModel
 class StoreRuleSettingsViewModel @Inject constructor(
     private val storeRuleRepository: StoreRuleRepository,
-    private val storeRuleSyncService: StoreRuleSyncService
+    private val storeRuleSyncService: StoreRuleSyncService,
+    private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(StoreRuleSettingsUiState())
@@ -147,6 +149,17 @@ class StoreRuleSettingsViewModel @Inject constructor(
                 newRule = null
             )
             _uiState.update { it.copy(showDeleteConfirm = null) }
+        }
+    }
+
+    // ===== 화면별 온보딩 =====
+
+    fun hasSeenScreenOnboardingFlow(screenId: String) =
+        settingsDataStore.hasSeenScreenOnboardingFlow(screenId)
+
+    fun markScreenOnboardingSeen(screenId: String) {
+        viewModelScope.launch {
+            settingsDataStore.setScreenOnboardingSeen(screenId)
         }
     }
 }
