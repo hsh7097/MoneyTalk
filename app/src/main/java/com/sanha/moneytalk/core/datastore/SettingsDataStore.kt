@@ -311,9 +311,12 @@ class SettingsDataStore @Inject constructor(
     // ===== 화면별 온보딩 (코치마크) =====
 
     /** 특정 화면의 온보딩 완료 여부 Flow */
-    // TODO: 테스트 완료 후 원래 로직 복원 — 항상 false를 반환하여 매번 코치마크 표시
-    fun hasSeenScreenOnboardingFlow(screenId: String): Flow<Boolean> =
-        flowOf(false)
+    fun hasSeenScreenOnboardingFlow(screenId: String): Flow<Boolean> {
+        val key = SCREEN_ONBOARDING_KEYS[screenId] ?: return flowOf(true)
+        return context.dataStore.data.map { preferences ->
+            preferences[key] ?: false
+        }
+    }
 
     /** 특정 화면의 온보딩 완료 마킹 */
     suspend fun setScreenOnboardingSeen(screenId: String) {
