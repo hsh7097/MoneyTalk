@@ -55,13 +55,9 @@ class SmsNotificationManager @Inject constructor(
     fun showExpenseNotification(
         amount: Int,
         storeName: String,
-        cardName: String,
-        category: String
+        cardName: String
     ) {
-        val title = context.getString(R.string.notification_expense_title)
-        val cardSuffix = if (cardName.isNotBlank()) " ($cardName)" else ""
-        val body = "$storeName ${numberFormat.format(amount)}원$cardSuffix"
-        showNotification(title, body)
+        showNotification(storeName, "${numberFormat.format(amount)}원")
     }
 
     /** 수입 거래 알림 표시 */
@@ -70,10 +66,8 @@ class SmsNotificationManager @Inject constructor(
         source: String,
         incomeType: String
     ) {
-        val title = context.getString(R.string.notification_income_title)
-        val sourceDisplay = source.ifBlank { incomeType }
-        val body = "$sourceDisplay ${numberFormat.format(amount)}원"
-        showNotification(title, body)
+        val title = if (source.isNotBlank()) "$source $incomeType" else "입금"
+        showNotification(title, "${numberFormat.format(amount)}원")
     }
 
     private fun showNotification(title: String, body: String) {
