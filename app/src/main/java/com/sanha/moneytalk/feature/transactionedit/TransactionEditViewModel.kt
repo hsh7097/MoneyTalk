@@ -183,7 +183,8 @@ class TransactionEditViewModel @Inject constructor(
                         hour = cal.get(Calendar.HOUR_OF_DAY),
                         minute = cal.get(Calendar.MINUTE),
                         memo = income.memo ?: "",
-                        originalSms = income.originalSms ?: ""
+                        originalSms = income.originalSms ?: "",
+                        isFixed = income.isRecurring
                     )
                 }
             } else {
@@ -236,7 +237,6 @@ class TransactionEditViewModel @Inject constructor(
                     transactionType = type,
                     category = Category.INCOME_UNCLASSIFIED.displayName,
                     transferDirection = null,
-                    isFixed = false,
                     applyCategoryToAll = false,
                     applyFixedToAll = false
                 )
@@ -428,7 +428,7 @@ class TransactionEditViewModel @Inject constructor(
                         },
                         source = state.source.trim(),
                         description = state.storeName.trim(),
-                        isRecurring = false,
+                        isRecurring = state.isFixed,
                         dateTime = dateTime,
                         originalSms = state.originalSms.ifBlank { null },
                         smsId = originalExpenseEntity?.smsId,
@@ -448,7 +448,7 @@ class TransactionEditViewModel @Inject constructor(
                         },
                         source = state.source.trim(),
                         description = state.storeName.trim(),
-                        isRecurring = false,
+                        isRecurring = state.isFixed,
                         dateTime = dateTime,
                         memo = state.memo.ifBlank { null },
                         category = state.category
@@ -461,6 +461,7 @@ class TransactionEditViewModel @Inject constructor(
                         type = state.incomeType.trim().ifBlank { orig.type },
                         source = state.source.trim(),
                         description = state.storeName.trim(),
+                        isRecurring = state.isFixed,
                         dateTime = dateTime,
                         memo = state.memo.ifBlank { null },
                         category = state.category

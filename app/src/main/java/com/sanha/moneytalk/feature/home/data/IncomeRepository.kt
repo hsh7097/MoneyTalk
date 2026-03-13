@@ -29,6 +29,9 @@ class IncomeRepository @Inject constructor(
 
     suspend fun getIncomeBySmsId(smsId: String): IncomeEntity? = incomeDao.getIncomeBySmsId(smsId)
 
+    suspend fun getIncomesBySmsIds(smsIds: List<String>): List<IncomeEntity> =
+        if (smsIds.isEmpty()) emptyList() else incomeDao.getIncomesBySmsIds(smsIds)
+
     suspend fun existsBySmsId(smsId: String): Boolean = incomeDao.existsBySmsId(smsId)
 
     suspend fun getAllSmsIds(): List<String> = incomeDao.getAllSmsIds()

@@ -38,6 +38,7 @@ class SettingsDataStore @Inject constructor(
         private val SYNCED_MONTHS = stringSetPreferencesKey("synced_months")
         private val FREE_SYNC_USED_COUNT = intPreferencesKey("free_sync_used_count")
         private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        private val NOTIFICATION_ENABLED = booleanPreferencesKey("notification_enabled")
     }
 
     // API 키 저장
@@ -266,6 +267,25 @@ class SettingsDataStore @Inject constructor(
     /** 무료 동기화 사용 횟수 Flow */
     val freeSyncUsedCountFlow: Flow<Int> = context.dataStore.data.map { preferences ->
         preferences[FREE_SYNC_USED_COUNT] ?: 0
+    }
+
+    // ===== 알림 설정 =====
+
+    /** 거래 알림 활성화 여부 Flow (기본값: false = 알림 안받음) */
+    val notificationEnabledFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[NOTIFICATION_ENABLED] ?: false
+    }
+
+    /** 거래 알림 활성화 여부 즉시 조회 */
+    suspend fun isNotificationEnabled(): Boolean {
+        return context.dataStore.data.first()[NOTIFICATION_ENABLED] ?: false
+    }
+
+    /** 거래 알림 활성화 여부 저장 */
+    suspend fun saveNotificationEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[NOTIFICATION_ENABLED] = enabled
+        }
     }
 
     /** 무료 동기화 사용 횟수 1 증가 */

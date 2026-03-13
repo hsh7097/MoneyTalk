@@ -26,6 +26,13 @@ class DataRefreshEvent @Inject constructor() {
         _refreshEvent.tryEmit(type)
     }
 
+    /**
+     * 순차 보장이 필요한 곳에서 사용하는 suspend 발행.
+     */
+    suspend fun emitSuspend(type: RefreshType) {
+        _refreshEvent.emit(type)
+    }
+
     enum class RefreshType {
         /** 전체 데이터 삭제 (설정 초기화) */
         ALL_DATA_DELETED,

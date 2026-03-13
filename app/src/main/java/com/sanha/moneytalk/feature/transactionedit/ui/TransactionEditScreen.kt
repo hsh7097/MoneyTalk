@@ -302,15 +302,23 @@ fun TransactionEditScreen(
                 }
             }
 
-            // 고정지출 토글 (지출만 표시, 원본 SMS 하단 고정 위치)
-            if (uiState.transactionType == TransactionType.EXPENSE) {
+            // 고정 거래 토글 (지출/수입 표시)
+            if (uiState.transactionType == TransactionType.EXPENSE ||
+                uiState.transactionType == TransactionType.INCOME
+            ) {
+                val fixedLabel = if (uiState.transactionType == TransactionType.INCOME) {
+                    stringResource(R.string.transaction_edit_fixed_income)
+                } else {
+                    stringResource(R.string.transaction_edit_fixed_expense)
+                }
                 FixedExpenseToggle(
                     isFixed = uiState.isFixed,
-                    onToggle = { viewModel.updateIsFixed(it) }
+                    onToggle = { viewModel.updateIsFixed(it) },
+                    label = fixedLabel
                 )
 
                 // 동일 거래처 고정지출 일괄 적용 (기존 지출만)
-                if (!uiState.isNew) {
+                if (!uiState.isNew && uiState.transactionType == TransactionType.EXPENSE) {
                     ApplyToAllCheckbox(
                         checked = uiState.applyFixedToAll,
                         label = stringResource(R.string.transaction_edit_apply_fixed_to_all),
@@ -681,7 +689,8 @@ private fun TransactionTypeTab(
 @Composable
 private fun FixedExpenseToggle(
     isFixed: Boolean,
-    onToggle: (Boolean) -> Unit
+    onToggle: (Boolean) -> Unit,
+    label: String
 ) {
     Row(
         modifier = Modifier
@@ -692,7 +701,7 @@ private fun FixedExpenseToggle(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = stringResource(R.string.transaction_edit_fixed_expense),
+            text = label,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface
         )

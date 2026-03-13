@@ -201,7 +201,7 @@ class SmsReaderV2 @Inject constructor(
     /**
      * MMS 메시지의 텍스트 본문 읽기
      */
-    private fun getMmsTextBody(contentResolver: ContentResolver, mmsId: String): String? {
+    internal fun getMmsTextBody(contentResolver: ContentResolver, mmsId: String): String? {
         val sb = StringBuilder()
         try {
             val cursor = contentResolver.query(
@@ -247,7 +247,7 @@ class SmsReaderV2 @Inject constructor(
     /**
      * MMS 발신 번호 읽기
      */
-    private fun getMmsAddress(contentResolver: ContentResolver, mmsId: String): String {
+    internal fun getMmsAddress(contentResolver: ContentResolver, mmsId: String): String {
         try {
             val addrUri = Uri.parse("content://mms/$mmsId/addr")
             val cursor = contentResolver.query(
@@ -496,6 +496,6 @@ class SmsReaderV2 @Inject constructor(
      * 중복 저장 방지를 위해 발신번호 + 시간 + 본문 해시로 구성
      */
     private fun generateSmsId(address: String, body: String, date: Long): String {
-        return "${address}_${date}_${body.hashCode()}"
+        return "${SmsFilter.normalizeAddress(address)}_${date}_${body.hashCode()}"
     }
 }

@@ -444,6 +444,10 @@
     <string name="settings_exclusion_empty">등록된 키워드가 없습니다</string>
     <string name="settings_exclusion_source_chat">(채팅)</string>
 
+    <!-- 거래 알림 -->
+    <string name="settings_notification_title">거래 알림</string>
+    <string name="settings_notification_subtitle">결제/입금 시 알림을 받습니다</string>
+
     <!-- 문자 설정 -->
     <string name="sms_settings_title">문자 설정</string>
     <string name="sms_settings_subtitle">문자 분석 및 수신 차단 관리</string>
@@ -573,6 +577,7 @@
     <string name="transaction_edit_amount_suffix">원</string>
     <string name="transaction_edit_date_time">날짜-시간</string>
     <string name="transaction_edit_fixed_expense">고정지출에 추가</string>
+    <string name="transaction_edit_fixed_income">고정수입에 추가</string>
     <string name="transaction_card_fixed_tag">고정</string>
     <string name="transaction_edit_apply_category_to_all">동일 거래처에 모두 적용</string>
     <string name="transaction_edit_apply_fixed_to_all">동일 거래처에 모두 적용</string>
@@ -610,4 +615,10 @@
 
     <!-- 공통 -->
     <string name="common_clear_input">입력 내용 지우기</string>
+
+    <!-- SMS 거래 알림 -->
+    <string name="notification_channel_name">거래 알림</string>
+    <string name="notification_channel_description">SMS 수신 시 거래 내역 알림</string>
+    <string name="notification_expense_title">카드 결제</string>
+    <string name="notification_income_title">입금</string>
 </resources>

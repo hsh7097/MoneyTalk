@@ -493,4 +493,10 @@
 
     <!-- Common -->
     <string name="common_clear_input">Clear input</string>
+
+    <!-- SMS Transaction Notification -->
+    <string name="notification_channel_name">Transaction Alerts</string>
+    <string name="notification_channel_description">Transaction alerts on SMS received</string>
+    <string name="notification_expense_title">Card Payment</string>
+    <string name="notification_income_title">Deposit</string>
 </resources>

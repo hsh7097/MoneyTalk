@@ -55,6 +55,9 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE smsId = :smsId LIMIT 1")
     suspend fun getExpenseBySmsId(smsId: String): ExpenseEntity?
 
+    @Query("SELECT * FROM expenses WHERE smsId IN (:smsIds)")
+    suspend fun getExpensesBySmsIds(smsIds: List<String>): List<ExpenseEntity>
+
     @Query("SELECT * FROM expenses WHERE dateTime BETWEEN :startTime AND :endTime ORDER BY dateTime DESC")
     fun getExpensesByDateRange(startTime: Long, endTime: Long): Flow<List<ExpenseEntity>>
 

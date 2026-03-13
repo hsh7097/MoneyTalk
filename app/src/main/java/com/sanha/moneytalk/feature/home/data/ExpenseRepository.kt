@@ -102,6 +102,9 @@ class ExpenseRepository @Inject constructor(
     suspend fun getExpenseBySmsId(smsId: String): ExpenseEntity? =
         expenseDao.getExpenseBySmsId(smsId)
 
+    suspend fun getExpensesBySmsIds(smsIds: List<String>): List<ExpenseEntity> =
+        if (smsIds.isEmpty()) emptyList() else expenseDao.getExpensesBySmsIds(smsIds)
+
     /** SMS ID 존재 여부 확인 (중복 방지) */
     suspend fun existsBySmsId(smsId: String): Boolean = expenseDao.existsBySmsId(smsId)
 

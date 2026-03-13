@@ -7,6 +7,8 @@ import com.google.android.gms.ads.MobileAds
 import com.google.firebase.FirebaseApp
 import com.sanha.moneytalk.core.firebase.CrashlyticsHelper
 import com.sanha.moneytalk.core.firebase.PremiumManager
+import com.sanha.moneytalk.core.notification.SmsNotificationManager
+import com.sanha.moneytalk.receiver.MmsContentObserver
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -16,8 +18,20 @@ class MoneyTalkApplication : Application() {
     @Inject
     lateinit var premiumManager: PremiumManager
 
+    @Inject
+    lateinit var smsNotificationManager: SmsNotificationManager
+
+    @Inject
+    lateinit var mmsContentObserver: MmsContentObserver
+
     override fun onCreate() {
         super.onCreate()
+
+        // SMS 거래 알림 채널 등록
+        smsNotificationManager.createNotificationChannel()
+
+        // MMS 수신 실시간 감시 등록
+        mmsContentObserver.register(contentResolver)
 
         // Firebase 초기화 (google-services.json 없으면 스킵)
         val firebaseAvailable = initializeFirebase()
