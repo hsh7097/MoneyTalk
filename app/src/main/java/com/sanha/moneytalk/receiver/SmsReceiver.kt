@@ -85,11 +85,12 @@ class SmsReceiver : BroadcastReceiver() {
                 MoneyTalkLogger.e("[SmsReceiver] 즉시 처리 예외: ${e.message}")
             } finally {
                 if (instantSuccess) {
-                    // 즉시 처리 성공 → UI 갱신만 (전체 동기화는 앱 진입 시 silent로)
-                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+                    // 즉시 반영 후, 배치 파이프라인으로 동일 smsId를 다시 검증한다.
+                    dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+                    dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.SMS_RECEIVED)
                 } else {
                     // 미처리 → 전체 동기화 트리거
-                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.SMS_RECEIVED)
+                    dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.SMS_RECEIVED)
                 }
                 pendingResult.finish()
             }

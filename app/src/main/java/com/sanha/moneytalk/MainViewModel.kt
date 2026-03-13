@@ -124,6 +124,9 @@ class MainViewModel @Inject constructor(
     private val isResumeClassificationChecking = AtomicBoolean(false)
     /** syncSmsV2 재진입 방지 플래그 (동시 호출 시 중복 수입 방지) */
     private val isSyncRunning = AtomicBoolean(false)
+    /** 동기화 중 들어온 silent 재실행 요청 */
+    @Volatile
+    private var pendingSilentSyncRequest = false
     /** 최초 진입(onCreate) 여부 — 첫 onAppResume 호출 시 초기 동기화 다이얼로그 표시용 */
     private var isFirstLaunch = true
 
@@ -264,10 +267,18 @@ class MainViewModel @Inject constructor(
         val classifiedCount: Int
     )
 
+    private data class SaveResult(
+        val newCount: Int = 0,
+        val reconciledCount: Int = 0,
+        val reconciledSmsIds: Set<String> = emptySet()
+    )
+
     /** 동기화 최종 결과 */
     private data class SyncResult(
         val expenseCount: Int,
         val incomeCount: Int,
+        val reconciledExpenseCount: Int = 0,
+        val reconciledIncomeCount: Int = 0,
         val detectedCardNames: List<String>,
         val classifiedCount: Int,
         /** 파이프라인 엔진 통계 (초기 동기화 요약 카드용) */
@@ -361,6 +372,7 @@ class MainViewModel @Inject constructor(
             } finally {
                 isSyncRunning.set(false)
                 tryResumeClassification()
+                drainPendingSilentSyncIfNeeded()
             }
         }
     }
@@ -407,6 +419,10 @@ class MainViewModel @Inject constructor(
         onSyncComplete: (suspend () -> Unit)? = null
     ) {
         if (!isSyncRunning.compareAndSet(false, true)) {
+            if (silent) {
+                pendingSilentSyncRequest = true
+                MoneyTalkLogger.i("syncSmsV2: 이미 동기화 진행 중 → silent 재실행 예약")
+            }
             MoneyTalkLogger.w("syncSmsV2: 이미 동기화 진행 중 → 스킵")
             return
         }
@@ -445,7 +461,17 @@ class MainViewModel @Inject constructor(
             } finally {
                 isSyncRunning.set(false)
                 tryResumeClassification()
+                drainPendingSilentSyncIfNeeded()
             }
+        }
+    }
+
+    private fun drainPendingSilentSyncIfNeeded() {
+        if (!pendingSilentSyncRequest) return
+        pendingSilentSyncRequest = false
+        viewModelScope.launch {
+            val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
+            syncSmsV2(range, updateLastSyncTime = true, silent = true)
         }
     }
 
@@ -465,28 +491,49 @@ class MainViewModel @Inject constructor(
         SmsIncomeParser.setUserExcludeKeywords(userExcludeKeywords)
 
         // Step 1: SMS 읽기 + 중복 제거
-        val smsInputs = readAndFilterSms(targetMonthRange)
+        val pendingReconciliationIds = SmsInstantProcessor.snapshotPendingReconciliationIds()
+        val smsInputs = readAndFilterSms(targetMonthRange, pendingReconciliationIds)
         MoneyTalkLogger.i("syncSmsV2 Step1 완료: 신규 SMS ${smsInputs.size}건")
         if (smsInputs.isEmpty()) {
             if (updateLastSyncTime) {
                 settingsDataStore.saveLastSyncTime(targetMonthRange.second)
             }
-            return SyncResult(0, 0, emptyList(), 0)
+            return SyncResult(
+                expenseCount = 0,
+                incomeCount = 0,
+                detectedCardNames = emptyList(),
+                classifiedCount = 0
+            )
         }
 
         // Step 2: sms2 파이프라인 실행
         val syncResult = processSmsPipeline(smsInputs, silent)
 
+        val reconciledExpenseIds = syncResult.expenses
+            .map { it.input.id }
+            .filter { it in pendingReconciliationIds }
+            .toSet()
+        val reconciledIncomeIds = syncResult.incomes
+            .map { it.id }
+            .filter { it in pendingReconciliationIds }
+            .toSet()
+
         // Step 3: DB 저장
-        val expenseCount = saveExpenses(syncResult.expenses)
-        val incomeCount = saveIncomes(syncResult.incomes)
+        val expenseSaveResult = saveExpenses(syncResult.expenses)
+        val incomeSaveResult = saveIncomes(syncResult.incomes)
 
         // Step 4: 후처리 (카테고리 분류, 패턴 정리, lastSyncTime 갱신)
         val cleanup = postSyncCleanup(updateLastSyncTime, targetMonthRange.second)
+        SmsInstantProcessor.clearPendingReconciliationIds(
+            reconciledExpenseIds + reconciledIncomeIds +
+                expenseSaveResult.reconciledSmsIds + incomeSaveResult.reconciledSmsIds
+        )
 
         return SyncResult(
-            expenseCount = expenseCount,
-            incomeCount = incomeCount,
+            expenseCount = expenseSaveResult.newCount,
+            incomeCount = incomeSaveResult.newCount,
+            reconciledExpenseCount = expenseSaveResult.reconciledCount,
+            reconciledIncomeCount = incomeSaveResult.reconciledCount,
             detectedCardNames = cleanup.cardNames,
             classifiedCount = cleanup.classifiedCount,
             stats = syncResult.stats
@@ -497,7 +544,8 @@ class MainViewModel @Inject constructor(
      * SMS 읽기 + 중복 제거
      */
     private suspend fun readAndFilterSms(
-        targetMonthRange: Pair<Long, Long>
+        targetMonthRange: Pair<Long, Long>,
+        pendingReconciliationIds: Set<String> = emptySet()
     ): List<SmsInput> {
         val allSmsList = smsReaderV2.readAllMessagesByDateRange(
             contentResolver,
@@ -530,7 +578,9 @@ class MainViewModel @Inject constructor(
             expenseExistingDeferred.await() + incomeExistingDeferred.await()
         }
 
-        val newSmsList = allSmsList.filter { it.id !in allExistingIds }
+        val newSmsList = allSmsList.filter { sms ->
+            sms.id !in allExistingIds || sms.id in pendingReconciliationIds
+        }
         MoneyTalkLogger.i("syncSmsV2 중복 제거: ${allSmsList.size}건 → ${newSmsList.size}건")
 
         return newSmsList
@@ -579,8 +629,8 @@ class MainViewModel @Inject constructor(
      */
     private suspend fun saveExpenses(
         expenses: List<com.sanha.moneytalk.core.sms2.SmsParseResult>
-    ): Int {
-        if (expenses.isEmpty()) return 0
+    ): SaveResult {
+        if (expenses.isEmpty()) return SaveResult()
 
         _uiState.update { it.copy(syncStepIndex = SmsPipeline.STEP_SAVE, syncProgress = "지출 저장 중...") }
 
@@ -674,13 +724,55 @@ class MainViewModel @Inject constructor(
             }
         }
 
+        val smsIds = entities.map { it.smsId }.distinct()
+        val existingExpensesBySmsId = expenseRepository.getExpensesBySmsIds(smsIds)
+            .associateBy { it.smsId }
+        val existingIncomesBySmsId = incomeRepository.getIncomesBySmsIds(smsIds)
+            .mapNotNull { income -> income.smsId?.let { it to income } }
+            .toMap()
+        val crossTypeIncomeIdsToDelete = mutableSetOf<Long>()
+        var newCount = 0
+        var reconciledCount = 0
+        val reconciledSmsIds = mutableSetOf<String>()
+
+        for (i in entities.indices) {
+            val entity = entities[i]
+            val existingExpense = existingExpensesBySmsId[entity.smsId]
+            val existingIncome = existingIncomesBySmsId[entity.smsId]
+
+            if (existingExpense != null || existingIncome != null) {
+                reconciledCount++
+                reconciledSmsIds += entity.smsId
+            } else {
+                newCount++
+            }
+
+            if (existingIncome != null) {
+                crossTypeIncomeIdsToDelete += existingIncome.id
+            }
+
+            if (existingExpense != null) {
+                entities[i] = entity.copy(
+                    id = existingExpense.id,
+                    memo = existingExpense.memo,
+                    createdAt = existingExpense.createdAt
+                )
+            }
+        }
+
+        crossTypeIncomeIdsToDelete.forEach { incomeRepository.deleteById(it) }
+
         // Phase 3: 분류 완료된 엔티티를 DB에 배치 저장
         _uiState.update { it.copy(syncProgress = "지출 저장 중...") }
         for (chunk in entities.chunked(DB_BATCH_INSERT_SIZE)) {
             expenseRepository.insertAll(chunk)
         }
 
-        return expenses.size
+        return SaveResult(
+            newCount = newCount,
+            reconciledCount = reconciledCount,
+            reconciledSmsIds = reconciledSmsIds
+        )
     }
 
     /**
@@ -688,12 +780,15 @@ class MainViewModel @Inject constructor(
      */
     private suspend fun saveIncomes(
         incomes: List<SmsInput>
-    ): Int {
-        if (incomes.isEmpty()) return 0
+    ): SaveResult {
+        if (incomes.isEmpty()) return SaveResult()
 
         _uiState.update { it.copy(syncProgress = "수입 처리 중...") }
         val batch = mutableListOf<IncomeEntity>()
-        var count = 0
+        val batchSmsIds = mutableSetOf<String>()
+        val reconciledSmsIds = mutableSetOf<String>()
+        var newCount = 0
+        var reconciledCount = 0
 
         for (income in incomes) {
             try {
@@ -704,6 +799,7 @@ class MainViewModel @Inject constructor(
 
                 if (amount > 0) {
                     val category = IncomeCategoryMapper.categoryForType(incomeType)
+                    batchSmsIds += income.id
                     batch.add(
                         IncomeEntity(
                             smsId = income.id,
@@ -718,22 +814,59 @@ class MainViewModel @Inject constructor(
                             category = category
                         )
                     )
-                    count++
-
-                    if (batch.size >= DB_BATCH_INSERT_SIZE) {
-                        incomeRepository.insertAll(batch)
-                        batch.clear()
-                    }
                 }
             } catch (e: Exception) {
                 MoneyTalkLogger.e("수입 처리 실패: ${income.id} - ${e.message}")
             }
         }
-        if (batch.isNotEmpty()) {
-            incomeRepository.insertAll(batch)
+
+        val existingIncomesBySmsId = incomeRepository.getIncomesBySmsIds(batchSmsIds.toList())
+            .mapNotNull { income -> income.smsId?.let { it to income } }
+            .toMap()
+        val existingExpensesBySmsId = expenseRepository.getExpensesBySmsIds(batchSmsIds.toList())
+            .associateBy { it.smsId }
+        val crossTypeExpenseIdsToDelete = mutableSetOf<Long>()
+
+        for (i in batch.indices) {
+            val entity = batch[i]
+            val smsId = entity.smsId ?: continue
+            val existingIncome = existingIncomesBySmsId[smsId]
+            val existingExpense = existingExpensesBySmsId[smsId]
+
+            if (existingIncome != null || existingExpense != null) {
+                reconciledCount++
+                reconciledSmsIds += smsId
+            } else {
+                newCount++
+            }
+
+            if (existingExpense != null) {
+                crossTypeExpenseIdsToDelete += existingExpense.id
+            }
+
+            if (existingIncome != null) {
+                batch[i] = entity.copy(
+                    id = existingIncome.id,
+                    memo = existingIncome.memo,
+                    recurringDay = existingIncome.recurringDay,
+                    createdAt = existingIncome.createdAt
+                )
+            }
         }
 
-        return count
+        crossTypeExpenseIdsToDelete.forEach { expenseRepository.deleteById(it) }
+
+        if (batch.isNotEmpty()) {
+            for (chunk in batch.chunked(DB_BATCH_INSERT_SIZE)) {
+                incomeRepository.insertAll(chunk)
+            }
+        }
+
+        return SaveResult(
+            newCount = newCount,
+            reconciledCount = reconciledCount,
+            reconciledSmsIds = reconciledSmsIds
+        )
     }
     /**
      * 동기화 후처리 (카테고리 캐시 정리, lastSyncTime 갱신)
@@ -818,7 +951,10 @@ class MainViewModel @Inject constructor(
 
     /** 동기화 결과 처리 (UI 상태 업데이트 + snackbar + 데이터 변경 통지) */
     private suspend fun handleSyncResult(result: SyncResult, silent: Boolean) {
-        MoneyTalkLogger.i("syncSmsV2 완료: 지출 ${result.expenseCount}건, 수입 ${result.incomeCount}건")
+        MoneyTalkLogger.i(
+            "syncSmsV2 완료: 신규 지출 ${result.expenseCount}건, 신규 수입 ${result.incomeCount}건, " +
+                "교체 지출 ${result.reconciledExpenseCount}건, 교체 수입 ${result.reconciledIncomeCount}건"
+        )
 
         // 카드 자동 등록 (백그라운드)
         if (result.detectedCardNames.isNotEmpty()) {

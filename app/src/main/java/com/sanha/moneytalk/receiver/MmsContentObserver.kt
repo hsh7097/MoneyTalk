@@ -24,7 +24,7 @@ import javax.inject.Singleton
  *
  * content://mms URI를 감시하여 MMS 수신 시 즉시 파싱/저장/알림을 수행한다.
  * SMS는 [SmsReceiver] BroadcastReceiver로 처리하고,
- * MMS/RCS(채팅+)로 수신되는 금융 문자는 이 Observer가 담당한다.
+ * MMS로 수신되는 금융 문자는 이 Observer가 담당한다.
  *
  * 주의:
  * - Android는 MMS part(body)를 비동기로 쓰므로 retry with backoff 필요
@@ -46,11 +46,19 @@ class MmsContentObserver @Inject constructor(
         /** dedup 항목 유지 시간 (5분) */
         private const val DEDUP_TTL_MS = 5 * 60 * 1000L
 
+        /** 한 번에 재확인할 최근 MMS 개수 */
+        private const val RECENT_MMS_SCAN_LIMIT = 10
+
         /** MMS body retry 대기 시간 (ms) */
         private val BODY_RETRY_DELAYS = longArrayOf(500L, 1500L, 3000L)
     }
 
-    /** mmsId → 처리 시각. 중복 onChange 호출 방지 */
+    private data class CandidateOutcome(
+        val instantSuccess: Boolean = false,
+        val shouldTriggerSync: Boolean = false
+    )
+
+    /** mmsId -> 처리 시각. 중복 onChange 호출 방지 */
     private val processedMmsIds = ConcurrentHashMap<String, Long>()
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -72,103 +80,120 @@ class MmsContentObserver @Inject constructor(
         super.onChange(selfChange, uri)
         scope.launch {
             try {
-                processLatestMms()
+                processRecentMms()
             } catch (e: Exception) {
                 MoneyTalkLogger.e("[MmsObserver] 처리 예외: ${e.message}")
             }
         }
     }
 
-    private suspend fun processLatestMms() {
+    private suspend fun processRecentMms() {
         val contentResolver = getContentResolver() ?: return
+        val recentCandidates = mutableListOf<Pair<String, Long>>()
 
-        // 최근 MMS 1건 조회
         val cursor = contentResolver.query(
             MMS_INBOX_URI,
             arrayOf("_id", "date"),
             null,
             null,
-            "date DESC LIMIT 1"
+            "date DESC LIMIT $RECENT_MMS_SCAN_LIMIT"
         ) ?: return
 
         cursor.use {
-            if (!it.moveToFirst()) return
-
             val idIndex = it.getColumnIndex("_id")
             val dateIndex = it.getColumnIndex("date")
             if (idIndex < 0 || dateIndex < 0) return
 
-            val mmsId = it.getString(idIndex) ?: return
-            val dateSec = it.getLong(dateIndex)
-            val timestampMillis = dateSec * 1000L
-
-            // Dedup 체크 + 만료 항목 정리
-            cleanExpiredEntries()
-            if (processedMmsIds.putIfAbsent(mmsId, System.currentTimeMillis()) != null) {
-                return
-            }
-
-            MoneyTalkLogger.i("[MmsObserver] 새 MMS 감지: id=$mmsId")
-
-            // MMS body 읽기 (retry with backoff — part 비동기 쓰기 대응)
-            var body: String? = null
-            for (delayMs in BODY_RETRY_DELAYS) {
-                body = smsReaderV2.getMmsTextBody(contentResolver, mmsId)
-                if (!body.isNullOrBlank()) break
-                MoneyTalkLogger.i("[MmsObserver] body 미준비, ${delayMs}ms 후 재시도")
-                delay(delayMs)
-            }
-
-            if (body.isNullOrBlank()) {
-                MoneyTalkLogger.w("[MmsObserver] body 읽기 최종 실패: mmsId=$mmsId")
-                processedMmsIds.remove(mmsId)
-                return
-            }
-
-            // 발신번호 읽기
-            val address = smsReaderV2.getMmsAddress(contentResolver, mmsId)
-            if (address == "unknown" || address.isBlank()) {
-                MoneyTalkLogger.w("[MmsObserver] 발신번호 읽기 실패: mmsId=$mmsId")
-                processedMmsIds.remove(mmsId)
-                return
-            }
-
-            // 개인번호 필터
-            if (SmsFilter.shouldSkipBySender(address, body)) {
-                MoneyTalkLogger.i("[MmsObserver] 개인번호 스킵: $address")
-                return
-            }
-
-            MoneyTalkLogger.i("[MmsObserver] MMS 처리 시작: addr=$address, len=${body.length}")
-
-            // SmsInstantProcessor로 즉시 처리
-            var instantSuccess = false
-            try {
-                val result = instantProcessor.processAndSave(address, body, timestampMillis)
-                when (result) {
-                    is SmsInstantProcessor.Result.Expense -> {
-                        instantSuccess = true
-                        MoneyTalkLogger.i("[MmsObserver] 즉시 지출 저장: ${result.entity.storeName} ${result.entity.amount}원")
-                    }
-                    is SmsInstantProcessor.Result.Income -> {
-                        instantSuccess = true
-                        MoneyTalkLogger.i("[MmsObserver] 즉시 수입 저장: ${result.entity.amount}원")
-                    }
-                    is SmsInstantProcessor.Result.Skipped ->
-                        MoneyTalkLogger.i("[MmsObserver] 비결제 또는 미매칭 → 전체 동기화 대기")
-                    is SmsInstantProcessor.Result.Error ->
-                        MoneyTalkLogger.w("[MmsObserver] 즉시 처리 실패: ${result.message}")
-                }
-            } catch (e: Exception) {
-                MoneyTalkLogger.e("[MmsObserver] 즉시 처리 예외: ${e.message}")
-            } finally {
-                if (instantSuccess) {
-                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
-                } else {
-                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.SMS_RECEIVED)
-                }
+            while (it.moveToNext()) {
+                val mmsId = it.getString(idIndex) ?: continue
+                val timestampMillis = it.getLong(dateIndex) * 1000L
+                recentCandidates += (mmsId to timestampMillis)
             }
         }
+
+        if (recentCandidates.isEmpty()) return
+
+        var hasInstantSuccess = false
+        var shouldTriggerSync = false
+        for ((mmsId, timestampMillis) in recentCandidates.asReversed()) {
+            val outcome = processMmsCandidate(contentResolver, mmsId, timestampMillis)
+            hasInstantSuccess = hasInstantSuccess || outcome.instantSuccess
+            shouldTriggerSync = shouldTriggerSync || outcome.shouldTriggerSync
+        }
+
+        if (hasInstantSuccess) {
+            dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+        }
+        if (shouldTriggerSync) {
+            dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.SMS_RECEIVED)
+        }
+    }
+
+    private suspend fun processMmsCandidate(
+        contentResolver: ContentResolver,
+        mmsId: String,
+        timestampMillis: Long
+    ): CandidateOutcome {
+        cleanExpiredEntries()
+        if (processedMmsIds.putIfAbsent(mmsId, System.currentTimeMillis()) != null) {
+            return CandidateOutcome()
+        }
+
+        MoneyTalkLogger.i("[MmsObserver] 새 MMS 감지: id=$mmsId")
+
+        var body: String? = null
+        for (delayMs in BODY_RETRY_DELAYS) {
+            body = smsReaderV2.getMmsTextBody(contentResolver, mmsId)
+            if (!body.isNullOrBlank()) break
+            MoneyTalkLogger.i("[MmsObserver] body 미준비, ${delayMs}ms 후 재시도")
+            delay(delayMs)
+        }
+
+        if (body.isNullOrBlank()) {
+            MoneyTalkLogger.w("[MmsObserver] body 읽기 최종 실패: mmsId=$mmsId")
+            processedMmsIds.remove(mmsId)
+            return CandidateOutcome()
+        }
+
+        val address = smsReaderV2.getMmsAddress(contentResolver, mmsId)
+        if (address == "unknown" || address.isBlank()) {
+            MoneyTalkLogger.w("[MmsObserver] 발신번호 읽기 실패: mmsId=$mmsId")
+            processedMmsIds.remove(mmsId)
+            return CandidateOutcome()
+        }
+
+        if (SmsFilter.shouldSkipBySender(address, body)) {
+            MoneyTalkLogger.i("[MmsObserver] 개인번호 스킵: $address")
+            return CandidateOutcome()
+        }
+
+        MoneyTalkLogger.i("[MmsObserver] MMS 처리 시작: addr=$address, len=${body.length}")
+
+        var instantSuccess = false
+        try {
+            val result = instantProcessor.processAndSave(address, body, timestampMillis)
+            when (result) {
+                is SmsInstantProcessor.Result.Expense -> {
+                    instantSuccess = true
+                    MoneyTalkLogger.i("[MmsObserver] 즉시 지출 저장: ${result.entity.storeName} ${result.entity.amount}원")
+                }
+                is SmsInstantProcessor.Result.Income -> {
+                    instantSuccess = true
+                    MoneyTalkLogger.i("[MmsObserver] 즉시 수입 저장: ${result.entity.amount}원")
+                }
+                is SmsInstantProcessor.Result.Skipped ->
+                    MoneyTalkLogger.i("[MmsObserver] 비결제 또는 미매칭 -> 전체 동기화 대기")
+                is SmsInstantProcessor.Result.Error ->
+                    MoneyTalkLogger.w("[MmsObserver] 즉시 처리 실패: ${result.message}")
+            }
+        } catch (e: Exception) {
+            MoneyTalkLogger.e("[MmsObserver] 즉시 처리 예외: ${e.message}")
+        }
+
+        return CandidateOutcome(
+            instantSuccess = instantSuccess,
+            shouldTriggerSync = true
+        )
     }
 
     /** 5분 경과 dedup 항목 제거 */

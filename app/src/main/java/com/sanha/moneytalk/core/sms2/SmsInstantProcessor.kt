@@ -5,12 +5,12 @@ import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.notification.SmsNotificationManager
 import com.sanha.moneytalk.core.util.CardNameNormalizer
-import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,8 +39,7 @@ class SmsInstantProcessor @Inject constructor(
     private val incomeRepository: IncomeRepository,
     private val storeRuleRepository: StoreRuleRepository,
     private val smsExclusionRepository: SmsExclusionRepository,
-    private val notificationManager: SmsNotificationManager,
-    private val dataRefreshEvent: DataRefreshEvent
+    private val notificationManager: SmsNotificationManager
 ) {
 
     companion object {
@@ -48,6 +47,20 @@ class SmsInstantProcessor @Inject constructor(
         @Volatile
         var lastInstantSaveTime: Long = 0L
             private set
+
+        /** 즉시 저장 후 배치 파이프라인으로 재검증할 smsId 목록 */
+        private val pendingReconciliationIds = ConcurrentHashMap.newKeySet<String>()
+
+        fun snapshotPendingReconciliationIds(): Set<String> = pendingReconciliationIds.toSet()
+
+        fun clearPendingReconciliationIds(smsIds: Collection<String>) {
+            smsIds.forEach { pendingReconciliationIds.remove(it) }
+        }
+
+        private fun markPendingReconciliation(smsId: String) {
+            lastInstantSaveTime = System.currentTimeMillis()
+            pendingReconciliationIds.add(smsId)
+        }
     }
 
     /** 즉시 처리 결과 */
@@ -159,19 +172,15 @@ class SmsInstantProcessor @Inject constructor(
         entity = applyStoreRules(entity)
 
         expenseRepository.insert(entity)
-        lastInstantSaveTime = System.currentTimeMillis()
+        markPendingReconciliation(smsId)
         MoneyTalkLogger.i("[InstantSMS] 지출 저장: ${entity.storeName} ${entity.amount}원 [${entity.category}]")
 
         // 알림
         notificationManager.showExpenseNotification(
             amount = entity.amount,
             storeName = entity.storeName,
-            cardName = entity.cardName,
-            category = entity.category
+            cardName = entity.cardName
         )
-
-        // UI 갱신
-        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
 
         return Result.Expense(entity)
     }
@@ -209,7 +218,7 @@ class SmsInstantProcessor @Inject constructor(
         )
 
         incomeRepository.insert(entity)
-        lastInstantSaveTime = System.currentTimeMillis()
+        markPendingReconciliation(smsId)
         MoneyTalkLogger.i("[InstantSMS] 수입 저장: ${entity.source} ${entity.amount}원 [$category]")
 
         // 알림
@@ -218,9 +227,6 @@ class SmsInstantProcessor @Inject constructor(
             source = entity.source,
             incomeType = entity.type
         )
-
-        // UI 갱신
-        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
 
         return Result.Income(entity)
     }
