@@ -577,6 +577,7 @@
     <string name="transaction_edit_amount_suffix">원</string>
     <string name="transaction_edit_date_time">날짜-시간</string>
     <string name="transaction_edit_fixed_expense">고정지출에 추가</string>
+    <string name="transaction_edit_fixed_income">고정수입에 추가</string>
     <string name="transaction_card_fixed_tag">고정</string>
     <string name="transaction_edit_apply_category_to_all">동일 거래처에 모두 적용</string>
     <string name="transaction_edit_apply_fixed_to_all">동일 거래처에 모두 적용</string>
