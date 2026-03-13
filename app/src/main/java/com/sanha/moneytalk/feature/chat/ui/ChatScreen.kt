@@ -54,6 +54,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkState
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
+import com.sanha.moneytalk.feature.chat.ui.coachmark.chatCoachMarkSteps
+import kotlinx.coroutines.delay
 
 /** 채팅 탭 메인 화면. 채팅방 목록과 채팅방 내부 화면을 전환하여 표시 */
 @Composable
@@ -64,6 +69,24 @@ fun ChatScreen(
     var showApiKeyDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf<Long?>(null) }
 
+    // ===== 코치마크 (화면별 온보딩) =====
+    val coachMarkRegistry = remember { CoachMarkTargetRegistry() }
+    val coachMarkState = remember { CoachMarkState() }
+    val allChatSteps = remember { chatCoachMarkSteps() }
+    val hasSeenChatOnboarding by viewModel.hasSeenScreenOnboardingFlow("chat")
+        .collectAsStateWithLifecycle(initialValue = true)
+
+    LaunchedEffect(hasSeenChatOnboarding, uiState.isInChatRoom) {
+        if (!hasSeenChatOnboarding && !uiState.isInChatRoom) {
+            delay(500)
+            val visibleSteps = allChatSteps.filter { it.targetKey in coachMarkRegistry.targets }
+            if (visibleSteps.isNotEmpty()) {
+                coachMarkState.show(visibleSteps)
+            }
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     // 채팅방 목록 <-> 채팅방 내부 전환 (애니메이션)
     AnimatedContent(
         targetState = uiState.isInChatRoom,
@@ -97,10 +120,19 @@ fun ChatScreen(
                 onSessionSelect = { viewModel.enterChatRoom(it) },
                 onSessionDelete = { showDeleteConfirm = it },
                 onNewSession = { viewModel.createNewSession() },
-                onApiKeyClick = { showApiKeyDialog = true }
+                onApiKeyClick = { showApiKeyDialog = true },
+                coachMarkRegistry = coachMarkRegistry
             )
         }
     }
+
+    // 코치마크 오버레이
+    CoachMarkOverlay(
+        state = coachMarkState,
+        targetRegistry = coachMarkRegistry,
+        onComplete = { viewModel.markScreenOnboardingSeen("chat") }
+    )
+    } // Box
 
     // API 키 설정 다이얼로그
     if (showApiKeyDialog) {

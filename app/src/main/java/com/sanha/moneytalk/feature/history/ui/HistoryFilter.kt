@@ -49,12 +49,18 @@ import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryInfo
 import com.sanha.moneytalk.core.model.CategoryProvider
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkState
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
+import com.sanha.moneytalk.core.ui.coachmark.onboardingTarget
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupCompose
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupOption
+import com.sanha.moneytalk.feature.history.ui.coachmark.filterCoachMarkSteps
 import dagger.hilt.android.EntryPointAccessors
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 private enum class CategorySheetType(
@@ -112,6 +118,8 @@ fun FilterBottomSheet(
     currentIncomeCategories: Set<String> = emptySet(),
     currentTransferCategories: Set<String> = emptySet(),
     currentFixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL,
+    hasSeenFilterOnboarding: Boolean = true,
+    onCoachMarkComplete: () -> Unit = {},
     onDismiss: () -> Unit,
     onApply: (
         SortOrder,
@@ -133,6 +141,22 @@ fun FilterBottomSheet(
     var tempTransferCategories by remember { mutableStateOf(currentTransferCategories) }
     var tempFixedFilter by remember { mutableStateOf(currentFixedExpenseFilter) }
     var categorySheetType by remember { mutableStateOf<CategorySheetType?>(null) }
+
+    // 코치마크 (필터 온보딩)
+    val filterCoachMarkRegistry = remember { CoachMarkTargetRegistry() }
+    val filterCoachMarkState = remember { CoachMarkState() }
+    val allFilterSteps = remember { filterCoachMarkSteps() }
+
+    LaunchedEffect(hasSeenFilterOnboarding) {
+        if (!hasSeenFilterOnboarding) {
+            delay(500)
+            val visibleSteps = allFilterSteps.filter { it.targetKey in filterCoachMarkRegistry.targets }
+            if (visibleSteps.isNotEmpty()) {
+                filterCoachMarkState.show(visibleSteps)
+            }
+        }
+    }
+
     // 3개 타입 모두 체크(기본) 상태에서 첫 카테고리 세부 선택 시 나머지 타입 자동 해제
     var hasAutoCollapsed by remember {
         mutableStateOf(!(currentShowExpenses && currentShowIncomes && currentShowTransfers))
@@ -167,15 +191,16 @@ fun FilterBottomSheet(
         sheetState = sheetState,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
+        Box {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = maxSheetHeight)
         ) {
+            // === 고정 영역: 타이틀 + 정렬 + 고정지출 (스크롤 영역 밖) ===
             Column(
                 modifier = Modifier
-                    .weight(1f, fill = false)
-                    .verticalScroll(rememberScrollState())
+                    .fillMaxWidth()
                     .padding(horizontal = 20.dp)
             ) {
                 Row(
@@ -223,64 +248,77 @@ fun FilterBottomSheet(
                     }
                 }
 
-                Text(
-                    text = stringResource(R.string.history_filter_sort),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                val sortOptions = listOf(
-                    SortOrder.DATE_DESC to stringResource(R.string.history_sort_date),
-                    SortOrder.AMOUNT_DESC to stringResource(R.string.history_sort_amount_short),
-                    SortOrder.STORE_FREQ to stringResource(R.string.history_sort_store)
-                )
-                RadioGroupCompose(
-                    options = sortOptions.map { (order, label) ->
-                        RadioGroupOption(label = label, isSelected = tempSortOrder == order)
-                    },
-                    onOptionSelected = { index ->
-                        tempSortOrder = sortOptions[index].first
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Text(
-                    text = stringResource(R.string.history_filter_fixed),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                val fixedOptions = listOf(
-                    FixedExpenseFilter.ALL to stringResource(R.string.history_filter_fixed_all),
-                    FixedExpenseFilter.FIXED_ONLY to stringResource(R.string.history_filter_fixed_only),
-                    FixedExpenseFilter.EXCLUDE_FIXED to stringResource(R.string.history_filter_fixed_exclude)
-                )
-                RadioGroupCompose(
-                    options = fixedOptions.map { (filter, label) ->
-                        RadioGroupOption(label = label, isSelected = tempFixedFilter == filter)
-                    },
-                    onOptionSelected = { index ->
-                        tempFixedFilter = fixedOptions[index].first
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Text(
-                    text = stringResource(R.string.history_filter_category),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(vertical = 6.dp)
+                    modifier = Modifier.onboardingTarget("filter_sort", filterCoachMarkRegistry)
                 ) {
+                    Text(
+                        text = stringResource(R.string.history_filter_sort),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    val sortOptions = listOf(
+                        SortOrder.DATE_DESC to stringResource(R.string.history_sort_date),
+                        SortOrder.AMOUNT_DESC to stringResource(R.string.history_sort_amount_short),
+                        SortOrder.STORE_FREQ to stringResource(R.string.history_sort_store)
+                    )
+                    RadioGroupCompose(
+                        options = sortOptions.map { (order, label) ->
+                            RadioGroupOption(label = label, isSelected = tempSortOrder == order)
+                        },
+                        onOptionSelected = { index ->
+                            tempSortOrder = sortOptions[index].first
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text(
+                        text = stringResource(R.string.history_filter_fixed),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    val fixedOptions = listOf(
+                        FixedExpenseFilter.ALL to stringResource(R.string.history_filter_fixed_all),
+                        FixedExpenseFilter.FIXED_ONLY to stringResource(R.string.history_filter_fixed_only),
+                        FixedExpenseFilter.EXCLUDE_FIXED to stringResource(R.string.history_filter_fixed_exclude)
+                    )
+                    RadioGroupCompose(
+                        options = fixedOptions.map { (filter, label) ->
+                            RadioGroupOption(label = label, isSelected = tempFixedFilter == filter)
+                        },
+                        onOptionSelected = { index ->
+                            tempFixedFilter = fixedOptions[index].first
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+
+            // === 스크롤 영역: 카테고리 선택만 ===
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+            ) {
+                Column {
+                    Text(
+                        text = stringResource(R.string.history_filter_category),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(vertical = 6.dp)
+                    ) {
                     FilterCategoryTypeRow(
                         label = stringResource(R.string.home_expense),
                         checked = tempShowExpenses,
@@ -336,6 +374,7 @@ fun FilterBottomSheet(
                         },
                         onCategoryClick = { categorySheetType = CategorySheetType.TRANSFER }
                     )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -368,6 +407,17 @@ fun FilterBottomSheet(
                 )
             }
         }
+
+        // matchParentSize: Column 크기에 맞추되 Box 사이즈 결정에 영향 안 줌
+        // (fillMaxSize 사용 시 BottomSheet가 풀스크린으로 확장되는 문제 방지)
+        Box(modifier = Modifier.matchParentSize()) {
+            CoachMarkOverlay(
+                state = filterCoachMarkState,
+                targetRegistry = filterCoachMarkRegistry,
+                onComplete = onCoachMarkComplete
+            )
+        }
+        } // Box
     }
 
     categorySheetType?.let { type ->

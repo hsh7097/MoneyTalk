@@ -11,6 +11,7 @@ import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.model.TransferDirection
+import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
@@ -85,6 +86,7 @@ class TransactionEditViewModel @Inject constructor(
     private val snackbarBus: AppSnackbarBus,
     private val storeRuleRepository: StoreRuleRepository,
     private val storeRuleSyncService: StoreRuleSyncService,
+    private val settingsDataStore: SettingsDataStore,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -497,6 +499,17 @@ class TransactionEditViewModel @Inject constructor(
             } catch (e: Exception) {
                 snackbarBus.show(context.getString(R.string.transaction_edit_delete_failed))
             }
+        }
+    }
+
+    // ===== 화면별 온보딩 =====
+
+    fun hasSeenScreenOnboardingFlow(screenId: String) =
+        settingsDataStore.hasSeenScreenOnboardingFlow(screenId)
+
+    fun markScreenOnboardingSeen(screenId: String) {
+        viewModelScope.launch {
+            settingsDataStore.setScreenOnboardingSeen(screenId)
         }
     }
 

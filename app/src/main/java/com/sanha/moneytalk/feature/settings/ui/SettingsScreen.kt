@@ -72,13 +72,19 @@ import com.google.android.gms.common.api.ApiException
 import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.ThemeMode
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkState
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
+import com.sanha.moneytalk.core.ui.coachmark.onboardingTarget
 import com.sanha.moneytalk.core.ui.component.settings.SettingsItemCompose
 import com.sanha.moneytalk.core.ui.component.settings.SettingsItemInfo
 import com.sanha.moneytalk.core.ui.component.settings.SettingsSectionCompose
 import com.sanha.moneytalk.core.util.DataBackupManager
 import com.sanha.moneytalk.feature.categorysettings.CategorySettingsActivity
+import com.sanha.moneytalk.feature.settings.ui.coachmark.settingsCoachMarkSteps
 import com.sanha.moneytalk.feature.smssettings.SmsSettingsActivity
 import com.sanha.moneytalk.feature.storerulesettings.StoreRuleSettingsActivity
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** 설정 탭 메인 화면. API 키, 월 시작일, 카드 관리, 데이터 관리 등 앱 설정 항목을 표시 */
@@ -167,6 +173,23 @@ fun SettingsScreen(
         }
     }
 
+    // ===== 코치마크 (화면별 온보딩) =====
+    val coachMarkRegistry = remember { CoachMarkTargetRegistry() }
+    val coachMarkState = remember { CoachMarkState() }
+    val allSettingsSteps = remember { settingsCoachMarkSteps() }
+    val hasSeenSettingsOnboarding by viewModel.hasSeenScreenOnboardingFlow("settings")
+        .collectAsStateWithLifecycle(initialValue = true)
+
+    LaunchedEffect(hasSeenSettingsOnboarding) {
+        if (!hasSeenSettingsOnboarding) {
+            delay(500)
+            val visibleSteps = allSettingsSteps.filter { it.targetKey in coachMarkRegistry.targets }
+            if (visibleSteps.isNotEmpty()) {
+                coachMarkState.show(visibleSteps)
+            }
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier
@@ -208,6 +231,7 @@ fun SettingsScreen(
 
             // 기간/예산 설정
             item {
+                Box(modifier = Modifier.onboardingTarget("settings_period", coachMarkRegistry)) {
                 val numberFormat = java.text.NumberFormat.getNumberInstance(java.util.Locale.KOREA)
                 val categoryCount = uiState.categoryBudgets.size
                 val budgetText = when {
@@ -254,10 +278,12 @@ fun SettingsScreen(
                         onClick = { viewModel.onIntent(SettingsIntent.ShowBudgetBottomSheet) }
                     )
                 }
+                } // Box (settings_period)
             }
 
             // 카테고리 관리
             item {
+                Box(modifier = Modifier.onboardingTarget("settings_category", coachMarkRegistry)) {
                 SettingsSectionCompose(title = stringResource(R.string.settings_section_category)) {
                     // 카테고리 정리 (AI 분류)
                     val isClassifyEnabled = uiState.hasApiKey &&
@@ -350,10 +376,12 @@ fun SettingsScreen(
                         }
                     )
                 }
+                } // Box (settings_category)
             }
 
             // 데이터 관리
             item {
+                Box(modifier = Modifier.onboardingTarget("settings_data", coachMarkRegistry)) {
                 SettingsSectionCompose(title = stringResource(R.string.settings_section_data)) {
                     // 거래 알림 토글
                     Row(
@@ -493,6 +521,7 @@ fun SettingsScreen(
                         onClick = { viewModel.onIntent(SettingsIntent.ShowDeleteConfirmDialog) }
                     )
                 }
+                } // Box (settings_data)
             }
 
             // 앱 정보
@@ -514,6 +543,17 @@ fun SettingsScreen(
                         },
                         onClick = { viewModel.onIntent(SettingsIntent.ShowPrivacyDialog) }
                     )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Box(modifier = Modifier.onboardingTarget("settings_reset", coachMarkRegistry)) {
+                        SettingsItemCompose(
+                            info = object : SettingsItemInfo {
+                                override val icon = Icons.Default.Refresh
+                                override val title = stringResource(R.string.settings_reset_guide)
+                                override val subtitle = stringResource(R.string.settings_reset_guide_subtitle)
+                            },
+                            onClick = { viewModel.resetAllScreenOnboardings() }
+                        )
+                    }
                 }
             }
         }
@@ -576,6 +616,13 @@ fun SettingsScreen(
                 }
             }
         }
+
+        // 코치마크 오버레이
+        CoachMarkOverlay(
+            state = coachMarkState,
+            targetRegistry = coachMarkRegistry,
+            onComplete = { viewModel.markScreenOnboardingSeen("settings") }
+        )
     }
 
     // ========== 다이얼로그 (activeDialog 기반) ==========

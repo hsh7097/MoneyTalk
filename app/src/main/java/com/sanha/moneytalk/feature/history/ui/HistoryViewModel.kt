@@ -1157,4 +1157,14 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
+    // ===== 화면별 온보딩 =====
+
+    fun hasSeenScreenOnboardingFlow(screenId: String) =
+        settingsDataStore.hasSeenScreenOnboardingFlow(screenId)
+
+    fun markScreenOnboardingSeen(screenId: String) {
+        viewModelScope.launch {
+            settingsDataStore.setScreenOnboardingSeen(screenId)
+        }
+    }
 }

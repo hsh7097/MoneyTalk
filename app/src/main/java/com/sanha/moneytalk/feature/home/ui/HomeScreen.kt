@@ -90,7 +90,13 @@ import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransaction
 import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.theme.moneyTalkColors
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkState
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
+import com.sanha.moneytalk.core.ui.coachmark.onboardingTarget
 import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.feature.home.ui.coachmark.homeCoachMarkSteps
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
@@ -158,6 +164,31 @@ fun HomeScreen(
     val isBannerAdEnabled by mainViewModel.adManager.isBannerAdEnabledFlow
         .collectAsStateWithLifecycle(initialValue = false)
 
+    // ===== 코치마크 (화면별 온보딩) =====
+    val coachMarkRegistry = remember { CoachMarkTargetRegistry() }
+    val coachMarkState = remember { CoachMarkState() }
+    val allHomeSteps = remember { homeCoachMarkSteps() }
+    val hasSeenHomeOnboarding by viewModel.hasSeenScreenOnboardingFlow("home")
+        .collectAsStateWithLifecycle(initialValue = true)
+
+    // 현재 페이지 데이터 로딩 완료 + 데이터 존재 시 코치마크 표시
+    val currentMonthKey = MonthKey(uiState.selectedYear, uiState.selectedMonth)
+    val currentPageData = uiState.pageCache[currentMonthKey]
+    val isCurrentPageLoading = currentPageData?.isLoading ?: true
+    val hasData = (currentPageData?.monthlyExpense ?: 0) > 0 ||
+        (currentPageData?.monthlyIncome ?: 0) > 0
+
+    LaunchedEffect(hasSeenHomeOnboarding, isCurrentPageLoading, hasData) {
+        if (!hasSeenHomeOnboarding && !isCurrentPageLoading && hasData) {
+            delay(500) // 레이아웃 안정화 대기
+            val visibleSteps = allHomeSteps.filter { it.targetKey in coachMarkRegistry.targets }
+            if (visibleSteps.isNotEmpty()) {
+                coachMarkState.show(visibleSteps)
+            }
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -242,6 +273,8 @@ fun HomeScreen(
                 },
                 onExpenseSelected = { expense -> selectedExpense = expense },
                 onIncomeSelected = { income -> selectedIncome = income },
+                coachMarkRegistry = coachMarkRegistry,
+                isCurrentPage = page == pagerState.currentPage,
                 coroutineScope = coroutineScope
             )
         } // HorizontalPager
@@ -251,6 +284,14 @@ fun HomeScreen(
             BannerAdCompose(adUnitId = BannerAdIds.HOME)
         }
     } // Column
+
+    // 코치마크 오버레이 (Column 위에 렌더링)
+    CoachMarkOverlay(
+        state = coachMarkState,
+        targetRegistry = coachMarkRegistry,
+        onComplete = { viewModel.markScreenOnboardingSeen("home") }
+    )
+    } // Box
 
     // 지출 상세 다이얼로그 (공통 컴포넌트 사용)
     selectedExpense?.let { expense ->
@@ -400,6 +441,8 @@ fun HomePageContent(
     onCategorySelected: (String?) -> Unit,
     onExpenseSelected: (ExpenseEntity) -> Unit,
     onIncomeSelected: (IncomeEntity) -> Unit,
+    coachMarkRegistry: CoachMarkTargetRegistry? = null,
+    isCurrentPage: Boolean = false,
     coroutineScope: kotlinx.coroutines.CoroutineScope
 ) {
     val listState = rememberLazyListState()
@@ -437,16 +480,21 @@ fun HomePageContent(
         ) {
             // ━━━ BLOCK 1: Hero Summary ━━━
             item {
-                MonthlyOverviewSection(
-                    year = year,
-                    month = month,
-                    monthStartDay = monthStartDay,
-                    periodLabel = pageData.periodLabel,
-                    income = pageData.monthlyIncome,
-                    expense = pageData.monthlyExpense,
-                    onPreviousMonth = onPreviousMonth,
-                    onNextMonth = onNextMonth
-                )
+                val targetModifier = if (isCurrentPage && coachMarkRegistry != null) {
+                    Modifier.onboardingTarget("home_overview", coachMarkRegistry)
+                } else Modifier
+                Box(modifier = targetModifier) {
+                    MonthlyOverviewSection(
+                        year = year,
+                        month = month,
+                        monthStartDay = monthStartDay,
+                        periodLabel = pageData.periodLabel,
+                        income = pageData.monthlyIncome,
+                        expense = pageData.monthlyExpense,
+                        onPreviousMonth = onPreviousMonth,
+                        onNextMonth = onNextMonth
+                    )
+                }
             }
 
             // CTA 표시 조건 계산
@@ -461,10 +509,15 @@ fun HomePageContent(
             // 현재월 데이터 가져오기 CTA (권한 없거나 데이터 없을 때)
             if (showImportCta) {
                 item {
-                    ImportDataCtaSection(
-                        onImportData = onIncrementalSync,
-                        isSyncing = isSyncing
-                    )
+                    val targetModifier = if (isCurrentPage && coachMarkRegistry != null) {
+                        Modifier.onboardingTarget("home_sync_cta", coachMarkRegistry)
+                    } else Modifier
+                    Box(modifier = targetModifier) {
+                        ImportDataCtaSection(
+                            onImportData = onIncrementalSync,
+                            isSyncing = isSyncing
+                        )
+                    }
                 }
             }
 
@@ -489,7 +542,12 @@ fun HomePageContent(
                 item {
                     val trendInfo = HomeSpendingTrendInfo.from(pageData)
                     if (trendInfo != null) {
-                        SpendingTrendSection(info = trendInfo)
+                        val targetModifier = if (isCurrentPage && coachMarkRegistry != null) {
+                            Modifier.onboardingTarget("home_trend", coachMarkRegistry)
+                        } else Modifier
+                        Box(modifier = targetModifier) {
+                            SpendingTrendSection(info = trendInfo)
+                        }
                     }
                 }
             }
@@ -509,12 +567,17 @@ fun HomePageContent(
 
             // ━━━ BLOCK 3: Category + AI Insight ━━━
             item {
-                CategoryExpenseSection(
-                    categoryExpenses = pageData.categoryExpenses,
-                    categoryBudgets = pageData.categoryBudgets,
-                    selectedCategory = selectedCategory,
-                    onCategorySelected = onCategorySelected
-                )
+                val targetModifier = if (isCurrentPage && coachMarkRegistry != null) {
+                    Modifier.onboardingTarget("home_category", coachMarkRegistry)
+                } else Modifier
+                Box(modifier = targetModifier) {
+                    CategoryExpenseSection(
+                        categoryExpenses = pageData.categoryExpenses,
+                        categoryBudgets = pageData.categoryBudgets,
+                        selectedCategory = selectedCategory,
+                        onCategorySelected = onCategorySelected
+                    )
+                }
             }
 
             // AI 인사이트 (카테고리 바로 아래)

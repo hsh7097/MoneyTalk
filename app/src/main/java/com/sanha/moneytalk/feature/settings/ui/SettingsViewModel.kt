@@ -1160,4 +1160,21 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    // ===== 화면별 온보딩 =====
+
+    fun hasSeenScreenOnboardingFlow(screenId: String) =
+        settingsDataStore.hasSeenScreenOnboardingFlow(screenId)
+
+    fun markScreenOnboardingSeen(screenId: String) {
+        viewModelScope.launch {
+            settingsDataStore.setScreenOnboardingSeen(screenId)
+        }
+    }
+
+    /** 모든 화면 온보딩 가이드 초기화 (설정 > 가이드 초기화) */
+    fun resetAllScreenOnboardings() {
+        viewModelScope.launch {
+            settingsDataStore.resetAllScreenOnboardings()
+        }
+    }
 }
