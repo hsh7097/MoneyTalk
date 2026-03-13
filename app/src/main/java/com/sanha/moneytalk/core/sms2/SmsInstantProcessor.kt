@@ -43,6 +43,13 @@ class SmsInstantProcessor @Inject constructor(
     private val dataRefreshEvent: DataRefreshEvent
 ) {
 
+    companion object {
+        /** 마지막 즉시 저장 시각 (앱 콜드스타트 시 silent sync 판단용) */
+        @Volatile
+        var lastInstantSaveTime: Long = 0L
+            private set
+    }
+
     /** 즉시 처리 결과 */
     sealed interface Result {
         data class Expense(val entity: ExpenseEntity) : Result
@@ -152,6 +159,7 @@ class SmsInstantProcessor @Inject constructor(
         entity = applyStoreRules(entity)
 
         expenseRepository.insert(entity)
+        lastInstantSaveTime = System.currentTimeMillis()
         MoneyTalkLogger.i("[InstantSMS] 지출 저장: ${entity.storeName} ${entity.amount}원 [${entity.category}]")
 
         // 알림
@@ -201,6 +209,7 @@ class SmsInstantProcessor @Inject constructor(
         )
 
         incomeRepository.insert(entity)
+        lastInstantSaveTime = System.currentTimeMillis()
         MoneyTalkLogger.i("[InstantSMS] 수입 저장: ${entity.source} ${entity.amount}원 [$category]")
 
         // 알림
@@ -236,8 +245,8 @@ class SmsInstantProcessor @Inject constructor(
         }
     }
 
-    /** SmsReaderV2.generateSmsId()와 동일한 형식으로 smsId 생성 */
+    /** SmsReaderV2.generateSmsId()와 동일한 형식으로 smsId 생성 (address 정규화 필수) */
     private fun generateSmsId(address: String, body: String, date: Long): String {
-        return "${address}_${date}_${body.hashCode()}"
+        return "${SmsFilter.normalizeAddress(address)}_${date}_${body.hashCode()}"
     }
 }

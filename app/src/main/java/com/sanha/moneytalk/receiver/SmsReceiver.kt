@@ -64,13 +64,18 @@ class SmsReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
 
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+            var instantSuccess = false
             try {
                 val result = instantProcessor.processAndSave(address, body, timestamp)
                 when (result) {
-                    is SmsInstantProcessor.Result.Expense ->
+                    is SmsInstantProcessor.Result.Expense -> {
+                        instantSuccess = true
                         MoneyTalkLogger.i("[SmsReceiver] 즉시 지출 저장: ${result.entity.storeName} ${result.entity.amount}원")
-                    is SmsInstantProcessor.Result.Income ->
+                    }
+                    is SmsInstantProcessor.Result.Income -> {
+                        instantSuccess = true
                         MoneyTalkLogger.i("[SmsReceiver] 즉시 수입 저장: ${result.entity.amount}원")
+                    }
                     is SmsInstantProcessor.Result.Skipped ->
                         MoneyTalkLogger.i("[SmsReceiver] 비결제 또는 미매칭 → 전체 동기화 대기")
                     is SmsInstantProcessor.Result.Error ->
@@ -79,8 +84,13 @@ class SmsReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 MoneyTalkLogger.e("[SmsReceiver] 즉시 처리 예외: ${e.message}")
             } finally {
-                // 항상 전체 동기화 트리거 (MMS/RCS 보완 + Gemini 분류 보완)
-                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.SMS_RECEIVED)
+                if (instantSuccess) {
+                    // 즉시 처리 성공 → UI 갱신만 (전체 동기화는 앱 진입 시 silent로)
+                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+                } else {
+                    // 미처리 → 전체 동기화 트리거
+                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.SMS_RECEIVED)
+                }
                 pendingResult.finish()
             }
         }

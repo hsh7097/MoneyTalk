@@ -26,6 +26,7 @@ import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.sms2.SmsIncomeParser
 import com.sanha.moneytalk.core.sms2.SmsInput
 import com.sanha.moneytalk.core.sms2.SmsFilter
+import com.sanha.moneytalk.core.sms2.SmsInstantProcessor
 import com.sanha.moneytalk.core.sms2.SmsReaderV2
 import com.sanha.moneytalk.core.sms2.SmsPipeline
 import com.sanha.moneytalk.core.sms2.SmsSyncCoordinator
@@ -100,6 +101,9 @@ class MainViewModel @Inject constructor(
         /** 카테고리 분류 최대 반복 횟수 */
         private const val MAX_CLASSIFICATION_ROUNDS = 3
 
+        /** 즉시 저장 후 silent 동기화 전환 판단 윈도우 (60초) */
+        private const val INSTANT_SAVE_SILENT_WINDOW_MS = 60_000L
+
     }
 
     private val _uiState = MutableStateFlow(MainUiState())
@@ -149,10 +153,17 @@ class MainViewModel @Inject constructor(
             val firstLaunch = isFirstLaunch
             isFirstLaunch = false
 
-            if (firstLaunch) {
+            // 최근 즉시 저장이 있으면 다이얼로그 없이 백그라운드 동기화
+            val recentInstantSave = (System.currentTimeMillis() -
+                SmsInstantProcessor.lastInstantSaveTime) < INSTANT_SAVE_SILENT_WINDOW_MS
+
+            if (firstLaunch && !recentInstantSave) {
                 launchSync()
                 syncTriggered = true
             } else {
+                if (firstLaunch && recentInstantSave) {
+                    MoneyTalkLogger.i("onAppResume: 최근 즉시 저장 감지 → silent 백그라운드 동기화")
+                }
                 viewModelScope.launch {
                     val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
                     syncSmsV2(range, updateLastSyncTime = true, silent = true)
