@@ -3,6 +3,7 @@ package com.sanha.moneytalk.core.sms2
 import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.notification.SmsNotificationManager
 import com.sanha.moneytalk.core.util.CardNameNormalizer
 import com.sanha.moneytalk.core.util.DateUtils
@@ -39,7 +40,8 @@ class SmsInstantProcessor @Inject constructor(
     private val incomeRepository: IncomeRepository,
     private val storeRuleRepository: StoreRuleRepository,
     private val smsExclusionRepository: SmsExclusionRepository,
-    private val notificationManager: SmsNotificationManager
+    private val notificationManager: SmsNotificationManager,
+    private val settingsDataStore: SettingsDataStore
 ) {
 
     companion object {
@@ -175,12 +177,14 @@ class SmsInstantProcessor @Inject constructor(
         markPendingReconciliation(smsId)
         MoneyTalkLogger.i("[InstantSMS] 지출 저장: ${entity.storeName} ${entity.amount}원 [${entity.category}]")
 
-        // 알림
-        notificationManager.showExpenseNotification(
-            amount = entity.amount,
-            storeName = entity.storeName,
-            cardName = entity.cardName
-        )
+        // 알림 (설정에서 활성화된 경우만)
+        if (settingsDataStore.isNotificationEnabled()) {
+            notificationManager.showExpenseNotification(
+                amount = entity.amount,
+                storeName = entity.storeName,
+                cardName = entity.cardName
+            )
+        }
 
         return Result.Expense(entity)
     }
@@ -221,12 +225,14 @@ class SmsInstantProcessor @Inject constructor(
         markPendingReconciliation(smsId)
         MoneyTalkLogger.i("[InstantSMS] 수입 저장: ${entity.source} ${entity.amount}원 [$category]")
 
-        // 알림
-        notificationManager.showIncomeNotification(
-            amount = entity.amount,
-            source = entity.source,
-            incomeType = entity.type
-        )
+        // 알림 (설정에서 활성화된 경우만)
+        if (settingsDataStore.isNotificationEnabled()) {
+            notificationManager.showIncomeNotification(
+                amount = entity.amount,
+                source = entity.source,
+                incomeType = entity.type
+            )
+        }
 
         return Result.Income(entity)
     }

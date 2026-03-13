@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sms
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -44,6 +46,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Switch
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -352,6 +355,51 @@ fun SettingsScreen(
             // 데이터 관리
             item {
                 SettingsSectionCompose(title = stringResource(R.string.settings_section_data)) {
+                    // 거래 알림 토글
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 56.dp)
+                            .clickable {
+                                viewModel.onIntent(
+                                    SettingsIntent.ToggleNotification(!uiState.notificationEnabled)
+                                )
+                            }
+                            .padding(vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.settings_notification_title),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Text(
+                                    text = stringResource(R.string.settings_notification_subtitle),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = uiState.notificationEnabled,
+                            onCheckedChange = { checked ->
+                                viewModel.onIntent(SettingsIntent.ToggleNotification(checked))
+                            }
+                        )
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SettingsItemCompose(
                         info = object : SettingsItemInfo {
                             override val icon = Icons.Default.Sms

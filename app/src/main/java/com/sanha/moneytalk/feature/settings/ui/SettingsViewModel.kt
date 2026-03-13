@@ -72,6 +72,7 @@ sealed interface SettingsIntent {
     data object OpenRestoreFilePicker : SettingsIntent
     data class SetPendingRestoreUri(val uri: Uri) : SettingsIntent
     data object ConfirmRestore : SettingsIntent
+    data class ToggleNotification(val enabled: Boolean) : SettingsIntent
 }
 
 /** 다이얼로그 종류 (하나의 필드로 관리) */
@@ -125,7 +126,9 @@ data class SettingsUiState(
     // 월 예산
     val monthlyBudget: Int? = null,
     // 카테고리별 예산 (category displayName → monthlyLimit)
-    val categoryBudgets: Map<String, Int> = emptyMap()
+    val categoryBudgets: Map<String, Int> = emptyMap(),
+    // 거래 알림 설정
+    val notificationEnabled: Boolean = false
 )
 
 @HiltViewModel
@@ -161,6 +164,7 @@ class SettingsViewModel @Inject constructor(
         observeClassificationState()
         loadThemeMode()
         loadMonthlyBudget()
+        loadNotificationEnabled()
     }
 
     // ========== Intent 처리 ==========
@@ -230,6 +234,8 @@ class SettingsViewModel @Inject constructor(
                 // Context가 필요한 복원은 Composable에서 직접 호출
                 dismissDialog()
             }
+
+            is SettingsIntent.ToggleNotification -> saveNotificationEnabled(intent.enabled)
         }
     }
 
@@ -246,6 +252,22 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(triggerRestoreFilePicker = false) }
     }
 
+
+    // ========== 알림 설정 ==========
+
+    private fun loadNotificationEnabled() {
+        viewModelScope.launch {
+            settingsDataStore.notificationEnabledFlow.collect { enabled ->
+                _uiState.update { it.copy(notificationEnabled = enabled) }
+            }
+        }
+    }
+
+    private fun saveNotificationEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.saveNotificationEnabled(enabled)
+        }
+    }
 
     private fun loadThemeMode() {
         viewModelScope.launch {
