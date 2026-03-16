@@ -36,7 +36,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -47,8 +49,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
 import com.sanha.moneytalk.core.model.CategoryType
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkState
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
+import com.sanha.moneytalk.core.ui.coachmark.onboardingTarget
 import com.sanha.moneytalk.core.ui.component.CategorySelectDialog
 import com.sanha.moneytalk.feature.storerulesettings.StoreRuleSettingsViewModel
+import com.sanha.moneytalk.feature.storerulesettings.ui.coachmark.storeRuleCoachMarkSteps
+import kotlinx.coroutines.delay
 
 /**
  * 거래처 규칙 관리 화면.
@@ -64,6 +72,24 @@ fun StoreRuleSettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // ===== 코치마크 (거래처 규칙 온보딩) =====
+    val coachMarkRegistry = remember { CoachMarkTargetRegistry() }
+    val coachMarkState = remember { CoachMarkState() }
+    val allStoreRuleSteps = remember { storeRuleCoachMarkSteps() }
+    val hasSeenStoreRuleOnboarding by viewModel.hasSeenScreenOnboardingFlow("store_rule")
+        .collectAsStateWithLifecycle(initialValue = true)
+
+    LaunchedEffect(hasSeenStoreRuleOnboarding) {
+        if (!hasSeenStoreRuleOnboarding) {
+            delay(500)
+            val visibleSteps = allStoreRuleSteps.filter { it.targetKey in coachMarkRegistry.targets }
+            if (visibleSteps.isNotEmpty()) {
+                coachMarkState.show(visibleSteps)
+            }
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -77,7 +103,10 @@ fun StoreRuleSettingsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.showAddDialog() }) {
+                    IconButton(
+                        onClick = { viewModel.showAddDialog() },
+                        modifier = Modifier.onboardingTarget("store_rule_add", coachMarkRegistry)
+                    ) {
                         Icon(
                             Icons.Default.Add,
                             contentDescription = stringResource(R.string.common_add)
@@ -161,6 +190,13 @@ fun StoreRuleSettingsScreen(
             }
         }
     }
+
+    CoachMarkOverlay(
+        state = coachMarkState,
+        targetRegistry = coachMarkRegistry,
+        onComplete = { viewModel.markScreenOnboardingSeen("store_rule") }
+    )
+    } // Box
 
     // 추가/편집 다이얼로그
     if (uiState.showAddDialog) {

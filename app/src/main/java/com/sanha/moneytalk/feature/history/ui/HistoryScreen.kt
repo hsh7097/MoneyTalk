@@ -42,6 +42,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.moneyTalkColors
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkState
+import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
+import com.sanha.moneytalk.core.ui.coachmark.onboardingTarget
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import androidx.compose.foundation.pager.HorizontalPager
@@ -55,7 +59,9 @@ import com.sanha.moneytalk.feature.transactionedit.TransactionEditActivity
 import com.sanha.moneytalk.MainViewModel
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
+import com.sanha.moneytalk.feature.history.ui.coachmark.historyCoachMarkSteps
 import com.sanha.moneytalk.feature.home.ui.component.ImportDataCtaSection
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -136,6 +142,28 @@ fun HistoryScreen(
         }
     }
 
+    // ===== 코치마크 (화면별 온보딩) =====
+    val coachMarkRegistry = remember { CoachMarkTargetRegistry() }
+    val coachMarkState = remember { CoachMarkState() }
+    val allHistorySteps = remember { historyCoachMarkSteps() }
+    val hasSeenHistoryOnboarding by viewModel.hasSeenScreenOnboardingFlow("history")
+        .collectAsStateWithLifecycle(initialValue = true)
+
+    LaunchedEffect(hasSeenHistoryOnboarding) {
+        if (!hasSeenHistoryOnboarding) {
+            delay(500)
+            val visibleSteps = allHistorySteps.filter { it.targetKey in coachMarkRegistry.targets }
+            if (visibleSteps.isNotEmpty()) {
+                coachMarkState.show(visibleSteps)
+            }
+        }
+    }
+
+    // 필터 BottomSheet 코치마크
+    val hasSeenFilterOnboarding by viewModel.hasSeenScreenOnboardingFlow("history_filter")
+        .collectAsStateWithLifecycle(initialValue = true)
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -158,26 +186,28 @@ fun HistoryScreen(
             )
 
             // 기간 선택 및 지출/수입 요약
-            PeriodSummaryCard(
-                year = uiState.selectedYear,
-                month = uiState.selectedMonth,
-                monthStartDay = uiState.monthStartDay,
-                totalExpense = uiState.filteredExpenseTotal,
-                totalIncome = uiState.filteredIncomeTotal,
-                onPreviousMonth = {
-                    coroutineScope.launch {
-                        pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                    }
-                },
-                onNextMonth = {
-                    coroutineScope.launch {
-                        val target = pagerState.currentPage + 1
-                        if (!MonthPagerUtils.isFutureMonth(target, uiState.monthStartDay)) {
-                            pagerState.animateScrollToPage(target)
+            Box(modifier = Modifier.onboardingTarget("history_period", coachMarkRegistry)) {
+                PeriodSummaryCard(
+                    year = uiState.selectedYear,
+                    month = uiState.selectedMonth,
+                    monthStartDay = uiState.monthStartDay,
+                    totalExpense = uiState.filteredExpenseTotal,
+                    totalIncome = uiState.filteredIncomeTotal,
+                    onPreviousMonth = {
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                        }
+                    },
+                    onNextMonth = {
+                        coroutineScope.launch {
+                            val target = pagerState.currentPage + 1
+                            if (!MonthPagerUtils.isFutureMonth(target, uiState.monthStartDay)) {
+                                pagerState.animateScrollToPage(target)
+                            }
                         }
                     }
-                }
-            )
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -185,6 +215,7 @@ fun HistoryScreen(
         // 검색 모드에서는 필터/탭 숨기기 (달력 의미 없음)
         if (!uiState.isSearchMode) {
             // 탭 (목록/달력) + 검색/추가/필터 아이콘
+            Box(modifier = Modifier.onboardingTarget("history_view_mode", coachMarkRegistry)) {
             FilterTabRow(
                 currentMode = viewMode,
                 onModeChange = { viewMode = it },
@@ -212,8 +243,11 @@ fun HistoryScreen(
                 onSearchClick = { viewModel.enterSearchMode() },
                 onAddClick = {
                     TransactionEditActivity.open(context)
-                }
+                },
+                hasSeenFilterOnboarding = hasSeenFilterOnboarding,
+                onFilterCoachMarkComplete = { viewModel.markScreenOnboardingSeen("history_filter") }
             )
+            } // Box (history_view_mode)
         }
 
         val isBannerAdEnabled by mainViewModel.adManager.isBannerAdEnabledFlow
@@ -309,7 +343,14 @@ fun HistoryScreen(
         if (isBannerAdEnabled) {
             BannerAdCompose(adUnitId = BannerAdIds.HISTORY)
         }
-    }
+    } // Column
+
+    CoachMarkOverlay(
+        state = coachMarkState,
+        targetRegistry = coachMarkRegistry,
+        onComplete = { viewModel.markScreenOnboardingSeen("history") }
+    )
+    } // Box
 
     uiState.selectedIncome?.let { income ->
         IncomeDetailDialog(
