@@ -1,5 +1,7 @@
 package com.sanha.moneytalk.core.ui.coachmark
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Modifier
@@ -23,11 +25,17 @@ class CoachMarkTargetRegistry {
     fun register(key: String, bounds: Rect) {
         _targets[key] = bounds
     }
+
+    /** 타겟 좌표 제거 (Composable dispose 시 호출) */
+    fun unregister(key: String) {
+        _targets.remove(key)
+    }
 }
 
 /**
  * 코치마크 스포트라이트 대상으로 등록하는 Modifier.
  * 이 Modifier가 붙은 Composable의 위치가 [CoachMarkTargetRegistry]에 기록된다.
+ * Composable이 dispose되면 자동으로 레지스트리에서 제거된다.
  *
  * ```kotlin
  * val registry = remember { CoachMarkTargetRegistry() }
@@ -39,7 +47,11 @@ class CoachMarkTargetRegistry {
  * CoachMarkOverlay(state = coachMarkState, targetRegistry = registry, ...)
  * ```
  */
+@Composable
 fun Modifier.onboardingTarget(key: String, registry: CoachMarkTargetRegistry): Modifier {
+    DisposableEffect(key) {
+        onDispose { registry.unregister(key) }
+    }
     return this.onGloballyPositioned { coordinates ->
         registry.register(key, coordinates.boundsInRoot())
     }
