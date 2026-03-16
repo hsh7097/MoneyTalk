@@ -505,7 +505,7 @@ fun TransactionListView(
                 val childStart = headerIdx + 1
                 val childCount = nextHeaderIdx - childStart
 
-                stickyHeader(key = "header_${header.title}") {
+                stickyHeader(key = "header_$headerIdx") {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
