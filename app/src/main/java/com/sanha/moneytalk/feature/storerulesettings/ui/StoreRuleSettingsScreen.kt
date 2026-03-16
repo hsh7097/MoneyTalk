@@ -81,7 +81,7 @@ fun StoreRuleSettingsScreen(
 
     LaunchedEffect(hasSeenStoreRuleOnboarding) {
         if (!hasSeenStoreRuleOnboarding) {
-            delay(500)
+            delay(1000)
             val visibleSteps = allStoreRuleSteps.filter { it.targetKey in coachMarkRegistry.targets }
             if (visibleSteps.isNotEmpty()) {
                 coachMarkState.show(visibleSteps)

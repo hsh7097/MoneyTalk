@@ -169,31 +169,30 @@ class MmsContentObserver @Inject constructor(
 
         MoneyTalkLogger.i("[MmsObserver] MMS 처리 시작: addr=$address, len=${body.length}")
 
-        var instantSuccess = false
         try {
             val result = instantProcessor.processAndSave(address, body, timestampMillis)
-            when (result) {
+            return when (result) {
                 is SmsInstantProcessor.Result.Expense -> {
-                    instantSuccess = true
                     MoneyTalkLogger.i("[MmsObserver] 즉시 지출 저장: ${result.entity.storeName} ${result.entity.amount}원")
+                    CandidateOutcome(instantSuccess = true)
                 }
                 is SmsInstantProcessor.Result.Income -> {
-                    instantSuccess = true
                     MoneyTalkLogger.i("[MmsObserver] 즉시 수입 저장: ${result.entity.amount}원")
+                    CandidateOutcome(instantSuccess = true)
                 }
-                is SmsInstantProcessor.Result.Skipped ->
+                is SmsInstantProcessor.Result.Skipped -> {
                     MoneyTalkLogger.i("[MmsObserver] 비결제 또는 미매칭 -> 전체 동기화 대기")
-                is SmsInstantProcessor.Result.Error ->
+                    CandidateOutcome(shouldTriggerSync = true)
+                }
+                is SmsInstantProcessor.Result.Error -> {
                     MoneyTalkLogger.w("[MmsObserver] 즉시 처리 실패: ${result.message}")
+                    CandidateOutcome(shouldTriggerSync = true)
+                }
             }
         } catch (e: Exception) {
             MoneyTalkLogger.e("[MmsObserver] 즉시 처리 예외: ${e.message}")
+            return CandidateOutcome(shouldTriggerSync = true)
         }
-
-        return CandidateOutcome(
-            instantSuccess = instantSuccess,
-            shouldTriggerSync = true
-        )
     }
 
     /** 5분 경과 dedup 항목 제거 */

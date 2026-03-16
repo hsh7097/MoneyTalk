@@ -463,6 +463,10 @@
     <string name="transaction_card_fixed_tag">Fixed</string>
     <string name="transaction_edit_apply_category_to_all">Apply to all same store</string>
     <string name="transaction_edit_apply_fixed_to_all">Apply to all same store</string>
+    <string name="transaction_edit_rule_keyword_label">Match keyword</string>
+    <string name="transaction_edit_rule_keyword_hint">Applies to all transactions containing this keyword</string>
+    <string name="transaction_edit_keyword_guide">Rules apply to all transactions whose store name contains the keyword.\ne.g. \'Samsung\' matches \'Samsung134\', \'Samsung 8613\'</string>
+    <string name="transaction_edit_keyword_guide_confirm">Got it</string>
     <string name="transaction_edit_type_label">Type</string>
 
     <!-- Daily transaction list Activity -->

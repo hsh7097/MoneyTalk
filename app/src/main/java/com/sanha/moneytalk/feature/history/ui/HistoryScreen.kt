@@ -3,12 +3,14 @@ package com.sanha.moneytalk.feature.history.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -151,7 +153,7 @@ fun HistoryScreen(
 
     LaunchedEffect(hasSeenHistoryOnboarding) {
         if (!hasSeenHistoryOnboarding) {
-            delay(500)
+            delay(1000)
             val visibleSteps = allHistorySteps.filter { it.targetKey in coachMarkRegistry.targets }
             if (visibleSteps.isNotEmpty()) {
                 coachMarkState.show(visibleSteps)
@@ -376,6 +378,7 @@ enum class ViewMode {
  * 통합 거래 목록 뷰
  * ViewModel에서 가공된 TransactionListItem 리스트를 순수 렌더링만 담당
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TransactionListView(
     items: List<TransactionListItem>,
@@ -491,37 +494,59 @@ fun TransactionListView(
                 }
             }
 
-            items(
-                count = items.size,
-                key = { index ->
-                    when (val item = items[index]) {
-                        is TransactionListItem.Header -> "header_$index"
-                        is TransactionListItem.ExpenseItem -> "expense_${item.expense.id}"
-                        is TransactionListItem.IncomeItem -> "income_${item.income.id}"
+            // Sticky 헤더: 그룹 헤더를 상단에 고정하여 스크롤 시에도 날짜 확인 가능
+            val headerIndices = items.mapIndexedNotNull { index, item ->
+                if (item is TransactionListItem.Header) index else null
+            }
+
+            headerIndices.forEachIndexed { groupIdx, headerIdx ->
+                val header = items[headerIdx] as TransactionListItem.Header
+                val nextHeaderIdx = headerIndices.getOrNull(groupIdx + 1) ?: items.size
+                val childStart = headerIdx + 1
+                val childCount = nextHeaderIdx - childStart
+
+                stickyHeader(key = "header_${header.title}") {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.background)
+                    ) {
+                        TransactionGroupHeaderCompose(info = header)
                     }
                 }
-            ) { index ->
-                when (val item = items[index]) {
-                    is TransactionListItem.Header -> {
-                        TransactionGroupHeaderCompose(info = item)
-                    }
 
-                    is TransactionListItem.ExpenseItem -> {
-                        TransactionCardCompose(
-                            info = item.cardInfo,
-                            onClick = {
-                                TransactionEditActivity.open(context, expenseId = item.expense.id)
-                            }
-                        )
+                items(
+                    count = childCount,
+                    key = { childIdx ->
+                        val actualIdx = childStart + childIdx
+                        when (val item = items[actualIdx]) {
+                            is TransactionListItem.ExpenseItem -> "expense_${item.expense.id}"
+                            is TransactionListItem.IncomeItem -> "income_${item.income.id}"
+                            else -> "item_$actualIdx"
+                        }
                     }
+                ) { childIdx ->
+                    val actualIdx = childStart + childIdx
+                    when (val item = items[actualIdx]) {
+                        is TransactionListItem.ExpenseItem -> {
+                            TransactionCardCompose(
+                                info = item.cardInfo,
+                                onClick = {
+                                    TransactionEditActivity.open(context, expenseId = item.expense.id)
+                                }
+                            )
+                        }
 
-                    is TransactionListItem.IncomeItem -> {
-                        TransactionCardCompose(
-                            info = item.cardInfo,
-                            onClick = {
-                                TransactionEditActivity.open(context, incomeId = item.income.id)
-                            }
-                        )
+                        is TransactionListItem.IncomeItem -> {
+                            TransactionCardCompose(
+                                info = item.cardInfo,
+                                onClick = {
+                                    TransactionEditActivity.open(context, incomeId = item.income.id)
+                                }
+                            )
+                        }
+
+                        else -> { /* Header — already rendered as stickyHeader */ }
                     }
                 }
             }

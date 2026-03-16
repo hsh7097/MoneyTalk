@@ -149,7 +149,7 @@ fun FilterBottomSheet(
 
     LaunchedEffect(hasSeenFilterOnboarding) {
         if (!hasSeenFilterOnboarding) {
-            delay(500)
+            delay(1000)
             val visibleSteps = allFilterSteps.filter { it.targetKey in filterCoachMarkRegistry.targets }
             if (visibleSteps.isNotEmpty()) {
                 filterCoachMarkState.show(visibleSteps)

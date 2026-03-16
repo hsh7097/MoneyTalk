@@ -490,9 +490,18 @@ class MainViewModel @Inject constructor(
         smsSyncCoordinator.setUserExcludeKeywords(userExcludeKeywords)
         SmsIncomeParser.setUserExcludeKeywords(userExcludeKeywords)
 
+        // DB의 모든 smsId 로드 (Fuzzy Matching용)
+        _uiState.update { it.copy(syncProgress = "기존 내역 확인 중...") }
+        val allExistingSmsIds = coroutineScope {
+            val expenseIds = async { expenseRepository.getAllSmsIds() }
+            val incomeIds = async { incomeRepository.getAllSmsIds() }
+            expenseIds.await() + incomeIds.await()
+        }.toSet()
+        val existingContentMap = buildContentKeyMap(allExistingSmsIds)
+
         // Step 1: SMS 읽기 + 중복 제거
         val pendingReconciliationIds = SmsInstantProcessor.snapshotPendingReconciliationIds()
-        val smsInputs = readAndFilterSms(targetMonthRange, pendingReconciliationIds)
+        val smsInputs = readAndFilterSms(targetMonthRange, pendingReconciliationIds, allExistingSmsIds, existingContentMap)
         MoneyTalkLogger.i("syncSmsV2 Step1 완료: 신규 SMS ${smsInputs.size}건")
         if (smsInputs.isEmpty()) {
             if (updateLastSyncTime) {
@@ -510,17 +519,15 @@ class MainViewModel @Inject constructor(
         val syncResult = processSmsPipeline(smsInputs, silent)
 
         val reconciledExpenseIds = syncResult.expenses
-            .map { it.input.id }
-            .filter { it in pendingReconciliationIds }
+            .flatMap { parsed -> findFuzzyMatchesInSet(parsed.input.id, pendingReconciliationIds) }
             .toSet()
         val reconciledIncomeIds = syncResult.incomes
-            .map { it.id }
-            .filter { it in pendingReconciliationIds }
+            .flatMap { income -> findFuzzyMatchesInSet(income.id, pendingReconciliationIds) }
             .toSet()
 
         // Step 3: DB 저장
-        val expenseSaveResult = saveExpenses(syncResult.expenses)
-        val incomeSaveResult = saveIncomes(syncResult.incomes)
+        val expenseSaveResult = saveExpenses(syncResult.expenses, existingContentMap)
+        val incomeSaveResult = saveIncomes(syncResult.incomes, existingContentMap)
 
         // Step 4: 후처리 (카테고리 분류, 패턴 정리, lastSyncTime 갱신)
         val cleanup = postSyncCleanup(updateLastSyncTime, targetMonthRange.second)
@@ -545,7 +552,9 @@ class MainViewModel @Inject constructor(
      */
     private suspend fun readAndFilterSms(
         targetMonthRange: Pair<Long, Long>,
-        pendingReconciliationIds: Set<String> = emptySet()
+        pendingReconciliationIds: Set<String> = emptySet(),
+        allExistingIds: Set<String>,
+        existingContentMap: Map<String, List<Long>>
     ): List<SmsInput> {
         val allSmsList = smsReaderV2.readAllMessagesByDateRange(
             contentResolver,
@@ -557,33 +566,86 @@ class MainViewModel @Inject constructor(
         if (allSmsList.isEmpty()) return emptyList()
 
         _uiState.update { it.copy(syncProgress = "이미 등록된 내역 확인 중...") }
-        val smsIdChunks = allSmsList
-            .map { it.id }
-            .chunked(SMS_ID_LOOKUP_CHUNK_SIZE)
-        val allExistingIds = coroutineScope {
-            val expenseExistingDeferred = async {
-                val ids = HashSet<String>()
-                for (chunk in smsIdChunks) {
-                    ids.addAll(expenseRepository.getExistingSmsIds(chunk))
-                }
-                ids
-            }
-            val incomeExistingDeferred = async {
-                val ids = HashSet<String>()
-                for (chunk in smsIdChunks) {
-                    ids.addAll(incomeRepository.getExistingSmsIds(chunk))
-                }
-                ids
-            }
-            expenseExistingDeferred.await() + incomeExistingDeferred.await()
-        }
+
+        // 타임스탬프 불일치 대비: pendingReconciliationIds에서 컨텐츠 키(address_bodyHash) 추출
+        val pendingContentMap = buildContentKeyMap(pendingReconciliationIds)
+
+        val FUZZY_TIME_MARGIN_MS = 60_000L // 1분 오차 허용
 
         val newSmsList = allSmsList.filter { sms ->
-            sms.id !in allExistingIds || sms.id in pendingReconciliationIds
+            val contentKey = "${SmsFilter.normalizeAddress(sms.address)}_${sms.body.hashCode()}"
+            val existsInDbExact = sms.id in allExistingIds
+            
+            // Fuzzy Matching: 동일 내용 + 1분 이내 시간 차이
+            val existingTimes = existingContentMap[contentKey] ?: emptyList()
+            val existsInDbFuzzy = existingTimes.any { Math.abs(it - sms.date) <= FUZZY_TIME_MARGIN_MS }
+            
+            val existsInDb = existsInDbExact || existsInDbFuzzy
+
+            // Pending (재검증 대상) 여부 확인 (Fuzzy 적용)
+            val pendingTimes = pendingContentMap[contentKey] ?: emptyList()
+            val existsInPending = pendingTimes.any { Math.abs(it - sms.date) <= FUZZY_TIME_MARGIN_MS }
+
+            when {
+                // DB에 있고 재검증 대상이면 → 포함 (LLM 업데이트를 위해)
+                existsInDb && existsInPending -> true
+                // DB에만 있으면 → 스킵
+                existsInDb -> false
+                // 새 SMS
+                else -> true
+            }
         }
         MoneyTalkLogger.i("syncSmsV2 중복 제거: ${allSmsList.size}건 → ${newSmsList.size}건")
 
         return newSmsList
+    }
+
+    /**
+     * smsId 목록으로부터 ContentKey(addr_hash) -> List<Timestamp> 맵 빌드
+     */
+    private fun buildContentKeyMap(smsIds: Collection<String>): Map<String, List<Long>> {
+        return smsIds.mapNotNull { id ->
+            val parts = id.split("_")
+            if (parts.size >= 3) {
+                val contentKey = "${parts.first()}_${parts.last()}"
+                val timestamp = parts[1].toLongOrNull() ?: 0L
+                contentKey to timestamp
+            } else null
+        }.groupBy({ it.first }, { it.second })
+    }
+
+    /**
+     * 특정 smsId와 Fuzzy 매칭되는 대상 Set 내부의 실제 smsId 목록을 반환.
+     *
+     * pendingReconciliationIds 정리 시에는 "현재 다시 읽은 smsId"가 아니라
+     * "즉시 저장 시 pending에 등록된 원래 smsId"를 제거해야 하므로 실제 매칭 ID가 필요하다.
+     */
+    private fun findFuzzyMatchesInSet(smsId: String, targetSet: Set<String>): Set<String> {
+        if (smsId in targetSet) return setOf(smsId)
+        val parts = smsId.split("_")
+        if (parts.size < 3) return emptySet()
+
+        val contentKey = "${parts.first()}_${parts.last()}"
+        val timestamp = parts[1].toLongOrNull() ?: return emptySet()
+
+        return targetSet.any { targetId ->
+            val tParts = targetId.split("_")
+            if (tParts.size >= 3) {
+                val tContentKey = "${tParts.first()}_${tParts.last()}"
+                val tTimestamp = tParts[1].toLongOrNull() ?: 0L
+                tContentKey == contentKey && Math.abs(tTimestamp - timestamp) <= 60_000L
+            } else false
+        }.let { hasMatch ->
+            if (!hasMatch) return emptySet()
+            targetSet.filterTo(mutableSetOf()) { targetId ->
+                val tParts = targetId.split("_")
+                if (tParts.size >= 3) {
+                    val tContentKey = "${tParts.first()}_${tParts.last()}"
+                    val tTimestamp = tParts[1].toLongOrNull() ?: 0L
+                    tContentKey == contentKey && Math.abs(tTimestamp - timestamp) <= 60_000L
+                } else false
+            }
+        }
     }
 
     /**
@@ -628,7 +690,8 @@ class MainViewModel @Inject constructor(
      * Phase 3: 분류 완료된 엔티티를 DB에 배치 저장
      */
     private suspend fun saveExpenses(
-        expenses: List<com.sanha.moneytalk.core.sms2.SmsParseResult>
+        expenses: List<com.sanha.moneytalk.core.sms2.SmsParseResult>,
+        existingContentMap: Map<String, List<Long>>
     ): SaveResult {
         if (expenses.isEmpty()) return SaveResult()
 
@@ -736,9 +799,30 @@ class MainViewModel @Inject constructor(
         val reconciledSmsIds = mutableSetOf<String>()
 
         for (i in entities.indices) {
-            val entity = entities[i]
-            val existingExpense = existingExpensesBySmsId[entity.smsId]
-            val existingIncome = existingIncomesBySmsId[entity.smsId]
+            var entity = entities[i]
+            
+            // 1. 정확한 ID로 먼저 확인
+            var existingExpense = existingExpensesBySmsId[entity.smsId]
+            var existingIncome = existingIncomesBySmsId[entity.smsId]
+
+            // 2. 정확한 ID가 없으면 Fuzzy 매칭 시도
+            if (existingExpense == null && existingIncome == null) {
+                val parts = entity.smsId.split("_")
+                if (parts.size >= 3) {
+                    val contentKey = "${parts.first()}_${parts.last()}"
+                    val timestamp = parts[1].toLongOrNull() ?: 0L
+                    val fuzzyTimestamp = existingContentMap[contentKey]?.find { 
+                        Math.abs(it - timestamp) <= 60_000L 
+                    }
+                    if (fuzzyTimestamp != null) {
+                        val fuzzyId = "${parts.first()}_${fuzzyTimestamp}_${parts.last()}"
+                        existingExpense = expenseRepository.getExpenseBySmsId(fuzzyId)
+                        if (existingExpense == null) {
+                            existingIncome = incomeRepository.getIncomeBySmsId(fuzzyId)
+                        }
+                    }
+                }
+            }
 
             if (existingExpense != null || existingIncome != null) {
                 reconciledCount++
@@ -779,7 +863,8 @@ class MainViewModel @Inject constructor(
      * 수입 SMS를 SmsIncomeParser로 파싱하여 DB에 배치 저장
      */
     private suspend fun saveIncomes(
-        incomes: List<SmsInput>
+        incomes: List<SmsInput>,
+        existingContentMap: Map<String, List<Long>>
     ): SaveResult {
         if (incomes.isEmpty()) return SaveResult()
 
@@ -798,7 +883,6 @@ class MainViewModel @Inject constructor(
                 val dateTime = SmsIncomeParser.extractDateTime(income.body, income.date)
 
                 if (amount > 0) {
-                    val category = IncomeCategoryMapper.categoryForType(incomeType)
                     batchSmsIds += income.id
                     batch.add(
                         IncomeEntity(
@@ -811,7 +895,7 @@ class MainViewModel @Inject constructor(
                             dateTime = DateUtils.parseDateTime(dateTime),
                             originalSms = income.body,
                             senderAddress = SmsFilter.normalizeAddress(income.address),
-                            category = category
+                            category = IncomeCategoryMapper.categoryForType(incomeType)
                         )
                     )
                 }
@@ -828,10 +912,30 @@ class MainViewModel @Inject constructor(
         val crossTypeExpenseIdsToDelete = mutableSetOf<Long>()
 
         for (i in batch.indices) {
-            val entity = batch[i]
+            var entity = batch[i]
             val smsId = entity.smsId ?: continue
-            val existingIncome = existingIncomesBySmsId[smsId]
-            val existingExpense = existingExpensesBySmsId[smsId]
+            
+            var existingIncome = existingIncomesBySmsId[smsId]
+            var existingExpense = existingExpensesBySmsId[smsId]
+
+            // Fuzzy 매칭
+            if (existingIncome == null && existingExpense == null) {
+                val parts = smsId.split("_")
+                if (parts.size >= 3) {
+                    val contentKey = "${parts.first()}_${parts.last()}"
+                    val timestamp = parts[1].toLongOrNull() ?: 0L
+                    val fuzzyTimestamp = existingContentMap[contentKey]?.find { 
+                        Math.abs(it - timestamp) <= 60_000L 
+                    }
+                    if (fuzzyTimestamp != null) {
+                        val fuzzyId = "${parts.first()}_${fuzzyTimestamp}_${parts.last()}"
+                        existingIncome = incomeRepository.getIncomeBySmsId(fuzzyId)
+                        if (existingIncome == null) {
+                            existingExpense = expenseRepository.getExpenseBySmsId(fuzzyId)
+                        }
+                    }
+                }
+            }
 
             if (existingIncome != null || existingExpense != null) {
                 reconciledCount++
@@ -967,8 +1071,12 @@ class MainViewModel @Inject constructor(
             }
         }
 
-        // HomeVM/HistoryVM에 데이터 변경 통지
-        notifyDataChanged()
+        // 실제 데이터 변경이 있을 때만 HomeVM/HistoryVM에 통지 (불필요한 UI 갱신 방지)
+        val hasDataChange = result.expenseCount > 0 || result.incomeCount > 0 ||
+            result.reconciledExpenseCount > 0 || result.reconciledIncomeCount > 0
+        if (hasDataChange) {
+            notifyDataChanged()
+        }
 
         val resultMessage = buildResultMessage(result.expenseCount, result.incomeCount)
 

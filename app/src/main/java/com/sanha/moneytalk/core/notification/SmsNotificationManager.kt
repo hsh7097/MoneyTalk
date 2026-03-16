@@ -29,7 +29,9 @@ class SmsNotificationManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     companion object {
-        const val CHANNEL_ID = "sms_transaction"
+        /** v2: IMPORTANCE_HIGH로 변경 (헤드업 알림 지원). 기존 채널은 삭제 */
+        const val CHANNEL_ID = "sms_transaction_v2"
+        private const val OLD_CHANNEL_ID = "sms_transaction"
         private var notificationId = 1000
     }
 
@@ -38,15 +40,19 @@ class SmsNotificationManager @Inject constructor(
     /** Application.onCreate()에서 호출하여 알림 채널 등록 */
     fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = context.getSystemService(NotificationManager::class.java)
+
+            // 기존 IMPORTANCE_DEFAULT 채널 삭제 (importance는 코드로 변경 불가)
+            manager.deleteNotificationChannel(OLD_CHANNEL_ID)
+
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 context.getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = context.getString(R.string.notification_channel_description)
                 setShowBadge(true)
             }
-            val manager = context.getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
         }
     }
@@ -85,7 +91,7 @@ class SmsNotificationManager @Inject constructor(
             .setContentText(body)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

@@ -182,7 +182,7 @@ fun SettingsScreen(
 
     LaunchedEffect(hasSeenSettingsOnboarding) {
         if (!hasSeenSettingsOnboarding) {
-            delay(500)
+            delay(1000)
             val visibleSteps = allSettingsSteps.filter { it.targetKey in coachMarkRegistry.targets }
             if (visibleSteps.isNotEmpty()) {
                 coachMarkState.show(visibleSteps)

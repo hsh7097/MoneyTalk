@@ -31,6 +31,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -179,6 +180,10 @@ fun TransactionEditScreen(
         }
     }
 
+    // ===== 키워드 가이드 (일괄 적용 최초 사용 시) =====
+    val hasSeenKeywordGuide by viewModel.hasSeenScreenOnboardingFlow("rule_keyword_guide")
+        .collectAsStateWithLifecycle(initialValue = true)
+
     // ===== 코치마크 (거래 편집 온보딩) =====
     val coachMarkRegistry = remember { CoachMarkTargetRegistry() }
     val coachMarkState = remember { CoachMarkState() }
@@ -188,7 +193,7 @@ fun TransactionEditScreen(
 
     LaunchedEffect(hasSeenEditOnboarding, uiState.isLoading, uiState.isNew) {
         if (!hasSeenEditOnboarding && !uiState.isLoading && !uiState.isNew) {
-            delay(500)
+            delay(1000)
             val visibleSteps = allEditSteps.filter { it.targetKey in coachMarkRegistry.targets }
             if (visibleSteps.isNotEmpty()) {
                 coachMarkState.show(visibleSteps)
@@ -351,6 +356,23 @@ fun TransactionEditScreen(
                             label = stringResource(R.string.transaction_edit_apply_fixed_to_all),
                             onCheckedChange = { viewModel.updateApplyFixedToAll(it) }
                         )
+
+                        // 키워드 입력 필드 (카테고리 또는 고정지출 일괄 적용 체크 시)
+                        if (uiState.applyCategoryToAll || uiState.applyFixedToAll) {
+                            RuleKeywordField(
+                                keyword = uiState.ruleKeyword,
+                                onKeywordChange = { viewModel.updateRuleKeyword(it) }
+                            )
+
+                            // 최초 사용 시 가이드 카드
+                            if (!hasSeenKeywordGuide) {
+                                KeywordGuideCard(
+                                    onDismiss = {
+                                        viewModel.markScreenOnboardingSeen("rule_keyword_guide")
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -780,6 +802,90 @@ private fun ApplyToAllCheckbox(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+/**
+ * 거래처 규칙 매칭 키워드 입력 필드.
+ * "동일 거래처에 적용" 체크 시 노출되며, 이 키워드가 포함된 모든 거래에 규칙이 적용된다.
+ */
+@Composable
+private fun RuleKeywordField(
+    keyword: String,
+    onKeywordChange: (String) -> Unit
+) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 36.dp, top = 4.dp, bottom = 4.dp)
+    ) {
+        OutlinedTextField(
+            value = keyword,
+            onValueChange = onKeywordChange,
+            label = {
+                Text(
+                    text = stringResource(R.string.transaction_edit_rule_keyword_label),
+                    color = primaryColor
+                )
+            },
+            supportingText = {
+                Text(
+                    text = stringResource(R.string.transaction_edit_rule_keyword_hint),
+                    color = primaryColor.copy(alpha = 0.7f)
+                )
+            },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                color = primaryColor
+            ),
+            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = primaryColor,
+                unfocusedBorderColor = primaryColor.copy(alpha = 0.5f),
+                cursorColor = primaryColor
+            )
+        )
+    }
+}
+
+/**
+ * 키워드 매칭 안내 가이드 카드.
+ * 최초 1회만 노출되며, 확인 버튼으로 닫을 수 있다.
+ */
+@Composable
+private fun KeywordGuideCard(
+    onDismiss: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 36.dp, top = 4.dp, bottom = 8.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = stringResource(R.string.transaction_edit_keyword_guide),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = onDismiss) {
+                    Text(
+                        text = stringResource(R.string.transaction_edit_keyword_guide_confirm),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
     }
 }
 

@@ -180,7 +180,7 @@ fun HomeScreen(
 
     LaunchedEffect(hasSeenHomeOnboarding, isCurrentPageLoading, hasData) {
         if (!hasSeenHomeOnboarding && !isCurrentPageLoading && hasData) {
-            delay(500) // 레이아웃 안정화 대기
+            delay(1000) // 레이아웃 안정화 + 화면 인지 여유
             val visibleSteps = allHomeSteps.filter { it.targetKey in coachMarkRegistry.targets }
             if (visibleSteps.isNotEmpty()) {
                 coachMarkState.show(visibleSteps)
