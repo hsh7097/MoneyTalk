@@ -78,7 +78,7 @@ fun ChatScreen(
 
     LaunchedEffect(hasSeenChatOnboarding, uiState.isInChatRoom) {
         if (!hasSeenChatOnboarding && !uiState.isInChatRoom) {
-            delay(500)
+            delay(1000)
             val visibleSteps = allChatSteps.filter { it.targetKey in coachMarkRegistry.targets }
             if (visibleSteps.isNotEmpty()) {
                 coachMarkState.show(visibleSteps)

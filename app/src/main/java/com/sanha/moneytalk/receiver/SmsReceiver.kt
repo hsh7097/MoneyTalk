@@ -85,11 +85,12 @@ class SmsReceiver : BroadcastReceiver() {
                 MoneyTalkLogger.e("[SmsReceiver] 즉시 처리 예외: ${e.message}")
             } finally {
                 if (instantSuccess) {
-                    // 즉시 반영 후, 배치 파이프라인으로 동일 smsId를 다시 검증한다.
+                    // 즉시 저장 성공 → UI 갱신만 트리거 (중복 적재 방지)
+                    // 배치 동기화(SMS_RECEIVED)는 트리거하지 않는다.
+                    // 다음 onAppResume()에서 증분 동기화가 재검증/Gemini 분류 보완 수행.
                     dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
-                    dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.SMS_RECEIVED)
                 } else {
-                    // 미처리 → 전체 동기화 트리거
+                    // 미처리 (regex 미매칭 등) → 배치 동기화에서 벡터/LLM 파이프라인으로 처리
                     dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.SMS_RECEIVED)
                 }
                 pendingResult.finish()

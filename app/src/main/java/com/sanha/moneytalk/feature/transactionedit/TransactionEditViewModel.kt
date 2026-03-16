@@ -52,6 +52,8 @@ data class TransactionEditUiState(
     val applyCategoryToAll: Boolean = false,
     /** 고정지출 변경을 동일 거래처에 일괄 적용 */
     val applyFixedToAll: Boolean = false,
+    /** 거래처 규칙 매칭 키워드 (일괄 적용 시 사용) */
+    val ruleKeyword: String = "",
     val isSaved: Boolean = false,
     val isDeleted: Boolean = false
 ) {
@@ -101,6 +103,8 @@ class TransactionEditViewModel @Inject constructor(
     /** 원본 entity (수정 시 smsId 등 보존용) */
     private var originalExpenseEntity: ExpenseEntity? = null
     private var originalIncomeEntity: IncomeEntity? = null
+    /** 편집 진입 시점에 매칭된 거래처 규칙 (키워드 변경 시 이전 규칙 정리용) */
+    private var originalMatchedRule: StoreRuleEntity? = null
 
     /** 최초 로드 시 타입 (크로스 테이블 이동 판단용) */
     private var originalTransactionType: TransactionType = TransactionType.EXPENSE
@@ -130,13 +134,15 @@ class TransactionEditViewModel @Inject constructor(
                 // StoreRule이 있으면 "동일 거래처 일괄 적용" 체크박스만 사전 체크
                 // DB 값(category, isFixed)은 소급 적용 시 이미 반영되어 있으므로 override하지 않음
                 // → 사용자가 개별 변경한 DB 값을 존중
-                val exactRule = if (type == TransactionType.EXPENSE) {
-                    storeRuleRepository.getByKeyword(expense.storeName.trim())
+                // contains 매칭으로 규칙 조회 (keyword가 storeName에 포함되는 규칙)
+                val matchingRule = if (type == TransactionType.EXPENSE) {
+                    storeRuleRepository.findMatchingRule(expense.storeName.trim())
                 } else {
                     null
                 }
-                val hasCategoryRule = exactRule?.category != null
-                val hasFixedRule = exactRule?.isFixed != null
+                originalMatchedRule = matchingRule
+                val hasCategoryRule = matchingRule?.category != null
+                val hasFixedRule = matchingRule?.isFixed != null
 
                 _uiState.update {
                     it.copy(
@@ -155,7 +161,8 @@ class TransactionEditViewModel @Inject constructor(
                         isFixed = expense.isFixed,
                         transferDirection = direction,
                         applyCategoryToAll = hasCategoryRule,
-                        applyFixedToAll = hasFixedRule
+                        applyFixedToAll = hasFixedRule,
+                        ruleKeyword = matchingRule?.keyword ?: expense.storeName.trim()
                     )
                 }
             } else {
@@ -169,6 +176,7 @@ class TransactionEditViewModel @Inject constructor(
             val income = incomeRepository.getIncomeById(id)
             if (income != null) {
                 originalIncomeEntity = income
+                originalMatchedRule = null
                 val cal = Calendar.getInstance().apply { timeInMillis = income.dateTime }
                 originalTransactionType = TransactionType.INCOME
                 _uiState.update {
@@ -197,6 +205,7 @@ class TransactionEditViewModel @Inject constructor(
 
     private fun initNewExpense() {
         val cal = Calendar.getInstance().apply { timeInMillis = initialDate }
+        originalMatchedRule = null
         originalTransactionType = TransactionType.EXPENSE
         _uiState.update {
             it.copy(
@@ -287,11 +296,33 @@ class TransactionEditViewModel @Inject constructor(
     }
 
     fun updateApplyCategoryToAll(value: Boolean) {
-        _uiState.update { it.copy(applyCategoryToAll = value) }
+        _uiState.update { state ->
+            state.copy(
+                applyCategoryToAll = value,
+                ruleKeyword = if (value && state.ruleKeyword.isBlank()) {
+                    state.storeName.trim()
+                } else {
+                    state.ruleKeyword
+                }
+            )
+        }
     }
 
     fun updateApplyFixedToAll(value: Boolean) {
-        _uiState.update { it.copy(applyFixedToAll = value) }
+        _uiState.update { state ->
+            state.copy(
+                applyFixedToAll = value,
+                ruleKeyword = if (value && state.ruleKeyword.isBlank()) {
+                    state.storeName.trim()
+                } else {
+                    state.ruleKeyword
+                }
+            )
+        }
+    }
+
+    fun updateRuleKeyword(value: String) {
+        _uiState.update { it.copy(ruleKeyword = value) }
     }
 
     fun save() {
@@ -373,25 +404,30 @@ class TransactionEditViewModel @Inject constructor(
                 }
 
                 val trimmedStore = state.storeName.trim()
-                if (!state.isNew && state.transactionType == TransactionType.EXPENSE && trimmedStore.isNotBlank()) {
+                val ruleKeyword = state.ruleKeyword.trim().ifBlank { trimmedStore }
+                if (!state.isNew && state.transactionType == TransactionType.EXPENSE && ruleKeyword.isNotBlank()) {
                     try {
-                        val existingRule = storeRuleRepository.getByKeyword(trimmedStore)
+                        val keywordRule = storeRuleRepository.getByKeyword(ruleKeyword)
+                        val previousRule = originalMatchedRule?.takeIf { matched ->
+                            !matched.keyword.equals(ruleKeyword, ignoreCase = true)
+                        } ?: keywordRule ?: originalMatchedRule
                         val newRule = if (state.applyCategoryToAll || state.applyFixedToAll) {
                             StoreRuleEntity(
-                                id = existingRule?.id ?: 0,
-                                keyword = trimmedStore,
+                                id = keywordRule?.id ?: previousRule?.id ?: 0,
+                                keyword = ruleKeyword,
                                 category = if (state.applyCategoryToAll) state.category else null,
                                 isFixed = if (state.applyFixedToAll) effectiveIsFixed else null,
-                                createdAt = existingRule?.createdAt ?: System.currentTimeMillis()
+                                createdAt = keywordRule?.createdAt ?: previousRule?.createdAt ?: System.currentTimeMillis()
                             )
                         } else {
                             null
                         }
 
                         storeRuleSyncService.applyRuleChange(
-                            previousRule = existingRule,
+                            previousRule = previousRule,
                             newRule = newRule
                         )
+                        originalMatchedRule = newRule
                     } catch (e: Exception) {
                         MoneyTalkLogger.w("일괄 적용 실패: ${e.message}")
                     }

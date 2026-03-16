@@ -23,10 +23,20 @@ class StoreRuleSyncService @Inject constructor(
         previousRule: StoreRuleEntity?,
         newRule: StoreRuleEntity?
     ) {
+        val shouldDeletePreviousRule = previousRule != null &&
+            newRule != null &&
+            previousRule.id != newRule.id &&
+            !previousRule.keyword.equals(newRule.keyword, ignoreCase = true)
+
         when {
             previousRule == null && newRule == null -> return
             newRule == null -> previousRule?.let { storeRuleRepository.deleteById(it.id) }
-            else -> storeRuleRepository.upsert(newRule)
+            else -> {
+                storeRuleRepository.upsert(newRule)
+                if (shouldDeletePreviousRule) {
+                    previousRule?.let { storeRuleRepository.deleteById(it.id) }
+                }
+            }
         }
 
         previousRule?.let { oldRule ->

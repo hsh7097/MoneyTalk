@@ -49,7 +49,8 @@ class SettingsDataStore @Inject constructor(
             "settings" to booleanPreferencesKey("has_seen_settings_onboarding_v1"),
             "store_rule" to booleanPreferencesKey("has_seen_store_rule_onboarding_v1"),
             "history_filter" to booleanPreferencesKey("has_seen_history_filter_onboarding_v1"),
-            "transaction_edit" to booleanPreferencesKey("has_seen_transaction_edit_onboarding_v1")
+            "transaction_edit" to booleanPreferencesKey("has_seen_transaction_edit_onboarding_v1"),
+            "rule_keyword_guide" to booleanPreferencesKey("has_seen_rule_keyword_guide_v1")
         )
     }
 
