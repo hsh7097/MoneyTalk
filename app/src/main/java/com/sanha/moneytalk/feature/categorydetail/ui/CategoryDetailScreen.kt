@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.feature.categorydetail.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -192,6 +193,7 @@ fun CategoryDetailScreen(
  *
  * 월 네비게이션 + 누적 추이 차트 + 거래 목록.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CategoryDetailPageContent(
     pageData: CategoryDetailPageData,
@@ -300,24 +302,70 @@ private fun CategoryDetailPageContent(
                 )
             }
         } else {
-            items(
-                items = pageData.transactionItems,
-                key = { item ->
+            val transactionItems = pageData.transactionItems
+            val headerIndices = transactionItems.mapIndexedNotNull { index, item ->
+                if (item is CategoryTransactionItem.Header) index else null
+            }
+
+            if (headerIndices.isEmpty()) {
+                items(
+                    items = transactionItems,
+                    key = { item ->
+                        when (item) {
+                            is CategoryTransactionItem.Header -> "header_${item.title}"
+                            is CategoryTransactionItem.ExpenseItem -> "expense_${item.expense.id}"
+                        }
+                    }
+                ) { item ->
                     when (item) {
-                        is CategoryTransactionItem.Header -> "header_${item.title}"
-                        is CategoryTransactionItem.ExpenseItem -> "expense_${item.expense.id}"
+                        is CategoryTransactionItem.Header -> {
+                            TransactionGroupHeaderCompose(info = item)
+                        }
+                        is CategoryTransactionItem.ExpenseItem -> {
+                            TransactionCardCompose(
+                                info = item.cardInfo,
+                                onClick = { onExpenseSelected(item.expense) }
+                            )
+                        }
                     }
                 }
-            ) { item ->
-                when (item) {
-                    is CategoryTransactionItem.Header -> {
-                        TransactionGroupHeaderCompose(info = item)
+            } else {
+                headerIndices.forEachIndexed { groupIndex, headerIndex ->
+                    val header = transactionItems[headerIndex] as CategoryTransactionItem.Header
+                    val nextHeaderIndex = headerIndices.getOrNull(groupIndex + 1) ?: transactionItems.size
+                    val childStart = headerIndex + 1
+                    val childCount = nextHeaderIndex - childStart
+
+                    stickyHeader(key = "header_$headerIndex") {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.background)
+                        ) {
+                            TransactionGroupHeaderCompose(info = header)
+                        }
                     }
-                    is CategoryTransactionItem.ExpenseItem -> {
-                        TransactionCardCompose(
-                            info = item.cardInfo,
-                            onClick = { onExpenseSelected(item.expense) }
-                        )
+
+                    items(
+                        count = childCount,
+                        key = { childIndex ->
+                            val actualIndex = childStart + childIndex
+                            when (val item = transactionItems[actualIndex]) {
+                                is CategoryTransactionItem.ExpenseItem -> "expense_${item.expense.id}"
+                                is CategoryTransactionItem.Header -> "item_$actualIndex"
+                            }
+                        }
+                    ) { childIndex ->
+                        val actualIndex = childStart + childIndex
+                        when (val item = transactionItems[actualIndex]) {
+                            is CategoryTransactionItem.ExpenseItem -> {
+                                TransactionCardCompose(
+                                    info = item.cardInfo,
+                                    onClick = { onExpenseSelected(item.expense) }
+                                )
+                            }
+                            is CategoryTransactionItem.Header -> Unit
+                        }
                     }
                 }
             }
