@@ -43,11 +43,13 @@ object NotificationContentParser {
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
 
-        // bigText > title+text > text > title 순으로 가장 풍부한 텍스트 사용
+        // text > bigText > title 순으로 사용.
+        // SMS 파이프라인의 길이 제한(130자)에 맞추기 위해 간결한 text를 우선 사용.
+        // bigText는 상세 정보(잔액, 시각 등)를 포함하여 130자를 초과할 수 있어
+        // SmsPreFilter에서 버려질 위험이 있다.
         val body = when {
-            bigText.isNotBlank() -> bigText
-            title.isNotBlank() && text.isNotBlank() -> "$title\n$text"
             text.isNotBlank() -> text
+            bigText.isNotBlank() -> bigText
             title.isNotBlank() -> title
             else -> return null
         }
