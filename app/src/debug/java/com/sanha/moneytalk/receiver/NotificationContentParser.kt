@@ -63,15 +63,15 @@ object NotificationContentParser {
     /**
      * 패키지명에서 알림 sender address 생성.
      *
-     * 예시:
-     * - "com.kakaobank.channel" → "NOTI_kakaobank"
-     * - "com.kbstar.kbbank" → "NOTI_kbbank"
-     * - "viva.republica.toss" → "NOTI_toss"
+     * "com." 접두사를 제거하고 "."을 "_"로 변환하여 유니크 키를 만든다.
      *
-     * 마지막 세그먼트를 사용하여 간결한 키를 만든다.
+     * 예시:
+     * - "com.kakaobank.channel" → "NOTI_kakaobank_channel"
+     * - "com.kbstar.kbbank" → "NOTI_kbstar_kbbank"
+     * - "viva.republica.toss" → "NOTI_viva_republica_toss"
      */
     private fun buildAddress(packageName: String): String {
-        val lastSegment = packageName.substringAfterLast(".")
-        return "NOTI_$lastSegment"
+        val stripped = packageName.removePrefix("com.")
+        return "NOTI_${stripped.replace('.', '_')}"
     }
 }

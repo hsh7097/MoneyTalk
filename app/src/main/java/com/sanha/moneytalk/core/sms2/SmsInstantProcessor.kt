@@ -168,6 +168,11 @@ class SmsInstantProcessor @Inject constructor(
         if (parsed == null) {
             // Regex 미매칭 → 전체 동기화에서 벡터/LLM 파이프라인으로 처리
             MoneyTalkLogger.i("[InstantSMS] regex 미매칭, 전체 동기화 대기: ${smsId.take(30)}")
+            // 비-SMS 소스(알림 등)는 디바이스 inbox에 없어 배치 동기화에서 누락됨.
+            // 대기 큐에 보관하여 다음 배치에서 벡터/LLM 파이프라인 합류.
+            if (address.startsWith("NOTI_")) {
+                addPendingNotification(smsInput)
+            }
             return Result.Skipped
         }
 

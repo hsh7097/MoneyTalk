@@ -2,7 +2,6 @@ package com.sanha.moneytalk.receiver
 
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import com.sanha.moneytalk.core.sms2.SmsInput
 import com.sanha.moneytalk.core.sms2.SmsInstantProcessor
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
@@ -129,18 +128,9 @@ class NotificationTransactionService : NotificationListenerService() {
                     )
                 }
                 is SmsInstantProcessor.Result.Skipped -> {
-                    MoneyTalkLogger.i("[NotiService] regex 미매칭 → 배치 파이프라인 대기 큐 등록")
-                    // 알림은 SMS inbox에 없으므로 대기 큐에 넣어 배치 동기화 시 합류
-                    val smsInput = SmsInput(
-                        id = "${parsed.address}_${parsed.timestamp}_${parsed.body.hashCode()}",
-                        body = parsed.body,
-                        address = parsed.address,
-                        date = parsed.timestamp
-                    )
-                    SmsInstantProcessor.addPendingNotification(smsInput)
-                    dataRefreshEvent.emitSuspend(
-                        DataRefreshEvent.RefreshType.SMS_RECEIVED
-                    )
+                    // 비결제 알림 → preFilter/incomeFilter에서 걸림 → 무시
+                    // 결제 의심 + regex 미매칭 → SmsInstantProcessor 내부에서 대기 큐에 자동 추가됨
+                    MoneyTalkLogger.i("[NotiService] 비결제 또는 regex 미매칭 → 스킵")
                 }
                 is SmsInstantProcessor.Result.Error -> {
                     MoneyTalkLogger.w("[NotiService] 처리 실패: ${result.message}")
