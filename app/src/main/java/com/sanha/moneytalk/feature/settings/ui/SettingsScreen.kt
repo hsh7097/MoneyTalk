@@ -69,6 +69,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
+import android.content.Intent
+import android.provider.Settings
+import androidx.core.app.NotificationManagerCompat
 import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.ThemeMode
@@ -448,6 +451,23 @@ fun SettingsScreen(
                             },
                             onClick = {
                                 viewModel.onIntent(SettingsIntent.DebugFullSyncAllMessages)
+                            }
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        val isNotiListenerEnabled = remember {
+                            NotificationManagerCompat.getEnabledListenerPackages(context)
+                                .contains(context.packageName)
+                        }
+                        SettingsItemCompose(
+                            info = object : SettingsItemInfo {
+                                override val icon = Icons.Default.Notifications
+                                override val title = "알림 수신 (디버그)"
+                                override val subtitle = if (isNotiListenerEnabled) "활성화됨 · 모든 앱 알림" else "비활성화"
+                            },
+                            onClick = {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                                )
                             }
                         )
                     }

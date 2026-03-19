@@ -517,8 +517,15 @@ class MainViewModel @Inject constructor(
         smsSyncCoordinator.setUserExcludeKeywords(userExcludeKeywords)
         SmsIncomeParser.setUserExcludeKeywords(userExcludeKeywords)
 
-        // Step 1: SMS 읽기 + 중복 제거
-        val allSmsList = readSmsInputs(targetMonthRange)
+        // Step 1: SMS 읽기 + 중복 제거 (+ 비-SMS 소스 대기 큐 합류)
+        val deviceSmsList = readSmsInputs(targetMonthRange)
+        val pendingNotifications = SmsInstantProcessor.drainPendingNotifications()
+        val allSmsList = if (pendingNotifications.isNotEmpty()) {
+            MoneyTalkLogger.i("syncSmsV2 대기 알림 ${pendingNotifications.size}건 합류")
+            deviceSmsList + pendingNotifications
+        } else {
+            deviceSmsList
+        }
         if (allSmsList.isEmpty()) {
             if (updateLastSyncTime) {
                 settingsDataStore.saveLastSyncTime(targetMonthRange.second)

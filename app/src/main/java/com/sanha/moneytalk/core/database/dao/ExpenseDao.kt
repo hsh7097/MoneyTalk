@@ -82,6 +82,10 @@ interface ExpenseDao {
     @Query("SELECT EXISTS(SELECT 1 FROM expenses WHERE smsId = :smsId)")
     suspend fun existsBySmsId(smsId: String): Boolean
 
+    /** 동일 금액 + 시간 범위 내 지출 존재 여부 (알림 ↔ SMS 중복 방지) */
+    @Query("SELECT EXISTS(SELECT 1 FROM expenses WHERE amount = :amount AND dateTime BETWEEN :startTime AND :endTime LIMIT 1)")
+    suspend fun existsByAmountAndDateTimeRange(amount: Int, startTime: Long, endTime: Long): Boolean
+
     /** 모든 smsId 목록 조회 (배치 중복 체크용 인메모리 Set 구성) */
     @Query("SELECT smsId FROM expenses")
     suspend fun getAllSmsIds(): List<String>

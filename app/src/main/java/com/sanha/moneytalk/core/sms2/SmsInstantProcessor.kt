@@ -63,6 +63,27 @@ class SmsInstantProcessor @Inject constructor(
             lastInstantSaveTime = System.currentTimeMillis()
             pendingReconciliationIds.add(smsId)
         }
+
+        /**
+         * 비-SMS 소스(앱 알림 등)에서 regex 미매칭된 항목의 대기 큐.
+         *
+         * 알림은 디바이스 SMS inbox에 존재하지 않아 배치 동기화의 ContentProvider 읽기에서
+         * 누락된다. 이 큐에 담아두면 다음 배치 동기화 시 SMS 목록에 합류하여
+         * 벡터/LLM 파이프라인을 탈 수 있다.
+         */
+        private val pendingNotificationInputs = ConcurrentHashMap<String, SmsInput>()
+
+        /** 미매칭 알림을 배치 처리 대기 큐에 추가 */
+        fun addPendingNotification(input: SmsInput) {
+            pendingNotificationInputs[input.id] = input
+        }
+
+        /** 대기 중인 알림 목록을 꺼내고 큐를 비운다 */
+        fun drainPendingNotifications(): List<SmsInput> {
+            val result = pendingNotificationInputs.values.toList()
+            pendingNotificationInputs.clear()
+            return result
+        }
     }
 
     /** 즉시 처리 결과 */
