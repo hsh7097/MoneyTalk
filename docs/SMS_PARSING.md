@@ -22,7 +22,7 @@ List<SmsInput> (원본 보존)
 │                                                          │
 │  Step 0: SmsPreFilter.filter()                           │
 │    비결제 키워드/구조 필터 (인증번호, 광고, 배송 등)        │
-│    20자 미만/100자 초과 제거, 결제 힌트 없으면 제거         │
+│    20자 미만/130자 초과 제거, 결제 힌트 없으면 제거         │
 │                                                          │
 │  Step 1: SmsIncomeFilter.classifyAll()                   │
 │    금융기관 키워드 + 금액 패턴 기반 분류                    │
@@ -98,15 +98,18 @@ core/sms2/                           ★ sms2 통합 파이프라인
 ├── SmsPatternMatcher.kt             # Step 4: 벡터 매칭 + 원격 룰 매칭 + regex 파싱 (자체 코사인 유사도)
 ├── SmsGroupClassifier.kt            # Step 5: 그룹핑 + LLM + regex 생성 + 패턴 등록 + RTDB 표본 수집
 ├── GeminiSmsExtractor.kt            # LLM 추출 (배치 추출 + regex 생성 + MainRegexContext)
+├── SmsInstantProcessor.kt            # 실시간 1건 처리 (SMS 수신 + 앱 알림) + 알림 대기 큐
+├── DeletedSmsTracker.kt              # 삭제된 SMS 추적 (재삽입 방지, SharedPreferences)
 ├── SmsReaderV2.kt                   # SMS/MMS/RCS 통합 읽기 (ContentResolver → List<SmsInput>)
 ├── SmsIncomeParser.kt               # 수입 SMS 파싱 (금액/유형/출처/날짜 추출)
 ├── RemoteSmsRule.kt                 # 원격 SMS regex 룰 데이터 클래스 (RTDB → 로컬 매칭)
 ├── RemoteSmsRuleRepository.kt       # 원격 룰 리포지토리 (RTDB 로드 + 메모리 캐시 + TTL)
-└── rules/                           # SMS regex 룰 관리 ★ 신규
-    ├── SmsRegexRuleAssetLoader.kt   # Asset JSON 기본 룰 시드 로더
-    ├── SmsRegexRemoteRuleLoader.kt  # RTDB overlay 룰 로더 (10분 캐시)
-    ├── SmsRegexRuleSyncService.kt   # Asset seed + RTDB overlay 병합 서비스
-    └── SmsRegexRuleRepository.kt    # 룰 Repository (DAO 래핑)
+├── SmsRegexRuleAssetLoader.kt       # Asset JSON 기본 룰 시드 로더
+├── SmsRegexRemoteRuleLoader.kt      # RTDB overlay 룰 로더 (10분 캐시)
+└── SmsRegexRuleSyncService.kt       # Asset seed + RTDB overlay 병합 서비스
+
+core/database/
+└── SmsRegexRuleRepository.kt        # 룰 Repository (DAO 래핑)
 
 core/database/entity/
 └── SmsPatternEntity.kt              # 벡터 DB 엔티티 (18 필드, isMainGroup 포함)
@@ -115,8 +118,8 @@ core/database/dao/
 └── SmsPatternDao.kt                 # 패턴 DB DAO (getMainPatternBySender 포함)
 ```
 
-**V1 레거시 (core/sms/)**: SmsProcessingService 실시간 수신 전용으로 유지.
-sms2에서는 `SmsFilter.shouldSkipBySender()` (SmsReaderV2 발신자 필터)만 참조.
+**V1 레거시 (core/sms/)**: sms2에서는 `SmsFilter.shouldSkipBySender()` (발신자 필터)만 참조.
+실시간 수신은 `SmsInstantProcessor`(sms2)가 담당.
 
 ---
 
@@ -237,13 +240,13 @@ SMS 본문에 아래 키워드 중 하나라도 포함되면 비결제:
 
 | 조건 | 판정 |
 |------|------|
-| 20자 미만 / 100자 초과 | 비결제 |
+| 20자 미만 / 130자 초과 | 비결제 |
 | 숫자 없음 | 비결제 |
 | 2자리+ 연속 숫자 없음 | 비결제 |
 | HTTP 링크 + 결제/승인 없음 | 비결제 |
 | 결제 힌트 키워드도 없고 `숫자+원` 패턴도 없음 | 비결제 |
 
-결제 힌트 키워드: `승인`, `결제`, `출금`, `이체`, `원`, `USD`, `JPY`, `EUR`, `카드`, `체크`, `CMS`
+결제 힌트 키워드: `승인`, `결제`, `출금`, `이체`, `원`, `USD`, `JPY`, `EUR`, `카드`, `체크`, `CMS`, `입금`, `급여`, `월급`, `송금`, `환급`, `정산`, `잔액`, `취소`
 
 ---
 
@@ -255,14 +258,14 @@ SMS 본문에 아래 키워드 중 하나라도 포함되면 비결제:
 ### 분류 로직 — `classify(body) → SmsType`
 
 ```
-1. 빈 SMS / 100자 초과 → SKIP
+1. 빈 SMS / 130자 초과 → SKIP
 2. 제외 키워드 (광고, 안내) → SKIP
 3. 사용자 제외 키워드 → SKIP
 4. 금융기관 키워드 없음 → SKIP
 5. 금액 패턴 없음 → SKIP
 6. 취소 키워드 (출금취소, 승인취소 등) → INCOME
-7. 결제 키워드 (결제, 승인, 사용, 출금) → PAYMENT
-8. 수입 제외 키워드 (자동이체출금, 보험료 등) → SKIP
+7. 수입 제외 키워드 (자동이체출금, 보험료 등) → SKIP
+8. 결제 키워드 (결제, 승인, 사용, 출금) → PAYMENT
 9. 수입 키워드 (입금, 급여, 송금 등) → INCOME
 10. 그 외 (금융+금액 있지만 명시적 키워드 없음) → PAYMENT (벡터/LLM에 맡김)
 ```
@@ -291,7 +294,8 @@ fun classifyAll(smsList: List<SmsInput>): Triple<List<SmsInput>, List<SmsInput>,
 |------|-----------|------|------|
 | 2 | SmsPreFilter | List<SmsInput> | List<SmsInput> (필터 통과분) |
 | 3 | SmsTemplateEngine | List<SmsInput> | List<EmbeddedSms> |
-| 4 | SmsPatternMatcher | List<EmbeddedSms> | (matched, unmatched) |
+| 4 | SmsPatternMatcher | List<EmbeddedSms> | (matched, regexFailed, unmatched) |
+| 4.5 | GeminiSmsExtractor | regexFailed | List<SmsParseResult> (성공) + unmatched (실패→Step 5) |
 | 5 | SmsGroupClassifier | List<EmbeddedSms> | List<SmsParseResult> |
 
 SmsSyncCoordinator 경유 시 Step 2는 `skipPreFilter=true`로 스킵.
@@ -730,7 +734,9 @@ LLM이 반환한 비표준 카테고리를 앱 17개 카테고리로 매핑:
 syncSmsV2(contentResolver, targetMonthRange, updateLastSyncTime)
   │
   ├── readAndFilterSms()
-  │   ├ SmsReaderV2.readAllMessagesByDateRange(start, end) → List<SmsInput>
+  │   ├ SmsReaderV2.readAllMessagesByDateRange(start, end) → deviceSmsList
+  │   ├ SmsInstantProcessor.drainPendingNotifications() → pendingNotifications (§13-A)
+  │   ├ allSmsList = deviceSmsList + pendingNotifications
   │   └ 기존 SMS ID로 중복 제거 (expenseRepository + incomeRepository)
   │
   ├── processSmsPipeline()
@@ -770,6 +776,53 @@ syncSmsV2(contentResolver, targetMonthRange, updateLastSyncTime)
 | 첫 동기화 + 해제 | 전체 (0L) |
 | 증분 | lastSyncTime |
 | DB 비어있는데 lastSyncTime > 0 | 리셋 후 60일 전 (Auto Backup 감지) |
+
+---
+
+## 13-A. 실시간 처리 — SmsInstantProcessor
+
+### 파일 위치
+[`core/sms2/SmsInstantProcessor.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsInstantProcessor.kt)
+
+### 역할
+SMS 수신(BroadcastReceiver) 및 앱 알림(NotificationListenerService, debug 전용) 시점에
+**즉시 1건씩** 처리하는 경로. 배치 동기화(syncSmsV2)와 별도.
+
+### processAndSave() 처리 순서
+
+```
+processAndSave(address, body, timestampMillis) → Result
+  │
+  ├── SmsFilter.shouldSkipBySender(address, body)  // 010/070 개인 → Skipped
+  ├── SmsPreFilter.isObviouslyNonPayment(body)      // 비결제 키워드 → Skipped
+  ├── SmsPreFilter.lacksPaymentRequirements(body)   // 길이/구조 → Skipped
+  ├── smsExclusionRepository 사용자 제외 키워드       // → Skipped
+  ├── DeletedSmsTracker.isDeleted(smsId)            // 삭제 이력 → Skipped
+  ├── SmsIncomeFilter.classify(body) → SmsType
+  │   ├── PAYMENT → processExpense() → regex 매칭 시도
+  │   │   ├── 매칭 성공 → ExpenseEntity DB 저장 → Result.Expense
+  │   │   └── 미매칭 + NOTI_ 주소 → pendingNotificationInputs 큐 보관 → Result.Skipped
+  │   ├── INCOME → processIncome() → IncomeEntity DB 저장 → Result.Income
+  │   └── SKIP → Result.Skipped
+```
+
+### 앱 알림 대기 큐 (debug 전용)
+
+앱 알림은 디바이스 SMS inbox에 존재하지 않아 배치 동기화의 ContentProvider 읽기에서 누락됩니다.
+regex 미매칭 시 `pendingNotificationInputs` 큐에 보관하고, 다음 배치 동기화에서 합류합니다.
+
+```
+[알림 수신 (NotificationTransactionService)]
+  → SmsInstantProcessor.processAndSave("NOTI_kakaobank_channel", body, timestamp)
+  → regex 미매칭 → addPendingNotification(SmsInput)
+  → 다음 syncSmsV2 → drainPendingNotifications() → deviceSmsList + pendingNotifications
+  → SmsSyncCoordinator.process() → 벡터/LLM 파이프라인 합류
+```
+
+| 메소드 | 역할 |
+|--------|------|
+| `addPendingNotification(input)` | 미매칭 알림을 큐에 추가 (ConcurrentHashMap) |
+| `drainPendingNotifications()` | 큐에서 꺼내고 해당 항목만 제거 (경합 안전) |
 
 ---
 
@@ -975,17 +1028,17 @@ sms2가 배치 동기화를 담당하지만, 일부 V1 컴포넌트는 여전히
 
 | V1 컴포넌트 | 현재 상태 | 사용처 |
 |------------|----------|--------|
-| SmsReader | **V1 only** | SmsProcessingService (실시간 수신) |
-| SmsParser | **V1 only** | SmsProcessingService (실시간 파싱) |
+| SmsReader | **V1 only** | — (sms2의 SmsReaderV2로 대체) |
+| SmsParser | **V1 only** | — (sms2 파이프라인으로 대체) |
 | HybridSmsClassifier | **삭제됨/미사용** | — |
 | SmsFilter | **V1+sms2 공유** | 발신자 필터 (shouldSkipBySender) |
 | SmsBatchProcessor | **미사용** (삭제 대기) | — |
-| VectorSearchEngine | **V1 only** | HybridSmsClassifier |
-| GeneratedSmsRegexParser | **V1 only** | HybridSmsClassifier |
-| SmsEmbeddingService | **V1 only** | HybridSmsClassifier |
+| VectorSearchEngine | **V1 only** | — |
+| GeneratedSmsRegexParser | **V1 only** | — |
+| SmsEmbeddingService | **V1 only** | — |
 
-> SmsProcessingService(실시간 SMS 수신)는 아직 V1 경로를 사용합니다.
-> 향후 sms2로 전환 시 SmsSyncCoordinator.process()를 통해 동일한 파이프라인으로 처리 가능.
+> 실시간 SMS 수신은 `SmsInstantProcessor`(sms2)가 담당합니다 (§13-A 참조).
+> 앱 알림 실시간 처리는 `NotificationTransactionService`(debug 전용)가 SmsInstantProcessor를 호출합니다.
 
 ---
 
@@ -1037,4 +1090,4 @@ ruleKey = sha256(sender|type|canonicalRegex|amountGroup|storeGroup|cardGroup|dat
 
 ---
 
-*마지막 업데이트: 2026-03-03*
+*마지막 업데이트: 2026-03-19*
