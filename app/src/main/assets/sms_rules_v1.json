@@ -41,6 +41,18 @@
           "source": "asset",
           "version": 1
         },
+        "4b0e04c204ed8f26751fc68f": {
+          "type": "income",
+          "priority": 945,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>KB)\\](?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\d+\\*+\\d+\\s*(?<store>[^\\n]+?)\\s*\\uc785\\uae08\\s*\\n\\s*(?<amount>[\\d,]+)\\s*\\n\\s*\\uc794\\uc561[\\d,]+\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
         "7ff8e5ee75e416585aa4f0f2": {
           "type": "income",
           "priority": 880,
@@ -59,6 +71,18 @@
           "type": "expense",
           "priority": 930,
           "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>KB)\\](?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\d+\\*+\\d+\\s*\\n(?<store>(?!\\ucd9c\\uae08\\ucde8\\uc18c)[^\\n]*\\ucd9c\\uae08[^\\n]*)\\s*\\n(?<amount>[\\d,]+)\\s*\\n\\uc794\\uc561[\\d,]+",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
+        "cb356994b6aadfcb1c371bfb": {
+          "type": "expense",
+          "priority": 935,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>KB)\\](?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\d+\\*+\\d+\\s*(?<store>[^\\n]+?)\\s*\\ucd9c\\uae08\\s*\\n\\s*(?<amount>[\\d,]+)\\s*\\n\\s*\\uc794\\uc561[\\d,]+\\s*$",
           "amountGroup": "amount",
           "storeGroup": "store",
           "cardGroup": "card",
@@ -90,6 +114,90 @@
           "status": "ACTIVE",
           "source": "asset",
           "version": 1
+        },
+        "81a16f62924deef46656547c": {
+          "type": "expense",
+          "priority": 850,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>KB)\\](?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\d+\\*+\\d+\\s*\\n(?<store>[^\\n]+)\\s*\\n\\ud604\\uae08IC\\s*\\n(?<amount>[\\d,]+)\\s*\\n\\uc794\\uc561[\\d,]+",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        }
+      },
+      "overseas": {
+        "6a4bd6cfa2e44979a7c92ddf": {
+          "type": "overseas",
+          "priority": 920,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>KB)\\](?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\d+\\*+\\d+\\s*\\n(?<store>[^\\n]*\\ud574\\uc678[^\\n]*)\\s*\\n\\ucd9c\\uae08\\s*\\n(?<amount>[\\d,]+)\\s*\\n\\uc794\\uc561[\\d,]+",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        }
+      }
+    },
+    "15220080": {
+      "expense": {
+        "4897d7dcb45ef35696b67b97": {
+          "type": "expense",
+          "priority": 900,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?(?<card>\\uc2a4\\ub9c8\\uc77c\\uce74\\ub4dc)\\uc2b9\\uc778\\s+\\S+\\s+(?<amount>[\\d,]+)\\uc6d0\\s*(?:\\uc77c\\uc2dc\\ubd88|\\d+\\uac1c\\uc6d4)\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s+(?<store>.+?)\\s*(?:\\ub204\\uc801[\\d,]+\\uc6d0)?(?:\\s*\\d+\\.\\d+%\\uc801\\ub9bd)?\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        }
+      }
+    },
+    "15776000": {
+      "cancel": {
+        "3a424e6f968a1f3a9765be05": {
+          "type": "cancel",
+          "priority": 940,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[?(?<card>\\ud604\\ub300\\uce74\\ub4dc|\\uc2a4\\ub9c8\\uc77c\\uce74\\ub4dc)\\]?\\s*\\S+\\ub2d8,?\\s*(?<date>\\d{2}/\\d{2})\\s+(?<store>.+?)\\s+\\ucde8\\uc18c\\uac74\\uc73c\\ub85c\\s+\\d{2}/\\d{2}\\s+\\uad6d\\ubbfc\\uc740\\ud589\\([^\\n]*?\\uacc4\\uc88c\\ub85c\\s+(?<amount>[\\d,]+)\\uc6d0\\s+\\ud658\\ubd88\\s+\\uc644\\ub8cc(?:\\ub418\\uc5c8\\uc2b5\\ub2c8\\ub2e4)?\\.?\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
+        "fff76f3e41a9eee7f7d124e0": {
+          "type": "cancel",
+          "priority": 900,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[?(?<card>\\ud604\\ub300\\uce74\\ub4dc|\\uc2a4\\ub9c8\\uc77c\\uce74\\ub4dc)\\]?\\s*\\S+\\ub2d8,?\\s*(?<date>\\d{2}/\\d{2})\\s+\\uad6d\\ubbfc\\uc740\\ud589\\([^\\n]*?\\uacc4\\uc88c\\ub85c\\s+(?<amount>[\\d,]+)\\uc6d0(?:\\uc774)?\\s*(?<store>\\ud658\\ubd88)\\s*\\uc644\\ub8cc(?:\\ub418\\uc5c8\\uc2b5\\ub2c8\\ub2e4)?\\.?\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        }
+      },
+      "income": {
+        "29119052b53ac9b1cb7d917a": {
+          "type": "income",
+          "priority": 880,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[?(?<card>\\ud604\\ub300\\uce74\\ub4dc|\\uc2a4\\ub9c8\\uc77c\\uce74\\ub4dc)\\]?\\s*\\S+\\ub2d8,?\\s*(?<date>\\d{2}/\\d{2})\\s+\\uad6d\\ubbfc\\uc740\\ud589\\([^\\n]*?\\uacc4\\uc88c\\ub85c\\s+(?<amount>[\\d,]+)\\uc6d0\\s*(?<store>\\uc2a4\\ub9c8\\uc77c\\uce74\\ub4dc\\s*\\uc5f0\\ud68c\\ube44\\s*\\uce90\\uc2dc\\ubc31)\\s*\\uc9c0\\uae09\\s*\\uc644\\ub8cc(?:\\ub418\\uc5c8\\uc2b5\\ub2c8\\ub2e4)?\\.?\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
         }
       }
     },
@@ -99,6 +207,18 @@
           "type": "cancel",
           "priority": 950,
           "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>\\ud604\\ub300\\uce74\\ub4dc)\\]\\s*[^\\n]*?(?<date>\\d{2}/\\d{2})\\s+(?<store>.+?)\\s+\\uc0ac\\uc6a9\\s+(?<amount>[\\d,]+)\\uc6d0\\s+\\ucde8\\uc18c\\ucc98\\ub9ac\\ub418\\uc5c8\\uc2b5\\ub2c8\\ub2e4",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
+        "9181279a6cbc3b8154c5ee7b": {
+          "type": "cancel",
+          "priority": 930,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>\\ud604\\ub300\\uce74\\ub4dc)\\]\\s*\\S+\\ub2d8\\s*(?<date>\\d{2}/\\d{2})\\s+(?<store>.+?)\\s+\\uc0ac\\uc6a9\\s+(?<amount>[\\d,]+)\\uc6d0\\s+\\ucde8\\uc18c\\uc694\\uccad\\ub418\\uc5c8\\uc2b5\\ub2c8\\ub2e4\\s*$",
           "amountGroup": "amount",
           "storeGroup": "store",
           "cardGroup": "card",
@@ -121,6 +241,18 @@
         }
       },
       "expense": {
+        "22b7188076745cc15ace88dd": {
+          "type": "expense",
+          "priority": 940,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>\\ud604\\ub300\\uce74\\ub4dc)\\]\\s*\\S+\\ub2d8\\s*\\d+\\uc6d4\\s*(?<store>\\ubc84\\uc2a4\\+\\uc9c0\\ud558\\ucca0)\\s*\\uc774\\uc6a9\\uae08\\uc561\\uc740\\s*\\ucd1d\\s*(?<amount>[\\d,]+)\\uc6d0\\uc785\\ub2c8\\ub2e4\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
         "eb0f2f3f25c6ed33a9c01187": {
           "type": "expense",
           "priority": 900,
@@ -211,6 +343,18 @@
     },
     "15888100": {
       "cancel": {
+        "a7d5375e6d82bb278a16981a": {
+          "type": "cancel",
+          "priority": 920,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>\\ub86f\\ub370\\uce74\\ub4dc)\\]\\s*\\S+\\ub2d8,\\s*(?<store>\\ub9e4\\ucd9c\\ucde8\\uc18c\\uae08\\uc561)\\s*(?<amount>[\\d,]+)\\uc6d0\\uc744\\s*\\uacb0\\uc81c\\uacc4\\uc88c\\ub85c\\s*\\ud658\\ubd88\\ubc1b\\uc558\\uc5b4\\uc694\\.\\((?<date>\\d{2}/\\d{2})\\([^)]*\\)\\s*\\uae30\\uc900\\)\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
         "d4eca04fdd51779ca4194cd0": {
           "type": "cancel",
           "priority": 900,
@@ -225,6 +369,18 @@
         }
       },
       "expense": {
+        "8f82ab8e16dee4be05a085cb": {
+          "type": "expense",
+          "priority": 910,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?(?<store>[^\\n]+?)\\s*\\n\\s*(?<amount>[\\d,]+)\\uc6d0(?:\\(\\d+\\uac74\\))?\\s*\\uc2b9\\uc778\\s*\\n\\s*\\S+\\s*(?<card>\\ub86f\\ub370(?:\\uce74\\ub4dc)?)\\d+\\*+\\d+\\*\\s*\\n\\s*(?:\\uc77c\\uc2dc\\ubd88|\\d+\\uac1c\\uc6d4)\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*\\ub204\\uc801[\\d,]+\\uc6d0\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
         "ee7e940f72995d342d245201": {
           "type": "expense",
           "priority": 860,
@@ -253,6 +409,18 @@
     },
     "15889955": {
       "expense": {
+        "fe01af65595b45119b126f6d": {
+          "type": "expense",
+          "priority": 900,
+          "bodyRegex": "(?s)\\u25cf\\s*(?<card>\\S+)\\s*\\uc774\\uc6a9\\uc548\\ub0b4\\s*\\n\\s*\\uc6b0\\ub9ac\\(\\d+\\)\\uc2b9\\uc778\\s*\\n\\s*\\S+\\ub2d8\\s*\\n\\s*(?<amount>[\\d,]+)\\uc6d0\\s*(?:\\uc77c\\uc2dc\\ubd88|\\d+\\uac1c\\uc6d4)\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*(?<store>.+?)\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
         "32f2c897ad114e7eb0808ea7": {
           "type": "expense",
           "priority": 870,
@@ -268,7 +436,57 @@
       }
     },
     "15888900": {
+      "cancel": {
+        "df593295fa2283e749d4b143": {
+          "type": "cancel",
+          "priority": 920,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?(?<card>\\uc0bc\\uc131)\\d+\\ucde8\\uc18c\\s+\\S+\\s*\\n\\s*-(?<amount>[\\d,]+)\\uc6d0\\s*\\uc77c\\uc2dc\\ubd88\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*(?<store>[^\\n]+?)\\s*\\n\\s*\\ub204\\uc801[\\d,]+\\uc6d0\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
+        "f81f7d48517331246e234f12": {
+          "type": "cancel",
+          "priority": 910,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>\\uc0bc\\uc131\\uce74\\ub4dc)\\]\\d+\\ucde8\\uc18c\\s*\\n\\s*(?<date>\\d{2}/\\d{2})\\s+(?<store>[^\\n]+?)\\s*\\n\\s*-(?<amount>[\\d,]+)\\uc6d0(?:\\s*\\n\\s*[^\\n]+)?\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        }
+      },
       "expense": {
+        "bb43f3af75c3b32ad6d6b2cc": {
+          "type": "expense",
+          "priority": 930,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>\\uc0bc\\uc131\\uce74\\ub4dc)\\]\\d+\\s*\\n\\s*\\uc790\\ub3d9\\uacb0\\uc81c\\s*(?<date>\\d{2}/\\d{2})\\uc811\\uc218\\s*\\n\\s*(?<store>[^\\n]+?)\\s*\\n\\s*(?<amount>[\\d,]+)\\uc6d0\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
+        "0af90bd87411651714bea4eb": {
+          "type": "expense",
+          "priority": 900,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>\\uc0bc\\uc131\\uce74\\ub4dc)\\]\\d+\\s*\\n\\s*\\d+\\uc6d4\\uc811\\uc218\\s*(?<store>\\ud6c4\\ubd88\\uad50\\ud1b5)\\s*\\n\\s*\\(\\ubc84\\uc2a4\\+\\uc9c0\\ud558\\ucca0\\+\\ud1b5\\ud589\\ub8cc\\)\\s*\\n\\s*\\ud569\\uacc4\\s*(?<amount>[\\d,]+)\\uc6d0\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
         "dcdade128662f32dbde6e523": {
           "type": "expense",
           "priority": 870,
@@ -315,6 +533,18 @@
     },
     "15881600": {
       "expense": {
+        "c46a6a76b4c357e3256a8f58": {
+          "type": "expense",
+          "priority": 930,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?(?<card>NH(?:\\ub18d\\ud611)?\\uce74\\ub4dc)\\d+\\*+\\d+\\*+\\uc2b9\\uc778\\s*\\n\\s*\\S+\\s*\\n\\s*(?<amount>[\\d,]+)\\uc6d0\\s*(?:\\uccb4\\ud06c|\\uc77c\\uc2dc\\ubd88)?\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*(?<store>[^\\n]+?)\\s*(?:\\n\\s*\\uc794\\uc561[\\d,]+\\uc6d0)?\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
         "2670bfa7c13e462d749f5d43": {
           "type": "expense",
           "priority": 920,
@@ -329,6 +559,18 @@
         }
       },
       "cancel": {
+        "63b959b909d529abfd93e349": {
+          "type": "cancel",
+          "priority": 940,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[\\ucde8\\uc18c\\s*\\uc644\\ub8cc\\]\\s*\\n\\s*(?<amount>[\\d,]+)\\uc6d0\\s*\\n\\s*(?<card>NH(?:\\ub18d\\ud611)?\\uce74\\ub4dc)\\(?\\d+\\*+\\d+\\*+\\)?\\s*\\n\\s*\\S+\\ub2d8\\s*\\n?\\s*(?<date>\\d{2}/\\d{2})\\s*\\n?\\s*(?<store>[^\\n]+?)\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
         "2ff54f5c610a5ce8ae9cb0c6": {
           "type": "cancel",
           "priority": 930,
