@@ -26,6 +26,7 @@ import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.sms2.SmsIncomeParser
 import com.sanha.moneytalk.core.sms2.SmsInput
 import com.sanha.moneytalk.core.sms2.SmsFilter
+import com.sanha.moneytalk.core.sms2.DeletedSmsTracker
 import com.sanha.moneytalk.core.sms2.SmsInstantProcessor
 import com.sanha.moneytalk.core.sms2.SmsReaderV2
 import com.sanha.moneytalk.core.sms2.SmsPipeline
@@ -605,6 +606,9 @@ class MainViewModel @Inject constructor(
         existingSnapshot: ExistingSmsSnapshot
     ): List<SmsInput> {
         val newSmsList = allSmsList.filter { sms ->
+            // 사용자가 명시적으로 삭제한 SMS는 재처리하지 않음
+            if (DeletedSmsTracker.isDeleted(sms.id)) return@filter false
+
             val contentKey = buildContentKey(sms.address, sms.body)
             val existsInDbExact = sms.id in existingSnapshot.exactSmsIds
             val existsInDbFuzzy = findClosestCandidate(
@@ -996,9 +1000,10 @@ class MainViewModel @Inject constructor(
 
         crossTypeIncomeIdsToDelete.forEach { incomeRepository.deleteById(it) }
 
-        // Phase 3: 분류 완료된 엔티티를 DB에 배치 저장
+        // Phase 3: 사용자가 삭제한 항목 제외 후 DB에 배치 저장
+        val filteredEntities = entities.filterNot { DeletedSmsTracker.isDeleted(it.smsId) }
         _uiState.update { it.copy(syncProgress = "지출 저장 중...") }
-        for (chunk in entities.chunked(DB_BATCH_INSERT_SIZE)) {
+        for (chunk in filteredEntities.chunked(DB_BATCH_INSERT_SIZE)) {
             expenseRepository.insertAll(chunk)
         }
 
@@ -1107,8 +1112,12 @@ class MainViewModel @Inject constructor(
 
         crossTypeExpenseIdsToDelete.forEach { expenseRepository.deleteById(it) }
 
-        if (batch.isNotEmpty()) {
-            for (chunk in batch.chunked(DB_BATCH_INSERT_SIZE)) {
+        // 사용자가 삭제한 항목 제외 후 저장
+        val filteredBatch = batch.filterNot { entity ->
+            entity.smsId?.let { DeletedSmsTracker.isDeleted(it) } == true
+        }
+        if (filteredBatch.isNotEmpty()) {
+            for (chunk in filteredBatch.chunked(DB_BATCH_INSERT_SIZE)) {
                 incomeRepository.insertAll(chunk)
             }
         }

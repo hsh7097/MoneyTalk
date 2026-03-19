@@ -19,6 +19,7 @@ import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardInf
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderInfo
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
+import com.sanha.moneytalk.core.sms2.DeletedSmsTracker
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
@@ -593,6 +594,7 @@ class HistoryViewModel @Inject constructor(
     fun deleteExpense(expense: ExpenseEntity) {
         viewModelScope.launch {
             try {
+                DeletedSmsTracker.markDeleted(expense.smsId)
                 withContext(Dispatchers.IO) { expenseRepository.delete(expense) }
                 clearAllPageCache()
                 loadCurrentAndAdjacentPages()
@@ -607,6 +609,7 @@ class HistoryViewModel @Inject constructor(
     fun deleteIncome(income: IncomeEntity) {
         viewModelScope.launch {
             try {
+                income.smsId?.let { DeletedSmsTracker.markDeleted(it) }
                 withContext(Dispatchers.IO) { incomeRepository.delete(income) }
                 snackbarBus.show("수입이 삭제되었습니다")
                 clearAllPageCache()
