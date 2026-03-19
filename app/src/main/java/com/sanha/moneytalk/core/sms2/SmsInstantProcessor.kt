@@ -78,10 +78,11 @@ class SmsInstantProcessor @Inject constructor(
             pendingNotificationInputs[input.id] = input
         }
 
-        /** 대기 중인 알림 목록을 꺼내고 큐를 비운다 */
+        /** 대기 중인 알림 목록을 꺼내고 해당 항목만 제거한다 */
         fun drainPendingNotifications(): List<SmsInput> {
             val result = pendingNotificationInputs.values.toList()
-            pendingNotificationInputs.clear()
+            // clear() 대신 꺼낸 항목만 제거 — drain 중 새로 추가된 항목 유실 방지
+            result.forEach { pendingNotificationInputs.remove(it.id) }
             return result
         }
     }
