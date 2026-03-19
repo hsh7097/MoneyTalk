@@ -19,6 +19,7 @@ import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.util.BackupData
 import com.sanha.moneytalk.core.util.DataBackupManager
+import com.sanha.moneytalk.core.sms2.DeletedSmsTracker
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter
@@ -720,6 +721,9 @@ class SettingsViewModel @Inject constructor(
                     )
                 }
                 snackbarBus.show("모든 데이터가 삭제되었습니다 (학습 데이터는 보존됨)")
+
+                // 전체 삭제 시 삭제 추적 목록도 초기화 (새 동기화에서 재수집 가능하도록)
+                DeletedSmsTracker.clear()
 
                 // 다른 ViewModel에게 데이터 삭제 이벤트 전달
                 dataRefreshEvent.emit(DataRefreshEvent.RefreshType.ALL_DATA_DELETED)

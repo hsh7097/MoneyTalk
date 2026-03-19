@@ -11,6 +11,7 @@ import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
+import com.sanha.moneytalk.core.sms2.DeletedSmsTracker
 import com.sanha.moneytalk.core.util.CumulativeChartDataBuilder
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
@@ -864,6 +865,7 @@ class HomeViewModel @Inject constructor(
     fun deleteExpense(expense: ExpenseEntity) {
         viewModelScope.launch {
             try {
+                DeletedSmsTracker.markDeleted(expense.smsId)
                 withContext(Dispatchers.IO) {
                     expenseRepository.delete(expense)
                 }
@@ -893,6 +895,7 @@ class HomeViewModel @Inject constructor(
     fun deleteIncome(income: IncomeEntity) {
         viewModelScope.launch {
             try {
+                income.smsId?.let { DeletedSmsTracker.markDeleted(it) }
                 withContext(Dispatchers.IO) { incomeRepository.delete(income) }
                 _uiState.update { it.copy(errorMessage = "수입이 삭제되었습니다") }
                 clearAllPageCache()

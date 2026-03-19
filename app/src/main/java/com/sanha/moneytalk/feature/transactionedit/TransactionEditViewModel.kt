@@ -13,6 +13,7 @@ import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
+import com.sanha.moneytalk.core.sms2.DeletedSmsTracker
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
@@ -522,10 +523,12 @@ class TransactionEditViewModel @Inject constructor(
                 when (originalTransactionType) {
                     TransactionType.INCOME -> {
                         if (incomeId <= 0) return@launch
+                        originalIncomeEntity?.smsId?.let { DeletedSmsTracker.markDeleted(it) }
                         incomeRepository.deleteById(incomeId)
                     }
                     TransactionType.EXPENSE, TransactionType.TRANSFER -> {
                         if (expenseId <= 0) return@launch
+                        originalExpenseEntity?.let { DeletedSmsTracker.markDeleted(it.smsId) }
                         expenseRepository.deleteById(expenseId)
                     }
                 }

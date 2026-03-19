@@ -112,9 +112,14 @@ class SmsInstantProcessor @Inject constructor(
             }
         }
 
-        // 5. 수입/지출 분류
-        val (smsType, _) = incomeFilter.classify(body)
+        // 5. 사용자 삭제 블랙리스트 체크
         val smsId = generateSmsId(address, body, timestampMillis)
+        if (DeletedSmsTracker.isDeleted(smsId)) {
+            return Result.Skipped
+        }
+
+        // 6. 수입/지출 분류
+        val (smsType, _) = incomeFilter.classify(body)
 
         return when (smsType) {
             SmsType.PAYMENT -> processExpense(address, body, timestampMillis, smsId)

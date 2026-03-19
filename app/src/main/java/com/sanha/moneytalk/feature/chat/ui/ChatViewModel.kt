@@ -18,6 +18,7 @@ import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.ActionType
+import com.sanha.moneytalk.core.sms2.DeletedSmsTracker
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.AnalyticsFilter
 import com.sanha.moneytalk.core.util.AnalyticsMetric
@@ -1561,6 +1562,7 @@ class ChatViewModel @Inject constructor(
                 } else {
                     val expense = expenseRepository.getExpenseById(expenseId)
                     if (expense != null) {
+                        DeletedSmsTracker.markDeleted(expense.smsId)
                         expenseRepository.deleteById(expenseId)
                         ActionResult(
                             actionType = ActionType.DELETE_EXPENSE,

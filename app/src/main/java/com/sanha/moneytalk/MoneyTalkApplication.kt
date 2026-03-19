@@ -5,6 +5,7 @@ import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import android.app.Application
 import com.google.android.gms.ads.MobileAds
 import com.google.firebase.FirebaseApp
+import com.sanha.moneytalk.core.sms2.DeletedSmsTracker
 import com.sanha.moneytalk.core.firebase.CrashlyticsHelper
 import com.sanha.moneytalk.core.firebase.PremiumManager
 import com.sanha.moneytalk.core.notification.SmsNotificationManager
@@ -26,6 +27,9 @@ class MoneyTalkApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // 사용자 삭제 SMS 추적기 복원 (동기화 시 재삽입 방지)
+        DeletedSmsTracker.init(this)
 
         // SMS 거래 알림 채널 등록
         smsNotificationManager.createNotificationChannel()
