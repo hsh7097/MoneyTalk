@@ -4,6 +4,7 @@ import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.notification.SmsNotificationManager
 import com.sanha.moneytalk.core.util.CardNameNormalizer
 import com.sanha.moneytalk.core.util.DateUtils
@@ -248,7 +249,11 @@ class SmsInstantProcessor @Inject constructor(
             ?: return entity
         return entity.copy(
             category = matchedRule.category ?: entity.category,
-            isFixed = matchedRule.isFixed ?: entity.isFixed
+            isFixed = if (supportsFixedExpense(entity)) {
+                matchedRule.isFixed ?: entity.isFixed
+            } else {
+                entity.isFixed
+            }
         )
     }
 
@@ -265,5 +270,11 @@ class SmsInstantProcessor @Inject constructor(
     /** SmsReaderV2.generateSmsId()와 동일한 형식으로 smsId 생성 (address 정규화 필수) */
     private fun generateSmsId(address: String, body: String, date: Long): String {
         return "${SmsFilter.normalizeAddress(address)}_${date}_${body.hashCode()}"
+    }
+
+    private fun supportsFixedExpense(entity: ExpenseEntity): Boolean {
+        return entity.transactionType == "EXPENSE" ||
+            (entity.transactionType == "TRANSFER" &&
+                entity.transferDirection == TransferDirection.WITHDRAWAL.dbValue)
     }
 }
