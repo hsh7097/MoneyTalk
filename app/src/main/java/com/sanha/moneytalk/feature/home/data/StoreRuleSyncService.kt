@@ -1,6 +1,8 @@
 package com.sanha.moneytalk.feature.home.data
 
+import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
+import com.sanha.moneytalk.core.model.TransferDirection
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -59,7 +61,13 @@ class StoreRuleSyncService @Inject constructor(
                 expenseRepository.updateCategoryByStoreNameContaining(currentRule.keyword, category)
             }
             currentRule.isFixed?.let { isFixed ->
-                expenseRepository.updateFixedByStoreNameContaining(currentRule.keyword, isFixed)
+                expenseRepository.getExpensesByStoreNameContaining(currentRule.keyword)
+                    .forEach { expense ->
+                        val nextFixed = if (expense.supportsFixedExpense()) isFixed else false
+                        if (expense.isFixed != nextFixed) {
+                            expenseRepository.updateFixedById(expense.id, nextFixed)
+                        }
+                    }
             }
         }
     }
@@ -81,13 +89,22 @@ class StoreRuleSyncService @Inject constructor(
 
     private suspend fun reapplyFixedStateByKeyword(keyword: String) {
         val expenses = expenseRepository.getExpensesByStoreNameContaining(keyword)
-            .filter { it.transactionType != "TRANSFER" }
 
         for (expense in expenses) {
-            val isFixed = storeRuleRepository.findMatchingRule(expense.storeName)?.isFixed ?: false
+            val isFixed = if (expense.supportsFixedExpense()) {
+                storeRuleRepository.findMatchingRule(expense.storeName)?.isFixed ?: false
+            } else {
+                false
+            }
             if (expense.isFixed != isFixed) {
                 expenseRepository.updateFixedById(expense.id, isFixed)
             }
         }
+    }
+
+    private fun ExpenseEntity.supportsFixedExpense(): Boolean {
+        return transactionType == "EXPENSE" ||
+            (transactionType == "TRANSFER" &&
+                transferDirection == TransferDirection.WITHDRAWAL.dbValue)
     }
 }

@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.feature.transactionedit.TransactionEditUiState
 import com.sanha.moneytalk.feature.transactionedit.TransactionEditViewModel
 import com.sanha.moneytalk.feature.transactionedit.TransactionType
@@ -120,6 +121,12 @@ private fun TransactionEditUiState.toSnapshot(): TransactionEditSnapshot {
         isFixed = isFixed,
         transferDirection = transferDirection?.dbValue
     )
+}
+
+private fun TransactionEditUiState.supportsFixedExpense(): Boolean {
+    return transactionType == TransactionType.EXPENSE ||
+        (transactionType == TransactionType.TRANSFER &&
+            transferDirection == TransferDirection.WITHDRAWAL)
 }
 
 /**
@@ -333,15 +340,15 @@ fun TransactionEditScreen(
                 }
             }
 
-            // 고정 거래 토글 (지출/수입 표시)
-            if (uiState.transactionType == TransactionType.EXPENSE ||
-                uiState.transactionType == TransactionType.INCOME
-            ) {
+            // 고정 거래 토글 (지출/수입/출금 이체)
+            if (uiState.transactionType == TransactionType.INCOME || uiState.supportsFixedExpense()) {
                 Column(modifier = Modifier.onboardingTarget("edit_fixed", coachMarkRegistry)) {
-                    val fixedLabel = if (uiState.transactionType == TransactionType.INCOME) {
-                        stringResource(R.string.transaction_edit_fixed_income)
-                    } else {
-                        stringResource(R.string.transaction_edit_fixed_expense)
+                    val fixedLabel = when {
+                        uiState.transactionType == TransactionType.INCOME ->
+                            stringResource(R.string.transaction_edit_fixed_income)
+                        uiState.transactionType == TransactionType.TRANSFER ->
+                            stringResource(R.string.transaction_edit_fixed_transfer)
+                        else -> stringResource(R.string.transaction_edit_fixed_expense)
                     }
                     FixedExpenseToggle(
                         isFixed = uiState.isFixed,
@@ -349,8 +356,8 @@ fun TransactionEditScreen(
                         label = fixedLabel
                     )
 
-                    // 동일 거래처 고정지출 일괄 적용 (기존 지출만)
-                    if (!uiState.isNew && uiState.transactionType == TransactionType.EXPENSE) {
+                    // 동일 거래처 고정 거래 일괄 적용 (기존 지출/출금 이체만)
+                    if (!uiState.isNew && uiState.supportsFixedExpense()) {
                         ApplyToAllCheckbox(
                             checked = uiState.applyFixedToAll,
                             label = stringResource(R.string.transaction_edit_apply_fixed_to_all),

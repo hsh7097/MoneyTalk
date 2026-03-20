@@ -824,6 +824,12 @@ class MainViewModel @Inject constructor(
         return matches
     }
 
+    private fun supportsFixedExpense(expense: ExpenseEntity): Boolean {
+        return expense.transactionType == "EXPENSE" ||
+            (expense.transactionType == "TRANSFER" &&
+                expense.transferDirection == TransferDirection.WITHDRAWAL.dbValue)
+    }
+
     /**
      * sms2 파이프라인 실행 (SmsSyncCoordinator.process)
      *
@@ -912,7 +918,11 @@ class MainViewModel @Inject constructor(
                 if (matchedRule != null) {
                     entities[i] = entity.copy(
                         category = matchedRule.category ?: entity.category,
-                        isFixed = matchedRule.isFixed ?: entity.isFixed
+                        isFixed = if (supportsFixedExpense(entity)) {
+                            matchedRule.isFixed ?: entity.isFixed
+                        } else {
+                            entity.isFixed
+                        }
                     )
                 }
             }
