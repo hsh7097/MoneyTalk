@@ -291,6 +291,24 @@ class HistoryViewModel @Inject constructor(
         _uiState.update { it.copy(pageCache = emptyMap()) }
     }
 
+    /**
+     * 현재 + 인접 페이지 데이터 새로고침 (캐시를 비우지 않고 덮어쓰기).
+     * 백그라운드 동기화 후 목록 전체가 비었다가 다시 나타나는 깜빡임을 줄인다.
+     */
+    private fun refreshCurrentPages() {
+        val state = _uiState.value
+        val year = state.selectedYear
+        val month = state.selectedMonth
+
+        loadPageData(year, month, forceReload = true)
+        val (prevY, prevM) = MonthPagerUtils.adjacentMonth(year, month, -1)
+        loadPageData(prevY, prevM, forceReload = true)
+        val (nextY, nextM) = MonthPagerUtils.adjacentMonth(year, month, +1)
+        if (!MonthPagerUtils.isFutureYearMonth(nextY, nextM, state.monthStartDay)) {
+            loadPageData(nextY, nextM, forceReload = true)
+        }
+    }
+
     /** 현재 + 인접 월 데이터 로드 (공통 진입점) */
     private fun loadCurrentAndAdjacentPages() {
         val state = _uiState.value
@@ -316,8 +334,7 @@ class HistoryViewModel @Inject constructor(
                 when (event) {
                     DataRefreshEvent.RefreshType.OWNED_CARD_UPDATED,
                     DataRefreshEvent.RefreshType.CATEGORY_UPDATED -> {
-                        clearAllPageCache()
-                        loadCurrentAndAdjacentPages()
+                        refreshCurrentPages()
                     }
 
                     DataRefreshEvent.RefreshType.ALL_DATA_DELETED -> {
@@ -326,8 +343,7 @@ class HistoryViewModel @Inject constructor(
                     }
 
                     DataRefreshEvent.RefreshType.TRANSACTION_ADDED -> {
-                        clearAllPageCache()
-                        loadCurrentAndAdjacentPages()
+                        refreshCurrentPages()
                     }
 
                     DataRefreshEvent.RefreshType.SMS_RECEIVED -> {
@@ -380,16 +396,22 @@ class HistoryViewModel @Inject constructor(
      * @param year 대상 연도
      * @param month 대상 월
      */
-    private fun loadPageData(year: Int, month: Int) {
+    private fun loadPageData(
+        year: Int,
+        month: Int,
+        forceReload: Boolean = false
+    ) {
         val key = MonthKey(year, month)
-        // 이미 로드 완료된 캐시가 있으면 스킵 (스와이프 시 불필요한 재로드 방지)
-        val existing = _uiState.value.pageCache[key]
-        if (existing != null && !existing.isLoading) return
+        if (!forceReload) {
+            // 이미 로드 완료된 캐시가 있으면 스킵 (스와이프 시 불필요한 재로드 방지)
+            val existing = _uiState.value.pageCache[key]
+            if (existing != null && !existing.isLoading) return
+        }
 
         pageLoadJobs[key]?.cancel()
         pageLoadJobs[key] = viewModelScope.launch {
-            // 캐시에 없으면 로딩 상태로 초기화
-            if (_uiState.value.pageCache[key] == null) {
+            // forceReload가 아니고 캐시에 없을 때만 로딩 상태로 초기화
+            if (!forceReload && _uiState.value.pageCache[key] == null) {
                 updatePageCache(key, HistoryPageData(isLoading = true))
             }
 
@@ -655,8 +677,7 @@ class HistoryViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true) }
-            clearAllPageCache()
-            loadCurrentAndAdjacentPages()
+            refreshCurrentPages()
             _uiState.update { it.copy(isRefreshing = false) }
         }
     }

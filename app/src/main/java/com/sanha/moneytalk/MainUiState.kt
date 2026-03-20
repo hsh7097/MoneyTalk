@@ -49,3 +49,18 @@ data class MainUiState(
     val hasFreeSyncRemaining: Boolean
         get() = freeSyncUsedCount < freeSyncMaxCount
 }
+
+/**
+ * 홈/내역 화면에서 필요한 MainViewModel 축약 상태.
+ *
+ * 동기화 진행 문구/다이얼로그 같은 잦은 변경은 제외하고,
+ * 화면 CTA와 권한/동기화 표시를 바꾸는 최소 상태만 포함한다.
+ */
+@Stable
+data class ScreenSyncUiState(
+    val hasSmsPermission: Boolean = false,
+    val hasFreeSyncRemaining: Boolean = false,
+    val isSyncing: Boolean = false,
+    val syncedMonths: Set<String> = emptySet(),
+    val isLegacyFullSyncUnlocked: Boolean = false
+)
