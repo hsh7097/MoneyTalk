@@ -15,6 +15,7 @@ import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.abs
 
 /**
  * SMS 수신 즉시 파싱/저장/알림을 담당하는 프로세서.
@@ -46,6 +47,9 @@ class SmsInstantProcessor @Inject constructor(
 ) {
 
     companion object {
+        /** 알림-origin row와 실제 SMS/MMS row를 같은 건으로 볼 시간 오차 범위 */
+        private const val NOTIFICATION_BRIDGE_WINDOW_MS = 60_000L
+
         /** 마지막 즉시 저장 시각 (앱 콜드스타트 시 silent sync 판단용) */
         @Volatile
         var lastInstantSaveTime: Long = 0L
@@ -206,12 +210,28 @@ class SmsInstantProcessor @Inject constructor(
         // StoreRule 적용 (Tier 0)
         entity = applyStoreRules(entity)
 
+        val currentIsNotification = address.startsWith("NOTI_")
+        val existingBridgeExpense = findBridgeExpense(entity, currentIsNotification)
+        if (existingBridgeExpense != null) {
+            if (currentIsNotification) {
+                MoneyTalkLogger.i("[InstantSMS] 기존 실문자/알림 row 존재 → 알림 중복 저장 스킵: ${smsId.take(40)}")
+                return Result.Skipped
+            }
+
+            entity = entity.copy(
+                id = existingBridgeExpense.id,
+                memo = existingBridgeExpense.memo,
+                createdAt = existingBridgeExpense.createdAt
+            )
+            clearPendingReconciliationIds(listOf(existingBridgeExpense.smsId))
+        }
+
         expenseRepository.insert(entity)
         markPendingReconciliation(smsId)
         MoneyTalkLogger.i("[InstantSMS] 지출 저장: ${entity.storeName} ${entity.amount}원 [${entity.category}]")
 
         // 알림 (설정에서 활성화된 경우만)
-        if (settingsDataStore.isNotificationEnabled()) {
+        if (settingsDataStore.isNotificationEnabled() && existingBridgeExpense == null) {
             notificationManager.showExpenseNotification(
                 amount = entity.amount,
                 storeName = entity.storeName,
@@ -254,6 +274,41 @@ class SmsInstantProcessor @Inject constructor(
             category = category
         )
 
+        val currentIsNotification = address.startsWith("NOTI_")
+        val existingBridgeIncome = findBridgeIncome(entity, currentIsNotification)
+        if (existingBridgeIncome != null) {
+            if (currentIsNotification) {
+                MoneyTalkLogger.i("[InstantSMS] 기존 실문자/알림 row 존재 → 수입 알림 중복 저장 스킵: ${smsId.take(40)}")
+                return Result.Skipped
+            }
+
+            val existingSmsId = existingBridgeIncome.smsId
+            entity.copy(
+                id = existingBridgeIncome.id,
+                memo = existingBridgeIncome.memo,
+                recurringDay = existingBridgeIncome.recurringDay,
+                createdAt = existingBridgeIncome.createdAt
+            ).also {
+                incomeRepository.insert(it)
+                if (existingSmsId != null) {
+                    clearPendingReconciliationIds(listOf(existingSmsId))
+                }
+                markPendingReconciliation(smsId)
+                MoneyTalkLogger.i("[InstantSMS] 수입 row 교체 저장: ${it.source} ${it.amount}원 [$category]")
+                if (settingsDataStore.isNotificationEnabled()) {
+                    // 알림-origin row를 실제 SMS row로 교체하는 경우 중복 알림 방지
+                    if (!existingBridgeIncome.senderAddress.startsWith("NOTI_")) {
+                        notificationManager.showIncomeNotification(
+                            amount = it.amount,
+                            source = it.source,
+                            incomeType = it.type
+                        )
+                    }
+                }
+                return Result.Income(it)
+            }
+        }
+
         incomeRepository.insert(entity)
         markPendingReconciliation(smsId)
         MoneyTalkLogger.i("[InstantSMS] 수입 저장: ${entity.source} ${entity.amount}원 [$category]")
@@ -268,6 +323,43 @@ class SmsInstantProcessor @Inject constructor(
         }
 
         return Result.Income(entity)
+    }
+
+    private suspend fun findBridgeExpense(
+        entity: ExpenseEntity,
+        currentIsNotification: Boolean
+    ): ExpenseEntity? {
+        val startTime = maxOf(0L, entity.dateTime - NOTIFICATION_BRIDGE_WINDOW_MS)
+        val endTime = entity.dateTime + NOTIFICATION_BRIDGE_WINDOW_MS
+
+        return expenseRepository.getExpensesByDateRangeOnce(startTime, endTime)
+            .firstOrNull { existing ->
+                existing.smsId != entity.smsId &&
+                    abs(existing.dateTime - entity.dateTime) <= NOTIFICATION_BRIDGE_WINDOW_MS &&
+                    existing.amount == entity.amount &&
+                    existing.storeName == entity.storeName &&
+                    existing.originalSms == entity.originalSms &&
+                    (currentIsNotification || existing.senderAddress.startsWith("NOTI_"))
+            }
+    }
+
+    private suspend fun findBridgeIncome(
+        entity: IncomeEntity,
+        currentIsNotification: Boolean
+    ): IncomeEntity? {
+        val startTime = maxOf(0L, entity.dateTime - NOTIFICATION_BRIDGE_WINDOW_MS)
+        val endTime = entity.dateTime + NOTIFICATION_BRIDGE_WINDOW_MS
+
+        return incomeRepository.getIncomesByDateRangeOnce(startTime, endTime)
+            .firstOrNull { existing ->
+                existing.smsId != entity.smsId &&
+                    abs(existing.dateTime - entity.dateTime) <= NOTIFICATION_BRIDGE_WINDOW_MS &&
+                    existing.amount == entity.amount &&
+                    existing.type == entity.type &&
+                    existing.source == entity.source &&
+                    existing.originalSms == entity.originalSms &&
+                    (currentIsNotification || existing.senderAddress.startsWith("NOTI_"))
+            }
     }
 
     /** StoreRule 적용 (카테고리 + 고정지출) */

@@ -130,6 +130,27 @@ class MainViewModel @Inject constructor(
         }
         .distinctUntilChanged()
 
+    val dialogUiState: Flow<MainDialogUiState> = uiState
+        .map { state ->
+            MainDialogUiState(
+                showSyncDialog = state.showSyncDialog,
+                syncProgress = state.syncProgress,
+                syncProgressCurrent = state.syncProgressCurrent,
+                syncProgressTotal = state.syncProgressTotal,
+                syncStepIndex = state.syncStepIndex,
+                showEngineSummary = state.showEngineSummary,
+                engineSummaryTotalSms = state.engineSummaryTotalSms,
+                engineSummaryPatterns = state.engineSummaryPatterns,
+                engineSummaryExpenses = state.engineSummaryExpenses,
+                engineSummaryIncomes = state.engineSummaryIncomes,
+                showFullSyncAdDialog = state.showFullSyncAdDialog,
+                fullSyncAdYear = state.fullSyncAdYear,
+                fullSyncAdMonth = state.fullSyncAdMonth,
+                monthStartDay = state.monthStartDay
+            )
+        }
+        .distinctUntilChanged()
+
     /** 광고 매니저 접근 (Activity에서 광고 표시에 필요) */
     val adManager: com.sanha.moneytalk.core.ad.RewardAdManager get() = rewardAdManager
 
@@ -297,9 +318,7 @@ class MainViewModel @Inject constructor(
         val address: String,
         val timestamp: Long,
         val bodyHash: String
-    ) {
-        val contentKey: String = "${address}_${bodyHash}"
-    }
+    )
 
     private data class SmsMatchCandidate(
         val smsId: String,
@@ -629,17 +648,16 @@ class MainViewModel @Inject constructor(
             // 사용자가 명시적으로 삭제한 SMS는 재처리하지 않음
             if (DeletedSmsTracker.isDeleted(sms.id)) return@filter false
 
-            val contentKey = buildContentKey(sms.address, sms.body)
             val existsInDbExact = sms.id in existingSnapshot.exactSmsIds
             val existsInDbFuzzy = findClosestCandidate(
-                contentKey = contentKey,
+                contentKeys = buildLookupKeys(sms.address, sms.body),
                 timestamp = sms.date,
                 candidateIndex = existingSnapshot.contentIndex
             ) != null
             val existsInDb = existsInDbExact || existsInDbFuzzy
 
             val existsInPending = findClosestCandidate(
-                contentKey = contentKey,
+                contentKeys = buildLookupKeys(sms.address, sms.body),
                 timestamp = sms.date,
                 candidateIndex = pendingContentIndex
             ) != null
@@ -726,13 +744,14 @@ class MainViewModel @Inject constructor(
     private fun buildSmsIdCandidateIndex(
         smsIds: Collection<String>
     ): Map<String, List<SmsMatchCandidate>> {
-        return smsIds.mapNotNull { smsId ->
+        return smsIds.flatMap { smsId ->
             parseSmsId(smsId)?.let { parsed ->
-                parsed.contentKey to SmsMatchCandidate(
+                val candidate = SmsMatchCandidate(
                     smsId = smsId,
                     timestamp = parsed.timestamp
                 )
-            }
+                buildCandidateKeys(parsed).map { key -> key to candidate }
+            } ?: emptyList()
         }.groupBy({ it.first }, { it.second })
     }
 
@@ -744,20 +763,26 @@ class MainViewModel @Inject constructor(
 
         expenses.forEach { expense ->
             parseSmsId(expense.smsId)?.let { parsed ->
-                entries += parsed.contentKey to SmsMatchCandidate(
+                val candidate = SmsMatchCandidate(
                     smsId = expense.smsId,
                     timestamp = parsed.timestamp
                 )
+                buildCandidateKeys(parsed).forEach { key ->
+                    entries += key to candidate
+                }
             }
         }
 
         incomes.forEach { income ->
             val smsId = income.smsId ?: return@forEach
             parseSmsId(smsId)?.let { parsed ->
-                entries += parsed.contentKey to SmsMatchCandidate(
+                val candidate = SmsMatchCandidate(
                     smsId = smsId,
                     timestamp = parsed.timestamp
                 )
+                buildCandidateKeys(parsed).forEach { key ->
+                    entries += key to candidate
+                }
             }
         }
 
@@ -785,22 +810,44 @@ class MainViewModel @Inject constructor(
     }
 
     private fun buildContentKey(address: String, body: String): String =
-        "${SmsFilter.normalizeAddress(address)}_${body.hashCode()}"
+        buildContentKeyFromHash(SmsFilter.normalizeAddress(address), body.hashCode().toString())
+
+    private fun buildContentKeyFromHash(address: String, bodyHash: String): String =
+        "${address}_${bodyHash}"
+
+    private fun buildNotificationBridgeKey(bodyHash: String): String = "BODY_$bodyHash"
+
+    private fun buildLookupKeys(address: String, body: String): List<String> {
+        val bodyHash = body.hashCode().toString()
+        return listOf(
+            buildContentKeyFromHash(SmsFilter.normalizeAddress(address), bodyHash),
+            buildNotificationBridgeKey(bodyHash)
+        )
+    }
+
+    private fun buildCandidateKeys(parsed: ParsedSmsId): List<String> = buildList {
+        add(buildContentKeyFromHash(parsed.address, parsed.bodyHash))
+        if (parsed.address.startsWith("NOTI_")) {
+            add(buildNotificationBridgeKey(parsed.bodyHash))
+        }
+    }
 
     private fun findClosestCandidate(
-        contentKey: String,
+        contentKeys: Collection<String>,
         timestamp: Long,
         candidateIndex: Map<String, List<SmsMatchCandidate>>
     ): SmsMatchCandidate? {
-        val candidates = candidateIndex[contentKey] ?: return null
         var closestCandidate: SmsMatchCandidate? = null
         var closestDiff = Long.MAX_VALUE
 
-        for (candidate in candidates) {
-            val diff = abs(candidate.timestamp - timestamp)
-            if (diff <= FUZZY_TIME_MARGIN_MS && diff < closestDiff) {
-                closestCandidate = candidate
-                closestDiff = diff
+        for (contentKey in contentKeys) {
+            val candidates = candidateIndex[contentKey] ?: continue
+            for (candidate in candidates) {
+                val diff = abs(candidate.timestamp - timestamp)
+                if (diff <= FUZZY_TIME_MARGIN_MS && diff < closestDiff) {
+                    closestCandidate = candidate
+                    closestDiff = diff
+                }
             }
         }
 
@@ -812,12 +859,14 @@ class MainViewModel @Inject constructor(
         candidateIndex: Map<String, List<SmsMatchCandidate>>
     ): Set<String> {
         val parsed = parseSmsId(smsId) ?: return emptySet()
-        val candidates = candidateIndex[parsed.contentKey] ?: return emptySet()
         val matches = mutableSetOf<String>()
 
-        for (candidate in candidates) {
-            if (abs(candidate.timestamp - parsed.timestamp) <= FUZZY_TIME_MARGIN_MS) {
-                matches += candidate.smsId
+        for (contentKey in buildCandidateKeys(parsed)) {
+            val candidates = candidateIndex[contentKey] ?: continue
+            for (candidate in candidates) {
+                if (abs(candidate.timestamp - parsed.timestamp) <= FUZZY_TIME_MARGIN_MS) {
+                    matches += candidate.smsId
+                }
             }
         }
 
@@ -995,7 +1044,7 @@ class MainViewModel @Inject constructor(
                 val parsedSmsId = parseSmsId(entity.smsId)
                 if (parsedSmsId != null) {
                     val fuzzyMatch = findClosestCandidate(
-                        contentKey = buildContentKey(entity.senderAddress, entity.originalSms),
+                        contentKeys = buildLookupKeys(entity.senderAddress, entity.originalSms),
                         timestamp = parsedSmsId.timestamp,
                         candidateIndex = existingSnapshot.contentIndex
                     )
@@ -1106,7 +1155,7 @@ class MainViewModel @Inject constructor(
                 val parsedSmsId = parseSmsId(smsId)
                 if (parsedSmsId != null) {
                     val fuzzyMatch = findClosestCandidate(
-                        contentKey = buildContentKey(entity.senderAddress, entity.originalSms.orEmpty()),
+                        contentKeys = buildLookupKeys(entity.senderAddress, entity.originalSms.orEmpty()),
                         timestamp = parsedSmsId.timestamp,
                         candidateIndex = existingSnapshot.contentIndex
                     )
