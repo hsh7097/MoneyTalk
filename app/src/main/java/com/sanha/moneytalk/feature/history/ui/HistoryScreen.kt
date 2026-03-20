@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.ScreenSyncUiState
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkState
@@ -101,7 +102,8 @@ fun HistoryScreen(
     val mainViewModel: MainViewModel = hiltViewModel(
         viewModelStoreOwner = context as ComponentActivity
     )
-    val mainUiState by mainViewModel.uiState.collectAsStateWithLifecycle()
+    val mainScreenUiState by mainViewModel.screenSyncUiState
+        .collectAsStateWithLifecycle(initialValue = ScreenSyncUiState())
 
     // HorizontalPager — Virtual Infinite Pager
     val initialPage = remember {
@@ -288,9 +290,9 @@ fun HistoryScreen(
                         isCurrentMonth = isCurrentMonth,
                         isMonthSynced = mainViewModel.isMonthSynced(pageYear, pageMonth),
                         isPartiallyCovered = mainViewModel.isPagePartiallyCovered(pageYear, pageMonth),
-                        hasSmsPermission = mainUiState.hasSmsPermission,
+                        hasSmsPermission = mainScreenUiState.hasSmsPermission,
                         monthLabel = pageMonthLabel,
-                        isAdEnabled = isBannerAdEnabled && !mainUiState.hasFreeSyncRemaining,
+                        isAdEnabled = isBannerAdEnabled && !mainScreenUiState.hasFreeSyncRemaining,
                         onImportData = {
                             onRequestSmsPermission {
                                 mainViewModel.syncIncremental()
@@ -307,7 +309,7 @@ fun HistoryScreen(
                                 onRequestSmsPermission {
                                     mainViewModel.unlockFullSync(pageYear, pageMonth)
                                 }
-                            } else if (mainUiState.hasFreeSyncRemaining) {
+                            } else if (mainScreenUiState.hasFreeSyncRemaining) {
                                 // 무료 동기화 잔여 횟수 있음 → 광고 없이 동기화
                                 onRequestSmsPermission {
                                     mainViewModel.unlockFullSync(pageYear, pageMonth, isFreeSyncUsed = true)

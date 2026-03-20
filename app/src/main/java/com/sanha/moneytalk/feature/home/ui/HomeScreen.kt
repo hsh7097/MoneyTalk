@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.MainViewModel
+import com.sanha.moneytalk.ScreenSyncUiState
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
@@ -116,7 +117,8 @@ fun HomeScreen(
     val mainViewModel: MainViewModel = hiltViewModel(
         viewModelStoreOwner = context as ComponentActivity
     )
-    val mainUiState by mainViewModel.uiState.collectAsStateWithLifecycle()
+    val mainScreenUiState by mainViewModel.screenSyncUiState
+        .collectAsStateWithLifecycle(initialValue = ScreenSyncUiState())
 
     // 선택된 지출/수입 항목 (상세보기용)
     var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
@@ -216,10 +218,10 @@ fun HomeScreen(
                 monthStartDay = uiState.monthStartDay,
                 isMonthSynced = mainViewModel.isMonthSynced(pageYear, pageMonth),
                 isPartiallyCovered = mainViewModel.isPagePartiallyCovered(pageYear, pageMonth),
-                hasSmsPermission = mainUiState.hasSmsPermission,
+                hasSmsPermission = mainScreenUiState.hasSmsPermission,
                 selectedCategory = uiState.selectedCategory,
-                isSyncing = mainUiState.isSyncing,
-                isAdEnabled = isBannerAdEnabled && !mainUiState.hasFreeSyncRemaining,
+                isSyncing = mainScreenUiState.isSyncing,
+                isAdEnabled = isBannerAdEnabled && !mainScreenUiState.hasFreeSyncRemaining,
                 onPreviousMonth = {
                     coroutineScope.launch {
                         pagerState.animateScrollToPage(pagerState.currentPage - 1)
@@ -251,7 +253,7 @@ fun HomeScreen(
                         onRequestSmsPermission {
                             mainViewModel.unlockFullSync(pageYear, pageMonth)
                         }
-                    } else if (mainUiState.hasFreeSyncRemaining) {
+                    } else if (mainScreenUiState.hasFreeSyncRemaining) {
                         // 무료 동기화 잔여 횟수 있음 → 광고 없이 동기화
                         onRequestSmsPermission {
                             mainViewModel.unlockFullSync(pageYear, pageMonth, isFreeSyncUsed = true)

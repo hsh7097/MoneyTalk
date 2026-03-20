@@ -46,8 +46,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -116,6 +118,17 @@ class MainViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
+    val screenSyncUiState: Flow<ScreenSyncUiState> = uiState
+        .map { state ->
+            ScreenSyncUiState(
+                hasSmsPermission = state.hasSmsPermission,
+                hasFreeSyncRemaining = state.hasFreeSyncRemaining,
+                isSyncing = state.isSyncing,
+                syncedMonths = state.syncedMonths,
+                isLegacyFullSyncUnlocked = state.isLegacyFullSyncUnlocked
+            )
+        }
+        .distinctUntilChanged()
 
     /** 광고 매니저 접근 (Activity에서 광고 표시에 필요) */
     val adManager: com.sanha.moneytalk.core.ad.RewardAdManager get() = rewardAdManager
