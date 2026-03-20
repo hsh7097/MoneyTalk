@@ -24,14 +24,11 @@ object NotificationContentParser {
         val bodyHints: Set<String>
     )
 
-    private val alwaysIgnoredMessageAppPackagePrefixes = listOf(
+    private val messageAppPackagePrefixes = listOf(
         "com.samsung.android.messaging",
         "com.skt.prod.dialer",
         "com.android.mms",
-        "com.lge.message"
-    )
-
-    private val mirrorCheckedMessageAppPackagePrefixes = listOf(
+        "com.lge.message",
         "com.google.android.apps.messaging",
         "com.android.messaging"
     )
@@ -142,11 +139,8 @@ object NotificationContentParser {
         )
     }
 
-    fun shouldAlwaysIgnoreMessageApp(packageName: String): Boolean =
-        alwaysIgnoredMessageAppPackagePrefixes.any { packageName.startsWith(it) }
-
     fun isMirrorCheckedMessageApp(packageName: String): Boolean =
-        mirrorCheckedMessageAppPackagePrefixes.any { packageName.startsWith(it) }
+        messageAppPackagePrefixes.any { packageName.startsWith(it) }
 
     private fun selectBestBody(
         packageName: String,

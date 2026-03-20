@@ -365,7 +365,7 @@ class SmsReaderV2 @Inject constructor(
      * RCS(채팅+) 메시지는 body가 JSON 형태로 저장됨.
      * "text" 필드의 값만 추출하여 반환, JSON이 아닌 경우 그대로 반환.
      */
-    private fun extractRcsText(rawBody: String): String {
+    internal fun extractRcsText(rawBody: String): String {
         if (rawBody.isBlank()) return rawBody
 
         val trimmed = rawBody.trim()

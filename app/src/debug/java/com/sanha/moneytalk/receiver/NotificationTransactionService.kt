@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap
  * 앱 알림에서 거래를 감지하는 서비스 (debug 전용).
  *
  * 일반 금융 앱 알림은 바로 처리하고,
- * 일부 메시지 앱 알림은 최근 SMS/MMS 미러 여부를 확인한 뒤에만 처리한다.
+ * 메시지 앱 알림은 최근 SMS/MMS/RCS 미러 여부를 확인한 뒤에만 처리한다.
  * 결제/비결제 판별은 기존 SMS 파이프라인(SmsPreFilter 등)이 처리한다.
  *
  * - address = 패키지명 기반 자동 생성 (예: "NOTI_kakaobank")
@@ -51,6 +51,9 @@ class NotificationTransactionService : NotificationListenerService() {
     }
 
     companion object {
+        /** RCS (채팅+) URI — 삼성 메시지 앱 등에서 사용 */
+        private val RCS_URI = Uri.parse("content://im/chat")
+
         /** 동일 알림 중복 처리 방지 TTL (5분) */
         private const val DEDUP_TTL_MS = 5 * 60 * 1000L
 
@@ -88,9 +91,6 @@ class NotificationTransactionService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         sbn ?: return
-        if (NotificationContentParser.shouldAlwaysIgnoreMessageApp(sbn.packageName)) {
-            return
-        }
 
         // 알림 텍스트 추출 (자기 자신은 NotificationContentParser에서 제외)
         val parsed = NotificationContentParser.parse(sbn) ?: return
@@ -308,7 +308,39 @@ class NotificationTransactionService : NotificationListenerService() {
         timestamp: Long
     ): Boolean {
         return hasRecentSmsMirror(candidateBodies, timestamp) ||
-            hasRecentMmsMirror(candidateBodies, timestamp)
+            hasRecentMmsMirror(candidateBodies, timestamp) ||
+            hasRecentRcsMirror(candidateBodies, timestamp)
+    }
+
+    private fun hasRecentRcsMirror(
+        candidateBodies: Set<String>,
+        timestamp: Long
+    ): Boolean {
+        val start = timestamp - MESSAGE_PROVIDER_LOOKBACK_MS
+        val end = timestamp + MESSAGE_PROVIDER_LOOKBACK_MS
+        return try {
+            val smsReaderV2 = entryPoint.smsReaderV2()
+            applicationContext.contentResolver.query(
+                RCS_URI,
+                arrayOf("body"),
+                "date >= ? AND date <= ?",
+                arrayOf(start.toString(), end.toString()),
+                "date DESC LIMIT $RECENT_MESSAGE_LOOKUP_LIMIT"
+            )?.use { cursor ->
+                val bodyIndex = cursor.getColumnIndex("body")
+                while (cursor.moveToNext()) {
+                    val rawBody = cursor.getString(bodyIndex) ?: continue
+                    val body = smsReaderV2.extractRcsText(rawBody)
+                    if (matchesCandidateBody(body, candidateBodies)) {
+                        return true
+                    }
+                }
+                false
+            } ?: false
+        } catch (e: Exception) {
+            MoneyTalkLogger.w("[NotiService] RCS 미러 확인 실패: ${e.message}")
+            false
+        }
     }
 
     private fun matchesCandidateBody(
