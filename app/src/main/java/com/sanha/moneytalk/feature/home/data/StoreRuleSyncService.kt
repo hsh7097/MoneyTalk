@@ -1,8 +1,6 @@
 package com.sanha.moneytalk.feature.home.data
 
-import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
-import com.sanha.moneytalk.core.model.TransferDirection
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -100,11 +98,5 @@ class StoreRuleSyncService @Inject constructor(
                 expenseRepository.updateFixedById(expense.id, isFixed)
             }
         }
-    }
-
-    private fun ExpenseEntity.supportsFixedExpense(): Boolean {
-        return transactionType == "EXPENSE" ||
-            (transactionType == "TRANSFER" &&
-                transferDirection == TransferDirection.WITHDRAWAL.dbValue)
     }
 }

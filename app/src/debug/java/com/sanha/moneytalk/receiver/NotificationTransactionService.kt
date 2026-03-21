@@ -355,7 +355,11 @@ class NotificationTransactionService : NotificationListenerService() {
         return candidateBodies.any { candidate ->
             normalizedBody == candidate ||
                 normalizedBody.contains(candidate) ||
-                candidate.contains(normalizedBody)
+                // 역방향 매칭은 짧은 candidate가 긴 body에 포함되는 경우만 허용하면
+                // false positive가 발생할 수 있으므로, body가 candidate에 포함될 때는
+                // 길이 차이가 적을 때만 매칭 (SMS 본문 트리밍 수준의 차이만 허용)
+                (candidate.contains(normalizedBody) &&
+                    candidate.length - normalizedBody.length <= 20)
         }
     }
 

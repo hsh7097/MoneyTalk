@@ -551,7 +551,7 @@ class MainViewModel @Inject constructor(
 
         // Step 1: SMS 읽기 + 중복 제거 (+ 비-SMS 소스 대기 큐 합류)
         val deviceSmsList = readSmsInputs(targetMonthRange)
-        val pendingNotifications = SmsInstantProcessor.drainPendingNotifications()
+        val pendingNotifications = SmsInstantProcessor.snapshotPendingNotifications()
         val allSmsList = if (pendingNotifications.isNotEmpty()) {
             MoneyTalkLogger.i("syncSmsV2 대기 알림 ${pendingNotifications.size}건 합류")
             deviceSmsList + pendingNotifications
@@ -609,6 +609,11 @@ class MainViewModel @Inject constructor(
         // Step 4: 후처리 (카테고리 분류, 패턴 정리, lastSyncTime 갱신)
         val cleanup = postSyncCleanup(updateLastSyncTime, targetMonthRange.second)
         SmsInstantProcessor.clearPendingReconciliationIds(reconciledExpenseIds + reconciledIncomeIds)
+
+        // sync 성공 후에만 대기 큐에서 제거 — 실패 시 다음 배치에서 재시도
+        if (pendingNotifications.isNotEmpty()) {
+            SmsInstantProcessor.removePendingNotifications(pendingNotifications.map { it.id })
+        }
 
         return SyncResult(
             expenseCount = expenseSaveResult.newCount,
@@ -873,12 +878,6 @@ class MainViewModel @Inject constructor(
         return matches
     }
 
-    private fun supportsFixedExpense(expense: ExpenseEntity): Boolean {
-        return expense.transactionType == "EXPENSE" ||
-            (expense.transactionType == "TRANSFER" &&
-                expense.transferDirection == TransferDirection.WITHDRAWAL.dbValue)
-    }
-
     /**
      * sms2 파이프라인 실행 (SmsSyncCoordinator.process)
      *
@@ -967,7 +966,7 @@ class MainViewModel @Inject constructor(
                 if (matchedRule != null) {
                     entities[i] = entity.copy(
                         category = matchedRule.category ?: entity.category,
-                        isFixed = if (supportsFixedExpense(entity)) {
+                        isFixed = if (entity.supportsFixedExpense()) {
                             matchedRule.isFixed ?: entity.isFixed
                         } else {
                             entity.isFixed

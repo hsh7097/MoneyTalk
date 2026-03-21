@@ -53,6 +53,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -454,9 +455,16 @@ fun SettingsScreen(
                             }
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        val isNotiListenerEnabled = remember {
-                            NotificationManagerCompat.getEnabledListenerPackages(context)
-                                .contains(context.packageName)
+                        val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+                        var isNotiListenerEnabled by remember { mutableStateOf(false) }
+                        LaunchedEffect(lifecycleOwner) {
+                            lifecycleOwner.lifecycle.repeatOnLifecycle(
+                                androidx.lifecycle.Lifecycle.State.RESUMED
+                            ) {
+                                isNotiListenerEnabled =
+                                    NotificationManagerCompat.getEnabledListenerPackages(context)
+                                        .contains(context.packageName)
+                            }
                         }
                         SettingsItemCompose(
                             info = object : SettingsItemInfo {

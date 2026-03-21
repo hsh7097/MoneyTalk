@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.sanha.moneytalk.core.model.TransferDirection
 
 /**
  * 지출 내역 엔티티
@@ -75,4 +76,11 @@ data class ExpenseEntity(
 
     /** 레코드 생성 시간 */
     val createdAt: Long = System.currentTimeMillis()
-)
+) {
+    /** 고정 지출 적용 가능 여부 (일반 지출 또는 출금 이체만 해당) */
+    fun supportsFixedExpense(): Boolean {
+        return transactionType == "EXPENSE" ||
+            (transactionType == "TRANSFER" &&
+                transferDirection == TransferDirection.WITHDRAWAL.dbValue)
+    }
+}

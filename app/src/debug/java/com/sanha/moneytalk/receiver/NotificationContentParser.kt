@@ -94,6 +94,7 @@ object NotificationContentParser {
     )
 
     /** 자기 자신의 패키지 (피드백 루프 방지용, 서비스에서 설정) */
+    @Volatile
     var selfPackageName: String = ""
 
     /** 알림에서 추출한 텍스트 (SMS의 address/body/timestamp에 대응) */
