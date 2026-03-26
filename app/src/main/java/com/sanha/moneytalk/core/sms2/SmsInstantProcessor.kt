@@ -4,6 +4,7 @@ import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.database.entity.supportsFixedExpense
 import com.sanha.moneytalk.core.notification.SmsNotificationManager
 import com.sanha.moneytalk.core.util.CardNameNormalizer
 import com.sanha.moneytalk.core.util.DateUtils
@@ -77,27 +78,17 @@ class SmsInstantProcessor @Inject constructor(
          */
         private val pendingNotificationInputs = ConcurrentHashMap<String, SmsInput>()
 
-        /** 대기 큐 최대 크기 — 초과 시 오래된 항목 삭제 */
-        private const val MAX_PENDING_NOTIFICATIONS = 100
-
         /** 미매칭 알림을 배치 처리 대기 큐에 추가 */
         fun addPendingNotification(input: SmsInput) {
             pendingNotificationInputs[input.id] = input
-            // 크기 제한 초과 시 가장 오래된 항목부터 제거
-            while (pendingNotificationInputs.size > MAX_PENDING_NOTIFICATIONS) {
-                val oldest = pendingNotificationInputs.entries.minByOrNull { it.value.date }
-                oldest?.let { pendingNotificationInputs.remove(it.key) }
-            }
         }
 
-        /** 대기 중인 알림 목록의 스냅샷을 반환한다. 큐에서 제거하지 않음. */
-        fun snapshotPendingNotifications(): List<SmsInput> {
-            return pendingNotificationInputs.values.toList()
-        }
-
-        /** 성공적으로 처리된 알림만 큐에서 제거한다 */
-        fun removePendingNotifications(ids: Collection<String>) {
-            ids.forEach { pendingNotificationInputs.remove(it) }
+        /** 대기 중인 알림 목록을 꺼내고 해당 항목만 제거한다 */
+        fun drainPendingNotifications(): List<SmsInput> {
+            val result = pendingNotificationInputs.values.toList()
+            // clear() 대신 꺼낸 항목만 제거 — drain 중 새로 추가된 항목 유실 방지
+            result.forEach { pendingNotificationInputs.remove(it.id) }
+            return result
         }
     }
 
@@ -399,5 +390,4 @@ class SmsInstantProcessor @Inject constructor(
     private fun generateSmsId(address: String, body: String, date: Long): String {
         return "${SmsFilter.normalizeAddress(address)}_${date}_${body.hashCode()}"
     }
-
 }

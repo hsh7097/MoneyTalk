@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.feature.home.data
 
 import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
+import com.sanha.moneytalk.core.database.entity.supportsFixedExpense
 import javax.inject.Inject
 import javax.inject.Singleton
 

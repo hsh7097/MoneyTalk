@@ -334,6 +334,7 @@ class HistoryViewModel @Inject constructor(
                 when (event) {
                     DataRefreshEvent.RefreshType.OWNED_CARD_UPDATED,
                     DataRefreshEvent.RefreshType.CATEGORY_UPDATED -> {
+                        // 전체 월 데이터에 영향 → 비가시 캐시 제거 + 현재 페이지 갱신
                         clearAllPageCache()
                         loadCurrentAndAdjacentPages()
                     }

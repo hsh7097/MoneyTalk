@@ -3,6 +3,7 @@ package com.sanha.moneytalk
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
 import android.Manifest
+import com.sanha.moneytalk.BuildConfig
 import android.content.ContentResolver
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
@@ -11,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.OwnedCardRepository
 import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.database.entity.supportsFixedExpense
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.IncomeCategoryMapper
@@ -190,6 +192,7 @@ class MainViewModel @Inject constructor(
      */
     fun onAppResume() {
         checkSmsPermission()
+        dismissFinancialNotificationsIfDebug()
 
         val hasSmsPermission = _uiState.value.hasSmsPermission
         var syncTriggered = false
@@ -232,6 +235,21 @@ class MainViewModel @Inject constructor(
             appContext, Manifest.permission.READ_SMS
         ) == PackageManager.PERMISSION_GRANTED
         _uiState.update { it.copy(hasSmsPermission = granted) }
+    }
+
+    /** debug 빌드에서 포그라운드 진입 시 금융 앱 알림을 상태바에서 해제 */
+    private fun dismissFinancialNotificationsIfDebug() {
+        if (!BuildConfig.DEBUG) return
+        try {
+            val serviceClass = Class.forName(
+                "com.sanha.moneytalk.receiver.NotificationTransactionService"
+            )
+            val companion = serviceClass.getDeclaredField("Companion").get(null)
+            companion.javaClass.getDeclaredMethod("dismissFinancialNotifications")
+                .invoke(companion)
+        } catch (_: Exception) {
+            // 서비스 미초기화 또는 리스너 미연결 → 무시
+        }
     }
 
     // ========== 설정 로드 ==========
@@ -551,7 +569,7 @@ class MainViewModel @Inject constructor(
 
         // Step 1: SMS 읽기 + 중복 제거 (+ 비-SMS 소스 대기 큐 합류)
         val deviceSmsList = readSmsInputs(targetMonthRange)
-        val pendingNotifications = SmsInstantProcessor.snapshotPendingNotifications()
+        val pendingNotifications = SmsInstantProcessor.drainPendingNotifications()
         val allSmsList = if (pendingNotifications.isNotEmpty()) {
             MoneyTalkLogger.i("syncSmsV2 대기 알림 ${pendingNotifications.size}건 합류")
             deviceSmsList + pendingNotifications
@@ -609,11 +627,6 @@ class MainViewModel @Inject constructor(
         // Step 4: 후처리 (카테고리 분류, 패턴 정리, lastSyncTime 갱신)
         val cleanup = postSyncCleanup(updateLastSyncTime, targetMonthRange.second)
         SmsInstantProcessor.clearPendingReconciliationIds(reconciledExpenseIds + reconciledIncomeIds)
-
-        // sync 성공 후에만 대기 큐에서 제거 — 실패 시 다음 배치에서 재시도
-        if (pendingNotifications.isNotEmpty()) {
-            SmsInstantProcessor.removePendingNotifications(pendingNotifications.map { it.id })
-        }
 
         return SyncResult(
             expenseCount = expenseSaveResult.newCount,
