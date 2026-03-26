@@ -4,6 +4,8 @@ import android.net.Uri
 import android.provider.Telephony
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.notification.NotificationAppCatalog
 import com.sanha.moneytalk.core.sms2.SmsInstantProcessor
 import com.sanha.moneytalk.core.sms2.SmsReaderV2
 import com.sanha.moneytalk.core.util.DataRefreshEvent
@@ -18,6 +20,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.lang.ref.WeakReference
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -48,6 +51,7 @@ class NotificationTransactionService : NotificationListenerService() {
         fun instantProcessor(): SmsInstantProcessor
         fun dataRefreshEvent(): DataRefreshEvent
         fun smsReaderV2(): SmsReaderV2
+        fun settingsDataStore(): SettingsDataStore
     }
 
     companion object {
@@ -68,9 +72,42 @@ class NotificationTransactionService : NotificationListenerService() {
 
         /** 메시지 앱 미러 반영을 기다리며 재확인할 지연 구간 */
         private val MESSAGE_MIRROR_RECHECK_DELAYS_MS = longArrayOf(500L, 1_500L, 3_000L)
+
+        private var instanceRef: WeakReference<NotificationTransactionService>? = null
+
+        /**
+         * 앱 포그라운드 진입 시 호출.
+         * 선택된 금융/메시지 앱의 알림을 상태바에서 제거한다.
+         */
+        fun dismissFinancialNotifications() {
+            val service = instanceRef?.get() ?: return
+            service.scope.launch {
+                try {
+                    val selectedPackages = service.getSelectedPackages()
+                    val activeNotifications = service.activeNotifications ?: return@launch
+                    var dismissed = 0
+                    for (sbn in activeNotifications) {
+                        if (sbn.packageName in selectedPackages) {
+                            service.cancelNotification(sbn.key)
+                            dismissed++
+                        }
+                    }
+                    if (dismissed > 0) {
+                        MoneyTalkLogger.i("[NotiService] 포그라운드 진입: 금융 알림 ${dismissed}건 해제")
+                    }
+                } catch (e: Exception) {
+                    MoneyTalkLogger.w("[NotiService] 알림 해제 실패: ${e.message}")
+                }
+            }
+        }
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val defaultSelectedPackages: Set<String> by lazy {
+        NotificationAppCatalog.getDefaultSelectedPackages(
+            NotificationAppCatalog.getInstalledLaunchableApps(applicationContext)
+        )
+    }
 
     /** dedupKey -> 처리 시각. 동일 알림의 중복 처리 방지 */
     private val processedNotifications = ConcurrentHashMap<String, Long>()
@@ -84,6 +121,7 @@ class NotificationTransactionService : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        instanceRef = WeakReference(this)
         // 자기 자신의 패키지명 설정 (피드백 루프 방지)
         NotificationContentParser.selfPackageName = applicationContext.packageName
         MoneyTalkLogger.i("[NotiService] 알림 리스너 연결됨")
@@ -92,31 +130,74 @@ class NotificationTransactionService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         sbn ?: return
 
-        // 알림 텍스트 추출 (자기 자신은 NotificationContentParser에서 제외)
-        val parsed = NotificationContentParser.parse(sbn) ?: return
-
-        // 5분 TTL dedup
-        val dedupKey = "${sbn.key}_${parsed.body.hashCode()}"
-        cleanExpiredEntries()
-        if (processedNotifications.putIfAbsent(dedupKey, System.currentTimeMillis()) != null) {
-            return
-        }
-
         scope.launch {
-            if (shouldSkipMirroredMessageAppNotification(sbn.packageName, parsed)) {
+            try {
                 MoneyTalkLogger.i(
-                    "[NotiService] 메시지 앱 미러 알림 스킵: " +
-                        "pkg=${sbn.packageName}, body=${parsed.body.take(50)}"
+                    "[NotiService] onNotificationPosted 진입: pkg=${sbn.packageName}, key=${sbn.key}"
                 )
-                return@launch
-            }
 
-            MoneyTalkLogger.i(
-                "[NotiService] 알림 수신: pkg=${sbn.packageName}, " +
-                    "title=${parsed.title.take(30)}, body=${parsed.body.take(50)}"
-            )
-            processNotification(parsed)
+                if (!shouldProcessNotificationPackage(sbn.packageName)) {
+                    return@launch
+                }
+
+                // 알림 텍스트 추출 (자기 자신은 NotificationContentParser에서 제외)
+                val parsed = NotificationContentParser.parse(sbn)
+                if (parsed == null) {
+                    MoneyTalkLogger.i("[NotiService] 파싱 실패 (null 반환): pkg=${sbn.packageName}")
+                    return@launch
+                }
+
+                // 5분 TTL dedup
+                val dedupKey = "${sbn.key}_${parsed.body.hashCode()}"
+                cleanExpiredEntries()
+                if (processedNotifications.putIfAbsent(dedupKey, System.currentTimeMillis()) != null) {
+                    MoneyTalkLogger.i(
+                        "[NotiService] TTL dedup 스킵: pkg=${sbn.packageName}, key=${sbn.key}, " +
+                            "body=${parsed.body.take(80)}"
+                    )
+                    return@launch
+                }
+
+                if (shouldSkipMirroredMessageAppNotification(sbn.packageName, parsed)) {
+                    MoneyTalkLogger.i(
+                        "[NotiService] 메시지 앱 미러 알림 스킵: " +
+                            "pkg=${sbn.packageName}, body=${parsed.body.take(50)}"
+                    )
+                    return@launch
+                }
+
+                MoneyTalkLogger.i(
+                    "[NotiService] 알림 수신: pkg=${sbn.packageName}, " +
+                        "title=${parsed.title.take(30)}, body=${parsed.body.take(80)}, " +
+                        "savedTimestamp=${parsed.timestamp}, postTime=${parsed.postedAt}, when=${parsed.notificationWhen}"
+                )
+                processNotification(parsed)
+            } catch (e: Exception) {
+                MoneyTalkLogger.e(
+                    "[NotiService] onNotificationPosted 예외: pkg=${sbn.packageName}, " +
+                        "error=${e.javaClass.simpleName}: ${e.message}"
+                )
+            }
         }
+    }
+
+    private suspend fun getSelectedPackages(): Set<String> {
+        val settingsDataStore = entryPoint.settingsDataStore()
+        return settingsDataStore.ensureNotificationSelectedAppsInitialized(
+            defaultSelectedPackages
+        )
+    }
+
+    private suspend fun shouldProcessNotificationPackage(packageName: String): Boolean {
+        val selectedPackages = getSelectedPackages()
+        val allowed = packageName in selectedPackages
+        if (!allowed) {
+            MoneyTalkLogger.i(
+                "[NotiService] 미선택 앱 알림 스킵: pkg=$packageName, " +
+                    "selectedCount=${selectedPackages.size}"
+            )
+        }
+        return allowed
     }
 
     /**
@@ -130,6 +211,10 @@ class NotificationTransactionService : NotificationListenerService() {
         val dataRefreshEvent = entryPoint.dataRefreshEvent()
 
         try {
+            MoneyTalkLogger.i(
+                "[NotiService] process 시작: address=${parsed.address}, " +
+                    "body=${parsed.body.take(100)}, timestamp=${parsed.timestamp}"
+            )
             val result = instantProcessor.processAndSave(
                 address = parsed.address,
                 body = parsed.body,
@@ -173,6 +258,7 @@ class NotificationTransactionService : NotificationListenerService() {
     }
 
     override fun onDestroy() {
+        instanceRef = null
         scope.cancel()
         super.onDestroy()
     }
@@ -188,19 +274,30 @@ class NotificationTransactionService : NotificationListenerService() {
         parsed: NotificationContentParser.ParsedNotification
     ): Boolean {
         if (!NotificationContentParser.isMirrorCheckedMessageApp(packageName)) {
+            MoneyTalkLogger.i("[NotiService] 일반 앱 알림 허용: pkg=$packageName")
             return false
         }
 
         if (!looksLikeFinancialMessage(parsed)) {
+            MoneyTalkLogger.i(
+                "[NotiService] 메시지 앱 비금융 판정 스킵: pkg=$packageName, body=${parsed.body.take(80)}"
+            )
             return true
         }
 
         val candidateBodies = buildCandidateBodies(parsed)
         if (candidateBodies.isEmpty()) {
+            MoneyTalkLogger.i("[NotiService] 메시지 앱 candidate body 없음 → 허용: pkg=$packageName")
             return false
         }
 
+        MoneyTalkLogger.i(
+            "[NotiService] 메시지 앱 미러 검사 시작: pkg=$packageName, " +
+                "timestamp=${parsed.timestamp}, candidates=${candidateBodies.joinToString(" || ") { it.take(80) }}"
+        )
+
         if (hasRecentProviderMirror(candidateBodies, parsed.timestamp)) {
+            MoneyTalkLogger.i("[NotiService] 즉시 provider mirror 발견 → 스킵: pkg=$packageName")
             return true
         }
 
@@ -210,10 +307,17 @@ class NotificationTransactionService : NotificationListenerService() {
         for (delayMs in MESSAGE_MIRROR_RECHECK_DELAYS_MS) {
             delay(delayMs)
             if (hasRecentProviderMirror(candidateBodies, parsed.timestamp)) {
+                MoneyTalkLogger.i(
+                    "[NotiService] 지연 재확인 mirror 발견 → 스킵: pkg=$packageName, delay=${delayMs}ms"
+                )
                 return true
             }
+            MoneyTalkLogger.i(
+                "[NotiService] 지연 재확인 mirror 없음: pkg=$packageName, delay=${delayMs}ms"
+            )
         }
 
+        MoneyTalkLogger.i("[NotiService] provider mirror 없음 → 알림 처리 허용: pkg=$packageName")
         return false
     }
 
@@ -355,11 +459,7 @@ class NotificationTransactionService : NotificationListenerService() {
         return candidateBodies.any { candidate ->
             normalizedBody == candidate ||
                 normalizedBody.contains(candidate) ||
-                // 역방향 매칭은 짧은 candidate가 긴 body에 포함되는 경우만 허용하면
-                // false positive가 발생할 수 있으므로, body가 candidate에 포함될 때는
-                // 길이 차이가 적을 때만 매칭 (SMS 본문 트리밍 수준의 차이만 허용)
-                (candidate.contains(normalizedBody) &&
-                    candidate.length - normalizedBody.length <= 20)
+                candidate.contains(normalizedBody)
         }
     }
 
