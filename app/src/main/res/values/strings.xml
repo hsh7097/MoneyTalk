@@ -447,6 +447,19 @@
     <!-- 거래 알림 -->
     <string name="settings_notification_title">거래 알림</string>
     <string name="settings_notification_subtitle">결제/입금 시 알림을 받습니다</string>
+    <string name="settings_notification_listener_title">금융 앱 알림 설정</string>
+    <string name="settings_notification_listener_subtitle_enabled">알림 접근 허용 · %1$d개 앱 선택</string>
+    <string name="settings_notification_listener_subtitle_disabled">알림 접근 비허용</string>
+    <string name="settings_notification_listener_dialog_title">금융 앱 알림 설정</string>
+    <string name="settings_notification_listener_dialog_description">알림을 분석할 금융 앱을 선택합니다. 목록에 없는 앱은 우측 상단의 추가 버튼으로 등록할 수 있습니다.</string>
+    <string name="settings_notification_listener_access_title">앱 알림 접근 설정</string>
+    <string name="settings_notification_listener_access_enabled">활성화됨</string>
+    <string name="settings_notification_listener_access_disabled">비활성화</string>
+    <string name="settings_notification_listener_selected_empty">선택된 앱이 없습니다. 추가 버튼으로 앱을 선택해주세요.</string>
+    <string name="settings_notification_listener_picker_title">알림 분석 앱 추가</string>
+    <string name="settings_notification_listener_picker_empty">추가할 수 있는 설치 앱이 없습니다.</string>
+    <string name="settings_notification_listener_recommended_badge">추천 금융 앱</string>
+    <string name="settings_notification_listener_add_app">앱 추가</string>
 
     <!-- 문자 설정 -->
     <string name="sms_settings_title">문자 설정</string>

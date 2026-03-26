@@ -40,6 +40,9 @@ class SettingsDataStore @Inject constructor(
         private val FREE_SYNC_USED_COUNT = intPreferencesKey("free_sync_used_count")
         private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         private val NOTIFICATION_ENABLED = booleanPreferencesKey("notification_enabled")
+        private val NOTIFICATION_SELECTED_APPS = stringSetPreferencesKey("notification_selected_apps")
+        private val NOTIFICATION_SELECTED_APPS_INITIALIZED =
+            booleanPreferencesKey("notification_selected_apps_initialized")
 
         // ===== 화면별 온보딩 (코치마크) =====
         private val SCREEN_ONBOARDING_KEYS = mapOf(
@@ -299,6 +302,51 @@ class SettingsDataStore @Inject constructor(
         context.dataStore.edit { preferences ->
             preferences[NOTIFICATION_ENABLED] = enabled
         }
+    }
+
+    /** 알림 분석 허용 패키지 목록 Flow */
+    val notificationSelectedAppsFlow: Flow<Set<String>> = context.dataStore.data.map { preferences ->
+        preferences[NOTIFICATION_SELECTED_APPS] ?: emptySet()
+    }
+
+    /** 알림 분석 허용 패키지 목록 즉시 조회 */
+    suspend fun getNotificationSelectedApps(): Set<String> {
+        return context.dataStore.data.first()[NOTIFICATION_SELECTED_APPS] ?: emptySet()
+    }
+
+    /** 알림 분석 허용 패키지 목록 저장 */
+    suspend fun saveNotificationSelectedApps(packageNames: Set<String>) {
+        context.dataStore.edit { preferences ->
+            preferences[NOTIFICATION_SELECTED_APPS] = packageNames
+            preferences[NOTIFICATION_SELECTED_APPS_INITIALIZED] = true
+        }
+    }
+
+    /** 단일 패키지 알림 분석 허용 여부 저장 */
+    suspend fun setNotificationSelectedApp(packageName: String, enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            val current = preferences[NOTIFICATION_SELECTED_APPS] ?: emptySet()
+            preferences[NOTIFICATION_SELECTED_APPS] = if (enabled) {
+                current + packageName
+            } else {
+                current - packageName
+            }
+            preferences[NOTIFICATION_SELECTED_APPS_INITIALIZED] = true
+        }
+    }
+
+    /** 추천 앱 기본값으로 초기화 (최초 1회만) */
+    suspend fun ensureNotificationSelectedAppsInitialized(defaultPackages: Set<String>): Set<String> {
+        val prefs = context.dataStore.data.first()
+        if (prefs[NOTIFICATION_SELECTED_APPS_INITIALIZED] == true) {
+            return prefs[NOTIFICATION_SELECTED_APPS] ?: emptySet()
+        }
+
+        context.dataStore.edit { preferences ->
+            preferences[NOTIFICATION_SELECTED_APPS] = defaultPackages
+            preferences[NOTIFICATION_SELECTED_APPS_INITIALIZED] = true
+        }
+        return defaultPackages
     }
 
     /** 무료 동기화 사용 횟수 1 증가 */

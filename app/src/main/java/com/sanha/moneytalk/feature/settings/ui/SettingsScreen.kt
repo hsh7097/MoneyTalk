@@ -53,7 +53,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +72,7 @@ import com.google.android.gms.common.api.ApiException
 import android.content.Intent
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.repeatOnLifecycle
 import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.ThemeMode
@@ -469,13 +469,18 @@ fun SettingsScreen(
                         SettingsItemCompose(
                             info = object : SettingsItemInfo {
                                 override val icon = Icons.Default.Notifications
-                                override val title = "알림 수신 (디버그)"
-                                override val subtitle = if (isNotiListenerEnabled) "활성화됨 · 모든 앱 알림" else "비활성화"
+                                override val title = stringResource(R.string.settings_notification_listener_title)
+                                override val subtitle = if (isNotiListenerEnabled) {
+                                    stringResource(
+                                        R.string.settings_notification_listener_subtitle_enabled,
+                                        uiState.notificationSelectedApps.size
+                                    )
+                                } else {
+                                    stringResource(R.string.settings_notification_listener_subtitle_disabled)
+                                }
                             },
                             onClick = {
-                                context.startActivity(
-                                    Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                                )
+                                viewModel.onIntent(SettingsIntent.ShowNotificationAppSettingsDialog)
                             }
                         )
                     }
@@ -822,7 +827,38 @@ fun SettingsScreen(
             )
         }
 
+        SettingsDialog.NOTIFICATION_APP_SETTINGS -> {
+            val isNotiListenerEnabled = NotificationManagerCompat
+                .getEnabledListenerPackages(context)
+                .contains(context.packageName)
+            NotificationAppSettingsDialog(
+                listenerEnabled = isNotiListenerEnabled,
+                selectedApps = uiState.notificationSelectedApps,
+                onOpenListenerSettings = {
+                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                },
+                onToggleApp = { packageName, enabled ->
+                    viewModel.onIntent(SettingsIntent.ToggleNotificationAppSelection(packageName, enabled))
+                },
+                onOpenAppPicker = {
+                    viewModel.onIntent(SettingsIntent.ShowNotificationAppPickerDialog)
+                },
+                onDismiss = { viewModel.onIntent(SettingsIntent.DismissDialog) }
+            )
+        }
+
+        SettingsDialog.NOTIFICATION_APP_PICKER -> {
+            NotificationAppPickerDialog(
+                availableApps = uiState.notificationAvailableApps,
+                onAddApp = { packageName ->
+                    viewModel.onIntent(SettingsIntent.ToggleNotificationAppSelection(packageName, true))
+                },
+                onDismiss = { viewModel.onIntent(SettingsIntent.ShowNotificationAppSettingsDialog) }
+            )
+        }
+
         null -> { /* 다이얼로그 미표시 */
         }
     }
 }
+

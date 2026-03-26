@@ -189,7 +189,7 @@ SettingsScreen                       ← 설정 탭 메인 화면
 ├── SettingsSectionCompose("AI 설정")
 │   └── SettingsItemCompose          ← API 키 + 카테고리 정리
 ├── SettingsSectionCompose("데이터 관리")
-│   └── SettingsItemCompose × 6      ← 문자설정/내보내기/Drive/복원/중복제거/삭제
+│   └── SettingsItemCompose × 7      ← 문자설정/금융 앱 알림(debug)/내보내기/Drive/복원/중복제거/삭제
 ├── SettingsSectionCompose("앱 정보")
 │   └── SettingsItemCompose × 3      ← 버전/개인정보/가이드 초기화
 │
@@ -206,6 +206,8 @@ SettingsScreen                       ← 설정 탭 메인 화면
 │
 ├── [다이얼로그 — 데이터 관리]
 │   ├── ExportDialog                 ← JSON/CSV 내보내기
+│   ├── NotificationAppSettingsDialog ← 금융 앱 알림 분석 대상 선택 (debug)
+│   ├── NotificationAppPickerDialog   ← 설치 앱 전체 목록에서 알림 분석 앱 추가 (debug)
 │   └── GoogleDriveDialog            ← Drive 백업 목록/업로드/복원
 │       └── DriveBackupFileItem      ← Drive 백업 파일 아이템
 │
@@ -218,7 +220,7 @@ SettingsScreen                       ← 설정 탭 메인 화면
 
 | 함수 | 설명 | 참조 |
 |------|------|------|
-| SettingsScreen | 설정 탭 메인 화면 | [SettingsScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsScreen.kt) |
+| SettingsScreen | 설정 탭 메인 화면 | [SettingsNotificationDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsNotificationDialogs.kt) |
 | BudgetBottomSheet | 전체+카테고리별 예산 설정 BottomSheet | [BudgetBottomSheetKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/BudgetBottomSheet.kt) |
 | TotalBudgetInput | 전체 예산 입력 영역 | [BudgetBottomSheetKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/BudgetBottomSheet.kt) |
 | CategoryBudgetHeader | 카테고리별 예산 헤더 + 초기화 | [BudgetBottomSheetKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/BudgetBottomSheet.kt) |
@@ -227,6 +229,8 @@ SettingsScreen                       ← 설정 탭 메인 화면
 | ApiKeySettingDialog | Gemini API 키 입력/저장 | [SettingsPreferenceDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsPreferenceDialogs.kt) |
 | MonthStartDayDialog | 정산 시작일 (1~31일) 선택 | [SettingsPreferenceDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsPreferenceDialogs.kt) |
 | ExportDialog | JSON/CSV 형식 데이터 내보내기 | [SettingsDataDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsDataDialogs.kt) |
+| NotificationAppSettingsDialog | 금융 앱 알림 분석 대상 설정 다이얼로그 (debug) | [SettingsNotificationDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsNotificationDialogs.kt) |
+| NotificationAppPickerDialog | 설치 앱 목록에서 알림 분석 앱 추가 다이얼로그 (debug) | [SettingsNotificationDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsNotificationDialogs.kt) |
 | GoogleDriveDialog | Drive 백업 목록/업로드/복원 | [SettingsDataDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsDataDialogs.kt) |
 | DriveBackupFileItem | Drive 백업 파일 아이템 | [SettingsDataDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsDataDialogs.kt) |
 | AppInfoDialog | 앱 버전/빌드 정보 | [SettingsInfoDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsInfoDialogs.kt) |

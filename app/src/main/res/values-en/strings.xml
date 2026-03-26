@@ -504,4 +504,17 @@
     <string name="notification_channel_description">Transaction alerts on SMS received</string>
     <string name="notification_expense_title">Card Payment</string>
     <string name="notification_income_title">Deposit</string>
+    <string name="settings_notification_listener_title">Financial App Alerts</string>
+    <string name="settings_notification_listener_subtitle_enabled">Notification access enabled · %1$d apps selected</string>
+    <string name="settings_notification_listener_subtitle_disabled">Notification access disabled</string>
+    <string name="settings_notification_listener_dialog_title">Financial App Alerts</string>
+    <string name="settings_notification_listener_dialog_description">Choose which financial apps to analyze from notifications. If an app is missing, add it from the button in the top right.</string>
+    <string name="settings_notification_listener_access_title">Notification Access</string>
+    <string name="settings_notification_listener_access_enabled">Enabled</string>
+    <string name="settings_notification_listener_access_disabled">Disabled</string>
+    <string name="settings_notification_listener_selected_empty">No apps selected. Add an app to start analyzing notifications.</string>
+    <string name="settings_notification_listener_picker_title">Add Notification App</string>
+    <string name="settings_notification_listener_picker_empty">There are no installed apps left to add.</string>
+    <string name="settings_notification_listener_recommended_badge">Recommended</string>
+    <string name="settings_notification_listener_add_app">Add app</string>
 </resources>

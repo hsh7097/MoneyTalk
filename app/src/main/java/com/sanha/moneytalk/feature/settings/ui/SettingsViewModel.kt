@@ -14,6 +14,8 @@ import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
+import com.sanha.moneytalk.core.notification.NotificationAppCatalog
+import com.sanha.moneytalk.core.notification.NotificationTargetApp
 import com.sanha.moneytalk.core.theme.ThemeMode
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.ClassificationState
@@ -31,6 +33,7 @@ import com.sanha.moneytalk.feature.home.data.CategoryRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,6 +56,8 @@ sealed interface SettingsIntent {
     data object ShowThemeDialog : SettingsIntent
     data object ShowMonthlyBudgetDialog : SettingsIntent
     data object ShowBudgetBottomSheet : SettingsIntent
+    data object ShowNotificationAppSettingsDialog : SettingsIntent
+    data object ShowNotificationAppPickerDialog : SettingsIntent
 
     // 다이얼로그 닫기
     data object DismissDialog : SettingsIntent
@@ -74,6 +79,10 @@ sealed interface SettingsIntent {
     data class SetPendingRestoreUri(val uri: Uri) : SettingsIntent
     data object ConfirmRestore : SettingsIntent
     data class ToggleNotification(val enabled: Boolean) : SettingsIntent
+    data class ToggleNotificationAppSelection(
+        val packageName: String,
+        val enabled: Boolean
+    ) : SettingsIntent
 }
 
 /** 다이얼로그 종류 (하나의 필드로 관리) */
@@ -88,8 +97,17 @@ enum class SettingsDialog {
     PRIVACY,
     THEME,
     MONTHLY_BUDGET,
-    BUDGET_BOTTOM_SHEET
+    BUDGET_BOTTOM_SHEET,
+    NOTIFICATION_APP_SETTINGS,
+    NOTIFICATION_APP_PICKER
 }
+
+@Stable
+data class NotificationAppSettingUiModel(
+    val packageName: String,
+    val appName: String,
+    val isRecommended: Boolean
+)
 
 @Stable
 data class SettingsUiState(
@@ -129,7 +147,10 @@ data class SettingsUiState(
     // 카테고리별 예산 (category displayName → monthlyLimit)
     val categoryBudgets: Map<String, Int> = emptyMap(),
     // 거래 알림 설정
-    val notificationEnabled: Boolean = false
+    val notificationEnabled: Boolean = false,
+    // 알림 분석 허용 앱 목록
+    val notificationSelectedApps: List<NotificationAppSettingUiModel> = emptyList(),
+    val notificationAvailableApps: List<NotificationAppSettingUiModel> = emptyList()
 )
 
 @HiltViewModel
@@ -148,14 +169,15 @@ class SettingsViewModel @Inject constructor(
     private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
     private val snackbarBus: AppSnackbarBus,
     private val classificationState: ClassificationState,
-    private val analyticsHelper: AnalyticsHelper
+    private val analyticsHelper: AnalyticsHelper,
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
-    companion object {
-    }
+    companion object
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+    private var installedNotificationApps: List<NotificationTargetApp> = emptyList()
 
     init {
         loadSettings()
@@ -166,6 +188,7 @@ class SettingsViewModel @Inject constructor(
         loadThemeMode()
         loadMonthlyBudget()
         loadNotificationEnabled()
+        loadNotificationSelectedApps()
     }
 
     // ========== Intent 처리 ==========
@@ -183,6 +206,8 @@ class SettingsViewModel @Inject constructor(
             is SettingsIntent.ShowThemeDialog -> showDialog(SettingsDialog.THEME)
             is SettingsIntent.ShowMonthlyBudgetDialog -> showDialog(SettingsDialog.MONTHLY_BUDGET)
             is SettingsIntent.ShowBudgetBottomSheet -> showDialog(SettingsDialog.BUDGET_BOTTOM_SHEET)
+            is SettingsIntent.ShowNotificationAppSettingsDialog -> showDialog(SettingsDialog.NOTIFICATION_APP_SETTINGS)
+            is SettingsIntent.ShowNotificationAppPickerDialog -> showDialog(SettingsDialog.NOTIFICATION_APP_PICKER)
             is SettingsIntent.DismissDialog -> dismissDialog()
 
             is SettingsIntent.SaveApiKey -> {
@@ -237,6 +262,9 @@ class SettingsViewModel @Inject constructor(
             }
 
             is SettingsIntent.ToggleNotification -> saveNotificationEnabled(intent.enabled)
+            is SettingsIntent.ToggleNotificationAppSelection -> {
+                setNotificationAppSelected(intent.packageName, intent.enabled)
+            }
         }
     }
 
@@ -267,6 +295,57 @@ class SettingsViewModel @Inject constructor(
     private fun saveNotificationEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.saveNotificationEnabled(enabled)
+        }
+    }
+
+    private fun loadNotificationSelectedApps() {
+        viewModelScope.launch {
+            installedNotificationApps = withContext(Dispatchers.IO) {
+                NotificationAppCatalog.getInstalledLaunchableApps(appContext)
+            }
+
+            val defaultPackages = NotificationAppCatalog.getDefaultSelectedPackages(installedNotificationApps)
+            settingsDataStore.ensureNotificationSelectedAppsInitialized(defaultPackages)
+
+            settingsDataStore.notificationSelectedAppsFlow.collect { selectedPackages ->
+                val installedPackageSet = installedNotificationApps.map { it.packageName }.toSet()
+                val effectiveSelected = selectedPackages.intersect(installedPackageSet)
+                _uiState.update {
+                    it.copy(
+                        notificationSelectedApps = buildNotificationAppUiModels(
+                            apps = installedNotificationApps.filter { app ->
+                                app.packageName in effectiveSelected
+                            }
+                        ),
+                        notificationAvailableApps = buildNotificationAppUiModels(
+                            apps = installedNotificationApps.filter { app ->
+                                app.packageName !in effectiveSelected
+                            }
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    private fun buildNotificationAppUiModels(
+        apps: List<NotificationTargetApp>
+    ): List<NotificationAppSettingUiModel> {
+        return apps.map { app ->
+            NotificationAppSettingUiModel(
+                packageName = app.packageName,
+                appName = app.appName,
+                isRecommended = app.isRecommended
+            )
+        }.sortedWith(
+            compareByDescending<NotificationAppSettingUiModel> { it.isRecommended }
+                .thenBy { it.appName.lowercase() }
+        )
+    }
+
+    private fun setNotificationAppSelected(packageName: String, enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setNotificationSelectedApp(packageName, enabled)
         }
     }
 
