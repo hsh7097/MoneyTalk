@@ -207,9 +207,9 @@ fun HomeScreen(
                 MonthPagerUtils.pageToYearMonth(page)
             }
             // pageCache에서 이 페이지의 데이터 읽기
-            // 캐시 미적재 페이지는 isLoading=false로 처리하여 CTA 조건이 즉시 평가되도록 함
+            // 캐시 미적재 첫 프레임은 loading 상태로 유지해 빈 CTA가 먼저 번쩍이지 않도록 한다.
             val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
-                ?: HomePageData(isLoading = false)
+                ?: HomePageData(isLoading = true)
 
             HomePageContent(
                 pageData = pageData,
@@ -586,9 +586,7 @@ fun HomePageContent(
             if (pageData.aiInsight.isNotBlank()) {
                 item {
                     AiInsightCard(
-                        insight = pageData.aiInsight,
-                        monthlyExpense = pageData.monthlyExpense,
-                        lastMonthExpense = pageData.lastMonthExpense
+                        insight = pageData.aiInsight
                     )
                 }
             }
@@ -1067,16 +1065,11 @@ fun EmptyExpenseSection() {
     }
 }
 
-/** AI 인사이트 카드. Gemini가 생성한 이번 달 소비 분석 요약 + 전월 대비 절대금액 표시 */
+/** AI 인사이트 카드. Gemini가 생성한 이번 달 소비 분석 요약 표시 */
 @Composable
 fun AiInsightCard(
-    insight: String,
-    monthlyExpense: Int = 0,
-    lastMonthExpense: Int = 0
+    insight: String
 ) {
-    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
-    val diff = monthlyExpense - lastMonthExpense
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -1091,28 +1084,6 @@ fun AiInsightCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            // 전월 대비 절대금액 변화 (전월 데이터 있을 때만)
-            if (lastMonthExpense > 0 && diff != 0) {
-                Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider(
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = if (diff > 0) {
-                        stringResource(R.string.home_insight_diff_more, numberFormat.format(diff))
-                    } else {
-                        stringResource(R.string.home_insight_diff_less, numberFormat.format(-diff))
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (diff > 0) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.moneyTalkColors.income
-                    }
-                )
-            }
         }
     }
 }

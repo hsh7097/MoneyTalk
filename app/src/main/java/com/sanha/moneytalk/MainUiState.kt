@@ -64,3 +64,27 @@ data class ScreenSyncUiState(
     val syncedMonths: Set<String> = emptySet(),
     val isLegacyFullSyncUnlocked: Boolean = false
 )
+
+/**
+ * Activity 루트에서 필요한 MainViewModel 축약 상태.
+ *
+ * 루트 Scaffold/Navigation은 동기화 다이얼로그, 광고 다이얼로그처럼
+ * 실제로 화면에 표시되는 최소 상태만 구독해 불필요한 전체 recomposition을 줄인다.
+ */
+@Stable
+data class MainDialogUiState(
+    val showSyncDialog: Boolean = false,
+    val syncProgress: String = "",
+    val syncProgressCurrent: Int = 0,
+    val syncProgressTotal: Int = 0,
+    val syncStepIndex: Int = 0,
+    val showEngineSummary: Boolean = false,
+    val engineSummaryTotalSms: Int = 0,
+    val engineSummaryPatterns: Int = 0,
+    val engineSummaryExpenses: Int = 0,
+    val engineSummaryIncomes: Int = 0,
+    val showFullSyncAdDialog: Boolean = false,
+    val fullSyncAdYear: Int = 0,
+    val fullSyncAdMonth: Int = 0,
+    val monthStartDay: Int = 1
+)

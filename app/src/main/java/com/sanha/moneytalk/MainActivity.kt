@@ -210,7 +210,8 @@ fun MoneyTalkApp(
     // Activity-scoped MainViewModel (동기화/권한/광고 통합 관리)
     // ON_RESUME 라이프사이클은 MainActivity.onCreate()에서 직접 관리
     val mainViewModel: MainViewModel = hiltViewModel()
-    val mainUiState by mainViewModel.uiState.collectAsStateWithLifecycle()
+    val dialogUiState by mainViewModel.dialogUiState
+        .collectAsStateWithLifecycle(initialValue = MainDialogUiState())
 
     // App-wide snackbar (toast-like): collect one-off events at the root
     LaunchedEffect(snackbarBus) {
@@ -246,7 +247,7 @@ fun MoneyTalkApp(
     // ===== Activity 레벨 다이얼로그 (탭 이동과 무관하게 표시) =====
 
     // SMS 동기화 진행 다이얼로그 (Stepper UI + 스킵 가능)
-    if (mainUiState.showSyncDialog) {
+    if (dialogUiState.showSyncDialog) {
         AlertDialog(
             onDismissRequest = { mainViewModel.dismissSyncDialog() },
             properties = DialogProperties(dismissOnClickOutside = false),
@@ -257,14 +258,14 @@ fun MoneyTalkApp(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     SyncStepIndicator(
-                        currentStep = mainUiState.syncStepIndex,
+                        currentStep = dialogUiState.syncStepIndex,
                         totalSteps = SmsPipeline.TOTAL_STEPS
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    if (mainUiState.syncProgressTotal > 0) {
+                    if (dialogUiState.syncProgressTotal > 0) {
                         val progress =
-                            mainUiState.syncProgressCurrent.toFloat() / mainUiState.syncProgressTotal.toFloat()
+                            dialogUiState.syncProgressCurrent.toFloat() / dialogUiState.syncProgressTotal.toFloat()
                         LinearProgressIndicator(
                             progress = { progress.coerceIn(0f, 1f) },
                             modifier = Modifier
@@ -274,7 +275,7 @@ fun MoneyTalkApp(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "${mainUiState.syncProgressCurrent} / ${mainUiState.syncProgressTotal}건",
+                            text = "${dialogUiState.syncProgressCurrent} / ${dialogUiState.syncProgressTotal}건",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
@@ -291,7 +292,7 @@ fun MoneyTalkApp(
                     }
 
                     Text(
-                        text = mainUiState.syncProgress,
+                        text = dialogUiState.syncProgress,
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -308,7 +309,7 @@ fun MoneyTalkApp(
     }
 
     // AI 성과 요약 카드 (초기 동기화 완료 후)
-    if (mainUiState.showEngineSummary) {
+    if (dialogUiState.showEngineSummary) {
         AlertDialog(
             onDismissRequest = { mainViewModel.dismissEngineSummary() },
             title = {
@@ -320,24 +321,24 @@ fun MoneyTalkApp(
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (mainUiState.engineSummaryTotalSms > 0) {
+                    if (dialogUiState.engineSummaryTotalSms > 0) {
                         Text(
-                            text = stringResource(R.string.engine_summary_sms_analyzed, mainUiState.engineSummaryTotalSms),
+                            text = stringResource(R.string.engine_summary_sms_analyzed, dialogUiState.engineSummaryTotalSms),
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
-                    if (mainUiState.engineSummaryPatterns > 0) {
+                    if (dialogUiState.engineSummaryPatterns > 0) {
                         Text(
-                            text = stringResource(R.string.engine_summary_patterns_learned, mainUiState.engineSummaryPatterns),
+                            text = stringResource(R.string.engine_summary_patterns_learned, dialogUiState.engineSummaryPatterns),
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
                     val parts = mutableListOf<String>()
-                    if (mainUiState.engineSummaryExpenses > 0) {
-                        parts.add(stringResource(R.string.engine_summary_expense_count, mainUiState.engineSummaryExpenses))
+                    if (dialogUiState.engineSummaryExpenses > 0) {
+                        parts.add(stringResource(R.string.engine_summary_expense_count, dialogUiState.engineSummaryExpenses))
                     }
-                    if (mainUiState.engineSummaryIncomes > 0) {
-                        parts.add(stringResource(R.string.engine_summary_income_count, mainUiState.engineSummaryIncomes))
+                    if (dialogUiState.engineSummaryIncomes > 0) {
+                        parts.add(stringResource(R.string.engine_summary_income_count, dialogUiState.engineSummaryIncomes))
                     }
                     if (parts.isNotEmpty()) {
                         Text(
@@ -357,12 +358,12 @@ fun MoneyTalkApp(
     }
 
     // 전체 동기화 해제 광고 다이얼로그
-    if (mainUiState.showFullSyncAdDialog) {
+    if (dialogUiState.showFullSyncAdDialog) {
         val context = LocalContext.current
         val activity = context as? android.app.Activity
-        val adYear = mainUiState.fullSyncAdYear
-        val adMonth = mainUiState.fullSyncAdMonth
-        val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(mainUiState.monthStartDay)
+        val adYear = dialogUiState.fullSyncAdYear
+        val adMonth = dialogUiState.fullSyncAdMonth
+        val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(dialogUiState.monthStartDay)
         val isCurrentMonth = adYear == effYear && adMonth == effMonth
         val monthLabel = if (isCurrentMonth) "이번달" else "${adMonth}월"
         AlertDialog(

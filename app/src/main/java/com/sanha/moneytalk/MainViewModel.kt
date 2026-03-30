@@ -129,6 +129,26 @@ class MainViewModel @Inject constructor(
             )
         }
         .distinctUntilChanged()
+    val dialogUiState: Flow<MainDialogUiState> = uiState
+        .map { state ->
+            MainDialogUiState(
+                showSyncDialog = state.showSyncDialog,
+                syncProgress = state.syncProgress,
+                syncProgressCurrent = state.syncProgressCurrent,
+                syncProgressTotal = state.syncProgressTotal,
+                syncStepIndex = state.syncStepIndex,
+                showEngineSummary = state.showEngineSummary,
+                engineSummaryTotalSms = state.engineSummaryTotalSms,
+                engineSummaryPatterns = state.engineSummaryPatterns,
+                engineSummaryExpenses = state.engineSummaryExpenses,
+                engineSummaryIncomes = state.engineSummaryIncomes,
+                showFullSyncAdDialog = state.showFullSyncAdDialog,
+                fullSyncAdYear = state.fullSyncAdYear,
+                fullSyncAdMonth = state.fullSyncAdMonth,
+                monthStartDay = state.monthStartDay
+            )
+        }
+        .distinctUntilChanged()
 
     /** 광고 매니저 접근 (Activity에서 광고 표시에 필요) */
     val adManager: com.sanha.moneytalk.core.ad.RewardAdManager get() = rewardAdManager
