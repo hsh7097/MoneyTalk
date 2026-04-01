@@ -11,6 +11,7 @@ import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
 import com.sanha.moneytalk.core.database.dao.OwnedCardDao
 import com.sanha.moneytalk.core.database.dao.SmsBlockedSenderDao
+import com.sanha.moneytalk.core.database.dao.SmsChannelProbeLogDao
 import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.dao.SmsRegexRuleDao
@@ -26,6 +27,7 @@ import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.database.entity.OwnedCardEntity
 import com.sanha.moneytalk.core.database.entity.SmsBlockedSenderEntity
+import com.sanha.moneytalk.core.database.entity.SmsChannelProbeLogEntity
 import com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.database.entity.SmsRegexRuleEntity
@@ -70,11 +72,12 @@ import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
         OwnedCardEntity::class,
         SmsExclusionKeywordEntity::class,
         SmsBlockedSenderEntity::class,
+        SmsChannelProbeLogEntity::class,
         SmsRegexRuleEntity::class,
         CustomCategoryEntity::class,
         StoreRuleEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(FloatListConverter::class)
@@ -110,6 +113,9 @@ abstract class AppDatabase : RoomDatabase() {
     /** SMS 수신거부 발신번호 DAO */
     abstract fun smsBlockedSenderDao(): SmsBlockedSenderDao
 
+    /** 채널 진단 로그 DAO */
+    abstract fun smsChannelProbeLogDao(): SmsChannelProbeLogDao
+
     /** sender 기반 regex 룰 DAO */
     abstract fun smsRegexRuleDao(): SmsRegexRuleDao
 
@@ -122,5 +128,35 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         /** 데이터베이스 파일명 */
         const val DATABASE_NAME = "moneytalk.db"
+
+        val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS sms_channel_probe_logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        normalizedSenderAddress TEXT NOT NULL,
+                        channel TEXT NOT NULL,
+                        stage TEXT NOT NULL,
+                        originBody TEXT NOT NULL,
+                        maskedBody TEXT NOT NULL,
+                        normalizedBody TEXT NOT NULL,
+                        messageTimestamp INTEGER NOT NULL,
+                        note TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_sms_channel_probe_logs_normalizedSenderAddress ON sms_channel_probe_logs(normalizedSenderAddress)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_sms_channel_probe_logs_createdAt ON sms_channel_probe_logs(createdAt)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_sms_channel_probe_logs_channel_stage ON sms_channel_probe_logs(channel, stage)"
+                )
+            }
+        }
     }
 }

@@ -24,7 +24,8 @@ class SmsRegexRuleMatcher @Inject constructor(
     private val ruleRepository: SmsRegexRuleRepository,
     private val smsPatternDao: SmsPatternDao,
     private val templateEngine: SmsTemplateEngine,
-    private val originSampleCollector: SmsOriginSampleCollector
+    private val originSampleCollector: SmsOriginSampleCollector,
+    private val channelProbeCollector: SmsChannelProbeCollector
 ) {
     data class RuleMatchResult(
         val matched: List<SmsParseResult>,
@@ -554,6 +555,21 @@ class SmsRegexRuleMatcher @Inject constructor(
         }.onFailure { e ->
             MoneyTalkLogger.w("Fast Path 실패 표본 수집 예외(무시): ${e.message}")
         }
+
+        channelProbeCollector.collect(
+            channel = "fast_path",
+            stage = failStage,
+            address = normalizedSender,
+            body = input.body,
+            timestamp = input.date,
+            note = buildString {
+                append("type=").append(type)
+                append(", failReason=").append(failReason)
+                if (matchedRuleKey.isNotBlank()) {
+                    append(", ruleKey=").append(matchedRuleKey)
+                }
+            }
+        )
     }
 
     private fun isEligibleType(type: String): Boolean {

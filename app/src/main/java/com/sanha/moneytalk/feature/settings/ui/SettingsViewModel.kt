@@ -70,6 +70,7 @@ sealed interface SettingsIntent {
     data object DeleteAllData : SettingsIntent
     data object DeleteDuplicates : SettingsIntent
     data object DebugFullSyncAllMessages : SettingsIntent
+    data object DebugSyncTodayMessages : SettingsIntent
     data object OpenRestoreFilePicker : SettingsIntent
     data class SetPendingRestoreUri(val uri: Uri) : SettingsIntent
     data object ConfirmRestore : SettingsIntent
@@ -218,6 +219,7 @@ class SettingsViewModel @Inject constructor(
 
             is SettingsIntent.DeleteDuplicates -> deleteDuplicates()
             is SettingsIntent.DebugFullSyncAllMessages -> requestDebugFullSyncAllMessages()
+            is SettingsIntent.DebugSyncTodayMessages -> requestDebugSyncTodayMessages()
             is SettingsIntent.OpenRestoreFilePicker -> {
                 _uiState.update { it.copy(triggerRestoreFilePicker = true) }
             }
@@ -1135,6 +1137,10 @@ class SettingsViewModel @Inject constructor(
 
     private fun requestDebugFullSyncAllMessages() {
         dataRefreshEvent.emit(DataRefreshEvent.RefreshType.DEBUG_FULL_SYNC_ALL_MESSAGES)
+    }
+
+    private fun requestDebugSyncTodayMessages() {
+        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.DEBUG_SYNC_TODAY_MESSAGES)
     }
 
     private fun launchBackgroundReclassification() {

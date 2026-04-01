@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
+import com.sanha.moneytalk.core.sms2.SmsChannelProbeCollector
 import com.sanha.moneytalk.core.sms2.SmsInstantProcessor
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
@@ -33,6 +34,9 @@ class SmsReceiver : BroadcastReceiver() {
     @Inject
     lateinit var instantProcessor: SmsInstantProcessor
 
+    @Inject
+    lateinit var channelProbeCollector: SmsChannelProbeCollector
+
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
 
@@ -59,6 +63,13 @@ class SmsReceiver : BroadcastReceiver() {
         }
 
         MoneyTalkLogger.i("[SmsReceiver] SMS 수신: addr=$address, len=${body.length}")
+        channelProbeCollector.collect(
+            channel = "sms_receiver",
+            stage = "received",
+            address = address,
+            body = body,
+            timestamp = timestamp
+        )
 
         // goAsync()로 코루틴 작업 범위 확장 (최대 10초)
         val pendingResult = goAsync()
@@ -70,16 +81,47 @@ class SmsReceiver : BroadcastReceiver() {
                 when (result) {
                     is SmsInstantProcessor.Result.Expense -> {
                         instantSuccess = true
+                        channelProbeCollector.collect(
+                            channel = "sms_receiver",
+                            stage = "instant_expense",
+                            address = address,
+                            body = body,
+                            timestamp = timestamp
+                        )
                         MoneyTalkLogger.i("[SmsReceiver] 즉시 지출 저장: ${result.entity.storeName} ${result.entity.amount}원")
                     }
                     is SmsInstantProcessor.Result.Income -> {
                         instantSuccess = true
+                        channelProbeCollector.collect(
+                            channel = "sms_receiver",
+                            stage = "instant_income",
+                            address = address,
+                            body = body,
+                            timestamp = timestamp
+                        )
                         MoneyTalkLogger.i("[SmsReceiver] 즉시 수입 저장: ${result.entity.amount}원")
                     }
-                    is SmsInstantProcessor.Result.Skipped ->
+                    is SmsInstantProcessor.Result.Skipped -> {
+                        channelProbeCollector.collect(
+                            channel = "sms_receiver",
+                            stage = "instant_skipped",
+                            address = address,
+                            body = body,
+                            timestamp = timestamp
+                        )
                         MoneyTalkLogger.i("[SmsReceiver] 비결제 또는 미매칭 → 전체 동기화 대기")
-                    is SmsInstantProcessor.Result.Error ->
+                    }
+                    is SmsInstantProcessor.Result.Error -> {
+                        channelProbeCollector.collect(
+                            channel = "sms_receiver",
+                            stage = "instant_error",
+                            address = address,
+                            body = body,
+                            timestamp = timestamp,
+                            note = result.message
+                        )
                         MoneyTalkLogger.w("[SmsReceiver] 즉시 처리 실패: ${result.message}")
+                    }
                 }
             } catch (e: Exception) {
                 MoneyTalkLogger.e("[SmsReceiver] 즉시 처리 예외: ${e.message}")

@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import com.sanha.moneytalk.core.sms2.SmsFilter
+import com.sanha.moneytalk.core.sms2.SmsChannelProbeCollector
 import com.sanha.moneytalk.core.sms2.SmsInstantProcessor
 import com.sanha.moneytalk.core.sms2.SmsReaderV2
 import com.sanha.moneytalk.core.util.DataRefreshEvent
@@ -37,7 +38,8 @@ import javax.inject.Singleton
 class MmsContentObserver @Inject constructor(
     private val smsReaderV2: SmsReaderV2,
     private val instantProcessor: SmsInstantProcessor,
-    private val dataRefreshEvent: DataRefreshEvent
+    private val dataRefreshEvent: DataRefreshEvent,
+    private val channelProbeCollector: SmsChannelProbeCollector
 ) : ContentObserver(Handler(Looper.getMainLooper())) {
 
     companion object {
@@ -163,28 +165,71 @@ class MmsContentObserver @Inject constructor(
         }
 
         if (SmsFilter.shouldSkipBySender(address, body)) {
+            channelProbeCollector.collect(
+                channel = "mms_observer",
+                stage = "sender_skipped",
+                address = address,
+                body = body,
+                timestamp = timestampMillis
+            )
             MoneyTalkLogger.i("[MmsObserver] 개인번호 스킵: $address")
             return CandidateOutcome()
         }
 
         MoneyTalkLogger.i("[MmsObserver] MMS 처리 시작: addr=$address, len=${body.length}")
+        channelProbeCollector.collect(
+            channel = "mms_observer",
+            stage = "received",
+            address = address,
+            body = body,
+            timestamp = timestampMillis
+        )
 
         try {
             val result = instantProcessor.processAndSave(address, body, timestampMillis)
             return when (result) {
                 is SmsInstantProcessor.Result.Expense -> {
+                    channelProbeCollector.collect(
+                        channel = "mms_observer",
+                        stage = "instant_expense",
+                        address = address,
+                        body = body,
+                        timestamp = timestampMillis
+                    )
                     MoneyTalkLogger.i("[MmsObserver] 즉시 지출 저장: ${result.entity.storeName} ${result.entity.amount}원")
                     CandidateOutcome(instantSuccess = true)
                 }
                 is SmsInstantProcessor.Result.Income -> {
+                    channelProbeCollector.collect(
+                        channel = "mms_observer",
+                        stage = "instant_income",
+                        address = address,
+                        body = body,
+                        timestamp = timestampMillis
+                    )
                     MoneyTalkLogger.i("[MmsObserver] 즉시 수입 저장: ${result.entity.amount}원")
                     CandidateOutcome(instantSuccess = true)
                 }
                 is SmsInstantProcessor.Result.Skipped -> {
+                    channelProbeCollector.collect(
+                        channel = "mms_observer",
+                        stage = "instant_skipped",
+                        address = address,
+                        body = body,
+                        timestamp = timestampMillis
+                    )
                     MoneyTalkLogger.i("[MmsObserver] 비결제 또는 미매칭 -> 전체 동기화 대기")
                     CandidateOutcome(shouldTriggerSync = true)
                 }
                 is SmsInstantProcessor.Result.Error -> {
+                    channelProbeCollector.collect(
+                        channel = "mms_observer",
+                        stage = "instant_error",
+                        address = address,
+                        body = body,
+                        timestamp = timestampMillis,
+                        note = result.message
+                    )
                     MoneyTalkLogger.w("[MmsObserver] 즉시 처리 실패: ${result.message}")
                     CandidateOutcome(shouldTriggerSync = true)
                 }

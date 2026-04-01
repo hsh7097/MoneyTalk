@@ -450,6 +450,17 @@ fun SettingsScreen(
                                 viewModel.onIntent(SettingsIntent.DebugFullSyncAllMessages)
                             }
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        SettingsItemCompose(
+                            info = object : SettingsItemInfo {
+                                override val icon = Icons.Default.Sms
+                                override val title = stringResource(R.string.settings_debug_today_sync_title)
+                                override val subtitle = stringResource(R.string.settings_debug_today_sync_subtitle)
+                            },
+                            onClick = {
+                                viewModel.onIntent(SettingsIntent.DebugSyncTodayMessages)
+                            }
+                        )
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SettingsItemCompose(

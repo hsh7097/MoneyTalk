@@ -50,6 +50,9 @@ class DataRefreshEvent @Inject constructor() {
         SMS_RECEIVED,
 
         /** DEBUG 전용: 기간 제한 없이 전체 메시지 동기화 트리거 */
-        DEBUG_FULL_SYNC_ALL_MESSAGES
+        DEBUG_FULL_SYNC_ALL_MESSAGES,
+
+        /** DEBUG 전용: 오늘 날짜 메시지만 동기화 트리거 */
+        DEBUG_SYNC_TODAY_MESSAGES
     }
 }

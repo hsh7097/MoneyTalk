@@ -409,6 +409,18 @@
     },
     "15889955": {
       "expense": {
+        "6e1b2e65d3cf4d58ab108311": {
+          "type": "expense",
+          "priority": 930,
+          "bodyRegex": "(?s)(?:\\uc548\\ub0b4\\s*)?\\u25cf\\s*(?<card>\\uc6b0\\ub9ac\\uce74\\ub4dc)\\s*\\uc774\\uc6a9\\uc548\\ub0b4\\s*\\n\\s*\\uc6b0\\ub9ac\\(\\d+\\)\\uc2b9\\uc778\\s*\\n\\s*\\S+\\ub2d8\\s*\\n\\s*(?<amount>[\\d,]+)\\uc6d0\\s*(?:\\uc77c\\uc2dc\\ubd88|\\d+\\uac1c\\uc6d4)\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*(?<store>[^\\n]+?)\\s*(?:\\n\\s*\\ub204\\uc801[\\d,]+\\uc6d0)?(?:\\n\\s*\\uce74\\ub4dc\\uc774\\uc6a9\\ub0b4\\uc5ed\\s*\\ud655\\uc778\\ud558\\uae30)?(?:\\n\\s*\\ub098\\uc758\\s*\\ud3ec\\uc778\\ud2b8\\s*\\uc870\\ud68c\\ud558\\uae30)?\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
         "fe01af65595b45119b126f6d": {
           "type": "expense",
           "priority": 900,

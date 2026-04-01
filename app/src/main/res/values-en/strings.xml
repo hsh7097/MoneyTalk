@@ -403,6 +403,8 @@
     <string name="sms_settings_subtitle">SMS analysis &amp; blocked sender management</string>
     <string name="settings_debug_full_sync_title">Debug Full SMS Sync</string>
     <string name="settings_debug_full_sync_subtitle">Re-analyze all messages without date range limits</string>
+    <string name="settings_debug_today_sync_title">Debug SMS Sync Since Yesterday</string>
+    <string name="settings_debug_today_sync_subtitle">Re-analyze messages from yesterday until now</string>
     <string name="sms_settings_section_analysis">SMS Analysis</string>
     <string name="sms_settings_section_block">Blocked</string>
     <string name="sms_settings_sync_title">Update SMS Analysis</string>

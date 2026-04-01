@@ -11,6 +11,7 @@ import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
 import com.sanha.moneytalk.core.database.dao.OwnedCardDao
 import com.sanha.moneytalk.core.database.dao.SmsBlockedSenderDao
+import com.sanha.moneytalk.core.database.dao.SmsChannelProbeLogDao
 import com.sanha.moneytalk.core.database.dao.SmsExclusionKeywordDao
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.dao.SmsRegexRuleDao
@@ -51,6 +52,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
+            .addMigrations(AppDatabase.MIGRATION_1_2)
             .build()
     }
 
@@ -122,6 +124,13 @@ object DatabaseModule {
     @Singleton
     fun provideSmsBlockedSenderDao(database: AppDatabase): SmsBlockedSenderDao {
         return database.smsBlockedSenderDao()
+    }
+
+    /** 채널 진단 로그 DAO 제공 */
+    @Provides
+    @Singleton
+    fun provideSmsChannelProbeLogDao(database: AppDatabase): SmsChannelProbeLogDao {
+        return database.smsChannelProbeLogDao()
     }
 
     /** sender 기반 regex 룰 DAO 제공 */

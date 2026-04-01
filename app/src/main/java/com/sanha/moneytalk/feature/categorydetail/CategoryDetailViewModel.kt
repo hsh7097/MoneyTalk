@@ -224,6 +224,10 @@ class CategoryDetailViewModel @Inject constructor(
                     DataRefreshEvent.RefreshType.DEBUG_FULL_SYNC_ALL_MESSAGES -> {
                         // MainViewModel이 전체 동기화 수행 후 TRANSACTION_ADDED로 갱신됨
                     }
+
+                    DataRefreshEvent.RefreshType.DEBUG_SYNC_TODAY_MESSAGES -> {
+                        // MainViewModel이 오늘 문자 동기화 수행 후 TRANSACTION_ADDED로 갱신됨
+                    }
                 }
             }
         }

@@ -25,7 +25,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class SmsReaderV2 @Inject constructor(
-    private val smsBlockedSenderRepository: SmsBlockedSenderRepository
+    private val smsBlockedSenderRepository: SmsBlockedSenderRepository,
+    private val channelProbeCollector: SmsChannelProbeCollector
 ) {
 
     companion object {
@@ -109,14 +110,36 @@ class SmsReaderV2 @Inject constructor(
                 val date = it.getLong(dateIndex)
 
                 if (shouldSkipBlockedSender(address, blockedAddressSet)) {
+                    channelProbeCollector.collect(
+                        channel = "sms_inbox",
+                        stage = "blocked_sender",
+                        address = address,
+                        body = body,
+                        timestamp = date
+                    )
                     blockedSenderSkipCount++
                     continue
                 }
 
                 if (SmsFilter.shouldSkipBySender(address, body)) {
+                    channelProbeCollector.collect(
+                        channel = "sms_inbox",
+                        stage = "sender_skipped",
+                        address = address,
+                        body = body,
+                        timestamp = date
+                    )
                     senderSkipCount++
                     continue
                 }
+
+                channelProbeCollector.collect(
+                    channel = "sms_inbox",
+                    stage = "accepted",
+                    address = address,
+                    body = body,
+                    timestamp = date
+                )
 
                 result.add(
                     SmsInput(
@@ -171,14 +194,36 @@ class SmsReaderV2 @Inject constructor(
                     val address = getMmsAddress(contentResolver, mmsId)
 
                     if (shouldSkipBlockedSender(address, blockedAddressSet)) {
+                        channelProbeCollector.collect(
+                            channel = "mms_inbox",
+                            stage = "blocked_sender",
+                            address = address,
+                            body = body,
+                            timestamp = dateMs
+                        )
                         blockedSenderSkipCount++
                         continue
                     }
 
                     if (SmsFilter.shouldSkipBySender(address, body)) {
+                        channelProbeCollector.collect(
+                            channel = "mms_inbox",
+                            stage = "sender_skipped",
+                            address = address,
+                            body = body,
+                            timestamp = dateMs
+                        )
                         senderSkipCount++
                         continue
                     }
+
+                    channelProbeCollector.collect(
+                        channel = "mms_inbox",
+                        stage = "accepted",
+                        address = address,
+                        body = body,
+                        timestamp = dateMs
+                    )
 
                     result.add(
                         SmsInput(
@@ -325,14 +370,36 @@ class SmsReaderV2 @Inject constructor(
                     if (body.isBlank()) continue
 
                     if (shouldSkipBlockedSender(address, blockedAddressSet)) {
+                        channelProbeCollector.collect(
+                            channel = "rcs_im_chat",
+                            stage = "blocked_sender",
+                            address = address,
+                            body = body,
+                            timestamp = date
+                        )
                         blockedSenderSkipCount++
                         continue
                     }
 
                     if (SmsFilter.shouldSkipBySender(address, body)) {
+                        channelProbeCollector.collect(
+                            channel = "rcs_im_chat",
+                            stage = "sender_skipped",
+                            address = address,
+                            body = body,
+                            timestamp = date
+                        )
                         senderSkipCount++
                         continue
                     }
+
+                    channelProbeCollector.collect(
+                        channel = "rcs_im_chat",
+                        stage = "accepted",
+                        address = address,
+                        body = body,
+                        timestamp = date
+                    )
 
                     result.add(
                         SmsInput(
@@ -365,7 +432,7 @@ class SmsReaderV2 @Inject constructor(
      * RCS(채팅+) 메시지는 body가 JSON 형태로 저장됨.
      * "text" 필드의 값만 추출하여 반환, JSON이 아닌 경우 그대로 반환.
      */
-    private fun extractRcsText(rawBody: String): String {
+    internal fun extractRcsText(rawBody: String): String {
         if (rawBody.isBlank()) return rawBody
 
         val trimmed = rawBody.trim()
