@@ -18,7 +18,6 @@ import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
-import com.sanha.moneytalk.core.notification.SmsNotificationManager
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.util.DataRefreshEvent
@@ -86,7 +85,6 @@ class MainViewModel @Inject constructor(
     private val snackbarBus: AppSnackbarBus,
     private val classificationState: ClassificationState,
     private val analyticsHelper: AnalyticsHelper,
-    private val smsNotificationManager: SmsNotificationManager,
     private val rewardAdManager: com.sanha.moneytalk.core.ad.RewardAdManager,
     private val smsSyncCoordinator: SmsSyncCoordinator,
     private val storeRuleRepository: StoreRuleRepository,
@@ -115,12 +113,6 @@ class MainViewModel @Inject constructor(
 
         /** fuzzy dedupe 후보 조회 시 대상 기간 앞뒤로 확장할 범위 */
         private const val FUZZY_CANDIDATE_PADDING_MS = 3L * 24 * 60 * 60 * 1000
-
-        /** silent sync 저장 직후 후행 거래 알림 허용 범위 */
-        private const val POST_SYNC_NOTIFICATION_WINDOW_MS = 2L * 60 * 60 * 1000
-
-        /** silent sync 1회당 후행 거래 알림 최대 개수 */
-        private const val MAX_POST_SYNC_NOTIFICATIONS = 5
 
     }
 
@@ -327,8 +319,7 @@ class MainViewModel @Inject constructor(
 
     private data class SaveResult(
         val newCount: Int = 0,
-        val reconciledCount: Int = 0,
-        val notificationCandidates: List<SyncNotificationCandidate> = emptyList()
+        val reconciledCount: Int = 0
     )
 
     private data class ParsedSmsId(
@@ -359,28 +350,9 @@ class MainViewModel @Inject constructor(
         val reconciledIncomeCount: Int = 0,
         val detectedCardNames: List<String>,
         val classifiedCount: Int,
-        val notificationCandidates: List<SyncNotificationCandidate> = emptyList(),
         /** 파이프라인 엔진 통계 (초기 동기화 요약 카드용) */
         val stats: SyncStats = SyncStats()
     )
-
-    private sealed interface SyncNotificationCandidate {
-        val messageTimestamp: Long
-
-        data class Expense(
-            val amount: Int,
-            val storeName: String,
-            val cardName: String,
-            override val messageTimestamp: Long
-        ) : SyncNotificationCandidate
-
-        data class Income(
-            val amount: Int,
-            val source: String,
-            val incomeType: String,
-            override val messageTimestamp: Long
-        ) : SyncNotificationCandidate
-    }
 
     /**
      * SMS 동기화 (초기/증분 공통)
@@ -648,7 +620,6 @@ class MainViewModel @Inject constructor(
             reconciledIncomeCount = incomeSaveResult.reconciledCount,
             detectedCardNames = cleanup.cardNames,
             classifiedCount = cleanup.classifiedCount,
-            notificationCandidates = expenseSaveResult.notificationCandidates + incomeSaveResult.notificationCandidates,
             stats = syncResult.stats
         )
     }
@@ -1085,18 +1056,6 @@ class MainViewModel @Inject constructor(
 
         // Phase 3: 사용자가 삭제한 항목 제외 후 DB에 배치 저장
         val filteredEntities = entities.filterNot { DeletedSmsTracker.isDeleted(it.smsId) }
-        val entityIndexBySmsId = entities.withIndex().associate { it.value.smsId to it.index }
-        val notificationCandidates = filteredEntities.mapNotNull { entity ->
-            val originalIndex = entityIndexBySmsId[entity.smsId] ?: return@mapNotNull null
-            if (originalIndex < 0 || !isNewFlags[originalIndex]) return@mapNotNull null
-            val messageTimestamp = expenses.getOrNull(originalIndex)?.input?.date ?: return@mapNotNull null
-            SyncNotificationCandidate.Expense(
-                amount = entity.amount,
-                storeName = entity.storeName,
-                cardName = entity.cardName,
-                messageTimestamp = messageTimestamp
-            )
-        }
         _uiState.update { it.copy(syncProgress = "지출 저장 중...") }
         for (chunk in filteredEntities.chunked(DB_BATCH_INSERT_SIZE)) {
             expenseRepository.insertAll(chunk)
@@ -1104,8 +1063,7 @@ class MainViewModel @Inject constructor(
 
         return SaveResult(
             newCount = newCount,
-            reconciledCount = reconciledCount,
-            notificationCandidates = notificationCandidates
+            reconciledCount = reconciledCount
         )
     }
 
@@ -1214,20 +1172,6 @@ class MainViewModel @Inject constructor(
         val filteredBatch = batch.filterNot { entity ->
             entity.smsId?.let { DeletedSmsTracker.isDeleted(it) } == true
         }
-        val batchIndexBySmsId = batch.withIndex()
-            .mapNotNull { indexed -> indexed.value.smsId?.let { it to indexed.index } }
-            .toMap()
-        val notificationCandidates = filteredBatch.mapNotNull { entity ->
-            val originalIndex = entity.smsId?.let { batchIndexBySmsId[it] } ?: return@mapNotNull null
-            if (!isNewFlags[originalIndex]) return@mapNotNull null
-            val messageTimestamp = incomes.getOrNull(originalIndex)?.date ?: return@mapNotNull null
-            SyncNotificationCandidate.Income(
-                amount = entity.amount,
-                source = entity.source,
-                incomeType = entity.type,
-                messageTimestamp = messageTimestamp
-            )
-        }
         if (filteredBatch.isNotEmpty()) {
             for (chunk in filteredBatch.chunked(DB_BATCH_INSERT_SIZE)) {
                 incomeRepository.insertAll(chunk)
@@ -1236,8 +1180,7 @@ class MainViewModel @Inject constructor(
 
         return SaveResult(
             newCount = newCount,
-            reconciledCount = reconciledCount,
-            notificationCandidates = notificationCandidates
+            reconciledCount = reconciledCount
         )
     }
     /**
@@ -1328,10 +1271,6 @@ class MainViewModel @Inject constructor(
                 "교체 지출 ${result.reconciledExpenseCount}건, 교체 수입 ${result.reconciledIncomeCount}건"
         )
 
-        if (silent) {
-            notifyRecentSyncedTransactions(result.notificationCandidates)
-        }
-
         // 카드 자동 등록 (백그라운드)
         if (result.detectedCardNames.isNotEmpty()) {
             viewModelScope.launch(Dispatchers.IO) {
@@ -1374,41 +1313,6 @@ class MainViewModel @Inject constructor(
                 snackbarBus.show(appContext.getString(R.string.sync_no_data))
             }
         }
-    }
-
-    private suspend fun notifyRecentSyncedTransactions(
-        candidates: List<SyncNotificationCandidate>
-    ) {
-        if (candidates.isEmpty()) return
-        if (!settingsDataStore.isNotificationEnabled()) return
-
-        val now = System.currentTimeMillis()
-        candidates.asSequence()
-            .filter { candidate ->
-                val age = now - candidate.messageTimestamp
-                age in 0..POST_SYNC_NOTIFICATION_WINDOW_MS
-            }
-            .sortedBy { it.messageTimestamp }
-            .take(MAX_POST_SYNC_NOTIFICATIONS)
-            .forEach { candidate ->
-                when (candidate) {
-                    is SyncNotificationCandidate.Expense -> {
-                        smsNotificationManager.showExpenseNotification(
-                            amount = candidate.amount,
-                            storeName = candidate.storeName,
-                            cardName = candidate.cardName
-                        )
-                    }
-
-                    is SyncNotificationCandidate.Income -> {
-                        smsNotificationManager.showIncomeNotification(
-                            amount = candidate.amount,
-                            source = candidate.source,
-                            incomeType = candidate.incomeType
-                        )
-                    }
-                }
-            }
     }
 
     /** 동기화 에러 처리 */

@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.core.sms2
 
+import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.core.database.dao.SmsChannelProbeLogDao
 import com.sanha.moneytalk.core.database.entity.SmsChannelProbeLogEntity
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
@@ -51,6 +52,7 @@ class SmsChannelProbeCollector @Inject constructor(
         timestamp: Long,
         note: String = ""
     ) {
+        if (!BuildConfig.DEBUG) return
         if (!shouldProbe(stage, address, body)) return
 
         val normalizedSender = SmsFilter.normalizeAddress(address)
