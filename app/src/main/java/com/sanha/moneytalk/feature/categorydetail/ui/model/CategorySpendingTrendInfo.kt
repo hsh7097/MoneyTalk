@@ -10,7 +10,7 @@ import com.sanha.moneytalk.core.ui.component.chart.CumulativeChartLine
 import com.sanha.moneytalk.core.ui.component.chart.SpendingTrendInfo
 import com.sanha.moneytalk.core.ui.component.chart.ToggleableLine
 import com.sanha.moneytalk.core.util.CumulativeChartDataBuilder
-import com.sanha.moneytalk.feature.categorydetail.CategoryDetailPageData
+import com.sanha.moneytalk.feature.categorydetail.ui.model.CategoryDetailPageData
 
 /**
  * 카테고리 상세 화면의 누적 추이 데이터 Mapper.

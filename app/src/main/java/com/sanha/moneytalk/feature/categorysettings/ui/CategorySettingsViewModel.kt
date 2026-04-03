@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.feature.categorysettings
+package com.sanha.moneytalk.feature.categorysettings.ui
 
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Stable

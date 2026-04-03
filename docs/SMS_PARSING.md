@@ -98,7 +98,7 @@ core/sms2/                           ★ sms2 통합 파이프라인
 ├── SmsPatternMatcher.kt             # Step 4: 벡터 매칭 + 원격 룰 매칭 + regex 파싱 (자체 코사인 유사도)
 ├── SmsGroupClassifier.kt            # Step 5: 그룹핑 + LLM + regex 생성 + 패턴 등록 + RTDB 표본 수집
 ├── GeminiSmsExtractor.kt            # LLM 추출 (배치 추출 + regex 생성 + MainRegexContext)
-├── SmsInstantProcessor.kt            # 실시간 1건 처리 (SMS 수신 + 앱 알림) + 알림 대기 큐
+├── SmsInstantProcessor.kt            # 실시간 1건 처리 (SMS/MMS/RCS/provider 원본 기준)
 ├── DeletedSmsTracker.kt              # 삭제된 SMS 추적 (재삽입 방지, SharedPreferences)
 ├── SmsReaderV2.kt                   # SMS/MMS/RCS 통합 읽기 (ContentResolver → List<SmsInput>)
 ├── SmsIncomeParser.kt               # 수입 SMS 파싱 (금액/유형/출처/날짜 추출)
@@ -116,6 +116,13 @@ core/database/entity/
 
 core/database/dao/
 └── SmsPatternDao.kt                 # 패턴 DB DAO (getMainPatternBySender 포함)
+
+receiver/
+├── SmsReceiver.kt                   # SMS 브로드캐스트 실시간 처리
+├── MmsContentObserver.kt            # MMS provider 실시간 감시
+├── RcsContentObserver.kt            # 삼성 RCS(content://im/chat) 실시간 감시
+├── NotificationTransactionService.kt # 메시지 앱 알림 → 최근 provider 원본 조회 보완
+└── NotificationContentParser.kt     # 메시지 앱 알림에서 거래 후보 텍스트 추출
 ```
 
 **V1 레거시 (core/sms/)**: sms2에서는 `SmsFilter.shouldSkipBySender()` (발신자 필터)만 참조.
@@ -785,8 +792,8 @@ syncSmsV2(contentResolver, targetMonthRange, updateLastSyncTime)
 [`core/sms2/SmsInstantProcessor.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsInstantProcessor.kt)
 
 ### 역할
-SMS 수신(BroadcastReceiver) 및 앱 알림(NotificationListenerService, debug 전용) 시점에
-**즉시 1건씩** 처리하는 경로. 배치 동기화(syncSmsV2)와 별도.
+SMS 수신(BroadcastReceiver), MMS/RCS ContentObserver, 메시지 앱 알림(NotificationListenerService)
+경로에서 **즉시 1건씩** 처리하는 공통 진입점. 배치 동기화(syncSmsV2)와 별도.
 
 ### processAndSave() 처리 순서
 
@@ -801,28 +808,31 @@ processAndSave(address, body, timestampMillis) → Result
   ├── SmsIncomeFilter.classify(body) → SmsType
   │   ├── PAYMENT → processExpense() → regex 매칭 시도
   │   │   ├── 매칭 성공 → ExpenseEntity DB 저장 → Result.Expense
-  │   │   └── 미매칭 + NOTI_ 주소 → pendingNotificationInputs 큐 보관 → Result.Skipped
+  │   │   └── 미매칭 → Result.Skipped (후속 batch sync에서 Vector/LLM 폴백)
   │   ├── INCOME → processIncome() → IncomeEntity DB 저장 → Result.Income
   │   └── SKIP → Result.Skipped
 ```
 
-### 앱 알림 대기 큐 (debug 전용)
+### 메시지 앱 알림 보완 경로
 
-앱 알림은 디바이스 SMS inbox에 존재하지 않아 배치 동기화의 ContentProvider 읽기에서 누락됩니다.
-regex 미매칭 시 `pendingNotificationInputs` 큐에 보관하고, 다음 배치 동기화에서 합류합니다.
+RCS/비즈메시지는 앱 프로세스가 죽어 있을 때 `ContentObserver`만으로는 실시간 감지가 보장되지 않습니다.
+이를 보완하기 위해 운영 경로에 `NotificationTransactionService`를 두고,
+메시지 앱 알림이 오면 최근 `SMS/MMS/RCS provider`에서 실제 원본 row를 찾아 기존 파이프라인으로 넘깁니다.
 
 ```
-[알림 수신 (NotificationTransactionService)]
-  → SmsInstantProcessor.processAndSave("NOTI_kakaobank_channel", body, timestamp)
-  → regex 미매칭 → addPendingNotification(SmsInput)
-  → 다음 syncSmsV2 → drainPendingNotifications() → deviceSmsList + pendingNotifications
-  → SmsSyncCoordinator.process() → 벡터/LLM 파이프라인 합류
+[메시지 앱 알림]
+  → NotificationContentParser.parse()
+  → 최근 provider row 탐색 (SMS / MMS / RCS)
+  → 실제 address/body/timestamp 확보
+  → SmsInstantProcessor.processAndSave(actualAddress, actualBody, actualTimestamp)
+  → 성공: 거래 저장 + MoneyTalk 거래 알림
+  → 스킵/실패: DataRefreshEvent.SMS_RECEIVED → batch sync 폴백
 ```
 
-| 메소드 | 역할 |
-|--------|------|
-| `addPendingNotification(input)` | 미매칭 알림을 큐에 추가 (ConcurrentHashMap) |
-| `drainPendingNotifications()` | 큐에서 꺼내고 해당 항목만 제거 (경합 안전) |
+핵심 포인트:
+- 알림 본문을 직접 저장하지 않고, **실제 provider 원본**을 찾아 처리한다.
+- 따라서 `15889955` 같은 실제 발신번호 기반 regex 룰을 그대로 사용할 수 있다.
+- cold start 상태에서 늦게 등록되는 `RcsContentObserver`의 한계를 `NotificationListenerService`가 보완한다.
 
 ---
 

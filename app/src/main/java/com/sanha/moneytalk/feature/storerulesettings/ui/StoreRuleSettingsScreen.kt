@@ -54,7 +54,6 @@ import com.sanha.moneytalk.core.ui.coachmark.CoachMarkState
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
 import com.sanha.moneytalk.core.ui.coachmark.onboardingTarget
 import com.sanha.moneytalk.core.ui.component.CategorySelectDialog
-import com.sanha.moneytalk.feature.storerulesettings.StoreRuleSettingsViewModel
 import com.sanha.moneytalk.feature.storerulesettings.ui.coachmark.storeRuleCoachMarkSteps
 import kotlinx.coroutines.delay
 

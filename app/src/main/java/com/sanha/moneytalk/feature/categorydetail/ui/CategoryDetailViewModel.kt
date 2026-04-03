@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.feature.categorydetail
+package com.sanha.moneytalk.feature.categorydetail.ui
 
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
@@ -21,6 +21,8 @@ import com.sanha.moneytalk.core.util.CumulativeChartDataBuilder
 import com.sanha.moneytalk.core.sms2.DeletedSmsTracker
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.feature.categorydetail.ui.model.CategoryDetailPageData
+import com.sanha.moneytalk.feature.categorydetail.ui.model.CategoryTransactionItem
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import dagger.hilt.android.lifecycle.HiltViewModel

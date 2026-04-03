@@ -50,7 +50,6 @@ import com.sanha.moneytalk.core.model.CategoryInfo
 import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.model.CustomCategoryInfo
 import com.sanha.moneytalk.core.ui.component.EmojiPickerCompose
-import com.sanha.moneytalk.feature.categorysettings.CategorySettingsViewModel
 
 /**
  * 카테고리 설정 화면.

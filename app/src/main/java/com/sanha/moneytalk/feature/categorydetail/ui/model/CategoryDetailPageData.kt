@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.feature.categorydetail
+package com.sanha.moneytalk.feature.categorydetail.ui.model
 
 import androidx.compose.runtime.Stable
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity

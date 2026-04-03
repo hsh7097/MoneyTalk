@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### Added (2026-04-03)
+- **운영용 메시지 앱 알림 리스너**: `NotificationTransactionService` + `NotificationContentParser` 추가
+  - 삼성/구글 메시지 알림을 트리거로 최근 SMS/MMS/RCS provider 원본을 찾아 `SmsInstantProcessor`로 즉시 처리
+  - 앱 프로세스가 죽어 있을 때 놓치던 RCS/비즈메시지 실시간 거래 저장/알림 보완
+
+### Changed (2026-04-03)
+- **SMS_PARSING/ARCHITECTURE/QUICK_START 문서 정합성 갱신**: 실시간 RCS 보완 경로와 현재 sms2 중심 구조 반영
+- **feature 화면 레이어 정리**: `categorydetail/categorysettings/smssettings/storerulesettings/transactionedit/transactionlist`의 `Activity/ViewModel`을 `ui/` 기준으로 통일
+  - 화면 전용 모델은 `ui/model/`에 배치하고, feature 루트에는 기능 경계만 남기도록 구조 정리
+
 ### Added (2026-03-13)
 - **코치마크 온보딩 시스템**: Canvas BlendMode.Clear 기반 스포트라이트 오버레이 (CoachMarkOverlay, CoachMarkState, CoachMarkStep, OnboardingTargetModifier)
 - **7개 화면 온보딩 통합**: 홈(2스텝), 내역(2스텝), 설정(3스텝), 채팅(2스텝), 필터(1스텝), 거래편집(2스텝), 거래처규칙(1스텝)

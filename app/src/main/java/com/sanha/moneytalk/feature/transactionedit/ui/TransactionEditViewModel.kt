@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.feature.transactionedit
+package com.sanha.moneytalk.feature.transactionedit.ui
 
 import android.content.Context
 import androidx.compose.runtime.Stable
@@ -16,6 +16,7 @@ import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.sms2.DeletedSmsTracker
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
+import com.sanha.moneytalk.feature.transactionedit.ui.model.TransactionType
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.feature.home.data.StoreRuleRepository

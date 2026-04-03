@@ -15,10 +15,10 @@ com.sanha.moneytalk/
 │
 ├── core/                                  # 공통 모듈
 │   ├── database/                          # Room 데이터베이스
-│   │   ├── AppDatabase.kt                 # Room Database 정의 (v1, 14 entities)
+│   │   ├── AppDatabase.kt                 # Room Database 정의 (v2, 15 entities)
 │   │   ├── converter/
 │   │   │   └── FloatListConverter.kt      # Float 리스트 타입 컨버터
-│   │   ├── dao/                           # Data Access Objects (13개)
+│   │   ├── dao/                           # Data Access Objects
 │   │   │   ├── BudgetDao.kt              # 예산 DAO
 │   │   │   ├── CategoryMappingDao.kt     # 카테고리 매핑 DAO
 │   │   │   ├── ChatDao.kt               # 채팅 DAO
@@ -29,7 +29,7 @@ com.sanha.moneytalk/
 │   │   │   ├── SmsPatternDao.kt         # SMS 패턴 캐시 DAO
 │   │   │   ├── SmsRegexRuleDao.kt      # SMS regex 룰 DAO (Fast Path)
 │   │   │   └── StoreEmbeddingDao.kt     # 가게명 임베딩 DAO
-│   │   ├── entity/                       # Room Entities (11개)
+│   │   ├── entity/                       # Room Entities / extensions
 │   │   │   ├── BudgetEntity.kt           # 예산 Entity
 │   │   │   ├── CategoryMappingEntity.kt  # 카테고리 매핑 Entity
 │   │   │   ├── ChatEntity.kt            # 채팅 메시지 Entity
@@ -191,6 +191,53 @@ com.sanha.moneytalk/
 │   │       ├── SettingsDataDialogs.kt    # 데이터 관리 다이얼로그
 │   │       └── SettingsInfoDialogs.kt    # 정보/정책 다이얼로그
 │   │
+│   ├── categorysettings/                 # 카테고리 설정
+│   │   └── ui/
+│   │       ├── CategorySettingsActivity.kt
+│   │       ├── CategorySettingsScreen.kt
+│   │       └── CategorySettingsViewModel.kt
+│   │
+│   ├── smssettings/                      # 문자 설정
+│   │   └── ui/
+│   │       ├── SmsSettingsActivity.kt
+│   │       ├── SmsSettingsScreen.kt
+│   │       └── SmsSettingsViewModel.kt
+│   │
+│   ├── storerulesettings/                # 거래처 규칙 설정
+│   │   └── ui/
+│   │       ├── StoreRuleSettingsActivity.kt
+│   │       ├── StoreRuleSettingsScreen.kt
+│   │       └── StoreRuleSettingsViewModel.kt
+│   │
+│   ├── transactionedit/                  # 거래 편집/추가
+│   │   └── ui/
+│   │       ├── TransactionEditActivity.kt
+│   │       ├── TransactionEditScreen.kt
+│   │       ├── TransactionEditViewModel.kt
+│   │       └── model/
+│   │           └── TransactionType.kt
+│   │
+│   ├── transactionlist/                  # 날짜별 거래 목록
+│   │   └── ui/
+│   │       ├── TransactionDetailListActivity.kt
+│   │       ├── TransactionDetailListScreen.kt
+│   │       └── TransactionDetailListViewModel.kt
+│   │
+│   ├── categorydetail/                   # 카테고리 상세
+│   │   └── ui/
+│   │       ├── CategoryDetailActivity.kt
+│   │       ├── CategoryDetailScreen.kt
+│   │       ├── CategoryDetailViewModel.kt
+│   │       └── model/
+│   │           ├── CategoryDetailPageData.kt
+│   │           └── CategorySpendingTrendInfo.kt
+│   │
+│   ├── intro/                            # 인트로/권한
+│   │   └── ui/
+│   │       ├── IntroActivity.kt
+│   │       ├── OnboardingScreen.kt
+│   │       └── PermissionScreen.kt
+│   │
 │   └── splash/                           # 스플래시
 │       └── ui/
 │           └── SplashScreen.kt           # 스플래시 화면
@@ -200,11 +247,21 @@ com.sanha.moneytalk/
 │   ├── Screen.kt                         # Screen 정의
 │   └── BottomNavItem.kt                  # 하단 탭 아이템
 │
-└── receiver/                             # BroadcastReceiver
-    └── SmsReceiver.kt                    # SMS 수신 리시버 (goAsync)
+└── receiver/                             # 실시간 수신/알림 보완 경로
+    ├── SmsReceiver.kt                    # SMS 수신 리시버 (goAsync)
+    ├── MmsContentObserver.kt             # MMS provider 실시간 감시
+    ├── RcsContentObserver.kt             # RCS provider 실시간 감시
+    ├── NotificationTransactionService.kt # 메시지 앱 알림 기반 실시간 보완
+    └── NotificationContentParser.kt      # 메시지 앱 알림 파서
 ```
 
-**총 117개 .kt 파일**
+**총 217개 .kt 파일**
+
+### Feature 패키지 원칙
+
+- 화면 전용 `Activity`, `ViewModel`, `UiState`, 보조 모델은 각 feature의 `ui/` 또는 `ui/model/` 아래에 둡니다.
+- 여러 화면이 공유하는 저장소/서비스만 `data/` 또는 `core/`에 둡니다.
+- `feature` 루트는 기능 이름 경계만 나타내고, 실행 가능한 화면 파일은 가능한 한 `ui/`에 모읍니다.
 
 ## 주요 기능
 
@@ -265,9 +322,12 @@ SMS 읽기 (SmsReaderV2) → SmsSyncCoordinator
 | 벡터 매칭 | SmsPatternMatcher | 0 | 기존 패턴 DB에서 코사인 유사도 매칭 |
 | LLM 추출 | SmsGroupClassifier | API | 그룹핑 → Gemini LLM 배치 추출 → regex 생성 |
 
-**실시간 수신** (V1 유지 — core/sms):
+**실시간 수신**:
 ```
-SmsReceiver → SmsParser (Regex only) → ExpenseEntity
+SMS → SmsReceiver → SmsInstantProcessor
+MMS → MmsContentObserver → SmsInstantProcessor
+RCS(provider) → RcsContentObserver → SmsInstantProcessor
+RCS/비즈메시지(cold start) → NotificationTransactionService → 최근 provider row 조회 → SmsInstantProcessor
 ```
 
 ### 카테고리 분류 (4-tier)
@@ -334,11 +394,15 @@ HomeViewModel.syncSmsV2()
   → UI 반영
 ```
 
-### SMS → 지출 저장 (실시간 수신 — V1)
+### SMS/MMS/RCS → 지출 저장 (실시간 수신)
 ```
-SMS 수신 (SmsReceiver)
-  → SmsProcessingService → SmsParser (Regex only)
-  → ExpenseEntity → Room DB
+실시간 이벤트 (SmsReceiver / MmsContentObserver / RcsContentObserver / NotificationTransactionService)
+  → SmsInstantProcessor.processAndSave()
+  → sender 필터 + PreFilter + IncomeFilter
+  → regex 매칭 성공 시 ExpenseEntity / IncomeEntity 저장
+  → 거래 알림 표시
+  → 미매칭/실패 시 DataRefreshEvent.SMS_RECEIVED
+  → 이후 syncSmsV2에서 Vector/LLM 폴백
 ```
 
 ### 채팅 질의

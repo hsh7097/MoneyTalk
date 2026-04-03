@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.feature.transactionedit
+package com.sanha.moneytalk.feature.transactionedit.ui.model
 
 import androidx.annotation.StringRes
 import com.sanha.moneytalk.R

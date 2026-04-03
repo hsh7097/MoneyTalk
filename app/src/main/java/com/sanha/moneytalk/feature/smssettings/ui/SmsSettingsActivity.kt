@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.feature.categorydetail
+package com.sanha.moneytalk.feature.smssettings.ui
 
 import android.content.Context
 import android.content.Intent
@@ -11,34 +11,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.theme.MoneyTalkTheme
 import com.sanha.moneytalk.core.theme.ThemeMode
-import com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailScreen
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 /**
- * 카테고리 상세 화면 Activity.
- *
- * 홈 화면에서 카테고리 탭 시 Intent로 실행.
- * - EXTRA_CATEGORY: 카테고리 displayName (예: "식비")
- * - EXTRA_YEAR: 선택된 연도
- * - EXTRA_MONTH: 선택된 월
+ * 문자설정 전용 Activity
  */
 @AndroidEntryPoint
-class CategoryDetailActivity : ComponentActivity() {
+class SmsSettingsActivity : ComponentActivity() {
 
     companion object {
-        private const val EXTRA_CATEGORY = "extra_category"
-        private const val EXTRA_YEAR = "extra_year"
-        private const val EXTRA_MONTH = "extra_month"
-
-        fun open(context: Context, category: String, year: Int, month: Int) {
-            context.startActivity(
-                Intent(context, CategoryDetailActivity::class.java).apply {
-                    putExtra(EXTRA_CATEGORY, category)
-                    putExtra(EXTRA_YEAR, year)
-                    putExtra(EXTRA_MONTH, month)
-                }
-            )
+        fun open(context: Context) {
+            context.startActivity(Intent(context, SmsSettingsActivity::class.java))
         }
     }
 
@@ -59,7 +43,7 @@ class CategoryDetailActivity : ComponentActivity() {
             }
 
             MoneyTalkTheme(themeMode = themeMode) {
-                CategoryDetailScreen(onBack = { finish() })
+                SmsSettingsScreen(onBack = { finish() })
             }
         }
     }

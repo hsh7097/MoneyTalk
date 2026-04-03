@@ -1,7 +1,7 @@
 # AI_CONTEXT.md - MoneyTalk 프로젝트 컨텍스트
 
 > AI 에이전트가 MoneyTalk 프로젝트를 이해하고 작업하기 위한 핵심 컨텍스트 문서
-> **최종 갱신**: 2026-03-05
+> **최종 갱신**: 2026-04-03
 
 ---
 
@@ -15,7 +15,7 @@
 - **AI**: Google Gemini (2.5-pro/2.5-flash/2.5-flash-lite)
 - **Min SDK**: 26 (Android 8.0)
 - **Package**: `com.sanha.moneytalk`
-- **DB 버전**: 11 (moneytalk_v4.db)
+- **DB 버전**: 2 (`moneytalk.db`)
 
 ---
 
@@ -56,30 +56,44 @@ app/src/main/java/com/sanha/moneytalk/
 │   │   ├── data/          # GeminiRepository, ChatRepository, ChatPrompts
 │   │   └── ui/            # ChatScreen, ChatViewModel
 │   ├── settings/          # 설정 (백업, 카드관리, SMS 제외 등)
+│   │   └── ui/            # SettingsScreen, SettingsViewModel, dialogs
 │   ├── categorysettings/  # 카테고리 설정 (커스텀 카테고리 추가/수정/삭제)
+│   │   └── ui/            # CategorySettingsActivity, Screen, ViewModel
+│   ├── smssettings/       # 문자 설정 (제외 키워드/차단번호)
+│   │   └── ui/            # SmsSettingsActivity, Screen, ViewModel
 │   ├── storerulesettings/ # 거래처 규칙 설정 (StoreRule 추가/편집/삭제)
+│   │   └── ui/            # StoreRuleSettingsActivity, Screen, ViewModel
 │   ├── transactionedit/   # 거래 편집/추가 (뱅크셀러드 스타일)
+│   │   └── ui/            # TransactionEditActivity, Screen, ViewModel, ui/model
+│   ├── transactionlist/   # 날짜별 거래 목록
+│   │   └── ui/            # TransactionDetailListActivity, Screen, ViewModel
 │   ├── categorydetail/    # 카테고리 상세 (월간 추이 + 거래 리스트)
+│   │   └── ui/            # CategoryDetailActivity, Screen, ViewModel, ui/model
+│   ├── intro/             # 인트로/권한/초기 진입
+│   │   └── ui/            # IntroActivity, OnboardingScreen, PermissionScreen
 │   └── splash/            # 스플래시
+│       └── ui/            # SplashScreen
 ├── navigation/            # NavGraph, Screen, BottomNavItem
-├── receiver/              # SmsReceiver (BroadcastReceiver)
+├── receiver/              # 실시간 수신/알림 보완 (SmsReceiver, Mms/RcsContentObserver, NotificationTransactionService)
 └── MoneyTalkApplication.kt
 ```
+
+- 원칙: feature 전용 `Activity` / `ViewModel` / 화면 모델은 `feature/<name>/ui` 또는 `ui/model`에 두고, 여러 화면이 공유하는 Repository/Service만 `data` 또는 `core`에 둔다.
 
 ### 2-2. 핵심 시스템
 
 | 시스템 | 설명 | 핵심 파일 |
 |--------|------|-----------|
 | SMS 파싱 (sms2, 3-tier) | Regex Fast Path → Vector → Gemini LLM (배치 동기화) | [SmsSyncCoordinator.kt](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsSyncCoordinator.kt), [SmsRegexRuleMatcher.kt](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsRegexRuleMatcher.kt), [SmsPipeline.kt](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipeline.kt) |
-| SMS 파싱 (V1, 실시간) | Regex only (SmsProcessingService) | [HybridSmsClassifier.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/HybridSmsClassifier.kt), [SmsParser.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsParser.kt) |
+| SMS 파싱 (실시간) | SmsInstantProcessor 기반 즉시 처리 + 메시지 앱 알림 보완 | [SmsInstantProcessor.kt](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsInstantProcessor.kt), [SmsReceiver.kt](../app/src/main/java/com/sanha/moneytalk/receiver/SmsReceiver.kt), [MmsContentObserver.kt](../app/src/main/java/com/sanha/moneytalk/receiver/MmsContentObserver.kt), [RcsContentObserver.kt](../app/src/main/java/com/sanha/moneytalk/receiver/RcsContentObserver.kt), [NotificationTransactionService.kt](../app/src/main/java/com/sanha/moneytalk/receiver/NotificationTransactionService.kt) |
 | SMS 필터링 (발신자) | 010/070 조건부 제외 + 금융 힌트 보존 | [SmsFilter.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsFilter.kt) |
 | 카테고리 분류 (4-tier) | Room → Vector → Keyword → Gemini Batch | [CategoryClassifierService.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt), [StoreEmbeddingRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreEmbeddingRepository.kt) |
 | AI 채팅 (3-step) | 쿼리분석 → DB조회/액션 → 답변생성 | [ChatViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt), [GeminiRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) |
 | 카드 관리 | 소유 카드 화이트리스트 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
 | SMS 필터링 | 제외 키워드 블랙리스트 | [SmsExclusionRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/SmsExclusionRepository.kt) |
-| 거래처 규칙 (StoreRule) | 거래처 키워드→카테고리/고정지출 자동 적용 (Tier 0) | [StoreRuleRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreRuleRepository.kt), [StoreRuleSettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/StoreRuleSettingsViewModel.kt) |
+| 거래처 규칙 (StoreRule) | 거래처 키워드→카테고리/고정지출 자동 적용 (Tier 0) | [StoreRuleRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreRuleRepository.kt), [StoreRuleSettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/ui/StoreRuleSettingsViewModel.kt) |
 
-### 2-3. DB 엔티티 (12개)
+### 2-3. DB 엔티티 (15개)
 
 | Entity | 테이블 | 용도 |
 |--------|--------|------|
@@ -92,15 +106,18 @@ app/src/main/java/com/sanha/moneytalk/
 | SmsPatternEntity | sms_patterns | SMS 패턴 벡터 캐시 |
 | StoreEmbeddingEntity | store_embeddings | 가게명 벡터 임베딩 |
 | OwnedCardEntity | owned_cards | 소유 카드 화이트리스트 |
+| SmsBlockedSenderEntity | sms_blocked_senders | 수신 차단 발신번호 |
+| SmsChannelProbeLogEntity | sms_channel_probe_logs | 채널 진단 로그 |
 | SmsExclusionKeywordEntity | sms_exclusion_keywords | SMS 제외 키워드 |
 | SmsRegexRuleEntity | sms_regex_rules | SMS regex 룰 (sender+type+ruleKey 복합키) |
+| CustomCategoryEntity | custom_categories | 사용자 정의 카테고리 |
 | StoreRuleEntity | store_rules | 거래처 규칙 (keyword→category/isFixed 자동 적용) |
 
 ### 2-4. DB 버전 정보
 
-- **현재 버전**: v1 (미출시 상태에서 리셋, 2026-03-05)
-- **Migration 코드**: 없음 (Entity 어노테이션 기반 스키마 자동 생성)
-- 향후 출시 후 스키마 변경 시 v2부터 Migration 추가 필요
+- **현재 버전**: v2
+- **Migration 코드**: `MIGRATION_1_2` (채널 진단 로그 테이블 추가)
+- 이후 스키마 변경 시 추가 Migration 필수
 
 ---
 
@@ -374,11 +391,15 @@ HomeViewModel.syncIncremental(contentResolver):
    → syncSmsV2(contentResolver, range)
 ```
 
-**실시간 수신 (V1 유지)**:
+**실시간 수신**:
 ```
-SMS 수신 → SmsReceiver → SmsProcessingService → SmsParser (Regex only)
-   → 성공: ExpenseEntity 생성
-   → 실패: 로그만 (실시간은 Tier 1만)
+SMS 수신 → SmsReceiver → SmsInstantProcessor
+MMS 수신 → MmsContentObserver → SmsInstantProcessor
+RCS 수신(프로세스 생존) → RcsContentObserver → SmsInstantProcessor
+RCS/비즈메시지(프로세스 cold start) → NotificationTransactionService
+   → 메시지 앱 알림 파싱
+   → 최근 SMS/MMS/RCS provider 원본 조회
+   → SmsInstantProcessor
 ```
 
 ### 5-2. 카테고리 자동 분류 흐름

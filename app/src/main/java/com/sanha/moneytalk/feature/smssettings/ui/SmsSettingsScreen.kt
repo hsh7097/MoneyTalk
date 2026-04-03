@@ -47,8 +47,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.sanha.moneytalk.R
-import com.sanha.moneytalk.feature.smssettings.SmsSettingsUiState
-import com.sanha.moneytalk.feature.smssettings.SmsSettingsViewModel
 import com.sanha.moneytalk.core.database.entity.SmsBlockedSenderEntity
 import com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity
 import com.sanha.moneytalk.core.ui.component.settings.SettingsItemCompose

@@ -64,42 +64,42 @@
 
         <!-- 카테고리 상세 -->
         <activity
-            android:name=".feature.categorydetail.CategoryDetailActivity"
+            android:name=".feature.categorydetail.ui.CategoryDetailActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 
         <!-- 거래 편집/추가 -->
         <activity
-            android:name=".feature.transactionedit.TransactionEditActivity"
+            android:name=".feature.transactionedit.ui.TransactionEditActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 
         <!-- 날짜별 거래 목록 -->
         <activity
-            android:name=".feature.transactionlist.TransactionDetailListActivity"
+            android:name=".feature.transactionlist.ui.TransactionDetailListActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 
         <!-- 문자 설정 -->
         <activity
-            android:name=".feature.smssettings.SmsSettingsActivity"
+            android:name=".feature.smssettings.ui.SmsSettingsActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 
         <!-- 카테고리 설정 -->
         <activity
-            android:name=".feature.categorysettings.CategorySettingsActivity"
+            android:name=".feature.categorysettings.ui.CategorySettingsActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 
         <!-- 거래처 규칙 설정 -->
         <activity
-            android:name=".feature.storerulesettings.StoreRuleSettingsActivity"
+            android:name=".feature.storerulesettings.ui.StoreRuleSettingsActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
@@ -114,6 +114,18 @@
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
+
+        <!-- 메시지 앱 알림 기반 실시간 거래 감지 (RCS/비즈메시지 보완) -->
+        <service
+            android:name=".receiver.NotificationTransactionService"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
 
     </application>
 

@@ -36,12 +36,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
-import com.sanha.moneytalk.feature.transactionlist.TransactionDetailListUiState
-import com.sanha.moneytalk.feature.transactionlist.TransactionDetailListViewModel
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
-import com.sanha.moneytalk.feature.transactionedit.TransactionEditActivity
+import com.sanha.moneytalk.feature.transactionedit.ui.TransactionEditActivity
 
 /**
  * 날짜별 거래 상세 목록 화면.

@@ -80,10 +80,10 @@ import com.sanha.moneytalk.core.ui.component.settings.SettingsItemCompose
 import com.sanha.moneytalk.core.ui.component.settings.SettingsItemInfo
 import com.sanha.moneytalk.core.ui.component.settings.SettingsSectionCompose
 import com.sanha.moneytalk.core.util.DataBackupManager
-import com.sanha.moneytalk.feature.categorysettings.CategorySettingsActivity
+import com.sanha.moneytalk.feature.categorysettings.ui.CategorySettingsActivity
 import com.sanha.moneytalk.feature.settings.ui.coachmark.settingsCoachMarkSteps
-import com.sanha.moneytalk.feature.smssettings.SmsSettingsActivity
-import com.sanha.moneytalk.feature.storerulesettings.StoreRuleSettingsActivity
+import com.sanha.moneytalk.feature.smssettings.ui.SmsSettingsActivity
+import com.sanha.moneytalk.feature.storerulesettings.ui.StoreRuleSettingsActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 

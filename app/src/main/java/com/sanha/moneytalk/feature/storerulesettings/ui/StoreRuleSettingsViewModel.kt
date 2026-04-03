@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.feature.storerulesettings
+package com.sanha.moneytalk.feature.storerulesettings.ui
 
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Stable

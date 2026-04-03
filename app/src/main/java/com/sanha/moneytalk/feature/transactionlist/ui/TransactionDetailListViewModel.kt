@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.feature.transactionlist
+package com.sanha.moneytalk.feature.transactionlist.ui
 
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.SavedStateHandle

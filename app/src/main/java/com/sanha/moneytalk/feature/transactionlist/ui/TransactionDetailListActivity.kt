@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.feature.transactionlist
+package com.sanha.moneytalk.feature.transactionlist.ui
 
 import android.content.Context
 import android.content.Intent
@@ -11,7 +11,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.theme.MoneyTalkTheme
 import com.sanha.moneytalk.core.theme.ThemeMode
-import com.sanha.moneytalk.feature.transactionlist.ui.TransactionDetailListScreen
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 

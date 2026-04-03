@@ -265,7 +265,7 @@ fun HomeScreen(
                 },
                 onCategorySelected = { category ->
                     if (category != null) {
-                        com.sanha.moneytalk.feature.categorydetail.CategoryDetailActivity.open(
+                        com.sanha.moneytalk.feature.categorydetail.ui.CategoryDetailActivity.open(
                             context,
                             category,
                             uiState.selectedYear,

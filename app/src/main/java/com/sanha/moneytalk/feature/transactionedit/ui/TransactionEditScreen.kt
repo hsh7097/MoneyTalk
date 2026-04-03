@@ -72,9 +72,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.TransferDirection
-import com.sanha.moneytalk.feature.transactionedit.TransactionEditUiState
-import com.sanha.moneytalk.feature.transactionedit.TransactionEditViewModel
-import com.sanha.moneytalk.feature.transactionedit.TransactionType
 import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.ui.component.rememberCategoryEmoji
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
@@ -85,6 +82,7 @@ import com.sanha.moneytalk.core.ui.component.CategorySelectDialog
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupCompose
 import com.sanha.moneytalk.core.ui.component.radiogroup.RadioGroupOption
 import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.feature.transactionedit.ui.model.TransactionType
 import com.sanha.moneytalk.feature.transactionedit.ui.coachmark.transactionEditCoachMarkSteps
 import kotlinx.coroutines.delay
 import java.text.NumberFormat

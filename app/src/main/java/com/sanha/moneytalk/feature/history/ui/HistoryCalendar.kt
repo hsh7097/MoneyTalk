@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import androidx.compose.ui.platform.LocalContext
 import com.sanha.moneytalk.core.theme.moneyTalkColors
-import com.sanha.moneytalk.feature.transactionlist.TransactionDetailListActivity
+import com.sanha.moneytalk.feature.transactionlist.ui.TransactionDetailListActivity
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar

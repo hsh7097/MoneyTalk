@@ -58,7 +58,7 @@ import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroup
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.activity.ComponentActivity
-import com.sanha.moneytalk.feature.transactionedit.TransactionEditActivity
+import com.sanha.moneytalk.feature.transactionedit.ui.TransactionEditActivity
 import com.sanha.moneytalk.MainViewModel
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
