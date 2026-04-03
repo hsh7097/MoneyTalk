@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms2
+package com.sanha.moneytalk.core.sms
 
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
@@ -13,10 +13,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * SMS/MMS/RCS 통합 읽기 (sms2 전용)
+ * SMS/MMS/RCS 통합 읽기 (sms 전용)
  *
  * 기기의 SMS/MMS/RCS 수신함에서 기간별 모든 메시지를 읽어 SmsInput으로 반환합니다.
- * 카드 결제/수입 필터링 없이 전체를 반환하여 sms2 파이프라인에서 분류하도록 합니다.
+ * 카드 결제/수입 필터링 없이 전체를 반환하여 sms 파이프라인에서 분류하도록 합니다.
  *
  * SmsReader(V1)에서 HomeViewModel이 사용하는 readAllMessagesByDateRange() 흐름만 추출.
  * - SMS: content://sms/inbox (date 밀리초)
@@ -46,7 +46,7 @@ class SmsReaderV2 @Inject constructor(
      * SMS + MMS + RCS 통합: 특정 기간의 모든 메시지를 SmsInput으로 반환
      *
      * 010/070 개인번호는 금융 힌트 없으면 제외합니다.
-     * 카드/수입 필터링은 하지 않고, sms2 파이프라인(SmsPreFilter → SmsIncomeFilter)에서 처리합니다.
+     * 카드/수입 필터링은 하지 않고, sms 파이프라인(SmsPreFilter → SmsIncomeFilter)에서 처리합니다.
      *
      * @param contentResolver ContentResolver
      * @param startDate 시작 시간 (밀리초)

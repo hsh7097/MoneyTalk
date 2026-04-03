@@ -5,10 +5,10 @@ import android.database.ContentObserver
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
-import com.sanha.moneytalk.core.sms2.SmsFilter
-import com.sanha.moneytalk.core.sms2.SmsChannelProbeCollector
-import com.sanha.moneytalk.core.sms2.SmsInstantProcessor
-import com.sanha.moneytalk.core.sms2.SmsReaderV2
+import com.sanha.moneytalk.core.sms.SmsFilter
+import com.sanha.moneytalk.core.sms.SmsChannelProbeCollector
+import com.sanha.moneytalk.core.sms.SmsInstantProcessor
+import com.sanha.moneytalk.core.sms.SmsReaderV2
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import kotlinx.coroutines.CoroutineScope

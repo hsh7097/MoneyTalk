@@ -15,22 +15,6 @@ interface SmsChannelProbeLogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(log: SmsChannelProbeLogEntity)
 
-    @Query(
-        """
-        SELECT * FROM sms_channel_probe_logs
-        WHERE normalizedSenderAddress = :senderAddress
-        ORDER BY createdAt DESC
-        LIMIT :limit
-        """
-    )
-    suspend fun getLatestBySender(
-        senderAddress: String,
-        limit: Int = 100
-    ): List<SmsChannelProbeLogEntity>
-
     @Query("DELETE FROM sms_channel_probe_logs WHERE createdAt < :minCreatedAt")
     suspend fun deleteOlderThan(minCreatedAt: Long): Int
-
-    @Query("DELETE FROM sms_channel_probe_logs")
-    suspend fun deleteAll()
 }

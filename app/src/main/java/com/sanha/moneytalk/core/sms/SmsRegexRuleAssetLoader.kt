@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms2
+package com.sanha.moneytalk.core.sms
 
 import android.content.Context
 import com.google.gson.JsonObject

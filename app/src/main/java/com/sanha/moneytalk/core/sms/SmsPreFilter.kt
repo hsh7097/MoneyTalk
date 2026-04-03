@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms2
+package com.sanha.moneytalk.core.sms
 
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -12,8 +12,8 @@ import javax.inject.Singleton
  * 1. 키워드 필터 [isObviouslyNonPayment]: 비결제 키워드 포함 시 제외
  * 2. 구조 필터 [lacksPaymentRequirements]: 길이/숫자/금액 패턴 조건 미충족 시 제외
  *
- * 키워드 목록: V1(SmsParser.excludeKeywords + HybridSmsClassifier.NON_PAYMENT_KEYWORDS)
- * 합집합을 여기서 단일 관리.
+ * 키워드 목록: 기존 로컬 파서/분류기에서 사용하던 비결제 키워드를
+ * 이 클래스에서 단일 관리.
  *
  * 호출 순서: SmsSyncCoordinator.process() → [여기] → SmsIncomeFilter
  */
@@ -28,9 +28,8 @@ class SmsPreFilter @Inject constructor() {
          * 이 키워드 중 하나라도 SMS 본문에 포함되면 결제 SMS가 아닌 것으로 판단.
          *
          * 출처:
-         * - V1 SmsParser.excludeKeywords
-         * - V1 HybridSmsClassifier.NON_PAYMENT_KEYWORDS
-         * - V2 추가 (광고/안내/금융광고 등)
+         * - 기존 로컬 파서/분류기에서 사용하던 비결제 키워드
+         * - 이후 보강된 광고/안내/금융광고 계열 키워드
          *
          * 중복 제거: "광고"가 "[광고]","(광고)" 모두 매칭하므로 별도 불필요.
          */
@@ -134,20 +133,17 @@ class SmsPreFilter @Inject constructor() {
      * @return 결제 가능성이 있는 SMS만 (비결제 제거됨)
      */
     fun filter(smsList: List<SmsInput>): List<SmsInput> {
-        val result = smsList.filter { sms ->
+        return smsList.filter smsFilter@{ sms ->
             val body = sms.body
 
             // 키워드 필터
-            if (isObviouslyNonPayment(body)) return@filter false
+            if (isObviouslyNonPayment(body)) return@smsFilter false
 
             // 구조 필터
-            if (lacksPaymentRequirements(body)) return@filter false
+            if (lacksPaymentRequirements(body)) return@smsFilter false
 
             true
         }
-
-
-        return result
     }
 
     /**

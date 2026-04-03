@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms2
+package com.sanha.moneytalk.core.sms
 
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
@@ -51,10 +51,10 @@ import javax.inject.Singleton
  *   val results = smsPipeline.process(listOf(smsInput))
  *
  * 의존성:
- * - SmsPreFilter (sms2) — 사전 필터링
- * - SmsTemplateEngine (sms2) — 템플릿화 + 임베딩 API 호출
- * - SmsPatternMatcher (sms2) — 벡터 매칭 + regex 파싱
- * - SmsGroupClassifier (sms2) — 그룹핑 + LLM + regex 생성
+ * - SmsPreFilter (sms) — 사전 필터링
+ * - SmsTemplateEngine (sms) — 템플릿화 + 임베딩 API 호출
+ * - SmsPatternMatcher (sms) — 벡터 매칭 + regex 파싱
+ * - SmsGroupClassifier (sms) — 그룹핑 + LLM + regex 생성
  */
 @Singleton
 class SmsPipeline @Inject constructor(

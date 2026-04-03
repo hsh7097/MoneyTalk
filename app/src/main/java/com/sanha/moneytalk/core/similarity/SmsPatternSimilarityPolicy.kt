@@ -12,8 +12,8 @@ package com.sanha.moneytalk.core.similarity
  * - group = 0.95 (SmsGroupClassifier.GROUPING_SIMILARITY) → SMS 패턴 그룹핑
  * - LLM_TRIGGER_THRESHOLD = 0.80 → LLM 요청 대상 선별 (결제 판정 기준이 아님)
  *
- * @see com.sanha.moneytalk.core.sms2.SmsPatternMatcher
- * @see com.sanha.moneytalk.core.sms2.SmsGroupClassifier
+ * @see com.sanha.moneytalk.core.sms.SmsPatternMatcher
+ * @see com.sanha.moneytalk.core.sms.SmsGroupClassifier
  */
 object SmsPatternSimilarityPolicy : SimilarityPolicy {
 

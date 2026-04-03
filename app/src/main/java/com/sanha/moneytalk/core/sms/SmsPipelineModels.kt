@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms2
+package com.sanha.moneytalk.core.sms
 
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
 
@@ -90,7 +90,7 @@ enum class SmsType {
  * 호출자(ViewModel)는 이 결과를 받아서:
  * - expenses → ExpenseEntity 변환 → DB 저장
  * - incomes → 수입 파싱 → IncomeEntity → DB 저장
- *   (수입 파싱은 호출자 책임 — sms2는 core/sms의 SmsParser를 참조하지 않음)
+ *   (수입 파싱은 호출자 책임 — sms는 core/sms의 SmsParser를 참조하지 않음)
  */
 data class SyncResult(
     /** 결제로 확인되고 파싱 성공한 지출 SMS */

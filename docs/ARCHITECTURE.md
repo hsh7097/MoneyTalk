@@ -98,38 +98,22 @@ com.sanha.moneytalk/
 │   │               ├── TransactionGroupHeaderCompose.kt # 그룹 헤더
 │   │               └── TransactionGroupHeaderInfo.kt    # 그룹 헤더 Contract
 │   │
-│   ├── sms/                              # SMS V1 - 실시간 수신 전용 (9개)
-│   │   ├── SmsParser.kt                  # SMS 정규식 파싱 (Tier 1)
-│   │   ├── SmsReader.kt                  # SMS/MMS/RCS 통합 읽기
-│   │   ├── SmsFilter.kt                  # 발신번호 기반 사전 필터링
-│   │   ├── HybridSmsClassifier.kt        # 증분 동기화용 3-tier 오케스트레이터
-│   │   ├── SmsBatchProcessor.kt          # Full Sync 배치 파이프라인
-│   │   ├── GeminiSmsExtractor.kt         # Gemini LLM 추출 (단건/배치/정규식 생성)
-│   │   ├── GeneratedSmsRegexParser.kt    # LLM 생성 정규식 파서 (폴백 체인)
-│   │   ├── SmsEmbeddingService.kt        # SMS 템플릿화 + 임베딩 생성
-│   │   └── VectorSearchEngine.kt         # 코사인 유사도 검색 엔진
-│   │
-│   ├── sms2/                             # SMS 통합 파이프라인 (배치 동기화 메인, 16개)
-│   │   ├── SmsSyncCoordinator.kt        # 유일한 외부 진입점 (process → PreFilter → IncomeFilter → Fast Path → Pipeline)
-│   │   ├── SmsReaderV2.kt               # SMS/MMS/RCS 통합 읽기 → List<SmsInput> 직접 반환
-│   │   ├── SmsIncomeFilter.kt           # PAYMENT/INCOME/SKIP 3분류 (financialKeywords 46개)
-│   │   ├── SmsIncomeParser.kt           # 수입 SMS 파싱 (금액/유형/출처/날짜시간)
-│   │   ├── SmsRegexRuleMatcher.kt       # Step 1.5: sender regex Fast Path 매칭
-│   │   ├── SmsOriginSampleCollector.kt  # RTDB 성공/실패 표본 수집
-│   │   ├── SmsPipeline.kt               # 오케스트레이터 (Step 2→3→4→4.5→5)
-│   │   ├── SmsPipelineModels.kt         # 데이터 클래스 (SmsInput, EmbeddedSms, SmsParseResult, SyncResult)
-│   │   ├── SmsPreFilter.kt              # Step 0: 사전 필터링 (키워드 + 구조)
-│   │   ├── SmsTemplateEngine.kt         # Step 3: 템플릿화 + Gemini Embedding API
-│   │   ├── SmsPatternMatcher.kt         # Step 4: 벡터 매칭 + regex 파싱
-│   │   ├── SmsGroupClassifier.kt        # Step 5: 그룹핑 + LLM + regex 생성
-│   │   ├── GeminiSmsExtractor.kt        # LLM 추출 (배치 + regex 생성)
-│   │   ├── RemoteSmsRule.kt             # 원격 SMS regex 룰 데이터 클래스
-│   │   ├── RemoteSmsRuleRepository.kt   # 원격 룰 리포지토리 (RTDB + 캐시)
-│   │   └── rules/                       # SMS regex 룰 관리 (4개)
-│   │       ├── SmsRegexRuleAssetLoader.kt   # Asset JSON 기본 룰 시드
-│   │       ├── SmsRegexRemoteRuleLoader.kt  # RTDB overlay 룰 로더
-│   │       ├── SmsRegexRuleSyncService.kt   # 병합 서비스
-│   │       └── SmsRegexRuleRepository.kt    # 룰 Repository
+│   ├── sms/                              # SMS 통합 패키지 (배치 + 실시간 + 보조 유틸, 25개)
+│   │   ├── SmsSyncCoordinator.kt         # 배치 동기화 외부 진입점
+│   │   ├── SmsReaderV2.kt                # SMS/MMS/RCS 통합 읽기
+│   │   ├── SmsInstantProcessor.kt        # 실시간 1건 처리
+│   │   ├── SmsPreFilter.kt               # Step 0 사전 필터링
+│   │   ├── SmsIncomeFilter.kt            # Step 1 PAYMENT/INCOME/SKIP 분류
+│   │   ├── SmsRegexRuleMatcher.kt        # Step 1.5 sender regex Fast Path
+│   │   ├── SmsPipeline.kt                # Step 2~5 오케스트레이션
+│   │   ├── SmsPatternMatcher.kt          # 벡터 매칭 + regex 파싱
+│   │   ├── SmsGroupClassifier.kt         # 그룹핑 + LLM + regex 생성
+│   │   ├── GeminiSmsExtractor.kt         # Gemini LLM 추출
+│   │   ├── SmsParser.kt / SmsFilter.kt   # 공용 파서/발신자 필터
+│   │   ├── SmsEmbeddingService.kt / VectorSearchEngine.kt # 임베딩/유사도 유틸
+│   │   ├── DeletedSmsTracker.kt          # 삭제 SMS 재삽입 방지
+│   │   ├── SmsChannelProbeCollector.kt   # DEBUG 채널 진단 수집
+│   │   └── RemoteSmsRule*.kt / SmsRegexRule*.kt # Fast Path 룰/시드/동기화
 │   │
 │   └── util/                             # 유틸리티 (12개)
 │       ├── CategoryReferenceProvider.kt  # 카테고리 참조 데이터 제공
@@ -306,19 +290,21 @@ com.sanha.moneytalk/
 
 ## 핵심 시스템
 
-### SMS 파싱 (sms2 — 2-tier Vector+LLM)
+### SMS 파싱 (sms — 3-tier Fast Path + Vector + LLM)
 
-**배치 동기화** (메인 경로 — sms2):
+**배치 동기화** (메인 경로 — sms):
 ```
 SMS 읽기 (SmsReaderV2) → SmsSyncCoordinator
   → SmsPreFilter → SmsIncomeFilter (PAYMENT/INCOME/SKIP)
+  → SmsRegexRuleMatcher (sender Fast Path)
   → SmsPipeline: 템플릿+임베딩 → 벡터매칭 → 그룹+LLM
 ```
 
-| 단계 | 엔진 (sms2) | 비용 | 설명 |
+| 단계 | 엔진 (sms) | 비용 | 설명 |
 |------|-------------|------|------|
 | 사전 필터 | SmsPreFilter | 0 | 비결제 SMS 제거 (60+ 키워드) |
 | 수입 분류 | SmsIncomeFilter | 0 | PAYMENT/INCOME/SKIP 키워드 분류 |
+| Fast Path | SmsRegexRuleMatcher | 0 | sender 기반 regex 룰 우선 매칭 |
 | 벡터 매칭 | SmsPatternMatcher | 0 | 기존 패턴 DB에서 코사인 유사도 매칭 |
 | LLM 추출 | SmsGroupClassifier | API | 그룹핑 → Gemini LLM 배치 추출 → regex 생성 |
 
@@ -377,7 +363,7 @@ RCS/비즈메시지(cold start) → NotificationTransactionService → 최근 pr
 
 ## 데이터 흐름
 
-### SMS → 지출 저장 (배치 동기화 — sms2)
+### SMS → 지출 저장 (배치 동기화 — sms)
 ```
 HomeViewModel.syncSmsV2()
   → SmsReaderV2.readAllMessagesByDateRange() → List<SmsInput>

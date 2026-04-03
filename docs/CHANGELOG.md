@@ -10,7 +10,7 @@
   - 앱 프로세스가 죽어 있을 때 놓치던 RCS/비즈메시지 실시간 거래 저장/알림 보완
 
 ### Changed (2026-04-03)
-- **SMS_PARSING/ARCHITECTURE/QUICK_START 문서 정합성 갱신**: 실시간 RCS 보완 경로와 현재 sms2 중심 구조 반영
+- **SMS_PARSING/ARCHITECTURE/QUICK_START 문서 정합성 갱신**: 실시간 RCS 보완 경로와 현재 sms 중심 구조 반영
 - **feature 화면 레이어 정리**: `categorydetail/categorysettings/smssettings/storerulesettings/transactionedit/transactionlist`의 `Activity/ViewModel`을 `ui/` 기준으로 통일
   - 화면 전용 모델은 `ui/model/`에 배치하고, feature 루트에는 기능 경계만 남기도록 구조 정리
 
@@ -225,7 +225,7 @@
   - Step 5 진입 시 DB에서 메인 regex 선조회 → 예외 그룹 regex 생성 시 참조 전달
   - `MainRegexContext`로 메인 regex를 LLM 프롬프트에 포함
   - `senderAddress` normalizeAddress() 적용 (DB 저장/조회 일관성)
-- **sms2 마이그레이션 완료**: 배치 동기화 경로를 V1(HybridSmsClassifier/SmsBatchProcessor)에서 sms2(SmsSyncCoordinator)로 전면 전환
+- **sms 마이그레이션 완료**: 배치 동기화 경로를 V1(HybridSmsClassifier/SmsBatchProcessor)에서 sms(SmsSyncCoordinator)로 전면 전환
   - `SmsSyncCoordinator.kt`: 유일한 외부 진입점 (process → SmsPreFilter → SmsIncomeFilter → SmsPipeline)
   - `SmsReaderV2.kt`: SMS/MMS/RCS 통합 읽기 → List\<SmsInput\> 직접 반환 (SmsMessage 중간 변환 제거)
   - `SmsIncomeFilter.kt`: PAYMENT/INCOME/SKIP 3분류 (financialKeywords 46개)
@@ -285,7 +285,7 @@
 - **"오늘 문자만 동기화" 메뉴 제거**: HomeScreen 새로고침 드롭다운에서 삭제
 
 ### Added (2026-02-19 후반)
-- **SMS 통합 파이프라인 (core/sms2/)**: 기존 3경로 파편화 SMS 처리를 단일 파이프라인으로 통합 (6개 파일)
+- **SMS 통합 파이프라인 (core/sms/)**: 기존 3경로 파편화 SMS 처리를 단일 파이프라인으로 통합 (6개 파일)
   - `SmsPipeline.kt`: 오케스트레이터 (Step 2→3→4→5)
   - `SmsPreFilter.kt`: 사전 필터링 (키워드 + 구조)
   - `SmsTemplateEngine.kt`: 템플릿화 + Gemini Embedding API

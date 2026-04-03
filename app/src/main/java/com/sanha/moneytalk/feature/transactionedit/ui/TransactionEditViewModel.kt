@@ -13,7 +13,7 @@ import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
-import com.sanha.moneytalk.core.sms2.DeletedSmsTracker
+import com.sanha.moneytalk.core.sms.DeletedSmsTracker
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import com.sanha.moneytalk.feature.transactionedit.ui.model.TransactionType

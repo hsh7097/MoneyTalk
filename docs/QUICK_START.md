@@ -118,9 +118,9 @@ C:\Users\hsh70\AndroidStudioProjects\MoneyTalk\docs\AI_CONTEXT.md
 | 파일 | 설명 |
 |------|------|
 | [`feature/home/ui/HomeViewModel.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeViewModel.kt) | 동기화, 데이터 로딩 핵심 로직 |
-| [`core/sms2/SmsSyncCoordinator.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsSyncCoordinator.kt) | 배치 SMS 파싱 메인 진입점 |
-| [`core/sms2/SmsReaderV2.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsReaderV2.kt) | SMS/MMS/RCS 통합 읽기 |
-| [`core/sms2/SmsInstantProcessor.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsInstantProcessor.kt) | 실시간 SMS/MMS/RCS 처리 |
+| [`core/sms/SmsSyncCoordinator.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsSyncCoordinator.kt) | 배치 SMS 파싱 메인 진입점 |
+| [`core/sms/SmsReaderV2.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsReaderV2.kt) | SMS/MMS/RCS 통합 읽기 |
+| [`core/sms/SmsInstantProcessor.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsInstantProcessor.kt) | 실시간 SMS/MMS/RCS 처리 |
 | [`receiver/NotificationTransactionService.kt`](../app/src/main/java/com/sanha/moneytalk/receiver/NotificationTransactionService.kt) | 메시지 앱 알림 기반 RCS 보완 |
 | [`feature/chat/data/GeminiRepository.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) | Gemini API 통신 |
 | [`feature/home/data/CategoryClassifierService.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt) | 4-tier 카테고리 분류 |

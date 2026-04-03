@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.Flow
  * - VectorSearchEngine: 유사도 검색 시 패턴 목록 제공
  *
  * @see SmsPatternEntity
- * @see com.sanha.moneytalk.core.sms2.SmsPatternMatcher
+ * @see com.sanha.moneytalk.core.sms.SmsPatternMatcher
  */
 @Dao
 interface SmsPatternDao {

@@ -19,7 +19,7 @@ import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.util.BackupData
 import com.sanha.moneytalk.core.util.DataBackupManager
-import com.sanha.moneytalk.core.sms2.DeletedSmsTracker
+import com.sanha.moneytalk.core.sms.DeletedSmsTracker
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter

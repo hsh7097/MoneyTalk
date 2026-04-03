@@ -333,7 +333,7 @@ fun ExpenseDetailDialog(
                     onMemoChange(memoText.ifBlank { null })
                     isEditingMemo = false
                 }) {
-                    Text("저장")
+                    Text(stringResource(R.string.common_save))
                 }
             },
             dismissButton = {
@@ -345,7 +345,7 @@ fun ExpenseDetailDialog(
     }
 
     // 삭제 확인 다이얼로그
-    if (showDeleteConfirm && onDelete != null) {
+    if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text(stringResource(R.string.history_delete_title)) },
@@ -353,7 +353,7 @@ fun ExpenseDetailDialog(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        onDelete()
+                        onDelete?.invoke()
                         showDeleteConfirm = false
                         onDismiss()
                     }

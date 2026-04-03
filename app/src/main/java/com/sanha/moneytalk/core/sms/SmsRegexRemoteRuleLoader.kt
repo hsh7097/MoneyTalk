@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms2
+package com.sanha.moneytalk.core.sms
 
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.FirebaseDatabase

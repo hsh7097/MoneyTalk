@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms2
+package com.sanha.moneytalk.core.sms
 
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
@@ -61,7 +61,7 @@ import javax.inject.Singleton
  * - GeminiSmsExtractor (core/sms) — LLM 호출 (배치 추출 + regex 생성)
  *   ※ LLM 호출 자체는 독립적이므로 core/sms 참조 허용
  * - SmsPatternDao (core/database) — 패턴 DB 등록
- * - SmsPatternMatcher (sms2) — regex 파싱 + 코사인 유사도
+ * - SmsPatternMatcher (sms) — regex 파싱 + 코사인 유사도
  * - SmsOriginSampleCollector — RTDB 표본 수집
  */
 @Singleton

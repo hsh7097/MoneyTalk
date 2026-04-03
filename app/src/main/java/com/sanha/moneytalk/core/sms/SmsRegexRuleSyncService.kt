@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms2
+package com.sanha.moneytalk.core.sms
 
 import com.sanha.moneytalk.core.database.SmsRegexRuleRepository
 import java.util.concurrent.atomic.AtomicBoolean

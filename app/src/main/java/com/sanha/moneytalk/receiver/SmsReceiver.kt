@@ -4,8 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
-import com.sanha.moneytalk.core.sms2.SmsChannelProbeCollector
-import com.sanha.moneytalk.core.sms2.SmsInstantProcessor
+import com.sanha.moneytalk.core.sms.SmsChannelProbeCollector
+import com.sanha.moneytalk.core.sms.SmsInstantProcessor
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import dagger.hilt.android.AndroidEntryPoint

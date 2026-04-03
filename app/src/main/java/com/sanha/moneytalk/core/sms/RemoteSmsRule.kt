@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms2
+package com.sanha.moneytalk.core.sms
 
 /**
  * ===== 원격 SMS 정규식 룰 =====

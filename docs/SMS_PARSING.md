@@ -6,7 +6,7 @@
 
 ## 1. 시스템 개요
 
-MoneyTalk은 **sms2 통합 파이프라인**으로 SMS에서 결제/수입 정보를 추출합니다.
+MoneyTalk은 **sms 통합 파이프라인**으로 SMS에서 결제/수입 정보를 추출합니다.
 **3-tier 구조**: sender regex Fast Path → Vector → LLM.
 Step 1.5에서 sender 기반 regex 룰 매칭을 먼저 시도하고, 미매칭만 임베딩 경로(Vector → LLM)로 처리합니다.
 
@@ -86,7 +86,7 @@ Step 1.5 Regex Fast Path 도입 이유:
 ## 2. 파일 구조
 
 ```
-core/sms2/                           ★ sms2 통합 파이프라인
+core/sms/                           ★ sms 통합 파이프라인
 ├── SmsSyncCoordinator.kt            # 외부 진입점 (process → PreFilter → IncomeFilter → Fast Path → Pipeline)
 ├── SmsPipeline.kt                   # 오케스트레이터 (Step 2→3→4→4.5→5)
 ├── SmsPipelineModels.kt             # 데이터 모델 (SmsInput, EmbeddedSms, SmsParseResult, SyncResult 등)
@@ -125,15 +125,15 @@ receiver/
 └── NotificationContentParser.kt     # 메시지 앱 알림에서 거래 후보 텍스트 추출
 ```
 
-**V1 레거시 (core/sms/)**: sms2에서는 `SmsFilter.shouldSkipBySender()` (발신자 필터)만 참조.
-실시간 수신은 `SmsInstantProcessor`(sms2)가 담당.
+현재는 `core/sms/` 하나로 통합되어 있습니다.
+배치 동기화, 실시간 수신, 공용 파서/필터, Fast Path 룰 관리가 모두 이 패키지 안에서 동작합니다.
 
 ---
 
 ## 3. 메시지 읽기 — SmsReaderV2
 
 ### 파일 위치
-[`core/sms2/SmsReaderV2.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsReaderV2.kt)
+[`core/sms/SmsReaderV2.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsReaderV2.kt)
 
 ### 지원 메시지 유형
 
@@ -157,7 +157,7 @@ V1의 `SmsReader`는 `SmsMessage`를 반환했지만, **SmsReaderV2는 `SmsInput
 
 ### 발신자 필터링 — SmsFilter (공유)
 
-[`core/sms/SmsFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsFilter.kt) — V1/sms2 공유
+[`core/sms/SmsFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsFilter.kt) — 공용 발신자 필터
 
 | 메소드 | 역할 |
 |--------|------|
@@ -180,10 +180,10 @@ RCS 메시지의 body는 JSON 형식이며, 위젯 트리 구조로 텍스트가
 ## 4. 외부 진입점 — SmsSyncCoordinator
 
 ### 파일 위치
-[`core/sms2/SmsSyncCoordinator.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsSyncCoordinator.kt)
+[`core/sms/SmsSyncCoordinator.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsSyncCoordinator.kt)
 
 ### 역할
-**sms2 패키지의 유일한 외부 진입점.** 하위 컴포넌트(SmsPipeline, SmsPreFilter 등)를 직접 호출하지 않습니다.
+**sms 패키지의 유일한 외부 진입점.** 하위 컴포넌트(SmsPipeline, SmsPreFilter 등)를 직접 호출하지 않습니다.
 
 ### process() 처리 순서
 
@@ -226,7 +226,7 @@ coordinator.setUserExcludeKeywords(keywords)  // 동기화 전 1회 호출
 ## 5. 사전 필터링 — SmsPreFilter
 
 ### 파일 위치
-[`core/sms2/SmsPreFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPreFilter.kt)
+[`core/sms/SmsPreFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsPreFilter.kt)
 
 ### 필터링 기준
 
@@ -260,7 +260,7 @@ SMS 본문에 아래 키워드 중 하나라도 포함되면 비결제:
 ## 6. 수입/결제 분류 — SmsIncomeFilter
 
 ### 파일 위치
-[`core/sms2/SmsIncomeFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsIncomeFilter.kt)
+[`core/sms/SmsIncomeFilter.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsIncomeFilter.kt)
 
 ### 분류 로직 — `classify(body) → SmsType`
 
@@ -293,7 +293,7 @@ fun classifyAll(smsList: List<SmsInput>): Triple<List<SmsInput>, List<SmsInput>,
 ## 7. 오케스트레이터 — SmsPipeline
 
 ### 파일 위치
-[`core/sms2/SmsPipeline.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPipeline.kt)
+[`core/sms/SmsPipeline.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsPipeline.kt)
 
 ### process() 처리 순서
 
@@ -319,7 +319,7 @@ SmsSyncCoordinator 경유 시 Step 2는 `skipPreFilter=true`로 스킵.
 ## 8. 템플릿화 + 임베딩 — SmsTemplateEngine
 
 ### 파일 위치
-[`core/sms2/SmsTemplateEngine.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsTemplateEngine.kt)
+[`core/sms/SmsTemplateEngine.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsTemplateEngine.kt)
 
 ### 템플릿화 — `templateize(smsBody)`
 
@@ -373,7 +373,7 @@ Gemini Embedding API (모델명은 Firebase RTDB에서 원격 관리, 기본 `ge
 ## 9. 벡터 매칭 + Regex 파싱 — SmsPatternMatcher
 
 ### 파일 위치
-[`core/sms2/SmsPatternMatcher.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsPatternMatcher.kt)
+[`core/sms/SmsPatternMatcher.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsPatternMatcher.kt)
 
 ### 코사인 유사도 (자체 구현)
 
@@ -503,7 +503,7 @@ isMainGroup = false
 ## 10. 그룹 분류 + LLM — SmsGroupClassifier
 
 ### 파일 위치
-[`core/sms2/SmsGroupClassifier.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsGroupClassifier.kt)
+[`core/sms/SmsGroupClassifier.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsGroupClassifier.kt)
 
 ### 설정 상수
 
@@ -670,7 +670,7 @@ cardRegex:   "\[([^\]]+)\]"
 ## 11. 수입 SMS 파싱 — SmsIncomeParser
 
 ### 파일 위치
-[`core/sms2/SmsIncomeParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsIncomeParser.kt)
+[`core/sms/SmsIncomeParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsIncomeParser.kt)
 
 ### 역할
 SmsIncomeFilter가 INCOME으로 분류한 SMS에서 금액/유형/출처/날짜를 추출.
@@ -696,9 +696,9 @@ Object singleton으로 구현 (DI 불필요).
 ## 12. LLM 추출 — GeminiSmsExtractor
 
 ### 파일 위치
-[`core/sms2/GeminiSmsExtractor.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/GeminiSmsExtractor.kt) — **sms2 패키지에 위치**
+[`core/sms/GeminiSmsExtractor.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/GeminiSmsExtractor.kt) — **sms 패키지에 위치**
 
-### sms2에서의 사용
+### sms에서의 사용
 `SmsGroupClassifier`가 Step 5에서 LLM 호출 시 사용:
 - `extractFromSmsBatch(bodies, timestamps)` → 결제 여부 + 정보 추출
 - `generateRegexForGroup(bodies, timestamps, mainRegexContext?)` → regex 생성 + 메인 regex 참조
@@ -789,7 +789,7 @@ syncSmsV2(contentResolver, targetMonthRange, updateLastSyncTime)
 ## 13-A. 실시간 처리 — SmsInstantProcessor
 
 ### 파일 위치
-[`core/sms2/SmsInstantProcessor.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms2/SmsInstantProcessor.kt)
+[`core/sms/SmsInstantProcessor.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsInstantProcessor.kt)
 
 ### 역할
 SMS 수신(BroadcastReceiver), MMS/RCS ContentObserver, 메시지 앱 알림(NotificationListenerService)
@@ -1032,23 +1032,21 @@ success/fail 모두 fingerprint 단위 row upsert + count/lastSeenAt 누적
 
 ---
 
-## 18. V1 레거시 참조
+## 18. 공용/보조 컴포넌트
 
-sms2가 배치 동기화를 담당하지만, 일부 V1 컴포넌트는 여전히 사용됩니다.
+별도 `sms2` 패키지는 더 이상 없고, 보조 컴포넌트도 모두 `core/sms/`로 정리되어 있습니다.
 
-| V1 컴포넌트 | 현재 상태 | 사용처 |
-|------------|----------|--------|
-| SmsReader | **V1 only** | — (sms2의 SmsReaderV2로 대체) |
-| SmsParser | **V1 only** | — (sms2 파이프라인으로 대체) |
-| HybridSmsClassifier | **삭제됨/미사용** | — |
-| SmsFilter | **V1+sms2 공유** | 발신자 필터 (shouldSkipBySender) |
-| SmsBatchProcessor | **미사용** (삭제 대기) | — |
-| VectorSearchEngine | **V1 only** | — |
-| GeneratedSmsRegexParser | **V1 only** | — |
-| SmsEmbeddingService | **V1 only** | — |
+| 컴포넌트 | 현재 상태 | 사용처 |
+|---------|----------|--------|
+| SmsParser | 사용 중 | 카테고리 추론, 실시간 단건 처리 보조 |
+| SmsFilter | 사용 중 | 발신번호 필터링, provider/receiver 공통 |
+| SmsEmbeddingService | 사용 중 | StoreEmbeddingRepository, StoreNameGrouper |
+| VectorSearchEngine | 사용 중 | 거래처 임베딩 검색/유사도 계산 |
+| DeletedSmsTracker | 사용 중 | 삭제된 문자 재삽입 방지 |
+| SmsChannelProbeCollector | DEBUG 전용 | 금융 문자 누락 채널 진단 |
 
-> 실시간 SMS 수신은 `SmsInstantProcessor`(sms2)가 담당합니다 (§13-A 참조).
-> 앱 알림 실시간 처리는 `NotificationTransactionService`(debug 전용)가 SmsInstantProcessor를 호출합니다.
+> 실시간 SMS/MMS/RCS 수신은 `SmsInstantProcessor`가 담당합니다 (§13-A 참조).
+> cold start RCS/비즈메시지는 `NotificationTransactionService`가 최근 provider 원본을 찾아 `SmsInstantProcessor`로 연결합니다.
 
 ---
 

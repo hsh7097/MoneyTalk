@@ -5,7 +5,7 @@ import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import android.app.Application
 import com.google.android.gms.ads.MobileAds
 import com.google.firebase.FirebaseApp
-import com.sanha.moneytalk.core.sms2.DeletedSmsTracker
+import com.sanha.moneytalk.core.sms.DeletedSmsTracker
 import com.sanha.moneytalk.core.firebase.CrashlyticsHelper
 import com.sanha.moneytalk.core.firebase.PremiumManager
 import com.sanha.moneytalk.core.notification.SmsNotificationManager

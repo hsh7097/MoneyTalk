@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms2
+package com.sanha.moneytalk.core.sms
 
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
@@ -64,11 +64,6 @@ class RemoteSmsRuleRepository @Inject constructor(
                 val grouped = rules.groupBy { it.normalizedSenderAddress }
                 cachedRules = grouped
                 cacheTimestamp = now
-
-                val totalRules = rules.size
-                val senderCount = grouped.size
-                for ((sender, senderRules) in grouped) {
-                }
 
                 grouped
             }

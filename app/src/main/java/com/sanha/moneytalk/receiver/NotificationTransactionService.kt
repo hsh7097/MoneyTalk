@@ -4,8 +4,8 @@ import android.net.Uri
 import android.provider.Telephony
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import com.sanha.moneytalk.core.sms2.SmsInstantProcessor
-import com.sanha.moneytalk.core.sms2.SmsReaderV2
+import com.sanha.moneytalk.core.sms.SmsInstantProcessor
+import com.sanha.moneytalk.core.sms.SmsReaderV2
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import dagger.hilt.EntryPoint

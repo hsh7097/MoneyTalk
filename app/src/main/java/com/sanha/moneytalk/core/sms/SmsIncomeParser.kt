@@ -1,9 +1,9 @@
-package com.sanha.moneytalk.core.sms2
+package com.sanha.moneytalk.core.sms
 
 import java.util.Calendar
 
 /**
- * 수입 SMS 파싱 유틸리티 (sms2 전용)
+ * 수입 SMS 파싱 유틸리티 (sms 전용)
  *
  * SmsParser(V1)에서 HomeViewModel의 saveIncomes()가 사용하는 메소드만 추출.
  * - extractIncomeAmount(): 입금 금액 추출
@@ -12,7 +12,7 @@ import java.util.Calendar
  * - extractDateTime(): 날짜/시간 추출
  * - setUserExcludeKeywords(): 사용자 제외 키워드 설정
  *
- * sms2 파이프라인의 SmsIncomeFilter가 수입으로 분류한 SMS에 대해 호출됩니다.
+ * sms 파이프라인의 SmsIncomeFilter가 수입으로 분류한 SMS에 대해 호출됩니다.
  */
 object SmsIncomeParser {
 

@@ -19,7 +19,7 @@ import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardInf
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderInfo
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
-import com.sanha.moneytalk.core.sms2.DeletedSmsTracker
+import com.sanha.moneytalk.core.sms.DeletedSmsTracker
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService

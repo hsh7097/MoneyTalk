@@ -23,15 +23,15 @@ import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.CardNameNormalizer
 import com.sanha.moneytalk.core.util.DateUtils
-import com.sanha.moneytalk.core.sms2.SmsIncomeParser
-import com.sanha.moneytalk.core.sms2.SmsInput
-import com.sanha.moneytalk.core.sms2.SmsFilter
-import com.sanha.moneytalk.core.sms2.DeletedSmsTracker
-import com.sanha.moneytalk.core.sms2.SmsInstantProcessor
-import com.sanha.moneytalk.core.sms2.SmsReaderV2
-import com.sanha.moneytalk.core.sms2.SmsPipeline
-import com.sanha.moneytalk.core.sms2.SmsSyncCoordinator
-import com.sanha.moneytalk.core.sms2.SyncStats
+import com.sanha.moneytalk.core.sms.SmsIncomeParser
+import com.sanha.moneytalk.core.sms.SmsInput
+import com.sanha.moneytalk.core.sms.SmsFilter
+import com.sanha.moneytalk.core.sms.DeletedSmsTracker
+import com.sanha.moneytalk.core.sms.SmsInstantProcessor
+import com.sanha.moneytalk.core.sms.SmsReaderV2
+import com.sanha.moneytalk.core.sms.SmsPipeline
+import com.sanha.moneytalk.core.sms.SmsSyncCoordinator
+import com.sanha.moneytalk.core.sms.SyncStats
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
@@ -309,7 +309,7 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    // ========== SMS 동기화 (sms2 파이프라인) ==========
+    // ========== SMS 동기화 (sms 파이프라인) ==========
 
     /** 동기화 후처리 결과 */
     private data class PostSyncResult(
@@ -471,7 +471,7 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * SMS 동기화 (sms2 파이프라인)
+     * SMS 동기화 (sms 파이프라인)
      *
      * 기존 호출부(syncIncremental, unlockFullSync 등) 호환 유지.
      * 내부적으로 syncSmsV2Internal()을 호출.
@@ -595,7 +595,7 @@ class MainViewModel @Inject constructor(
             )
         }
 
-        // Step 2: sms2 파이프라인 실행
+        // Step 2: sms 파이프라인 실행
         val syncResult = processSmsPipeline(smsInputs, silent)
 
         val reconciledExpenseIds = syncResult.expenses
@@ -853,14 +853,14 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * sms2 파이프라인 실행 (SmsSyncCoordinator.process)
+     * sms 파이프라인 실행 (SmsSyncCoordinator.process)
      *
      * @param silent true면 dataRefreshEvent에 진행 상태를 전파하지 않음
      */
     private suspend fun processSmsPipeline(
         smsInputs: List<SmsInput>,
         silent: Boolean = false
-    ): com.sanha.moneytalk.core.sms2.SyncResult {
+    ): com.sanha.moneytalk.core.sms.SyncResult {
         if (!silent) {
             _uiState.update {
                 it.copy(
@@ -894,7 +894,7 @@ class MainViewModel @Inject constructor(
      * Phase 3: 분류 완료된 엔티티를 DB에 배치 저장
      */
     private suspend fun saveExpenses(
-        expenses: List<com.sanha.moneytalk.core.sms2.SmsParseResult>,
+        expenses: List<com.sanha.moneytalk.core.sms.SmsParseResult>,
         existingSnapshot: ExistingSmsSnapshot
     ): SaveResult {
         if (expenses.isEmpty()) return SaveResult()
@@ -1539,7 +1539,7 @@ class MainViewModel @Inject constructor(
             if (remainingCount > 0) {
 
                 val phase2Classified = categoryClassifierService.classifyAllUntilComplete(
-                    onProgress = { round, classifiedInRound, remaining ->
+                    onProgress = { _, _, _ ->
                     },
                     onStepProgress = null,
                     maxRounds = MAX_CLASSIFICATION_ROUNDS

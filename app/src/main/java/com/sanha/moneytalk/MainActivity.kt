@@ -69,7 +69,7 @@ import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.firebase.ForceUpdateChecker
 import com.sanha.moneytalk.core.firebase.ForceUpdateState
-import com.sanha.moneytalk.core.sms2.SmsPipeline
+import com.sanha.moneytalk.core.sms.SmsPipeline
 import com.sanha.moneytalk.core.theme.MoneyTalkTheme
 import com.sanha.moneytalk.core.theme.ThemeMode
 import com.sanha.moneytalk.core.ui.AppSnackbarBus

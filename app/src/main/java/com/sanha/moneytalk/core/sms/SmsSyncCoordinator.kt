@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms2
+package com.sanha.moneytalk.core.sms
 
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
@@ -6,9 +6,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * ===== SMS 동기화 코디네이터 (sms2 패키지의 유일한 외부 진입점) =====
+ * ===== SMS 동기화 코디네이터 (sms 패키지의 유일한 외부 진입점) =====
  *
- * 역할: sms2 패키지의 단일 진입점.
+ * 역할: sms 패키지의 단일 진입점.
  *       외부에서 SMS를 처리할 때 반드시 이 클래스의 process()를 통해 진입한다.
  *       SmsPipeline, SmsPreFilter 등 하위 컴포넌트를 직접 호출하지 않는다.
  *
@@ -31,7 +31,7 @@ import javax.inject.Singleton
  * - 카드 자동 등록 (호출자 책임)
  * - 카테고리 분류 (호출자 책임)
  *
- * 의존성: SmsPreFilter (sms2), SmsIncomeFilter (sms2), SmsPipeline (sms2)
+ * 의존성: SmsPreFilter (sms), SmsIncomeFilter (sms), SmsPipeline (sms)
  * ※ core/sms 패키지 미참조
  */
 @Singleton
@@ -45,7 +45,7 @@ class SmsSyncCoordinator @Inject constructor(
 ) {
 
     /**
-     * ★ sms2 패키지의 유일한 외부 진입점 ★
+     * ★ sms 패키지의 유일한 외부 진입점 ★
      *
      * 모든 SMS 처리(배치 동기화, 증분 동기화, 실시간 수신)는
      * 반드시 이 메소드를 통해 진입해야 한다.

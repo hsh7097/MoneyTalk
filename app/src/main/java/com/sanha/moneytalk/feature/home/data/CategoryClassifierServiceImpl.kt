@@ -5,7 +5,7 @@ import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.IncomeCategoryMapper
 import com.sanha.moneytalk.core.model.TransferDirection
-import com.sanha.moneytalk.core.sms2.SmsParser
+import com.sanha.moneytalk.core.sms.SmsParser
 import com.sanha.moneytalk.core.util.StoreNameGrouper
 import javax.inject.Inject
 import javax.inject.Singleton

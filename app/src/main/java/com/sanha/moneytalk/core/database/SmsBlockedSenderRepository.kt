@@ -2,7 +2,7 @@ package com.sanha.moneytalk.core.database
 
 import com.sanha.moneytalk.core.database.dao.SmsBlockedSenderDao
 import com.sanha.moneytalk.core.database.entity.SmsBlockedSenderEntity
-import com.sanha.moneytalk.core.sms2.SmsFilter
+import com.sanha.moneytalk.core.sms.SmsFilter
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton

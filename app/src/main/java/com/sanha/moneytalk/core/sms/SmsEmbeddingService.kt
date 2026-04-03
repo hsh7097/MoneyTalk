@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms2
+package com.sanha.moneytalk.core.sms
 
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
@@ -138,8 +138,6 @@ class SmsEmbeddingService @Inject constructor(
                 val requestBody = mapOf("requests" to requests)
                 val jsonBody = gson.toJson(requestBody)
 
-                val overallStartTime = System.currentTimeMillis()
-
                 // 429 Rate Limit 재시도 (지수 백오프)
                 // Quota 초과("exceeded your current quota")는 재시도 불가 → 즉시 실패
                 var lastError: String? = null
@@ -192,7 +190,6 @@ class SmsEmbeddingService @Inject constructor(
                         values.map { it.asFloat }
                     }
 
-                    val batchElapsed = System.currentTimeMillis() - overallStartTime
                     return@withContext result
                 }
 

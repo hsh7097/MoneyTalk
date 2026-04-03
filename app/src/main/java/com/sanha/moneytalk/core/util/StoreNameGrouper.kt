@@ -3,8 +3,8 @@ package com.sanha.moneytalk.core.util
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
 import com.sanha.moneytalk.core.similarity.StoreNameSimilarityPolicy
-import com.sanha.moneytalk.core.sms2.SmsEmbeddingService
-import com.sanha.moneytalk.core.sms2.VectorSearchEngine
+import com.sanha.moneytalk.core.sms.SmsEmbeddingService
+import com.sanha.moneytalk.core.sms.VectorSearchEngine
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -29,7 +29,7 @@ import javax.inject.Singleton
  * 2. 첫 가게명을 그룹 중심으로, 유사도 ≥ 0.88이면 같은 그룹
  * 3. 각 그룹의 대표만 Gemini에 전송
  *
- * @see com.sanha.moneytalk.core.sms2.SmsGroupClassifier 동일 알고리즘 참고
+ * @see com.sanha.moneytalk.core.sms.SmsGroupClassifier 동일 알고리즘 참고
  * @see StoreNameSimilarityPolicy 가게명 유사도 정책 (그룹핑 임계값 0.88)
  */
 @Singleton

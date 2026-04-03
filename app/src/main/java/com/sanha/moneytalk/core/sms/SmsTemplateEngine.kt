@@ -1,4 +1,4 @@
-package com.sanha.moneytalk.core.sms2
+package com.sanha.moneytalk.core.sms
 
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
@@ -241,8 +241,6 @@ class SmsTemplateEngine @Inject constructor(
 
                 val jsonBody = gson.toJson(mapOf("requests" to requests))
 
-                val startTime = System.currentTimeMillis()
-
                 // 429 Rate Limit 재시도 (지수 백오프)
                 var lastError: String? = null
                 for (attempt in 0 until MAX_RETRIES) {
@@ -292,7 +290,6 @@ class SmsTemplateEngine @Inject constructor(
                         values.map { it.asFloat }
                     }
 
-                    val elapsed = System.currentTimeMillis() - startTime
                     return@withContext result
                 }
 
