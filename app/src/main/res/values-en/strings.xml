@@ -185,6 +185,12 @@
     <string name="settings_api_key_not_set">Set up API key for AI chat (free)</string>
 
     <string name="settings_section_data">Data Management</string>
+    <string name="settings_notification_title">Transaction Alerts</string>
+    <string name="settings_notification_subtitle">Receive alerts for payments and deposits</string>
+    <string name="settings_notification_access_title">Notification Access</string>
+    <string name="settings_notification_access_subtitle_enabled">Real-time RCS and web message capture is enabled</string>
+    <string name="settings_notification_access_subtitle_disabled">System access is required to read message app notifications</string>
+    <string name="settings_notification_access_warning">Turn on notification access to capture RCS and web messages in real time.</string>
     <string name="settings_export_title">Export Data</string>
     <string name="settings_export_subtitle">Export to JSON or CSV with filters</string>
     <string name="settings_google_drive_title">Google Drive</string>

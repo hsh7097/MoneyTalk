@@ -14,6 +14,7 @@ import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
+import com.sanha.moneytalk.core.notification.NotificationAccessHelper
 import com.sanha.moneytalk.core.theme.ThemeMode
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.ClassificationState
@@ -30,6 +31,7 @@ import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.CategoryRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
+import com.sanha.moneytalk.receiver.NotificationTransactionService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -130,7 +132,9 @@ data class SettingsUiState(
     // 카테고리별 예산 (category displayName → monthlyLimit)
     val categoryBudgets: Map<String, Int> = emptyMap(),
     // 거래 알림 설정
-    val notificationEnabled: Boolean = false
+    val notificationEnabled: Boolean = false,
+    // 알림 접근 권한 상태
+    val notificationAccessEnabled: Boolean = false
 )
 
 @HiltViewModel
@@ -270,6 +274,14 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsDataStore.saveNotificationEnabled(enabled)
         }
+    }
+
+    fun refreshNotificationAccess(context: Context) {
+        val enabled = NotificationAccessHelper.isNotificationListenerEnabled(
+            context = context,
+            listenerServiceClass = NotificationTransactionService::class.java
+        )
+        _uiState.update { it.copy(notificationAccessEnabled = enabled) }
     }
 
     private fun loadThemeMode() {

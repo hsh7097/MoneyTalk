@@ -447,6 +447,10 @@
     <!-- 거래 알림 -->
     <string name="settings_notification_title">거래 알림</string>
     <string name="settings_notification_subtitle">결제/입금 시 알림을 받습니다</string>
+    <string name="settings_notification_access_title">앱 알림 접근 설정</string>
+    <string name="settings_notification_access_subtitle_enabled">실시간 RCS/웹발신 반영이 활성화되어 있습니다</string>
+    <string name="settings_notification_access_subtitle_disabled">메시지 앱 알림을 읽으려면 시스템 권한이 필요합니다</string>
+    <string name="settings_notification_access_warning">RCS·웹발신 문자를 실시간으로 반영하려면 앱 알림 접근 권한을 켜주세요.</string>
 
     <!-- 문자 설정 -->
     <string name="sms_settings_title">문자 설정</string>

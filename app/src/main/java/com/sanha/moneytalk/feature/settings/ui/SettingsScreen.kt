@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.feature.settings.ui
 
+import androidx.compose.runtime.DisposableEffect
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -67,10 +68,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
 import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.notification.NotificationAccessHelper
 import com.sanha.moneytalk.core.theme.ThemeMode
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkState
@@ -93,6 +98,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
 
@@ -143,6 +149,19 @@ fun SettingsScreen(
     LaunchedEffect(Unit) {
         viewModel.checkGoogleSignIn(context)
         viewModel.refresh()
+        viewModel.refreshNotificationAccess(context)
+    }
+
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshNotificationAccess(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     // 백업 콘텐츠가 준비되면 파일 저장 다이얼로그 열기 (로컬 내보내기일 때만)
@@ -425,6 +444,34 @@ fun SettingsScreen(
                             onCheckedChange = { checked ->
                                 viewModel.onIntent(SettingsIntent.ToggleNotification(checked))
                             }
+                        )
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsItemCompose(
+                        info = object : SettingsItemInfo {
+                            override val icon = if (uiState.notificationAccessEnabled) {
+                                Icons.Default.Notifications
+                            } else {
+                                Icons.Default.Warning
+                            }
+                            override val title = stringResource(R.string.settings_notification_access_title)
+                            override val subtitle = if (uiState.notificationAccessEnabled) {
+                                stringResource(R.string.settings_notification_access_subtitle_enabled)
+                            } else {
+                                stringResource(R.string.settings_notification_access_subtitle_disabled)
+                            }
+                        },
+                        onClick = {
+                            NotificationAccessHelper.openNotificationListenerSettings(context)
+                        }
+                    )
+                    if (!uiState.notificationAccessEnabled) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Text(
+                            text = stringResource(R.string.settings_notification_access_warning),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
                         )
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
