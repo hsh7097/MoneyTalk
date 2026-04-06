@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -53,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -204,6 +206,8 @@ fun MoneyTalkApp(
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    val density = LocalDensity.current
+    val isImeVisible = WindowInsets.ime.getBottom(density) > 0
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -406,84 +410,86 @@ fun MoneyTalkApp(
         modifier = Modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            Column(
-                modifier = Modifier
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-            ) {
-                HorizontalDivider(
-                    thickness = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                NavigationBar(
-                    modifier = Modifier.height(64.dp),
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 0.dp,
-                    windowInsets = WindowInsets(0)
+            if (!isImeVisible) {
+                Column(
+                    modifier = Modifier
+                        .windowInsetsPadding(WindowInsets.navigationBars)
                 ) {
-                    bottomNavItems.forEach { item ->
-                        val title = stringResource(item.titleRes)
-                        val isSelected = currentRoute?.startsWith(item.route.substringBefore("?")) == true
-                        NavigationBarItem(
-                            selected = isSelected,
-                            onClick = {
-                                if (!isSelected) {
-                                    navController.navigate(item.route) {
-                                        popUpTo(Screen.Home.route) {
-                                            saveState = true
+                    HorizontalDivider(
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    NavigationBar(
+                        modifier = Modifier.height(64.dp),
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 0.dp,
+                        windowInsets = WindowInsets(0)
+                    ) {
+                        bottomNavItems.forEach { item ->
+                            val title = stringResource(item.titleRes)
+                            val isSelected = currentRoute?.startsWith(item.route.substringBefore("?")) == true
+                            NavigationBarItem(
+                                selected = isSelected,
+                                onClick = {
+                                    if (!isSelected) {
+                                        navController.navigate(item.route) {
+                                            popUpTo(Screen.Home.route) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
                                         }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                    if (item.route == Screen.Home.route) {
+                                        if (item.route == Screen.Home.route) {
+                                            mainViewModel.homeTabReClickEvent.tryEmit(Unit)
+                                        } else if (item.route.startsWith("history")) {
+                                            mainViewModel.historyTabReClickEvent.tryEmit(Unit)
+                                        }
+                                    } else if (item.route == Screen.Home.route) {
                                         mainViewModel.homeTabReClickEvent.tryEmit(Unit)
                                     } else if (item.route.startsWith("history")) {
                                         mainViewModel.historyTabReClickEvent.tryEmit(Unit)
                                     }
-                                } else if (item.route == Screen.Home.route) {
-                                    mainViewModel.homeTabReClickEvent.tryEmit(Unit)
-                                } else if (item.route.startsWith("history")) {
-                                    mainViewModel.historyTabReClickEvent.tryEmit(Unit)
-                                }
-                            },
-                            icon = {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(top = 4.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally
+                                },
+                                icon = {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(top = 4.dp),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(
-                                            imageVector = if (isSelected) {
-                                                item.selectedIcon
-                                            } else {
-                                                item.unselectedIcon
-                                            },
-                                            contentDescription = title,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Text(
-                                            text = title,
-                                            fontSize = 12.dp.toDpTextUnit
-                                        )
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isSelected) {
+                                                    item.selectedIcon
+                                                } else {
+                                                    item.unselectedIcon
+                                                },
+                                                contentDescription = title,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Text(
+                                                text = title,
+                                                fontSize = 12.dp.toDpTextUnit
+                                            )
+                                        }
                                     }
-                                }
-                            },
-                            label = null,
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.onSurface,
-                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(
-                                    alpha = 0.5f
-                                ),
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(
-                                    alpha = 0.5f
-                                ),
-                                indicatorColor = MaterialTheme.colorScheme.surface
+                                },
+                                label = null,
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.onSurface,
+                                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(
+                                        alpha = 0.5f
+                                    ),
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(
+                                        alpha = 0.5f
+                                    ),
+                                    indicatorColor = MaterialTheme.colorScheme.surface
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }
