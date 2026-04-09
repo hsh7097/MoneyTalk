@@ -27,7 +27,7 @@ fun settingsCoachMarkSteps(): List<CoachMarkStep> = listOf(
         tooltipPosition = TooltipPosition.BELOW
     ),
     // Step 3: 데이터 관리
-    // LazyColumn 하단이라 화면 높이에 따라 compose 시점에 미등록될 수 있음 → 자동 스킵
+    // 오프스크린일 수 있어도 SettingsScreen에서 해당 섹션까지 자동 스크롤해 등록을 보장한다.
     CoachMarkStep(
         id = "settings_data",
         titleResId = R.string.coach_mark_settings_data_title,
@@ -36,5 +36,4 @@ fun settingsCoachMarkSteps(): List<CoachMarkStep> = listOf(
         tooltipPosition = TooltipPosition.ABOVE
     )
     // settings_reset: 가이드 초기화는 메타 기능이므로 온보딩 스텝에서 제외
-    // (LazyColumn 하단이라 화면 높이에 따라 compose 시점에 미등록될 수 있음)
 )

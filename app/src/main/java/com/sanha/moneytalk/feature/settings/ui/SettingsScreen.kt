@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -101,6 +102,7 @@ fun SettingsScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
 
     // 플랫폼 연동 상태 (ActivityResult 런처와 직접 연결되어 Compose-local 유지)
     var isExportingToGoogleDrive by remember { mutableStateOf(false) }
@@ -196,15 +198,34 @@ fun SettingsScreen(
     val coachMarkRegistry = remember { CoachMarkTargetRegistry() }
     val coachMarkState = remember { CoachMarkState() }
     val allSettingsSteps = remember { settingsCoachMarkSteps() }
+    val registeredTargetKeys = coachMarkRegistry.targets.keys.toSet()
+    val coachMarkTargetItemIndices = remember {
+        mapOf(
+            "settings_period" to 2,
+            "settings_category" to 3,
+            "settings_data" to 4
+        )
+    }
     val hasSeenSettingsOnboarding by viewModel.hasSeenScreenOnboardingFlow("settings")
         .collectAsStateWithLifecycle(initialValue = true)
 
-    LaunchedEffect(hasSeenSettingsOnboarding) {
-        if (!hasSeenSettingsOnboarding) {
-            delay(1000)
-            val visibleSteps = allSettingsSteps.filter { it.targetKey in coachMarkRegistry.targets }
-            if (visibleSteps.isNotEmpty()) {
-                coachMarkState.show(visibleSteps)
+    LaunchedEffect(hasSeenSettingsOnboarding, registeredTargetKeys) {
+        if (!hasSeenSettingsOnboarding &&
+            !coachMarkState.isVisible &&
+            "settings_period" in registeredTargetKeys
+        ) {
+            delay(300)
+            coachMarkState.show(allSettingsSteps)
+        }
+    }
+
+    LaunchedEffect(coachMarkState.isVisible, coachMarkState.currentStep?.targetKey) {
+        if (!coachMarkState.isVisible) return@LaunchedEffect
+
+        val targetKey = coachMarkState.currentStep?.targetKey ?: return@LaunchedEffect
+        if (targetKey !in registeredTargetKeys) {
+            coachMarkTargetItemIndices[targetKey]?.let { itemIndex ->
+                listState.animateScrollToItem(itemIndex)
             }
         }
     }
@@ -214,6 +235,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
+            state = listState,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
