@@ -17,6 +17,7 @@ import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.dao.SmsRegexRuleDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import com.sanha.moneytalk.core.database.dao.StoreRuleDao
+import com.sanha.moneytalk.core.database.dao.SyncCoverageDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -53,6 +54,7 @@ object DatabaseModule {
             AppDatabase.DATABASE_NAME
         )
             .addMigrations(AppDatabase.MIGRATION_1_2)
+            .addMigrations(AppDatabase.MIGRATION_2_3)
             .build()
     }
 
@@ -152,5 +154,12 @@ object DatabaseModule {
     @Singleton
     fun provideStoreRuleDao(database: AppDatabase): StoreRuleDao {
         return database.storeRuleDao()
+    }
+
+    /** 실제 동기화 구간 DAO 제공 */
+    @Provides
+    @Singleton
+    fun provideSyncCoverageDao(database: AppDatabase): SyncCoverageDao {
+        return database.syncCoverageDao()
     }
 }

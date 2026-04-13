@@ -11,6 +11,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.sanha.moneytalk.core.database.AppDatabase
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
+import com.sanha.moneytalk.core.database.SyncCoverageRepository
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
@@ -149,6 +150,7 @@ class SettingsViewModel @Inject constructor(
     private val appDatabase: AppDatabase,
     private val chatDao: ChatDao,
     private val budgetDao: BudgetDao,
+    private val syncCoverageRepository: SyncCoverageRepository,
     private val dataRefreshEvent: DataRefreshEvent,
     private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
     private val snackbarBus: AppSnackbarBus,
@@ -723,6 +725,8 @@ class SettingsViewModel @Inject constructor(
                     settingsDataStore.saveMonthStartDay(1)
                     // 마지막 동기화 시간 초기화 (다음 동기화 시 전체 동기화 되도록)
                     settingsDataStore.saveLastSyncTime(0L)
+                    // 실제 동기화 구간 기록도 함께 제거
+                    syncCoverageRepository.clearAll()
                     // 광고 시청 기록 초기화 (월별 전체 동기화 다시 가능하도록)
                     settingsDataStore.clearSyncedMonths()
                 }

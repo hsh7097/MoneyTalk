@@ -10,8 +10,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.OwnedCardRepository
 import com.sanha.moneytalk.core.database.SmsExclusionRepository
+import com.sanha.moneytalk.core.database.SyncCoverageRepository
+import com.sanha.moneytalk.core.database.SyncCoverageStatus
+import com.sanha.moneytalk.core.database.SyncCoverageTrigger
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.database.entity.SyncCoverageEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.IncomeCategoryMapper
 import com.sanha.moneytalk.core.model.TransferDirection
@@ -81,6 +85,7 @@ class MainViewModel @Inject constructor(
     private val dataRefreshEvent: DataRefreshEvent,
     private val ownedCardRepository: OwnedCardRepository,
     private val smsExclusionRepository: SmsExclusionRepository,
+    private val syncCoverageRepository: SyncCoverageRepository,
     private val geminiRepository: GeminiRepository,
     private val snackbarBus: AppSnackbarBus,
     private val classificationState: ClassificationState,
@@ -125,6 +130,7 @@ class MainViewModel @Inject constructor(
                 hasFreeSyncRemaining = state.hasFreeSyncRemaining,
                 isSyncing = state.isSyncing,
                 syncedMonths = state.syncedMonths,
+                syncCoverageVersion = state.syncCoverageVersion,
                 isLegacyFullSyncUnlocked = state.isLegacyFullSyncUnlocked
             )
         }
@@ -168,11 +174,14 @@ class MainViewModel @Inject constructor(
     /** 동기화 중 들어온 silent 재실행 요청 */
     @Volatile
     private var pendingSilentSyncRequest = false
+    /** 실제 성공한 동기화 구간 캐시 */
+    private var syncCoverageEntries: List<SyncCoverageEntity> = emptyList()
     /** 최초 진입(onCreate) 여부 — 첫 onAppResume 호출 시 초기 동기화 다이얼로그 표시용 */
     private var isFirstLaunch = true
 
     init {
         loadSettings()
+        observeSyncCoverage()
         observeDataRefreshEvents()
         rewardAdManager.preloadAd()
     }
@@ -210,7 +219,12 @@ class MainViewModel @Inject constructor(
                 }
                 viewModelScope.launch {
                     val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
-                    syncSmsV2(range, updateLastSyncTime = true, silent = true)
+                    syncSmsV2(
+                        targetMonthRange = range,
+                        updateLastSyncTime = true,
+                        silent = true,
+                        trigger = SyncCoverageTrigger.APP_RESUME_INCREMENTAL
+                    )
                 }
                 syncTriggered = true
             }
@@ -271,6 +285,17 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    private fun observeSyncCoverage() {
+        viewModelScope.launch {
+            syncCoverageRepository.coverageFlow.collect { coverages ->
+                syncCoverageEntries = coverages
+                _uiState.update {
+                    it.copy(syncCoverageVersion = coverages.hashCode())
+                }
+            }
+        }
+    }
+
     // ========== 전역 이벤트 처리 ==========
 
     private fun observeDataRefreshEvents() {
@@ -285,13 +310,23 @@ class MainViewModel @Inject constructor(
                     DataRefreshEvent.RefreshType.SMS_RECEIVED -> {
                         MoneyTalkLogger.i("SMS 수신 이벤트 → silent 증분 동기화 시작")
                         val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
-                        syncSmsV2(range, updateLastSyncTime = true, silent = true)
+                        syncSmsV2(
+                            targetMonthRange = range,
+                            updateLastSyncTime = true,
+                            silent = true,
+                            trigger = SyncCoverageTrigger.SMS_RECEIVED_INCREMENTAL
+                        )
                     }
 
                     DataRefreshEvent.RefreshType.DEBUG_FULL_SYNC_ALL_MESSAGES -> {
                         MoneyTalkLogger.i("DEBUG 전체 메시지 동기화 시작")
                         val range = Pair(0L, System.currentTimeMillis())
-                        syncSmsV2(range, updateLastSyncTime = true, silent = false)
+                        syncSmsV2(
+                            targetMonthRange = range,
+                            updateLastSyncTime = true,
+                            silent = false,
+                            trigger = SyncCoverageTrigger.DEBUG_FULL_SYNC
+                        )
                     }
 
                     DataRefreshEvent.RefreshType.DEBUG_SYNC_TODAY_MESSAGES -> {
@@ -300,7 +335,12 @@ class MainViewModel @Inject constructor(
                             DateUtils.getDaysAgoTimestamp(1),
                             System.currentTimeMillis()
                         )
-                        syncSmsV2(range, updateLastSyncTime = false, silent = false)
+                        syncSmsV2(
+                            targetMonthRange = range,
+                            updateLastSyncTime = false,
+                            silent = false,
+                            trigger = SyncCoverageTrigger.DEBUG_RECENT_SYNC
+                        )
                     }
 
                     else -> { /* CATEGORY_UPDATED, OWNED_CARD_UPDATED, TRANSACTION_ADDED → HomeVM/HistoryVM이 처리 */ }
@@ -387,6 +427,11 @@ class MainViewModel @Inject constructor(
                 val result = withContext(Dispatchers.IO) {
                     syncSmsV2Internal(fullRange, updateLastSyncTime = true, silent = false)
                 }
+                recordSuccessfulSyncCoverage(
+                    targetMonthRange = fullRange,
+                    trigger = SyncCoverageTrigger.AUTO_INITIAL,
+                    result = result
+                )
 
                 if (isInitialSync) {
                     // 초기 동기화 완료 → 카드 자동 등록 + 데이터 변경 통지 + AI 성과 요약
@@ -446,6 +491,26 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    private suspend fun recordSuccessfulSyncCoverage(
+        targetMonthRange: Pair<Long, Long>,
+        trigger: SyncCoverageTrigger,
+        result: SyncResult
+    ) {
+        try {
+            syncCoverageRepository.recordCoverage(
+                startMillis = targetMonthRange.first,
+                endMillis = targetMonthRange.second,
+                trigger = trigger,
+                expenseCount = result.expenseCount,
+                incomeCount = result.incomeCount,
+                reconciledExpenseCount = result.reconciledExpenseCount,
+                reconciledIncomeCount = result.reconciledIncomeCount
+            )
+        } catch (e: Exception) {
+            MoneyTalkLogger.w("동기화 구간 저장 실패: ${e.message}")
+        }
+    }
+
     /** 결과 메시지 빌드 헬퍼 */
     private fun buildResultMessage(expenseCount: Int, incomeCount: Int): String = when {
         expenseCount > 0 && incomeCount > 0 ->
@@ -466,7 +531,11 @@ class MainViewModel @Inject constructor(
     fun syncIncremental() {
         viewModelScope.launch {
             val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
-            syncSmsV2(range, updateLastSyncTime = true)
+            syncSmsV2(
+                targetMonthRange = range,
+                updateLastSyncTime = true,
+                trigger = SyncCoverageTrigger.MANUAL_INCREMENTAL
+            )
         }
     }
 
@@ -485,6 +554,7 @@ class MainViewModel @Inject constructor(
         targetMonthRange: Pair<Long, Long>,
         updateLastSyncTime: Boolean = true,
         silent: Boolean = false,
+        trigger: SyncCoverageTrigger = SyncCoverageTrigger.MANUAL_INCREMENTAL,
         onSyncComplete: (suspend () -> Unit)? = null
     ) {
         if (!isSyncRunning.compareAndSet(false, true)) {
@@ -521,6 +591,7 @@ class MainViewModel @Inject constructor(
                     syncSmsV2Internal(targetMonthRange, updateLastSyncTime, silent)
                 }
 
+                recordSuccessfulSyncCoverage(targetMonthRange, trigger, result)
                 handleSyncResult(result, silent)
                 onSyncComplete?.invoke()
             } catch (e: CancellationException) {
@@ -540,7 +611,12 @@ class MainViewModel @Inject constructor(
         pendingSilentSyncRequest = false
         viewModelScope.launch {
             val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
-            syncSmsV2(range, updateLastSyncTime = true, silent = true)
+            syncSmsV2(
+                targetMonthRange = range,
+                updateLastSyncTime = true,
+                silent = true,
+                trigger = SyncCoverageTrigger.PENDING_SILENT_INCREMENTAL
+            )
         }
     }
 
@@ -1385,7 +1461,8 @@ class MainViewModel @Inject constructor(
     /**
      * 월별 동기화 해제 (광고 시청 완료 후 호출)
      *
-     * 지정된 월의 SMS만 가져오고, 해당 월을 syncedMonths에 기록.
+     * 지정된 월의 실제 커스텀 기간만 가져오고, 성공 시 해당 구간을 coverage로 저장한다.
+     * syncedMonths 기록은 기존 사용자 상태와의 호환을 위한 보조 정보만 유지한다.
      *
      * @param year 대상 연도
      * @param month 대상 월
@@ -1403,6 +1480,7 @@ class MainViewModel @Inject constructor(
         syncSmsV2(
             monthRange,
             updateLastSyncTime = false,
+            trigger = SyncCoverageTrigger.MANUAL_MONTH_UNLOCK,
             onSyncComplete = {
                 settingsDataStore.addSyncedMonth(yearMonth)
                 if (isFreeSyncUsed) {
@@ -1416,8 +1494,7 @@ class MainViewModel @Inject constructor(
     fun isMonthSynced(year: Int, month: Int): Boolean {
         val state = _uiState.value
         if (state.isLegacyFullSyncUnlocked) return true
-        val yearMonth = String.format("%04d-%02d", year, month)
-        return yearMonth in state.syncedMonths
+        return getPageCoverageStatus(year, month) == SyncCoverageStatus.FULL
     }
 
     /**
@@ -1430,19 +1507,22 @@ class MainViewModel @Inject constructor(
     /**
      * 해당 페이지의 커스텀 월이 동기화 범위에 부분만 포함되는지 판단
      *
-     * 해당 월이 이미 동기화(광고 시청) 되었으면 → false (완전 커버)
-     * 미동기화 시 → 커스텀 월 시작이 (현재 - DEFAULT_SYNC_PERIOD_MILLIS) 이전이면 부분 커버
+     * 실제 성공한 동기화 구간 합집합 기준으로 커스텀 월이 일부만 덮여 있으면 true.
+     * 기존 전체 해제 사용자는 legacy 플래그로 계속 완전 커버 처리한다.
      */
     fun isPagePartiallyCovered(year: Int, month: Int): Boolean {
         val state = _uiState.value
         if (state.isLegacyFullSyncUnlocked) return false
-        val yearMonth = String.format("%04d-%02d", year, month)
-        if (yearMonth in state.syncedMonths) return false
-        val (customMonthStart, _) = DateUtils.getCustomMonthPeriod(
-            year, month, state.monthStartDay
+        return getPageCoverageStatus(year, month) == SyncCoverageStatus.PARTIAL
+    }
+
+    private fun getPageCoverageStatus(year: Int, month: Int): SyncCoverageStatus {
+        val (startMillis, endMillis) = calculateMonthRange(year, month)
+        return syncCoverageRepository.getCoverageStatus(
+            startMillis = startMillis,
+            endMillis = endMillis,
+            coverages = syncCoverageEntries
         )
-        val syncCoverageStart = System.currentTimeMillis() - DEFAULT_SYNC_PERIOD_MILLIS
-        return customMonthStart < syncCoverageStart
     }
 
     /**
@@ -1452,7 +1532,8 @@ class MainViewModel @Inject constructor(
         val monthRange = calculateMonthRange(year, month)
         syncSmsV2(
             monthRange,
-            updateLastSyncTime = false
+            updateLastSyncTime = false,
+            trigger = SyncCoverageTrigger.MANUAL_MONTH_SYNC
         )
     }
 
