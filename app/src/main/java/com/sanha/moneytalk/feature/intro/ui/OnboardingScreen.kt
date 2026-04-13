@@ -38,12 +38,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.OnPrimary
 import com.sanha.moneytalk.core.theme.Primary
 import com.sanha.moneytalk.core.theme.PrimaryDark
 import com.sanha.moneytalk.core.theme.PrimaryLight
+import com.sanha.moneytalk.core.util.toDpTextUnit
 
 /**
  * 온보딩 인트로 화면.
@@ -136,7 +136,7 @@ fun OnboardingScreen(
                 Text(
                     text = stringResource(R.string.onboarding_skip),
                     color = OnPrimary.copy(alpha = 0.7f),
-                    fontSize = 14.sp
+                    fontSize = 14.toDpTextUnit
                 )
             }
         }
@@ -181,7 +181,7 @@ fun OnboardingScreen(
             ) {
                 Text(
                     text = stringResource(R.string.onboarding_start),
-                    fontSize = 16.sp,
+                    fontSize = 16.toDpTextUnit,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -208,14 +208,14 @@ private fun OnboardingPageContent(page: OnboardingPage) {
     ) {
         Text(
             text = page.emoji,
-            fontSize = 72.sp
+            fontSize = 72.toDpTextUnit
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
             text = stringResource(page.titleRes),
-            fontSize = 26.sp,
+            fontSize = 26.toDpTextUnit,
             fontWeight = FontWeight.Bold,
             color = OnPrimary,
             textAlign = TextAlign.Center
@@ -225,10 +225,10 @@ private fun OnboardingPageContent(page: OnboardingPage) {
 
         Text(
             text = stringResource(page.descRes),
-            fontSize = 15.sp,
+            fontSize = 15.toDpTextUnit,
             color = OnPrimary.copy(alpha = 0.8f),
             textAlign = TextAlign.Center,
-            lineHeight = 22.sp
+            lineHeight = 22.toDpTextUnit
         )
 
         Spacer(modifier = Modifier.height(28.dp))
@@ -247,9 +247,9 @@ private fun OnboardingPageContent(page: OnboardingPage) {
             page.featureRes.forEach { featureStringRes ->
                 Text(
                     text = stringResource(featureStringRes),
-                    fontSize = 14.sp,
+                    fontSize = 14.toDpTextUnit,
                     color = OnPrimary.copy(alpha = 0.9f),
-                    lineHeight = 20.sp
+                    lineHeight = 20.toDpTextUnit
                 )
             }
         }

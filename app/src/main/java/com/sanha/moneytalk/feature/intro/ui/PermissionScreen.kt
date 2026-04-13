@@ -25,8 +25,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.util.toDpTextUnit
 
 /**
  * 커스텀 권한 설명 화면.
@@ -63,7 +63,10 @@ fun PermissionScreen(
                 // 제목
                 Text(
                     text = stringResource(R.string.permission_title),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 16.toDpTextUnit,
+                        lineHeight = 24.toDpTextUnit
+                    ),
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -76,7 +79,10 @@ fun PermissionScreen(
                 // SMS 권한 설명
                 Text(
                     text = stringResource(R.string.permission_sms_label),
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontSize = 14.toDpTextUnit,
+                        lineHeight = 20.toDpTextUnit
+                    ),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -85,9 +91,11 @@ fun PermissionScreen(
 
                 Text(
                     text = stringResource(R.string.permission_sms_description),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 14.toDpTextUnit,
+                        lineHeight = 20.toDpTextUnit
+                    ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 20.sp
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -97,9 +105,11 @@ fun PermissionScreen(
                 // 부가 안내
                 Text(
                     text = stringResource(R.string.permission_note),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.toDpTextUnit,
+                        lineHeight = 18.toDpTextUnit
+                    ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 18.sp
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -114,7 +124,8 @@ fun PermissionScreen(
                     TextButton(onClick = onDisagree) {
                         Text(
                             text = stringResource(R.string.permission_disagree),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 14.toDpTextUnit
                         )
                     }
 
@@ -122,7 +133,8 @@ fun PermissionScreen(
                         Text(
                             text = stringResource(R.string.permission_agree),
                             color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.toDpTextUnit
                         )
                     }
                 }
