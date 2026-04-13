@@ -29,12 +29,12 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.getCustomCategoryBackgroundColor
 import com.sanha.moneytalk.core.ui.component.rememberCategoryEmoji
+import com.sanha.moneytalk.core.util.toDpTextUnit
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -87,7 +87,7 @@ fun TransactionCardCompose(
                     CategoryIcon(
                         category = category,
                         containerSize = 40.dp,
-                        fontSize = 22.sp
+                        fontSize = 22.dp
                     )
                 } else if (iconEmoji != null) {
                     val bgColor = if (info.isIncome) {
@@ -102,7 +102,7 @@ fun TransactionCardCompose(
                             .background(bgColor),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(text = iconEmoji, fontSize = 20.sp)
+                        Text(text = iconEmoji, fontSize = 20.dp.toDpTextUnit)
                     }
                 }
 

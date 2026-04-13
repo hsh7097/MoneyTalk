@@ -61,7 +61,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.model.Category
@@ -71,6 +70,7 @@ import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.model.TransferDirection
 import dagger.hilt.android.EntryPointAccessors
 import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.core.util.toDpTextUnit
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -112,7 +112,7 @@ fun ExpenseDetailDialog(
                 backgroundColorOverride = if (isCustomCategory)
                     getCustomCategoryBackgroundColor(expense.category) else null,
                 containerSize = 48.dp,
-                fontSize = 28.sp
+                fontSize = 28.dp
             )
         },
         title = {
@@ -599,7 +599,7 @@ private fun CategoryGridItem(
     ) {
         Text(
             text = emoji,
-            fontSize = 28.sp
+            fontSize = 28.toDpTextUnit
         )
         Text(
             text = label,

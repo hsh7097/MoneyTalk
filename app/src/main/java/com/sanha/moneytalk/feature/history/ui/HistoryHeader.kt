@@ -46,7 +46,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabInfo
@@ -158,7 +157,7 @@ fun PeriodSummaryCard(
             ) {
                 Text(
                     text = startDate,
-                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 18.sp),
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 18.toDpTextUnit),
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -171,7 +170,7 @@ fun PeriodSummaryCard(
                 )
                 Text(
                     text = endDate,
-                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 18.sp),
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 18.toDpTextUnit),
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -218,7 +217,7 @@ fun PeriodSummaryCard(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = stringResource(R.string.common_won, numberFormat.format(totalExpense)),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.sp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.toDpTextUnit),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.End
@@ -243,7 +242,7 @@ fun PeriodSummaryCard(
                         R.string.common_won,
                         numberFormat.format(totalIncome)
                     ),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.sp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.toDpTextUnit),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.moneyTalkColors.income,
                     textAlign = TextAlign.End

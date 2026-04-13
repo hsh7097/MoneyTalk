@@ -17,7 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.sanha.moneytalk.core.util.toDpTextUnit
 
 /**
  * 이모지 프리셋 선택 그리드.
@@ -57,7 +57,7 @@ fun EmojiPickerCompose(
                 ) {
                     Text(
                         text = emoji,
-                        fontSize = 24.sp
+                        fontSize = 24.toDpTextUnit
                     )
                 }
             }

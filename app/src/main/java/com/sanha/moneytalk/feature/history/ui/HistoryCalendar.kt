@@ -35,10 +35,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import androidx.compose.ui.platform.LocalContext
 import com.sanha.moneytalk.core.theme.moneyTalkColors
+import com.sanha.moneytalk.core.util.toDpTextUnit
 import com.sanha.moneytalk.feature.transactionlist.ui.TransactionDetailListActivity
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -344,7 +344,7 @@ fun CalendarDayCell(
                 Text(
                     text = "+${numberFormat.format(dayIncome)}",
                     style = MaterialTheme.typography.labelSmall,
-                    fontSize = 9.sp,
+                    fontSize = 9.toDpTextUnit,
                     color = MaterialTheme.moneyTalkColors.income,
                     maxLines = 1
                 )
@@ -355,7 +355,7 @@ fun CalendarDayCell(
                 Text(
                     text = "-${numberFormat.format(dayTotal)}",
                     style = MaterialTheme.typography.labelSmall,
-                    fontSize = 9.sp,
+                    fontSize = 9.toDpTextUnit,
                     color = MaterialTheme.colorScheme.error,
                     maxLines = 1
                 )

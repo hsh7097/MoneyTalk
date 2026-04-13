@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -42,14 +44,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
-import com.sanha.moneytalk.core.model.CategoryInfo
 import com.sanha.moneytalk.core.model.CategoryType
-import com.sanha.moneytalk.core.model.CustomCategoryInfo
 import com.sanha.moneytalk.core.ui.component.EmojiPickerCompose
+import com.sanha.moneytalk.core.util.toDpTextUnit
 
 /**
  * 카테고리 설정 화면.
@@ -280,7 +280,7 @@ private fun CategoryListItem(
             modifier = Modifier.size(40.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text(text = emoji, fontSize = 22.sp)
+            Text(text = emoji, fontSize = 22.toDpTextUnit)
         }
         Spacer(modifier = Modifier.width(12.dp))
         Text(
@@ -314,7 +314,9 @@ private fun AddCategoryDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.category_settings_add_title)) },
         text = {
-            Column {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 // 이름 입력
                 OutlinedTextField(
                     value = name,
@@ -339,7 +341,7 @@ private fun AddCategoryDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = emoji, fontSize = 28.sp)
+                    Text(text = emoji, fontSize = 28.toDpTextUnit)
                 }
 
                 // 이모지 그리드
