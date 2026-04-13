@@ -18,6 +18,7 @@ import com.sanha.moneytalk.core.database.dao.SmsRegexRuleDao
 import com.sanha.moneytalk.core.database.dao.CustomCategoryDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import com.sanha.moneytalk.core.database.dao.StoreRuleDao
+import com.sanha.moneytalk.core.database.dao.SyncCoverageDao
 import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import com.sanha.moneytalk.core.database.entity.CustomCategoryEntity
 import com.sanha.moneytalk.core.database.entity.CategoryMappingEntity
@@ -33,6 +34,7 @@ import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.database.entity.SmsRegexRuleEntity
 import com.sanha.moneytalk.core.database.entity.StoreEmbeddingEntity
 import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
+import com.sanha.moneytalk.core.database.entity.SyncCoverageEntity
 
 /**
  * MoneyTalk 앱의 Room 데이터베이스 정의
@@ -75,9 +77,10 @@ import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
         SmsChannelProbeLogEntity::class,
         SmsRegexRuleEntity::class,
         CustomCategoryEntity::class,
-        StoreRuleEntity::class
+        StoreRuleEntity::class,
+        SyncCoverageEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(FloatListConverter::class)
@@ -125,6 +128,9 @@ abstract class AppDatabase : RoomDatabase() {
     /** 거래처 규칙 DAO */
     abstract fun storeRuleDao(): StoreRuleDao
 
+    /** 실제 동기화 구간 DAO */
+    abstract fun syncCoverageDao(): SyncCoverageDao
+
     companion object {
         /** 데이터베이스 파일명 */
         const val DATABASE_NAME = "moneytalk.db"
@@ -155,6 +161,38 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_sms_channel_probe_logs_channel_stage ON sms_channel_probe_logs(channel, stage)"
+                )
+            }
+        }
+
+        val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS sync_coverage (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        startMillis INTEGER NOT NULL,
+                        endMillis INTEGER NOT NULL,
+                        trigger TEXT NOT NULL,
+                        expenseCount INTEGER NOT NULL,
+                        incomeCount INTEGER NOT NULL,
+                        reconciledExpenseCount INTEGER NOT NULL,
+                        reconciledIncomeCount INTEGER NOT NULL,
+                        syncedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_sync_coverage_startMillis ON sync_coverage(startMillis)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_sync_coverage_endMillis ON sync_coverage(endMillis)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_sync_coverage_syncedAt ON sync_coverage(syncedAt)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_sync_coverage_trigger ON sync_coverage(trigger)"
                 )
             }
         }

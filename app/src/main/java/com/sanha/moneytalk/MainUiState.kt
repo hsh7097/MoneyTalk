@@ -34,6 +34,8 @@ data class MainUiState(
     val engineSummaryIncomes: Int = 0,
     // 월별 동기화 해제 (리워드 광고)
     val syncedMonths: Set<String> = emptySet(),
+    /** 실제 동기화 구간 목록 변경 감지용 버전 */
+    val syncCoverageVersion: Int = 0,
     val isLegacyFullSyncUnlocked: Boolean = false,
     /** 무료 동기화 사용 횟수 (DataStore 기반) */
     val freeSyncUsedCount: Int = 0,
@@ -62,6 +64,7 @@ data class ScreenSyncUiState(
     val hasFreeSyncRemaining: Boolean = false,
     val isSyncing: Boolean = false,
     val syncedMonths: Set<String> = emptySet(),
+    val syncCoverageVersion: Int = 0,
     val isLegacyFullSyncUnlocked: Boolean = false
 )
 
