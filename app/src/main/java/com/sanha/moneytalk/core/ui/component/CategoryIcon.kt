@@ -11,10 +11,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.util.toDpTextUnit
 
 /**
  * 카테고리 이모지 아이콘 컴포저블
@@ -27,7 +26,7 @@ import com.sanha.moneytalk.core.model.Category
  * @param emojiOverride 이모지 override (커스텀 카테고리용, null이면 category.emoji 사용)
  * @param backgroundColorOverride 배경색 override (커스텀 카테고리용, null이면 category 기반 배경색)
  * @param containerSize 컨테이너 크기 (기본 40dp)
- * @param fontSize 이모지 텍스트 크기 (기본 22sp)
+ * @param fontSize 이모지 텍스트 크기 (기본 22dp 기준 고정)
  */
 @Composable
 fun CategoryIcon(
@@ -36,7 +35,7 @@ fun CategoryIcon(
     emojiOverride: String? = null,
     backgroundColorOverride: Color? = null,
     containerSize: Dp = 40.dp,
-    fontSize: TextUnit = 22.sp
+    fontSize: Dp = 22.dp
 ) {
     Box(
         modifier = modifier
@@ -47,7 +46,7 @@ fun CategoryIcon(
     ) {
         Text(
             text = emojiOverride ?: category.emoji,
-            fontSize = fontSize
+            fontSize = fontSize.toDpTextUnit
         )
     }
 }

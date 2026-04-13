@@ -25,12 +25,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.OnPrimary
 import com.sanha.moneytalk.core.theme.Primary
 import com.sanha.moneytalk.core.theme.PrimaryDark
 import com.sanha.moneytalk.core.theme.PrimaryLight
+import com.sanha.moneytalk.core.util.toDpTextUnit
 import kotlinx.coroutines.delay
 
 /** 스플래시 화면. 앱 로고 페이드인 애니메이션 후 홈 화면으로 자동 전환 */
@@ -89,7 +89,7 @@ fun SplashScreen(
 
             Text(
                 text = stringResource(R.string.app_name),
-                fontSize = 36.sp,
+                fontSize = 36.toDpTextUnit,
                 fontWeight = FontWeight.Bold,
                 color = OnPrimary
             )
@@ -98,7 +98,7 @@ fun SplashScreen(
 
             Text(
                 text = stringResource(R.string.splash_tagline),
-                fontSize = 16.sp,
+                fontSize = 16.toDpTextUnit,
                 color = OnPrimary.copy(alpha = 0.8f)
             )
         }

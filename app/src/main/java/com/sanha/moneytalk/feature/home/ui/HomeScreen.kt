@@ -61,7 +61,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.MainViewModel
 import com.sanha.moneytalk.ScreenSyncUiState
@@ -959,7 +958,7 @@ fun CategoryExpenseSection(
                                 backgroundColorOverride = if (isCustomCategory)
                                     getCustomCategoryBackgroundColor(item.category) else null,
                                 containerSize = 40.dp,
-                                fontSize = 20.sp
+                                fontSize = 20.dp
                             )
                             Text(
                                 text = item.category,
