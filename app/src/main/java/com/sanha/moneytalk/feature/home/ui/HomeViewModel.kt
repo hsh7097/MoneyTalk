@@ -279,6 +279,9 @@ class HomeViewModel @Inject constructor(
                         _uiState.update {
                             it.copy(monthStartDay = monthStartDay)
                         }
+                        // coverage 도입 전 저장된 syncedMonths fallback은
+                        // 시작일이 바뀌면 stale 해질 수 있으므로 정리한다.
+                        settingsDataStore.resetSyncedMonths()
                     }
                     clearAllPageCache()
                     loadCurrentAndAdjacentPages()

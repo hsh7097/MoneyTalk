@@ -477,7 +477,11 @@ class MainViewModel @Inject constructor(
                         }
                     }
                 } else {
-                    handleSyncResult(result, silent = false)
+                    handleSyncResult(
+                        result = result,
+                        silent = false,
+                        showNoDataMessage = false
+                    )
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -497,9 +501,12 @@ class MainViewModel @Inject constructor(
         result: SyncResult
     ) {
         try {
+            val recordEndMillis = minOf(targetMonthRange.second, System.currentTimeMillis())
+            if (recordEndMillis < targetMonthRange.first) return
+
             syncCoverageRepository.recordCoverage(
                 startMillis = targetMonthRange.first,
-                endMillis = targetMonthRange.second,
+                endMillis = recordEndMillis,
                 trigger = trigger,
                 expenseCount = result.expenseCount,
                 incomeCount = result.incomeCount,
@@ -1341,7 +1348,11 @@ class MainViewModel @Inject constructor(
     }
 
     /** 동기화 결과 처리 (UI 상태 업데이트 + snackbar + 데이터 변경 통지) */
-    private suspend fun handleSyncResult(result: SyncResult, silent: Boolean) {
+    private suspend fun handleSyncResult(
+        result: SyncResult,
+        silent: Boolean,
+        showNoDataMessage: Boolean = true
+    ) {
         MoneyTalkLogger.i(
             "syncSmsV2 완료: 신규 지출 ${result.expenseCount}건, 신규 수입 ${result.incomeCount}건, " +
                 "교체 지출 ${result.reconciledExpenseCount}건, 교체 수입 ${result.reconciledIncomeCount}건"
@@ -1385,7 +1396,7 @@ class MainViewModel @Inject constructor(
             }
             if (result.expenseCount > 0 || result.incomeCount > 0) {
                 snackbarBus.show(resultMessage)
-            } else {
+            } else if (showNoDataMessage) {
                 snackbarBus.show(appContext.getString(R.string.sync_no_data))
             }
         }
@@ -1490,11 +1501,19 @@ class MainViewModel @Inject constructor(
         )
     }
 
-    /** 해당 월이 이미 동기화(광고 시청) 되었는지 확인 */
+    /**
+     * 해당 월이 이미 동기화(광고 시청) 되었는지 확인
+     *
+     * coverage 기반 판정을 우선 사용하고,
+     * 업그레이드 이전 사용자용 syncedMonths는 fallback으로만 유지한다.
+     */
     fun isMonthSynced(year: Int, month: Int): Boolean {
         val state = _uiState.value
         if (state.isLegacyFullSyncUnlocked) return true
-        return getPageCoverageStatus(year, month) == SyncCoverageStatus.FULL
+        if (getPageCoverageStatus(year, month) == SyncCoverageStatus.FULL) return true
+
+        val yearMonth = String.format("%04d-%02d", year, month)
+        return yearMonth in state.syncedMonths
     }
 
     /**
@@ -1509,15 +1528,27 @@ class MainViewModel @Inject constructor(
      *
      * 실제 성공한 동기화 구간 합집합 기준으로 커스텀 월이 일부만 덮여 있으면 true.
      * 기존 전체 해제 사용자는 legacy 플래그로 계속 완전 커버 처리한다.
+     * 업그레이드 이전 syncedMonths fallback 대상은 partial로 보지 않는다.
      */
     fun isPagePartiallyCovered(year: Int, month: Int): Boolean {
         val state = _uiState.value
         if (state.isLegacyFullSyncUnlocked) return false
+
+        val yearMonth = String.format("%04d-%02d", year, month)
+        if (yearMonth in state.syncedMonths) return false
+
         return getPageCoverageStatus(year, month) == SyncCoverageStatus.PARTIAL
     }
 
     private fun getPageCoverageStatus(year: Int, month: Int): SyncCoverageStatus {
-        val (startMillis, endMillis) = calculateMonthRange(year, month)
+        val (startMillis, rawEndMillis) = calculateMonthRange(year, month)
+        val (effectiveYear, effectiveMonth) = DateUtils.getEffectiveCurrentMonth(_uiState.value.monthStartDay)
+        val endMillis = if (year == effectiveYear && month == effectiveMonth) {
+            minOf(rawEndMillis, System.currentTimeMillis())
+        } else {
+            rawEndMillis
+        }
+
         return syncCoverageRepository.getCoverageStatus(
             startMillis = startMillis,
             endMillis = endMillis,
