@@ -76,6 +76,20 @@ class SmsNotificationManager @Inject constructor(
         showNotification(title, "${numberFormat.format(amount)}원")
     }
 
+    /** 앱 진입 시 MoneyTalk 거래 알림을 정리 */
+    fun clearTransactionNotifications() {
+        val manager = context.getSystemService(NotificationManager::class.java)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            manager.activeNotifications
+                .filter { it.notification.channelId == CHANNEL_ID }
+                .forEach { manager.cancel(it.id) }
+            return
+        }
+
+        manager.cancelAll()
+    }
+
     private fun showNotification(title: String, body: String) {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP

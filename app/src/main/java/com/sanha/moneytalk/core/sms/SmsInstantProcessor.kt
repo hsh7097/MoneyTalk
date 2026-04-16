@@ -53,11 +53,19 @@ class SmsInstantProcessor @Inject constructor(
 
         /** 즉시 저장 후 배치 파이프라인으로 재검증할 smsId 목록 */
         private val pendingReconciliationIds = ConcurrentHashMap.newKeySet<String>()
+        /** 동시 다발 수신/알림 경로에서 같은 smsId 중복 처리 방지 */
+        private val inFlightSmsIds = ConcurrentHashMap.newKeySet<String>()
 
         fun snapshotPendingReconciliationIds(): Set<String> = pendingReconciliationIds.toSet()
 
         fun clearPendingReconciliationIds(smsIds: Collection<String>) {
             smsIds.forEach { pendingReconciliationIds.remove(it) }
+        }
+
+        private fun tryAcquireInFlight(smsId: String): Boolean = inFlightSmsIds.add(smsId)
+
+        private fun releaseInFlight(smsId: String) {
+            inFlightSmsIds.remove(smsId)
         }
 
         private fun markPendingReconciliation(smsId: String) {
@@ -119,13 +127,22 @@ class SmsInstantProcessor @Inject constructor(
             return Result.Skipped
         }
 
-        // 6. 수입/지출 분류
-        val (smsType, _) = incomeFilter.classify(body)
+        if (!tryAcquireInFlight(smsId)) {
+            MoneyTalkLogger.i("[InstantSMS] in-flight 중복 스킵: ${smsId.take(30)}")
+            return Result.Skipped
+        }
 
-        return when (smsType) {
-            SmsType.PAYMENT -> processExpense(address, body, timestampMillis, smsId)
-            SmsType.INCOME -> processIncome(address, body, timestampMillis, smsId)
-            SmsType.SKIP -> Result.Skipped
+        return try {
+            // 6. 수입/지출 분류
+            val (smsType, _) = incomeFilter.classify(body)
+
+            when (smsType) {
+                SmsType.PAYMENT -> processExpense(address, body, timestampMillis, smsId)
+                SmsType.INCOME -> processIncome(address, body, timestampMillis, smsId)
+                SmsType.SKIP -> Result.Skipped
+            }
+        } finally {
+            releaseInFlight(smsId)
         }
     }
 

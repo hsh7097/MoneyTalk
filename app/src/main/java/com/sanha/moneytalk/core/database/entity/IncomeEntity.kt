@@ -21,7 +21,7 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "incomes",
     indices = [
-        Index(value = ["smsId"]),
+        Index(value = ["smsId"], unique = true),
         Index(value = ["dateTime"]),
         Index(value = ["senderAddress"])
     ]

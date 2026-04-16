@@ -80,7 +80,7 @@ import com.sanha.moneytalk.core.database.entity.SyncCoverageEntity
         StoreRuleEntity::class,
         SyncCoverageEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(FloatListConverter::class)
@@ -193,6 +193,27 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_sync_coverage_trigger ON sync_coverage(trigger)"
+                )
+            }
+        }
+
+        val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("DROP INDEX IF EXISTS index_incomes_smsId")
+                db.execSQL(
+                    """
+                    DELETE FROM incomes
+                    WHERE smsId IS NOT NULL
+                      AND id NOT IN (
+                        SELECT MIN(id)
+                        FROM incomes
+                        WHERE smsId IS NOT NULL
+                        GROUP BY smsId
+                      )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_incomes_smsId ON incomes(smsId)"
                 )
             }
         }
