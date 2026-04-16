@@ -70,6 +70,7 @@ import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.firebase.ForceUpdateChecker
 import com.sanha.moneytalk.core.firebase.ForceUpdateState
+import com.sanha.moneytalk.core.notification.SmsNotificationManager
 import com.sanha.moneytalk.core.sms.SmsPipeline
 import com.sanha.moneytalk.core.theme.MoneyTalkTheme
 import com.sanha.moneytalk.core.theme.ThemeMode
@@ -81,8 +82,6 @@ import com.sanha.moneytalk.navigation.NavGraph
 import com.sanha.moneytalk.navigation.Screen
 import com.sanha.moneytalk.navigation.bottomNavItems
 import androidx.activity.viewModels
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.LifecycleOwner
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -97,6 +96,8 @@ class MainActivity : ComponentActivity() {
     lateinit var forceUpdateChecker: ForceUpdateChecker
     @Inject
     lateinit var analyticsHelper: AnalyticsHelper
+    @Inject
+    lateinit var smsNotificationManager: SmsNotificationManager
 
     /** Activity-scoped MainViewModel (동기화/권한/광고 통합 관리) */
     private val mainViewModel: MainViewModel by viewModels()
@@ -120,13 +121,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // Activity 라이프사이클에서 직접 resume 핸들링 (Compose 의존 X)
-        lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onResume(owner: LifecycleOwner) {
-                mainViewModel.onAppResume()
-            }
-        })
 
         setContent {
             val themeModeStr by settingsDataStore.themeModeFlow.collectAsStateWithLifecycle(initialValue = "SYSTEM")
@@ -165,6 +159,12 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        smsNotificationManager.clearTransactionNotifications()
+        mainViewModel.onAppResume()
     }
 
     private fun checkAndRequestSmsPermission(onGranted: () -> Unit) {
