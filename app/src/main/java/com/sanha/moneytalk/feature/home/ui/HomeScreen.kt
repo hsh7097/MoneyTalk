@@ -533,7 +533,10 @@ fun HomePageContent(
             // 과거 월 전체 동기화 CTA (광고 시청 → 데이터 가져오기)
             val ctaMonthLabel = if (isCurrentMonth) "이번달" else "${month}월"
             val showEmptyCta = hasNoData && !isCurrentMonth && !isMonthSynced
-            val showPartialCta = !hasNoData && isPartiallyCovered && !isMonthSynced
+            val showPartialCta = !showImportCta &&
+                    !hasNoData &&
+                    isPartiallyCovered &&
+                    !isMonthSynced
 
             if (showEmptyCta) {
                 item {

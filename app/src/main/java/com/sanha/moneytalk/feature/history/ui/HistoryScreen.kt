@@ -479,7 +479,9 @@ fun TransactionListView(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // 현재월 + 권한 없음 → 데이터 가져오기 CTA (데이터 있어도 표시)
-            if (isCurrentMonth && !hasSmsPermission) {
+            val showCurrentMonthImportCta = isCurrentMonth && !hasSmsPermission
+
+            if (showCurrentMonthImportCta) {
                 item(key = "import_cta") {
                     ImportDataCtaSection(
                         onImportData = onImportData
@@ -488,7 +490,7 @@ fun TransactionListView(
             }
 
             // 부분 데이터 안내 CTA (데이터 있지만 일부 기간 누락)
-            if (isPartiallyCovered && !isMonthSynced) {
+            if (!showCurrentMonthImportCta && isPartiallyCovered && !isMonthSynced) {
                 item(key = "partial_cta") {
                     com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
                         onRequestFullSync = onRequestFullSync,
