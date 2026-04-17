@@ -287,7 +287,7 @@ class NotificationTransactionService : NotificationListenerService() {
                 }
 
                 is SmsInstantProcessor.Result.Skipped -> {
-                    if (message.channel == "rcs_im_chat") {
+                    if (shouldRequestBatchRefresh(message.channel)) {
                         MoneyTalkLogger.i(
                             "[NotiService] ${message.channel} 즉시 처리 스킵 → 배치 동기화 대기"
                         )
@@ -303,17 +303,28 @@ class NotificationTransactionService : NotificationListenerService() {
                     MoneyTalkLogger.w(
                         "[NotiService] ${message.channel} 즉시 처리 실패: ${result.message}"
                     )
-                    if (message.channel == "rcs_im_chat") {
+                    if (shouldRequestBatchRefresh(message.channel)) {
                         dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.SMS_RECEIVED)
                     }
                 }
             }
         } catch (e: Exception) {
             MoneyTalkLogger.e("[NotiService] provider 메시지 처리 예외: ${e.message}")
-            if (message.channel == "rcs_im_chat") {
+            if (shouldRequestBatchRefresh(message.channel)) {
                 dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.SMS_RECEIVED)
             }
         }
+    }
+
+    /**
+     * sms_inbox는 [SmsReceiver]가 주 경로이므로 알림 보조 경로 실패 시에도
+     * 추가 배치 동기화를 강제하지 않는다.
+     *
+     * MMS/RCS는 알림 보조 경로가 사실상 실시간 복구 역할을 하므로,
+     * 즉시 파싱 실패 시 배치 동기화로 한 번 더 태운다.
+     */
+    private fun shouldRequestBatchRefresh(channel: String): Boolean {
+        return channel == "mms_inbox" || channel == "rcs_im_chat"
     }
 
     private fun matchesCandidateBody(
