@@ -236,7 +236,13 @@ fun HomeScreen(
                 },
                 onIncrementalSync = {
                     onRequestSmsPermission {
-                        mainViewModel.syncIncremental()
+                        val (effY, effM) = DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+                        val isPageCurrentMonth = pageYear == effY && pageMonth == effM
+                        if (isPageCurrentMonth) {
+                            mainViewModel.syncMonthData(pageYear, pageMonth)
+                        } else {
+                            mainViewModel.syncIncremental()
+                        }
                     }
                 },
                 onFullSync = {
@@ -504,8 +510,10 @@ fun HomePageContent(
             val hasNoData = !pageData.isLoading &&
                     pageData.monthlyExpense == 0 && pageData.monthlyIncome == 0
 
-            // 데이터 가져오기 CTA: 현재월 + 권한 없거나 데이터 없음
-            val showImportCta = isCurrentMonth && (!hasSmsPermission || hasNoData)
+            // 데이터 가져오기 CTA:
+            // 현재월 + 권한 없음 또는 아직 해당 월 전체 확인 전의 빈 화면
+            val showImportCta = isCurrentMonth &&
+                    (!hasSmsPermission || (hasNoData && !isMonthSynced))
 
             // 현재월 데이터 가져오기 CTA (권한 없거나 데이터 없을 때)
             if (showImportCta) {
@@ -525,7 +533,7 @@ fun HomePageContent(
             // 과거 월 전체 동기화 CTA (광고 시청 → 데이터 가져오기)
             val ctaMonthLabel = if (isCurrentMonth) "이번달" else "${month}월"
             val showEmptyCta = hasNoData && !isCurrentMonth && !isMonthSynced
-            val showPartialCta = !hasNoData && !isCurrentMonth && isPartiallyCovered && !isMonthSynced
+            val showPartialCta = !hasNoData && isPartiallyCovered && !isMonthSynced
 
             if (showEmptyCta) {
                 item {
@@ -561,7 +569,7 @@ fun HomePageContent(
                         monthLabel = ctaMonthLabel,
                         isPartial = true,
                         isSyncing = isSyncing,
-                        isAdEnabled = isAdEnabled
+                        isAdEnabled = !isCurrentMonth && isAdEnabled
                     )
                 }
             }

@@ -295,14 +295,14 @@ fun HistoryScreen(
                         isAdEnabled = isBannerAdEnabled && !mainScreenUiState.hasFreeSyncRemaining,
                         onImportData = {
                             onRequestSmsPermission {
-                                mainViewModel.syncIncremental()
+                                mainViewModel.syncMonthData(pageYear, pageMonth)
                             }
                         },
                         onRequestFullSync = {
                             if (isCurrentMonth) {
-                                // 현재월 → 바로 증분 동기화
+                                // 현재월 → 현재 페이지 구간을 다시 동기화
                                 onRequestSmsPermission {
-                                    mainViewModel.syncIncremental()
+                                    mainViewModel.syncMonthData(pageYear, pageMonth)
                                 }
                             } else if (!isBannerAdEnabled) {
                                 // 광고 비활성 → 광고 없이 바로 전체 동기화 해제
@@ -426,8 +426,11 @@ fun TransactionListView(
     }
 
     if (items.isEmpty()) {
-        // 데이터 가져오기 CTA: 현재월 + 필터 없음 (items.isEmpty → 데이터 없음 확정)
-        val showImportCta = isCurrentMonth && !hasActiveFilter
+        // 데이터 가져오기 CTA:
+        // 현재월 + 필터 없음 + (권한 없음 또는 아직 해당 월 전체 확인 전)
+        val showImportCta = isCurrentMonth &&
+                !hasActiveFilter &&
+                (!hasSmsPermission || !isMonthSynced)
         // 전체 동기화 CTA: 과거 월 + 미해제 + 필터 없음
         val showFullSyncCta = !isCurrentMonth && !isMonthSynced && !hasActiveFilter
         Box(
@@ -491,7 +494,7 @@ fun TransactionListView(
                         onRequestFullSync = onRequestFullSync,
                         monthLabel = monthLabel,
                         isPartial = true,
-                        isAdEnabled = isAdEnabled
+                        isAdEnabled = !isCurrentMonth && isAdEnabled
                     )
                 }
             }
