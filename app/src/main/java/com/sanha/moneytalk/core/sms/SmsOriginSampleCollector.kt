@@ -2,6 +2,7 @@ package com.sanha.moneytalk.core.sms
 
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ServerValue
+import com.sanha.moneytalk.core.firebase.PremiumManager
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import java.security.MessageDigest
 import java.util.Locale
@@ -19,7 +20,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class SmsOriginSampleCollector @Inject constructor(
-    private val database: FirebaseDatabase?
+    private val database: FirebaseDatabase?,
+    private val premiumManager: PremiumManager
 ) {
     companion object {
         private const val SMS_ORIGIN_PATH = "sms_origin"
@@ -58,6 +60,7 @@ class SmsOriginSampleCollector @Inject constructor(
         val db = database ?: return
         if (sample.normalizedSenderAddress.isBlank()) return
         if (sample.type.isBlank()) return
+        val shouldSendOriginMessage = shouldSendOriginMessage()
 
         val fingerprint = sha256Hex(
             buildString {
@@ -91,7 +94,6 @@ class SmsOriginSampleCollector @Inject constructor(
             "normalizedSenderAddress" to sample.normalizedSenderAddress,
             "type" to sample.type.lowercase(Locale.ROOT),
             "template" to sample.template,
-            "originBody" to sample.originBody,
             "maskedBody" to sample.maskedBody,
             "parseSource" to sample.parseSource,
             "cardName" to sample.cardName.ifBlank { "UNKNOWN" },
@@ -100,6 +102,9 @@ class SmsOriginSampleCollector @Inject constructor(
             "lastSeenAt" to ServerValue.TIMESTAMP,
             "updatedAt" to ServerValue.TIMESTAMP
         )
+        if (shouldSendOriginMessage) {
+            payload["originBody"] = sample.originBody
+        }
         if (isNewInSession) {
             payload["createdAt"] = now
         }
@@ -119,12 +124,20 @@ class SmsOriginSampleCollector @Inject constructor(
                 "sms_origin success 표본 업로드 실패: ${e.javaClass.simpleName} ${e.message}"
             )
         }
+        if (!shouldSendOriginMessage) {
+            ref.child("originBody").removeValue().addOnFailureListener { e ->
+                MoneyTalkLogger.w(
+                    "sms_origin success originBody 제거 실패: ${e.javaClass.simpleName} ${e.message}"
+                )
+            }
+        }
 
     }
 
     fun collectFailure(sample: FailureSample) {
         val db = database ?: return
         if (sample.normalizedSenderAddress.isBlank()) return
+        val shouldSendOriginMessage = shouldSendOriginMessage()
 
         val normalizedType = sample.type.ifBlank { "expense" }.lowercase(Locale.ROOT)
         val failureTemplate = normalizeFailureTemplate(sample.originBody)
@@ -154,7 +167,6 @@ class SmsOriginSampleCollector @Inject constructor(
             "outcome" to "fail",
             "normalizedSenderAddress" to sample.normalizedSenderAddress,
             "type" to normalizedType,
-            "originBody" to sample.originBody,
             "maskedBody" to maskBody(sample.originBody),
             "parseSource" to sample.parseSource,
             "failStage" to sample.failStage,
@@ -164,6 +176,9 @@ class SmsOriginSampleCollector @Inject constructor(
             "lastSeenAt" to ServerValue.TIMESTAMP,
             "updatedAt" to ServerValue.TIMESTAMP
         )
+        if (shouldSendOriginMessage) {
+            payload["originBody"] = sample.originBody
+        }
         if (sample.matchedRuleKey.isNotBlank()) {
             payload["matchedRuleKey"] = sample.matchedRuleKey
         }
@@ -182,6 +197,13 @@ class SmsOriginSampleCollector @Inject constructor(
                     "sms_origin failure 표본 업로드 실패: ${e.javaClass.simpleName} ${e.message}"
                 )
             }
+        if (!shouldSendOriginMessage) {
+            ref.child("originBody").removeValue().addOnFailureListener { e ->
+                MoneyTalkLogger.w(
+                    "sms_origin failure originBody 제거 실패: ${e.javaClass.simpleName} ${e.message}"
+                )
+            }
+        }
     }
 
     private fun trimSuccessCacheIfNeeded() {
@@ -191,6 +213,10 @@ class SmsOriginSampleCollector @Inject constructor(
             val oldestBucket = iterator.next()
             successFingerprintsByBucket.remove(oldestBucket)
         }
+    }
+
+    private fun shouldSendOriginMessage(): Boolean {
+        return premiumManager.premiumConfig.value.sendOriginMessage
     }
 
     private fun normalizeRuleType(type: String): String {

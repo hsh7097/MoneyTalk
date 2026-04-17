@@ -41,6 +41,7 @@ import javax.inject.Singleton
  *   /models/... (기타 모델)
  *   /free_tier_enabled: true|false
  *   /service_enabled: true|false
+ *   /send_origin_message: true|false
  *   /maintenance_message: "점검 메시지"
  * ```
  */
@@ -205,6 +206,7 @@ class PremiumManager @Inject constructor(
             maintenanceMessage = snapshot.child("maintenance_message").getValue(String::class.java) ?: "",
             rewardAdEnabled = snapshot.child("reward_ad_enabled").getValue(Boolean::class.java) ?: false,
             rewardAdChatCount = snapshot.child("reward_ad_chat_count").getValue(Int::class.java) ?: 5,
+            sendOriginMessage = snapshot.child("send_origin_message").getValue(Boolean::class.java) ?: false,
             freeSyncCount = snapshot.child("free_sync_count").getValue(Int::class.java) ?: 3,
             minVersionCode = snapshot.child("min_version_code").getValue(Int::class.java) ?: 1,
             minVersionName = snapshot.child("min_version_name").getValue(String::class.java) ?: "1.0.0",
