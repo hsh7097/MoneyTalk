@@ -245,6 +245,7 @@ SMS 본문에 아래 키워드 중 하나라도 포함되면 비결제:
 | 해외발신 | `국외발신`, `국제발신`, `해외발신` |
 | 광고/마케팅 | `광고`, `수신거부`, `이벤트`, `프로모션`, `특가` |
 | 청구/안내 | `결제내역`, `명세서`, `청구서`, `결제예정`, `카드대금` |
+| 통신 단가 안내 | `요율`, `단가`, `원/초`, `원/KB`, `MMS`, `데이터` |
 | 배송 | `배송`, `택배`, `운송장` |
 | 금융광고 | `대출`, `투자`, `분양`, `모델하우스` |
 
@@ -978,6 +979,8 @@ ORDER BY matchCount DESC LIMIT 1
 성공 표본은 **regex가 존재하는 결제 패턴**일 때만 수집합니다.
 현재 코드 기준으로는 `amountRegex`와 `storeRegex`가 있는 `llm_regex`/`template_regex` 경로가 대상입니다.
 `SmsRegexRuleMatcher` Fast Path 실패 건은 `SmsOriginSampleCollector.collectFailure()`로 별도 수집.
+로컬 감사는 `scripts/sms_origin_rule_audit.py`를 사용해 현재 asset 커버 여부, 비거래 통신 단가 안내,
+조치 필요 클러스터를 먼저 분리합니다.
 
 ### RTDB 데이터 구조
 

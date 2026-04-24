@@ -15,12 +15,12 @@
 | 카드사 | sender | type | 필요 표본 수 | 확보 상태 | 룰 반영 상태 | 테스트 상태 |
 |--------|--------|------|--------------|-----------|--------------|-------------|
 | KB국민 | 16449999, 15881688 | expense, cancel, overseas | 확보 완료 | asset seed | 반영 완료 | synthetic 회귀 있음 |
-| 신한 | 15447200, 15447000 | expense, cancel | 확보 완료 | asset seed | 반영 완료 | synthetic 회귀 있음 |
+| 신한 | 15447200, 15447000 | expense, cancel | 확보 완료 | asset seed + sms_origin 2026-04-24 | 반영 완료 | synthetic 회귀 있음 |
 | 현대 | 15776200 | expense, cancel | 확보 완료 | asset seed | 반영 완료 | synthetic 회귀 있음 |
 | 삼성 | 15888900 | expense, cancel | 확보 완료 | asset seed | 반영 완료 | synthetic 회귀 있음 |
-| 롯데 | 15888100 | expense, cancel | 확보 완료 | asset seed | 반영 완료 | synthetic 회귀 있음 |
+| 롯데 | 15888100 | expense, cancel | 확보 완료 | asset seed + sms_origin 2026-04-24 | 반영 완료 | synthetic 회귀 있음 |
 | 우리 | 15889955 | expense | 확보 완료 | asset seed | 반영 완료 | synthetic 회귀 있음 |
-| NH농협 | 15881600 | expense, cancel | 확보 완료 | asset seed | 반영 완료 | synthetic 회귀 있음 |
+| NH농협 | 15881600, 15882100 | expense, cancel | 확보 완료 | asset seed + sms_origin 2026-04-24 | 반영 완료 | synthetic 회귀 있음 |
 | 스마일카드 | 15220080, 15776000 | expense, cancel | 확보 완료 | asset seed | 반영 완료 | synthetic 회귀 있음 |
 
 ## 우선 확장 대상

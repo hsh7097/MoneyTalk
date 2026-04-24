@@ -92,6 +92,16 @@ Step1.5 SenderRegex: 매칭 X건, 폴백 Y건
   - `count`: 누적 발생 횟수
 
 RTDB 기반 갱신 시 `outcome=fail` 표본만 대상으로, `count`가 높은 순서대로 우선 처리한다.
+분석 전에는 로컬 감사 스크립트로 현재 asset 커버 여부와 비거래 후보를 먼저 분리한다.
+
+```bash
+python3 scripts/sms_origin_rule_audit.py \
+  --origin ~/Downloads/moneytalk-...-sms_origin-export.json \
+  --asset app/src/main/assets/sms_rules_v1.json
+```
+
+스크립트는 기본적으로 `originBody`를 출력하지 않는다. 원문 확인이 필요한 마스킹/검수 환경에서만
+`--show-body`를 사용한다.
 
 ## 6. JSON 구조 (고정)
 
@@ -176,10 +186,11 @@ echo -n "$KEY_INPUT" | shasum -a 256 | cut -c1-24
 ### B. RTDB 기반 (운영 중 갱신)
 
 1. Firebase Console에서 `sms_origin` 노드 JSON 내보내기
-2. `outcome=fail` 표본을 sender/type별로 그룹화
-3. `count` 높은 순으로 `failureTemplate`의 구조 분석
-4. 같은 구조인데 가게명만 다른 표본은 하나의 룰로 통합
-5. `failureTemplate`의 플레이스홀더를 generic regex로 변환:
+2. `scripts/sms_origin_rule_audit.py`로 현재 asset 매칭/비거래 후보/조치 필요 클러스터 확인
+3. `outcome=fail` 표본을 sender/type별로 그룹화
+4. `count` 높은 순으로 `failureTemplate`의 구조 분석
+5. 같은 구조인데 가게명만 다른 표본은 하나의 룰로 통합
+6. `failureTemplate`의 플레이스홀더를 generic regex로 변환:
    - `{AMOUNT}` → `(?<amount>[\\d,]+)`
    - `{DATE}` → `(?<date>\\d{2}/\\d{2})`
    - `{TIME}` → `\\d{2}:\\d{2}`
@@ -265,6 +276,10 @@ echo -n "$KEY_INPUT" | shasum -a 256 | cut -c1-24
 5. 신규 룰 작성 → ruleKey/priority 결정 → JSON 반영
 
 검증:
+- `python3 scripts/sms_origin_rule_audit.py --origin ~/Downloads/moneytalk-...-sms_origin-export.json`
+  - `current_asset_matched` 증가 확인
+  - 통신 단가/요율 안내는 `skip_non_transaction`으로 분리
+  - `actionable_unmatched`가 남으면 룰 또는 비거래 필터 추가 검토
 - jq 문법 검증 통과
 - assembleDebug 성공
 - 기존 룰과 중복/충돌 없음
@@ -272,12 +287,13 @@ echo -n "$KEY_INPUT" | shasum -a 256 | cut -c1-24
 주의:
 - RTDB fail은 역사적 누적이므로, 현재 asset 룰로 이미 매칭되는 표본은 건너뛴다
 - RTDB에서 type이 잘못 분류된 경우(예: 환불이 expense로 분류)도 있으므로 내용 기준으로 type 판단
+- 통신 요율/로밍 단가 안내처럼 금액이 있어도 실제 거래가 아닌 문자는 regex 룰로 추가하지 않는다
 - RTDB 작업 완료 후 sms_origin 노드 데이터 삭제하여 다음 수집 주기에 깨끗한 상태로 시작
 ```
 
 ## 13. 현재 룰 현황
 
-마지막 업데이트: 2026-04-24 (v1, 40개 룰)
+마지막 업데이트: 2026-04-24 (v1, 42개 룰)
 
 | sender | 카드사 | cancel | expense | overseas | 합계 |
 |--------|--------|--------|---------|----------|------|
@@ -285,11 +301,12 @@ echo -n "$KEY_INPUT" | shasum -a 256 | cut -c1-24
 | 15220080 | 스마일카드(현대) | - | 1 | - | 1 |
 | 15776000 | 현대/스마일 | 2 | - | - | 2 |
 | 15776200 | 현대카드 | 3 | 2 | - | 5 |
-| 15447200 | 신한카드(단문) | 1 | 1 | - | 2 |
+| 15447200 | 신한카드(단문) | 1 | 2 | - | 3 |
 | 15447000 | 신한카드(장문) | 1 | 1 | - | 2 |
 | 15881688 | KB국민카드 | 1 | 1 | 1 | 3 |
 | 15888100 | 롯데카드 | 2 | 3 | - | 5 |
 | 15889955 | 우리카드 | - | 3 | - | 3 |
 | 15888900 | 삼성카드 | 2 | 3 | - | 5 |
 | 15881600 | NH농협카드 | 2 | 2 | - | 4 |
-| **합계** | | **16** | **22** | **2** | **40** |
+| 15882100 | NH농협은행 | - | 1 | - | 1 |
+| **합계** | | **16** | **24** | **2** | **42** |
