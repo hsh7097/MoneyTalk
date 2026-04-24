@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -433,21 +434,34 @@ fun TransactionListView(
                 (!hasSmsPermission || !isMonthSynced)
         // 전체 동기화 CTA: 과거 월 + 미해제 + 필터 없음
         val showFullSyncCta = !isCurrentMonth && !isMonthSynced && !hasActiveFilter
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            if (showImportCta) {
-                ImportDataCtaSection(
-                    onImportData = onImportData
-                )
-            } else if (showFullSyncCta) {
-                com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
-                    onRequestFullSync = onRequestFullSync,
-                    monthLabel = monthLabel,
-                    isAdEnabled = isAdEnabled
-                )
-            } else {
+        if (showImportCta || showFullSyncCta) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item(key = "empty_state_cta") {
+                    if (showImportCta) {
+                        ImportDataCtaSection(
+                            onImportData = onImportData
+                        )
+                    } else {
+                        com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
+                            onRequestFullSync = onRequestFullSync,
+                            monthLabel = monthLabel,
+                            isAdEnabled = isAdEnabled
+                        )
+                    }
+                }
+            }
+        } else {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     val isIncomeOnly = !showExpenses && showIncomes
                     val emptyMessageRes = when {
