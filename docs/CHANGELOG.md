@@ -5,6 +5,8 @@
 ## [Unreleased]
 
 ### Changed (2026-04-24)
+- **sms_origin 운영 감사 도구 및 비거래 필터 보강**: RTDB export와 local asset 매칭 상태를 비교하는 `scripts/sms_origin_rule_audit.py` 추가, 통신 단가/요율 안내 SMS를 Fast Path 실패 후보에서 제외하도록 `SmsPreFilter` 보강
+- **RTDB sms_origin 기반 SMS Regex 룰 갱신**: 신한 카드번호입력승인, NH 지역화폐 체크 승인, 농협 자동출금, 롯데 무누적/제휴카드 승인 구조를 asset 룰과 synthetic 회귀 테스트에 반영
 - **SMS Regex 룰 정합성 정리**: `sms_rules_v1.json`에서 실행되지 않는 income Fast Path 룰 제거, ruleKey 결정식 불일치 룰 키 보정
 - **SMS 룰 회귀 테스트 추가**: asset JSON 구조/타입/ruleKey 검증 및 주요 카드사 synthetic payment sample 매칭 테스트 추가
 - **카드사 룰 커버리지 문서화**: 현재 커버 카드사와 우선 확장 대상(하나/BC/IBK/카카오뱅크/토스뱅크/씨티) 관리 문서 추가

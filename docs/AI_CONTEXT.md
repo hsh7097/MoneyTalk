@@ -356,7 +356,7 @@ HomeViewModel.syncSmsV2(contentResolver, targetMonthRange)
      → 010/070 발신자 조건부 제외 (SmsFilter.shouldSkipBySender)
      → smsId 중복 제거 (expenseRepository + incomeRepository)
    → processSmsPipeline(): SmsSyncCoordinator.process(smsInputs)
-     → SmsPreFilter: 비결제 SMS 제거 (60+ 키워드, 100자 초과)
+     → SmsPreFilter: 비결제 SMS 제거 (60+ 키워드, 통신 단가 안내, 130자 초과)
      → SmsIncomeFilter: PAYMENT/INCOME/SKIP 3분류 (financialKeywords 46개)
      → Step 1.5: SmsRegexRuleMatcher.matchPaymentCandidates() ★ Fast Path
        - sender 기반 로컬 regex 룰 매칭 (Asset seed + RTDB overlay)

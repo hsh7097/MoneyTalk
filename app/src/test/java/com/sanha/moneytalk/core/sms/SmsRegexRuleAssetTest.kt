@@ -85,6 +85,19 @@ class SmsRegexRuleAssetTest {
                 date = "04/24 13:45"
             ),
             Sample(
+                issuer = "신한 카드번호입력",
+                sender = "15447200",
+                type = "expense",
+                body = listOf(
+                    "[Web발신]",
+                    "RE:신한 카드번호입력승인 홍길동님(1234) 04/24 13:45 18,700원 SK 세븐모바일"
+                ).joinToString("\n"),
+                amount = "18,700",
+                store = "SK 세븐모바일",
+                card = "신한",
+                date = "04/24 13:45"
+            ),
+            Sample(
                 issuer = "현대",
                 sender = "15776200",
                 type = "expense",
@@ -132,6 +145,52 @@ class SmsRegexRuleAssetTest {
                 amount = "12,300",
                 store = "스타벅스",
                 card = "NH카드",
+                date = "04/24 13:45"
+            ),
+            Sample(
+                issuer = "NH농협 지역화폐",
+                sender = "15881600",
+                type = "expense",
+                body = listOf(
+                    "[Web발신]",
+                    "NH카드5*6*승인",
+                    "홍길동 8,000원 체크",
+                    "(지역화폐 8,000원 사용)",
+                    "04/24 13:45",
+                    "더벤티 영천시"
+                ).joinToString("\n"),
+                amount = "8,000",
+                store = "더벤티 영천시",
+                card = "NH카드",
+                date = "04/24 13:45"
+            ),
+            Sample(
+                issuer = "NH농협 자동출금",
+                sender = "15882100",
+                type = "expense",
+                body = listOf(
+                    "[Web발신]",
+                    "농협04/24 13:45 352-****-6488-03 자동출금33,980원(신한카드) 잔액11,024,387원"
+                ).joinToString("\n"),
+                amount = "33,980",
+                store = "신한카드",
+                card = "농협",
+                date = "04/24 13:45"
+            ),
+            Sample(
+                issuer = "롯데 무누적 승인",
+                sender = "15888100",
+                type = "expense",
+                body = listOf(
+                    "[Web발신]",
+                    "(주)마이리얼트립",
+                    "250,158원 승인",
+                    "홍길동 롯데8*2*",
+                    "일시불 04/24 13:45"
+                ).joinToString("\n"),
+                amount = "250,158",
+                store = "(주)마이리얼트립",
+                card = "롯데",
                 date = "04/24 13:45"
             ),
             Sample(
