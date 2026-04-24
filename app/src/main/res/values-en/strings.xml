@@ -104,6 +104,7 @@
     <string name="home_sync_new_only">Sync new messages only</string>
     <string name="home_sync_today">Sync today\'s messages only</string>
     <string name="home_sync_full">Re-sync all messages</string>
+    <string name="sync_sms_read_failed">Could not read the SMS inbox. Please check SMS permission and default messaging app status.</string>
     <string name="home_income">Income</string>
     <string name="home_expense">Expenses</string>
     <string name="home_remaining_budget">Remaining: ₩%s</string>

@@ -62,6 +62,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import kotlin.coroutines.coroutineContext
 
+private class SmsPrimaryProviderReadException(message: String) : Exception(message)
+
 /**
  * Activity-scoped ViewModel — SMS 동기화 엔진 + resume/권한/광고 통합 관리
  *
@@ -713,11 +715,16 @@ class MainViewModel @Inject constructor(
     private suspend fun readSmsInputs(
         targetMonthRange: Pair<Long, Long>
     ): List<SmsInput> {
-        val allSmsList = smsReaderV2.readAllMessagesByDateRange(
+        val readResult = smsReaderV2.readAllMessagesByDateRange(
             contentResolver,
             targetMonthRange.first,
             targetMonthRange.second
         )
+        if (!readResult.smsProviderReadSucceeded) {
+            throw SmsPrimaryProviderReadException(appContext.getString(R.string.sync_sms_read_failed))
+        }
+
+        val allSmsList = readResult.messages
         MoneyTalkLogger.i("syncSmsV2 SMS 읽기: ${allSmsList.size}건")
         return allSmsList
     }

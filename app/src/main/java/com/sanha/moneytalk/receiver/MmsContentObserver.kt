@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -64,6 +65,7 @@ class MmsContentObserver @Inject constructor(
     private val processedMmsIds = ConcurrentHashMap<String, Long>()
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val processMutex = Mutex()
 
     private var cachedContentResolver: ContentResolver? = null
 
@@ -81,10 +83,13 @@ class MmsContentObserver @Inject constructor(
     override fun onChange(selfChange: Boolean, uri: Uri?) {
         super.onChange(selfChange, uri)
         scope.launch {
+            if (!processMutex.tryLock()) return@launch
             try {
                 processRecentMms()
             } catch (e: Exception) {
                 MoneyTalkLogger.e("[MmsObserver] 처리 예외: ${e.message}")
+            } finally {
+                processMutex.unlock()
             }
         }
     }

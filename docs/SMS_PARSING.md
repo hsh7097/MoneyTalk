@@ -149,10 +149,12 @@ receiver/
 
 | 메소드 | 반환 | 용도 |
 |--------|------|------|
-| `readAllMessagesByDateRange(cr, start, end)` | `List<SmsInput>` | SMS+MMS+RCS 통합 읽기 |
+| `readAllMessagesByDateRange(cr, start, end)` | `SmsReadResult` | SMS+MMS+RCS 통합 읽기 + SMS provider 성공 여부 |
 
 V1의 `SmsReader`는 `SmsMessage`를 반환했지만, **SmsReaderV2는 `SmsInput`을 직접 반환**합니다.
 중간 변환 단계가 없어 호출자(MainViewModel)가 바로 SmsSyncCoordinator에 전달 가능.
+SMS/MMS/RCS는 병렬로 읽고, SMS 기본 provider 조회가 실패하면 빈 목록으로 간주하지 않고 동기화 실패로 전파합니다.
+이 경우 `lastSyncTime`을 갱신하지 않아 다음 동기화에서 누락 없이 다시 읽을 수 있습니다.
 
 ### SMS ID 생성
 `발신번호_수신시간_본문해시코드` → 중복 저장 방지
@@ -747,7 +749,7 @@ LLM이 반환한 비표준 카테고리를 앱 17개 카테고리로 매핑:
 syncSmsV2(contentResolver, targetMonthRange, updateLastSyncTime)
   │
   ├── readAndFilterSms()
-  │   ├ SmsReaderV2.readAllMessagesByDateRange(start, end) → deviceSmsList
+  │   ├ SmsReaderV2.readAllMessagesByDateRange(start, end) → SmsReadResult.messages
   │   ├ SmsInstantProcessor.drainPendingNotifications() → pendingNotifications (§13-A)
   │   ├ allSmsList = deviceSmsList + pendingNotifications
   │   └ 기존 SMS ID로 중복 제거 (expenseRepository + incomeRepository)

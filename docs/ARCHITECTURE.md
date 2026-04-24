@@ -367,7 +367,7 @@ RCS/비즈메시지(cold start) → NotificationTransactionService → 최근 pr
 ### SMS → 지출 저장 (배치 동기화 — sms)
 ```
 HomeViewModel.syncSmsV2()
-  → SmsReaderV2.readAllMessagesByDateRange() → List<SmsInput>
+  → SmsReaderV2.readAllMessagesByDateRange() → SmsReadResult.messages
   → 중복 제거 (expenseRepository + incomeRepository smsId)
   → SmsSyncCoordinator.process()
     → SmsPreFilter (비결제 제거)

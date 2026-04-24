@@ -90,6 +90,7 @@
     <string name="home_sync_new_only">새 문자만 동기화</string>
     <string name="home_sync_today">오늘 문자만 동기화</string>
     <string name="home_sync_full">전체 문자 다시 읽기</string>
+    <string name="sync_sms_read_failed">문자 보관함을 읽지 못했습니다. SMS 권한과 기본 메시지 앱 상태를 확인해주세요.</string>
     <string name="home_income">수입</string>
     <string name="home_expense">지출</string>
     <string name="home_this_month_expense">이번 달 지출</string>

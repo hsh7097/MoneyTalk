@@ -6,6 +6,8 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.provider.Telephony
 import com.sanha.moneytalk.core.database.SmsBlockedSenderRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -40,7 +42,23 @@ class SmsReaderV2 @Inject constructor(
 
         /** RCS JSON에서 텍스트를 찾을 키 목록 */
         private val TEXT_KEYS = listOf("text", "description", "body", "title", "content", "message", "msg")
+
+        /** RCS provider 실패 후 재시도까지 대기 시간 */
+        private const val RCS_PROVIDER_RETRY_DELAY_MS = 10 * 60 * 1000L
     }
+
+    data class SmsReadResult(
+        val messages: List<SmsInput>,
+        val smsProviderReadSucceeded: Boolean
+    )
+
+    private data class ChannelReadResult(
+        val messages: List<SmsInput>,
+        val readSucceeded: Boolean
+    )
+
+    @Volatile
+    private var rcsProviderRetryAfterMillis: Long = 0L
 
     /**
      * SMS + MMS + RCS 통합: 특정 기간의 모든 메시지를 SmsInput으로 반환
@@ -51,23 +69,36 @@ class SmsReaderV2 @Inject constructor(
      * @param contentResolver ContentResolver
      * @param startDate 시작 시간 (밀리초)
      * @param endDate 종료 시간 (밀리초)
-     * @return 모든 메시지의 SmsInput 리스트 (최신순 정렬, id 중복 제거)
+     * @return 모든 메시지의 SmsInput 리스트와 SMS 기본 provider 읽기 성공 여부
      */
     suspend fun readAllMessagesByDateRange(
         contentResolver: ContentResolver,
         startDate: Long,
         endDate: Long
-    ): List<SmsInput> {
+    ): SmsReadResult = coroutineScope {
         val blockedAddressSet = smsBlockedSenderRepository.getBlockedAddressSet()
-        val smsList = readAllSmsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
-        val mmsList = readAllMmsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
-        val rcsList = readAllRcsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
+        val smsDeferred = async {
+            readAllSmsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
+        }
+        val mmsDeferred = async {
+            readAllMmsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
+        }
+        val rcsDeferred = async {
+            readAllRcsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
+        }
 
-        MoneyTalkLogger.i("[SmsReaderV2] 채널별 읽기 결과: SMS=${smsList.size}, MMS=${mmsList.size}, RCS=${rcsList.size}")
+        val smsResult = smsDeferred.await()
+        val mmsList = mmsDeferred.await()
+        val rcsList = rcsDeferred.await()
 
-        return (smsList + mmsList + rcsList)
-            .distinctBy { it.id }
-            .sortedByDescending { it.date }
+        MoneyTalkLogger.i("[SmsReaderV2] 채널별 읽기 결과: SMS=${smsResult.messages.size}, MMS=${mmsList.size}, RCS=${rcsList.size}")
+
+        SmsReadResult(
+            messages = (smsResult.messages + mmsList + rcsList)
+                .distinctBy { it.id }
+                .sortedByDescending { it.date },
+            smsProviderReadSucceeded = smsResult.readSucceeded
+        )
     }
 
     // ========== SMS 읽기 ==========
@@ -77,30 +108,44 @@ class SmsReaderV2 @Inject constructor(
         startDate: Long,
         endDate: Long,
         blockedAddressSet: Set<String>
-    ): List<SmsInput> {
+    ): ChannelReadResult {
         val result = mutableListOf<SmsInput>()
         var senderSkipCount = 0
         var blockedSenderSkipCount = 0
         var totalCursorCount = 0
 
-        val cursor = contentResolver.query(
-            Uri.parse("content://sms/inbox"),
-            arrayOf(
-                Telephony.Sms._ID,
-                Telephony.Sms.ADDRESS,
-                Telephony.Sms.BODY,
-                Telephony.Sms.DATE
-            ),
-            "${Telephony.Sms.DATE} >= ? AND ${Telephony.Sms.DATE} <= ?",
-            arrayOf(startDate.toString(), endDate.toString()),
-            "${Telephony.Sms.DATE} DESC"
-        )
+        val cursor = try {
+            contentResolver.query(
+                Uri.parse("content://sms/inbox"),
+                arrayOf(
+                    Telephony.Sms._ID,
+                    Telephony.Sms.ADDRESS,
+                    Telephony.Sms.BODY,
+                    Telephony.Sms.DATE
+                ),
+                "${Telephony.Sms.DATE} >= ? AND ${Telephony.Sms.DATE} <= ?",
+                arrayOf(startDate.toString(), endDate.toString()),
+                "${Telephony.Sms.DATE} DESC"
+            )
+        } catch (e: Exception) {
+            MoneyTalkLogger.e("[SmsReaderV2][SMS] provider 조회 실패: ${e.message}")
+            return ChannelReadResult(emptyList(), readSucceeded = false)
+        }
 
-        cursor?.use {
+        if (cursor == null) {
+            MoneyTalkLogger.e("[SmsReaderV2][SMS] provider cursor null")
+            return ChannelReadResult(emptyList(), readSucceeded = false)
+        }
+
+        cursor.use {
             val idIndex = it.getColumnIndex(Telephony.Sms._ID)
             val addressIndex = it.getColumnIndex(Telephony.Sms.ADDRESS)
             val bodyIndex = it.getColumnIndex(Telephony.Sms.BODY)
             val dateIndex = it.getColumnIndex(Telephony.Sms.DATE)
+            if (idIndex < 0 || addressIndex < 0 || bodyIndex < 0 || dateIndex < 0) {
+                MoneyTalkLogger.e("[SmsReaderV2][SMS] 필수 컬럼 누락")
+                return ChannelReadResult(emptyList(), readSucceeded = false)
+            }
 
             while (it.moveToNext()) {
                 totalCursorCount++
@@ -153,7 +198,7 @@ class SmsReaderV2 @Inject constructor(
         }
 
         MoneyTalkLogger.i("[SmsReaderV2][SMS] 총 ${totalCursorCount}건 조회, ${result.size}건 통과, sender스킵=${senderSkipCount}, blocked스킵=${blockedSenderSkipCount}")
-        return result
+        return ChannelReadResult(result, readSucceeded = true)
     }
 
     // ========== MMS 읽기 ==========
@@ -340,9 +385,7 @@ class SmsReaderV2 @Inject constructor(
         var senderSkipCount = 0
         var blockedSenderSkipCount = 0
         var totalCursorCount = 0
-        val rcsAvailable = isRcsAvailable(contentResolver)
-        MoneyTalkLogger.i("[SmsReaderV2][RCS] 가용 여부: $rcsAvailable")
-        if (!rcsAvailable) return result
+        if (shouldSkipRcsProvider()) return result
 
         try {
             val cursor = contentResolver.query(
@@ -352,12 +395,22 @@ class SmsReaderV2 @Inject constructor(
                 arrayOf(startDate.toString(), endDate.toString()),
                 "date DESC"
             )
+            if (cursor == null) {
+                markRcsProviderUnavailable()
+                MoneyTalkLogger.w("[SmsReaderV2][RCS] provider cursor null")
+                return result
+            }
 
-            cursor?.use {
+            cursor.use {
                 val idIndex = it.getColumnIndex("_id")
                 val addressIndex = it.getColumnIndex("address")
                 val bodyIndex = it.getColumnIndex("body")
                 val dateIndex = it.getColumnIndex("date")
+                if (idIndex < 0 || addressIndex < 0 || bodyIndex < 0 || dateIndex < 0) {
+                    markRcsProviderUnavailable()
+                    MoneyTalkLogger.w("[SmsReaderV2][RCS] 필수 컬럼 누락")
+                    return result
+                }
 
                 while (it.moveToNext()) {
                     totalCursorCount++
@@ -411,12 +464,26 @@ class SmsReaderV2 @Inject constructor(
                     )
                 }
             }
+            markRcsProviderAvailable()
         } catch (e: Exception) {
+            markRcsProviderUnavailable()
             MoneyTalkLogger.e("RCS 읽기 실패: ${e.message}")
         }
 
         MoneyTalkLogger.i("[SmsReaderV2][RCS] 총 ${totalCursorCount}건 조회, ${result.size}건 통과, sender스킵=${senderSkipCount}, blocked스킵=${blockedSenderSkipCount}")
         return result
+    }
+
+    private fun shouldSkipRcsProvider(): Boolean {
+        return System.currentTimeMillis() < rcsProviderRetryAfterMillis
+    }
+
+    private fun markRcsProviderUnavailable() {
+        rcsProviderRetryAfterMillis = System.currentTimeMillis() + RCS_PROVIDER_RETRY_DELAY_MS
+    }
+
+    private fun markRcsProviderAvailable() {
+        rcsProviderRetryAfterMillis = 0L
     }
 
     /** 수신거부 발신번호 여부 확인 */
@@ -536,23 +603,6 @@ class SmsReaderV2 @Inject constructor(
                     extractTextsFromLayout(child, texts)
                 }
             }
-        }
-    }
-
-    private fun isRcsAvailable(contentResolver: ContentResolver): Boolean {
-        return try {
-            val cursor = contentResolver.query(
-                RCS_URI,
-                arrayOf("_id"),
-                null,
-                null,
-                "date DESC LIMIT 1"
-            )
-            val available = cursor != null && cursor.count > 0
-            cursor?.close()
-            available
-        } catch (e: Exception) {
-            false
         }
     }
 
