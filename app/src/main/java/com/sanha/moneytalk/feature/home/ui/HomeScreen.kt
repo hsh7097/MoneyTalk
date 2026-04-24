@@ -535,6 +535,7 @@ fun HomePageContent(
             val showEmptyCta = hasNoData && !isCurrentMonth && !isMonthSynced
             val showPartialCta = !showImportCta &&
                     !hasNoData &&
+                    !isCurrentMonth &&
                     isPartiallyCovered &&
                     !isMonthSynced
 

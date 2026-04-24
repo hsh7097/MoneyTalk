@@ -490,7 +490,12 @@ fun TransactionListView(
             }
 
             // 부분 데이터 안내 CTA (데이터 있지만 일부 기간 누락)
-            if (!showCurrentMonthImportCta && isPartiallyCovered && !isMonthSynced) {
+            if (
+                !showCurrentMonthImportCta &&
+                !isCurrentMonth &&
+                isPartiallyCovered &&
+                !isMonthSynced
+            ) {
                 item(key = "partial_cta") {
                     com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
                         onRequestFullSync = onRequestFullSync,

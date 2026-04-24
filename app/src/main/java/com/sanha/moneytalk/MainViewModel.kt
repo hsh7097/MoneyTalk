@@ -1549,7 +1549,7 @@ class MainViewModel @Inject constructor(
             rawEndMillis
         }
 
-        return syncCoverageRepository.getCoverageStatus(
+        return syncCoverageRepository.getDateCoverageStatus(
             startMillis = startMillis,
             endMillis = endMillis,
             coverages = syncCoverageEntries
