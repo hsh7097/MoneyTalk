@@ -9,6 +9,7 @@
 - JSON 룰이 충분하면 Step1.5에서 대부분 처리되어 동기화가 빨라진다.
 - JSON/RTDB 룰이 없으면 기존 임베딩+LLM 파이프라인으로 대부분 폴백되어 느려진다.
 - 룰 키는 반드시 결정적 키(`ruleKey`)를 사용해 중복 누적을 방지한다.
+- Fast Path 룰은 결제 계열만 다룬다. 수입 SMS는 `SmsIncomeFilter -> SmsIncomeParser` 경로로 파싱한다.
 
 ## 2. 런타임 동작 방식
 
@@ -24,6 +25,7 @@
 중요:
 - 임베딩 파이프라인은 제거되지 않았고, Fast Path miss에 대해 그대로 동작한다.
 - 따라서 JSON 룰을 비우면 파싱이 깨지지는 않지만 속도는 크게 느려진다.
+- `income` 타입 룰은 asset에 넣지 않는다. 기존 DB에 남아 있어도 `SmsRegexRuleMatcher`의 허용 타입 필터와 `paymentCandidates` 입력 때문에 실행되지 않는다.
 
 ## 3. 속도 해석 기준
 
@@ -125,11 +127,13 @@ RTDB 기반 갱신 시 `outcome=fail` 표본만 대상으로, `count`가 높은 
 ## 7. 타입 분류 기준
 
 - `expense`: 출금/결제/승인 (일시불/할부 포함)
-- `income`: 입금/이체입금
 - `cancel`: 승인취소/취소완료
 - `overseas`: 해외승인/해외결제
+- `payment`, `debit`: 운영/RTDB 호환용 결제 계열 타입
 
 실행 엔진은 sender 내에서 `priority DESC`로 룰을 순차 시도하며, 첫 성공 룰의 type이 최종 타입이다.
+Fast Path 허용 타입은 `expense`, `cancel`, `overseas`, `payment`, `debit`이다.
+입금/급여/환급 등 수입 SMS는 regex asset 룰이 아니라 `SmsIncomeParser`에서 처리한다.
 
 ## 8. ruleKey 생성 규칙
 
@@ -203,6 +207,7 @@ echo -n "$KEY_INPUT" | shasum -a 256 | cut -c1-24
 
 4. 검증
 - JSON 문법: `jq empty app/src/main/assets/sms_rules_v1.json`
+- 룰 테스트: `./gradlew :app:testDebugUnitTest --tests com.sanha.moneytalk.core.sms.SmsRegexRuleAssetTest`
 - 빌드: `./gradlew :app:assembleDebug`
 - 로그:
   - `Asset 룰 로드 완료: N건`
@@ -213,6 +218,8 @@ echo -n "$KEY_INPUT" | shasum -a 256 | cut -c1-24
 
 - sender는 숫자 normalize 기준으로 키를 넣었는가
 - `amountGroup`, `storeGroup`이 실제 캡처되는가
+- `type`이 Fast Path 허용 타입(`expense/cancel/overseas/payment/debit`)인가
+- `ruleKey`가 `sender|type|bodyRegex|amountGroup|storeGroup|cardGroup|dateGroup|version`의 SHA-256 앞 24자리와 일치하는가
 - 오탐 가능성이 큰 과도한 `.*`를 피했는가
 - 동일 sender/type에서 중복 룰이 늘어나지 않는가
 - 신규 룰 후 기존 주요 sender 매칭률이 유지/개선되는가
@@ -270,19 +277,19 @@ echo -n "$KEY_INPUT" | shasum -a 256 | cut -c1-24
 
 ## 13. 현재 룰 현황
 
-마지막 업데이트: 2026-03-19 (v1, 43개 룰)
+마지막 업데이트: 2026-04-24 (v1, 40개 룰)
 
-| sender | 카드사 | cancel | income | expense | overseas | 합계 |
-|--------|--------|--------|--------|---------|----------|------|
-| 16449999 | KB국민은행 | 2 | 3 | 5 | 1 | 11 |
-| 15220080 | 스마일카드(현대) | - | - | 1 | - | 1 |
-| 15776000 | 현대/스마일 | 2 | 1 | - | - | 3 |
-| 15776200 | 현대카드 | 3 | - | 2 | - | 5 |
-| 15447200 | 신한카드(단문) | 1 | - | 1 | - | 2 |
-| 15447000 | 신한카드(장문) | 1 | - | 1 | - | 2 |
-| 15881688 | KB국민카드 | 1 | - | 1 | 1 | 3 |
-| 15888100 | 롯데카드 | 2 | - | 3 | - | 5 |
-| 15889955 | 우리카드 | - | - | 2 | - | 2 |
-| 15888900 | 삼성카드 | 2 | - | 3 | - | 5 |
-| 15881600 | NH농협카드 | 2 | - | 2 | - | 4 |
-| **합계** | | **16** | **4** | **21** | **2** | **43** |
+| sender | 카드사 | cancel | expense | overseas | 합계 |
+|--------|--------|--------|---------|----------|------|
+| 16449999 | KB국민은행 | 2 | 5 | 1 | 8 |
+| 15220080 | 스마일카드(현대) | - | 1 | - | 1 |
+| 15776000 | 현대/스마일 | 2 | - | - | 2 |
+| 15776200 | 현대카드 | 3 | 2 | - | 5 |
+| 15447200 | 신한카드(단문) | 1 | 1 | - | 2 |
+| 15447000 | 신한카드(장문) | 1 | 1 | - | 2 |
+| 15881688 | KB국민카드 | 1 | 1 | 1 | 3 |
+| 15888100 | 롯데카드 | 2 | 3 | - | 5 |
+| 15889955 | 우리카드 | - | 3 | - | 3 |
+| 15888900 | 삼성카드 | 2 | 3 | - | 5 |
+| 15881600 | NH농협카드 | 2 | 2 | - | 4 |
+| **합계** | | **16** | **22** | **2** | **40** |

@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Changed (2026-04-24)
+- **SMS Regex 룰 정합성 정리**: `sms_rules_v1.json`에서 실행되지 않는 income Fast Path 룰 제거, ruleKey 결정식 불일치 룰 키 보정
+- **SMS 룰 회귀 테스트 추가**: asset JSON 구조/타입/ruleKey 검증 및 주요 카드사 synthetic payment sample 매칭 테스트 추가
+- **카드사 룰 커버리지 문서화**: 현재 커버 카드사와 우선 확장 대상(하나/BC/IBK/카카오뱅크/토스뱅크/씨티) 관리 문서 추가
+
 ### Added (2026-04-03)
 - **운영용 메시지 앱 알림 리스너**: `NotificationTransactionService` + `NotificationContentParser` 추가
   - 삼성/구글 메시지 알림을 트리거로 최근 SMS/MMS/RCS provider 원본을 찾아 `SmsInstantProcessor`로 즉시 처리

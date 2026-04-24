@@ -296,15 +296,16 @@ com.sanha.moneytalk/
 ```
 SMS 읽기 (SmsReaderV2) → SmsSyncCoordinator
   → SmsPreFilter → SmsIncomeFilter (PAYMENT/INCOME/SKIP)
-  → SmsRegexRuleMatcher (sender Fast Path)
-  → SmsPipeline: 템플릿+임베딩 → 벡터매칭 → 그룹+LLM
+  → PAYMENT만 SmsRegexRuleMatcher (sender Fast Path)
+  → Fast Path miss만 SmsPipeline: 템플릿+임베딩 → 벡터매칭 → 그룹+LLM
+  → INCOME은 SmsIncomeParser로 저장
 ```
 
 | 단계 | 엔진 (sms) | 비용 | 설명 |
 |------|-------------|------|------|
 | 사전 필터 | SmsPreFilter | 0 | 비결제 SMS 제거 (60+ 키워드) |
 | 수입 분류 | SmsIncomeFilter | 0 | PAYMENT/INCOME/SKIP 키워드 분류 |
-| Fast Path | SmsRegexRuleMatcher | 0 | sender 기반 regex 룰 우선 매칭 |
+| Fast Path | SmsRegexRuleMatcher | 0 | 결제 후보 sender 기반 regex 룰 우선 매칭 |
 | 벡터 매칭 | SmsPatternMatcher | 0 | 기존 패턴 DB에서 코사인 유사도 매칭 |
 | LLM 추출 | SmsGroupClassifier | API | 그룹핑 → Gemini LLM 배치 추출 → regex 생성 |
 
@@ -371,11 +372,12 @@ HomeViewModel.syncSmsV2()
   → SmsSyncCoordinator.process()
     → SmsPreFilter (비결제 제거)
     → SmsIncomeFilter (PAYMENT/INCOME/SKIP 분류)
-    → SmsPipeline (결제 후보)
+    → SmsRegexRuleMatcher (PAYMENT Fast Path)
+    → SmsPipeline (Fast Path 미매칭 결제 후보)
       → SmsTemplateEngine (템플릿화 + 임베딩)
       → SmsPatternMatcher (벡터 매칭 + regex 파싱)
       → SmsGroupClassifier (그룹핑 + LLM 추출 + regex 생성)
-  → saveExpenses() / saveIncomes()
+  → saveExpenses() / saveIncomes(SmsIncomeParser)
   → CategoryClassifierService (4-tier 카테고리 분류)
   → UI 반영
 ```
@@ -385,7 +387,8 @@ HomeViewModel.syncSmsV2()
 실시간 이벤트 (SmsReceiver / MmsContentObserver / RcsContentObserver / NotificationTransactionService)
   → SmsInstantProcessor.processAndSave()
   → sender 필터 + PreFilter + IncomeFilter
-  → regex 매칭 성공 시 ExpenseEntity / IncomeEntity 저장
+  → 지출은 regex 매칭 성공 시 ExpenseEntity 저장
+  → 수입은 SmsIncomeParser로 IncomeEntity 저장
   → 거래 알림 표시
   → 미매칭/실패 시 DataRefreshEvent.SMS_RECEIVED
   → 이후 syncSmsV2에서 Vector/LLM 폴백

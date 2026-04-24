@@ -8,7 +8,8 @@
 
 MoneyTalk은 **sms 통합 파이프라인**으로 SMS에서 결제/수입 정보를 추출합니다.
 **3-tier 구조**: sender regex Fast Path → Vector → LLM.
-Step 1.5에서 sender 기반 regex 룰 매칭을 먼저 시도하고, 미매칭만 임베딩 경로(Vector → LLM)로 처리합니다.
+Step 1.5에서 결제 후보에만 sender 기반 regex 룰 매칭을 먼저 시도하고, 미매칭만 임베딩 경로(Vector → LLM)로 처리합니다.
+수입 SMS는 Fast Path 룰 대상이 아니며 `SmsIncomeFilter -> SmsIncomeParser` 경로로 파싱합니다.
 
 ```
 SMS/MMS/RCS 수신 (SmsReaderV2)
@@ -29,7 +30,7 @@ List<SmsInput> (원본 보존)
 │    → PAYMENT / INCOME / SKIP                              │
 │                                                          │
 │  Step 1.5: SmsRegexRuleMatcher.matchPaymentCandidates()  │
-│    sender 기반 로컬 regex 룰 매칭 (Fast Path) ★ 신규      │
+│    결제 후보 sender 기반 로컬 regex 룰 매칭 (Fast Path)   │
 │    Asset seed + RTDB overlay → priority DESC 순차 매칭     │
 │    → 매칭 성공 → SmsParseResult (SmsPipeline 스킵)         │
 │    → 미매칭 → SmsPipeline fallback                        │
@@ -80,6 +81,7 @@ Step 1.5 Regex Fast Path 도입 이유:
 - 발신번호별 regex 룰을 Asset seed + RTDB overlay로 관리
 - 룰이 커버하는 발신번호의 SMS는 임베딩/LLM 호출 없이 즉시 파싱
 - 룰 품질 자동 관리 (matchCount/failCount 통계, 저품질 룰 자동 비활성화)
+- 허용 타입은 `expense`, `cancel`, `overseas`, `payment`, `debit`이다. `income` 룰은 asset에 두지 않는다.
 
 ---
 
@@ -204,6 +206,9 @@ process(smsList: List<SmsInput>, onProgress) → SyncResult
   │
   └── 결과 병합: (fastPathMatched + pipelineResult).distinctBy { it.input.id }
 ```
+
+`incomeCandidates`는 이 단계에서 regex Fast Path로 보내지지 않습니다.
+호출자(MainViewModel)가 `SmsIncomeParser`로 금액/유형/출처/날짜를 추출한 뒤 `IncomeEntity`로 저장합니다.
 
 ### 책임 분리
 
@@ -794,6 +799,8 @@ syncSmsV2(contentResolver, targetMonthRange, updateLastSyncTime)
 ### 역할
 SMS 수신(BroadcastReceiver), MMS/RCS ContentObserver, 메시지 앱 알림(NotificationListenerService)
 경로에서 **즉시 1건씩** 처리하는 공통 진입점. 배치 동기화(syncSmsV2)와 별도.
+실시간 지출 처리는 regex Fast Path만 사용하며 Gemini/임베딩을 호출하지 않습니다.
+regex 미매칭 지출 후보는 저장하지 않고 후속 batch sync에서 Vector/LLM 폴백을 받습니다.
 
 ### processAndSave() 처리 순서
 
@@ -1066,7 +1073,7 @@ success/fail 모두 fingerprint 단위 row upsert + count/lastSeenAt 누적
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
 | senderAddress | String (PK) | 발신번호 |
-| type | String (PK) | 거래 유형 (expense, income 등) |
+| type | String (PK) | Fast Path 거래 유형 (expense, cancel, overseas, payment, debit) |
 | ruleKey | String (PK) | 결정적 해시 (SHA-256) |
 | bodyRegex | String | SMS 본문 매칭 정규식 |
 | amountGroup | String | 금액 캡처 그룹명 |
@@ -1087,7 +1094,7 @@ success/fail 모두 fingerprint 단위 row upsert + count/lastSeenAt 누적
 ```
 ruleKey = sha256(sender|type|canonicalRegex|amountGroup|storeGroup|cardGroup|dateGroup|version)
 ```
-- `canonicalRegex`: 공백/개행 정규화 후 사용
+- `canonicalRegex`: asset/RTDB에 저장되는 `bodyRegex` 문자열
 - 동일 룰이면 어떤 기기에서 올라와도 같은 key로 upsert
 
 ### 인덱스
