@@ -29,9 +29,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file(localProperties.getProperty("STORE_FILE", "moneytalk-release.jks"))
-            storePassword = localProperties.getProperty("STORE_PASSWORD", "")
-            keyAlias = localProperties.getProperty("KEY_ALIAS", "")
-            keyPassword = localProperties.getProperty("KEY_PASSWORD", "")
+            storePassword = localProperties.getProperty("STORE_PASSWORD", "moneytalk")
+            keyAlias = localProperties.getProperty("KEY_ALIAS", "moneytalk")
+            keyPassword = localProperties.getProperty("KEY_PASSWORD", "moneytalk")
         }
     }
 
