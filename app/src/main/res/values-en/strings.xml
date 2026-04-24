@@ -16,6 +16,7 @@
     <string name="common_scroll_to_top">Scroll to Top</string>
     <string name="common_processing">Processing…</string>
     <string name="common_won">₩%s</string>
+    <string name="common_unknown_error">Unknown error</string>
     <string name="nav_home">Home</string>
     <string name="nav_history">History</string>
     <string name="nav_chat">Chat</string>
@@ -391,8 +392,19 @@
     <string name="settings_classify_progress">%1$d / %2$d items</string>
     <string name="settings_classify_title">Category Classification</string>
     <string name="settings_classify_unclassified">%d unclassified</string>
+    <string name="settings_classify_already_running">Category cleanup is already running</string>
+    <string name="settings_classify_nothing_to_process">No items to classify</string>
+    <string name="settings_classify_preparing">Preparing cleanup...</string>
+    <string name="settings_classify_step_progress">%1$s (%2$d/%3$d)</string>
+    <string name="settings_classify_success">%d categories were cleaned up</string>
+    <string name="settings_classify_no_result">No items were cleaned up. Please try again later.</string>
+    <string name="settings_classify_failed">Category cleanup failed: %s</string>
     <string name="settings_duplicate_subtitle">Remove duplicate items with same amount, store, and time</string>
     <string name="settings_duplicate_title">Delete Duplicates</string>
+    <string name="settings_duplicate_deleted">%d duplicate items deleted</string>
+    <string name="settings_duplicate_empty">No duplicate data</string>
+    <string name="settings_duplicate_failed">Failed to delete duplicates: %s</string>
+    <string name="settings_reset_guide_done">Screen guides have been reset</string>
     <string name="settings_exclusion_default_section">Default Keywords (%d)</string>
     <string name="settings_exclusion_description">Messages containing these keywords are excluded from expense/income messages</string>
     <string name="settings_exclusion_empty">No keywords registered</string>
@@ -464,6 +476,21 @@
     <string name="category_sort_date">Latest</string>
     <string name="category_sort_amount">By Price</string>
 
+    <!-- Category settings -->
+    <string name="category_settings_title">Category Settings</string>
+    <string name="category_settings_subtitle">Manage categories and add custom categories</string>
+    <string name="category_settings_default_header">Default Categories</string>
+    <string name="category_settings_custom_header">Custom Categories</string>
+    <string name="category_settings_custom_empty">No custom categories added</string>
+    <string name="category_settings_add">Add Category</string>
+    <string name="category_settings_add_title">Add Category</string>
+    <string name="category_settings_emoji_label">Icon</string>
+    <string name="category_settings_name_label">Category Name</string>
+    <string name="category_settings_delete_title">Delete Category</string>
+    <string name="category_settings_delete_message">Delete this category?\nTransactions assigned to this category will be changed to Uncategorized.</string>
+    <string name="category_settings_error_name_required">Please enter a category name</string>
+    <string name="category_settings_error_duplicate">This category already exists</string>
+
     <!-- Transaction edit Activity -->
     <string name="transaction_edit_title">Transaction Detail</string>
     <string name="transaction_add_title">Add Transaction</string>
@@ -490,15 +517,30 @@
     <string name="transaction_edit_store_hint">Enter store name</string>
     <string name="transaction_edit_amount_hint">0</string>
     <string name="transaction_edit_amount_suffix">KRW</string>
+    <string name="transaction_edit_amount_prefix_expense">- </string>
+    <string name="transaction_edit_amount_prefix_income">+ </string>
+    <string name="transaction_edit_amount_prefix_transfer">- </string>
     <string name="transaction_edit_date_time">Date/Time</string>
+    <string name="transaction_edit_date_time_value">%1$s  %2$s</string>
+    <string name="transaction_edit_basic_info">Basic Info</string>
+    <string name="transaction_edit_auto_organize">Auto Organize</string>
+    <string name="transaction_edit_transfer_direction">Direction</string>
+    <string name="transfer_direction_flow_withdrawal">Withdrawal → Deposit</string>
+    <string name="transfer_direction_flow_deposit">Deposit → Withdrawal</string>
     <string name="transaction_edit_income_input_required">Please enter amount</string>
     <string name="transaction_edit_fixed_expense">Add to fixed expenses</string>
     <string name="transaction_edit_fixed_transfer">Add to fixed transfers</string>
     <string name="transaction_edit_fixed_income">Add to fixed income</string>
+    <string name="transaction_edit_fixed_expense_short">Fixed Expense</string>
+    <string name="transaction_edit_fixed_transfer_short">Fixed Transfer</string>
+    <string name="transaction_edit_fixed_income_short">Fixed Income</string>
     <string name="transaction_card_fixed_tag">Fixed</string>
     <string name="transaction_edit_apply_category_to_all">Apply to all same store</string>
     <string name="transaction_edit_apply_fixed_to_all">Apply to all same store</string>
+    <string name="transaction_edit_apply_category_to_same_store">Apply category to same store</string>
+    <string name="transaction_edit_apply_fixed_to_same_store">Apply fixed transaction to same store</string>
     <string name="transaction_edit_rule_keyword_label">Match keyword</string>
+    <string name="transaction_edit_rule_keyword_placeholder">e.g. KakaoPay, Starbucks</string>
     <string name="transaction_edit_rule_keyword_hint">Applies to all transactions containing this keyword</string>
     <string name="transaction_edit_keyword_guide">Rules apply to all transactions whose store name contains the keyword.\ne.g. \'Samsung\' matches \'Samsung134\', \'Samsung 8613\'</string>
     <string name="transaction_edit_keyword_guide_confirm">Got it</string>

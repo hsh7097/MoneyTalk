@@ -327,20 +327,10 @@ fun SettingsScreen(
                 Box(modifier = Modifier.onboardingTarget("settings_category", coachMarkRegistry)) {
                 SettingsSectionCompose(title = stringResource(R.string.settings_section_category)) {
                     // 카테고리 정리 (AI 분류)
-                    val isClassifyEnabled = uiState.hasApiKey &&
-                            uiState.unclassifiedCount > 0 &&
-                            !uiState.isBackgroundClassifying &&
-                            !uiState.isClassifying
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .then(
-                                if (isClassifyEnabled) {
-                                    Modifier.clickable { viewModel.onIntent(SettingsIntent.ClassifyUnclassified) }
-                                } else {
-                                    Modifier
-                                }
-                            )
+                            .clickable { viewModel.onIntent(SettingsIntent.ClassifyUnclassified) }
                             .alpha(if (uiState.isBackgroundClassifying || uiState.isClassifying) 0.6f else 1f)
                             .padding(vertical = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,

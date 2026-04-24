@@ -17,6 +17,7 @@
     <string name="common_processing">처리 중…</string>
     <string name="common_apply">적용</string>
     <string name="common_won">%s원</string>
+    <string name="common_unknown_error">알 수 없는 오류</string>
     <string name="nav_home">홈</string>
     <string name="nav_history">가계부</string>
     <string name="nav_chat">상담</string>
@@ -448,6 +449,13 @@
     <string name="settings_classify_background">백그라운드에서 분류 진행 중…</string>
     <string name="settings_classify_unclassified">미정리 %d건</string>
     <string name="settings_classify_done">정리할 항목 없음</string>
+    <string name="settings_classify_already_running">카테고리 정리가 이미 진행 중입니다</string>
+    <string name="settings_classify_nothing_to_process">정리할 항목이 없습니다</string>
+    <string name="settings_classify_preparing">정리 준비 중...</string>
+    <string name="settings_classify_step_progress">%1$s (%2$d/%3$d)</string>
+    <string name="settings_classify_success">%d건의 카테고리가 정리되었습니다</string>
+    <string name="settings_classify_no_result">정리된 항목이 없습니다. 잠시 후 다시 시도해주세요.</string>
+    <string name="settings_classify_failed">카테고리 정리 실패: %s</string>
 
     <!-- 설정 - SMS 제외 키워드 -->
     <string name="settings_exclusion_title">SMS 제외 키워드</string>
@@ -517,6 +525,9 @@
     <!-- 설정 - 중복 삭제 -->
     <string name="settings_duplicate_title">중복 데이터 삭제</string>
     <string name="settings_duplicate_subtitle">금액, 가게명, 시간이 같은 중복 항목 제거</string>
+    <string name="settings_duplicate_deleted">중복 데이터 %d건이 삭제되었습니다</string>
+    <string name="settings_duplicate_empty">중복 데이터가 없습니다</string>
+    <string name="settings_duplicate_failed">중복 삭제 실패: %s</string>
 
     <!-- 리워드 광고 -->
     <string name="reward_ad_dialog_title">무료 상담 횟수 소진</string>
@@ -602,14 +613,29 @@
     <string name="transaction_edit_store_hint">거래처를 입력하세요</string>
     <string name="transaction_edit_amount_hint">0원</string>
     <string name="transaction_edit_amount_suffix">원</string>
+    <string name="transaction_edit_amount_prefix_expense">- </string>
+    <string name="transaction_edit_amount_prefix_income">+ </string>
+    <string name="transaction_edit_amount_prefix_transfer">- </string>
     <string name="transaction_edit_date_time">날짜-시간</string>
+    <string name="transaction_edit_date_time_value">%1$s  %2$s</string>
+    <string name="transaction_edit_basic_info">기본 정보</string>
+    <string name="transaction_edit_auto_organize">자동 정리</string>
+    <string name="transaction_edit_transfer_direction">방향</string>
+    <string name="transfer_direction_flow_withdrawal">출금 → 입금</string>
+    <string name="transfer_direction_flow_deposit">입금 → 출금</string>
     <string name="transaction_edit_fixed_expense">고정지출에 추가</string>
     <string name="transaction_edit_fixed_transfer">고정이체에 추가</string>
     <string name="transaction_edit_fixed_income">고정수입에 추가</string>
+    <string name="transaction_edit_fixed_expense_short">고정 지출</string>
+    <string name="transaction_edit_fixed_transfer_short">고정 이체</string>
+    <string name="transaction_edit_fixed_income_short">고정 수입</string>
     <string name="transaction_card_fixed_tag">고정</string>
     <string name="transaction_edit_apply_category_to_all">동일 거래처에 모두 적용</string>
     <string name="transaction_edit_apply_fixed_to_all">동일 거래처에 모두 적용</string>
+    <string name="transaction_edit_apply_category_to_same_store">카테고리 동일 거래처에 적용</string>
+    <string name="transaction_edit_apply_fixed_to_same_store">고정 거래 동일 거래처에 적용</string>
     <string name="transaction_edit_rule_keyword_label">매칭 키워드</string>
+    <string name="transaction_edit_rule_keyword_placeholder">예: 카카오페이, 스타벅스</string>
     <string name="transaction_edit_rule_keyword_hint">이 키워드가 포함된 모든 거래에 적용</string>
     <string name="transaction_edit_keyword_guide">입력한 키워드가 거래처명에 포함되면 자동으로 적용돼요.\n예: \'삼성화\' 입력 시 \'삼성화134\', \'삼성화 8613\' 모두 적용</string>
     <string name="transaction_edit_keyword_guide_confirm">확인</string>

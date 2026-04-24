@@ -1,14 +1,18 @@
 package com.sanha.moneytalk.feature.transactionedit.ui
 
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.database.CustomCategoryRepository
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.CategoryInfo
+import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
@@ -56,6 +60,12 @@ data class TransactionEditUiState(
     val applyFixedToAll: Boolean = false,
     /** 거래처 규칙 매칭 키워드 (일괄 적용 시 사용) */
     val ruleKeyword: String = "",
+    val categoryEntries: List<CategoryInfo> = Category.expenseEntries,
+    val showCategoryPicker: Boolean = false,
+    val showAddCategoryDialog: Boolean = false,
+    val addCategoryEmoji: String = "\uD83D\uDCE6",
+    val addCategoryName: String = "",
+    @StringRes val addCategoryErrorResId: Int? = null,
     val isSaved: Boolean = false,
     val isDeleted: Boolean = false
 ) {
@@ -90,6 +100,8 @@ class TransactionEditViewModel @Inject constructor(
     private val snackbarBus: AppSnackbarBus,
     private val storeRuleRepository: StoreRuleRepository,
     private val storeRuleSyncService: StoreRuleSyncService,
+    private val customCategoryRepository: CustomCategoryRepository,
+    private val categoryProvider: CategoryProvider,
     private val settingsDataStore: SettingsDataStore,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -146,7 +158,7 @@ class TransactionEditViewModel @Inject constructor(
                     null
                 }
                 originalMatchedRule = matchingRule
-                val hasCategoryRule = type == TransactionType.EXPENSE && matchingRule?.category != null
+                val hasCategoryRule = matchingRule?.category != null
                 val hasFixedRule = supportsFixedExpense(type) && matchingRule?.isFixed != null
 
                 _uiState.update {
@@ -167,9 +179,11 @@ class TransactionEditViewModel @Inject constructor(
                         transferDirection = direction,
                         applyCategoryToAll = hasCategoryRule,
                         applyFixedToAll = hasFixedRule,
-                        ruleKeyword = matchingRule?.keyword ?: expense.storeName.trim()
+                        ruleKeyword = matchingRule?.keyword ?: expense.storeName.trim(),
+                        categoryEntries = defaultCategoryEntries(type)
                     )
                 }
+                refreshCategoryEntries(type)
             } else {
                 initNewExpense()
             }
@@ -199,9 +213,11 @@ class TransactionEditViewModel @Inject constructor(
                         minute = cal.get(Calendar.MINUTE),
                         memo = income.memo ?: "",
                         originalSms = income.originalSms ?: "",
-                        isFixed = income.isRecurring
+                        isFixed = income.isRecurring,
+                        categoryEntries = defaultCategoryEntries(TransactionType.INCOME)
                     )
                 }
+                refreshCategoryEntries(TransactionType.INCOME)
             } else {
                 initNewExpense()
             }
@@ -219,9 +235,11 @@ class TransactionEditViewModel @Inject constructor(
                 isLoading = false,
                 dateMillis = initialDate,
                 hour = cal.get(Calendar.HOUR_OF_DAY),
-                minute = cal.get(Calendar.MINUTE)
+                minute = cal.get(Calendar.MINUTE),
+                categoryEntries = defaultCategoryEntries(TransactionType.EXPENSE)
             )
         }
+        refreshCategoryEntries(TransactionType.EXPENSE)
     }
 
     /**
@@ -239,24 +257,28 @@ class TransactionEditViewModel @Inject constructor(
                     category = Category.UNCLASSIFIED.displayName,
                     transferDirection = TransferDirection.WITHDRAWAL,
                     applyCategoryToAll = false,
-                    applyFixedToAll = false
+                    applyFixedToAll = false,
+                    categoryEntries = defaultCategoryEntries(type)
                 )
                 TransactionType.EXPENSE -> state.copy(
                     transactionType = type,
                     category = Category.UNCLASSIFIED.displayName,
                     transferDirection = null,
                     applyCategoryToAll = false,
-                    applyFixedToAll = false
+                    applyFixedToAll = false,
+                    categoryEntries = defaultCategoryEntries(type)
                 )
                 TransactionType.INCOME -> state.copy(
                     transactionType = type,
                     category = Category.INCOME_UNCLASSIFIED.displayName,
                     transferDirection = null,
                     applyCategoryToAll = false,
-                    applyFixedToAll = false
+                    applyFixedToAll = false,
+                    categoryEntries = defaultCategoryEntries(type)
                 )
             }
         }
+        refreshCategoryEntries(type)
     }
 
     fun updateTransferDirection(direction: TransferDirection) {
@@ -275,6 +297,91 @@ class TransactionEditViewModel @Inject constructor(
 
     fun updateCategory(value: String) {
         _uiState.update { it.copy(category = value) }
+    }
+
+    fun showCategoryPicker() {
+        refreshCategoryEntries()
+        _uiState.update { it.copy(showCategoryPicker = true) }
+    }
+
+    fun dismissCategoryPicker() {
+        _uiState.update {
+            it.copy(
+                showCategoryPicker = false,
+                showAddCategoryDialog = false
+            )
+        }
+    }
+
+    fun selectCategory(value: String?) {
+        _uiState.update { state ->
+            state.copy(
+                category = value ?: state.category,
+                showCategoryPicker = false,
+                showAddCategoryDialog = false
+            )
+        }
+    }
+
+    fun showAddCategoryDialog() {
+        _uiState.update {
+            it.copy(
+                showAddCategoryDialog = true,
+                addCategoryEmoji = "\uD83D\uDCE6",
+                addCategoryName = "",
+                addCategoryErrorResId = null
+            )
+        }
+    }
+
+    fun dismissAddCategoryDialog() {
+        _uiState.update { it.copy(showAddCategoryDialog = false) }
+    }
+
+    fun updateAddCategoryEmoji(emoji: String) {
+        _uiState.update { it.copy(addCategoryEmoji = emoji) }
+    }
+
+    fun updateAddCategoryName(name: String) {
+        _uiState.update { it.copy(addCategoryName = name, addCategoryErrorResId = null) }
+    }
+
+    fun addCategoryFromPicker() {
+        val state = _uiState.value
+        val name = state.addCategoryName.trim()
+
+        if (name.isBlank()) {
+            _uiState.update {
+                it.copy(addCategoryErrorResId = R.string.category_settings_error_name_required)
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            val type = state.transactionType.toCategoryType()
+            val isDuplicate = customCategoryRepository.isDuplicate(name, type)
+            if (isDuplicate) {
+                _uiState.update {
+                    it.copy(addCategoryErrorResId = R.string.category_settings_error_duplicate)
+                }
+                return@launch
+            }
+
+            customCategoryRepository.add(name, state.addCategoryEmoji, type)
+            categoryProvider.invalidateCache()
+            val entries = loadCategoryEntries(type)
+            dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
+            _uiState.update {
+                it.copy(
+                    category = name,
+                    categoryEntries = entries,
+                    showCategoryPicker = false,
+                    showAddCategoryDialog = false,
+                    addCategoryName = "",
+                    addCategoryErrorResId = null
+                )
+            }
+        }
     }
 
     fun updateIncomeType(value: String) {
@@ -415,7 +522,8 @@ class TransactionEditViewModel @Inject constructor(
                 val shouldSyncStoreRule = !state.isNew &&
                     ruleKeyword.isNotBlank() &&
                     (
-                        state.transactionType == TransactionType.EXPENSE ||
+                        state.applyCategoryToAll ||
+                            originalMatchedRule?.category != null ||
                             (
                                 supportsFixedRuleEditing &&
                                     (state.applyFixedToAll || originalMatchedRule?.isFixed != null)
@@ -523,6 +631,17 @@ class TransactionEditViewModel @Inject constructor(
                     )
                     incomeRepository.update(updated)
                 }
+
+                val ruleKeyword = state.ruleKeyword.trim().ifBlank { state.storeName.trim() }
+                if (!state.isNew && ruleKeyword.isNotBlank()) {
+                    if (state.applyCategoryToAll) {
+                        incomeRepository.updateCategoryByKeyword(ruleKeyword, state.category)
+                    }
+                    if (state.applyFixedToAll) {
+                        incomeRepository.updateRecurringByKeyword(ruleKeyword, state.isFixed)
+                    }
+                }
+
                 dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
                 snackbarBus.show(context.getString(R.string.transaction_edit_saved))
                 _uiState.update { it.copy(isSaved = true) }
@@ -594,5 +713,43 @@ class TransactionEditViewModel @Inject constructor(
     private fun supportsFixedExpense(transactionType: TransactionType): Boolean {
         return transactionType == TransactionType.EXPENSE ||
             transactionType == TransactionType.TRANSFER
+    }
+
+    private fun refreshCategoryEntries(transactionType: TransactionType = _uiState.value.transactionType) {
+        viewModelScope.launch {
+            val type = transactionType.toCategoryType()
+            val entries = loadCategoryEntries(type)
+            _uiState.update { state ->
+                if (state.transactionType.toCategoryType() == type) {
+                    state.copy(categoryEntries = entries)
+                } else {
+                    state
+                }
+            }
+        }
+    }
+
+    private suspend fun loadCategoryEntries(type: CategoryType): List<CategoryInfo> {
+        return when (type) {
+            CategoryType.EXPENSE -> categoryProvider.getExpenseEntries()
+            CategoryType.INCOME -> categoryProvider.getIncomeEntries()
+            CategoryType.TRANSFER -> categoryProvider.getTransferEntries()
+        }
+    }
+
+    private fun defaultCategoryEntries(transactionType: TransactionType): List<CategoryInfo> {
+        return when (transactionType) {
+            TransactionType.EXPENSE -> Category.expenseEntries
+            TransactionType.INCOME -> Category.incomeEntries
+            TransactionType.TRANSFER -> Category.transferEntries
+        }
+    }
+
+    private fun TransactionType.toCategoryType(): CategoryType {
+        return when (this) {
+            TransactionType.EXPENSE -> CategoryType.EXPENSE
+            TransactionType.INCOME -> CategoryType.INCOME
+            TransactionType.TRANSFER -> CategoryType.TRANSFER
+        }
     }
 }

@@ -8,6 +8,7 @@ import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.AppDatabase
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
@@ -27,13 +28,13 @@ import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
 import com.sanha.moneytalk.core.util.GoogleDriveHelper
-import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.CategoryRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.receiver.NotificationTransactionService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -140,8 +141,8 @@ data class SettingsUiState(
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val settingsDataStore: SettingsDataStore,
-    private val geminiRepository: GeminiRepository,
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val googleDriveHelper: GoogleDriveHelper,
@@ -159,6 +160,10 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
+    }
+
+    private fun message(resId: Int, vararg args: Any): String {
+        return context.getString(resId, *args)
     }
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -320,11 +325,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun loadSettings() {
-        viewModelScope.launch {
-            // API 키 존재 여부 (Firebase RTDB 기반)
-            val hasKey = withContext(Dispatchers.IO) { geminiRepository.hasApiKey() }
-            _uiState.update { it.copy(hasApiKey = hasKey) }
-        }
+        loadApiKeyState()
 
         viewModelScope.launch {
             // 월 시작일 로드
@@ -332,6 +333,20 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update { it.copy(monthStartDay = day) }
             }
         }
+    }
+
+    private fun loadApiKeyState() {
+        viewModelScope.launch {
+            refreshApiKeyState()
+        }
+    }
+
+    private suspend fun refreshApiKeyState(): Boolean {
+        val hasKey = withContext(Dispatchers.IO) {
+            categoryClassifierService.hasGeminiApiKey()
+        }
+        _uiState.update { it.copy(hasApiKey = hasKey) }
+        return hasKey
     }
 
     private fun loadFilterOptions() {
@@ -1022,6 +1037,7 @@ class SettingsViewModel @Inject constructor(
      * 다른 탭(홈)에서 SMS 동기화 후 설정 탭으로 돌아올 때 최신 데이터 반영
      */
     fun refresh() {
+        loadApiKeyState()
         loadUnclassifiedCount()
         loadFilterOptions()
     }
@@ -1047,23 +1063,30 @@ class SettingsViewModel @Inject constructor(
      */
     fun classifyUnclassifiedExpenses() {
         viewModelScope.launch {
-            // API 키 확인
-            if (!_uiState.value.hasApiKey) {
-                snackbarBus.show("API 키를 먼저 설정해주세요")
+            if (_uiState.value.isClassifying || _uiState.value.isBackgroundClassifying) {
+                snackbarBus.show(message(R.string.settings_classify_already_running))
                 return@launch
             }
 
-            // 미정리 항목 확인
-            if (_uiState.value.unclassifiedCount == 0) {
-                snackbarBus.show("정리할 항목이 없습니다")
+            val hasApiKey = refreshApiKeyState()
+            if (!hasApiKey) {
+                snackbarBus.show(message(R.string.settings_classify_no_api_key))
                 return@launch
             }
 
-            val initialCount = _uiState.value.unclassifiedCount
+            val initialCount = withContext(Dispatchers.IO) {
+                categoryClassifierService.getUnclassifiedCount()
+            }
+            _uiState.update { it.copy(unclassifiedCount = initialCount) }
+            if (initialCount == 0) {
+                snackbarBus.show(message(R.string.settings_classify_nothing_to_process))
+                return@launch
+            }
+
             _uiState.update {
                 it.copy(
                     isClassifying = true,
-                    classifyProgress = "정리 준비 중...",
+                    classifyProgress = message(R.string.settings_classify_preparing),
                     classifyProgressCurrent = 0,
                     classifyProgressTotal = initialCount
                 )
@@ -1072,7 +1095,11 @@ class SettingsViewModel @Inject constructor(
                 val count = withContext(Dispatchers.IO) {
                     categoryClassifierService.classifyUnclassifiedExpenses(onStepProgress = { step, current, total ->
                         _uiState.update {
-                            val progressText = if (total > 0) "$step ($current/$total)" else step
+                            val progressText = if (total > 0) {
+                                message(R.string.settings_classify_step_progress, step, current, total)
+                            } else {
+                                step
+                            }
                             it.copy(
                                 classifyProgress = progressText,
                                 classifyProgressCurrent = current,
@@ -1084,9 +1111,9 @@ class SettingsViewModel @Inject constructor(
                 loadUnclassifiedCount()
                 snackbarBus.show(
                     if (count > 0) {
-                        "${count}건의 카테고리가 정리되었습니다"
+                        message(R.string.settings_classify_success, count)
                     } else {
-                        "정리에 실패했습니다. API 키를 확인해주세요."
+                        message(R.string.settings_classify_no_result)
                     }
                 )
                 _uiState.update {
@@ -1098,7 +1125,12 @@ class SettingsViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                snackbarBus.show("카테고리 정리 실패: ${e.message}")
+                snackbarBus.show(
+                    message(
+                        R.string.settings_classify_failed,
+                        e.message ?: message(R.string.common_unknown_error)
+                    )
+                )
                 _uiState.update {
                     it.copy(
                         isClassifying = false,
@@ -1130,9 +1162,9 @@ class SettingsViewModel @Inject constructor(
                 }
                 snackbarBus.show(
                     if (deletedCount > 0) {
-                        "중복 데이터 ${deletedCount}건이 삭제되었습니다"
+                        message(R.string.settings_duplicate_deleted, deletedCount)
                     } else {
-                        "중복 데이터가 없습니다"
+                        message(R.string.settings_duplicate_empty)
                     }
                 )
                 _uiState.update {
@@ -1141,7 +1173,12 @@ class SettingsViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                snackbarBus.show("중복 삭제 실패: ${e.message}")
+                snackbarBus.show(
+                    message(
+                        R.string.settings_duplicate_failed,
+                        e.message ?: message(R.string.common_unknown_error)
+                    )
+                )
                 _uiState.update {
                     it.copy(
                         isLoading = false
@@ -1201,6 +1238,7 @@ class SettingsViewModel @Inject constructor(
     fun resetAllScreenOnboardings() {
         viewModelScope.launch {
             settingsDataStore.resetAllScreenOnboardings()
+            snackbarBus.show(message(R.string.settings_reset_guide_done))
         }
     }
 }

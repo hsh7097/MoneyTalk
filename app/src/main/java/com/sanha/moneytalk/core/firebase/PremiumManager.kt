@@ -8,11 +8,15 @@ import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -52,6 +56,7 @@ class PremiumManager @Inject constructor(
 ) {
     companion object {
         private const val CONFIG_PATH = "config"
+        private const val CONFIG_FETCH_TIMEOUT_MS = 3000L
     }
 
     private val _premiumConfig = MutableStateFlow(PremiumConfig())
@@ -134,10 +139,21 @@ class PremiumManager @Inject constructor(
      * 3. 빈 문자열 (키 없음)
      */
     suspend fun getEffectiveApiKey(): String {
-        val config = _premiumConfig.value
+        var config = _premiumConfig.value
         if (!config.serviceEnabled) return ""
 
-        val keys = getAvailableKeys(config)
+        var keys = getAvailableKeys(config)
+        if (keys.isEmpty()) {
+            val refreshedConfig = withTimeoutOrNull(CONFIG_FETCH_TIMEOUT_MS) {
+                fetchConfigSnapshot()
+            }
+            if (refreshedConfig != null) {
+                config = refreshedConfig
+                if (!config.serviceEnabled) return ""
+                keys = getAvailableKeys(config)
+            }
+        }
+
         return if (keys.isNotEmpty()) {
             keys[keyIndex.getAndIncrement().mod(keys.size)]
         } else {
@@ -164,6 +180,23 @@ class PremiumManager @Inject constructor(
                 MoneyTalkLogger.e("서버 설정 1회 조회 실패: ${e.message}")
                 onResult(PremiumConfig())
             }
+    }
+
+    /**
+     * RTDB 리스너가 아직 값을 받기 전 사용자가 AI 기능을 누를 수 있어,
+     * 키 풀이 비어 있을 때만 단발 조회로 최신 설정을 보강한다.
+     */
+    private suspend fun fetchConfigSnapshot(): PremiumConfig? {
+        val db = database ?: return null
+        return try {
+            withContext(Dispatchers.IO) {
+                val snapshot = db.getReference(CONFIG_PATH).get().await()
+                parseConfig(snapshot).also { _premiumConfig.value = it }
+            }
+        } catch (e: Exception) {
+            MoneyTalkLogger.e("서버 설정 즉시 조회 실패: ${e.message}")
+            null
+        }
     }
 
     /**

@@ -220,6 +220,7 @@ fun StoreRuleSettingsScreen(
             currentCategory = uiState.addCategory,
             categoryType = CategoryType.EXPENSE,
             showAllOption = false,
+            customCategories = uiState.categoryEntries,
             onDismiss = { viewModel.dismissCategorySelect() },
             onCategorySelected = { selected ->
                 viewModel.updateCategory(selected)

@@ -16,9 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -31,7 +29,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,7 +45,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.CategoryType
-import com.sanha.moneytalk.core.ui.component.EmojiPickerCompose
+import com.sanha.moneytalk.core.ui.component.CategoryAddDialog
 import com.sanha.moneytalk.core.util.toDpTextUnit
 
 /**
@@ -199,7 +196,7 @@ fun CategorySettingsScreen(
 
     // 추가 다이얼로그
     if (uiState.showAddDialog) {
-        AddCategoryDialog(
+        CategoryAddDialog(
             emoji = uiState.addEmoji,
             name = uiState.addName,
             error = uiState.addErrorResId?.let { stringResource(it) },
@@ -298,69 +295,4 @@ private fun CategoryListItem(
             }
         }
     }
-}
-
-@Composable
-private fun AddCategoryDialog(
-    emoji: String,
-    name: String,
-    error: String?,
-    onEmojiChange: (String) -> Unit,
-    onNameChange: (String) -> Unit,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.category_settings_add_title)) },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            ) {
-                // 이름 입력
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = onNameChange,
-                    label = { Text(stringResource(R.string.category_settings_name_label)) },
-                    isError = error != null,
-                    supportingText = error?.let { { Text(it) } },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 선택된 이모지 표시
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.category_settings_emoji_label),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = emoji, fontSize = 28.toDpTextUnit)
-                }
-
-                // 이모지 그리드
-                EmojiPickerCompose(
-                    selectedEmoji = emoji,
-                    onEmojiSelected = onEmojiChange,
-                    modifier = Modifier.height(200.dp)
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(stringResource(R.string.common_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_cancel))
-            }
-        }
-    )
 }
