@@ -595,6 +595,7 @@
     <string name="transaction_edit_original_sms">원본 문자</string>
     <string name="transaction_edit_save">저장</string>
     <string name="transaction_edit_saved">저장되었습니다</string>
+    <string name="transaction_edit_saved_rule_failed">거래는 저장됐지만 일괄 적용은 실패했습니다</string>
     <string name="transaction_edit_deleted">삭제되었습니다</string>
     <string name="transaction_edit_input_required">금액과 가게명을 입력해주세요</string>
     <string name="transaction_edit_income_input_required">금액을 입력해주세요</string>

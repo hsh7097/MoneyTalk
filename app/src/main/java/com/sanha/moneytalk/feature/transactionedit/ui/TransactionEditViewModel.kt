@@ -19,7 +19,6 @@ import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.sms.DeletedSmsTracker
 import com.sanha.moneytalk.core.util.DataRefreshEvent
-import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import com.sanha.moneytalk.feature.transactionedit.ui.model.TransactionType
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
@@ -461,6 +460,7 @@ class TransactionEditViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
+                var storeRuleSyncFailed = false
                 val txType = if (state.transactionType == TransactionType.TRANSFER) "TRANSFER" else "EXPENSE"
                 val txDirection = state.transferDirection?.dbValue ?: ""
                 val effectiveIsFixed = state.isFixed && supportsFixedExpense(state.transactionType)
@@ -554,12 +554,20 @@ class TransactionEditViewModel @Inject constructor(
                         )
                         originalMatchedRule = newRule
                     } catch (e: Exception) {
-                        MoneyTalkLogger.w("일괄 적용 실패: ${e.message}")
+                        storeRuleSyncFailed = true
                     }
                 }
 
                 dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
-                snackbarBus.show(context.getString(R.string.transaction_edit_saved))
+                snackbarBus.show(
+                    context.getString(
+                        if (storeRuleSyncFailed) {
+                            R.string.transaction_edit_saved_rule_failed
+                        } else {
+                            R.string.transaction_edit_saved
+                        }
+                    )
+                )
                 _uiState.update { it.copy(isSaved = true) }
             } catch (e: Exception) {
                 snackbarBus.show(context.getString(R.string.transaction_edit_save_failed))

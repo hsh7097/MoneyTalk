@@ -1,7 +1,5 @@
 package com.sanha.moneytalk.feature.settings.ui
 
-import com.sanha.moneytalk.core.util.MoneyTalkLogger
-
 import android.content.Context
 import android.net.Uri
 import androidx.compose.runtime.Stable
@@ -538,7 +536,7 @@ class SettingsViewModel @Inject constructor(
     fun prepareBackup() {
         analyticsHelper.logClick(AnalyticsEvent.SCREEN_SETTINGS, AnalyticsEvent.CLICK_BACKUP)
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = true, backupContent = null) }
             try {
                 val state = _uiState.value
                 val content = withContext(Dispatchers.IO) {
@@ -884,7 +882,8 @@ class SettingsViewModel @Inject constructor(
                     snackbarBus.show("업로드 실패: ${e.message}")
                     _uiState.update {
                         it.copy(
-                            isLoading = false
+                            isLoading = false,
+                            backupContent = null
                         )
                     }
                 }
@@ -892,7 +891,8 @@ class SettingsViewModel @Inject constructor(
                 snackbarBus.show("업로드 실패: ${e.message}")
                 _uiState.update {
                     it.copy(
-                        isLoading = false
+                        isLoading = false,
+                        backupContent = null
                     )
                 }
             }
@@ -1194,33 +1194,6 @@ class SettingsViewModel @Inject constructor(
 
     private fun requestDebugSyncTodayMessages() {
         dataRefreshEvent.emit(DataRefreshEvent.RefreshType.DEBUG_SYNC_TODAY_MESSAGES)
-    }
-
-    private fun launchBackgroundReclassification() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                var totalReclassified = 0
-
-                // Step 1: 저신뢰도 임베딩 재분류
-                val reclassifiedCount = categoryClassifierService.reclassifyLowConfidenceItems()
-                totalReclassified += reclassifiedCount
-
-                // Step 2: 미분류 지출 분류
-                val classifiedCount = categoryClassifierService.classifyUnclassifiedExpenses()
-                totalReclassified += classifiedCount
-
-                if (totalReclassified > 0) {
-                    withContext(Dispatchers.Main) {
-                        loadUnclassifiedCount()
-                        snackbarBus.show("${totalReclassified}건의 카테고리가 정리되었습니다")
-                        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
-                    }
-                } else {
-                }
-            } catch (e: Exception) {
-                MoneyTalkLogger.e("백그라운드 재분류 실패: ${e.message}")
-            }
-        }
     }
 
     // ===== 화면별 온보딩 =====

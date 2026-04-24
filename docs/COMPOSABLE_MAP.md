@@ -84,7 +84,7 @@ HomeScreen                           ← 홈 탭 메인 화면
 | CumulativeChartCompose | 누적 곡선 차트 (도메인 독립, Canvas) | [CumulativeChartComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/chart/CumulativeChartCompose.kt) |
 | CategoryExpenseSection | 카테고리 TOP 4 지출 리스트 (예산 진척률 포함) | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 | AiInsightCard | "AI가 본 이번 달" Gemini 소비 분석 요약 카드 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
-| ImportDataCtaSection | 데이터 가져오기 CTA (현재월, SMS 권한/데이터 없음) | [ImportDataCtaSectionKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/component/ImportDataCtaSection.kt) |
+| ImportDataCtaSection | 데이터 가져오기 CTA (현재월, SMS 권한/데이터 없음) | [ImportDataCtaSectionKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/cta/ImportDataCtaSection.kt) |
 | EmptyExpenseSection | 지출 없을 때 빈 상태 표시 | [HomeScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt) |
 
 ---
@@ -209,12 +209,15 @@ ChatScreen                           ← 채팅 탭 메인 (목록 ↔ 채팅방
 SettingsScreen                       ← 설정 탭 메인 화면
 ├── SettingsSectionCompose("화면 설정")  ← 섹션 그룹 (공통)
 │   └── SettingsItemCompose          ← 테마 선택 (공통)
-├── SettingsSectionCompose("기간 설정")
-│   └── SettingsItemCompose          ← 월 시작일
-├── SettingsSectionCompose("AI 설정")
-│   └── SettingsItemCompose          ← API 키 + 카테고리 정리
+├── SettingsSectionCompose("수입/예산 관리")
+│   ├── SettingsItemCompose          ← 월 시작일
+│   └── SettingsItemCompose          ← 월 예산
+├── SettingsSectionCompose("카테고리 관리")
+│   ├── Row                          ← 카테고리 정리 (클릭 시 RTDB API 키/미분류 건수 재검증)
+│   ├── SettingsItemCompose          ← 카테고리 설정
+│   └── SettingsItemCompose          ← 거래처 규칙
 ├── SettingsSectionCompose("데이터 관리")
-│   └── SettingsItemCompose × 6      ← 문자설정/내보내기/Drive/복원/중복제거/삭제
+│   └── SettingsItemCompose          ← 거래알림/알림권한/문자설정/내보내기/Drive/복원/중복제거/삭제
 ├── SettingsSectionCompose("앱 정보")
 │   └── SettingsItemCompose × 3      ← 버전/개인정보/가이드 초기화
 │
@@ -226,7 +229,6 @@ SettingsScreen                       ← 설정 탭 메인 화면
 │
 ├── [다이얼로그 — 환경 설정]
 │   ├── ThemeModeDialog              ← 시스템/라이트/다크 선택
-│   ├── ApiKeySettingDialog          ← Gemini API 키 입력
 │   └── MonthStartDayDialog          ← 정산 시작일 (1~31일) 선택
 │
 ├── [다이얼로그 — 데이터 관리]
@@ -249,7 +251,6 @@ SettingsScreen                       ← 설정 탭 메인 화면
 | CategoryBudgetHeader | 카테고리별 예산 헤더 + 초기화 | [BudgetBottomSheetKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/BudgetBottomSheet.kt) |
 | CategoryBudgetRow | 카테고리 예산 행 (이모지+입력+%) | [BudgetBottomSheetKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/BudgetBottomSheet.kt) |
 | ThemeModeDialog | 시스템/라이트/다크 모드 선택 | [SettingsPreferenceDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsPreferenceDialogs.kt) |
-| ApiKeySettingDialog | Gemini API 키 입력/저장 | [SettingsPreferenceDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsPreferenceDialogs.kt) |
 | MonthStartDayDialog | 정산 시작일 (1~31일) 선택 | [SettingsPreferenceDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsPreferenceDialogs.kt) |
 | ExportDialog | JSON/CSV 형식 데이터 내보내기 | [SettingsDataDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsDataDialogs.kt) |
 | GoogleDriveDialog | Drive 백업 목록/업로드/복원 | [SettingsDataDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsDataDialogs.kt) |
@@ -413,15 +414,17 @@ StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Acti
 | TransactionCardCompose | 지출/수입 통합 거래 카드 | 홈, 내역(목록/달력) | [TransactionCardComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/card/TransactionCardCompose.kt) |
 | TransactionGroupHeaderCompose | 날짜/가게/금액 그룹 헤더 | 내역(목록) | [TransactionGroupHeaderComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/header/TransactionGroupHeaderCompose.kt) |
 | SegmentedTabRowCompose | 세그먼트 스타일 탭 Row | 내역(FilterTabRow) | [SegmentedTabRowComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/tab/SegmentedTabRowCompose.kt) |
+| ImportDataCtaSection | 데이터 가져오기 CTA | 홈, 내역 | [ImportDataCtaSectionKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/cta/ImportDataCtaSection.kt) |
+| FullSyncCtaSection | 전체 동기화 해제 CTA | 홈, 내역 | [FullSyncCtaSectionKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/cta/FullSyncCtaSection.kt) |
 | CategoryIcon | 카테고리 이모지 아이콘 (원형 배경) | 홈, 거래 카드 | [CategoryIconKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/CategoryIcon.kt) |
 | CumulativeTrendSection | 누적 추이 섹션 (금액+비교문구+Vico차트+범례) | 홈(SpendingTrendSection) | [CumulativeTrendSectionKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/chart/CumulativeTrendSection.kt) |
 | VicoCumulativeChart | Vico 기반 누적 곡선 차트 (금융앱 스타일) | CumulativeTrendSection 내부 | [VicoCumulativeChartKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/chart/VicoCumulativeChart.kt) |
 | CumulativeChartCompose | 누적 곡선 차트 (Canvas, 하위 호환) | CumulativeTrendSection(개별 파라미터) 내부 | [CumulativeChartComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/chart/CumulativeChartCompose.kt) |
 | DonutChartCompose | 도넛 차트 (Canvas drawArc + 범례) | 홈(CategoryExpenseSection) | [DonutChartComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/chart/DonutChartCompose.kt) |
 | MonthlyBarChartSection | 6개월 수입/지출 바 차트 (Canvas) | 홈(결산카드 하단) | [MonthlyBarChartSectionKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/chart/MonthlyBarChartSection.kt) |
-| ExpenseDetailDialog | 지출 상세/수정/삭제 다이얼로그 | 홈, 내역 | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
-| CategorySelectDialog | 카테고리 변경 (3열 그리드) | ExpenseDetailDialog 내부 | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
-| CategoryPickerDialog | 카테고리 선택 (하위 호환) | AddExpenseDialog 내부 | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
+| ExpenseDetailDialog | 지출 상세/수정/삭제 다이얼로그 (legacy, 주요 상세는 TransactionEditActivity) | 하위 호환 | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
+| CategorySelectDialog | 카테고리 선택 BottomSheet (타입/이체 방향/추가 버튼 지원) | 거래 편집, 수입 상세, 거래처 규칙 | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
+| CategoryPickerDialog | 카테고리 선택 (하위 호환) | legacy | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
 | SettingsSectionCompose | 설정 섹션 (타이틀 + Card) | 설정 | [SettingsSectionComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsSectionCompose.kt) |
 | SettingsItemCompose | 설정 아이템 (아이콘 + 텍스트) | 설정 | [SettingsItemComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsItemCompose.kt) |
 | BannerAdCompose | 하단 고정 배너 광고 (AdMob, RTDB 연동) | 홈, 내역, 카테고리 상세 | [BannerAdComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/BannerAdCompose.kt) |

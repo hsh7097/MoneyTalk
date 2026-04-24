@@ -307,12 +307,12 @@ fun ExpenseDetailDialog(
     if (isEditingMemo && onMemoChange != null) {
         AlertDialog(
             onDismissRequest = { isEditingMemo = false },
-            title = { Text("메모 편집") },
+            title = { Text(stringResource(R.string.detail_memo)) },
             text = {
                 OutlinedTextField(
                     value = memoText,
                     onValueChange = { memoText = it },
-                    placeholder = { Text("메모를 입력하세요") },
+                    placeholder = { Text(stringResource(R.string.detail_add_memo)) },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3,
                     trailingIcon = {

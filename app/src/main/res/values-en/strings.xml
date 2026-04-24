@@ -503,6 +503,7 @@
     <string name="transaction_edit_original_sms">Original SMS</string>
     <string name="transaction_edit_save">Save</string>
     <string name="transaction_edit_saved">Saved</string>
+    <string name="transaction_edit_saved_rule_failed">Saved, but bulk apply failed</string>
     <string name="transaction_edit_deleted">Deleted</string>
     <string name="transaction_edit_input_required">Please enter amount and store name</string>
     <string name="transaction_edit_save_failed">Failed to save</string>

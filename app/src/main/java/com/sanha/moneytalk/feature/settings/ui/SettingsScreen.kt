@@ -135,7 +135,11 @@ fun SettingsScreen(
     val backupLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("*/*")
     ) { uri ->
-        uri?.let { viewModel.exportBackup(context, it) }
+        if (uri != null) {
+            viewModel.exportBackup(context, uri)
+        } else {
+            viewModel.clearBackupContent()
+        }
     }
 
     // 복원 파일 선택 런처
@@ -166,22 +170,25 @@ fun SettingsScreen(
         }
     }
 
-    // 백업 콘텐츠가 준비되면 파일 저장 다이얼로그 열기 (로컬 내보내기일 때만)
+    // 백업 콘텐츠가 준비된 뒤 실제 내보내기 동작을 시작한다.
     LaunchedEffect(uiState.backupContent) {
         uiState.backupContent?.let {
             if (uiState.activeDialog != SettingsDialog.EXPORT &&
-                uiState.activeDialog != SettingsDialog.GOOGLE_DRIVE &&
-                !isExportingToGoogleDrive
+                uiState.activeDialog != SettingsDialog.GOOGLE_DRIVE
             ) {
-                val fileName = DataBackupManager.generateBackupFileName(uiState.exportFormat)
-                backupLauncher.launch(fileName)
+                if (isExportingToGoogleDrive) {
+                    viewModel.exportToGoogleDrive()
+                } else {
+                    val fileName = DataBackupManager.generateBackupFileName(uiState.exportFormat)
+                    backupLauncher.launch(fileName)
+                }
             }
         }
     }
 
     // Google Drive export 완료 감지
-    LaunchedEffect(uiState.isLoading) {
-        if (isExportingToGoogleDrive && !uiState.isLoading) {
+    LaunchedEffect(uiState.isLoading, uiState.backupContent) {
+        if (isExportingToGoogleDrive && !uiState.isLoading && uiState.backupContent == null) {
             isExportingToGoogleDrive = false
         }
     }
@@ -737,7 +744,6 @@ fun SettingsScreen(
                     isExportingToGoogleDrive = true
                     viewModel.prepareBackup()
                     viewModel.onIntent(SettingsIntent.DismissDialog)
-                    viewModel.exportToGoogleDrive()
                 },
                 onSignInGoogle = {
                     googleSignInSource = "export"
