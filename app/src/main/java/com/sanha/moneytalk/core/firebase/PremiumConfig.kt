@@ -90,6 +90,8 @@ data class GeminiModelConfig(
     val embedding: String = DEFAULT_EMBEDDING
 ) {
     companion object {
+        // 앱 배포 기본값은 안정판 2.5 계열을 유지하고,
+        // 최신 preview 계열은 RTDB /config/models에서 내부 테스트로만 오버라이드한다.
         const val DEFAULT_QUERY_ANALYZER = "gemini-2.5-pro"
         const val DEFAULT_FINANCIAL_ADVISOR = "gemini-2.5-pro"
         const val DEFAULT_SUMMARY = "gemini-2.5-flash"

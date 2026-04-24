@@ -7,7 +7,7 @@
         android:name="android.hardware.telephony"
         android:required="false" />
 
-    <!-- SMS 권한 -->
+    <!-- SMS-based money management core feature. Play Console declaration required before production release. -->
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
 

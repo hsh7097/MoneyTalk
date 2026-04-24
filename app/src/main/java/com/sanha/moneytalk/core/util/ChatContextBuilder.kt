@@ -47,7 +47,7 @@ object ChatContextBuilder {
     fun buildFinalAnswerPrompt(
         context: ChatContext,
         queryResults: String,
-        monthlyIncome: Int,
+        monthlyIncome: Int?,
         actionResults: String = ""
     ): String {
         val sb = StringBuilder()
@@ -67,13 +67,24 @@ object ChatContextBuilder {
             sb.appendLine()
         }
 
-        // 월 수입
-        sb.appendLine("[월 수입] ${String.format("%,d", monthlyIncome)}원")
-        sb.appendLine()
+        // 월 수입은 조회/분석에 필요한 경우에만 포함한다.
+        monthlyIncome?.let {
+            sb.appendLine("[월 수입] ${String.format("%,d", it)}원")
+            sb.appendLine()
+        }
 
         // 쿼리 결과
         sb.appendLine("[조회된 데이터]")
-        sb.appendLine(queryResults)
+        sb.appendLine(
+            queryResults.ifBlank {
+                """
+                DB 조회 결과 없음
+                - 이 질문은 별도 DB 조회/액션 없이 답변하는 일반 대화일 수 있습니다.
+                - 재무 수치가 필요한 질문이라면 데이터가 부족한 상태로 보고 추정하지 마세요.
+                - 금융 판단에 필요한 데이터가 없으면 필요한 기간/대상/월 수입/예산 정보를 요청하거나 현재 데이터만으로는 판단할 수 없다고 답하세요.
+                """.trimIndent()
+            }
+        )
 
         // 액션 결과
         if (actionResults.isNotBlank()) {

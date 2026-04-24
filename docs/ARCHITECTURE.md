@@ -121,7 +121,7 @@ com.sanha.moneytalk/
 │       ├── StoreAliasManager.kt          # 가게명 별칭 관리
 │       ├── CardNameNormalizer.kt         # 카드사 명칭 정규화 (25+)
 │       ├── ChatContextBuilder.kt         # 채팅 컨텍스트 빌더
-│       ├── DataQueryParser.kt            # 데이터 쿼리 파서 (17 쿼리 + 12 액션)
+│       ├── DataQueryParser.kt            # 데이터 쿼리 파서 (18 쿼리 + 13 액션)
 │       ├── DateParser.kt                 # 날짜 파서
 │       ├── DateUtils.kt                  # 날짜/시간 유틸리티
 │       ├── DpTextUnit.kt                 # fontScale 무관 고정 텍스트 크기
@@ -335,7 +335,7 @@ RCS/비즈메시지(cold start) → NotificationTransactionService → 최근 pr
 
 | Step | 모델 | 프롬프트 위치 | 역할 |
 |------|------|-------------|------|
-| 1 | gemini-2.5-pro | string_prompt.xml (QUERY_ANALYZER) | 질문 → 쿼리/액션 JSON 변환 (17 쿼리 + 12 액션) |
+| 1 | gemini-2.5-pro | string_prompt.xml (QUERY_ANALYZER) | 질문 → 쿼리/액션 JSON 변환 (18 쿼리 + 13 액션) |
 | 2 | - | ChatViewModel.kt | DB 조회, 액션 실행, ANALYTICS 분석 |
 | 3 | gemini-2.5-pro | string_prompt.xml (FINANCIAL_ADVISOR) | 데이터 기반 최종 답변 생성 |
 

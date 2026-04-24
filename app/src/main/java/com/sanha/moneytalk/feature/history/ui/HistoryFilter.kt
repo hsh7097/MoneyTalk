@@ -60,7 +60,6 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -69,7 +68,6 @@ import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryInfo
-import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkState
@@ -77,10 +75,7 @@ import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
 import com.sanha.moneytalk.core.ui.coachmark.onboardingTarget
 import com.sanha.moneytalk.core.util.toDpTextUnit
 import com.sanha.moneytalk.feature.history.ui.coachmark.filterCoachMarkSteps
-import dagger.hilt.android.EntryPointAccessors
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 
 private enum class CategorySheetType(
     @StringRes val titleResId: Int
@@ -169,6 +164,9 @@ fun FilterBottomSheet(
     currentExpenseCategories: Set<String> = emptySet(),
     currentIncomeCategories: Set<String> = emptySet(),
     currentTransferCategories: Set<String> = emptySet(),
+    allExpenseCategories: List<CategoryInfo> = Category.expenseEntries,
+    allIncomeCategories: List<CategoryInfo> = Category.incomeEntries,
+    allTransferCategories: List<CategoryInfo> = Category.transferEntries,
     currentFixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL,
     hasSeenFilterOnboarding: Boolean = true,
     onCoachMarkComplete: () -> Unit = {},
@@ -212,25 +210,6 @@ fun FilterBottomSheet(
     // 3개 타입 모두 체크(기본) 상태에서 첫 카테고리 세부 선택 시 나머지 타입 자동 해제
     var hasAutoCollapsed by remember {
         mutableStateOf(!(currentShowExpenses && currentShowIncomes && currentShowTransfers))
-    }
-
-    val context = LocalContext.current
-    val provider = remember {
-        EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            CategoryProvider.Provider::class.java
-        ).categoryProvider()
-    }
-    var allExpenseCategories by remember { mutableStateOf<List<CategoryInfo>>(Category.expenseEntries) }
-    var allIncomeCategories by remember { mutableStateOf<List<CategoryInfo>>(Category.incomeEntries) }
-    var allTransferCategories by remember { mutableStateOf<List<CategoryInfo>>(Category.transferEntries) }
-    LaunchedEffect(Unit) {
-        val expense = withContext(Dispatchers.IO) { provider.getExpenseEntries() }
-        val income = withContext(Dispatchers.IO) { provider.getIncomeEntries() }
-        val transfer = withContext(Dispatchers.IO) { provider.getTransferEntries() }
-        allExpenseCategories = expense
-        allIncomeCategories = income
-        allTransferCategories = transfer
     }
 
     val configuration = LocalConfiguration.current
@@ -677,6 +656,11 @@ fun FilterBottomSheet(
 
         CategoryFilterListBottomSheet(
             sheetType = type,
+            categories = when (type) {
+                CategorySheetType.EXPENSE -> allExpenseCategories
+                CategorySheetType.INCOME -> allIncomeCategories
+                CategorySheetType.TRANSFER -> allTransferCategories
+            },
             isTypeChecked = isTypeChecked,
             selectedCategories = selected,
             onSelectionChanged = { updated ->
@@ -1135,34 +1119,12 @@ private fun FilterCategorySummaryRow(
 @Composable
 private fun CategoryFilterListBottomSheet(
     sheetType: CategorySheetType,
+    categories: List<CategoryInfo>,
     isTypeChecked: Boolean,
     selectedCategories: Set<String>,
     onSelectionChanged: (Set<String>) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
-    val provider = remember {
-        EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            CategoryProvider.Provider::class.java
-        ).categoryProvider()
-    }
-    val defaultCategories: List<CategoryInfo> = when (sheetType) {
-        CategorySheetType.EXPENSE -> Category.expenseEntries
-        CategorySheetType.INCOME -> Category.incomeEntries
-        CategorySheetType.TRANSFER -> Category.transferEntries
-    }
-    var categories by remember { mutableStateOf(defaultCategories) }
-    LaunchedEffect(sheetType) {
-        val loaded = withContext(Dispatchers.IO) {
-            when (sheetType) {
-                CategorySheetType.EXPENSE -> provider.getExpenseEntries()
-                CategorySheetType.INCOME -> provider.getIncomeEntries()
-                CategorySheetType.TRANSFER -> provider.getTransferEntries()
-            }
-        }
-        categories = loaded
-    }
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val compactSheetHeight = screenHeight * 0.68f
     val expandedSheetHeight = screenHeight - 72.dp

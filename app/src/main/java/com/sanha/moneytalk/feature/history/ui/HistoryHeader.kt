@@ -46,6 +46,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.CategoryInfo
 import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabInfo
@@ -269,6 +271,9 @@ fun FilterTabRow(
     selectedExpenseCategories: Set<String> = emptySet(),
     selectedIncomeCategories: Set<String> = emptySet(),
     selectedTransferCategories: Set<String> = emptySet(),
+    expenseCategories: List<CategoryInfo> = Category.expenseEntries,
+    incomeCategories: List<CategoryInfo> = Category.incomeEntries,
+    transferCategories: List<CategoryInfo> = Category.transferEntries,
     fixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL,
     onApplyFilter: (
         SortOrder,
@@ -420,6 +425,9 @@ fun FilterTabRow(
             currentExpenseCategories = selectedExpenseCategories,
             currentIncomeCategories = selectedIncomeCategories,
             currentTransferCategories = selectedTransferCategories,
+            allExpenseCategories = expenseCategories,
+            allIncomeCategories = incomeCategories,
+            allTransferCategories = transferCategories,
             currentFixedExpenseFilter = fixedExpenseFilter,
             hasSeenFilterOnboarding = hasSeenFilterOnboarding,
             onCoachMarkComplete = onFilterCoachMarkComplete,

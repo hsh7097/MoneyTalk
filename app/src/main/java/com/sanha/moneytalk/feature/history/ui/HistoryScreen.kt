@@ -232,6 +232,9 @@ fun HistoryScreen(
                 selectedExpenseCategories = uiState.selectedExpenseCategories,
                 selectedIncomeCategories = uiState.selectedIncomeCategories,
                 selectedTransferCategories = uiState.selectedTransferCategories,
+                expenseCategories = uiState.expenseCategories,
+                incomeCategories = uiState.incomeCategories,
+                transferCategories = uiState.transferCategories,
                 fixedExpenseFilter = uiState.fixedExpenseFilter,
                 onApplyFilter = { sortOrder, showExp, showInc, showTransfer, expenseCategories, incomeCategories, transferCategories, fixedFilter ->
                     viewModel.applyFilter(

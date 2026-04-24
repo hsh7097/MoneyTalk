@@ -507,7 +507,7 @@ class ChatViewModel @Inject constructor(
                             val hasDataChange = actionResults.any { it.success && it.affectedCount > 0 }
                             if (hasDataChange) {
                                 val hasCategoryChange = actionResults.any {
-                                    it.success && it.actionType == ActionType.UPDATE_CATEGORY
+                                    it.success && isCategoryChangeAction(it.actionType)
                                 }
                                 dataRefreshEvent.emit(
                                     if (hasCategoryChange) DataRefreshEvent.RefreshType.CATEGORY_UPDATED
@@ -516,24 +516,33 @@ class ChatViewModel @Inject constructor(
                             }
                         }
 
-                        // 쿼리/액션 모두 없으면 기본 데이터 제공
+                        // 쿼리/액션 모두 없으면 일반 대화로 처리한다.
                         if (queryRequest.queries.isEmpty() && queryRequest.actions.isEmpty()) {
+                            MoneyTalkLogger.d("채팅 쿼리 없음: 기본 지출 데이터 전송 생략")
+                        }
+                    } else {
+                        if (shouldUseDefaultQueryResults(message)) {
                             val fallbackResults = getDefaultQueryResults()
                             queryResults.addAll(fallbackResults)
                         }
-                    } else {
+                    }
+                }.onFailure {
+                    if (shouldUseDefaultQueryResults(message)) {
                         val fallbackResults = getDefaultQueryResults()
                         queryResults.addAll(fallbackResults)
                     }
-                }.onFailure {
-                    val fallbackResults = getDefaultQueryResults()
-                    queryResults.addAll(fallbackResults)
                 }
 
                 // Clarification이면 쿼리/답변 생성을 건너뜀 (사용자의 추가 입력을 기다림)
                 if (!isClarification) {
                     // 5단계: 대화 맥락 + 쿼리 결과로 최종 답변 생성
-                    val monthlyIncome = settingsDataStore.getMonthlyIncome()
+                    val hasFinancialContext =
+                        queryResults.isNotEmpty() || actionResults.isNotEmpty()
+                    val monthlyIncome = if (hasFinancialContext) {
+                        settingsDataStore.getMonthlyIncome()
+                    } else {
+                        null
+                    }
 
                     val dataContext = queryResults.joinToString("\n\n") { result ->
                         "[${result.queryType.name}]\n${result.data}"
@@ -582,6 +591,40 @@ class ChatViewModel @Inject constructor(
                     canRetry = true
                 )
             }
+        }
+    }
+
+    /**
+     * 쿼리 분석이 실패했을 때만 사용하는 보수적 폴백 판정.
+     * 일반 인사/잡담에는 최근 지출 내역을 자동 첨부하지 않는다.
+     */
+    private fun shouldUseDefaultQueryResults(message: String): Boolean {
+        val lower = message.lowercase(Locale.KOREA)
+        val financialKeywords = listOf(
+            "지출", "소비", "결제", "수입", "입금", "돈", "금액", "얼마",
+            "가계부", "내역", "카테고리", "분류", "예산", "절약", "분석",
+            "비율", "카드", "가게", "상점", "식비", "배달", "카페", "쇼핑",
+            "미분류", "중복", "삭제", "수정", "추가", "메모",
+            "expense", "spend", "spent", "income", "payment", "budget",
+            "category", "categorize", "saving", "analysis", "ratio",
+            "card", "store", "transaction", "uncategorized", "duplicate"
+        )
+        return financialKeywords.any { lower.contains(it) }
+    }
+
+    private fun isCategoryChangeAction(actionType: ActionType): Boolean {
+        return actionType == ActionType.UPDATE_CATEGORY ||
+            actionType == ActionType.UPDATE_CATEGORY_BY_STORE ||
+            actionType == ActionType.UPDATE_CATEGORY_BY_KEYWORD
+    }
+
+    private fun normalizeExpenseCategoryName(categoryName: String): String {
+        val trimmed = categoryName.trim()
+        val category = Category.fromDisplayName(trimmed)
+        return if (category == Category.ETC && trimmed != Category.ETC.displayName) {
+            trimmed
+        } else {
+            category.displayName
         }
     }
 
@@ -1479,12 +1522,13 @@ class ChatViewModel @Inject constructor(
                         message = "지출 ID 또는 새 카테고리가 지정되지 않았습니다."
                     )
                 } else {
-                    val affected = expenseRepository.updateCategoryById(expenseId, newCategory)
+                    val normalizedCategory = normalizeExpenseCategoryName(newCategory)
+                    val affected = expenseRepository.updateCategoryById(expenseId, normalizedCategory)
                     if (affected > 0) categoryReferenceProvider.invalidateCache()
                     ActionResult(
                         actionType = ActionType.UPDATE_CATEGORY,
                         success = affected > 0,
-                        message = if (affected > 0) "ID $expenseId 항목의 카테고리를 '$newCategory'(으)로 변경했습니다." else "해당 항목을 찾을 수 없습니다.",
+                        message = if (affected > 0) "ID $expenseId 항목의 카테고리를 '$normalizedCategory'(으)로 변경했습니다." else "해당 항목을 찾을 수 없습니다.",
                         affectedCount = affected
                     )
                 }
@@ -1501,20 +1545,21 @@ class ChatViewModel @Inject constructor(
                         message = "가게명 또는 새 카테고리가 지정되지 않았습니다."
                     )
                 } else {
+                    val normalizedCategory = normalizeExpenseCategoryName(newCategory)
                     // StoreAliasManager를 사용하여 모든 별칭에 대해 업데이트
                     val aliases = StoreAliasManager.getAllAliases(storeName)
                     var totalAffected = 0
                     for (alias in aliases) {
                         totalAffected += expenseRepository.updateCategoryByStoreNameContaining(
                             alias,
-                            newCategory
+                            normalizedCategory
                         )
                     }
                     if (totalAffected > 0) categoryReferenceProvider.invalidateCache()
                     ActionResult(
                         actionType = ActionType.UPDATE_CATEGORY_BY_STORE,
                         success = totalAffected > 0,
-                        message = if (totalAffected > 0) "'$storeName' 관련 ${totalAffected}건의 카테고리를 '$newCategory'(으)로 변경했습니다." else "'$storeName' 관련 항목을 찾을 수 없습니다.",
+                        message = if (totalAffected > 0) "'$storeName' 관련 ${totalAffected}건의 카테고리를 '$normalizedCategory'(으)로 변경했습니다." else "'$storeName' 관련 항목을 찾을 수 없습니다.",
                         affectedCount = totalAffected
                     )
                 }
@@ -1531,20 +1576,21 @@ class ChatViewModel @Inject constructor(
                         message = "검색 키워드 또는 새 카테고리가 지정되지 않았습니다."
                     )
                 } else {
+                    val normalizedCategory = normalizeExpenseCategoryName(newCategory)
                     // StoreAliasManager를 사용하여 모든 별칭에 대해 업데이트
                     val aliases = StoreAliasManager.getAllAliases(keyword)
                     var totalAffected = 0
                     for (alias in aliases) {
                         totalAffected += expenseRepository.updateCategoryByStoreNameContaining(
                             alias,
-                            newCategory
+                            normalizedCategory
                         )
                     }
                     if (totalAffected > 0) categoryReferenceProvider.invalidateCache()
                     ActionResult(
                         actionType = ActionType.UPDATE_CATEGORY_BY_KEYWORD,
                         success = totalAffected > 0,
-                        message = if (totalAffected > 0) "'$keyword' 관련 ${totalAffected}건의 카테고리를 '$newCategory'(으)로 변경했습니다." else "'$keyword' 관련 항목을 찾을 수 없습니다.",
+                        message = if (totalAffected > 0) "'$keyword' 관련 ${totalAffected}건의 카테고리를 '$normalizedCategory'(으)로 변경했습니다." else "'$keyword' 관련 항목을 찾을 수 없습니다.",
                         affectedCount = totalAffected
                     )
                 }
@@ -1641,7 +1687,7 @@ class ChatViewModel @Inject constructor(
                         amount = amount,
                         dateTime = dateTime,
                         cardName = action.cardName ?: "수동입력",
-                        category = action.newCategory ?: "미분류",
+                        category = action.newCategory?.let(::normalizeExpenseCategoryName) ?: "미분류",
                         originalSms = "",
                         smsId = "manual_${System.currentTimeMillis()}",
                         memo = action.memo
@@ -1798,9 +1844,14 @@ class ChatViewModel @Inject constructor(
                         message = "카테고리 또는 금액이 지정되지 않았습니다."
                     )
                 } else {
+                    val normalizedCategory = if (targetCategory == "전체") {
+                        targetCategory
+                    } else {
+                        normalizeExpenseCategoryName(targetCategory)
+                    }
                     budgetDao.insert(
                         BudgetEntity(
-                            category = targetCategory,
+                            category = normalizedCategory,
                             monthlyLimit = amount,
                             yearMonth = "default"
                         )
@@ -1809,7 +1860,7 @@ class ChatViewModel @Inject constructor(
                     ActionResult(
                         actionType = ActionType.SET_BUDGET,
                         success = true,
-                        message = "'$targetCategory' 카테고리의 월 예산을 ${numberFormat.format(amount)}원으로 설정했습니다.",
+                        message = "'$normalizedCategory' 카테고리의 월 예산을 ${numberFormat.format(amount)}원으로 설정했습니다.",
                         affectedCount = 1
                     )
                 }

@@ -11,6 +11,8 @@ import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.CategoryInfo
+import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
@@ -177,6 +179,9 @@ data class HistoryUiState(
     val showIncomes: Boolean = true,
     val showTransfers: Boolean = true,
     val fixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL,
+    val expenseCategories: List<CategoryInfo> = Category.expenseEntries,
+    val incomeCategories: List<CategoryInfo> = Category.incomeEntries,
+    val transferCategories: List<CategoryInfo> = Category.transferEntries,
     // 다이얼로그 상태 (Composable에서 remember 대신 ViewModel에서 관리)
     val selectedExpense: ExpenseEntity? = null,
     val selectedIncome: IncomeEntity? = null
@@ -244,6 +249,7 @@ class HistoryViewModel @Inject constructor(
     private val incomeRepository: IncomeRepository,
     private val settingsDataStore: SettingsDataStore,
     private val categoryClassifierService: CategoryClassifierService,
+    private val categoryProvider: CategoryProvider,
     private val dataRefreshEvent: DataRefreshEvent,
     private val snackbarBus: AppSnackbarBus,
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
@@ -264,6 +270,7 @@ class HistoryViewModel @Inject constructor(
 
     init {
         loadSettings()
+        loadFilterCategories()
         observeDataRefreshEvents()
     }
 
@@ -331,6 +338,27 @@ class HistoryViewModel @Inject constructor(
 
     // ========== 전역 이벤트 처리 ==========
 
+    private fun loadFilterCategories() {
+        viewModelScope.launch {
+            val expenseCategories = withContext(Dispatchers.IO) {
+                categoryProvider.getExpenseEntries()
+            }
+            val incomeCategories = withContext(Dispatchers.IO) {
+                categoryProvider.getIncomeEntries()
+            }
+            val transferCategories = withContext(Dispatchers.IO) {
+                categoryProvider.getTransferEntries()
+            }
+            _uiState.update {
+                it.copy(
+                    expenseCategories = expenseCategories,
+                    incomeCategories = incomeCategories,
+                    transferCategories = transferCategories
+                )
+            }
+        }
+    }
+
     /** 내 카드 변경 등 전역 이벤트 감지 */
     private fun observeDataRefreshEvents() {
         viewModelScope.launch {
@@ -339,6 +367,7 @@ class HistoryViewModel @Inject constructor(
                     DataRefreshEvent.RefreshType.OWNED_CARD_UPDATED,
                     DataRefreshEvent.RefreshType.CATEGORY_UPDATED -> {
                         // 전체 월 데이터에 영향 → 비가시 캐시 제거 + 현재 페이지 갱신
+                        loadFilterCategories()
                         clearAllPageCache()
                         loadCurrentAndAdjacentPages()
                     }

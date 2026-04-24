@@ -544,7 +544,8 @@ class HomeViewModel @Inject constructor(
                                 filteredLastMonthExpense,
                                 filteredTodayExpenses.sumOf { e -> e.amount },
                                 top3.map { c -> Pair(c.category, c.total) },
-                                lastMonthTop3ForComparison
+                                lastMonthTop3ForComparison,
+                                monthlyBudgetValue
                             )
                         }
                     }
@@ -565,10 +566,18 @@ class HomeViewModel @Inject constructor(
         lastMonthExpense: Int,
         todayExpense: Int,
         topCategories: List<Pair<String, Int>>,
-        lastMonthTopCategories: List<Pair<String, Int>>
+        lastMonthTopCategories: List<Pair<String, Int>>,
+        monthlyBudget: Int?
     ) {
         // 입력 데이터 해시 비교
-        val inputHash = listOf(monthlyExpense, lastMonthExpense, todayExpense, topCategories, lastMonthTopCategories).hashCode()
+        val inputHash = listOf(
+            monthlyExpense,
+            lastMonthExpense,
+            todayExpense,
+            topCategories,
+            lastMonthTopCategories,
+            monthlyBudget
+        ).hashCode()
         val existingInsight = _uiState.value.pageCache[monthKey]?.aiInsight
         if (inputHash == lastInsightInputHash.get() && existingInsight?.isNotEmpty() == true) return
         lastInsightInputHash.set(inputHash)
@@ -580,7 +589,8 @@ class HomeViewModel @Inject constructor(
                     lastMonthExpense = lastMonthExpense,
                     todayExpense = todayExpense,
                     topCategories = topCategories,
-                    lastMonthTopCategories = lastMonthTopCategories
+                    lastMonthTopCategories = lastMonthTopCategories,
+                    monthlyBudget = monthlyBudget
                 )
                 if (insight != null) {
                     // 해당 월의 캐시가 아직 존재하면 인사이트 저장

@@ -4,7 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 
 /**
- * Gemini가 요청할 수 있는 데이터 쿼리/액션 모델
+ * Gemini가 요청할 수 있는 데이터 쿼리/액션 모델 (18 쿼리 + 13 액션)
  * Gemini는 사용자 질문을 분석하여 필요한 쿼리 또는 액션을 JSON으로 반환
  */
 data class DataQueryRequest(

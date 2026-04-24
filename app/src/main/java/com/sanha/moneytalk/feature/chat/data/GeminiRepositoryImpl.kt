@@ -149,7 +149,8 @@ class GeminiRepositoryImpl @Inject constructor(
         lastMonthExpense: Int,
         todayExpense: Int,
         topCategories: List<Pair<String, Int>>,
-        lastMonthTopCategories: List<Pair<String, Int>>
+        lastMonthTopCategories: List<Pair<String, Int>>,
+        monthlyBudget: Int?
     ): String? {
         val apiKey = getApiKey()
         if (apiKey.isBlank()) return null
@@ -163,26 +164,69 @@ class GeminiRepositoryImpl @Inject constructor(
             }
         )
         val topCatText = topCategories.joinToString(", ") { "${it.first} ${it.second}원" }
-        val lastMonthCatText = if (lastMonthTopCategories.isNotEmpty()) {
-            "\n전월 동일 카테고리: " + lastMonthTopCategories.joinToString(", ") { "${it.first} ${it.second}원" }
-        } else ""
+        val lastMonthCategoryMap = lastMonthTopCategories.toMap()
+        val categoryComparisonText = if (topCategories.isNotEmpty()) {
+            "\n카테고리별 전월 대비 계산 결과: " + topCategories.joinToString(", ") { (category, amount) ->
+                val lastAmount = lastMonthCategoryMap[category] ?: 0
+                if (lastAmount > 0) {
+                    val difference = amount - lastAmount
+                    val absDifference = kotlin.math.abs(difference)
+                    val percent = absDifference.toLong() * 100 / lastAmount
+                    val direction = when {
+                        difference > 0 -> "증가"
+                        difference < 0 -> "감소"
+                        else -> "동일"
+                    }
+                    "$category ${absDifference}원 $direction (${percent}% $direction)"
+                } else {
+                    "$category 전월 데이터 부족으로 비율 판단 불가"
+                }
+            }
+        } else {
+            "\n카테고리별 전월 대비 계산 결과: 비교 데이터 부족"
+        }
+        val budgetText = monthlyBudget
+            ?.takeIf { it > 0 }
+            ?.let {
+                val usagePercent = monthlyExpense.toLong() * 100 / it
+                "\n월 예산: ${it}원\n예산 사용률: ${usagePercent}%"
+            }
+            .orEmpty()
+        val monthComparisonText = when {
+            lastMonthExpense > 0 -> {
+                val difference = monthlyExpense - lastMonthExpense
+                val absDifference = kotlin.math.abs(difference)
+                val percent = absDifference.toLong() * 100 / lastMonthExpense
+                val direction = when {
+                    difference > 0 -> "증가"
+                    difference < 0 -> "감소"
+                    else -> "동일"
+                }
+                "\n전월 대비 계산 결과: ${absDifference}원 $direction (${percent}% $direction)"
+            }
+
+            monthlyExpense > 0 -> "\n전월 대비 계산 결과: 전월 지출 0원/데이터 부족으로 비율 판단 불가"
+            else -> "\n전월 대비 계산 결과: 비교 데이터 부족"
+        }
         val noExpenseHint = if (monthlyExpense == 0) "\n※ 이번 달 지출이 아직 없습니다. 격려/기대감 톤으로 작성." else ""
         val prompt = """
                 재무 어드바이저로서 한국어로 한줄 인사이트를 작성해.
                 이번 달 지출: ${monthlyExpense}원
                 지난 달 지출: ${lastMonthExpense}원
                 오늘 지출: ${todayExpense}원
-                이번 달 주요 카테고리: $topCatText$lastMonthCatText$noExpenseHint
+                이번 달 주요 카테고리: $topCatText$categoryComparisonText$budgetText$monthComparisonText$noExpenseHint
 
                 규칙: 이모지 1개 + 한줄(30자 이내). 격려/경고/팁 중 적절한 톤 선택.
-                카테고리별 전월 대비 증감을 참고하여 인사이트 생성.
-                예시: "💪 지난달보다 15% 절약 중이에요!" 또는 "☕ 카페 지출이 늘고 있어요"
+                숫자/비율/증감률은 위에 제공된 값만 사용하고 직접 계산하지 마. 근거 없는 절약률, 원인, 소비 패턴은 추정하지 마.
+                "비율 판단 불가" 또는 "비교 데이터 부족"이면 절약률/증가율/패턴을 단정하지 말고 데이터 부족을 짧게 안내.
+                예산 사용률이 있으면 예산 초과/근접 여부를 우선 고려하고, 그 외에는 계산 결과에 있는 카테고리별 전월 대비 증감을 참고하여 인사이트 생성.
+                예시: "💪 이번 달 지출 좋아요" 또는 "☕ 카페 지출을 확인해봐요"
             """.trimIndent()
 
         for (attempt in 1..HOME_INSIGHT_MAX_ATTEMPTS) {
             try {
                 val response = model.generateContent(prompt)
-                val insight = response.text?.trim()
+                val insight = sanitizeHomeInsight(response.text)
                 if (!insight.isNullOrBlank()) return insight
                 throw IllegalStateException("인사이트 응답이 비어있습니다")
             } catch (e: Exception) {
@@ -207,6 +251,24 @@ class GeminiRepositoryImpl @Inject constructor(
         }
 
         return null
+    }
+
+    private fun sanitizeHomeInsight(raw: String?): String? {
+        val line = raw
+            ?.lineSequence()
+            ?.map { it.trim().trim('"', '\'', '“', '”') }
+            ?.firstOrNull { it.isNotBlank() }
+            ?: return null
+
+        val cleaned = line
+            .removePrefix("-")
+            .removePrefix("*")
+            .trim()
+            .replace(Regex("\\s+"), " ")
+
+        return cleaned.takeIf { it.isNotBlank() }?.let {
+            if (it.length <= 36) it else it.take(35).trimEnd() + "…"
+        }
     }
 
     @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
@@ -272,17 +334,27 @@ $contextualMessage
             val dataContext = queryResults.joinToString("\n\n") { result ->
                 "[${result.queryType.name}]\n${result.data}"
             }
+            val safeDataContext = dataContext.ifBlank {
+                """
+                DB 조회 결과 없음
+                - 재무 수치가 필요한 질문이라면 데이터가 부족한 상태로 보고 추정하지 마세요.
+                - 금융 판단에 필요한 데이터가 없으면 필요한 기간/대상/월 수입/예산 정보를 요청하거나 현재 데이터만으로는 판단할 수 없다고 답하세요.
+                """.trimIndent()
+            }
 
             val actionContext = if (actionResults.isNotEmpty()) {
                 "\n\n[실행된 액션 결과]\n" + actionResults.joinToString("\n") { result ->
                     "- ${result.message}"
                 }
             } else ""
+            val incomeContext = if (monthlyIncome > 0) {
+                "[월 수입] ${String.format("%,d", monthlyIncome)}원\n\n"
+            } else {
+                "[월 수입] 미설정\n\n"
+            }
 
-            val prompt = """[월 수입] ${String.format("%,d", monthlyIncome)}원
-
-[조회된 데이터]
-$dataContext$actionContext
+            val prompt = """$incomeContext[조회된 데이터]
+$safeDataContext$actionContext
 
 [사용자 질문]
 $userMessage"""
