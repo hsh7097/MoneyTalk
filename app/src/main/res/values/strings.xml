@@ -96,6 +96,7 @@
     <string name="home_remaining_budget">남은 예산: %s원</string>
     <string name="home_category_expense">카테고리별 지출</string>
     <string name="home_expense_top3">지출 TOP 3</string>
+    <string name="home_expense_top4">카테고리 TOP 4</string>
     <string name="home_view_all">전체보기</string>
     <string name="home_view_collapse">접기</string>
     <string name="home_no_expense">아직 지출 내역이 없어요</string>
@@ -114,6 +115,9 @@
     <string name="home_recent_expense">최근 지출</string>
     <string name="home_today_transactions">오늘 내역</string>
     <string name="home_no_today_transactions">오늘은 아직 내역이 없어요</string>
+    <string name="home_ai_insight_title">AI가 본 이번 달</string>
+    <string name="home_current_month_sync_label">이번달</string>
+    <string name="home_sync_month_label_format">%d월</string>
     <string name="home_spending_trend">지출 추이</string>
     <string name="home_trend_last_month">지난달</string>
     <string name="home_trend_avg_three_month">지난 3개월 평균</string>
@@ -259,8 +263,10 @@
     <string name="history_filter_sort">정렬</string>
     <string name="history_filter_type">거래 유형</string>
     <string name="history_filter_category">카테고리</string>
+    <string name="history_filter_category_helper">지출, 수입, 이체별로 카테고리를 따로 선택할 수 있어요</string>
     <string name="history_filter_category_summary_multiple">%1$s 외 %2$d개</string>
     <string name="history_filter_all_categories">모든 카테고리</string>
+    <string name="history_filter_selected_count">%d개 선택</string>
     <string name="history_filter_expense_category_title">지출 카테고리 선택</string>
     <string name="history_filter_income_category_title">수입 카테고리 선택</string>
     <string name="history_filter_transfer_category_title">이체 카테고리 선택</string>
@@ -544,6 +550,11 @@
 
     <!-- 카테고리 상세 -->
     <string name="action_back">뒤로가기</string>
+    <string name="category_detail_monthly_summary">%s 이번 달 지출</string>
+    <string name="category_detail_budget_remaining">%s원 남음</string>
+    <string name="category_detail_budget_over">%s원 초과</string>
+    <string name="category_detail_budget_not_set">예산 미설정</string>
+    <string name="category_detail_recent_transactions">최근 %s 내역</string>
     <string name="category_detail_spending_trend">%s 지출 추이</string>
     <string name="category_detail_empty">이 달에는 %s 지출이 없습니다</string>
 

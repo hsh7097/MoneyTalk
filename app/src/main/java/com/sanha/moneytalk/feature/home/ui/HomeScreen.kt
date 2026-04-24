@@ -34,7 +34,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.SmallFloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -73,8 +72,6 @@ import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
 import com.sanha.moneytalk.core.ui.component.FullSyncCtaSection
-import com.sanha.moneytalk.core.ui.component.ExpenseDetailDialog
-import com.sanha.moneytalk.feature.history.ui.IncomeDetailDialog
 import com.sanha.moneytalk.feature.home.ui.component.ImportDataCtaSection
 import com.sanha.moneytalk.feature.home.ui.component.SpendingTrendSection
 import com.sanha.moneytalk.feature.home.ui.model.HomeSpendingTrendInfo
@@ -96,6 +93,7 @@ import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
 import com.sanha.moneytalk.core.ui.coachmark.onboardingTarget
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.feature.home.ui.coachmark.homeCoachMarkSteps
+import com.sanha.moneytalk.feature.transactionedit.ui.TransactionEditActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
@@ -118,10 +116,6 @@ fun HomeScreen(
     )
     val mainScreenUiState by mainViewModel.screenSyncUiState
         .collectAsStateWithLifecycle(initialValue = ScreenSyncUiState())
-
-    // 선택된 지출/수입 항목 (상세보기용)
-    var selectedExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
-    var selectedIncome by remember { mutableStateOf<IncomeEntity?>(null) }
 
     // HorizontalPager — Virtual Infinite Pager (1200페이지, 중앙이 현재 월)
     val initialPage = remember {
@@ -278,8 +272,12 @@ fun HomeScreen(
                         )
                     }
                 },
-                onExpenseSelected = { expense -> selectedExpense = expense },
-                onIncomeSelected = { income -> selectedIncome = income },
+                onExpenseSelected = { expense ->
+                    TransactionEditActivity.open(context, expenseId = expense.id)
+                },
+                onIncomeSelected = { income ->
+                    TransactionEditActivity.open(context, incomeId = income.id)
+                },
                 coachMarkRegistry = coachMarkRegistry,
                 isCurrentPage = page == pagerState.currentPage,
                 coroutineScope = coroutineScope
@@ -299,45 +297,6 @@ fun HomeScreen(
         onComplete = { viewModel.markScreenOnboardingSeen("home") }
     )
     } // Box
-
-    // 지출 상세 다이얼로그 (공통 컴포넌트 사용)
-    selectedExpense?.let { expense ->
-        ExpenseDetailDialog(
-            expense = expense,
-            onDismiss = { selectedExpense = null },
-            onDelete = {
-                viewModel.deleteExpense(expense)
-                selectedExpense = null
-            },
-            onCategoryChange = { newCategory ->
-                viewModel.updateExpenseCategory(
-                    storeName = expense.storeName,
-                    newCategory = newCategory
-                )
-                selectedExpense = null
-            },
-            onMemoChange = { memo ->
-                viewModel.updateExpenseMemo(expense.id, memo)
-                selectedExpense = null
-            }
-        )
-    }
-
-    // 수입 상세 다이얼로그
-    selectedIncome?.let { income ->
-        IncomeDetailDialog(
-            income = income,
-            onDismiss = { selectedIncome = null },
-            onDelete = {
-                viewModel.deleteIncome(income)
-                selectedIncome = null
-            },
-            onMemoChange = { memo ->
-                viewModel.updateIncomeMemo(income.id, memo)
-                selectedIncome = null
-            }
-        )
-    }
 
     // 에러 메시지 스낵바
     uiState.errorMessage?.let { message ->
@@ -475,6 +434,8 @@ fun HomePageContent(
             }
         }
     }
+    val currentMonthSyncLabel = stringResource(R.string.home_current_month_sync_label)
+    val syncMonthLabelFormat = stringResource(R.string.home_sync_month_label_format)
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -485,7 +446,69 @@ fun HomePageContent(
             contentPadding = PaddingValues(vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // ━━━ BLOCK 1: Hero Summary ━━━
+            // CTA 표시 조건 계산
+            val (effYearCta, effMonthCta) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
+            val isCurrentMonth = year == effYearCta && month == effMonthCta
+            val hasNoData = !pageData.isLoading &&
+                    pageData.monthlyExpense == 0 && pageData.monthlyIncome == 0
+
+            // 데이터 가져오기 CTA:
+            // 현재월 + 권한 없음 또는 아직 해당 월 전체 확인 전의 빈 화면
+            val showImportCta = isCurrentMonth &&
+                    (!hasSmsPermission || (hasNoData && !isMonthSynced))
+
+            // 과거 월 전체 동기화 CTA (광고 시청 → 데이터 가져오기)
+            val ctaMonthLabel = if (isCurrentMonth) {
+                currentMonthSyncLabel
+            } else {
+                String.format(syncMonthLabelFormat, month)
+            }
+            val showEmptyCta = hasNoData && !isCurrentMonth && !isMonthSynced
+            val showPartialCta = !showImportCta &&
+                    !hasNoData &&
+                    !isCurrentMonth &&
+                    isPartiallyCovered &&
+                    !isMonthSynced
+
+            // ━━━ BLOCK 1: CTA — 필요할 때 홈 최상단에 노출 ━━━
+            if (showImportCta) {
+                item {
+                    val targetModifier = if (isCurrentPage && coachMarkRegistry != null) {
+                        Modifier.onboardingTarget("home_sync_cta", coachMarkRegistry)
+                    } else Modifier
+                    Box(modifier = targetModifier) {
+                        ImportDataCtaSection(
+                            onImportData = onIncrementalSync,
+                            isSyncing = isSyncing
+                        )
+                    }
+                }
+            }
+
+            if (showEmptyCta) {
+                item {
+                    FullSyncCtaSection(
+                        onRequestFullSync = onFullSync,
+                        monthLabel = ctaMonthLabel,
+                        isSyncing = isSyncing,
+                        isAdEnabled = isAdEnabled
+                    )
+                }
+            }
+
+            if (showPartialCta) {
+                item {
+                    FullSyncCtaSection(
+                        onRequestFullSync = onFullSync,
+                        monthLabel = ctaMonthLabel,
+                        isPartial = true,
+                        isSyncing = isSyncing,
+                        isAdEnabled = !isCurrentMonth && isAdEnabled
+                    )
+                }
+            }
+
+            // ━━━ BLOCK 2: Hero Summary ━━━
             item {
                 val targetModifier = if (isCurrentPage && coachMarkRegistry != null) {
                     Modifier.onboardingTarget("home_overview", coachMarkRegistry)
@@ -504,53 +527,7 @@ fun HomePageContent(
                 }
             }
 
-            // CTA 표시 조건 계산
-            val (effYearCta, effMonthCta) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
-            val isCurrentMonth = year == effYearCta && month == effMonthCta
-            val hasNoData = !pageData.isLoading &&
-                    pageData.monthlyExpense == 0 && pageData.monthlyIncome == 0
-
-            // 데이터 가져오기 CTA:
-            // 현재월 + 권한 없음 또는 아직 해당 월 전체 확인 전의 빈 화면
-            val showImportCta = isCurrentMonth &&
-                    (!hasSmsPermission || (hasNoData && !isMonthSynced))
-
-            // 현재월 데이터 가져오기 CTA (권한 없거나 데이터 없을 때)
-            if (showImportCta) {
-                item {
-                    val targetModifier = if (isCurrentPage && coachMarkRegistry != null) {
-                        Modifier.onboardingTarget("home_sync_cta", coachMarkRegistry)
-                    } else Modifier
-                    Box(modifier = targetModifier) {
-                        ImportDataCtaSection(
-                            onImportData = onIncrementalSync,
-                            isSyncing = isSyncing
-                        )
-                    }
-                }
-            }
-
-            // 과거 월 전체 동기화 CTA (광고 시청 → 데이터 가져오기)
-            val ctaMonthLabel = if (isCurrentMonth) "이번달" else "${month}월"
-            val showEmptyCta = hasNoData && !isCurrentMonth && !isMonthSynced
-            val showPartialCta = !showImportCta &&
-                    !hasNoData &&
-                    !isCurrentMonth &&
-                    isPartiallyCovered &&
-                    !isMonthSynced
-
-            if (showEmptyCta) {
-                item {
-                    FullSyncCtaSection(
-                        onRequestFullSync = onFullSync,
-                        monthLabel = ctaMonthLabel,
-                        isSyncing = isSyncing,
-                        isAdEnabled = isAdEnabled
-                    )
-                }
-            }
-
-            // ━━━ BLOCK 2: Spending Trend (누적 추이 차트) ━━━
+            // ━━━ BLOCK 3: Spending Trend (누적 추이 차트) ━━━
             if (pageData.dailyCumulativeExpenses.isNotEmpty()) {
                 item {
                     val trendInfo = HomeSpendingTrendInfo.from(pageData)
@@ -565,20 +542,7 @@ fun HomePageContent(
                 }
             }
 
-            // 부분 데이터 안내 CTA (데이터 있지만 해당 월 미동기화)
-            if (showPartialCta) {
-                item {
-                    FullSyncCtaSection(
-                        onRequestFullSync = onFullSync,
-                        monthLabel = ctaMonthLabel,
-                        isPartial = true,
-                        isSyncing = isSyncing,
-                        isAdEnabled = !isCurrentMonth && isAdEnabled
-                    )
-                }
-            }
-
-            // ━━━ BLOCK 3: Category + AI Insight ━━━
+            // ━━━ BLOCK 4: Category + AI Insight ━━━
             item {
                 val targetModifier = if (isCurrentPage && coachMarkRegistry != null) {
                     Modifier.onboardingTarget("home_category", coachMarkRegistry)
@@ -602,7 +566,7 @@ fun HomePageContent(
                 }
             }
 
-            // ━━━ BLOCK 4: Recent Transactions (오늘 내역 + 오늘 지출 요약) ━━━
+            // ━━━ BLOCK 5: Recent Transactions (오늘 내역 + 오늘 지출 요약) ━━━
             if (isCurrentMonth) {
                 item {
                     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
@@ -869,26 +833,26 @@ fun CategoryExpenseSection(
         mergedExpenses.sumOf { it.total }
     }
 
-    // TOP 5 또는 전체 표시
+    // TOP 4 또는 전체 표시
     val displayList = remember(mergedExpenses, showAll) {
-        if (showAll) mergedExpenses else mergedExpenses.take(5)
+        if (showAll) mergedExpenses else mergedExpenses.take(4)
     }
 
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        // 헤더: "카테고리별 지출" + "전체보기/접기"
+        // 헤더: "카테고리 TOP 4" + "전체보기/접기"
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = stringResource(R.string.home_category_expense),
+                text = stringResource(R.string.home_expense_top4),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
-            if (mergedExpenses.size > 5) {
+            if (mergedExpenses.size > 4) {
                 Text(
                     text = if (showAll) stringResource(R.string.home_view_collapse)
                     else stringResource(R.string.home_view_all),
@@ -1091,9 +1055,16 @@ fun AiInsightCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
+                text = stringResource(R.string.home_ai_insight_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
                 text = insight,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onPrimaryContainer
             )
         }
     }

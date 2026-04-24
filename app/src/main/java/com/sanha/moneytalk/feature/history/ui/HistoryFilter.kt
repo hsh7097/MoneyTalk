@@ -311,6 +311,12 @@ fun FilterBottomSheet(
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
+                    Text(
+                        text = stringResource(R.string.history_filter_category_helper),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 10.dp)
+                    )
 
                     Column(
                         modifier = Modifier
@@ -570,6 +576,11 @@ private fun CategoryFilterListBottomSheet(
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.58f).dp
+    val selectionSummary = if (selectedCategories.isEmpty()) {
+        stringResource(R.string.history_filter_all_categories)
+    } else {
+        stringResource(R.string.history_filter_selected_count, selectedCategories.size)
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -605,6 +616,12 @@ private fun CategoryFilterListBottomSheet(
                         )
                     }
                 }
+                Text(
+                    text = selectionSummary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
 
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
@@ -684,6 +701,13 @@ private fun CategoryFilterListRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
+            .background(
+                if (checked) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                } else {
+                    Color.Transparent
+                }
+            )
             .clickable { onCheckedChange() }
             .padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically

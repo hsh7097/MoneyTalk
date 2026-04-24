@@ -318,8 +318,14 @@
     <string name="history_filter_fixed_only">Fixed Only</string>
     <string name="history_filter_fixed_exclude">Exclude</string>
     <string name="home_expense_top3">Top 3 Expenses</string>
+    <string name="home_expense_top4">Top 4 Categories</string>
+    <string name="home_ai_insight_title">AI view of this month</string>
+    <string name="home_current_month_sync_label">This month</string>
+    <string name="home_sync_month_label_format">Month %d</string>
     <string name="home_income_badge">Income %s won</string>
     <string name="home_no_today_transactions">No transactions yet today</string>
+    <string name="history_filter_category_helper">Choose categories separately for expense, income, and transfer.</string>
+    <string name="history_filter_selected_count">%d selected</string>
     <string name="home_sync_dialog_title">Reading expense history</string>
     <string name="sync_dialog_dismiss">Continue in background</string>
     <string name="sync_in_progress_button">Syncing…</string>
@@ -436,6 +442,11 @@
     <string name="sms_regex_reason_card_compile_failed" translatable="false">cardRegex is not a valid regex. Check JSON escaping.</string>
 
     <!-- Category detail sort -->
+    <string name="category_detail_monthly_summary">This month %s spending</string>
+    <string name="category_detail_budget_remaining">%s won left</string>
+    <string name="category_detail_budget_over">%s won over</string>
+    <string name="category_detail_budget_not_set">Budget not set</string>
+    <string name="category_detail_recent_transactions">Recent %s transactions</string>
     <string name="category_sort_date">Latest</string>
     <string name="category_sort_amount">By Price</string>
 

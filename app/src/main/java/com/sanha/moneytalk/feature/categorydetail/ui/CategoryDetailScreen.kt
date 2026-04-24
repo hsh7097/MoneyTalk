@@ -18,10 +18,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -55,18 +58,22 @@ import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
+import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabInfo
 import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabRowCompose
 import com.sanha.moneytalk.feature.categorydetail.ui.model.CategorySpendingTrendInfo
 import com.sanha.moneytalk.feature.home.ui.component.SpendingTrendSection
 import kotlinx.coroutines.launch
+import java.text.NumberFormat
+import java.util.Locale
+import kotlin.math.abs
 
 /**
  * 카테고리 상세 화면 메인 Composable.
  *
  * 상단 TopBar(뒤로가기 + 카테고리명) + HorizontalPager(월별 차트 + 거래 목록).
- * 거래 아이템 탭 시 ExpenseDetailDialog 표시.
+ * 거래 아이템 탭 시 TransactionEditActivity로 이동.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -232,47 +239,11 @@ private fun CategoryDetailPageContent(
             )
         }
 
-        // 정렬 토글 (세그먼트 탭)
-        item(key = "sort_toggle") {
-            val primaryColor = MaterialTheme.colorScheme.primary
-            val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
-            val dateSortLabel = stringResource(R.string.category_sort_date)
-            val amountSortLabel = stringResource(R.string.category_sort_amount)
-
-            val sortTabs = remember(sortOrder, primaryColor, onPrimaryColor) {
-                listOf(
-                    object : SegmentedTabInfo {
-                        override val label = dateSortLabel
-                        override val isSelected = sortOrder == CategorySortOrder.DATE_DESC
-                        override val selectedColor = primaryColor
-                        override val selectedTextColor = onPrimaryColor
-                    },
-                    object : SegmentedTabInfo {
-                        override val label = amountSortLabel
-                        override val isSelected = sortOrder == CategorySortOrder.AMOUNT_DESC
-                        override val selectedColor = primaryColor
-                        override val selectedTextColor = onPrimaryColor
-                    }
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                SegmentedTabRowCompose(
-                    tabs = sortTabs,
-                    onTabClick = { index ->
-                        val newOrder = when (index) {
-                            0 -> CategorySortOrder.DATE_DESC
-                            else -> CategorySortOrder.AMOUNT_DESC
-                        }
-                        onSortOrderChange(newOrder)
-                    }
-                )
-            }
+        item(key = "summary") {
+            CategoryDetailHeroCard(
+                pageData = pageData,
+                categoryName = categoryName
+            )
         }
 
         // 누적 추이 차트
@@ -299,6 +270,14 @@ private fun CategoryDetailPageContent(
                 )
             }
         } else {
+            item(key = "list_header") {
+                CategoryTransactionListHeader(
+                    categoryName = categoryName,
+                    sortOrder = sortOrder,
+                    onSortOrderChange = onSortOrderChange
+                )
+            }
+
             val transactionItems = pageData.transactionItems
             val headerIndices = transactionItems.mapIndexedNotNull { index, item ->
                 if (item is CategoryTransactionItem.Header) index else null
@@ -372,6 +351,133 @@ private fun CategoryDetailPageContent(
         item(key = "bottom_spacer") {
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+}
+
+@Composable
+private fun CategoryDetailHeroCard(
+    pageData: CategoryDetailPageData,
+    categoryName: String
+) {
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
+    val budget = pageData.categoryBudget
+    val budgetStatus = when {
+        budget == null || budget <= 0 -> stringResource(R.string.category_detail_budget_not_set)
+        pageData.monthlyExpense <= budget -> stringResource(
+            R.string.category_detail_budget_remaining,
+            numberFormat.format(budget - pageData.monthlyExpense)
+        )
+        else -> stringResource(
+            R.string.category_detail_budget_over,
+            numberFormat.format(abs(budget - pageData.monthlyExpense))
+        )
+    }
+    val budgetStatusColor = when {
+        budget == null || budget <= 0 -> MaterialTheme.colorScheme.onSurfaceVariant
+        pageData.monthlyExpense <= budget -> MaterialTheme.moneyTalkColors.income
+        else -> MaterialTheme.colorScheme.error
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.category_detail_monthly_summary, categoryName),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = stringResource(
+                    R.string.common_won,
+                    numberFormat.format(pageData.monthlyExpense)
+                ),
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (pageData.periodLabel.isNotBlank()) {
+                    Text(
+                        text = pageData.periodLabel,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text(
+                    text = budgetStatus,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = budgetStatusColor
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryTransactionListHeader(
+    categoryName: String,
+    sortOrder: CategorySortOrder,
+    onSortOrderChange: (CategorySortOrder) -> Unit
+) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
+    val dateSortLabel = stringResource(R.string.category_sort_date)
+    val amountSortLabel = stringResource(R.string.category_sort_amount)
+
+    val sortTabs = remember(sortOrder, primaryColor, onPrimaryColor) {
+        listOf(
+            object : SegmentedTabInfo {
+                override val label = dateSortLabel
+                override val isSelected = sortOrder == CategorySortOrder.DATE_DESC
+                override val selectedColor = primaryColor
+                override val selectedTextColor = onPrimaryColor
+            },
+            object : SegmentedTabInfo {
+                override val label = amountSortLabel
+                override val isSelected = sortOrder == CategorySortOrder.AMOUNT_DESC
+                override val selectedColor = primaryColor
+                override val selectedTextColor = onPrimaryColor
+            }
+        )
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = stringResource(R.string.category_detail_recent_transactions, categoryName),
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        SegmentedTabRowCompose(
+            tabs = sortTabs,
+            onTabClick = { index ->
+                val newOrder = when (index) {
+                    0 -> CategorySortOrder.DATE_DESC
+                    else -> CategorySortOrder.AMOUNT_DESC
+                }
+                onSortOrderChange(newOrder)
+            }
+        )
     }
 }
 
