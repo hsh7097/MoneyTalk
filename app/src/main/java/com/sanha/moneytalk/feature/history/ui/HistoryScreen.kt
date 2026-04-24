@@ -63,8 +63,9 @@ import com.sanha.moneytalk.feature.transactionedit.ui.TransactionEditActivity
 import com.sanha.moneytalk.MainViewModel
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
+import com.sanha.moneytalk.core.ui.component.cta.FullSyncCtaSection
+import com.sanha.moneytalk.core.ui.component.cta.ImportDataCtaSection
 import com.sanha.moneytalk.feature.history.ui.coachmark.historyCoachMarkSteps
-import com.sanha.moneytalk.feature.home.ui.component.ImportDataCtaSection
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -449,7 +450,7 @@ fun TransactionListView(
                             onImportData = onImportData
                         )
                     } else {
-                        com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
+                        FullSyncCtaSection(
                             onRequestFullSync = onRequestFullSync,
                             monthLabel = monthLabel,
                             isAdEnabled = isAdEnabled
@@ -511,7 +512,7 @@ fun TransactionListView(
                 !isMonthSynced
             ) {
                 item(key = "partial_cta") {
-                    com.sanha.moneytalk.core.ui.component.FullSyncCtaSection(
+                    FullSyncCtaSection(
                         onRequestFullSync = onRequestFullSync,
                         monthLabel = monthLabel,
                         isPartial = true,

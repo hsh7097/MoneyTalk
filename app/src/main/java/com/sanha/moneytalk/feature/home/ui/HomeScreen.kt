@@ -4,6 +4,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
@@ -59,6 +61,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.MainViewModel
@@ -71,8 +74,8 @@ import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
-import com.sanha.moneytalk.core.ui.component.FullSyncCtaSection
-import com.sanha.moneytalk.feature.home.ui.component.ImportDataCtaSection
+import com.sanha.moneytalk.core.ui.component.cta.FullSyncCtaSection
+import com.sanha.moneytalk.core.ui.component.cta.ImportDataCtaSection
 import com.sanha.moneytalk.feature.home.ui.component.SpendingTrendSection
 import com.sanha.moneytalk.feature.home.ui.model.HomeSpendingTrendInfo
 import com.sanha.moneytalk.core.ui.component.getCustomCategoryBackgroundColor
@@ -86,6 +89,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
+import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkState
@@ -542,7 +546,15 @@ fun HomePageContent(
                 }
             }
 
-            // ━━━ BLOCK 4: Category + AI Insight ━━━
+            // ━━━ BLOCK 4: AI Insight + Category ━━━
+            if (pageData.aiInsight.isNotBlank()) {
+                item {
+                    AiInsightCard(
+                        insight = pageData.aiInsight
+                    )
+                }
+            }
+
             item {
                 val targetModifier = if (isCurrentPage && coachMarkRegistry != null) {
                     Modifier.onboardingTarget("home_category", coachMarkRegistry)
@@ -553,15 +565,6 @@ fun HomePageContent(
                         categoryBudgets = pageData.categoryBudgets,
                         selectedCategory = selectedCategory,
                         onCategorySelected = onCategorySelected
-                    )
-                }
-            }
-
-            // AI 인사이트 (카테고리 바로 아래)
-            if (pageData.aiInsight.isNotBlank()) {
-                item {
-                    AiInsightCard(
-                        insight = pageData.aiInsight
                     )
                 }
             }
@@ -587,7 +590,10 @@ fun HomePageContent(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "₩${numberFormat.format(pageData.todayExpense)}",
+                                text = stringResource(
+                                    R.string.common_won,
+                                    numberFormat.format(pageData.todayExpense)
+                                ),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -747,16 +753,17 @@ fun MonthlyOverviewSection(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Hero 카드: Navy 그라데이션 배경 + 총 지출 + 수입 뱃지
+        // Hero 카드: 따뜻한 Mint/Honey 그라데이션으로 홈 첫인상을 명확히 바꾼다.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(28.dp))
                 .background(
-                    brush = Brush.verticalGradient(
+                    brush = Brush.linearGradient(
                         colors = listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                            FriendlyMoneyColors.MintDeep,
+                            FriendlyMoneyColors.Mint,
+                            FriendlyMoneyColors.Honey.copy(alpha = 0.82f)
                         )
                     )
                 )
@@ -769,11 +776,11 @@ fun MonthlyOverviewSection(
                 Text(
                     text = stringResource(R.string.home_this_month_expense),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.7f)
+                    color = Color.White.copy(alpha = 0.82f)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "₩${numberFormat.format(expense)}",
+                    text = stringResource(R.string.common_won, numberFormat.format(expense)),
                     style = MaterialTheme.typography.displayLarge,
                     color = Color.White
                 )
@@ -795,7 +802,7 @@ fun MonthlyOverviewSection(
                     Text(
                         text = stringResource(R.string.home_income_badge, numberFormat.format(income)),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.7f)
+                        color = Color.White.copy(alpha = 0.8f)
                     )
                 }
             }
@@ -811,7 +818,6 @@ fun CategoryExpenseSection(
     selectedCategory: String? = null,
     onCategorySelected: (String?) -> Unit = {}
 ) {
-    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
     var showAll by remember { mutableStateOf(false) }
 
     // 금액 내림차순 정렬 ("AI 분류 중" 항목은 항상 마지막에 배치)
@@ -838,9 +844,7 @@ fun CategoryExpenseSection(
         if (showAll) mergedExpenses else mergedExpenses.take(4)
     }
 
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         // 헤더: "카테고리 TOP 4" + "전체보기/접기"
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -850,20 +854,21 @@ fun CategoryExpenseSection(
             Text(
                 text = stringResource(R.string.home_expense_top4),
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = FriendlyMoneyColors.textPrimary
             )
             if (mergedExpenses.size > 4) {
                 Text(
-                    text = if (showAll) stringResource(R.string.home_view_collapse)
-                    else stringResource(R.string.home_view_all),
+                    text = if (showAll) stringResource(R.string.home_category_view_collapse)
+                    else stringResource(R.string.home_category_view_more),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = FriendlyMoneyColors.Mint,
                     modifier = Modifier.clickable { showAll = !showAll }
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         if (displayList.isEmpty()) {
             Text(
@@ -872,141 +877,179 @@ fun CategoryExpenseSection(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
         } else {
-            displayList.forEachIndexed { index, item ->
-                val category = Category.fromDisplayName(item.category)
-                val categoryEmoji = rememberCategoryEmoji(item.category)
-                val isCustomCategory = category == Category.ETC
-                        && item.category != Category.ETC.displayName
-                val budget = categoryBudgets[item.category]
-                val budgetAmount = budget ?: 0
-                val hasBudget = budget != null && budgetAmount > 0
-                val isOverBudget = hasBudget && item.total > budgetAmount
-                val budgetRatio = if (hasBudget) item.total.toFloat() / budgetAmount else 0f
-                val isWarningBudget = hasBudget && budgetRatio in 0.9f..1f
-                val isSelected = selectedCategory == item.category
-                val isFirst = index == 0
-
-                val percentage = if (hasBudget) {
-                    (item.total.toFloat() / budgetAmount * 100).toInt()
-                } else if (totalExpense > 0) {
-                    (item.total.toFloat() / totalExpense * 100).toInt()
-                } else 0
-
-                val progress = if (hasBudget) {
-                    (item.total.toFloat() / budgetAmount).coerceAtMost(1f)
-                } else if (totalExpense > 0) {
-                    item.total.toFloat() / totalExpense
-                } else 0f
-
-                // 예산 상태별 색상: 초과(빨강), 경고(주황), 기본
-                val warningColor = MaterialTheme.moneyTalkColors.calendarSunday
-                val barColor = when {
-                    isOverBudget -> MaterialTheme.colorScheme.error
-                    isWarningBudget -> warningColor
-                    isFirst && !hasBudget -> MaterialTheme.colorScheme.primary
-                    isCustomCategory -> getCustomCategoryChartColor(item.category)
-                    else -> getCategoryChartColor(category)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                displayList.forEachIndexed { index, item ->
+                    CategoryRankingExpenseRow(
+                        item = item,
+                        index = index,
+                        totalExpense = totalExpense,
+                        categoryBudgets = categoryBudgets,
+                        isSelected = selectedCategory == item.category,
+                        onClick = {
+                            if (selectedCategory == item.category) {
+                                onCategorySelected(null)
+                            } else {
+                                onCategorySelected(item.category)
+                            }
+                        }
+                    )
                 }
+            }
+        }
+    }
+}
 
-                Column(
+@Composable
+private fun CategoryRankingExpenseRow(
+    item: CategorySum,
+    index: Int,
+    totalExpense: Int,
+    categoryBudgets: Map<String, Int>,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
+    val category = Category.fromDisplayName(item.category)
+    val categoryEmoji = rememberCategoryEmoji(item.category)
+    val isCustomCategory = category == Category.ETC && item.category != Category.ETC.displayName
+    val budget = categoryBudgets[item.category]
+    val budgetAmount = budget ?: 0
+    val hasBudget = budget != null && budgetAmount > 0
+    val isOverBudget = hasBudget && item.total > budgetAmount
+    val budgetRatio = if (hasBudget) item.total.toFloat() / budgetAmount else 0f
+    val isWarningBudget = hasBudget && budgetRatio in 0.9f..1f
+    val percentage = if (hasBudget) {
+        (item.total.toFloat() / budgetAmount * 100).toInt()
+    } else if (totalExpense > 0) {
+        (item.total.toFloat() / totalExpense * 100).toInt()
+    } else {
+        0
+    }
+    val progress = if (hasBudget) {
+        (item.total.toFloat() / budgetAmount).coerceAtMost(1f)
+    } else if (totalExpense > 0) {
+        item.total.toFloat() / totalExpense
+    } else {
+        0f
+    }
+    val warningColor = MaterialTheme.moneyTalkColors.calendarSunday
+    val barColor = when {
+        isOverBudget -> MaterialTheme.colorScheme.error
+        isWarningBudget -> warningColor
+        index == 0 && !hasBudget -> FriendlyMoneyColors.Mint
+        isCustomCategory -> getCustomCategoryChartColor(item.category)
+        else -> getCategoryChartColor(category)
+    }
+    val amountText = stringResource(R.string.common_won, numberFormat.format(item.total))
+    val percentText = stringResource(R.string.home_category_share_percent, percentage)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                if (isSelected) FriendlyMoneyColors.mintTint else Color.Transparent
+            )
+            .padding(vertical = 6.dp)
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = (index + 1).toString(),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = FriendlyMoneyColors.textSecondary,
+            modifier = Modifier.width(18.dp),
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        CategoryIcon(
+            category = category,
+            emojiOverride = categoryEmoji,
+            backgroundColorOverride = if (isCustomCategory) {
+                getCustomCategoryBackgroundColor(item.category)
+            } else {
+                null
+            },
+            containerSize = 38.dp,
+            fontSize = 21.dp
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = item.category,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = FriendlyMoneyColors.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = amountText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isOverBudget) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        FriendlyMoneyColors.textPrimary
+                    },
+                    maxLines = 1
+                )
+            }
+            Spacer(modifier = Modifier.height(7.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            if (isSelected) onCategorySelected(null)
-                            else onCategorySelected(item.category)
-                        }
-                        .padding(vertical = 6.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            when {
+                                isOverBudget -> MaterialTheme.colorScheme.error.copy(alpha = 0.18f)
+                                isWarningBudget -> warningColor.copy(alpha = 0.18f)
+                                else -> FriendlyMoneyColors.mintTint
+                            }
+                        )
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
-                    // 상단: 아이콘 + 이름 | 금액 + 퍼센트
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // 왼쪽: 원형 아이콘 + 카테고리명
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            CategoryIcon(
-                                category = category,
-                                emojiOverride = categoryEmoji,
-                                backgroundColorOverride = if (isCustomCategory)
-                                    getCustomCategoryBackgroundColor(item.category) else null,
-                                containerSize = 40.dp,
-                                fontSize = 20.dp
-                            )
-                            Text(
-                                text = item.category,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                    Text(
+                        text = percentText,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = when {
+                            isOverBudget -> MaterialTheme.colorScheme.error
+                            isWarningBudget -> warningColor
+                            else -> FriendlyMoneyColors.Mint
                         }
-
-                        // 오른쪽: 금액 + 퍼센트 (한 줄)
-                        if (hasBudget) {
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "₩${numberFormat.format(item.total)} / ₩${numberFormat.format(budgetAmount)}",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isOverBudget) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = if (isOverBudget) {
-                                        "₩${numberFormat.format(item.total - budgetAmount)} 초과"
-                                    } else if (isWarningBudget) {
-                                        "₩${numberFormat.format(budgetAmount - item.total)} 남음 ⚠️"
-                                    } else {
-                                        "₩${numberFormat.format(budgetAmount - item.total)} 남음"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = when {
-                                        isOverBudget -> MaterialTheme.colorScheme.error
-                                        isWarningBudget -> warningColor
-                                        else -> MaterialTheme.moneyTalkColors.income
-                                    }
-                                )
-                            }
-                        } else {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = "₩${numberFormat.format(item.total)}",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "${percentage}%",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // 수평 바 차트
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(5.dp)
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(FriendlyMoneyColors.border)
+                ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(progress)
-                                .height(8.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(barColor)
-                        )
-                    }
+                            .fillMaxWidth(progress)
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(barColor)
+                    )
                 }
             }
         }
@@ -1047,26 +1090,135 @@ fun AiInsightCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        ),
-        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, FriendlyMoneyColors.Mint.copy(alpha = 0.28f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(R.string.home_ai_insight_title),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = insight,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF0B3A30),
+                            Color(0xFF0F4B3F),
+                            Color(0xFF12392F)
+                        )
+                    )
+                )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, top = 14.dp, end = 14.dp, bottom = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.home_ai_insight_title),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = FriendlyMoneyColors.Mint
+                    )
+                    Spacer(modifier = Modifier.height(5.dp))
+                    Text(
+                        text = insight,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.92f)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                AiCoachMascot()
+            }
         }
+    }
+}
+
+@Composable
+private fun AiCoachMascot() {
+    Box(
+        modifier = Modifier.size(74.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = 2.dp)
+                .size(7.dp)
+                .clip(CircleShape)
+                .background(FriendlyMoneyColors.Honey)
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .offset(x = 7.dp)
+                .size(12.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.8f))
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .offset(x = (-7).dp)
+                .size(12.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.8f))
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(y = 6.dp)
+                .width(40.dp)
+                .height(48.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color.White.copy(alpha = 0.88f))
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(y = (-5).dp)
+                .width(54.dp)
+                .height(42.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color.White.copy(alpha = 0.92f))
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(y = (-5).dp)
+                .width(36.dp)
+                .height(22.dp)
+                .clip(RoundedCornerShape(11.dp))
+                .background(Color(0xFF17362F))
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(x = (-7).dp, y = (-5).dp)
+                .size(4.dp)
+                .clip(CircleShape)
+                .background(FriendlyMoneyColors.Mint)
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(x = 7.dp, y = (-5).dp)
+                .size(4.dp)
+                .clip(CircleShape)
+                .background(FriendlyMoneyColors.Mint)
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(y = 2.dp)
+                .width(13.dp)
+                .height(3.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(FriendlyMoneyColors.Mint.copy(alpha = 0.9f))
+        )
     }
 }
 

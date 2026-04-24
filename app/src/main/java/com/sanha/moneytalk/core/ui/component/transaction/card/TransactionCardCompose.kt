@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.getCustomCategoryBackgroundColor
@@ -62,12 +63,12 @@ fun TransactionCardCompose(
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier
@@ -133,6 +134,7 @@ fun TransactionCardCompose(
                         text = titleText,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
+                        color = FriendlyMoneyColors.textPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -153,10 +155,10 @@ fun TransactionCardCompose(
                                 Text(
                                     text = tag,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = FriendlyMoneyColors.MintDeep,
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(FriendlyMoneyColors.mintTint)
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
@@ -173,19 +175,19 @@ fun TransactionCardCompose(
                                 Text(
                                     text = detail,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = FriendlyMoneyColors.textSecondary,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
 
-                            // 고정지출 태그
+                            // 고정 거래 태그
                             if (info.isFixed) {
                                 Text(
                                     text = stringResource(R.string.transaction_card_fixed_tag),
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = FriendlyMoneyColors.Coral
                                 )
                             }
                         }
@@ -194,7 +196,7 @@ fun TransactionCardCompose(
                         Text(
                             text = info.subtitle,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = FriendlyMoneyColors.textSecondary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -205,7 +207,7 @@ fun TransactionCardCompose(
             // 금액 (-50,000원 / +10,000원)
             Text(
                 text = formattedAmount,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = if (info.isIncome) MaterialTheme.moneyTalkColors.income else MaterialTheme.colorScheme.error
             )

@@ -52,7 +52,7 @@ data class TransactionEditUiState(
     val transferDirection: TransferDirection? = null,
     /** 카테고리 변경을 동일 거래처에 일괄 적용 */
     val applyCategoryToAll: Boolean = false,
-    /** 고정지출 변경을 동일 거래처에 일괄 적용 */
+    /** 고정 거래 변경을 동일 거래처에 일괄 적용 */
     val applyFixedToAll: Boolean = false,
     /** 거래처 규칙 매칭 키워드 (일괄 적용 시 사용) */
     val ruleKeyword: String = "",
@@ -139,7 +139,7 @@ class TransactionEditViewModel @Inject constructor(
                 // contains 매칭으로 규칙 조회 (keyword가 storeName에 포함되는 규칙)
                 val matchingRule = if (
                     type == TransactionType.EXPENSE ||
-                    supportsFixedExpense(type, direction)
+                    supportsFixedExpense(type)
                 ) {
                     storeRuleRepository.findMatchingRule(expense.storeName.trim())
                 } else {
@@ -147,7 +147,7 @@ class TransactionEditViewModel @Inject constructor(
                 }
                 originalMatchedRule = matchingRule
                 val hasCategoryRule = type == TransactionType.EXPENSE && matchingRule?.category != null
-                val hasFixedRule = supportsFixedExpense(type, direction) && matchingRule?.isFixed != null
+                val hasFixedRule = supportsFixedExpense(type) && matchingRule?.isFixed != null
 
                 _uiState.update {
                     it.copy(
@@ -163,7 +163,7 @@ class TransactionEditViewModel @Inject constructor(
                         minute = cal.get(Calendar.MINUTE),
                         memo = expense.memo ?: "",
                         originalSms = expense.originalSms,
-                        isFixed = expense.isFixed && supportsFixedExpense(type, direction),
+                        isFixed = expense.isFixed && supportsFixedExpense(type),
                         transferDirection = direction,
                         applyCategoryToAll = hasCategoryRule,
                         applyFixedToAll = hasFixedRule,
@@ -238,7 +238,6 @@ class TransactionEditViewModel @Inject constructor(
                     transactionType = type,
                     category = Category.UNCLASSIFIED.displayName,
                     transferDirection = TransferDirection.WITHDRAWAL,
-                    isFixed = if (currentType == TransactionType.EXPENSE) state.isFixed else false,
                     applyCategoryToAll = false,
                     applyFixedToAll = false
                 )
@@ -262,15 +261,7 @@ class TransactionEditViewModel @Inject constructor(
 
     fun updateTransferDirection(direction: TransferDirection) {
         _uiState.update { state ->
-            if (direction == TransferDirection.DEPOSIT) {
-                state.copy(
-                    transferDirection = direction,
-                    isFixed = false,
-                    applyFixedToAll = false
-                )
-            } else {
-                state.copy(transferDirection = direction)
-            }
+            state.copy(transferDirection = direction)
         }
     }
 
@@ -365,10 +356,7 @@ class TransactionEditViewModel @Inject constructor(
             try {
                 val txType = if (state.transactionType == TransactionType.TRANSFER) "TRANSFER" else "EXPENSE"
                 val txDirection = state.transferDirection?.dbValue ?: ""
-                val effectiveIsFixed = state.isFixed && supportsFixedExpense(
-                    transactionType = state.transactionType,
-                    transferDirection = state.transferDirection
-                )
+                val effectiveIsFixed = state.isFixed && supportsFixedExpense(state.transactionType)
 
                 // 수입 → 지출/이체 크로스 테이블 이동 (insert 먼저, delete 후 — 원자성 보장)
                 if (originalTransactionType == TransactionType.INCOME && !state.isNew) {
@@ -423,10 +411,7 @@ class TransactionEditViewModel @Inject constructor(
 
                 val trimmedStore = state.storeName.trim()
                 val ruleKeyword = state.ruleKeyword.trim().ifBlank { trimmedStore }
-                val supportsFixedRuleEditing = supportsFixedExpense(
-                    transactionType = state.transactionType,
-                    transferDirection = state.transferDirection
-                )
+                val supportsFixedRuleEditing = supportsFixedExpense(state.transactionType)
                 val shouldSyncStoreRule = !state.isNew &&
                     ruleKeyword.isNotBlank() &&
                     (
@@ -606,12 +591,8 @@ class TransactionEditViewModel @Inject constructor(
         }.timeInMillis
     }
 
-    private fun supportsFixedExpense(
-        transactionType: TransactionType,
-        transferDirection: TransferDirection?
-    ): Boolean {
+    private fun supportsFixedExpense(transactionType: TransactionType): Boolean {
         return transactionType == TransactionType.EXPENSE ||
-            (transactionType == TransactionType.TRANSFER &&
-                transferDirection == TransferDirection.WITHDRAWAL)
+            transactionType == TransactionType.TRANSFER
     }
 }

@@ -97,6 +97,11 @@
     <string name="home_category_expense">카테고리별 지출</string>
     <string name="home_expense_top3">지출 TOP 3</string>
     <string name="home_expense_top4">카테고리 TOP 4</string>
+    <string name="home_category_share_percent">%d%%</string>
+    <string name="home_category_budget_remaining">%s 남음</string>
+    <string name="home_category_budget_over">%s 초과</string>
+    <string name="home_category_view_more">더보기 ›</string>
+    <string name="home_category_view_collapse">접기 ‹</string>
     <string name="home_view_all">전체보기</string>
     <string name="home_view_collapse">접기</string>
     <string name="home_no_expense">아직 지출 내역이 없어요</string>
@@ -140,10 +145,8 @@
     <string name="home_trend_comparison_no_data">지난달 데이터가 없어요</string>
     <string name="home_empty_expense_title">아직 지출 내역이 없어요</string>
     <string name="home_empty_expense_subtitle">문자를 동기화해서 지출을 추가해보세요</string>
-    <string name="home_import_data_button">SMS 문자 가져오기</string>
-    <string name="home_import_data_title">카드 결제 내역을 가져와 보세요</string>
-    <string name="home_import_data_description">SMS 문자에서 결제 내역을 자동으로 분석하고\nAI가 카테고리까지 분류해 드려요</string>
-    <string name="home_import_data_note">권한 동의 없이도 수동 입력이 가능해요</string>
+    <string name="cta_import_data_title">카드 결제 내역을 가져와 보세요</string>
+    <string name="cta_import_data_description">SMS 결제 문자를 읽어 AI가 자동으로 정리해요</string>
     <string name="sync_no_data">데이터가 없습니다</string>
     <string name="home_sync_dialog_title">지출 내역 읽는 중</string>
     <string name="sync_dialog_dismiss">백그라운드에서 계속</string>
@@ -218,9 +221,9 @@
     <string name="history_filter_active_type">유형 필터 적용 중</string>
     <string name="history_filter_active_sort">정렬 필터 적용 중</string>
     <string name="history_filter_active_combined">필터 적용 중</string>
-    <string name="history_filter_active_fixed_only">고정지출만 표시 중</string>
-    <string name="history_filter_active_fixed_exclude">고정지출 제외 중</string>
-    <string name="history_filter_fixed">고정지출</string>
+    <string name="history_filter_active_fixed_only">고정 거래만 표시 중</string>
+    <string name="history_filter_active_fixed_exclude">고정 거래 제외 중</string>
+    <string name="history_filter_fixed">고정 거래</string>
     <string name="history_filter_fixed_all">전체</string>
     <string name="history_filter_fixed_only">고정만</string>
     <string name="history_filter_fixed_exclude">제외</string>
@@ -258,14 +261,21 @@
     <string name="history_sort_date">최신순</string>
     <string name="history_sort_amount_short">금액순</string>
     <string name="history_sort_store">사용처별</string>
-    <string name="history_filter_title">내역 필터</string>
+    <string name="history_filter_title">필터</string>
     <string name="history_filter_reset">초기화</string>
     <string name="history_filter_sort">정렬</string>
     <string name="history_filter_type">거래 유형</string>
     <string name="history_filter_category">카테고리</string>
-    <string name="history_filter_category_helper">지출, 수입, 이체별로 카테고리를 따로 선택할 수 있어요</string>
+    <string name="history_filter_type_helper">먼저 거래 유형을 고르면 카테고리가 쉬워져요</string>
+    <string name="history_filter_guide_icon">🤖</string>
+    <string name="history_filter_guide_text">고정 거래와 정렬을 고른 뒤\n카테고리로 좁혀보세요</string>
+    <string name="history_filter_and_notice">선택한 조건은 모두 함께 적용돼요</string>
+    <string name="history_filter_category_helper">선택한 거래 유형 안에서 카테고리를 좁혀볼 수 있어요</string>
     <string name="history_filter_category_summary_multiple">%1$s 외 %2$d개</string>
     <string name="history_filter_all_categories">모든 카테고리</string>
+    <string name="history_filter_more_categories">더보기</string>
+    <string name="history_filter_expand_sheet">전체화면</string>
+    <string name="history_filter_collapse_sheet">줄여보기</string>
     <string name="history_filter_selected_count">%d개 선택</string>
     <string name="history_filter_expense_category_title">지출 카테고리 선택</string>
     <string name="history_filter_income_category_title">수입 카테고리 선택</string>
@@ -526,13 +536,13 @@
     <string name="full_sync_already_unlocked">이미 전체 동기화가 해제되어 있습니다.</string>
     <string name="home_sync_full_locked">전체 동기화 (광고 시청 필요)</string>
     <string name="full_sync_cta_title">이전 데이터가 없어요</string>
-    <string name="full_sync_cta_subtitle">최근 2개월 이전 데이터는 광고를 시청하면\n해당 기간을 가져올 수 있어요</string>
-    <string name="full_sync_cta_subtitle_no_ad">버튼을 누르면 해당 기간의\n문자 데이터를 가져올 수 있어요</string>
+    <string name="full_sync_cta_subtitle">광고 시청 후 %1$s 데이터를 가져와요</string>
+    <string name="full_sync_cta_subtitle_no_ad">탭하면 %1$s 데이터를 가져와요</string>
     <string name="full_sync_cta_button">광고 보고 %1$s 데이터 가져오기</string>
     <string name="full_sync_cta_button_no_ad">%1$s 데이터 가져오기</string>
     <string name="partial_sync_cta_title">일부 데이터만 표시되고 있어요</string>
-    <string name="partial_sync_cta_subtitle">이 기간의 일부 데이터가 누락되었어요.\n광고를 시청하면 해당 데이터를 가져올 수 있어요</string>
-    <string name="partial_sync_cta_subtitle_no_ad">이 기간의 일부 데이터가 누락되었어요.\n버튼을 누르면 해당 데이터를 가져올 수 있어요</string>
+    <string name="partial_sync_cta_subtitle">광고 시청 후 %1$s 누락 데이터를 가져와요</string>
+    <string name="partial_sync_cta_subtitle_no_ad">탭하면 %1$s 누락 데이터를 가져와요</string>
 
     <!-- 강제 업데이트 -->
     <string name="force_update_title">업데이트 필요</string>
@@ -677,8 +687,12 @@
     <string name="coach_mark_settings_data_desc">문자 분석, 알림, 백업·복원을 한 곳에서 관리합니다.</string>
 
     <!-- Coach Mark — 필터 -->
-    <string name="coach_mark_filter_sort_title">정렬과 필터</string>
-    <string name="coach_mark_filter_sort_desc">최신순·과거순·금액순으로 정렬하고, 고정지출만 따로 볼 수도 있어요.</string>
+    <string name="coach_mark_filter_type_title">거래 유형 선택</string>
+    <string name="coach_mark_filter_type_desc">카테고리 단계에서 지출·수입·이체 범위를 고르면 관련 카테고리만 볼 수 있어요.</string>
+    <string name="coach_mark_filter_category_title">카테고리로 좁히기</string>
+    <string name="coach_mark_filter_category_desc">선택한 거래 유형 안에서 카테고리를 좁힙니다. 여러 조건은 함께 적용돼요.</string>
+    <string name="coach_mark_filter_sort_title">정렬과 고정 거래</string>
+    <string name="coach_mark_filter_sort_desc">먼저 고정 거래 포함 여부와 정렬 기준을 빠르게 조정하세요.</string>
 
     <!-- Coach Mark — 거래 편집 -->
     <string name="coach_mark_edit_category_title">카테고리 변경</string>

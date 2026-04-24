@@ -16,6 +16,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import java.text.NumberFormat
 import java.util.Locale
@@ -46,7 +47,8 @@ fun TransactionGroupHeaderCompose(
         Text(
             text = info.title,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            fontWeight = FontWeight.SemiBold,
+            color = FriendlyMoneyColors.textSecondary
         )
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp)

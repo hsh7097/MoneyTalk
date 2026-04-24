@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.util.toDpTextUnit
 
 /**
@@ -39,8 +40,8 @@ fun SegmentedTabRowCompose(
     Row(
         modifier = modifier
             .width(IntrinsicSize.Max)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clip(RoundedCornerShape(14.dp))
+            .background(FriendlyMoneyColors.elevatedCardBackground)
             .padding(2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -67,7 +68,7 @@ private fun SegmentedTab(
     Box(
         modifier = Modifier
             .padding(3.dp)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(
                 if (info.isSelected) info.selectedColor
                 else Color.Transparent

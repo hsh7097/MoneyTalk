@@ -1,21 +1,19 @@
 package com.sanha.moneytalk.feature.history.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -42,11 +40,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabInfo
 import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabRowCompose
@@ -115,12 +115,14 @@ fun PeriodSummaryCard(
         val startCal = Calendar.getInstance().apply { timeInMillis = startTs }
         val endCal = Calendar.getInstance().apply { timeInMillis = endTs }
         val start = String.format(
+            Locale.KOREA,
             "%02d.%02d.%02d",
             startCal.get(Calendar.YEAR) % 100,
             startCal.get(Calendar.MONTH) + 1,
             startCal.get(Calendar.DAY_OF_MONTH)
         )
         val end = String.format(
+            Locale.KOREA,
             "%02d.%02d.%02d",
             endCal.get(Calendar.YEAR) % 100,
             endCal.get(Calendar.MONTH) + 1,
@@ -295,8 +297,8 @@ fun FilterTabRow(
             || !showTransfers
             || fixedExpenseFilter != FixedExpenseFilter.ALL
 
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
+    val primaryColor = FriendlyMoneyColors.Mint
+    val onPrimaryColor = Color.White
 
     val listLabel = stringResource(R.string.history_view_list)
     val calendarLabel = stringResource(R.string.history_view_calendar)
@@ -330,12 +332,21 @@ fun FilterTabRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 왼쪽: 필터 비활성 → 탭 + 필터 버튼 / 필터 활성 → 필터 칩
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
+            SegmentedTabRowCompose(
+                tabs = tabs,
+                onTabClick = { index ->
+                    when (index) {
+                        0 -> onModeChange(ViewMode.LIST)
+                        1 -> onModeChange(ViewMode.CALENDAR)
+                    }
+                }
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+
             if (hasActiveFilter) {
-                // 필터 활성: 초록 outline 칩 (필터 설명 + X)
                 val hasMultipleFilters = listOf(
                     selectedExpenseCategories.isNotEmpty() ||
                             selectedIncomeCategories.isNotEmpty() ||
@@ -361,77 +372,16 @@ fun FilterTabRow(
                     else ->
                         stringResource(R.string.history_filter_active_sort)
                 }
-                val chipColor = MaterialTheme.moneyTalkColors.income
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .border(1.dp, chipColor, RoundedCornerShape(16.dp))
-                        .clickable { onResetFilter() }
-                        .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = filterDescription,
-                            fontSize = 13.toDpTextUnit,
-                            fontWeight = FontWeight.Medium,
-                            color = chipColor
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = stringResource(R.string.common_clear),
-                            modifier = Modifier.size(16.dp),
-                            tint = chipColor
-                        )
-                    }
-                }
-            } else {
-                // 필터 비활성: 탭 + 필터 버튼
-                SegmentedTabRowCompose(
-                    tabs = tabs,
-                    onTabClick = { index ->
-                        when (index) {
-                            0 -> onModeChange(ViewMode.LIST)
-                            1 -> onModeChange(ViewMode.CALENDAR)
-                        }
-                    }
+                FilterStatusChip(
+                    label = filterDescription,
+                    onResetFilter = onResetFilter
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                // 필터 버튼 (텍스트 + ∨) — 탭 박스와 동일 높이
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable { showBottomSheet = true }
-                        .padding(horizontal = 10.dp, vertical = 7.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.common_filter),
-                            fontSize = 14.toDpTextUnit,
-                            fontWeight = FontWeight.Normal,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+            } else {
+                FilterActionButton(onClick = { showBottomSheet = true })
             }
         }
 
-        // 오른쪽: 검색 + 추가
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -442,7 +392,8 @@ fun FilterTabRow(
                 Icon(
                     imageVector = Icons.Default.Search,
                     contentDescription = stringResource(R.string.common_search),
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(24.dp),
+                    tint = FriendlyMoneyColors.Mint
                 )
             }
             IconButton(
@@ -452,7 +403,8 @@ fun FilterTabRow(
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = stringResource(R.string.common_add),
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(24.dp),
+                    tint = FriendlyMoneyColors.Coral
                 )
             }
         }
@@ -486,5 +438,73 @@ fun FilterTabRow(
                 showBottomSheet = false
             }
         )
+    }
+}
+
+@Composable
+private fun FilterActionButton(
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(FriendlyMoneyColors.elevatedCardBackground)
+            .border(1.dp, FriendlyMoneyColors.border, RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = stringResource(R.string.common_filter),
+                fontSize = 14.toDpTextUnit,
+                fontWeight = FontWeight.Medium,
+                color = FriendlyMoneyColors.textSecondary
+            )
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = FriendlyMoneyColors.textSecondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun FilterStatusChip(
+    label: String,
+    onResetFilter: () -> Unit
+) {
+    val chipColor = MaterialTheme.moneyTalkColors.income
+
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, chipColor, RoundedCornerShape(12.dp))
+            .clickable { onResetFilter() }
+            .padding(start = 10.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                fontSize = 13.toDpTextUnit,
+                fontWeight = FontWeight.Medium,
+                color = chipColor
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = stringResource(R.string.common_clear),
+                modifier = Modifier.size(16.dp),
+                tint = chipColor
+            )
+        }
     }
 }

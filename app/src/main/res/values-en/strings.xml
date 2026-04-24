@@ -297,8 +297,12 @@
     <string name="history_filter_category">Category</string>
     <string name="history_filter_reset">Reset</string>
     <string name="history_filter_sort">Sort</string>
-    <string name="history_filter_title">History Filter</string>
+    <string name="history_filter_title">Filter</string>
     <string name="history_filter_type">Transaction Type</string>
+    <string name="history_filter_type_helper">Choose a transaction type first to make category filtering easier.</string>
+    <string name="history_filter_guide_icon">🤖</string>
+    <string name="history_filter_guide_text">Set fixed transactions and sorting first,\nthen narrow by category.</string>
+    <string name="history_filter_and_notice">All selected conditions are applied together.</string>
     <string name="history_no_filtered">No transactions match the current filters</string>
     <string name="history_no_income">No income history</string>
     <string name="history_sort_amount">Highest Amount</string>
@@ -311,20 +315,28 @@
     <string name="history_filter_active_type">Type filter active</string>
     <string name="history_filter_active_sort">Sort filter active</string>
     <string name="history_filter_active_combined">Filter active</string>
-    <string name="history_filter_active_fixed_only">Fixed only</string>
-    <string name="history_filter_active_fixed_exclude">Fixed excluded</string>
-    <string name="history_filter_fixed">Fixed Expense</string>
+    <string name="history_filter_active_fixed_only">Fixed transactions only</string>
+    <string name="history_filter_active_fixed_exclude">Fixed transactions excluded</string>
+    <string name="history_filter_fixed">Fixed Transaction</string>
     <string name="history_filter_fixed_all">All</string>
     <string name="history_filter_fixed_only">Fixed Only</string>
     <string name="history_filter_fixed_exclude">Exclude</string>
     <string name="home_expense_top3">Top 3 Expenses</string>
     <string name="home_expense_top4">Top 4 Categories</string>
+    <string name="home_category_share_percent">%d%%</string>
+    <string name="home_category_budget_remaining">%s left</string>
+    <string name="home_category_budget_over">%s over</string>
+    <string name="home_category_view_more">More ›</string>
+    <string name="home_category_view_collapse">Collapse ‹</string>
     <string name="home_ai_insight_title">AI view of this month</string>
     <string name="home_current_month_sync_label">This month</string>
     <string name="home_sync_month_label_format">Month %d</string>
     <string name="home_income_badge">Income %s won</string>
     <string name="home_no_today_transactions">No transactions yet today</string>
-    <string name="history_filter_category_helper">Choose categories separately for expense, income, and transfer.</string>
+    <string name="history_filter_category_helper">Narrow categories inside the selected transaction types.</string>
+    <string name="history_filter_more_categories">More</string>
+    <string name="history_filter_expand_sheet">Full screen</string>
+    <string name="history_filter_collapse_sheet">Compact</string>
     <string name="history_filter_selected_count">%d selected</string>
     <string name="home_sync_dialog_title">Reading expense history</string>
     <string name="sync_dialog_dismiss">Continue in background</string>
@@ -351,6 +363,8 @@
     <string name="home_insight_diff_less">vs Last Month -₩%s</string>
     <string name="home_today_expense">Today Expense</string>
     <string name="home_today_transactions">Today Transactions</string>
+    <string name="cta_import_data_title">Import card payment history</string>
+    <string name="cta_import_data_description">AI will organize SMS payment messages automatically</string>
     <string name="home_view_all">View All</string>
     <string name="home_view_collapse">Collapse</string>
     <string name="home_vs_last_month">Same Period Last Month</string>
@@ -480,6 +494,7 @@
     <string name="transaction_edit_income_input_required">Please enter amount</string>
     <string name="transaction_edit_fixed_expense">Add to fixed expenses</string>
     <string name="transaction_edit_fixed_transfer">Add to fixed transfers</string>
+    <string name="transaction_edit_fixed_income">Add to fixed income</string>
     <string name="transaction_card_fixed_tag">Fixed</string>
     <string name="transaction_edit_apply_category_to_all">Apply to all same store</string>
     <string name="transaction_edit_apply_fixed_to_all">Apply to all same store</string>
@@ -514,6 +529,14 @@
     <string name="store_rule_settings_fixed_toggle">Set as fixed expense</string>
     <string name="store_rule_error_keyword_required">Please enter a keyword</string>
     <string name="store_rule_error_no_rule">Please set either category or fixed expense</string>
+
+    <!-- Coach Mark - Filter -->
+    <string name="coach_mark_filter_type_title">Choose transaction type</string>
+    <string name="coach_mark_filter_type_desc">Choose expense, income, or transfer inside categories to show only related categories.</string>
+    <string name="coach_mark_filter_category_title">Narrow by category</string>
+    <string name="coach_mark_filter_category_desc">Narrow categories inside the selected transaction type. Multiple conditions are applied together.</string>
+    <string name="coach_mark_filter_sort_title">Sort and fixed transactions</string>
+    <string name="coach_mark_filter_sort_desc">First adjust whether fixed transactions are included and how the list is sorted.</string>
 
     <!-- Common -->
     <string name="common_clear_input">Clear input</string>

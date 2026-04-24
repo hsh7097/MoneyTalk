@@ -49,7 +49,7 @@ interface TransactionCardInfo {
     val memoText: String?
         get() = null
 
-    /** 고정지출 여부 */
+    /** 고정 거래 여부 */
     val isFixed: Boolean
         get() = false
 }

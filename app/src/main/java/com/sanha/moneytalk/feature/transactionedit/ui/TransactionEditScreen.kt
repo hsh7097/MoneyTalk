@@ -124,8 +124,7 @@ private fun TransactionEditUiState.toSnapshot(): TransactionEditSnapshot {
 
 private fun TransactionEditUiState.supportsFixedExpense(): Boolean {
     return transactionType == TransactionType.EXPENSE ||
-        (transactionType == TransactionType.TRANSFER &&
-            transferDirection == TransferDirection.WITHDRAWAL)
+        transactionType == TransactionType.TRANSFER
 }
 
 /**
@@ -356,7 +355,7 @@ fun TransactionEditScreen(
                         label = fixedLabel
                     )
 
-                    // 동일 거래처 고정 거래 일괄 적용 (기존 지출/출금 이체만)
+                    // 동일 거래처 고정 거래 일괄 적용 (기존 지출/이체만)
                     if (!uiState.isNew && uiState.supportsFixedExpense()) {
                         ApplyToAllCheckbox(
                             checked = uiState.applyFixedToAll,
@@ -364,7 +363,7 @@ fun TransactionEditScreen(
                             onCheckedChange = { viewModel.updateApplyFixedToAll(it) }
                         )
 
-                        // 키워드 입력 필드 (카테고리 또는 고정지출 일괄 적용 체크 시)
+                        // 키워드 입력 필드 (카테고리 또는 고정 거래 일괄 적용 체크 시)
                         if (uiState.applyCategoryToAll || uiState.applyFixedToAll) {
                             RuleKeywordField(
                                 keyword = uiState.ruleKeyword,
@@ -747,8 +746,8 @@ private fun TransactionTypeTab(
 }
 
 /**
- * 고정지출 토글.
- * Switch + "고정지출에 추가" 라벨.
+ * 고정 거래 토글.
+ * Switch + "고정 거래에 추가" 계열 라벨.
  */
 @Composable
 private fun FixedExpenseToggle(
@@ -784,7 +783,7 @@ private fun FixedExpenseToggle(
 
 /**
  * 동일 거래처 일괄 적용 체크박스.
- * 카테고리/고정지출 변경 시 동일한 거래처(storeName 정확 일치)에 모두 적용.
+ * 카테고리/고정 거래 변경 시 동일한 거래처(storeName 정확 일치)에 모두 적용.
  */
 @Composable
 private fun ApplyToAllCheckbox(

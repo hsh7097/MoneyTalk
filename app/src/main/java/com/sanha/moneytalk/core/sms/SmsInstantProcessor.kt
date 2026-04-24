@@ -4,7 +4,6 @@ import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
-import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.notification.SmsNotificationManager
 import com.sanha.moneytalk.core.util.CardNameNormalizer
 import com.sanha.moneytalk.core.util.DateUtils
@@ -291,7 +290,6 @@ class SmsInstantProcessor @Inject constructor(
 
     private fun supportsFixedExpense(entity: ExpenseEntity): Boolean {
         return entity.transactionType == "EXPENSE" ||
-            (entity.transactionType == "TRANSFER" &&
-                entity.transferDirection == TransferDirection.WITHDRAWAL.dbValue)
+            entity.transactionType == "TRANSFER"
     }
 }

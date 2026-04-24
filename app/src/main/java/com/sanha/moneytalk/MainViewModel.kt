@@ -931,8 +931,7 @@ class MainViewModel @Inject constructor(
 
     private fun supportsFixedExpense(expense: ExpenseEntity): Boolean {
         return expense.transactionType == "EXPENSE" ||
-            (expense.transactionType == "TRANSFER" &&
-                expense.transferDirection == TransferDirection.WITHDRAWAL.dbValue)
+            expense.transactionType == "TRANSFER"
     }
 
     /**

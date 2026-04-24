@@ -2,7 +2,7 @@
 
 > 각 화면의 Composable 계층 구조를 트리로 정리한 문서
 > 함수 참조 클릭 시 IDE에서 해당 파일로 이동 가능
-> **최종 갱신**: 2026-03-13
+> **최종 갱신**: 2026-04-24
 
 ---
 
@@ -65,7 +65,7 @@ HomeScreen                           ← 홈 탭 메인 화면
 ├── CategoryExpenseSection           ← 카테고리 TOP 4 지출 리스트 (예산 진척률 포함)
 │   └── CategoryIcon                 ← 카테고리 이모지 아이콘 (공통)
 ├── AiInsightCard                    ← "AI가 본 이번 달" 소비 분석 요약
-├── TransactionCardCompose           ← 오늘 거래 카드 (공통, 헤더에 오늘 지출 요약 포함)
+├── TransactionCardCompose           ← 오늘 거래 카드 (공통, 설정 카드와 동일한 surface/outlineVariant 톤)
 │   └── CategoryIcon                 ← 카테고리 이모지 아이콘 (공통)
 ├── ImportDataCtaSection             ← 데이터 가져오기 CTA (현재월, 권한 없거나 데이터 없음)
 ├── EmptyExpenseSection              ← 지출 없을 때 빈 상태
@@ -89,6 +89,12 @@ HomeScreen                           ← 홈 탭 메인 화면
 
 ---
 
+### 카드형 공통 톤
+
+- 홈/가계부 거래 카드와 설정 섹션 카드는 동일하게 `MaterialTheme.colorScheme.surface` 배경과 `MaterialTheme.colorScheme.outlineVariant` 보더를 기준으로 맞춘다.
+
+---
+
 ## 2. 내역 화면 (HistoryScreen)
 
 ```
@@ -97,7 +103,8 @@ HistoryScreen                        ← 내역 탭 메인 화면
 ├── PeriodSummaryCard                ← 기간 네비게이션 + 총 수입/지출
 ├── FilterTabRow                     ← 목록/달력 탭 + 필터/검색/추가 버튼
 │   ├── SegmentedTabRowCompose       ← 목록/달력 전환 탭 (공통)
-│   └── FilterChipButton             ← 필터 버튼
+│   ├── FilterActionButton           ← 필터 BottomSheet 진입 버튼
+│   └── FilterStatusChip             ← 활성 필터 표시/초기화 칩
 │
 ├── [목록 모드]
 │   └── TransactionListView          ← 통합 거래 목록 (순수 렌더링)
@@ -111,8 +118,17 @@ HistoryScreen                        ← 내역 탭 메인 화면
 │   └── BillingCycleCalendarView     ← 결제 기간 기준 달력 (날짜 클릭 → TransactionDetailListActivity)
 │       └── CalendarDayCell          ← 날짜 셀 (날짜 + 수입/지출 2줄)
 │
-├── FilterBottomSheet                ← 정렬/거래유형/카테고리 필터 + 코치마크
-│   ├── FilterCategoryGridItem       ← 카테고리 선택 그리드 아이템
+├── FilterBottomSheet                ← 고정 거래/정렬 우선 필터 + 카테고리/거래 유형 + 코치마크
+│   ├── FilterGuideCard              ← 거래 유형 우선 선택 안내 카드
+│   ├── FilterTransactionTypeSelector ← 전체/지출/수입/이체 선택 칩
+│   ├── FilterTypeTile               ← 거래 유형 선택 타일
+│   ├── FilterNoticeCard             ← AND 조건 안내 카드
+│   ├── FilterOptionPillRow          ← 고정 거래/정렬 옵션 pill 그룹
+│   ├── FilterCategoryChipGroup      ← 단일 거래 유형 카테고리 빠른 선택 칩
+│   ├── CategoryChoiceChip           ← 카테고리 빠른 선택 칩
+│   ├── FilterCategorySummaryRow     ← 다중 거래 유형 카테고리 요약 행
+│   ├── CategoryFilterListBottomSheet ← 유형별 카테고리 전체 목록 (2/3 높이 ↔ 전체화면 전환)
+│   ├── CategoryFilterListRow        ← 카테고리 선택 행
 │   └── CoachMarkOverlay             ← 필터 온보딩 오버레이 (첫 진입 시)
 │
 ├── [지출 선택 시]                    → TransactionEditActivity 이동
@@ -128,12 +144,22 @@ HistoryScreen                        ← 내역 탭 메인 화면
 | TransactionListView | 통합 거래 목록 (순수 렌더링) | [HistoryScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryScreen.kt) |
 | SearchBar | 가게명/메모 키워드 검색 | [HistoryHeaderKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryHeader.kt) |
 | PeriodSummaryCard | 기간 네비게이션 + 총 수입/지출 | [HistoryHeaderKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryHeader.kt) |
-| FilterTabRow | 탭 + 필터 아이콘 통합 Row | [HistoryHeaderKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryHeader.kt) |
-| FilterChipButton | 필터 칩 버튼 (일관된 스타일) | [HistoryHeaderKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryHeader.kt) |
+| FilterTabRow | 목록/달력 탭 + 필터/검색/추가 버튼 | [HistoryHeaderKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryHeader.kt) |
+| FilterActionButton | 필터 BottomSheet 진입 버튼 | [HistoryHeaderKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryHeader.kt) |
+| FilterStatusChip | 활성 필터 표시/초기화 칩 | [HistoryHeaderKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryHeader.kt) |
 | BillingCycleCalendarView | 결제 기간 기준 달력 뷰 | [HistoryCalendarKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryCalendar.kt) |
 | CalendarDayCell | 달력 날짜 셀 (날짜 + 수입/지출 2줄) | [HistoryCalendarKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryCalendar.kt) |
-| FilterBottomSheet | 정렬/거래유형/카테고리 선택 BottomSheet | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
-| FilterCategoryGridItem | BottomSheet 내 카테고리 그리드 아이템 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
+| FilterBottomSheet | 고정 거래/정렬 우선 필터 + 카테고리/거래 유형 BottomSheet | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
+| FilterGuideCard | 거래 유형 우선 선택 안내 카드 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
+| FilterTransactionTypeSelector | 전체/지출/수입/이체 선택 칩 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
+| FilterTypeTile | 거래 유형 선택 타일 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
+| FilterNoticeCard | AND 조건 안내 카드 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
+| FilterOptionPillRow | 고정 거래/정렬 옵션 pill 그룹 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
+| FilterCategoryChipGroup | 단일 거래 유형 카테고리 빠른 선택 칩 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
+| CategoryChoiceChip | 카테고리 빠른 선택 칩 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
+| FilterCategorySummaryRow | 다중 거래 유형 카테고리 요약 행 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
+| CategoryFilterListBottomSheet | 유형별 카테고리 전체 목록 BottomSheet (2/3 높이 ↔ 전체화면 전환) | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
+| CategoryFilterListRow | 카테고리 선택 행 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | ExpenseDetailDialog | 지출 상세/수정/삭제 다이얼로그 | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
 | CategorySelectDialog | 카테고리 변경 다이얼로그 (3열 그리드) | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
 | IncomeDetailDialog | 수입 상세 + 원본 SMS 다이얼로그 | [HistoryDialogsKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryDialogs.kt) |
@@ -269,8 +295,8 @@ TransactionEditActivity               ← 거래 편집/추가 (별도 Activity,
     ├── TransactionTypeTab            ← 수입/지출/이체 분류 (SegmentedTabRowCompose)
     ├── CompactReadOnlyRow            ← 읽기 전용 행 (날짜-시간/카테고리 등 picker용)
     ├── CompactEditRow                ← 편집 가능 행 (BasicTextField + 포커스 X버튼)
-    ├── FixedExpenseToggle            ← 고정지출 토글 (Switch, 지출/이체만 표시)
-    ├── ApplyToAllCheckbox            ← 동일 거래처 일괄 적용 체크박스 (카테고리/고정지출, 기존 거래만)
+    ├── FixedExpenseToggle            ← 고정 거래 토글 (Switch, 지출/수입/이체 표시)
+    ├── ApplyToAllCheckbox            ← 동일 거래처 일괄 적용 체크박스 (카테고리/고정 거래, 기존 거래만)
     ├── CategorySelectDialog          ← 카테고리 선택 (공통)
     ├── DatePickerDialog              ← 날짜 선택 (Material3)
     ├── TimePickerDialog              ← 시간 선택 (AlertDialog 래퍼)
@@ -284,7 +310,7 @@ TransactionEditActivity               ← 거래 편집/추가 (별도 Activity,
 | TransactionEditScreen | 거래 편집/추가 전체 화면 (뱅크셀러드 스타일) | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
 | TransactionHeader | 헤더 (X 닫기 + 거래처명 + 금액 인라인 편집) | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
 | TransactionTypeTab | 수입/지출/이체 분류 탭 (SegmentedTabRowCompose) | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
-| FixedExpenseToggle | 고정지출 토글 (Switch + 라벨) | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
+| FixedExpenseToggle | 고정 거래 토글 (Switch + 라벨) | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
 | ApplyToAllCheckbox | 동일 거래처 일괄 적용 체크박스 | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
 | TransactionBottomButtons | 하단 삭제+저장 버튼 | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
 | CompactEditRow | 편집 가능 컴팩트 행 (BasicTextField + 포커스 X버튼) | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
