@@ -1,7 +1,7 @@
 # AI_CONTEXT.md - MoneyTalk 프로젝트 컨텍스트
 
 > AI 에이전트가 MoneyTalk 프로젝트를 이해하고 작업하기 위한 핵심 컨텍스트 문서
-> **최종 갱신**: 2026-04-03
+> **최종 갱신**: 2026-04-28
 
 ---
 
@@ -32,6 +32,7 @@ app/src/main/java/com/sanha/moneytalk/
 │   │   ├── OwnedCardRepository.kt      # 카드 화이트리스트
 │   │   └── SmsExclusionRepository.kt   # SMS 제외 키워드
 │   ├── firebase/          # Firebase (PremiumManager, ForceUpdateChecker, CrashlyticsHelper)
+│   ├── appfunctions/      # Android App Functions (월간 가계 요약 외부 호출)
 │   ├── datastore/         # DataStore (설정값)
 │   ├── di/                # Hilt DI 모듈
 │   ├── model/             # Category enum, SmsAnalysisResult 등
@@ -87,6 +88,7 @@ app/src/main/java/com/sanha/moneytalk/
 | SMS 필터링 (발신자) | 010/070 조건부 제외 + 금융 힌트 보존 | [SmsFilter.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsFilter.kt) |
 | 카테고리 분류 (4-tier) | Room → Vector → Keyword → Gemini Batch | [CategoryClassifierService.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt), [StoreEmbeddingRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreEmbeddingRepository.kt) |
 | AI 채팅 (3-step) | 쿼리분석 → DB조회/액션 → 답변생성 | [ChatViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt), [GeminiRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) |
+| Android App Functions | Assistant/agent가 앱 내부 월간 가계 요약을 조회 | [MoneyTalkFinanceAppFunctions.kt](../app/src/main/java/com/sanha/moneytalk/core/appfunctions/MoneyTalkFinanceAppFunctions.kt), [MoneyTalkFinanceSummaryReader.kt](../app/src/main/java/com/sanha/moneytalk/core/appfunctions/MoneyTalkFinanceSummaryReader.kt), [MoneyTalkApplication.kt](../app/src/main/java/com/sanha/moneytalk/MoneyTalkApplication.kt) |
 | 카드 관리 | 소유 카드 화이트리스트 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
 | SMS 필터링 | 제외 키워드 블랙리스트 | [SmsExclusionRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/SmsExclusionRepository.kt) |
 | 거래처 규칙 (StoreRule) | 거래처 키워드→카테고리/고정지출 자동 적용 (Tier 0) | [StoreRuleRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreRuleRepository.kt), [StoreRuleSettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/ui/StoreRuleSettingsViewModel.kt) |

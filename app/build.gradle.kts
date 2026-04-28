@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
+    alias(libs.plugins.compose.compiler)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
     alias(libs.plugins.google.services) apply false
@@ -24,7 +25,7 @@ if (localPropertiesFile.exists()) {
 
 android {
     namespace = "com.sanha.moneytalk"
-    compileSdk = 35
+    compileSdk = 36
 
     signingConfigs {
         create("release") {
@@ -96,9 +97,6 @@ android {
         compose = true
         buildConfig = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.10"
-    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -108,6 +106,10 @@ android {
             useLegacyPackaging = false
         }
     }
+}
+
+ksp {
+    arg("appfunctions:aggregateAppFunctions", "true")
 }
 
 dependencies {
@@ -158,6 +160,11 @@ dependencies {
 
     // Vico Chart
     implementation(libs.vico.compose.m3)
+
+    // Android App Functions
+    implementation(libs.appfunctions)
+    implementation(libs.appfunctions.service)
+    ksp(libs.appfunctions.compiler)
 
     // Google Play Services & Drive
     implementation(libs.play.services.auth)

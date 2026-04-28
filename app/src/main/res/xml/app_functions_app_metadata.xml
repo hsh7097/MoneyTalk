@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<app-function-app-metadata xmlns:appfunctions="http://schemas.android.com/apk/res-auto"
+    appfunctions:description="척척 가계부에 저장된 수입, 지출, 예산, 최근 거래를 바탕으로 월간 가계 요약을 제공합니다."
+    appfunctions:displayDescription="@string/app_functions_app_display_description" />

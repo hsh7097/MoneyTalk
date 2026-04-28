@@ -1,7 +1,7 @@
 # MoneyTalk 앱 엔트리 포인트 맵
 
 > 코드 기준 앱 시작 지점과 주요 화면 진입 흐름 정리
-> 마지막 확인: 2026-04-03
+> 마지막 확인: 2026-04-28
 
 ## 1. 엔트리 포인트
 
@@ -27,6 +27,13 @@
 - 경로: [`NotificationTransactionService.kt`](../app/src/main/java/com/sanha/moneytalk/receiver/NotificationTransactionService.kt)
 - Service action: `android.service.notification.NotificationListenerService`
 - 역할: 메시지 앱 알림을 트리거로 최근 SMS/MMS/RCS provider 원본을 찾아 실시간 파싱 보완
+
+### Android App Functions (외부 agent 진입점)
+- 클래스: `MoneyTalkFinanceAppFunctions`
+- 경로: [`MoneyTalkFinanceAppFunctions.kt`](../app/src/main/java/com/sanha/moneytalk/core/appfunctions/MoneyTalkFinanceAppFunctions.kt)
+- Function ID: `com.sanha.moneytalk.core.appfunctions.MoneyTalkFinanceAppFunctions#getMonthlyFinanceSummary`
+- 역할: 앱에 저장된 수입/지출/예산/최근 거래를 바탕으로 월간 가계 요약을 반환
+- DI 연결: [`MoneyTalkApplication.kt`](../app/src/main/java/com/sanha/moneytalk/MoneyTalkApplication.kt)의 `AppFunctionConfiguration.Provider`
 
 ## 2. 앱 시작 플로우
 

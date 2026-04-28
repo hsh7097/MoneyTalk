@@ -17,6 +17,13 @@
     <string name="common_processing">Processing…</string>
     <string name="common_won">₩%s</string>
     <string name="common_unknown_error">Unknown error</string>
+    <string name="app_functions_app_display_description">View monthly finance summary</string>
+    <string name="app_function_error_rate_limited">Too many app function requests. Try again later.</string>
+    <string name="app_function_error_timeout">App function execution timed out. Try again later.</string>
+    <string name="app_function_error_invalid_month">Month must be between 1 and 12.</string>
+    <string name="app_function_error_invalid_year">Year must be 1970 or later.</string>
+    <string name="app_function_error_future_month">Future months cannot be queried.</string>
+    <string name="app_function_error_invalid_date">Date must be in yyyy-MM-dd format, and start date cannot be after end date.</string>
     <string name="nav_home">Home</string>
     <string name="nav_history">History</string>
     <string name="nav_chat">Chat</string>

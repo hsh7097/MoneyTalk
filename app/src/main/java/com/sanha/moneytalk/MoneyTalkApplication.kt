@@ -3,19 +3,24 @@ package com.sanha.moneytalk
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
 import android.app.Application
+import androidx.appfunctions.service.AppFunctionConfiguration
 import com.google.android.gms.ads.MobileAds
 import com.google.firebase.FirebaseApp
+import com.sanha.moneytalk.core.appfunctions.MoneyTalkAppFunctionEntryPoint
+import com.sanha.moneytalk.core.appfunctions.MoneyTalkChatAppFunctions
+import com.sanha.moneytalk.core.appfunctions.MoneyTalkFinanceAppFunctions
 import com.sanha.moneytalk.core.sms.DeletedSmsTracker
 import com.sanha.moneytalk.core.firebase.CrashlyticsHelper
 import com.sanha.moneytalk.core.firebase.PremiumManager
 import com.sanha.moneytalk.core.notification.SmsNotificationManager
 import com.sanha.moneytalk.receiver.MmsContentObserver
 import com.sanha.moneytalk.receiver.RcsContentObserver
+import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
 @HiltAndroidApp
-class MoneyTalkApplication : Application() {
+class MoneyTalkApplication : Application(), AppFunctionConfiguration.Provider {
 
     @Inject
     lateinit var premiumManager: PremiumManager
@@ -28,6 +33,25 @@ class MoneyTalkApplication : Application() {
 
     @Inject
     lateinit var rcsContentObserver: RcsContentObserver
+
+    override val appFunctionConfiguration: AppFunctionConfiguration by lazy {
+        AppFunctionConfiguration.Builder()
+            .addEnclosingClassFactory(MoneyTalkFinanceAppFunctions::class.java) {
+                val entryPoint = EntryPointAccessors.fromApplication(
+                    this,
+                    MoneyTalkAppFunctionEntryPoint::class.java
+                )
+                MoneyTalkFinanceAppFunctions(entryPoint.financeSummaryReader())
+            }
+            .addEnclosingClassFactory(MoneyTalkChatAppFunctions::class.java) {
+                val entryPoint = EntryPointAccessors.fromApplication(
+                    this,
+                    MoneyTalkAppFunctionEntryPoint::class.java
+                )
+                MoneyTalkChatAppFunctions(entryPoint.chatAppFunctionReader())
+            }
+            .build()
+    }
 
     override fun onCreate() {
         super.onCreate()
