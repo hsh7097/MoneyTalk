@@ -37,8 +37,6 @@ class StoreNameGrouper @Inject constructor(
     private val embeddingService: SmsEmbeddingService
 ) {
     companion object {
-        private const val PERF_LOG_PREFIX = "[CategoryPerf]"
-
         /** 배치 임베딩 한 번에 처리할 최대 개수 (batchEmbedContents 최대 100) */
         private const val EMBEDDING_BATCH_SIZE = 100
 
@@ -79,53 +77,22 @@ class StoreNameGrouper @Inject constructor(
      * 임베딩 API 재호출을 피합니다.
      */
     suspend fun groupStoreNamesWithEmbeddings(storeNames: List<String>): StoreGroupingResult {
-        val totalStart = System.currentTimeMillis()
         if (storeNames.size <= 1) {
             val groups = storeNames.map { StoreGroup(representative = it, members = listOf(it)) }
-            MoneyTalkLogger.i(
-                "$PERF_LOG_PREFIX grouping.done " +
-                    "input=${storeNames.size}, embedded=${storeNames.size}, groups=${storeNames.size}, " +
-                    "multiGroups=0, maxGroupSize=${storeNames.size}, embeddingMs=0, clusterMs=0, " +
-                    "elapsedMs=${System.currentTimeMillis() - totalStart}"
-            )
             return StoreGroupingResult(groups = groups, embeddingsByStoreName = emptyMap())
         }
 
         // Step 1: 배치 임베딩 생성
-        val embeddingStart = System.currentTimeMillis()
         val embeddedStores = generateBatchEmbeddings(storeNames)
-        val embeddingElapsed = System.currentTimeMillis() - embeddingStart
 
         if (embeddedStores.isEmpty()) {
             MoneyTalkLogger.w("임베딩 생성 실패, 그룹핑 없이 반환")
             val groups = storeNames.map { StoreGroup(representative = it, members = listOf(it)) }
-            MoneyTalkLogger.i(
-                "$PERF_LOG_PREFIX grouping.done " +
-                    "input=${storeNames.size}, embedded=0, groups=${storeNames.size}, " +
-                    "multiGroups=0, maxGroupSize=1, embeddingMs=$embeddingElapsed, clusterMs=0, " +
-                    "elapsedMs=${System.currentTimeMillis() - totalStart}"
-            )
             return StoreGroupingResult(groups = groups, embeddingsByStoreName = emptyMap())
         }
 
         // Step 2: 그리디 클러스터링
-        val clusterStart = System.currentTimeMillis()
         val groups = clusterByGreedy(embeddedStores)
-        val clusterElapsed = System.currentTimeMillis() - clusterStart
-
-        for (group in groups) {
-            if (group.members.size > 1) {
-            }
-        }
-
-        MoneyTalkLogger.i(
-            "$PERF_LOG_PREFIX grouping.done " +
-                "input=${storeNames.size}, embedded=${embeddedStores.size}, groups=${groups.size}, " +
-                "multiGroups=${groups.count { it.members.size > 1 }}, " +
-                "maxGroupSize=${groups.maxOfOrNull { it.members.size } ?: 0}, " +
-                "embeddingMs=$embeddingElapsed, clusterMs=$clusterElapsed, " +
-                "elapsedMs=${System.currentTimeMillis() - totalStart}"
-        )
 
         return StoreGroupingResult(
             groups = groups,
@@ -142,7 +109,6 @@ class StoreNameGrouper @Inject constructor(
         storeNames: List<String>
     ): List<Pair<String, List<Float>>> {
         val batches = storeNames.chunked(EMBEDDING_BATCH_SIZE)
-        val startTime = System.currentTimeMillis()
 
         val semaphore = Semaphore(EMBEDDING_CONCURRENCY)
         val batchEmbeddings = coroutineScope {
@@ -166,11 +132,6 @@ class StoreNameGrouper @Inject constructor(
             }
         }
 
-        val elapsed = System.currentTimeMillis() - startTime
-        MoneyTalkLogger.i(
-            "$PERF_LOG_PREFIX grouping.embedding.done " +
-                "input=${storeNames.size}, batches=${batches.size}, embedded=${results.size}, elapsedMs=$elapsed"
-        )
         return results
     }
 

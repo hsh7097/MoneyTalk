@@ -65,8 +65,6 @@ class SmsPipeline @Inject constructor(
 ) {
 
     companion object {
-        private const val PERF_LOG_PREFIX = "[SyncPerf]"
-
         /** 배치 임베딩 크기 (batchEmbedContents API 최대 100) */
         private const val EMBEDDING_BATCH_SIZE = 100
 
@@ -120,7 +118,6 @@ class SmsPipeline @Inject constructor(
         onProgress: ((stepIndex: Int, step: String, current: Int, total: Int) -> Unit)? = null,
         skipPreFilter: Boolean = false
     ): PipelineResult {
-        val totalStart = System.currentTimeMillis()
         if (smsList.isEmpty()) return PipelineResult(emptyList(), 0, 0)
         MoneyTalkLogger.e("SmsPipeline 시작: 입력 ${smsList.size}건")
 
@@ -131,14 +128,7 @@ class SmsPipeline @Inject constructor(
             smsList
         } else {
             onProgress?.invoke(STEP_FILTER, "문자 분류 준비 중...", 0, smsList.size)
-            val preFilterStart = System.currentTimeMillis()
-            val result = preFilter.filter(smsList)
-            MoneyTalkLogger.i(
-                "$PERF_LOG_PREFIX pipeline.preFilter.done " +
-                    "input=${smsList.size}, output=${result.size}, " +
-                    "elapsedMs=${System.currentTimeMillis() - preFilterStart}"
-            )
-            result
+            preFilter.filter(smsList)
         }
         MoneyTalkLogger.e("Step2 PreFilter: ${smsList.size}건 → ${filtered.size}건")
 
@@ -146,52 +136,28 @@ class SmsPipeline @Inject constructor(
 
         // Step 3: 전체 임베딩 — 100건씩 배치, Semaphore(10)로 병렬 제한
         onProgress?.invoke(STEP_EMBED, "문자 패턴 분석 중...", 0, filtered.size)
-        val embedStart = System.currentTimeMillis()
         val embedded = batchEmbed(filtered)
-        val embedElapsed = System.currentTimeMillis() - embedStart
         MoneyTalkLogger.e("Step3 Embedding: ${filtered.size}건 → ${embedded.size}건")
-        MoneyTalkLogger.i(
-            "$PERF_LOG_PREFIX pipeline.embedding.done " +
-                "input=${filtered.size}, embedded=${embedded.size}, elapsedMs=$embedElapsed"
-        )
 
         if (embedded.isEmpty()) return PipelineResult(emptyList(), 0, 0)
 
         // Step 4: 벡터 매칭 — DB 기존 패턴과 유사도 비교
         onProgress?.invoke(STEP_MATCH, "이전 내역과 비교 중...", 0, embedded.size)
-        val matchStart = System.currentTimeMillis()
         val matchResult = patternMatcher.matchPatterns(embedded)
-        val matchElapsed = System.currentTimeMillis() - matchStart
         MoneyTalkLogger.e("Step4 VectorMatch: 매칭 ${matchResult.matched.size}건, regex실패 ${matchResult.regexFailed.size}건, 미매칭 ${matchResult.unmatched.size}건")
-        MoneyTalkLogger.i(
-            "$PERF_LOG_PREFIX pipeline.vectorMatch.done " +
-                "input=${embedded.size}, matched=${matchResult.matched.size}, " +
-                "regexFailed=${matchResult.regexFailed.size}, unmatched=${matchResult.unmatched.size}, " +
-                "elapsedMs=$matchElapsed"
-        )
 
         // Step 4.5: regex 실패건 배치 LLM (그룹핑+regex생성 스킵)
-        var regexRecoveryElapsed = 0L
         val (regexFailedResults, regexFailedFallback) = if (matchResult.regexFailed.isNotEmpty()) {
             onProgress?.invoke(STEP_LLM, "regex 실패건 복구 중...", matchResult.matched.size, embedded.size)
-            val regexRecoveryStart = System.currentTimeMillis()
-            groupClassifier.batchExtractRegexFailed(matchResult.regexFailed).also {
-                regexRecoveryElapsed = System.currentTimeMillis() - regexRecoveryStart
-            }
+            groupClassifier.batchExtractRegexFailed(matchResult.regexFailed)
         } else {
             Pair(emptyList(), emptyList())
         }
         if (matchResult.regexFailed.isNotEmpty()) {
             MoneyTalkLogger.e("Step4.5 RegexFailedRecovery: ${matchResult.regexFailed.size}건 → 복구 ${regexFailedResults.size}건, Step5 fallback ${regexFailedFallback.size}건")
-            MoneyTalkLogger.i(
-                "$PERF_LOG_PREFIX pipeline.regexRecovery.done " +
-                    "input=${matchResult.regexFailed.size}, recovered=${regexFailedResults.size}, " +
-                    "fallback=${regexFailedFallback.size}, elapsedMs=$regexRecoveryElapsed"
-            )
         }
 
         // Step 5-A: 순수 미매칭건은 기존 정책(그룹핑 + regex 생성 가능) 유지
-        var unmatchedElapsed = 0L
         val unmatchedClassification = if (matchResult.unmatched.isNotEmpty()) {
             val preview = matchResult.unmatched.take(5)
             preview.forEachIndexed { index, embeddedSms ->
@@ -205,11 +171,8 @@ class SmsPipeline @Inject constructor(
                 )
             }
             onProgress?.invoke(STEP_LLM, "AI가 결제 내역 분석 중...", matchResult.matched.size + regexFailedResults.size, embedded.size)
-            val unmatchedStart = System.currentTimeMillis()
             groupClassifier.classifyUnmatched(matchResult.unmatched) { step, current, total ->
                 onProgress?.invoke(STEP_LLM, step, current, total)
-            }.also {
-                unmatchedElapsed = System.currentTimeMillis() - unmatchedStart
             }
         } else {
             SmsGroupClassifier.ClassificationResult(emptyList(), 0)
@@ -221,11 +184,6 @@ class SmsPipeline @Inject constructor(
             MoneyTalkLogger.i(
                 "Step5-A 결과: 입력 ${matchResult.unmatched.size}건 → 결제확정 ${unmatchedClassification.results.size}건, 미확정 ${unresolvedFromUnmatched.size}건"
             )
-            MoneyTalkLogger.i(
-                "$PERF_LOG_PREFIX pipeline.unmatchedLlm.done " +
-                    "input=${matchResult.unmatched.size}, parsed=${unmatchedClassification.results.size}, " +
-                    "learned=${unmatchedClassification.learnedPatternCount}, elapsedMs=$unmatchedElapsed"
-            )
             unresolvedFromUnmatched.take(5).forEachIndexed { index, embeddedSms ->
                 MoneyTalkLogger.w(
                     "[Step5-A unresolved] #${index + 1} id=${embeddedSms.input.id}, addr=${embeddedSms.input.address}, " +
@@ -235,7 +193,6 @@ class SmsPipeline @Inject constructor(
         }
 
         // Step 5-B: Step4.5 fallback은 regex 재시도하지 않고 direct LLM만 수행
-        var regexFallbackElapsed = 0L
         val regexFallbackClassification = if (regexFailedFallback.isNotEmpty()) {
             val preview = regexFailedFallback.take(5)
             preview.forEachIndexed { index, embeddedSms ->
@@ -244,14 +201,11 @@ class SmsPipeline @Inject constructor(
                 )
             }
             onProgress?.invoke(STEP_LLM, "AI가 결제 내역 분석 중...", matchResult.matched.size + regexFailedResults.size + unmatchedClassification.results.size, embedded.size)
-            val regexFallbackStart = System.currentTimeMillis()
             groupClassifier.classifyUnmatched(
                 unmatchedList = regexFailedFallback,
                 forceSkipRegexAll = true
             ) { step, current, total ->
                 onProgress?.invoke(STEP_LLM, step, current, total)
-            }.also {
-                regexFallbackElapsed = System.currentTimeMillis() - regexFallbackStart
             }
         } else {
             SmsGroupClassifier.ClassificationResult(emptyList(), 0)
@@ -262,11 +216,6 @@ class SmsPipeline @Inject constructor(
                 .filter { it.input.id !in fallbackParsedIds }
             MoneyTalkLogger.i(
                 "Step5-B 결과: 입력 ${regexFailedFallback.size}건 → 결제확정 ${regexFallbackClassification.results.size}건, 미확정 ${unresolvedFromRegexFallback.size}건"
-            )
-            MoneyTalkLogger.i(
-                "$PERF_LOG_PREFIX pipeline.regexFallbackLlm.done " +
-                    "input=${regexFailedFallback.size}, parsed=${regexFallbackClassification.results.size}, " +
-                    "learned=${regexFallbackClassification.learnedPatternCount}, elapsedMs=$regexFallbackElapsed"
             )
             unresolvedFromRegexFallback.take(5).forEachIndexed { index, embeddedSms ->
                 MoneyTalkLogger.w(
@@ -304,12 +253,6 @@ class SmsPipeline @Inject constructor(
             }
         }
         MoneyTalkLogger.e("SmsPipeline 완료: 결제 확정 ${total.size}건 (벡터${matchResult.matched.size} + regex복구${regexFailedResults.size} + LLM${llmResults.size})")
-        MoneyTalkLogger.i(
-            "$PERF_LOG_PREFIX pipeline.done " +
-                "input=${smsList.size}, filtered=${filtered.size}, embedded=${embedded.size}, " +
-                "matched=${matchResult.matched.size}, regexRecovered=${regexFailedResults.size}, " +
-                "llm=${llmResults.size}, dropped=$droppedCount, elapsedMs=${System.currentTimeMillis() - totalStart}"
-        )
         return PipelineResult(
             results = total,
             vectorMatchCount = matchResult.matched.size,

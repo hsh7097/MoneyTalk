@@ -48,8 +48,6 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
 ) : StoreEmbeddingRepository {
 
     companion object {
-        private const val PERF_LOG_PREFIX = "[CategoryPerf]"
-
         /** 임베딩 배치 병렬 동시 실행 수 (API 키 5개 × 키당 2 = 10) */
         private const val EMBEDDING_CONCURRENCY = 10
 
@@ -71,13 +69,8 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
     private suspend fun getEmbeddings(): List<StoreEmbeddingEntity> {
         cachedEmbeddings?.let { return it }
 
-        val start = System.currentTimeMillis()
         return storeEmbeddingDao.getAllEmbeddings().also {
             cachedEmbeddings = it
-            MoneyTalkLogger.i(
-                "$PERF_LOG_PREFIX embeddingCache.load " +
-                    "count=${it.size}, elapsedMs=${System.currentTimeMillis() - start}"
-            )
         }
     }
 
@@ -214,19 +207,11 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
     ) {
         if (storeCategories.isEmpty()) return
 
-        val totalStart = System.currentTimeMillis()
         try {
             // inFlight 중복 제거: 이미 임베딩 생성 중인 가게명 스킵
             val storeNames = storeCategories.keys.filter { inFlightStoreNames.add(it) }
             if (storeNames.isEmpty()) {
-                MoneyTalkLogger.i(
-                    "$PERF_LOG_PREFIX embeddingSave.skip " +
-                        "input=${storeCategories.size}, reason=inFlight, elapsedMs=${System.currentTimeMillis() - totalStart}"
-                )
                 return
-            }
-            val skipped = storeCategories.size - storeNames.size
-            if (skipped > 0) {
             }
 
             try {
@@ -244,7 +229,6 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
 
                 val missingStoreNames = storeNames.filter { embeddingsByStoreName[it] == null }
                 val chunks = missingStoreNames.chunked(EMBEDDING_BATCH_SIZE)
-                val embeddingStart = System.currentTimeMillis()
                 val batchEmbeddings = if (chunks.isEmpty()) {
                     emptyList()
                 } else {
@@ -259,7 +243,6 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
                         }.awaitAll()
                     }
                 }
-                val embeddingElapsed = System.currentTimeMillis() - embeddingStart
 
                 val allEntities = precomputedEntities.toMutableList()
                 for ((chunkIdx, chunk) in chunks.withIndex()) {
@@ -279,20 +262,10 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
                     allEntities.addAll(entities)
                 }
 
-                var insertElapsed = 0L
                 if (allEntities.isNotEmpty()) {
-                    val insertStart = System.currentTimeMillis()
                     storeEmbeddingDao.insertAll(allEntities)
-                    insertElapsed = System.currentTimeMillis() - insertStart
                     invalidateCache()
                 }
-                MoneyTalkLogger.i(
-                    "$PERF_LOG_PREFIX embeddingSave.done " +
-                        "input=${storeCategories.size}, reused=${precomputedEntities.size}, " +
-                        "generated=${allEntities.size - precomputedEntities.size}, skipped=$skipped, " +
-                        "chunks=${chunks.size}, source=$source, embeddingMs=$embeddingElapsed, " +
-                        "insertMs=$insertElapsed, elapsedMs=${System.currentTimeMillis() - totalStart}"
-                )
             } finally {
                 // 완료 후 inFlight에서 제거
                 storeNames.forEach { inFlightStoreNames.remove(it) }

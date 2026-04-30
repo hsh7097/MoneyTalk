@@ -43,9 +43,7 @@ class CategoryClassifierServiceImpl @Inject constructor(
     private val storeRuleRepository: StoreRuleRepository
 ) : CategoryClassifierService {
     companion object {
-        private const val PERF_LOG_PREFIX = "[CategoryPerf]"
         private const val SEMANTIC_GROUPING_MIN_STORE_COUNT = 120
-        private const val GEMINI_CATEGORY_BATCH_SIZE_FOR_LOG = 13
 
         /** 마스킹된 한국 이름 패턴: "하*현", "김**", "이*수" 등 */
         private val MASKED_NAME_PATTERN = Regex("^[가-힣][*]+[가-힣]?$")
@@ -168,17 +166,12 @@ class CategoryClassifierServiceImpl @Inject constructor(
      * 모든 카테고리 매핑을 메모리에 로드하여 동기화 루프 중 DB 쿼리/API 호출을 제거합니다.
      */
     override suspend fun initCategoryCache() {
-        val start = System.currentTimeMillis()
         val mappings = categoryRepository.getAllMappingsOnce()
         categoryCache = HashMap<String, String>(mappings.size * 2).apply {
             for (mapping in mappings) {
                 put(mapping.storeName, mapping.category)
             }
         }
-        MoneyTalkLogger.i(
-            "$PERF_LOG_PREFIX categoryCache.init " +
-                "mappings=${mappings.size}, elapsedMs=${System.currentTimeMillis() - start}"
-        )
     }
 
     /** 인메모리 캐시 해제 */
@@ -189,16 +182,10 @@ class CategoryClassifierServiceImpl @Inject constructor(
     /** 대기 중인 매핑을 Room에 일괄 저장 */
     override suspend fun flushPendingMappings() {
         if (pendingMappings.isEmpty()) return
-        val start = System.currentTimeMillis()
-        val pendingCount = pendingMappings.size
         val mappings = pendingMappings.map { (store, category, _) -> store to category }
         val source = pendingMappings.firstOrNull()?.third ?: "local"
         categoryRepository.saveMappings(mappings, source)
         pendingMappings.clear()
-        MoneyTalkLogger.i(
-            "$PERF_LOG_PREFIX categoryCache.flush " +
-                "pending=$pendingCount, source=$source, elapsedMs=${System.currentTimeMillis() - start}"
-        )
     }
 
     /**
@@ -361,64 +348,37 @@ class CategoryClassifierServiceImpl @Inject constructor(
     ): Map<String, String> {
         if (storeNames.isEmpty()) return emptyMap()
 
-        val totalStart = System.currentTimeMillis()
-        MoneyTalkLogger.i(
-            "$PERF_LOG_PREFIX inMemory.start " +
-                "stores=${storeNames.size}, uniqueStores=${storeNames.distinct().size}"
-        )
-
         val result = mutableMapOf<String, String>()
 
         // 1. 이체 패턴 감지
-        val transferStart = System.currentTimeMillis()
         val transferNames = storeNames.filter {
             isTransferPattern(it) && it !in PERSON_NAME_EXCEPTIONS
         }
         for (name in transferNames) {
             result[name] = Category.TRANSFER_GENERAL.displayName
         }
-        val transferElapsed = System.currentTimeMillis() - transferStart
 
         val remaining = storeNames.filter { it !in result }
         if (remaining.isEmpty()) {
-            MoneyTalkLogger.i(
-                "$PERF_LOG_PREFIX inMemory.done " +
-                    "result=${result.size}, transfer=${transferNames.size}, rule=0, " +
-                    "geminiInput=0, groups=0, representatives=0, " +
-                    "transferMs=$transferElapsed, ruleMs=0, groupingMs=0, geminiMs=0, saveMs=0, " +
-                    "elapsedMs=${System.currentTimeMillis() - totalStart}"
-            )
             return result
         }
 
         // 2. 로컬 룰 사전 분류
         onStepProgress?.invoke("기본 규칙으로 분류 중...", 0, remaining.size)
-        val ruleStart = System.currentTimeMillis()
         val (ruleClassified, storeNamesForGemini) = preClassifyByRules(remaining)
-        val ruleElapsed = System.currentTimeMillis() - ruleStart
         result.putAll(ruleClassified)
 
         if (storeNamesForGemini.isEmpty()) {
-            val saveStart = System.currentTimeMillis()
             saveMappingsIfNeeded(
                 classifications = result,
                 originalStoreNames = storeNames,
                 saveEmbeddings = false
-            )
-            val saveElapsed = System.currentTimeMillis() - saveStart
-            MoneyTalkLogger.i(
-                "$PERF_LOG_PREFIX inMemory.done " +
-                    "result=${result.size}, transfer=${transferNames.size}, rule=${ruleClassified.size}, " +
-                    "geminiInput=0, groups=0, representatives=0, " +
-                    "transferMs=$transferElapsed, ruleMs=$ruleElapsed, groupingMs=0, geminiMs=0, " +
-                    "saveMs=$saveElapsed, elapsedMs=${System.currentTimeMillis() - totalStart}"
             )
             return result
         }
 
         // 3. 시맨틱 그룹핑
         onStepProgress?.invoke("비슷한 가게 묶는 중...", 0, storeNamesForGemini.size)
-        val groupingStart = System.currentTimeMillis()
         val shouldUseSemanticGrouping = storeNamesForGemini.size >= SEMANTIC_GROUPING_MIN_STORE_COUNT
         val groupingResult = if (shouldUseSemanticGrouping) {
             try {
@@ -441,16 +401,12 @@ class CategoryClassifierServiceImpl @Inject constructor(
             )
         }
         val groups = groupingResult.groups
-        val groupingElapsed = System.currentTimeMillis() - groupingStart
 
         // 4. Gemini 배치 분류
         val representatives = groups.map { it.representative }
-        var geminiElapsed = 0L
         if (representatives.isNotEmpty()) {
             onStepProgress?.invoke("AI가 분류하는 중...", 0, representatives.size)
-            val geminiStart = System.currentTimeMillis()
             val classifications = geminiRepository.classifyStoreNames(representatives)
-            geminiElapsed = System.currentTimeMillis() - geminiStart
 
             for (group in groups) {
                 val category = classifications[group.representative] ?: continue
@@ -461,24 +417,11 @@ class CategoryClassifierServiceImpl @Inject constructor(
         }
 
         // 5. Room 매핑 + 벡터 DB 저장 (다음 분류 시 재사용)
-        val saveStart = System.currentTimeMillis()
         saveMappingsIfNeeded(
             classifications = result,
             originalStoreNames = storeNames,
             embeddingsByStoreName = groupingResult.embeddingsByStoreName,
             saveEmbeddings = shouldUseSemanticGrouping && groupingResult.embeddingsByStoreName.isNotEmpty()
-        )
-        val saveElapsed = System.currentTimeMillis() - saveStart
-
-        MoneyTalkLogger.i(
-            "$PERF_LOG_PREFIX inMemory.done " +
-                "result=${result.size}, transfer=${transferNames.size}, rule=${ruleClassified.size}, " +
-                "geminiInput=${storeNamesForGemini.size}, groups=${groups.size}, " +
-                "representatives=${representatives.size}, groupingSkipped=${!shouldUseSemanticGrouping}, " +
-                "reusedEmbeddings=${groupingResult.embeddingsByStoreName.size}, " +
-                "transferMs=$transferElapsed, ruleMs=$ruleElapsed, groupingMs=$groupingElapsed, " +
-                "geminiMs=$geminiElapsed, saveMs=$saveElapsed, " +
-                "elapsedMs=${System.currentTimeMillis() - totalStart}"
         )
 
         return result
@@ -495,35 +438,23 @@ class CategoryClassifierServiceImpl @Inject constructor(
         if (toSave.isEmpty()) return
 
         val mappings = toSave.map { (store, category) -> store to category }
-        val roomStart = System.currentTimeMillis()
         categoryRepository.saveMappings(mappings, "gemini")
-        val roomElapsed = System.currentTimeMillis() - roomStart
-        var embeddingElapsed = 0L
-        var embeddingTargetCount = 0
         try {
             if (saveEmbeddings) {
-                val embeddingStart = System.currentTimeMillis()
                 val embeddingTargets = if (embeddingsByStoreName.isEmpty()) {
                     toSave
                 } else {
                     toSave.filterKeys { embeddingsByStoreName.containsKey(it) }
                 }
-                embeddingTargetCount = embeddingTargets.size
                 storeEmbeddingRepository.saveStoreEmbeddings(
                     storeCategories = embeddingTargets,
                     source = "gemini",
                     embeddingsByStoreName = embeddingsByStoreName
                 )
-                embeddingElapsed = System.currentTimeMillis() - embeddingStart
             }
         } catch (e: Exception) {
             MoneyTalkLogger.w("벡터 DB 캐싱 실패 (무시): ${e.message}")
         }
-        MoneyTalkLogger.i(
-            "$PERF_LOG_PREFIX saveMappings.done " +
-                "count=${toSave.size}, embeddingTargets=$embeddingTargetCount, " +
-                "roomMs=$roomElapsed, embeddingMs=$embeddingElapsed"
-        )
     }
 
     /**
@@ -542,27 +473,15 @@ class CategoryClassifierServiceImpl @Inject constructor(
         onStepProgress: (suspend (step: String, current: Int, total: Int) -> Unit)?,
         maxStoreCount: Int?
     ): Int {
-        val totalStartTime = System.currentTimeMillis()
-        MoneyTalkLogger.i(
-            "$PERF_LOG_PREFIX classifyExisting.start maxStoreCount=${maxStoreCount ?: "all"}"
-        )
-
         // ===== [1/6] 미분류 항목 조회 =====
-        val step1Start = System.currentTimeMillis()
         onStepProgress?.invoke("분류할 항목 확인 중...", 0, 0)
         val unclassifiedExpenses = expenseRepository.getExpensesByCategoryOnce("미분류")
-        val step1Elapsed = System.currentTimeMillis() - step1Start
 
         if (unclassifiedExpenses.isEmpty()) {
-            MoneyTalkLogger.i(
-                "$PERF_LOG_PREFIX classifyExisting.done " +
-                    "input=0, updated=0, queryMs=$step1Elapsed, elapsedMs=${System.currentTimeMillis() - totalStartTime}"
-            )
             return 0
         }
 
         // ===== [1.5/6] 이체 감지 (마스킹 인명 패턴) =====
-        val transferStart = System.currentTimeMillis()
         val transferStoreNames = unclassifiedExpenses
             .filter { expense ->
                 expense.transactionType == "TRANSFER" ||
@@ -585,7 +504,6 @@ class CategoryClassifierServiceImpl @Inject constructor(
                 transferCount += updated
             }
         }
-        val transferElapsed = System.currentTimeMillis() - transferStart
 
         // 이체로 처리된 항목 제외하고 재조회
         val expensesForClassification = if (transferCount > 0) {
@@ -595,12 +513,6 @@ class CategoryClassifierServiceImpl @Inject constructor(
         }
 
         if (expensesForClassification.isEmpty()) {
-            MoneyTalkLogger.i(
-                "$PERF_LOG_PREFIX classifyExisting.done " +
-                    "input=${unclassifiedExpenses.size}, updated=$transferCount, transferOnly=true, " +
-                    "queryMs=$step1Elapsed, transferMs=$transferElapsed, " +
-                    "elapsedMs=${System.currentTimeMillis() - totalStartTime}"
-            )
             return transferCount
         }
 
@@ -622,13 +534,10 @@ class CategoryClassifierServiceImpl @Inject constructor(
 
 
         // ===== [2/6] 로컬 룰 사전 분류 =====
-        val step2Start = System.currentTimeMillis()
         onStepProgress?.invoke("기본 규칙으로 분류 중...", 0, storeNames.size)
         val (ruleClassified, storeNamesForGemini) = preClassifyByRules(storeNames)
-        val step2Elapsed = System.currentTimeMillis() - step2Start
 
         // ===== [3/6] 시맨틱 그룹핑 (임베딩 + 클러스터링) =====
-        val step3Start = System.currentTimeMillis()
         onStepProgress?.invoke("비슷한 가게 묶는 중...", 0, storeNamesForGemini.size)
         val shouldUseSemanticGrouping = storeNamesForGemini.size >= SEMANTIC_GROUPING_MIN_STORE_COUNT
         val groupingResult = if (shouldUseSemanticGrouping) {
@@ -658,45 +567,23 @@ class CategoryClassifierServiceImpl @Inject constructor(
             )
         }
         val groups = groupingResult.groups
-        val step3Elapsed = System.currentTimeMillis() - step3Start
 
         val representatives = groups.map { it.representative }
-        val multiMemberGroups = groups.count { it.members.size > 1 }
-        val maxGroupSize = groups.maxOfOrNull { it.members.size } ?: 0
 
         // ===== [4/6] Gemini LLM 분류 =====
-        val step4Start = System.currentTimeMillis()
         val classifications: Map<String, String>
-        val step4Elapsed: Long
-        var batchCount = 0
         if (representatives.isNotEmpty()) {
             onStepProgress?.invoke("AI가 분류하는 중...", 0, representatives.size)
-            batchCount = (representatives.size + GEMINI_CATEGORY_BATCH_SIZE_FOR_LOG - 1) /
-                GEMINI_CATEGORY_BATCH_SIZE_FOR_LOG
             classifications = geminiRepository.classifyStoreNames(representatives)
-            step4Elapsed = System.currentTimeMillis() - step4Start
         } else {
             classifications = emptyMap()
-            step4Elapsed = System.currentTimeMillis() - step4Start
         }
 
         if (classifications.isEmpty() && ruleClassified.isEmpty()) {
-            val totalElapsed = System.currentTimeMillis() - totalStartTime
-            MoneyTalkLogger.i(
-                "$PERF_LOG_PREFIX classifyExisting.done " +
-                    "input=${unclassifiedExpenses.size}, stores=${storeNames.size}, updated=0, " +
-                    "rule=0, geminiInput=${storeNamesForGemini.size}, groups=${groups.size}, " +
-                    "representatives=${representatives.size}, geminiBatches=$batchCount, " +
-                    "multiGroups=$multiMemberGroups, maxGroupSize=$maxGroupSize, " +
-                    "queryMs=$step1Elapsed, transferMs=$transferElapsed, ruleMs=$step2Elapsed, " +
-                    "groupingMs=$step3Elapsed, geminiMs=$step4Elapsed, saveMs=0, updateMs=0, " +
-                    "elapsedMs=$totalElapsed"
-            )
             return 0
         }
 
         // ===== [5/6] 결과 전파 + Room 저장 + 벡터 DB 캐싱 =====
-        val step5Start = System.currentTimeMillis()
         val allClassifications = mutableMapOf<String, String>()
         allClassifications.putAll(ruleClassified)
 
@@ -714,10 +601,8 @@ class CategoryClassifierServiceImpl @Inject constructor(
         onStepProgress?.invoke("결과 저장 중...", classifications.size, representatives.size)
         val mappings = allClassifications.map { (store, category) -> store to category }
         categoryRepository.saveMappings(mappings, "gemini")
-        val roomSaveElapsed = System.currentTimeMillis() - step5Start
 
         // 벡터 DB 캐싱
-        val vectorStart = System.currentTimeMillis()
         try {
             if (shouldUseSemanticGrouping && groupingResult.embeddingsByStoreName.isNotEmpty()) {
                 val embeddingTargets = allClassifications.filterKeys {
@@ -732,11 +617,8 @@ class CategoryClassifierServiceImpl @Inject constructor(
         } catch (e: Exception) {
             MoneyTalkLogger.w("벡터 DB 캐싱 실패 (무시): ${e.message}")
         }
-        val vectorElapsed = System.currentTimeMillis() - vectorStart
-        val step5Elapsed = System.currentTimeMillis() - step5Start
 
         // ===== [6/6] 지출 항목 카테고리 업데이트 =====
-        val step6Start = System.currentTimeMillis()
         val storeNamesToUpdate = expensesForClassification.map { it.storeName }.distinct()
             .filter { allClassifications.containsKey(it) }
         for ((idx, store) in storeNamesToUpdate.withIndex()) {
@@ -747,23 +629,9 @@ class CategoryClassifierServiceImpl @Inject constructor(
                 onStepProgress?.invoke("분류 결과 적용 중...", idx, storeNamesToUpdate.size)
             }
         }
-        val step6Elapsed = System.currentTimeMillis() - step6Start
         val updatedCount =
             expensesForClassification.count { allClassifications.containsKey(it.storeName) }
 
-        val totalElapsed = System.currentTimeMillis() - totalStartTime
-        MoneyTalkLogger.i(
-            "$PERF_LOG_PREFIX classifyExisting.done " +
-                "input=${unclassifiedExpenses.size}, stores=${storeNames.size}, updated=${updatedCount + transferCount}, " +
-                "transfer=$transferCount, rule=${ruleClassified.size}, geminiInput=${storeNamesForGemini.size}, " +
-                "groups=${groups.size}, representatives=${representatives.size}, " +
-                "geminiBatches=$batchCount, multiGroups=$multiMemberGroups, maxGroupSize=$maxGroupSize, " +
-                "groupingSkipped=${!shouldUseSemanticGrouping}, reusedEmbeddings=${groupingResult.embeddingsByStoreName.size}, " +
-                "queryMs=$step1Elapsed, transferMs=$transferElapsed, ruleMs=$step2Elapsed, " +
-                "groupingMs=$step3Elapsed, geminiMs=$step4Elapsed, roomSaveMs=$roomSaveElapsed, " +
-                "embeddingSaveMs=$vectorElapsed, saveMs=$step5Elapsed, updateMs=$step6Elapsed, " +
-                "elapsedMs=$totalElapsed"
-        )
         return updatedCount + transferCount
     }
 
