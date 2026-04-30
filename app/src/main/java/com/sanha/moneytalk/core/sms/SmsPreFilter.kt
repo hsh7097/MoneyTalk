@@ -148,11 +148,11 @@ class SmsPreFilter @Inject constructor() {
         return smsList.filter smsFilter@{ sms ->
             val body = sms.body
 
-            // 키워드 필터
-            if (isObviouslyNonPayment(body)) return@smsFilter false
-
             // 구조 필터
             if (lacksPaymentRequirements(body)) return@smsFilter false
+
+            // 키워드 필터
+            if (isObviouslyNonPayment(body)) return@smsFilter false
 
             true
         }

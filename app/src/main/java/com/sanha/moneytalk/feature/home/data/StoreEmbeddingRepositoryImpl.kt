@@ -48,6 +48,7 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
 ) : StoreEmbeddingRepository {
 
     companion object {
+        private const val PERF_LOG_PREFIX = "[CategoryPerf]"
 
         /** 임베딩 배치 병렬 동시 실행 수 (API 키 5개 × 키당 2 = 10) */
         private const val EMBEDDING_CONCURRENCY = 10
@@ -68,8 +69,15 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
      * 최초 호출 시 DB에서 로드, 이후 캐시 반환
      */
     private suspend fun getEmbeddings(): List<StoreEmbeddingEntity> {
-        return cachedEmbeddings ?: storeEmbeddingDao.getAllEmbeddings().also {
+        cachedEmbeddings?.let { return it }
+
+        val start = System.currentTimeMillis()
+        return storeEmbeddingDao.getAllEmbeddings().also {
             cachedEmbeddings = it
+            MoneyTalkLogger.i(
+                "$PERF_LOG_PREFIX embeddingCache.load " +
+                    "count=${it.size}, elapsedMs=${System.currentTimeMillis() - start}"
+            )
         }
     }
 
@@ -201,14 +209,20 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
 
     override suspend fun saveStoreEmbeddings(
         storeCategories: Map<String, String>,
-        source: String
+        source: String,
+        embeddingsByStoreName: Map<String, List<Float>>
     ) {
         if (storeCategories.isEmpty()) return
 
+        val totalStart = System.currentTimeMillis()
         try {
             // inFlight 중복 제거: 이미 임베딩 생성 중인 가게명 스킵
             val storeNames = storeCategories.keys.filter { inFlightStoreNames.add(it) }
             if (storeNames.isEmpty()) {
+                MoneyTalkLogger.i(
+                    "$PERF_LOG_PREFIX embeddingSave.skip " +
+                        "input=${storeCategories.size}, reason=inFlight, elapsedMs=${System.currentTimeMillis() - totalStart}"
+                )
                 return
             }
             val skipped = storeCategories.size - storeNames.size
@@ -216,20 +230,38 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
             }
 
             try {
-                // 100건씩 청킹 → 병렬 임베딩 생성
-                val chunks = storeNames.chunked(EMBEDDING_BATCH_SIZE)
-                val semaphore = Semaphore(EMBEDDING_CONCURRENCY)
-                val batchEmbeddings = coroutineScope {
-                    chunks.map { chunk ->
-                        async {
-                            semaphore.withPermit {
-                                embeddingService.generateEmbeddings(chunk)
-                            }
-                        }
-                    }.awaitAll()
+                val precomputedEntities = storeNames.mapNotNull { storeName ->
+                    val embedding = embeddingsByStoreName[storeName] ?: return@mapNotNull null
+                    val category = storeCategories[storeName] ?: return@mapNotNull null
+                    StoreEmbeddingEntity(
+                        storeName = storeName,
+                        category = category,
+                        embedding = embedding,
+                        source = source,
+                        confidence = if (source == "user") 1.0f else 0.8f
+                    )
                 }
 
-                val allEntities = mutableListOf<StoreEmbeddingEntity>()
+                val missingStoreNames = storeNames.filter { embeddingsByStoreName[it] == null }
+                val chunks = missingStoreNames.chunked(EMBEDDING_BATCH_SIZE)
+                val embeddingStart = System.currentTimeMillis()
+                val batchEmbeddings = if (chunks.isEmpty()) {
+                    emptyList()
+                } else {
+                    val semaphore = Semaphore(EMBEDDING_CONCURRENCY)
+                    coroutineScope {
+                        chunks.map { chunk ->
+                            async {
+                                semaphore.withPermit {
+                                    embeddingService.generateEmbeddings(chunk)
+                                }
+                            }
+                        }.awaitAll()
+                    }
+                }
+                val embeddingElapsed = System.currentTimeMillis() - embeddingStart
+
+                val allEntities = precomputedEntities.toMutableList()
                 for ((chunkIdx, chunk) in chunks.withIndex()) {
                     val embeddings = batchEmbeddings[chunkIdx]
                     val entities = chunk.mapIndexedNotNull { index, storeName ->
@@ -247,10 +279,20 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
                     allEntities.addAll(entities)
                 }
 
+                var insertElapsed = 0L
                 if (allEntities.isNotEmpty()) {
+                    val insertStart = System.currentTimeMillis()
                     storeEmbeddingDao.insertAll(allEntities)
+                    insertElapsed = System.currentTimeMillis() - insertStart
                     invalidateCache()
                 }
+                MoneyTalkLogger.i(
+                    "$PERF_LOG_PREFIX embeddingSave.done " +
+                        "input=${storeCategories.size}, reused=${precomputedEntities.size}, " +
+                        "generated=${allEntities.size - precomputedEntities.size}, skipped=$skipped, " +
+                        "chunks=${chunks.size}, source=$source, embeddingMs=$embeddingElapsed, " +
+                        "insertMs=$insertElapsed, elapsedMs=${System.currentTimeMillis() - totalStart}"
+                )
             } finally {
                 // 완료 후 inFlight에서 제거
                 storeNames.forEach { inFlightStoreNames.remove(it) }
