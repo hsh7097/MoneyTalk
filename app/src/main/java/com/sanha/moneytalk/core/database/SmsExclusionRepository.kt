@@ -50,6 +50,11 @@ class SmsExclusionRepository @Inject constructor(
         return dao.getAll()
     }
 
+    /** 백업 대상 사용자/채팅 키워드 조회 */
+    suspend fun getUserKeywordEntities(): List<SmsExclusionKeywordEntity> {
+        return dao.getUserKeywordEntities()
+    }
+
     /**
      * 키워드 추가
      * @param keyword 추가할 키워드 (자동 lowercase 변환)
@@ -68,6 +73,24 @@ class SmsExclusionRepository @Inject constructor(
         )
         invalidateCache()
         return true
+    }
+
+    /** 백업 복원용 사용자/채팅 키워드 일괄 추가 */
+    suspend fun restoreKeywords(keywords: List<SmsExclusionKeywordEntity>) {
+        val userKeywords = keywords
+            .filter { it.source != "default" }
+            .mapNotNull { entity ->
+                val normalized = entity.keyword.trim().lowercase()
+                if (normalized.isBlank()) {
+                    null
+                } else {
+                    entity.copy(keyword = normalized)
+                }
+            }
+        if (userKeywords.isNotEmpty()) {
+            dao.insertAll(userKeywords)
+            invalidateCache()
+        }
     }
 
     /**

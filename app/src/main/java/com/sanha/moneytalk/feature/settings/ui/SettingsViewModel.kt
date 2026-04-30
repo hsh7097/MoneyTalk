@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.AppDatabase
+import com.sanha.moneytalk.core.database.CustomCategoryRepository
+import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.SyncCoverageRepository
@@ -15,6 +17,7 @@ import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.notification.NotificationAccessHelper
+import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.theme.ThemeMode
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.ClassificationState
@@ -30,6 +33,7 @@ import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.CategoryRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
+import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
 import com.sanha.moneytalk.receiver.NotificationTransactionService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -137,6 +141,14 @@ data class SettingsUiState(
     val notificationAccessEnabled: Boolean = false
 )
 
+private data class RestoreCounts(
+    val expenses: Int,
+    val incomes: Int,
+    val categorySettings: Int,
+    val storeRules: Int,
+    val userSettings: Int
+)
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -146,6 +158,10 @@ class SettingsViewModel @Inject constructor(
     private val googleDriveHelper: GoogleDriveHelper,
     private val categoryClassifierService: CategoryClassifierService,
     private val categoryRepository: CategoryRepository,
+    private val customCategoryRepository: CustomCategoryRepository,
+    private val categoryProvider: CategoryProvider,
+    private val storeRuleRepository: StoreRuleRepository,
+    private val smsExclusionRepository: SmsExclusionRepository,
     private val appDatabase: AppDatabase,
     private val chatDao: ChatDao,
     private val budgetDao: BudgetDao,
@@ -563,7 +579,13 @@ class SettingsViewModel @Inject constructor(
                             expenses = expenses,
                             incomes = incomes,
                             monthlyIncome = savedMonthlyIncome,
-                            monthStartDay = state.monthStartDay
+                            monthStartDay = state.monthStartDay,
+                            categoryMappings = categoryRepository.getAllMappingsOnce(),
+                            customCategories = customCategoryRepository.getAll(),
+                            storeRules = storeRuleRepository.getAllOnce(),
+                            budgets = budgetDao.getBudgetsByMonthOnce("default"),
+                            ownedCards = ownedCardRepository.getAllCardsOnce(),
+                            smsExclusionKeywords = smsExclusionRepository.getUserKeywordEntities()
                         )
 
                         ExportFormat.CSV -> DataBackupManager.createCombinedCsv(expenses, incomes)
@@ -664,33 +686,83 @@ class SettingsViewModel @Inject constructor(
      */
     private suspend fun restoreData(backupData: BackupData) {
         try {
-            val (expenseCount, incomeCount) = withContext(Dispatchers.IO) {
+            val restoredCounts = withContext(Dispatchers.IO) {
                 // 설정 복원
                 settingsDataStore.saveMonthlyIncome(backupData.settings.monthlyIncome)
                 settingsDataStore.saveMonthStartDay(backupData.settings.monthStartDay)
 
                 // 지출 데이터 복원
-                val expenses = DataBackupManager.convertToExpenseEntities(backupData.expenses)
+                val expenses = DataBackupManager.convertToExpenseEntities(backupData.expenses.orEmpty())
                 if (expenses.isNotEmpty()) {
                     expenseRepository.insertAll(expenses)
                 }
 
                 // 수입 데이터 복원
-                val incomes = DataBackupManager.convertToIncomeEntities(backupData.incomes)
+                val incomes = DataBackupManager.convertToIncomeEntities(backupData.incomes.orEmpty())
                 if (incomes.isNotEmpty()) {
                     incomeRepository.insertAll(incomes)
                 }
 
-                Pair(expenses.size, incomes.size)
+                val categoryMappings = DataBackupManager.convertToCategoryMappingEntities(
+                    backupData.categoryMappings.orEmpty()
+                )
+                categoryRepository.restoreMappings(categoryMappings)
+
+                val customCategories = DataBackupManager.convertToCustomCategoryEntities(
+                    backupData.customCategories.orEmpty()
+                )
+                customCategoryRepository.insertAll(customCategories)
+
+                val storeRules = DataBackupManager.convertToStoreRuleEntities(
+                    backupData.storeRules.orEmpty()
+                )
+                storeRuleRepository.upsertAll(storeRules)
+
+                val budgets = DataBackupManager.convertToBudgetEntities(backupData.budgets.orEmpty())
+                if (budgets.isNotEmpty()) {
+                    budgetDao.insertAll(budgets)
+                }
+
+                val ownedCards = DataBackupManager.convertToOwnedCardEntities(
+                    backupData.ownedCards.orEmpty()
+                )
+                ownedCardRepository.upsertAll(ownedCards)
+
+                val smsExclusionKeywords = DataBackupManager.convertToSmsExclusionKeywordEntities(
+                    backupData.smsExclusionKeywords.orEmpty()
+                )
+                smsExclusionRepository.restoreKeywords(smsExclusionKeywords)
+
+                RestoreCounts(
+                    expenses = expenses.size,
+                    incomes = incomes.size,
+                    categorySettings = categoryMappings.size + customCategories.size,
+                    storeRules = storeRules.size,
+                    userSettings = budgets.size + ownedCards.size + smsExclusionKeywords.size
+                )
             }
 
+            categoryProvider.invalidateCache()
             _uiState.update {
                 it.copy(
                     isLoading = false,
                     monthStartDay = backupData.settings.monthStartDay
                 )
             }
-            snackbarBus.show("복원 완료: 지출 ${expenseCount}건, 수입 ${incomeCount}건")
+            loadFilterOptions()
+            loadOwnedCards()
+            loadMonthlyBudget()
+            dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
+            snackbarBus.show(
+                message(
+                    R.string.settings_restore_complete_with_settings,
+                    restoredCounts.expenses,
+                    restoredCounts.incomes,
+                    restoredCounts.categorySettings,
+                    restoredCounts.storeRules,
+                    restoredCounts.userSettings
+                )
+            )
         } catch (e: Exception) {
             snackbarBus.show("복원 실패: ${e.message}")
             _uiState.update {

@@ -34,6 +34,10 @@ interface StoreRuleDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(rule: StoreRuleEntity)
 
+    /** 규칙 일괄 추가/갱신 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(rules: List<StoreRuleEntity>)
+
     /** 규칙 삭제 */
     @Delete
     suspend fun delete(rule: StoreRuleEntity)

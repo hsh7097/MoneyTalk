@@ -93,6 +93,7 @@ app/src/main/java/com/sanha/moneytalk/
 | 카드 관리 | 소유 카드 화이트리스트 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
 | SMS 필터링 | 제외 키워드 블랙리스트 | [SmsExclusionRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/SmsExclusionRepository.kt) |
 | 거래처 규칙 (StoreRule) | 거래처 키워드→카테고리/고정지출/통계 제외 자동 적용 (Tier 0) | [StoreRuleRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreRuleRepository.kt), [StoreRuleSettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/ui/StoreRuleSettingsViewModel.kt) |
+| 설정 백업/복원 | JSON 백업은 거래 내역과 카테고리/거래처 규칙/예산/내 카드/SMS 제외 키워드를 함께 병합 복원 | [DataBackupManager.kt](../app/src/main/java/com/sanha/moneytalk/core/util/DataBackupManager.kt), [SettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsViewModel.kt) |
 
 ### 2-3. DB 엔티티 (15개)
 

@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added (2026-04-30)
+- **사용자 설정 JSON 백업/복원 확장**: 카테고리 매핑, 커스텀 카테고리, 거래처 규칙, 기본 예산, 내 카드, 사용자/채팅 SMS 제외 키워드를 JSON 백업에 포함하고 복원 시 기존 데이터와 병합
 - **월별 SMS 동기화 순서 회귀 테스트**: 2025년 1월부터 현재월까지 10개 월별 읽기 순서(순차/역순/셔플 포함)로 SMS ID 집합, 거래월 집계, coverage/CTA 판정을 검증
 - **실기기 SMS Provider/UI 이동 검증**: 실제 SMS/MMS/RCS provider 읽기 순서 검증과 홈/가계부 월 이동 instrumented test 추가
 - **거래별 통계 제외 플래그**: `ExpenseEntity.isExcludedFromStats` + Room v5 마이그레이션 추가, 카드대금 납부 SMS는 신규 저장 시 기본 통계 제외 처리

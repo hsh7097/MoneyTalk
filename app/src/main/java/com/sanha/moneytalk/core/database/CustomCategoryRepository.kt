@@ -33,6 +33,12 @@ class CustomCategoryRepository @Inject constructor(
         return customCategoryDao.insert(entity)
     }
 
+    suspend fun insertAll(entities: List<CustomCategoryEntity>) {
+        if (entities.isNotEmpty()) {
+            customCategoryDao.insertAll(entities)
+        }
+    }
+
     suspend fun update(entity: CustomCategoryEntity) = customCategoryDao.update(entity)
 
     suspend fun delete(id: Long) = customCategoryDao.deleteById(id)

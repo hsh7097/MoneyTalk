@@ -400,7 +400,8 @@
 
     <!-- 복원 다이얼로그 -->
     <string name="dialog_restore_title">데이터 복원</string>
-    <string name="dialog_restore_message">백업 파일에서 데이터를 복원합니다.\n기존 데이터는 모두 삭제되고 백업 데이터로 대체됩니다.\n\n계속하시겠습니까?</string>
+    <string name="dialog_restore_message">백업 파일에서 데이터를 복원합니다.\n기존 데이터와 병합되며, 같은 항목은 백업 데이터로 갱신됩니다.\n\n계속하시겠습니까?</string>
+    <string name="settings_restore_complete_with_settings">복원 완료: 지출 %1$d건, 수입 %2$d건, 카테고리 %3$d건, 거래처 규칙 %4$d건, 기타 설정 %5$d건</string>
 
     <!-- 내보내기 다이얼로그 -->
     <string name="export_dialog_title">데이터 내보내기</string>
