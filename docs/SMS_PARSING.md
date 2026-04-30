@@ -816,6 +816,19 @@ syncSmsV2(targetMonthRange, updateLastSyncTime, silent, trigger)
 | 증분 | max(lastSyncTime - 5분, now - 60일 - 월 시작일 마진) |
 | DB 비어있는데 lastSyncTime > 0 | lastSyncTime을 0으로 리셋 후 초기 동기화 범위 (Auto Backup 감지) |
 
+### 월별 동기화 순서 검증
+
+월별 동기화는 사용자가 과거 월을 임의 순서로 열 수 있으므로, **읽기 순서와 저장 결과가 독립적**이어야 합니다.
+특히 1월 수신 문자에 12월 거래일이 들어 있는 환불/취소 SMS는 수신월과 거래월이 달라질 수 있어 회귀 검증 대상입니다.
+
+| 테스트 | 위치 | 검증 내용 |
+|--------|------|-----------|
+| JVM 회귀 | [`MonthlySmsSyncOrderRegressionTest.kt`](../app/src/test/java/com/sanha/moneytalk/core/sync/MonthlySmsSyncOrderRegressionTest.kt) | 2025-01부터 현재월까지 10개 순서(순차/역순/셔플 포함)로 저장 SMS ID 집합, 거래월별 집계, coverage/CTA 판정 동일성 검증 |
+| 실기기 Provider | [`RealDeviceMonthlySmsSyncOrderInstrumentedTest.kt`](../app/src/androidTest/java/com/sanha/moneytalk/core/sync/RealDeviceMonthlySmsSyncOrderInstrumentedTest.kt) | 실제 SMS/MMS/RCS provider를 월별로 읽어 순서가 달라도 메시지 ID 집합과 거래월별 PAYMENT/INCOME 집계가 같은지 검증 |
+| 실기기 화면 이동 | [`RealDeviceMonthlyPageNavigationInstrumentedTest.kt`](../app/src/androidTest/java/com/sanha/moneytalk/core/sync/RealDeviceMonthlyPageNavigationInstrumentedTest.kt) | 홈/가계부 화면에서 월 이동 버튼을 실제 탭하여 각 월 타이틀/기간이 정상 반영되는지 검증 |
+
+실기기 화면 이동 테스트는 현재 `SM-F966N` 해상도 좌표 기반 검증이므로 다른 기기에서는 `Assume`으로 스킵됩니다.
+
 ---
 
 ## 13-A. 실시간 처리 — SmsInstantProcessor
@@ -992,6 +1005,11 @@ ORDER BY matchCount DESC LIMIT 1
 | Regex 캐시 (ConcurrentHashMap) | 동일 정규식 재컴파일 방지 |
 | 코사인 유사도 최적화 | FloatArray RandomAccess 체크 |
 | NON_PAYMENT_KEYWORDS 사전 lowercase | filter() 호출 시 매번 변환 방지 |
+
+### 성능 진단 로그 정책
+
+전체 문자 동기화/카테고리 분류 병목 확인용 `SyncPerf`/`CategoryPerf` 로그는 실기기 성능 개선 검증 후 운영 코드에서 제거했습니다.
+추가 병목 분석이 필요하면 짧은 수명 브랜치에서 임시 로그를 넣고, 검증 완료 시 동일 커밋 범위에서 제거합니다.
 
 ---
 

@@ -4,11 +4,20 @@
 
 ## [Unreleased]
 
+### Added (2026-04-30)
+- **월별 SMS 동기화 순서 회귀 테스트**: 2025년 1월부터 현재월까지 10개 월별 읽기 순서(순차/역순/셔플 포함)로 SMS ID 집합, 거래월 집계, coverage/CTA 판정을 검증
+- **실기기 SMS Provider/UI 이동 검증**: 실제 SMS/MMS/RCS provider 읽기 순서 검증과 홈/가계부 월 이동 instrumented test 추가
+
 ### Fixed (2026-04-30)
 - **연말/연초 SMS 날짜 보정**: 연도 없는 `MM/DD` 거래 문자를 수신 시각과 가장 가까운 연도로 저장하여 1월에 수신한 12월 환불/결제 내역이 다음 12월로 밀리는 문제 수정
 
 ### Changed (2026-04-30)
 - **SMS 동기화 책임 분리**: 문자 원본 읽기, 동기화 기간 계산, 월별 coverage/CTA 판정, SMS 거래 날짜 해석 로직을 전용 클래스로 분리
+- **AI 프롬프트 XML 정리**: 채팅/홈 인사이트/요약/제목 생성의 시스템·유저 프롬프트 템플릿을 `string_prompt.xml`로 통합하고, 프롬프트 조립용 보조 문자열은 `strings.xml`의 `ai_*` key로 분리
+- **AI 프롬프트 지침 보정**: 카테고리/날짜 지침을 현재 파싱 정책에 맞게 보정하고, 카테고리 분류가 목록 밖 축약명 대신 실제 displayName을 반환하도록 강화
+
+### Removed (2026-04-30)
+- **임시 성능 측정 로그 제거**: 전체 문자 동기화/카테고리 분류 병목 확인용 `SyncPerf`/`CategoryPerf` 운영 로그와 타이밍 변수를 정리
 
 ### Changed (2026-04-24)
 - **sms_origin 운영 감사 도구 및 비거래 필터 보강**: RTDB export와 local asset 매칭 상태를 비교하는 `scripts/sms_origin_rule_audit.py` 추가, 통신 단가/요율 안내 SMS를 Fast Path 실패 후보에서 제외하도록 `SmsPreFilter` 보강

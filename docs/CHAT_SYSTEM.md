@@ -180,7 +180,7 @@ System Instruction에 재무 상담사 역할이 정의되어 있으며, 다음 
 | 식비 | 15-20% |
 | 주거비 | 25-30% |
 | 교통비 | 5-10% |
-| 카페/여가 | 5-10% |
+| 카페/간식 + 문화/여가 | 5-10% |
 | 저축 | 20% 이상 권장 |
 | 총 지출 | 80% 이하면 건강 |
 
@@ -240,16 +240,24 @@ AI에 전달되는 내용:
 
 ### 프롬프트 위치 (XML 리소스)
 
-> 모든 시스템 프롬프트는 [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml)에서 관리
+> 채팅 관련 AI 요청 프롬프트는 [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml)에서 관리
 
-| 프롬프트 | XML key | 사용처 |
-|---------|---------|-------|
-| 쿼리 분석기 | `prompt_query_analyzer_system` | GeminiRepository (queryAnalyzerModel) |
-| 재무 상담사 | `prompt_financial_advisor_system` | GeminiRepository (financialAdvisorModel) |
-| 대화 요약 | `prompt_summary_system` | GeminiRepository (summaryModel) |
-| SMS 추출 (단일) | `prompt_sms_extract_system` | GeminiSmsExtractor |
-| SMS 추출 (배치) | `prompt_sms_batch_extract_system` | GeminiSmsExtractor |
-| 카테고리 분류 | `prompt_category_classification` | GeminiCategoryRepository |
+| 프롬프트 그룹 | XML key | 사용처 |
+|-------------|---------|-------|
+| 쿼리 분석 시스템 | `prompt_query_analyzer_system` | GeminiRepository (queryAnalyzerModel) |
+| 쿼리 분석 유저 템플릿 | `prompt_query_analyzer_user` | GeminiRepository, ChatContextBuilder |
+| 최종 답변 시스템 | `prompt_financial_advisor_system` | GeminiRepository (financialAdvisorModel) |
+| 최종 답변 유저 템플릿 | `prompt_final_answer_*` | GeminiRepository, ChatContextBuilder |
+| 홈 한줄 인사이트 | `prompt_home_insight_*` | GeminiRepository.generateInsight() |
+| 대화 요약/제목 | `prompt_summary_system`, `prompt_rolling_summary_*`, `prompt_chat_title_user` | GeminiRepository (summaryModel) |
+| SMS/카테고리 계열 | `prompt_sms_*`, `prompt_category_classification`, `prompt_income_classification` | GeminiSmsExtractor, GeminiCategoryRepository |
+
+관리 원칙:
+
+- `string_prompt.xml`에는 모델에 전달되는 시스템 instruction/user prompt template만 둔다.
+- 프롬프트 조립에 필요한 섹션 라벨, 방향값, 상태값은 `strings.xml`의 `ai_*` key에 둔다.
+- Kotlin은 사용자 질문, 조회 결과, 액션 결과처럼 런타임 데이터만 조립한다.
+- 카테고리 예시는 실제 displayName을 사용한다. 예: 카페는 `카페/간식`, 배달앱은 `식비`.
 
 ### API 키 관리
 - `SettingsDataStore`에 저장
@@ -377,7 +385,8 @@ chat_history 테이블
 | [`core/database/dao/ChatDao.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/dao/ChatDao.kt) | 세션/메시지 DAO |
 | [`core/database/entity/ChatEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/ChatEntity.kt) | 메시지 엔티티 |
 | [`core/database/entity/ChatSessionEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/ChatSessionEntity.kt) | 세션 엔티티 |
-| [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml) | 모든 AI 시스템 프롬프트 (6종) |
+| [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml) | AI 시스템/유저 프롬프트 템플릿 |
+| [`res/values/strings.xml`](../app/src/main/res/values/strings.xml) | 프롬프트 조립용 `ai_*` 보조 문자열 |
 
 ---
 

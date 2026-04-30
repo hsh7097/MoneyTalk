@@ -131,6 +131,33 @@ C:\Users\hsh70\AndroidStudioProjects\MoneyTalk\docs\AI_CONTEXT.md
 | [`feature/home/data/CategoryClassifierService.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt) | 4-tier 카테고리 분류 |
 | `docs/` | 기술 문서 전체 |
 
+### SMS 동기화 검증 명령
+
+월별 데이터 누락, 연말/연초 환불 날짜 보정, 월별 coverage/CTA 회귀를 확인할 때 아래 테스트를 우선 실행합니다.
+
+```bash
+./gradlew testDebugUnitTest --tests "com.sanha.moneytalk.core.sync.MonthlySmsSyncOrderRegressionTest"
+```
+
+실기기 SMS Provider 검증은 SMS 권한이 허용된 설치 상태에서 실행합니다.
+
+```bash
+./gradlew :app:installDebug :app:installDebugAndroidTest
+adb -s <serial> shell pm grant com.sanha.moneytalk android.permission.READ_SMS
+adb -s <serial> shell am instrument -w -r \
+  -e class com.sanha.moneytalk.core.sync.RealDeviceMonthlySmsSyncOrderInstrumentedTest \
+  com.sanha.moneytalk.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+홈/가계부 월 이동까지 직접 검증해야 할 때는 UI 이동 instrumented test를 실행합니다.
+현재 좌표 기반 검증은 `SM-F966N` 실기기에서만 수행되고, 다른 기기에서는 스킵됩니다.
+
+```bash
+adb -s <serial> shell am instrument -w -r \
+  -e class com.sanha.moneytalk.core.sync.RealDeviceMonthlyPageNavigationInstrumentedTest \
+  com.sanha.moneytalk.test/androidx.test.runner.AndroidJUnitRunner
+```
+
 ---
 
 *최종 업데이트: 2026-04-30*

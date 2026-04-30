@@ -246,7 +246,15 @@ com.sanha.moneytalk/
     └── NotificationContentParser.kt      # 메시지 앱 알림 파서
 ```
 
-**총 217개 .kt 파일**
+**총 229개 main .kt 파일**
+
+### 테스트 구조
+
+| 경로 | 주요 테스트 | 용도 |
+|------|-------------|------|
+| `app/src/test/java/com/sanha/moneytalk/core/sync/` | `MonthlySmsSyncOrderRegressionTest` | 월별 SMS 동기화 순서가 달라도 저장 결과/coverage/CTA 판정이 동일한지 JVM에서 검증 |
+| `app/src/androidTest/java/com/sanha/moneytalk/core/sync/` | `RealDeviceMonthlySmsSyncOrderInstrumentedTest` | 실기기 SMS/MMS/RCS provider를 직접 읽어 월별 순서 독립성 검증 |
+| `app/src/androidTest/java/com/sanha/moneytalk/core/sync/` | `RealDeviceMonthlyPageNavigationInstrumentedTest` | 홈/가계부 화면에서 실제 월 이동 탭으로 월 표시 동기화 검증 |
 
 ### Feature 패키지 원칙
 
@@ -348,16 +356,18 @@ RCS/비즈메시지(cold start) → NotificationTransactionService → 최근 pr
 
 ## AI 프롬프트 위치
 
-> 모든 시스템 프롬프트는 [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml)에서 관리
+> 시스템 instruction과 user prompt template은 [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml)에서 관리한다.
+> 프롬프트 조립에 필요한 섹션 라벨/방향값/상태값은 [`res/values/strings.xml`](../app/src/main/res/values/strings.xml)의 `ai_*` key로 분리한다.
 
-| 프롬프트 | XML key | 모델 | 목적 |
-|---------|---------|------|------|
-| 쿼리 분석기 | `prompt_query_analyzer_system` | gemini-2.5-pro | 사용자 질문 → 쿼리/액션 JSON |
-| 재무 상담사 | `prompt_financial_advisor_system` | gemini-2.5-pro | 재무 상담 답변 생성 |
-| 대화 요약 | `prompt_summary_system` | gemini-2.5-flash | 대화 요약 |
-| SMS 추출 (단일) | `prompt_sms_extract_system` | gemini-2.5-flash-lite | SMS → 결제 정보 추출 |
-| SMS 추출 (배치) | `prompt_sms_batch_extract_system` | gemini-2.5-flash-lite | 다건 SMS 배치 추출 |
-| 카테고리 분류 | `prompt_category_classification` | gemini-2.5-flash-lite | 가게명 → 카테고리 분류 |
+| 프롬프트 그룹 | XML key | 모델 | 목적 |
+|-------------|---------|------|------|
+| 쿼리 분석기 | `prompt_query_analyzer_system`, `prompt_query_analyzer_user` | gemini-2.5-pro | 사용자 질문 → 쿼리/액션 JSON |
+| 재무 상담사 | `prompt_financial_advisor_system`, `prompt_final_answer_*` | gemini-2.5-pro | 데이터 기반 최종 답변 생성 |
+| 홈 한줄 인사이트 | `prompt_home_insight_*` | gemini-2.5-pro | 홈 화면 소비 코멘트 생성 |
+| 대화 요약/제목 | `prompt_summary_system`, `prompt_rolling_summary_*`, `prompt_chat_title_user` | gemini-2.5-flash | Rolling Summary 및 채팅방 제목 생성 |
+| SMS 추출 | `prompt_sms_extract_*`, `prompt_sms_context_*`, `prompt_sms_batch_*` | gemini-2.5-flash-lite | SMS → 결제 정보 추출 |
+| SMS Regex 생성/수선 | `prompt_sms_regex_*` | gemini-2.5-flash-lite | 발신번호별 SMS regex 룰 생성/수선 |
+| 카테고리/수입 분류 | `prompt_category_classification`, `prompt_income_classification` | gemini-2.5-flash-lite | 가게명/수입명 → 카테고리 분류 |
 
 ## 유사도 정책 (core/similarity/)
 
