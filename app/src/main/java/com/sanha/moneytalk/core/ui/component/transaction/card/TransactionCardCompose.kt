@@ -155,7 +155,7 @@ fun TransactionCardCompose(
                                 Text(
                                     text = tag,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = FriendlyMoneyColors.MintDeep,
+                                    color = FriendlyMoneyColors.mintTintContent,
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(FriendlyMoneyColors.mintTint)

@@ -973,37 +973,37 @@ private object TransactionEditDesignColors {
     val background: Color
         @Composable
         @ReadOnlyComposable
-        get() = if (FriendlyMoneyColors.isDark) Color(0xFF111713) else Color(0xFFFFF7EA)
+        get() = MaterialTheme.colorScheme.background
 
     val card: Color
         @Composable
         @ReadOnlyComposable
-        get() = if (FriendlyMoneyColors.isDark) Color(0xFF1B211D) else MaterialTheme.colorScheme.surface
+        get() = MaterialTheme.colorScheme.surface
 
     val innerCard: Color
         @Composable
         @ReadOnlyComposable
-        get() = if (FriendlyMoneyColors.isDark) Color(0xFF222A25) else Color(0xFFFFFBF4)
+        get() = MaterialTheme.colorScheme.surfaceVariant
 
     val segmentBackground: Color
         @Composable
         @ReadOnlyComposable
-        get() = if (FriendlyMoneyColors.isDark) Color(0xFF222A25) else Color(0xFFFFFBF4)
+        get() = MaterialTheme.colorScheme.surfaceVariant
 
     val border: Color
         @Composable
         @ReadOnlyComposable
-        get() = if (FriendlyMoneyColors.isDark) Color(0xFF343D37) else Color(0xFFE8DED0)
+        get() = MaterialTheme.colorScheme.outlineVariant
 
     val textPrimary: Color
         @Composable
         @ReadOnlyComposable
-        get() = if (FriendlyMoneyColors.isDark) Color(0xFFF4F1E8) else Color(0xFF20302A)
+        get() = MaterialTheme.colorScheme.onSurface
 
     val textSecondary: Color
         @Composable
         @ReadOnlyComposable
-        get() = if (FriendlyMoneyColors.isDark) Color(0xFFA9B3AA) else Color(0xFF6B7D72)
+        get() = MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 private class SignedAmountTransformation(

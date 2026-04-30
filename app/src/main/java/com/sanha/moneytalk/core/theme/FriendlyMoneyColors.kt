@@ -60,6 +60,11 @@ object FriendlyMoneyColors {
         @ReadOnlyComposable
         get() = if (isDark) Mint.copy(alpha = 0.16f) else Mint.copy(alpha = 0.12f)
 
+    val mintTintContent: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = if (isDark) Color(0xFFEAF7EE) else MintDeep
+
     val coralTint: Color
         @Composable
         @ReadOnlyComposable
