@@ -70,10 +70,25 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE category = :category ORDER BY dateTime DESC")
     suspend fun getExpensesByCategoryOnce(category: String): List<ExpenseEntity>
 
-    @Query("SELECT SUM(amount) FROM expenses WHERE dateTime BETWEEN :startTime AND :endTime")
+    @Query(
+        """
+        SELECT SUM(amount) FROM expenses
+        WHERE dateTime BETWEEN :startTime AND :endTime
+          AND is_excluded_from_stats = 0
+          AND (transaction_type != 'TRANSFER' OR transfer_direction != 'DEPOSIT')
+    """
+    )
     suspend fun getTotalExpenseByDateRange(startTime: Long, endTime: Long): Int?
 
-    @Query("SELECT category, SUM(amount) as total FROM expenses WHERE dateTime BETWEEN :startTime AND :endTime GROUP BY category")
+    @Query(
+        """
+        SELECT category, SUM(amount) as total FROM expenses
+        WHERE dateTime BETWEEN :startTime AND :endTime
+          AND is_excluded_from_stats = 0
+          AND (transaction_type != 'TRANSFER' OR transfer_direction != 'DEPOSIT')
+        GROUP BY category
+    """
+    )
     suspend fun getExpenseSumByCategory(startTime: Long, endTime: Long): List<CategorySum>
 
     @Query("SELECT * FROM expenses ORDER BY dateTime DESC LIMIT :limit")
@@ -121,7 +136,15 @@ interface ExpenseDao {
     ): List<ExpenseEntity>
 
     /** 기간 + 카테고리 목록으로 총 지출 합산 (채팅 쿼리용) */
-    @Query("SELECT SUM(amount) FROM expenses WHERE category IN (:categories) AND dateTime BETWEEN :startTime AND :endTime")
+    @Query(
+        """
+        SELECT SUM(amount) FROM expenses
+        WHERE category IN (:categories)
+          AND dateTime BETWEEN :startTime AND :endTime
+          AND is_excluded_from_stats = 0
+          AND (transaction_type != 'TRANSFER' OR transfer_direction != 'DEPOSIT')
+    """
+    )
     suspend fun getTotalExpenseByCategoriesAndDateRange(
         categories: List<String>,
         startTime: Long,
@@ -141,11 +164,30 @@ interface ExpenseDao {
     suspend fun getAllCategories(): List<String>
 
     // 날짜별 총액 (일별 합계)
-    @Query("SELECT date(dateTime/1000, 'unixepoch', 'localtime') as date, SUM(amount) as total FROM expenses WHERE dateTime BETWEEN :startTime AND :endTime GROUP BY date ORDER BY date DESC")
+    @Query(
+        """
+        SELECT date(dateTime/1000, 'unixepoch', 'localtime') as date, SUM(amount) as total
+        FROM expenses
+        WHERE dateTime BETWEEN :startTime AND :endTime
+          AND is_excluded_from_stats = 0
+          AND (transaction_type != 'TRANSFER' OR transfer_direction != 'DEPOSIT')
+        GROUP BY date
+        ORDER BY date DESC
+    """
+    )
     suspend fun getDailyTotals(startTime: Long, endTime: Long): List<DailySum>
 
     // 월별 총액
-    @Query("SELECT strftime('%Y-%m', dateTime/1000, 'unixepoch', 'localtime') as month, SUM(amount) as total FROM expenses GROUP BY month ORDER BY month DESC")
+    @Query(
+        """
+        SELECT strftime('%Y-%m', dateTime/1000, 'unixepoch', 'localtime') as month, SUM(amount) as total
+        FROM expenses
+        WHERE is_excluded_from_stats = 0
+          AND (transaction_type != 'TRANSFER' OR transfer_direction != 'DEPOSIT')
+        GROUP BY month
+        ORDER BY month DESC
+    """
+    )
     suspend fun getMonthlyTotals(): List<MonthlySum>
 
     // 백업용 - 모든 지출 한번에 가져오기
@@ -211,6 +253,10 @@ interface ExpenseDao {
     /** 특정 ID의 고정지출 여부 변경 */
     @Query("UPDATE expenses SET is_fixed = :isFixed WHERE id = :expenseId")
     suspend fun updateFixedById(expenseId: Long, isFixed: Boolean): Int
+
+    /** 특정 ID의 통계 제외 여부 변경 */
+    @Query("UPDATE expenses SET is_excluded_from_stats = :isExcluded WHERE id = :expenseId")
+    suspend fun updateStatsExcludedById(expenseId: Long, isExcluded: Boolean): Int
 
     // 중복 데이터 조회 (금액, 가게명, 날짜시간이 동일한 항목)
     @Query(
@@ -299,7 +345,15 @@ interface ExpenseDao {
     ): Flow<List<ExpenseEntity>>
 
     /** 내 카드 기준 총 지출 합계 */
-    @Query("SELECT SUM(amount) FROM expenses WHERE cardName IN (:ownedCardNames) AND dateTime BETWEEN :startTime AND :endTime")
+    @Query(
+        """
+        SELECT SUM(amount) FROM expenses
+        WHERE cardName IN (:ownedCardNames)
+          AND dateTime BETWEEN :startTime AND :endTime
+          AND is_excluded_from_stats = 0
+          AND (transaction_type != 'TRANSFER' OR transfer_direction != 'DEPOSIT')
+    """
+    )
     suspend fun getTotalExpenseByOwnedCards(
         ownedCardNames: List<String>,
         startTime: Long,
@@ -307,7 +361,16 @@ interface ExpenseDao {
     ): Int?
 
     /** 내 카드 기준 카테고리별 합계 */
-    @Query("SELECT category, SUM(amount) as total FROM expenses WHERE cardName IN (:ownedCardNames) AND dateTime BETWEEN :startTime AND :endTime GROUP BY category")
+    @Query(
+        """
+        SELECT category, SUM(amount) as total FROM expenses
+        WHERE cardName IN (:ownedCardNames)
+          AND dateTime BETWEEN :startTime AND :endTime
+          AND is_excluded_from_stats = 0
+          AND (transaction_type != 'TRANSFER' OR transfer_direction != 'DEPOSIT')
+        GROUP BY category
+    """
+    )
     suspend fun getExpenseSumByCategoryOwned(
         ownedCardNames: List<String>,
         startTime: Long,

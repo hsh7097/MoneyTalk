@@ -40,6 +40,7 @@ class SettingsDataStore @Inject constructor(
         private val FREE_SYNC_USED_COUNT = intPreferencesKey("free_sync_used_count")
         private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         private val NOTIFICATION_ENABLED = booleanPreferencesKey("notification_enabled")
+        private val PREMIUM_CONFIG_JSON = stringPreferencesKey("premium_config_json")
 
         // ===== 화면별 온보딩 (코치마크) =====
         private val SCREEN_ONBOARDING_KEYS = mapOf(
@@ -299,6 +300,20 @@ class SettingsDataStore @Inject constructor(
         context.dataStore.edit { preferences ->
             preferences[NOTIFICATION_ENABLED] = enabled
         }
+    }
+
+    // ===== 서버 설정 캐시 =====
+
+    /** 마지막으로 정상 수신한 서버 설정 JSON 저장 */
+    suspend fun savePremiumConfigJson(json: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PREMIUM_CONFIG_JSON] = json
+        }
+    }
+
+    /** 마지막으로 정상 수신한 서버 설정 JSON 즉시 조회 */
+    suspend fun getPremiumConfigJson(): String {
+        return context.dataStore.data.first()[PREMIUM_CONFIG_JSON].orEmpty()
     }
 
     /** 무료 동기화 사용 횟수 1 증가 */

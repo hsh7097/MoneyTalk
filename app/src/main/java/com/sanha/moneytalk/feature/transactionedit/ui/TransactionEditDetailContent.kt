@@ -2,6 +2,12 @@ package com.sanha.moneytalk.feature.transactionedit.ui
 
 import android.app.Activity
 import android.os.Build
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,6 +51,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -102,11 +110,27 @@ internal fun TransactionEditDetailContent(
     onDateTimeClick: () -> Unit,
     onMemoChange: (String) -> Unit,
     onFixedToggle: (Boolean) -> Unit,
+    onStatsExcludeToggle: (Boolean) -> Unit,
+    onApplyStatsExcludeToAllChange: (Boolean) -> Unit,
     onApplyFixedToAllChange: (Boolean) -> Unit,
     onRuleKeywordChange: (String) -> Unit,
     onKeywordGuideDismiss: () -> Unit
 ) {
     TransactionEditSystemBars()
+    val hasCategorySameStoreRule = !uiState.isNew && uiState.applyCategoryToAll
+    val hasAutomationSameStoreRule = !uiState.isNew &&
+        (uiState.applyFixedToAll || uiState.applyStatsExcludeToAll)
+    val shouldShowSameStoreRule = hasCategorySameStoreRule || hasAutomationSameStoreRule
+
+    val onCategorySameStoreChange: (Boolean) -> Unit = { checked ->
+        onApplyCategoryToAllChange(checked)
+    }
+    val onFixedSameStoreChange: (Boolean) -> Unit = { checked ->
+        onApplyFixedToAllChange(checked)
+    }
+    val onStatsSameStoreChange: (Boolean) -> Unit = { checked ->
+        onApplyStatsExcludeToAllChange(checked)
+    }
 
     Column(
         modifier = Modifier
@@ -137,20 +161,40 @@ internal fun TransactionEditDetailContent(
                 uiState = uiState,
                 coachMarkRegistry = coachMarkRegistry,
                 onCategoryClick = onCategoryClick,
-                onApplyCategoryToAllChange = onApplyCategoryToAllChange,
+                onApplyCategoryToAllChange = onCategorySameStoreChange,
                 onDateTimeClick = onDateTimeClick,
                 onMemoChange = onMemoChange
             )
 
             TransactionAutomationCard(
                 uiState = uiState,
-                hasSeenKeywordGuide = hasSeenKeywordGuide,
                 coachMarkRegistry = coachMarkRegistry,
                 onFixedToggle = onFixedToggle,
-                onApplyFixedToAllChange = onApplyFixedToAllChange,
-                onRuleKeywordChange = onRuleKeywordChange,
-                onKeywordGuideDismiss = onKeywordGuideDismiss
+                onStatsExcludeToggle = onStatsExcludeToggle,
+                onApplyFixedToAllChange = onFixedSameStoreChange,
+                onApplyStatsExcludeToAllChange = onStatsSameStoreChange
             )
+
+            AnimatedVisibility(
+                visible = shouldShowSameStoreRule,
+                enter = fadeIn(animationSpec = tween(durationMillis = 240)) +
+                    expandVertically(
+                        animationSpec = tween(durationMillis = 320),
+                        expandFrom = Alignment.Top
+                    ),
+                exit = fadeOut(animationSpec = tween(durationMillis = 180)) +
+                    shrinkVertically(
+                        animationSpec = tween(durationMillis = 260),
+                        shrinkTowards = Alignment.Top
+                    )
+            ) {
+                TransactionSameStoreRuleCard(
+                    uiState = uiState,
+                    hasSeenKeywordGuide = hasSeenKeywordGuide,
+                    onRuleKeywordChange = onRuleKeywordChange,
+                    onKeywordGuideDismiss = onKeywordGuideDismiss
+                )
+            }
 
             if (!uiState.isNew && uiState.originalSms.isNotBlank()) {
                 TransactionOriginalSmsCard(originalSms = uiState.originalSms)
@@ -251,6 +295,7 @@ private fun TransactionHeroCard(
                 EditableHeroAmount(
                     amount = uiState.amount,
                     transactionType = uiState.transactionType,
+                    transferDirection = uiState.transferDirection,
                     accentColor = accentColor,
                     onAmountChange = onAmountChange
                 )
@@ -330,48 +375,104 @@ private fun TransactionBasicInfoCard(
 @Composable
 private fun TransactionAutomationCard(
     uiState: TransactionEditUiState,
-    hasSeenKeywordGuide: Boolean,
     coachMarkRegistry: CoachMarkTargetRegistry,
     onFixedToggle: (Boolean) -> Unit,
+    onStatsExcludeToggle: (Boolean) -> Unit,
     onApplyFixedToAllChange: (Boolean) -> Unit,
-    onRuleKeywordChange: (String) -> Unit,
-    onKeywordGuideDismiss: () -> Unit
+    onApplyStatsExcludeToAllChange: (Boolean) -> Unit
 ) {
-    val shouldShowKeyword = !uiState.isNew &&
-        (uiState.applyCategoryToAll || uiState.applyFixedToAll)
+    val canShowStatsExclude = uiState.transactionType != TransactionType.INCOME
+    val automationSameStoreChecked = uiState.applyFixedToAll || uiState.applyStatsExcludeToAll
+    val automationSameStoreVisible = !uiState.isNew &&
+        (uiState.isFixed || (canShowStatsExclude && uiState.isExcludedFromStats))
+
+    LaunchedEffect(automationSameStoreVisible, automationSameStoreChecked) {
+        if (!automationSameStoreVisible && automationSameStoreChecked) {
+            onApplyFixedToAllChange(false)
+            onApplyStatsExcludeToAllChange(false)
+        }
+    }
 
     TransactionSectionCard(
-        title = stringResource(R.string.transaction_edit_auto_organize)
+        title = stringResource(R.string.transaction_edit_auto_organize),
+        titleTrailing = if (automationSameStoreVisible) {
+            {
+                SameStoreHeaderCheckbox(
+                    checked = automationSameStoreChecked,
+                    onCheckedChange = { checked ->
+                        if (checked) {
+                            onApplyFixedToAllChange(uiState.isFixed)
+                            onApplyStatsExcludeToAllChange(canShowStatsExclude && uiState.isExcludedFromStats)
+                        } else {
+                            onApplyFixedToAllChange(false)
+                            onApplyStatsExcludeToAllChange(false)
+                        }
+                    }
+                )
+            }
+        } else {
+            null
+        }
     ) {
-        Column(modifier = Modifier.onboardingTarget("edit_fixed", coachMarkRegistry)) {
-            FixedTransactionRow(
-                isFixed = uiState.isFixed,
-                label = uiState.fixedShortLabel(),
-                onToggle = onFixedToggle,
-                showDivider = false
+        Column(
+            modifier = Modifier.onboardingTarget("edit_fixed", coachMarkRegistry),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            AutomationOptionRow(
+                title = uiState.fixedShortLabel(),
+                description = uiState.fixedDescription(),
+                selected = uiState.isFixed,
+                onSelectedChange = { checked ->
+                    onFixedToggle(checked)
+                    if (automationSameStoreChecked) {
+                        onApplyFixedToAllChange(checked)
+                    }
+                }
             )
 
-            if (!uiState.isNew) {
-                CompactRuleCheckbox(
-                    checked = uiState.applyFixedToAll,
-                    label = stringResource(R.string.transaction_edit_apply_fixed_to_same_store),
-                    onCheckedChange = onApplyFixedToAllChange
+            if (canShowStatsExclude) {
+                TransactionDivider()
+                AutomationOptionRow(
+                    title = stringResource(R.string.transaction_edit_exclude_from_stats),
+                    description = stringResource(R.string.transaction_edit_exclude_from_stats_desc),
+                    selected = uiState.isExcludedFromStats,
+                    onSelectedChange = { checked ->
+                        onStatsExcludeToggle(checked)
+                        if (automationSameStoreChecked) {
+                            onApplyStatsExcludeToAllChange(checked)
+                        }
+                    }
                 )
             }
         }
+    }
+}
 
-        if (shouldShowKeyword) {
-            Spacer(modifier = Modifier.height(12.dp))
+@Composable
+private fun TransactionSameStoreRuleCard(
+    uiState: TransactionEditUiState,
+    hasSeenKeywordGuide: Boolean,
+    onRuleKeywordChange: (String) -> Unit,
+    onKeywordGuideDismiss: () -> Unit
+) {
+    TransactionSectionCard(
+        title = stringResource(R.string.transaction_edit_same_store_rule)
+    ) {
+        Text(
+            text = stringResource(R.string.transaction_edit_same_store_rule_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = TransactionEditDesignColors.textSecondary
+        )
+        Spacer(modifier = Modifier.height(10.dp))
 
-            RuleKeywordInput(
-                keyword = uiState.ruleKeyword,
-                onKeywordChange = onRuleKeywordChange
-            )
+        RuleKeywordInput(
+            keyword = uiState.ruleKeyword,
+            onKeywordChange = onRuleKeywordChange
+        )
 
-            if (!hasSeenKeywordGuide) {
-                Spacer(modifier = Modifier.height(8.dp))
-                KeywordGuideCard(onDismiss = onKeywordGuideDismiss)
-            }
+        if (!hasSeenKeywordGuide) {
+            Spacer(modifier = Modifier.height(8.dp))
+            KeywordGuideCard(onDismiss = onKeywordGuideDismiss)
         }
     }
 }
@@ -410,6 +511,7 @@ private fun TransactionOriginalSmsCard(originalSms: String) {
 private fun TransactionSectionCard(
     modifier: Modifier = Modifier,
     title: String? = null,
+    titleTrailing: @Composable (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
@@ -425,12 +527,23 @@ private fun TransactionSectionCard(
             modifier = Modifier.padding(16.dp)
         ) {
             if (title != null) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = TransactionEditDesignColors.textPrimary
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 32.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = TransactionEditDesignColors.textPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (titleTrailing != null) {
+                        titleTrailing()
+                    }
+                }
                 Spacer(modifier = Modifier.height(10.dp))
             }
             content()
@@ -480,6 +593,7 @@ private fun EditableHeroText(
 private fun EditableHeroAmount(
     amount: String,
     transactionType: TransactionType,
+    transferDirection: TransferDirection?,
     accentColor: Color,
     onAmountChange: (String) -> Unit
 ) {
@@ -488,7 +602,13 @@ private fun EditableHeroAmount(
     val prefix = when (transactionType) {
         TransactionType.INCOME -> stringResource(R.string.transaction_edit_amount_prefix_income)
         TransactionType.EXPENSE -> stringResource(R.string.transaction_edit_amount_prefix_expense)
-        TransactionType.TRANSFER -> stringResource(R.string.transaction_edit_amount_prefix_transfer)
+        TransactionType.TRANSFER -> stringResource(
+            if (transferDirection == TransferDirection.DEPOSIT) {
+                R.string.transaction_edit_amount_prefix_income
+            } else {
+                R.string.transaction_edit_amount_prefix_expense
+            }
+        )
     }
     val amountTransformation = remember(prefix, suffix) {
         SignedAmountTransformation(prefix = prefix, suffix = suffix)
@@ -749,30 +869,40 @@ private fun CompactRuleCheckbox(
 }
 
 @Composable
-private fun FixedTransactionRow(
-    isFixed: Boolean,
-    label: String,
-    onToggle: (Boolean) -> Unit,
-    showDivider: Boolean = true
+private fun AutomationOptionRow(
+    title: String,
+    description: String,
+    selected: Boolean,
+    onSelectedChange: (Boolean) -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .clickable { onToggle(!isFixed) }
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .clickable { onSelectedChange(!selected) }
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = TransactionEditDesignColors.textPrimary
-        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = TransactionEditDesignColors.textPrimary
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = TransactionEditDesignColors.textSecondary
+            )
+        }
+
         Switch(
-            checked = isFixed,
-            onCheckedChange = onToggle,
+            checked = selected,
+            onCheckedChange = onSelectedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = TransactionEditDesignColors.Mint,
@@ -782,8 +912,32 @@ private fun FixedTransactionRow(
             )
         )
     }
-    if (showDivider) {
-        TransactionDivider()
+}
+
+@Composable
+private fun SameStoreHeaderCheckbox(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .clickable { onCheckedChange(!checked) }
+            .heightIn(min = 32.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = null,
+            modifier = Modifier.size(28.dp)
+        )
+        Text(
+            text = stringResource(R.string.transaction_edit_same_store_apply_short),
+            style = MaterialTheme.typography.labelSmall,
+            color = TransactionEditDesignColors.textSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -949,10 +1103,19 @@ private fun TransactionEditUiState.fixedShortLabel(): String {
 }
 
 @Composable
+private fun TransactionEditUiState.fixedDescription(): String {
+    return when (transactionType) {
+        TransactionType.INCOME -> stringResource(R.string.transaction_edit_fixed_income_desc)
+        TransactionType.TRANSFER -> stringResource(R.string.transaction_edit_fixed_transfer_desc)
+        TransactionType.EXPENSE -> stringResource(R.string.transaction_edit_fixed_expense_desc)
+    }
+}
+
+@Composable
 private fun TransferDirection?.toDirectionLabel(): String {
     return when (this) {
-        TransferDirection.DEPOSIT -> stringResource(R.string.transfer_direction_flow_deposit)
-        TransferDirection.WITHDRAWAL, null -> stringResource(R.string.transfer_direction_flow_withdrawal)
+        TransferDirection.DEPOSIT -> stringResource(R.string.transfer_direction_deposit)
+        TransferDirection.WITHDRAWAL, null -> stringResource(R.string.transfer_direction_withdrawal)
     }
 }
 

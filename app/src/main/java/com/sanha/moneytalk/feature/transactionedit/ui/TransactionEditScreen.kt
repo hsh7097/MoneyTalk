@@ -56,6 +56,8 @@ private data class TransactionEditSnapshot(
     val minute: Int,
     val memo: String,
     val isFixed: Boolean,
+    val isExcludedFromStats: Boolean,
+    val applyStatsExcludeToAll: Boolean,
     val transferDirection: String?
 )
 
@@ -73,6 +75,8 @@ private fun TransactionEditUiState.toSnapshot(): TransactionEditSnapshot {
         minute = minute,
         memo = memo,
         isFixed = isFixed,
+        isExcludedFromStats = isExcludedFromStats,
+        applyStatsExcludeToAll = applyStatsExcludeToAll,
         transferDirection = transferDirection?.dbValue
     )
 }
@@ -208,6 +212,8 @@ fun TransactionEditScreen(
                 onDateTimeClick = { showDatePicker = true },
                 onMemoChange = { viewModel.updateMemo(it) },
                 onFixedToggle = { viewModel.updateIsFixed(it) },
+                onStatsExcludeToggle = { viewModel.updateStatsExcluded(it) },
+                onApplyStatsExcludeToAllChange = { viewModel.updateApplyStatsExcludeToAll(it) },
                 onApplyFixedToAllChange = { viewModel.updateApplyFixedToAll(it) },
                 onRuleKeywordChange = { viewModel.updateRuleKeyword(it) },
                 onKeywordGuideDismiss = {

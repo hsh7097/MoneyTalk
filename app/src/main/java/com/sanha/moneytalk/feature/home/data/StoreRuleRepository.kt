@@ -9,7 +9,7 @@ import javax.inject.Singleton
 /**
  * 거래처 규칙 Repository
  *
- * 거래처명 키워드 기반으로 카테고리/고정지출을 자동 적용하는 규칙을 관리합니다.
+ * 거래처명 키워드 기반으로 카테고리/고정지출/통계 제외를 자동 적용하는 규칙을 관리합니다.
  * contains 매칭: storeName에 keyword가 포함되면 규칙 적용.
  */
 @Singleton

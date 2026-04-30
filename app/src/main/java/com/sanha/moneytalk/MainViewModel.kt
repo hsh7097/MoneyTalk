@@ -13,6 +13,7 @@ import com.sanha.moneytalk.core.database.SyncCoverageRepository
 import com.sanha.moneytalk.core.database.SyncCoverageTrigger
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
 import com.sanha.moneytalk.core.database.entity.SyncCoverageEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.IncomeCategoryMapper
@@ -25,6 +26,7 @@ import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.CardNameNormalizer
 import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.core.util.StatsExclusionClassifier
 import com.sanha.moneytalk.core.sms.SmsIncomeParser
 import com.sanha.moneytalk.core.sms.SmsInput
 import com.sanha.moneytalk.core.sms.SmsFilter
@@ -1001,11 +1003,24 @@ class MainViewModel @Inject constructor(
 
         // Phase 1.5: StoreRule 적용 (최우선 = Tier 0)
         val allRules = storeRuleRepository.getAllOnce()
+        fun findMatchingStoreRule(storeName: String): StoreRuleEntity? {
+            val lowerStore = storeName.lowercase()
+            return allRules
+                .filter { lowerStore.contains(it.keyword.lowercase()) }
+                .maxWithOrNull(
+                    compareBy<StoreRuleEntity>({ it.keyword.length }, { it.createdAt })
+                )
+        }
+
+        fun resolveStatsExclusion(entity: ExpenseEntity): Boolean {
+            return findMatchingStoreRule(entity.storeName)?.isExcludedFromStats
+                ?: StatsExclusionClassifier.shouldExcludeExpense(entity)
+        }
+
         if (allRules.isNotEmpty()) {
             for (i in entities.indices) {
                 val entity = entities[i]
-                val lowerStore = entity.storeName.lowercase()
-                val matchedRule = allRules.firstOrNull { lowerStore.contains(it.keyword.lowercase()) }
+                val matchedRule = findMatchingStoreRule(entity.storeName)
                 if (matchedRule != null) {
                     entities[i] = entity.copy(
                         category = matchedRule.category ?: entity.category,
@@ -1013,7 +1028,8 @@ class MainViewModel @Inject constructor(
                             matchedRule.isFixed ?: entity.isFixed
                         } else {
                             entity.isFixed
-                        }
+                        },
+                        isExcludedFromStats = matchedRule.isExcludedFromStats ?: entity.isExcludedFromStats
                     )
                 }
             }
@@ -1050,10 +1066,13 @@ class MainViewModel @Inject constructor(
                             val newCategory = geminiResults[entity.storeName]
                             if (newCategory != null) {
                                 val isTransfer = newCategory == Category.TRANSFER_GENERAL.displayName
-                                entities[i] = entity.copy(
+                                val updated = entity.copy(
                                     category = newCategory,
                                     transactionType = if (isTransfer) "TRANSFER" else entity.transactionType,
                                     transferDirection = if (isTransfer) TransferDirection.WITHDRAWAL.dbValue else entity.transferDirection
+                                )
+                                entities[i] = updated.copy(
+                                    isExcludedFromStats = resolveStatsExclusion(updated)
                                 )
                             }
                         }
@@ -1116,7 +1135,12 @@ class MainViewModel @Inject constructor(
                 entities[i] = entity.copy(
                     id = existingExpense.id,
                     memo = existingExpense.memo,
+                    isExcludedFromStats = existingExpense.isExcludedFromStats,
                     createdAt = existingExpense.createdAt
+                )
+            } else {
+                entities[i] = entity.copy(
+                    isExcludedFromStats = resolveStatsExclusion(entity)
                 )
             }
         }

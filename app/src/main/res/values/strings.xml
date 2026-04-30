@@ -651,23 +651,31 @@
     <string name="transaction_edit_date_time_value">%1$s  %2$s</string>
     <string name="transaction_edit_basic_info">기본 정보</string>
     <string name="transaction_edit_auto_organize">자동 정리</string>
+    <string name="transaction_edit_same_store_rule">동일 거래처 적용</string>
+    <string name="transaction_edit_same_store_apply_short">동일 거래처 적용</string>
+    <string name="transaction_edit_same_store_rule_desc">체크한 항목은 아래 키워드가 포함된 모든 거래처에 함께 적용됩니다.</string>
     <string name="transaction_edit_transfer_direction">방향</string>
-    <string name="transfer_direction_flow_withdrawal">출금 → 입금</string>
-    <string name="transfer_direction_flow_deposit">입금 → 출금</string>
+    <string name="transaction_edit_exclude_from_stats">통계에서 제외</string>
+    <string name="transaction_edit_exclude_from_stats_desc">기록은 유지하고 월별 합계, 카테고리, AI 분석에서는 제외</string>
     <string name="transaction_edit_fixed_expense">고정지출에 추가</string>
     <string name="transaction_edit_fixed_transfer">고정이체에 추가</string>
     <string name="transaction_edit_fixed_income">고정수입에 추가</string>
     <string name="transaction_edit_fixed_expense_short">고정 지출</string>
     <string name="transaction_edit_fixed_transfer_short">고정 이체</string>
     <string name="transaction_edit_fixed_income_short">고정 수입</string>
+    <string name="transaction_edit_fixed_expense_desc">반복되는 지출로 표시하고 고정 거래 필터에 포함</string>
+    <string name="transaction_edit_fixed_transfer_desc">반복되는 이체로 표시하고 고정 거래 필터에 포함</string>
+    <string name="transaction_edit_fixed_income_desc">반복되는 수입으로 표시하고 고정 거래 필터에 포함</string>
     <string name="transaction_card_fixed_tag">고정</string>
+    <string name="transaction_card_stats_excluded_tag">통계 제외</string>
     <string name="transaction_edit_apply_category_to_all">동일 거래처에 모두 적용</string>
     <string name="transaction_edit_apply_fixed_to_all">동일 거래처에 모두 적용</string>
     <string name="transaction_edit_apply_category_to_same_store">카테고리 동일 거래처에 적용</string>
     <string name="transaction_edit_apply_fixed_to_same_store">고정 거래 동일 거래처에 적용</string>
+    <string name="transaction_edit_apply_stats_exclude_to_same_store">통계 제외 동일 거래처에 적용</string>
     <string name="transaction_edit_rule_keyword_label">매칭 키워드</string>
     <string name="transaction_edit_rule_keyword_placeholder">예: 카카오페이, 스타벅스</string>
-    <string name="transaction_edit_rule_keyword_hint">이 키워드가 포함된 모든 거래에 적용</string>
+    <string name="transaction_edit_rule_keyword_hint">카테고리, 고정 거래, 통계 제외 일괄 적용에 공통으로 사용</string>
     <string name="transaction_edit_keyword_guide">입력한 키워드가 거래처명에 포함되면 자동으로 적용돼요.\n예: \'삼성화\' 입력 시 \'삼성화134\', \'삼성화 8613\' 모두 적용</string>
     <string name="transaction_edit_keyword_guide_confirm">확인</string>
     <string name="transaction_edit_type_label">분류</string>
@@ -682,8 +690,8 @@
 
     <!-- 거래처 규칙 설정 -->
     <string name="store_rule_settings_title">거래처 규칙</string>
-    <string name="store_rule_settings_subtitle">거래처별 카테고리/고정지출 자동 적용</string>
-    <string name="store_rule_settings_description">키워드가 포함된 거래처에 카테고리와 고정지출을 자동으로 적용합니다.\n거래 편집에서 \"동일 거래처 일괄 적용\" 시 자동 생성됩니다.</string>
+    <string name="store_rule_settings_subtitle">거래처별 카테고리/고정지출/통계 제외 자동 적용</string>
+    <string name="store_rule_settings_description">키워드가 포함된 거래처에 카테고리, 고정지출, 통계 제외를 자동으로 적용합니다.\n거래 편집에서 \"동일 거래처 일괄 적용\" 시 자동 생성됩니다.</string>
     <string name="store_rule_settings_empty">등록된 거래처 규칙이 없습니다</string>
     <string name="store_rule_settings_add">규칙 추가</string>
     <string name="store_rule_settings_add_title">규칙 추가</string>
@@ -698,6 +706,9 @@
     <string name="store_rule_settings_category_select">선택</string>
     <string name="store_rule_settings_category_label">카테고리: %s</string>
     <string name="store_rule_settings_fixed_label">고정지출</string>
+    <string name="store_rule_settings_stats_excluded_label">통계 제외: %s</string>
+    <string name="store_rule_settings_stats_excluded_on">제외</string>
+    <string name="store_rule_settings_stats_excluded_off">포함</string>
     <string name="store_rule_settings_fixed_toggle">고정지출로 설정</string>
     <string name="store_rule_error_keyword_required">키워드를 입력해주세요</string>
     <string name="store_rule_error_no_rule">카테고리 또는 고정지출 중 하나는 설정해주세요</string>

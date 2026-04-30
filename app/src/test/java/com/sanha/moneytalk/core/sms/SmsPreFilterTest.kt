@@ -32,4 +32,19 @@ class SmsPreFilterTest {
         assertFalse(preFilter.isObviouslyNonPayment(body))
         assertFalse(preFilter.lacksPaymentRequirements(body))
     }
+
+    @Test
+    fun `card bill debit is kept for transaction record`() {
+        val body = "[Web발신]\n우리카드결제 120,000원 출금 완료 잔액 500,000원"
+
+        assertFalse(preFilter.isObviouslyNonPayment(body))
+        assertFalse(preFilter.lacksPaymentRequirements(body))
+    }
+
+    @Test
+    fun `card bill notice is filtered`() {
+        val body = "[Web발신]\n이번 달 카드대금 결제예정 금액은 120,000원입니다"
+
+        assertTrue(preFilter.isObviouslyNonPayment(body))
+    }
 }

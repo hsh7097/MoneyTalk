@@ -526,9 +526,12 @@
     <string name="transaction_edit_date_time_value">%1$s  %2$s</string>
     <string name="transaction_edit_basic_info">Basic Info</string>
     <string name="transaction_edit_auto_organize">Auto Organize</string>
+    <string name="transaction_edit_same_store_rule">Same Store Rule</string>
+    <string name="transaction_edit_same_store_apply_short">Same store</string>
+    <string name="transaction_edit_same_store_rule_desc">Checked options apply together to every store containing the keyword below.</string>
     <string name="transaction_edit_transfer_direction">Direction</string>
-    <string name="transfer_direction_flow_withdrawal">Withdrawal → Deposit</string>
-    <string name="transfer_direction_flow_deposit">Deposit → Withdrawal</string>
+    <string name="transaction_edit_exclude_from_stats">Exclude from stats</string>
+    <string name="transaction_edit_exclude_from_stats_desc">Keep the record but exclude it from monthly totals, categories, and AI analysis</string>
     <string name="transaction_edit_income_input_required">Please enter amount</string>
     <string name="transaction_edit_fixed_expense">Add to fixed expenses</string>
     <string name="transaction_edit_fixed_transfer">Add to fixed transfers</string>
@@ -536,14 +539,19 @@
     <string name="transaction_edit_fixed_expense_short">Fixed Expense</string>
     <string name="transaction_edit_fixed_transfer_short">Fixed Transfer</string>
     <string name="transaction_edit_fixed_income_short">Fixed Income</string>
+    <string name="transaction_edit_fixed_expense_desc">Mark as a recurring expense and include it in fixed transaction filters</string>
+    <string name="transaction_edit_fixed_transfer_desc">Mark as a recurring transfer and include it in fixed transaction filters</string>
+    <string name="transaction_edit_fixed_income_desc">Mark as recurring income and include it in fixed transaction filters</string>
     <string name="transaction_card_fixed_tag">Fixed</string>
+    <string name="transaction_card_stats_excluded_tag">Excluded</string>
     <string name="transaction_edit_apply_category_to_all">Apply to all same store</string>
     <string name="transaction_edit_apply_fixed_to_all">Apply to all same store</string>
     <string name="transaction_edit_apply_category_to_same_store">Apply category to same store</string>
     <string name="transaction_edit_apply_fixed_to_same_store">Apply fixed transaction to same store</string>
+    <string name="transaction_edit_apply_stats_exclude_to_same_store">Apply stats exclusion to same store</string>
     <string name="transaction_edit_rule_keyword_label">Match keyword</string>
     <string name="transaction_edit_rule_keyword_placeholder">e.g. KakaoPay, Starbucks</string>
-    <string name="transaction_edit_rule_keyword_hint">Applies to all transactions containing this keyword</string>
+    <string name="transaction_edit_rule_keyword_hint">Shared by category, fixed transaction, and stats exclusion batch rules</string>
     <string name="transaction_edit_keyword_guide">Rules apply to all transactions whose store name contains the keyword.\ne.g. \'Samsung\' matches \'Samsung134\', \'Samsung 8613\'</string>
     <string name="transaction_edit_keyword_guide_confirm">Got it</string>
     <string name="transaction_edit_type_label">Type</string>
@@ -554,8 +562,8 @@
 
     <!-- Store Rule Settings -->
     <string name="store_rule_settings_title">Store Rules</string>
-    <string name="store_rule_settings_subtitle">Auto-apply category/fixed expense by store</string>
-    <string name="store_rule_settings_description">Automatically applies category and fixed expense to stores containing the keyword.\nAuto-created when using \"Apply to all same store\" in transaction edit.</string>
+    <string name="store_rule_settings_subtitle">Auto-apply category/fixed expense/stats exclusion by store</string>
+    <string name="store_rule_settings_description">Automatically applies category, fixed expense, and stats exclusion to stores containing the keyword.\nAuto-created when using \"Apply to all same store\" in transaction edit.</string>
     <string name="store_rule_settings_empty">No store rules registered</string>
     <string name="store_rule_settings_add">Add Rule</string>
     <string name="store_rule_settings_add_title">Add Rule</string>
@@ -570,6 +578,9 @@
     <string name="store_rule_settings_category_select">Select</string>
     <string name="store_rule_settings_category_label">Category: %s</string>
     <string name="store_rule_settings_fixed_label">Fixed Expense</string>
+    <string name="store_rule_settings_stats_excluded_label">Stats exclusion: %s</string>
+    <string name="store_rule_settings_stats_excluded_on">Excluded</string>
+    <string name="store_rule_settings_stats_excluded_off">Included</string>
     <string name="store_rule_settings_fixed_toggle">Set as fixed expense</string>
     <string name="store_rule_error_keyword_required">Please enter a keyword</string>
     <string name="store_rule_error_no_rule">Please set either category or fixed expense</string>

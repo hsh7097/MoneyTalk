@@ -52,11 +52,14 @@ data class TransactionEditUiState(
     val memo: String = "",
     val originalSms: String = "",
     val isFixed: Boolean = false,
+    val isExcludedFromStats: Boolean = false,
     val transferDirection: TransferDirection? = null,
     /** 카테고리 변경을 동일 거래처에 일괄 적용 */
     val applyCategoryToAll: Boolean = false,
     /** 고정 거래 변경을 동일 거래처에 일괄 적용 */
     val applyFixedToAll: Boolean = false,
+    /** 통계 제외 변경을 동일 거래처에 일괄 적용 */
+    val applyStatsExcludeToAll: Boolean = false,
     /** 거래처 규칙 매칭 키워드 (일괄 적용 시 사용) */
     val ruleKeyword: String = "",
     val categoryEntries: List<CategoryInfo> = Category.expenseEntries,
@@ -159,6 +162,7 @@ class TransactionEditViewModel @Inject constructor(
                 originalMatchedRule = matchingRule
                 val hasCategoryRule = matchingRule?.category != null
                 val hasFixedRule = supportsFixedExpense(type) && matchingRule?.isFixed != null
+                val hasStatsExcludeRule = matchingRule?.isExcludedFromStats != null
 
                 _uiState.update {
                     it.copy(
@@ -175,9 +179,11 @@ class TransactionEditViewModel @Inject constructor(
                         memo = expense.memo ?: "",
                         originalSms = expense.originalSms,
                         isFixed = expense.isFixed && supportsFixedExpense(type),
+                        isExcludedFromStats = expense.isExcludedFromStats,
                         transferDirection = direction,
                         applyCategoryToAll = hasCategoryRule,
                         applyFixedToAll = hasFixedRule,
+                        applyStatsExcludeToAll = hasStatsExcludeRule,
                         ruleKeyword = matchingRule?.keyword ?: expense.storeName.trim(),
                         categoryEntries = defaultCategoryEntries(type)
                     )
@@ -213,6 +219,8 @@ class TransactionEditViewModel @Inject constructor(
                         memo = income.memo ?: "",
                         originalSms = income.originalSms ?: "",
                         isFixed = income.isRecurring,
+                        isExcludedFromStats = false,
+                        applyStatsExcludeToAll = false,
                         categoryEntries = defaultCategoryEntries(TransactionType.INCOME)
                     )
                 }
@@ -235,6 +243,7 @@ class TransactionEditViewModel @Inject constructor(
                 dateMillis = initialDate,
                 hour = cal.get(Calendar.HOUR_OF_DAY),
                 minute = cal.get(Calendar.MINUTE),
+                applyStatsExcludeToAll = false,
                 categoryEntries = defaultCategoryEntries(TransactionType.EXPENSE)
             )
         }
@@ -255,24 +264,30 @@ class TransactionEditViewModel @Inject constructor(
                     transactionType = type,
                     category = Category.UNCLASSIFIED.displayName,
                     transferDirection = TransferDirection.WITHDRAWAL,
+                    isExcludedFromStats = state.isExcludedFromStats,
                     applyCategoryToAll = false,
                     applyFixedToAll = false,
+                    applyStatsExcludeToAll = false,
                     categoryEntries = defaultCategoryEntries(type)
                 )
                 TransactionType.EXPENSE -> state.copy(
                     transactionType = type,
                     category = Category.UNCLASSIFIED.displayName,
                     transferDirection = null,
+                    isExcludedFromStats = state.isExcludedFromStats,
                     applyCategoryToAll = false,
                     applyFixedToAll = false,
+                    applyStatsExcludeToAll = false,
                     categoryEntries = defaultCategoryEntries(type)
                 )
                 TransactionType.INCOME -> state.copy(
                     transactionType = type,
                     category = Category.INCOME_UNCLASSIFIED.displayName,
                     transferDirection = null,
+                    isExcludedFromStats = false,
                     applyCategoryToAll = false,
                     applyFixedToAll = false,
+                    applyStatsExcludeToAll = false,
                     categoryEntries = defaultCategoryEntries(type)
                 )
             }
@@ -407,6 +422,10 @@ class TransactionEditViewModel @Inject constructor(
         _uiState.update { it.copy(isFixed = value) }
     }
 
+    fun updateStatsExcluded(value: Boolean) {
+        _uiState.update { it.copy(isExcludedFromStats = value) }
+    }
+
     fun updateApplyCategoryToAll(value: Boolean) {
         _uiState.update { state ->
             state.copy(
@@ -424,6 +443,19 @@ class TransactionEditViewModel @Inject constructor(
         _uiState.update { state ->
             state.copy(
                 applyFixedToAll = value,
+                ruleKeyword = if (value && state.ruleKeyword.isBlank()) {
+                    state.storeName.trim()
+                } else {
+                    state.ruleKeyword
+                }
+            )
+        }
+    }
+
+    fun updateApplyStatsExcludeToAll(value: Boolean) {
+        _uiState.update { state ->
+            state.copy(
+                applyStatsExcludeToAll = value,
                 ruleKeyword = if (value && state.ruleKeyword.isBlank()) {
                     state.storeName.trim()
                 } else {
@@ -478,6 +510,7 @@ class TransactionEditViewModel @Inject constructor(
                         senderAddress = originalIncomeEntity?.senderAddress ?: "",
                         memo = state.memo.ifBlank { null },
                         isFixed = effectiveIsFixed,
+                        isExcludedFromStats = state.isExcludedFromStats,
                         transactionType = txType,
                         transferDirection = txDirection
                     )
@@ -496,6 +529,7 @@ class TransactionEditViewModel @Inject constructor(
                         smsId = "manual_${System.currentTimeMillis()}",
                         memo = state.memo.ifBlank { null },
                         isFixed = effectiveIsFixed,
+                        isExcludedFromStats = state.isExcludedFromStats,
                         transactionType = txType,
                         transferDirection = txDirection
                     )
@@ -509,6 +543,7 @@ class TransactionEditViewModel @Inject constructor(
                         cardName = state.cardName.trim(),
                         dateTime = dateTime,
                         isFixed = effectiveIsFixed,
+                        isExcludedFromStats = state.isExcludedFromStats,
                         memo = state.memo.ifBlank { null },
                         transactionType = txType,
                         transferDirection = txDirection
@@ -527,7 +562,9 @@ class TransactionEditViewModel @Inject constructor(
                             (
                                 supportsFixedRuleEditing &&
                                     (state.applyFixedToAll || originalMatchedRule?.isFixed != null)
-                                )
+                                ) ||
+                            state.applyStatsExcludeToAll ||
+                            originalMatchedRule?.isExcludedFromStats != null
                         )
 
                 if (shouldSyncStoreRule) {
@@ -536,12 +573,21 @@ class TransactionEditViewModel @Inject constructor(
                         val previousRule = originalMatchedRule?.takeIf { matched ->
                             !matched.keyword.equals(ruleKeyword, ignoreCase = true)
                         } ?: keywordRule ?: originalMatchedRule
-                        val newRule = if (state.applyCategoryToAll || state.applyFixedToAll) {
+                        val newRule = if (
+                            state.applyCategoryToAll ||
+                            state.applyFixedToAll ||
+                            state.applyStatsExcludeToAll
+                        ) {
                             StoreRuleEntity(
                                 id = keywordRule?.id ?: previousRule?.id ?: 0,
                                 keyword = ruleKeyword,
                                 category = if (state.applyCategoryToAll) state.category else null,
                                 isFixed = if (state.applyFixedToAll) effectiveIsFixed else null,
+                                isExcludedFromStats = if (state.applyStatsExcludeToAll) {
+                                    state.isExcludedFromStats
+                                } else {
+                                    null
+                                },
                                 createdAt = keywordRule?.createdAt ?: previousRule?.createdAt ?: System.currentTimeMillis()
                             )
                         } else {

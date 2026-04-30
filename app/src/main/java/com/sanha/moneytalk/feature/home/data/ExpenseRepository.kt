@@ -225,6 +225,10 @@ class ExpenseRepository @Inject constructor(
     suspend fun updateFixedById(expenseId: Long, isFixed: Boolean): Int =
         expenseDao.updateFixedById(expenseId, isFixed)
 
+    /** 특정 ID의 통계 제외 여부 변경 */
+    suspend fun updateStatsExcludedById(expenseId: Long, isExcluded: Boolean): Int =
+        expenseDao.updateStatsExcludedById(expenseId, isExcluded)
+
     /** 특정 카테고리의 지출 조회 (일회성) */
     suspend fun getExpensesByCategoryOnce(category: String): List<ExpenseEntity> =
         expenseDao.getExpensesByCategoryOnce(category)

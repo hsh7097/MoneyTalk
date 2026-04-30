@@ -23,7 +23,6 @@ import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.ForceUpdateChecker
 import com.sanha.moneytalk.core.firebase.ForceUpdateState
-import com.sanha.moneytalk.core.firebase.PremiumConfig
 import com.sanha.moneytalk.core.firebase.PremiumManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -40,7 +39,6 @@ import com.sanha.moneytalk.core.ui.ForceUpdateDialog
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 /**
@@ -48,8 +46,8 @@ import javax.inject.Inject
  *
  * 3가지 초기화를 처리한 뒤 MainActivity로 전환:
  * 1. 권한 설정 — 커스텀 설명 화면 + 시스템 권한 요청
- * 2. RTDB 가져오기 — PremiumConfig 비동기 로딩 (splash 동안 병렬)
- * 3. 강제 업데이트 체크 — RTDB 로드 후 min_version_code 비교
+ * 2. 서버 설정 — PremiumManager가 캐시를 복원하고 RTDB는 비동기로 갱신
+ * 3. 강제 업데이트 체크 — 현재 보유한 min_version_name 기준 즉시 비교
  */
 @AndroidEntryPoint
 class IntroActivity : ComponentActivity() {
@@ -119,7 +117,7 @@ class IntroActivity : ComponentActivity() {
                     }
 
                     IntroState.NAVIGATING -> {
-                        // RTDB 대기 중 — 스플래시 배경만 유지 (애니메이션 재생 없이)
+                        // MainActivity 전환 직전 — 스플래시 배경만 유지 (애니메이션 재생 없이)
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -157,7 +155,7 @@ class IntroActivity : ComponentActivity() {
         lifecycleScope.launch {
             val completed = settingsDataStore.onboardingCompletedFlow.first()
             if (completed) {
-                waitForConfigAndNavigate()
+                checkConfigAndNavigate()
             } else {
                 introState = IntroState.ONBOARDING
             }
@@ -201,23 +199,19 @@ class IntroActivity : ComponentActivity() {
     private fun onPermissionFlowDone() {
         lifecycleScope.launch {
             settingsDataStore.setOnboardingCompleted(true)
-            waitForConfigAndNavigate()
+            checkConfigAndNavigate()
         }
     }
 
     /**
-     * RTDB 비동기 대기 → 강제 업데이트 체크 → MainActivity 전환.
-     *
-     * premiumConfig의 첫 유효 값을 최대 3초 대기.
-     * 타임아웃 시 기본값으로 진행 (MainActivity의 ForceUpdateChecker가 이후 대응).
+     * RTDB 응답을 기다리지 않고 현재 보유 설정만 확인한 뒤 MainActivity로 전환.
+     * 서버 설정은 PremiumManager에서 캐시 복원 후 비동기로 갱신된다.
      */
-    private suspend fun waitForConfigAndNavigate() {
+    private fun checkConfigAndNavigate() {
         introState = IntroState.NAVIGATING
-        val config = withTimeoutOrNull(3000L) {
-            premiumManager.premiumConfig.first { it != PremiumConfig() }
-        }
+        val config = premiumManager.premiumConfig.value
         // 강제 업데이트 체크 (버전명 비교)
-        if (config != null && ForceUpdateChecker.compareVersionNames(BuildConfig.VERSION_NAME, config.minVersionName) < 0) {
+        if (ForceUpdateChecker.compareVersionNames(BuildConfig.VERSION_NAME, config.minVersionName) < 0) {
             forceUpdateState = ForceUpdateState.Required(
                 currentVersion = BuildConfig.VERSION_NAME,
                 requiredVersion = config.minVersionName,

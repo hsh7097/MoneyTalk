@@ -1,22 +1,26 @@
 package com.sanha.moneytalk.core.firebase
 
-import com.sanha.moneytalk.core.util.MoneyTalkLogger
-
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import com.google.gson.Gson
 import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -52,7 +56,8 @@ import javax.inject.Singleton
 @Singleton
 class PremiumManager @Inject constructor(
     private val database: FirebaseDatabase?,
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val gson: Gson
 ) {
     companion object {
         private const val CONFIG_PATH = "config"
@@ -62,10 +67,17 @@ class PremiumManager @Inject constructor(
     private val _premiumConfig = MutableStateFlow(PremiumConfig())
     val premiumConfig: StateFlow<PremiumConfig> = _premiumConfig.asStateFlow()
 
+    private val managerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var configListener: ValueEventListener? = null
+    private val configLock = Any()
+    private val remoteConfigLoaded = AtomicBoolean(false)
 
     /** 라운드로빈 키 인덱스 (thread-safe) */
     private val keyIndex = AtomicInteger(0)
+
+    init {
+        loadCachedConfig()
+    }
 
     /**
      * Firebase Realtime Database의 /config 경로를 실시간 감시 시작
@@ -79,8 +91,8 @@ class PremiumManager @Inject constructor(
 
         configListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val config = parseConfig(snapshot)
-                _premiumConfig.value = config
+                val config = parseConfigOrNull(snapshot) ?: return
+                updateRemoteConfig(config)
             }
 
             override fun onCancelled(error: DatabaseError) {
@@ -166,19 +178,23 @@ class PremiumManager @Inject constructor(
      */
     fun fetchConfigOnce(onResult: (PremiumConfig) -> Unit) {
         if (database == null) {
-            MoneyTalkLogger.w("Firebase 미설정 — 기본 설정 반환")
-            onResult(PremiumConfig())
+            MoneyTalkLogger.w("Firebase 미설정 — 저장된 서버 설정 반환")
+            onResult(_premiumConfig.value)
             return
         }
         database.getReference(CONFIG_PATH).get()
             .addOnSuccessListener { snapshot ->
-                val config = parseConfig(snapshot)
-                _premiumConfig.value = config
-                onResult(config)
+                val remoteConfig = parseConfigOrNull(snapshot)
+                if (remoteConfig != null) {
+                    updateRemoteConfig(remoteConfig)
+                    onResult(remoteConfig)
+                } else {
+                    onResult(_premiumConfig.value)
+                }
             }
             .addOnFailureListener { e ->
                 MoneyTalkLogger.e("서버 설정 1회 조회 실패: ${e.message}")
-                onResult(PremiumConfig())
+                onResult(_premiumConfig.value)
             }
     }
 
@@ -191,10 +207,54 @@ class PremiumManager @Inject constructor(
         return try {
             withContext(Dispatchers.IO) {
                 val snapshot = db.getReference(CONFIG_PATH).get().await()
-                parseConfig(snapshot).also { _premiumConfig.value = it }
+                parseConfigOrNull(snapshot)?.also { updateRemoteConfig(it) }
             }
         } catch (e: Exception) {
             MoneyTalkLogger.e("서버 설정 즉시 조회 실패: ${e.message}")
+            null
+        }
+    }
+
+    private fun loadCachedConfig() {
+        managerScope.launch {
+            val cachedConfig = readCachedConfig() ?: return@launch
+            synchronized(configLock) {
+                if (!remoteConfigLoaded.get() && _premiumConfig.value == PremiumConfig()) {
+                    _premiumConfig.value = cachedConfig
+                }
+            }
+        }
+    }
+
+    private suspend fun readCachedConfig(): PremiumConfig? {
+        return try {
+            val cachedJson = settingsDataStore.getPremiumConfigJson()
+            if (cachedJson.isBlank()) return null
+            gson.fromJson(cachedJson, PremiumConfig::class.java)
+        } catch (e: Exception) {
+            MoneyTalkLogger.w("저장된 서버 설정 복원 실패: ${e.message}")
+            null
+        }
+    }
+
+    private fun updateRemoteConfig(config: PremiumConfig) {
+        synchronized(configLock) {
+            remoteConfigLoaded.set(true)
+            _premiumConfig.value = config
+        }
+        managerScope.launch {
+            try {
+                settingsDataStore.savePremiumConfigJson(gson.toJson(config))
+            } catch (e: Exception) {
+                MoneyTalkLogger.w("서버 설정 저장 실패: ${e.message}")
+            }
+        }
+    }
+
+    private fun parseConfigOrNull(snapshot: DataSnapshot): PremiumConfig? {
+        return if (snapshot.exists() && snapshot.hasChildren()) {
+            parseConfig(snapshot)
+        } else {
             null
         }
     }

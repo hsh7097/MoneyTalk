@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.core.sms
 
+import com.sanha.moneytalk.core.util.StatsExclusionClassifier
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,10 +21,11 @@ import javax.inject.Singleton
  * 2. 금융기관 키워드 없음 → SKIP
  * 3. 금액 패턴 없음 → SKIP
  * 4. 취소 키워드 → INCOME (출금취소 = 돈 돌아옴)
- * 5. 수입 제외 키워드 → SKIP (자동이체출금, 출금예정 등 안내성 문구)
- * 6. 결제 키워드 → PAYMENT
- * 7. 수입 키워드 → INCOME
- * 8. 그 외 (금융+금액은 있지만 명시적 키워드 없음) → PAYMENT (벡터/LLM에 맡김)
+ * 5. 카드대금 실제 출금 → PAYMENT (저장 후 통계 제외)
+ * 6. 수입 제외 키워드 → SKIP (자동이체출금, 출금예정 등 안내성 문구)
+ * 7. 결제 키워드 → PAYMENT
+ * 8. 수입 키워드 → INCOME
+ * 9. 그 외 (금융+금액은 있지만 명시적 키워드 없음) → PAYMENT (벡터/LLM에 맡김)
  *
  * 의존성: 없음 (모든 키워드를 자체 보유, core/sms 미참조)
  *
@@ -152,6 +154,10 @@ class SmsIncomeFilter @Inject constructor() {
         if (body.length > MAX_SMS_LENGTH) return SmsType.SKIP to "tooLong(${body.length})"
 
         val bodyLower = body.lowercase()
+
+        if (StatsExclusionClassifier.isCardBillDebitText(body, requireWonAmount = true)) {
+            return SmsType.PAYMENT to "cardBillDebit"
+        }
 
         // 제외 키워드 (광고, 안내 등)
         val matchedExclude = excludeKeywords.firstOrNull { bodyLower.contains(it) }

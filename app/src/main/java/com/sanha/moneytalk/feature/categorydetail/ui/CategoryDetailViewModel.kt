@@ -11,6 +11,7 @@ import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.database.entity.isIncludedInExpenseStats
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryProvider
@@ -510,15 +511,19 @@ class CategoryDetailViewModel @Inject constructor(
 
     // ========== 제외 키워드 필터 ==========
 
-    /** 제외 키워드로 지출 목록 필터링 */
+    /** 제외 키워드와 통계 제외 플래그로 카테고리 통계용 지출 목록 필터링 */
     private fun filterByExclusion(
         expenses: List<ExpenseEntity>,
         exclusionKeywords: Set<String>
     ): List<ExpenseEntity> {
-        if (exclusionKeywords.isEmpty()) return expenses
         return expenses.filter { expense ->
-            val smsLower = expense.originalSms.lowercase()
-            exclusionKeywords.none { kw -> smsLower.contains(kw) }
+            val isKeywordAllowed = if (exclusionKeywords.isEmpty()) {
+                true
+            } else {
+                val smsLower = expense.originalSms.lowercase()
+                exclusionKeywords.none { kw -> smsLower.contains(kw) }
+            }
+            isKeywordAllowed && expense.isIncludedInExpenseStats()
         }
     }
 

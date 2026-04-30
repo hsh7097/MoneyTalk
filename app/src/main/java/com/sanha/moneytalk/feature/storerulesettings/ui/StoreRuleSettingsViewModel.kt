@@ -124,7 +124,7 @@ class StoreRuleSettingsViewModel @Inject constructor(
             return
         }
 
-        if (state.addCategory == null && !state.addIsFixed) {
+        if (state.addCategory == null && !state.addIsFixed && state.editingRule?.isExcludedFromStats == null) {
             _uiState.update { it.copy(addErrorResId = R.string.store_rule_error_no_rule) }
             return
         }
@@ -135,7 +135,9 @@ class StoreRuleSettingsViewModel @Inject constructor(
                 id = oldRule?.id ?: 0,
                 keyword = keyword,
                 category = state.addCategory,
-                isFixed = if (state.addIsFixed) true else null
+                isFixed = if (state.addIsFixed) true else null,
+                isExcludedFromStats = oldRule?.isExcludedFromStats,
+                createdAt = oldRule?.createdAt ?: System.currentTimeMillis()
             )
             storeRuleSyncService.applyRuleChange(
                 previousRule = oldRule,

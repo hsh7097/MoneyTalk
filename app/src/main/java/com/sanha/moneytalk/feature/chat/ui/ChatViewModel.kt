@@ -12,6 +12,7 @@ import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.database.entity.isIncludedInExpenseStats
 import kotlin.math.abs
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
@@ -729,7 +730,8 @@ class ChatViewModel @Inject constructor(
                     )
                 } else {
                     expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp)
-                }.take(limit)
+                }.filter { it.isIncludedInExpenseStats() }
+                    .take(limit)
 
                 val expenseList = expenses.joinToString("\n") { expense ->
                     "${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${
@@ -880,6 +882,7 @@ class ChatViewModel @Inject constructor(
                 val cardName = query.cardName ?: query.storeName ?: return null
                 val allExpenses =
                     expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp)
+                        .filter { it.isIncludedInExpenseStats() }
                         .filter { it.cardName.contains(cardName, ignoreCase = true) }
                         .sortedByDescending { it.dateTime }
 
@@ -1101,6 +1104,7 @@ class ChatViewModel @Inject constructor(
             // 1. DB에서 기간 내 전체 지출 조회
             var expenses =
                 expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp)
+                    .filter { it.isIncludedInExpenseStats() }
 
             // 2. filters 배열 순회하며 메모리 필터링
             val filters = query.filters ?: emptyList()
@@ -1903,7 +1907,9 @@ class ChatViewModel @Inject constructor(
         )
 
         // 최근 지출 10건
-        val recentExpenses = expenseRepository.getRecentExpenses(10)
+        val recentExpenses = expenseRepository.getRecentExpenses(30)
+            .filter { it.isIncludedInExpenseStats() }
+            .take(10)
         val expenseList = recentExpenses.joinToString("\n") { expense ->
             "${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${
                 numberFormat.format(

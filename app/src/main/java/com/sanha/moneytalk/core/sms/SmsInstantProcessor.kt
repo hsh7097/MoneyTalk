@@ -8,6 +8,7 @@ import com.sanha.moneytalk.core.notification.SmsNotificationManager
 import com.sanha.moneytalk.core.util.CardNameNormalizer
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
+import com.sanha.moneytalk.core.util.StatsExclusionClassifier
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
@@ -259,17 +260,24 @@ class SmsInstantProcessor @Inject constructor(
         return Result.Income(entity)
     }
 
-    /** StoreRule 적용 (카테고리 + 고정지출) */
+    /** StoreRule 적용 (카테고리 + 고정지출 + 통계 제외) */
     private suspend fun applyStoreRules(entity: ExpenseEntity): ExpenseEntity {
         val matchedRule = storeRuleRepository.findMatchingRule(entity.storeName)
-            ?: return entity
-        return entity.copy(
-            category = matchedRule.category ?: entity.category,
-            isFixed = if (supportsFixedExpense(entity)) {
-                matchedRule.isFixed ?: entity.isFixed
-            } else {
-                entity.isFixed
-            }
+        val updated = matchedRule?.let { rule ->
+            entity.copy(
+                category = rule.category ?: entity.category,
+                isFixed = if (supportsFixedExpense(entity)) {
+                    rule.isFixed ?: entity.isFixed
+                } else {
+                    entity.isFixed
+                },
+                isExcludedFromStats = rule.isExcludedFromStats ?: entity.isExcludedFromStats
+            )
+        } ?: entity
+
+        return updated.copy(
+            isExcludedFromStats = matchedRule?.isExcludedFromStats
+                ?: StatsExclusionClassifier.shouldExcludeExpense(updated)
         )
     }
 

@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.database.entity.isIncludedInExpenseStats
+import com.sanha.moneytalk.core.database.entity.isIncludedInTransferIncomeStats
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
@@ -195,9 +197,9 @@ data class HistoryUiState(
         get() {
             return currentPageData.expenses.filterExpensesByFixed(fixedExpenseFilter).filter { expense ->
                 if (expense.transactionType == "TRANSFER") {
-                    showTransfers && expense.transferDirection != TransferDirection.DEPOSIT.dbValue
+                    showTransfers && expense.isIncludedInExpenseStats()
                 } else {
-                    showExpenses
+                    showExpenses && expense.isIncludedInExpenseStats()
                 }
             }.sumOf { it.amount }
         }
@@ -214,7 +216,7 @@ data class HistoryUiState(
             val transferDepositTotal = if (showTransfers) {
                 fixedFilteredExpenses.filter {
                     it.transactionType == "TRANSFER" &&
-                            it.transferDirection == TransferDirection.DEPOSIT.dbValue
+                            it.isIncludedInTransferIncomeStats()
                 }.sumOf { it.amount }
             } else {
                 0
@@ -539,9 +541,10 @@ class HistoryViewModel @Inject constructor(
                     }
                     val filteredExpenses =
                         typeCategoryFilteredExpenses.filterExpensesByFixed(currentState.fixedExpenseFilter)
+                    val statsExpenses = filteredExpenses.filter { it.isIncludedInExpenseStats() }
                     val sortedExpenses = sortExpenses(filteredExpenses, currentState.sortOrder)
                     val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
-                    val dailyTotalsMap = filteredExpenses
+                    val dailyTotalsMap = statsExpenses
                         .groupBy { dateFormat.format(java.util.Date(it.dateTime)) }
                         .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
                     val incomesForList = _uiState.value.pageCache[key]?.incomes ?: emptyList()
@@ -550,7 +553,7 @@ class HistoryViewModel @Inject constructor(
                     updatePageCache(key, cached.copy(
                         isLoading = false,
                         expenses = sortedExpenses,
-                        monthlyTotal = filteredExpenses.sumOf { it.amount },
+                        monthlyTotal = statsExpenses.sumOf { it.amount },
                         dailyTotals = dailyTotalsMap,
                         transactionListItems = buildTransactionListItems(
                             sortedExpenses, incomesForList, currentState.sortOrder,
@@ -767,7 +770,9 @@ class HistoryViewModel @Inject constructor(
                 updatePageCache(key, HistoryPageData(
                     isLoading = false,
                     expenses = sortedResults,
-                    monthlyTotal = filteredResults.sumOf { e -> e.amount },
+                    monthlyTotal = filteredResults
+                        .filter { it.isIncludedInExpenseStats() }
+                        .sumOf { e -> e.amount },
                     transactionListItems = buildTransactionListItems(
                         sortedResults, emptyList(), currentState.sortOrder,
                         currentState.showExpenses, currentState.showIncomes, currentState.showTransfers,
@@ -1057,8 +1062,13 @@ class HistoryViewModel @Inject constructor(
         allDates.forEach { date ->
             val dayExpenses = groupedExpenses[date] ?: emptyList()
             val dayIncomes = groupedIncomes[date] ?: emptyList()
-            val dailyExpenseTotal = dayExpenses.sumOf { it.amount }
-            val dailyIncomeTotal = dayIncomes.sumOf { it.amount }
+            val dailyExpenseTotal = dayExpenses
+                .filter { it.isIncludedInExpenseStats() }
+                .sumOf { it.amount }
+            val dailyIncomeTotal = dayIncomes.sumOf { it.amount } +
+                dayExpenses
+                    .filter { it.isIncludedInTransferIncomeStats() }
+                    .sumOf { it.amount }
 
             val calendar = Calendar.getInstance().apply { time = date }
             val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
@@ -1095,8 +1105,9 @@ class HistoryViewModel @Inject constructor(
                 title = "${context.getString(R.string.history_sort_amount)} (${
                     context.getString(R.string.history_count_with_unit, totalCount)
                 })",
-                expenseTotal = expenses.sumOf { it.amount },
-                incomeTotal = incomes.sumOf { it.amount }
+                expenseTotal = expenses.filter { it.isIncludedInExpenseStats() }.sumOf { it.amount },
+                incomeTotal = incomes.sumOf { it.amount } +
+                    expenses.filter { it.isIncludedInTransferIncomeStats() }.sumOf { it.amount }
             )
         )
         // 지출+수입 금액 높은순 통합 정렬
@@ -1120,13 +1131,19 @@ class HistoryViewModel @Inject constructor(
             .sortedByDescending { it.value.size }
 
         storeGroups.forEach { (storeName, storeExpenses) ->
-            val storeTotal = storeExpenses.sumOf { it.amount }
+            val storeExpenseTotal = storeExpenses
+                .filter { it.isIncludedInExpenseStats() }
+                .sumOf { it.amount }
+            val storeIncomeTotal = storeExpenses
+                .filter { it.isIncludedInTransferIncomeStats() }
+                .sumOf { it.amount }
             items.add(
                 TransactionListItem.Header(
                     title = "$storeName (${
                         context.getString(R.string.history_visit_with_unit, storeExpenses.size)
                     })",
-                    expenseTotal = storeTotal
+                    expenseTotal = storeExpenseTotal,
+                    incomeTotal = storeIncomeTotal
                 )
             )
             storeExpenses.sortedByDescending { it.dateTime }

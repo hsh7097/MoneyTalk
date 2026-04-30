@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.database.entity.isIncludedInExpenseStats
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.MonthKey
@@ -358,6 +359,7 @@ class HomeViewModel @Inject constructor(
                         exclusionKeywords.none { kw -> smsLower.contains(kw) }
                     }
                 }
+                val statsTodayExpenses = filteredTodayExpenses.filter { it.isIncludedInExpenseStats() }
 
                 // 오늘의 수입 조회
                 val todayIncomesList = withContext(Dispatchers.IO) {
@@ -393,7 +395,8 @@ class HomeViewModel @Inject constructor(
                         exclusionKeywords.none { kw -> smsLower.contains(kw) }
                     }
                 }
-                val filteredLastMonthExpense = filteredLastMonthExpenses.sumOf { it.amount }
+                val statsLastMonthExpenses = filteredLastMonthExpenses.filter { it.isIncludedInExpenseStats() }
+                val filteredLastMonthExpense = statsLastMonthExpenses.sumOf { it.amount }
 
                 // 비교 기간 레이블 생성
                 val dateFormat = java.text.SimpleDateFormat("M/d", java.util.Locale.KOREA)
@@ -423,17 +426,20 @@ class HomeViewModel @Inject constructor(
                     }
                 }
                 val lastMonthCumulative = CumulativeChartDataBuilder.buildDailyCumulative(
-                    filteredFullLastMonthExpenses, lastMonthFullStart, lastMonthDaysInMonth
+                    filteredFullLastMonthExpenses.filter { it.isIncludedInExpenseStats() },
+                    lastMonthFullStart,
+                    lastMonthDaysInMonth
                 )
 
                 // 지난 3개월 / 6개월 평균 (IO에서 1회 로드)
                 // exclusionKeywords 필터링을 포함한 데이터 로드 람다
                 val loadFilteredExpenses: suspend (Long, Long) -> List<ExpenseEntity> = { s, e ->
                     val raw = expenseRepository.getExpensesByDateRangeOnce(s, e)
-                    if (exclusionKeywords.isEmpty()) raw
+                    val keywordFiltered = if (exclusionKeywords.isEmpty()) raw
                     else raw.filter { ex ->
                         exclusionKeywords.none { kw -> ex.originalSms.lowercase().contains(kw) }
                     }
+                    keywordFiltered.filter { it.isIncludedInExpenseStats() }
                 }
                 val avgThreeMonthCumulative = withContext(Dispatchers.IO) {
                     CumulativeChartDataBuilder.buildAvgNMonthCumulative(
@@ -463,7 +469,7 @@ class HomeViewModel @Inject constructor(
                     isLoading = existingData == null, // 캐시 없을 때만 로딩 표시
                     periodLabel = periodLabel,
                     monthlyIncome = totalIncome,
-                    todayExpense = filteredTodayExpenses.sumOf { e -> e.amount },
+                    todayExpense = statsTodayExpenses.sumOf { e -> e.amount },
                     todayExpenseCount = filteredTodayExpenses.size,
                     todayExpenses = filteredTodayExpenses.sortedByDescending { e -> e.dateTime },
                     todayIncomes = filteredTodayIncomes.sortedByDescending { e -> e.dateTime },
@@ -496,8 +502,9 @@ class HomeViewModel @Inject constructor(
                                 exclusionKeywords.none { kw -> smsLower.contains(kw) }
                             }
                         }
-                        val totalExpense = expenses.sumOf { it.amount }
-                        val categories = expenses
+                        val statsExpenses = expenses.filter { it.isIncludedInExpenseStats() }
+                        val totalExpense = statsExpenses.sumOf { it.amount }
+                        val categories = statsExpenses
                             .groupBy { expense ->
                                 val cat = Category.fromDisplayName(expense.category)
                                 // 커스텀 카테고리는 원래 이름 유지 (기타로 합치지 않음)
@@ -513,7 +520,7 @@ class HomeViewModel @Inject constructor(
                             .sortedByDescending { it.total }
 
                         // 이번 달 일별 누적 지출 계산
-                        val dailyCumulative = CumulativeChartDataBuilder.buildDailyCumulative(expenses, monthStart, daysInMonth)
+                        val dailyCumulative = CumulativeChartDataBuilder.buildDailyCumulative(statsExpenses, monthStart, daysInMonth)
 
                         // 현재 캐시의 1회성 데이터를 유지하면서 지출 데이터 업데이트
                         val current = _uiState.value.pageCache[key] ?: HomePageData()
@@ -529,7 +536,7 @@ class HomeViewModel @Inject constructor(
                         if (!insightLoaded && totalExpense > 0) {
                             insightLoaded = true
                             val top3 = categories.take(3)
-                            val lastMonthByCategory = filteredLastMonthExpenses
+                            val lastMonthByCategory = statsLastMonthExpenses
                                 .groupBy { expense ->
                                     val cat = Category.fromDisplayName(expense.category)
                                     cat.parentCategory?.displayName ?: cat.displayName
