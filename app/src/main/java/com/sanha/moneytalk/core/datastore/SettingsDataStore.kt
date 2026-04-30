@@ -193,10 +193,10 @@ class SettingsDataStore @Inject constructor(
         return context.dataStore.data.first()[REWARD_CHAT_REMAINING] ?: 0
     }
 
-    // ===== 월별 동기화 해제 관리 =====
+    // ===== 월별 동기화 완료 기록 관리 =====
 
     /**
-     * 특정 월의 동기화 해제 기록 추가
+     * 특정 월의 동기화 완료 기록 추가
      * @param yearMonth "YYYY-MM" 형식 (예: "2026-02")
      */
     suspend fun addSyncedMonth(yearMonth: String) {
@@ -206,18 +206,18 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
-    /** 동기화 해제된 월 목록 Flow */
+    /** 동기화 완료된 월 목록 Flow */
     val syncedMonthsFlow: Flow<Set<String>> = context.dataStore.data.map { preferences ->
         preferences[SYNCED_MONTHS] ?: emptySet()
     }
 
-    /** 특정 월이 동기화 해제되었는지 확인 */
+    /** 특정 월이 동기화 완료되었는지 확인 */
     suspend fun isMonthSynced(yearMonth: String): Boolean {
         val months = context.dataStore.data.first()[SYNCED_MONTHS] ?: emptySet()
         return yearMonth in months
     }
 
-    /** 동기화 해제된 월이 하나라도 있는지 (= 광고를 한 번이라도 시청했는지) */
+    /** 동기화 완료된 월이 하나라도 있는지 (= 월별 CTA를 한 번이라도 완료했는지) */
     suspend fun hasAnySyncedMonth(): Boolean {
         val prefs = context.dataStore.data.first()
         val months = prefs[SYNCED_MONTHS] ?: emptySet()

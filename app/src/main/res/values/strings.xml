@@ -539,14 +539,12 @@
     <string name="reward_ad_load_failed">광고 로드에 실패했습니다. 잠시 후 다시 시도해주세요.</string>
     <string name="reward_ad_rewarded">%d회 무료 상담이 충전되었습니다!</string>
 
-    <!-- 전체 동기화 해제 (리워드 광고) -->
+    <!-- 월별 SMS 동기화 CTA (리워드 광고) -->
     <string name="full_sync_ad_dialog_title">%1$s 문자 동기화</string>
     <string name="full_sync_ad_dialog_message">%1$s 문자 데이터를 가져옵니다.\n광고를 시청하면 해당 기간의 문자를 동기화할 수 있습니다.</string>
     <string name="full_sync_ad_watch_button">광고 보고 %1$s 데이터 가져오기</string>
     <string name="full_sync_ad_later">나중에</string>
     <string name="full_sync_unlocked_message">%1$s 데이터를 가져옵니다.</string>
-    <string name="full_sync_already_unlocked">이미 전체 동기화가 해제되어 있습니다.</string>
-    <string name="home_sync_full_locked">전체 동기화 (광고 시청 필요)</string>
     <string name="full_sync_cta_title">이전 데이터가 없어요</string>
     <string name="full_sync_cta_subtitle">광고 시청 후 %1$s 데이터를 가져와요</string>
     <string name="full_sync_cta_subtitle_no_ad">탭하면 %1$s 데이터를 가져와요</string>

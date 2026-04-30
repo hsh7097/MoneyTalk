@@ -3,7 +3,6 @@ package com.sanha.moneytalk
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
 import android.Manifest
-import android.content.ContentResolver
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
@@ -11,7 +10,6 @@ import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.OwnedCardRepository
 import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.SyncCoverageRepository
-import com.sanha.moneytalk.core.database.SyncCoverageStatus
 import com.sanha.moneytalk.core.database.SyncCoverageTrigger
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
@@ -32,10 +30,14 @@ import com.sanha.moneytalk.core.sms.SmsInput
 import com.sanha.moneytalk.core.sms.SmsFilter
 import com.sanha.moneytalk.core.sms.DeletedSmsTracker
 import com.sanha.moneytalk.core.sms.SmsInstantProcessor
-import com.sanha.moneytalk.core.sms.SmsReaderV2
 import com.sanha.moneytalk.core.sms.SmsPipeline
+import com.sanha.moneytalk.core.sms.SmsSyncMessageReader
 import com.sanha.moneytalk.core.sms.SmsSyncCoordinator
 import com.sanha.moneytalk.core.sms.SyncStats
+import com.sanha.moneytalk.core.sync.SmsSyncRangeCalculator
+import com.sanha.moneytalk.core.sync.SyncCoveragePagePolicy
+import com.sanha.moneytalk.core.sync.SyncCoverageRecordCounts
+import com.sanha.moneytalk.core.sync.SyncCoverageRecorder
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
@@ -62,19 +64,17 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import kotlin.coroutines.coroutineContext
 
-private class SmsPrimaryProviderReadException(message: String) : Exception(message)
-
 /**
  * Activity-scoped ViewModel — SMS 동기화 엔진 + resume/권한/광고 통합 관리
  *
- * HomeViewModel(1,890줄)에서 동기화 관련 ~600줄을 추출하여 Activity 레벨로 이동.
+ * HomeViewModel에서 동기화 관련 책임을 Activity 레벨로 이동.
  * HomeScreen/HistoryScreen 모두에서 공유되는 동기화, 권한, 광고 상태를 단일 소스로 관리.
  *
  * 주요 기능:
  * - SMS 동기화 (초기/증분/월별)
  * - 앱 resume 시 자동 동기화 + 자동 분류
  * - SMS 권한 상태 관리
- * - 월별 동기화 해제 (리워드 광고)
+ * - 월별 SMS 동기화 CTA (리워드 광고)
  * - AI 성과 요약 (초기 동기화 완료 후)
  */
 @HiltViewModel
@@ -82,12 +82,15 @@ class MainViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val categoryClassifierService: CategoryClassifierService,
-    private val smsReaderV2: SmsReaderV2,
+    private val smsSyncMessageReader: SmsSyncMessageReader,
     private val settingsDataStore: SettingsDataStore,
     private val dataRefreshEvent: DataRefreshEvent,
     private val ownedCardRepository: OwnedCardRepository,
     private val smsExclusionRepository: SmsExclusionRepository,
     private val syncCoverageRepository: SyncCoverageRepository,
+    private val smsSyncRangeCalculator: SmsSyncRangeCalculator,
+    private val syncCoverageRecorder: SyncCoverageRecorder,
+    private val syncCoveragePagePolicy: SyncCoveragePagePolicy,
     private val geminiRepository: GeminiRepository,
     private val snackbarBus: AppSnackbarBus,
     private val classificationState: ClassificationState,
@@ -105,9 +108,6 @@ class MainViewModel @Inject constructor(
 
         /** smsId 존재 여부 조회 chunk 크기 (SQLite bind limit 여유) */
         private const val SMS_ID_LOOKUP_CHUNK_SIZE = 500
-
-        /** 초기 동기화 제한 기간 (2개월, 밀리초) — 전체 동기화 미해제 시 적용 */
-        private const val DEFAULT_SYNC_PERIOD_MILLIS = 60L * 24 * 60 * 60 * 1000
 
         /** 카테고리 분류 최대 반복 횟수 */
         private const val MAX_CLASSIFICATION_ROUNDS = 3
@@ -165,9 +165,6 @@ class MainViewModel @Inject constructor(
     val homeTabReClickEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     /** 내역 탭 재클릭 → 오늘 페이지로 이동 + 필터 초기화 이벤트 */
     val historyTabReClickEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-
-    /** appContext의 ContentResolver (SMS 읽기용) */
-    private val contentResolver: ContentResolver get() = appContext.contentResolver
 
     /** resume 자동 분류 중복 실행 방지 플래그 */
     private val isResumeClassificationChecking = AtomicBoolean(false)
@@ -260,7 +257,7 @@ class MainViewModel @Inject constructor(
                     _uiState.update { it.copy(monthStartDay = monthStartDay) }
                 }
         }
-        // 월별 동기화 해제 상태
+        // 월별 동기화 완료 상태
         viewModelScope.launch {
             settingsDataStore.syncedMonthsFlow.collect { months ->
                 _uiState.update { it.copy(syncedMonths = months) }
@@ -502,22 +499,16 @@ class MainViewModel @Inject constructor(
         trigger: SyncCoverageTrigger,
         result: SyncResult
     ) {
-        try {
-            val recordEndMillis = minOf(targetMonthRange.second, System.currentTimeMillis())
-            if (recordEndMillis < targetMonthRange.first) return
-
-            syncCoverageRepository.recordCoverage(
-                startMillis = targetMonthRange.first,
-                endMillis = recordEndMillis,
-                trigger = trigger,
+        syncCoverageRecorder.recordSuccessfulRange(
+            range = targetMonthRange,
+            trigger = trigger,
+            counts = SyncCoverageRecordCounts(
                 expenseCount = result.expenseCount,
                 incomeCount = result.incomeCount,
                 reconciledExpenseCount = result.reconciledExpenseCount,
                 reconciledIncomeCount = result.reconciledIncomeCount
             )
-        } catch (e: Exception) {
-            MoneyTalkLogger.w("동기화 구간 저장 실패: ${e.message}")
-        }
+        )
     }
 
     /** 결과 메시지 빌드 헬퍼 */
@@ -715,18 +706,7 @@ class MainViewModel @Inject constructor(
     private suspend fun readSmsInputs(
         targetMonthRange: Pair<Long, Long>
     ): List<SmsInput> {
-        val readResult = smsReaderV2.readAllMessagesByDateRange(
-            contentResolver,
-            targetMonthRange.first,
-            targetMonthRange.second
-        )
-        if (!readResult.smsProviderReadSucceeded) {
-            throw SmsPrimaryProviderReadException(appContext.getString(R.string.sync_sms_read_failed))
-        }
-
-        val allSmsList = readResult.messages
-        MoneyTalkLogger.i("syncSmsV2 SMS 읽기: ${allSmsList.size}건")
-        return allSmsList
+        return smsSyncMessageReader.read(targetMonthRange)
     }
 
     /**
@@ -1302,55 +1282,12 @@ class MainViewModel @Inject constructor(
      * 증분 동기화용 시간 범위 계산
      *
      * - lastSyncTime이 있으면: lastSyncTime ~ now (증분)
-     * - lastSyncTime이 없으면 (초기): 전월 1일 ~ now (2달치)
+     * - lastSyncTime이 없으면 (초기): monthStartDay 기준 초기 동기화 범위
      *
      * Auto Backup 감지: savedSyncTime > 0 이지만 DB 비어있으면 초기 상태로 리셋.
      */
     private suspend fun calculateIncrementalRange(): Pair<Long, Long> {
-        val savedSyncTime = settingsDataStore.getLastSyncTime()
-        val now = System.currentTimeMillis()
-        val monthStartDay = _uiState.value.monthStartDay
-
-        val dbCount = expenseRepository.getExpenseCount() + incomeRepository.getIncomeCount()
-        val effectiveSyncTime = if (savedSyncTime > 0 && dbCount == 0) {
-            MoneyTalkLogger.w("Auto Backup 감지: savedSyncTime 있으나 DB 비어있음 → 리셋")
-            settingsDataStore.saveLastSyncTime(0L)
-            0L
-        } else {
-            savedSyncTime
-        }
-
-        // monthStartDay > 1이면 커스텀 월이 달을 걸치므로 추가 마진 필요
-        val extraDaysMillis = if (monthStartDay > 1) {
-            (monthStartDay - 1).toLong() * 24 * 60 * 60 * 1000
-        } else 0L
-
-        val minStartTime = now - DEFAULT_SYNC_PERIOD_MILLIS - extraDaysMillis
-
-        val OVERLAP_MARGIN_MILLIS = 5L * 60 * 1000 // 5분
-
-        val startTime = if (effectiveSyncTime > 0) {
-            maxOf(effectiveSyncTime - OVERLAP_MARGIN_MILLIS, minStartTime)
-        } else {
-            val cal = java.util.Calendar.getInstance()
-            if (monthStartDay > 1) {
-                cal.add(java.util.Calendar.MONTH, -2)
-                cal.set(
-                    java.util.Calendar.DAY_OF_MONTH,
-                    monthStartDay.coerceAtMost(cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH))
-                )
-            } else {
-                cal.add(java.util.Calendar.MONTH, -1)
-                cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
-            }
-            cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
-            cal.set(java.util.Calendar.MINUTE, 0)
-            cal.set(java.util.Calendar.SECOND, 0)
-            cal.set(java.util.Calendar.MILLISECOND, 0)
-            cal.timeInMillis
-        }
-
-        return Pair(startTime, now)
+        return smsSyncRangeCalculator.calculateIncrementalRange(_uiState.value.monthStartDay)
     }
 
     /** 동기화 결과 처리 (UI 상태 업데이트 + snackbar + 데이터 변경 통지) */
@@ -1455,10 +1392,10 @@ class MainViewModel @Inject constructor(
         dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
     }
 
-    // ========== 전체 동기화 해제 (리워드 광고) ==========
+    // ========== 월별 SMS 동기화 CTA (리워드 광고) ==========
 
     /**
-     * 전체 동기화 광고 다이얼로그 표시 (광고 미로드 시 프리로드도 함께 실행)
+     * 월별 SMS 동기화 광고 다이얼로그 표시 (광고 미로드 시 프리로드도 함께 실행)
      *
      * @param year 대상 연도 (Activity 레벨 다이얼로그에서 월 라벨 표시에 사용)
      * @param month 대상 월
@@ -1470,13 +1407,13 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    /** 전체 동기화 광고 다이얼로그 닫기 */
+    /** 월별 SMS 동기화 광고 다이얼로그 닫기 */
     fun dismissFullSyncAdDialog() {
         _uiState.update { it.copy(showFullSyncAdDialog = false) }
     }
 
     /**
-     * 월별 동기화 해제 (광고 시청 완료 후 호출)
+     * 월별 SMS 동기화 실행 (광고 시청 완료 후 호출)
      *
      * 지정된 월의 실제 커스텀 기간만 가져오고, 성공 시 해당 구간을 coverage로 저장한다.
      * syncedMonths 기록은 기존 사용자 상태와의 호환을 위한 보조 정보만 유지한다.
@@ -1489,10 +1426,8 @@ class MainViewModel @Inject constructor(
         _uiState.update { it.copy(showFullSyncAdDialog = false) }
 
         val monthRange = calculateMonthRange(year, month)
-        val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(_uiState.value.monthStartDay)
-        val isCurrentMonth = year == effYear && month == effMonth
-        val monthLabel = if (isCurrentMonth) "이번달" else "${month}월"
-        snackbarBus.show("${monthLabel} 데이터를 가져옵니다.")
+        val monthLabel = buildSyncMonthLabel(year, month)
+        snackbarBus.show(appContext.getString(R.string.full_sync_unlocked_message, monthLabel))
 
         syncSmsV2(
             monthRange,
@@ -1508,25 +1443,32 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * 해당 월이 이미 동기화(광고 시청) 되었는지 확인
+     * 해당 월이 이미 동기화되었는지 확인
      *
      * coverage 기반 판정을 우선 사용하고,
      * 업그레이드 이전 사용자용 syncedMonths는 fallback으로만 유지한다.
      */
     fun isMonthSynced(year: Int, month: Int): Boolean {
         val state = _uiState.value
-        if (state.isLegacyFullSyncUnlocked) return true
-        if (getPageCoverageStatus(year, month) == SyncCoverageStatus.FULL) return true
-
-        val yearMonth = String.format("%04d-%02d", year, month)
-        return yearMonth in state.syncedMonths
+        return syncCoveragePagePolicy.isMonthSynced(
+            year = year,
+            month = month,
+            monthStartDay = state.monthStartDay,
+            isLegacyFullSyncUnlocked = state.isLegacyFullSyncUnlocked,
+            syncedMonths = state.syncedMonths,
+            coverages = syncCoverageEntries
+        )
     }
 
     /**
      * 특정 년/월의 커스텀 월 기간 계산 (사용자 설정 monthStartDay 반영)
      */
     private fun calculateMonthRange(year: Int, month: Int): Pair<Long, Long> {
-        return DateUtils.getCustomMonthPeriod(year, month, _uiState.value.monthStartDay)
+        return smsSyncRangeCalculator.calculateMonthRange(
+            year = year,
+            month = month,
+            monthStartDay = _uiState.value.monthStartDay
+        )
     }
 
     /**
@@ -1538,26 +1480,12 @@ class MainViewModel @Inject constructor(
      */
     fun isPagePartiallyCovered(year: Int, month: Int): Boolean {
         val state = _uiState.value
-        if (state.isLegacyFullSyncUnlocked) return false
-
-        val yearMonth = String.format("%04d-%02d", year, month)
-        if (yearMonth in state.syncedMonths) return false
-
-        return getPageCoverageStatus(year, month) == SyncCoverageStatus.PARTIAL
-    }
-
-    private fun getPageCoverageStatus(year: Int, month: Int): SyncCoverageStatus {
-        val (startMillis, rawEndMillis) = calculateMonthRange(year, month)
-        val (effectiveYear, effectiveMonth) = DateUtils.getEffectiveCurrentMonth(_uiState.value.monthStartDay)
-        val endMillis = if (year == effectiveYear && month == effectiveMonth) {
-            minOf(rawEndMillis, System.currentTimeMillis())
-        } else {
-            rawEndMillis
-        }
-
-        return syncCoverageRepository.getDateCoverageStatus(
-            startMillis = startMillis,
-            endMillis = endMillis,
+        return syncCoveragePagePolicy.isPagePartiallyCovered(
+            year = year,
+            month = month,
+            monthStartDay = state.monthStartDay,
+            isLegacyFullSyncUnlocked = state.isLegacyFullSyncUnlocked,
+            syncedMonths = state.syncedMonths,
             coverages = syncCoverageEntries
         )
     }
@@ -1574,9 +1502,19 @@ class MainViewModel @Inject constructor(
         )
     }
 
-    /** 전체 동기화 해제용 광고 준비 */
+    /** 월별 SMS 동기화용 광고 준비 */
     fun preloadFullSyncAd() {
         rewardAdManager.preloadAd()
+    }
+
+    private fun buildSyncMonthLabel(year: Int, month: Int): String {
+        val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(_uiState.value.monthStartDay)
+        val isCurrentMonth = year == effYear && month == effMonth
+        return if (isCurrentMonth) {
+            appContext.getString(R.string.home_current_month_sync_label)
+        } else {
+            appContext.getString(R.string.home_sync_month_label_format, month)
+        }
     }
 
     // ========== resume 시 자동 분류 ==========

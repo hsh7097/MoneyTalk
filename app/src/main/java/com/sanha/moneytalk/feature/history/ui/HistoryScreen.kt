@@ -282,7 +282,13 @@ fun HistoryScreen(
             // CTA 판별용: 현재 실효 월 여부
             val (effYearCta, effMonthCta) = com.sanha.moneytalk.core.util.DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
             val isCurrentMonth = pageYear == effYearCta && pageMonth == effMonthCta
-            val pageMonthLabel = if (isCurrentMonth) "이번달" else "${pageMonth}월"
+            val currentMonthSyncLabel = stringResource(R.string.home_current_month_sync_label)
+            val syncMonthLabelFormat = stringResource(R.string.home_sync_month_label_format)
+            val pageMonthLabel = if (isCurrentMonth) {
+                currentMonthSyncLabel
+            } else {
+                String.format(syncMonthLabelFormat, pageMonth)
+            }
 
             when {
                 viewMode == ViewMode.LIST -> {
@@ -310,7 +316,7 @@ fun HistoryScreen(
                                     mainViewModel.syncMonthData(pageYear, pageMonth)
                                 }
                             } else if (!isBannerAdEnabled) {
-                                // 광고 비활성 → 광고 없이 바로 전체 동기화 해제
+                                // 광고 비활성 → 광고 없이 바로 월별 동기화
                                 onRequestSmsPermission {
                                     mainViewModel.unlockFullSync(pageYear, pageMonth)
                                 }
@@ -331,8 +337,7 @@ fun HistoryScreen(
                             ),
                             uiState.sortOrder,
                             pageYear to pageMonth
-                        ),
-                        onIntent = viewModel::onIntent
+                        )
                     )
                 }
 
@@ -397,12 +402,11 @@ fun TransactionListView(
     isMonthSynced: Boolean = false,
     isPartiallyCovered: Boolean = false,
     hasSmsPermission: Boolean = true,
-    monthLabel: String = "이번달",
+    monthLabel: String = "",
     isAdEnabled: Boolean = true,
     onImportData: () -> Unit = {},
     onRequestFullSync: () -> Unit = {},
-    scrollResetKey: Any? = null,
-    onIntent: (HistoryIntent) -> Unit
+    scrollResetKey: Any? = null
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -436,7 +440,7 @@ fun TransactionListView(
         val showImportCta = isCurrentMonth &&
                 !hasActiveFilter &&
                 (!hasSmsPermission || !isMonthSynced)
-        // 전체 동기화 CTA: 과거 월 + 미해제 + 필터 없음
+        // 월별 데이터 CTA: 과거 월 + 미동기화 + 필터 없음
         val showFullSyncCta = !isCurrentMonth && !isMonthSynced && !hasActiveFilter
         if (showImportCta || showFullSyncCta) {
             LazyColumn(

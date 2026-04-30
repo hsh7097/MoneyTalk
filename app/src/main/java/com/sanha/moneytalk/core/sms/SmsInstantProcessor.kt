@@ -29,7 +29,7 @@ import javax.inject.Singleton
  * 5. StoreRule 적용 (Tier 0)
  * 6. DB 저장 + 알림 표시
  *
- * smsId 형식은 [SmsReaderV2]와 동일하여 후속 전체 동기화에서 dedup 처리됨.
+ * smsId 형식은 [SmsReaderV2]와 동일하여 후속 배치 동기화에서 dedup 처리됨.
  */
 @Singleton
 class SmsInstantProcessor @Inject constructor(
@@ -162,8 +162,8 @@ class SmsInstantProcessor @Inject constructor(
         val parsed = matchResult.matched.firstOrNull()
 
         if (parsed == null) {
-            // Regex 미매칭 → 전체 동기화에서 벡터/LLM 파이프라인으로 처리
-            MoneyTalkLogger.i("[InstantSMS] regex 미매칭, 전체 동기화 대기: ${smsId.take(30)}")
+            // Regex 미매칭 → 후속 배치 동기화에서 벡터/LLM 파이프라인으로 처리
+            MoneyTalkLogger.i("[InstantSMS] regex 미매칭, 후속 배치 동기화 대기: ${smsId.take(30)}")
             return Result.Skipped
         }
 

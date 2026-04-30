@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -156,7 +155,7 @@ class RewardAdManager @Inject constructor(
             }
         }
 
-        ad.show(activity) { rewardItem ->
+        ad.show(activity) {
             onRewarded()
         }
     }
@@ -195,21 +194,6 @@ class RewardAdManager @Inject constructor(
     suspend fun isAdRequired(): Boolean {
         if (!premiumManager.premiumConfig.value.rewardAdEnabled) return false
         return settingsDataStore.getRewardChatRemaining() <= 0
-    }
-
-    /**
-     * 전체 동기화 해제 (광고 시청 완료 후 호출)
-     * DataStore에 전체 동기화 해제 상태를 저장합니다.
-     */
-    suspend fun unlockFullSync() {
-        settingsDataStore.saveFullSyncUnlocked(true)
-    }
-
-    /**
-     * 전체 동기화가 이미 해제되었는지 확인
-     */
-    suspend fun isFullSyncUnlocked(): Boolean {
-        return settingsDataStore.isFullSyncUnlocked()
     }
 
     /**

@@ -135,6 +135,24 @@ class DateUtilsTest {
     }
 
     @Test
+    fun `연도 없는 SMS 날짜 - 1월 수신 12월 거래는 전년도`() {
+        val reference = timestamp(2026, 1, 2, 0, 5)
+
+        val resolvedYear = DateUtils.resolveYearForMonthDay(reference, 12, 31)
+
+        assertEquals(2025, resolvedYear)
+    }
+
+    @Test
+    fun `연도 없는 SMS 날짜 - 12월 수신 1월 거래는 다음년도`() {
+        val reference = timestamp(2025, 12, 31, 23, 55)
+
+        val resolvedYear = DateUtils.resolveYearForMonthDay(reference, 1, 1)
+
+        assertEquals(2026, resolvedYear)
+    }
+
+    @Test
     fun `getEffectiveCurrentMonth 결과가 getCurrentCustomMonthPeriod 종료일의 년월과 일치`() {
         // monthStartDay=19일 때, 실효 년월은 커스텀 기간 종료일에서 추출
         val monthStartDay = 19
@@ -329,6 +347,20 @@ class DateUtilsTest {
 
     private fun calFrom(timestamp: Long): Calendar {
         return Calendar.getInstance().apply { timeInMillis = timestamp }
+    }
+
+    private fun timestamp(
+        year: Int,
+        month: Int,
+        day: Int,
+        hour: Int,
+        minute: Int
+    ): Long {
+        return Calendar.getInstance().apply {
+            clear()
+            set(year, month - 1, day, hour, minute, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
     }
 
     private fun assertDate(cal: Calendar, expectedYear: Int, expectedMonth: Int, expectedDay: Int) {

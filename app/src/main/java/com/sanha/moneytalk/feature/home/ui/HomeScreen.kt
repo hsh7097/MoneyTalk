@@ -252,7 +252,7 @@ fun HomeScreen(
                             mainViewModel.syncMonthData(pageYear, pageMonth)
                         }
                     } else if (!isBannerAdEnabled) {
-                        // 광고 비활성 → 광고 없이 바로 전체 동기화 해제
+                        // 광고 비활성 → 광고 없이 바로 월별 동기화
                         onRequestSmsPermission {
                             mainViewModel.unlockFullSync(pageYear, pageMonth)
                         }
@@ -384,7 +384,7 @@ fun HomeScreen(
         )
     }
 
-    // 동기화 다이얼로그, AI 성과 요약, 전체 동기화 광고 다이얼로그는
+    // 동기화 다이얼로그, AI 성과 요약, 월별 SMS 동기화 광고 다이얼로그는
     // Activity 레벨(MoneyTalkApp)에서 MainViewModel을 통해 표시
 }
 
@@ -461,7 +461,7 @@ fun HomePageContent(
             val showImportCta = isCurrentMonth &&
                     (!hasSmsPermission || (hasNoData && !isMonthSynced))
 
-            // 과거 월 전체 동기화 CTA (광고 시청 → 데이터 가져오기)
+            // 과거 월 데이터 가져오기 CTA (광고 시청 → 월별 동기화)
             val ctaMonthLabel = if (isCurrentMonth) {
                 currentMonthSyncLabel
             } else {

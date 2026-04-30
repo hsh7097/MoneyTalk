@@ -223,7 +223,7 @@ class MmsContentObserver @Inject constructor(
                         body = body,
                         timestamp = timestampMillis
                     )
-                    MoneyTalkLogger.i("[MmsObserver] 비결제 또는 미매칭 -> 전체 동기화 대기")
+                    MoneyTalkLogger.i("[MmsObserver] 비결제 또는 미매칭 -> 후속 배치 동기화 대기")
                     CandidateOutcome(shouldTriggerSync = true)
                 }
                 is SmsInstantProcessor.Result.Error -> {

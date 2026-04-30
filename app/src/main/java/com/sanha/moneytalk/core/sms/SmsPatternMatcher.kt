@@ -1,10 +1,9 @@
 package com.sanha.moneytalk.core.sms
 
-import com.sanha.moneytalk.core.util.MoneyTalkLogger
-
 import com.sanha.moneytalk.core.database.dao.SmsPatternDao
 import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -421,10 +420,6 @@ class SmsPatternMatcher @Inject constructor(
         """\[(KB|신한카드|신한|우리|하나|삼성카드|삼성|현대카드|현대|롯데카드|롯데|IBK|NH|농협|BC|카카오뱅크|토스뱅크|토스|SC|씨티|수협|대구|부산|광주|전북|경남|제주)\]"""
     )
 
-    /** 날짜/시간 추출 패턴 (MM/DD HH:mm 등) */
-    private val DATE_PATTERN = Regex("""(\d{1,2})[/.-](\d{1,2})""")
-    private val TIME_PATTERN = Regex("""(\d{1,2}):(\d{2})""")
-
     /**
      * 패턴에 저장된 regex로 원본 SMS를 파싱하여 SmsAnalysisResult 생성
      *
@@ -674,29 +669,6 @@ class SmsPatternMatcher @Inject constructor(
      * @return "yyyy-MM-dd HH:mm" 형식 문자열
      */
     private fun extractDateTime(body: String, timestamp: Long): String {
-        val calendar = java.util.Calendar.getInstance().apply {
-            timeInMillis = timestamp
-        }
-
-        // SMS 본문에서 날짜 추출
-        val dateMatch = DATE_PATTERN.find(body)
-        if (dateMatch != null) {
-            val month = dateMatch.groupValues[1].toIntOrNull() ?: (calendar.get(java.util.Calendar.MONTH) + 1)
-            val day = dateMatch.groupValues[2].toIntOrNull() ?: calendar.get(java.util.Calendar.DAY_OF_MONTH)
-            calendar.set(java.util.Calendar.MONTH, month - 1)
-            calendar.set(java.util.Calendar.DAY_OF_MONTH, day)
-        }
-
-        // SMS 본문에서 시간 추출
-        val timeMatch = TIME_PATTERN.find(body)
-        if (timeMatch != null) {
-            val hour = timeMatch.groupValues[1].toIntOrNull() ?: calendar.get(java.util.Calendar.HOUR_OF_DAY)
-            val minute = timeMatch.groupValues[2].toIntOrNull() ?: calendar.get(java.util.Calendar.MINUTE)
-            calendar.set(java.util.Calendar.HOUR_OF_DAY, hour)
-            calendar.set(java.util.Calendar.MINUTE, minute)
-        }
-
-        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.KOREA)
-        return sdf.format(calendar.time)
+        return SmsTransactionDateResolver.extractDateTime(body, timestamp)
     }
 }

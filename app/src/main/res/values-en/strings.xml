@@ -645,8 +645,6 @@
     <string name="full_sync_ad_watch_button">Watch ad and import %1$s data</string>
     <string name="full_sync_ad_later">Later</string>
     <string name="full_sync_unlocked_message">Importing %1$s data.</string>
-    <string name="full_sync_already_unlocked">Full sync is already unlocked.</string>
-    <string name="home_sync_full_locked">Full Sync (Ad Required)</string>
     <string name="full_sync_cta_title">Earlier data is missing</string>
     <string name="full_sync_cta_subtitle">Watch an ad to import %1$s data</string>
     <string name="full_sync_cta_subtitle_no_ad">Tap to import %1$s data</string>

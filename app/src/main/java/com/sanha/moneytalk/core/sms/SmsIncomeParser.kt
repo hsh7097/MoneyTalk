@@ -1,7 +1,5 @@
 package com.sanha.moneytalk.core.sms
 
-import java.util.Calendar
-
 /**
  * 수입 SMS 파싱 유틸리티 (sms 전용)
  *
@@ -36,13 +34,6 @@ object SmsIncomeParser {
     private val PURE_NUMBER_PATTERN = Regex("""[\d,]+""")
     /** 숫자+원+한글 (가게명 등 제외용) */
     private val AMOUNT_WON_HANGUL_PATTERN = Regex(""".*\d+원[가-힣]+.*""")
-
-    /** 날짜 패턴: MM/DD, MM-DD, MM.DD */
-    private val DATE_PATTERN_SLASH = Regex("""(\d{1,2})[/.-](\d{1,2})""")
-    /** 날짜 패턴: M월 D일 */
-    private val DATE_PATTERN_KOREAN = Regex("""(\d{1,2})월\s*(\d{1,2})일""")
-    /** 시간 패턴: HH:mm */
-    private val TIME_PATTERN = Regex("""(\d{1,2}):(\d{2})""")
 
     /** "OOO님으로부터" 패턴 */
     private val FROM_PATTERN = Regex("""([가-힣a-zA-Z0-9]+)(님)?으?로부터""")
@@ -170,38 +161,7 @@ object SmsIncomeParser {
      * @return "YYYY-MM-DD HH:mm" 형식
      */
     fun extractDateTime(message: String, smsTimestamp: Long): String {
-        val calendar = Calendar.getInstance()
-        calendar.timeInMillis = smsTimestamp
-        val currentYear = calendar.get(Calendar.YEAR)
-
-        var month = calendar.get(Calendar.MONTH) + 1
-        var day = calendar.get(Calendar.DAY_OF_MONTH)
-        var hour = calendar.get(Calendar.HOUR_OF_DAY)
-        var minute = calendar.get(Calendar.MINUTE)
-
-        val dateMatch1 = DATE_PATTERN_SLASH.find(message)
-        val dateMatch2 = DATE_PATTERN_KOREAN.find(message)
-
-        if (dateMatch1 != null) {
-            month = dateMatch1.groupValues[1].toIntOrNull() ?: month
-            day = dateMatch1.groupValues[2].toIntOrNull() ?: day
-        } else if (dateMatch2 != null) {
-            month = dateMatch2.groupValues[1].toIntOrNull() ?: month
-            day = dateMatch2.groupValues[2].toIntOrNull() ?: day
-        }
-
-        val timeMatch = TIME_PATTERN.find(message)
-        if (timeMatch != null) {
-            hour = timeMatch.groupValues[1].toIntOrNull() ?: hour
-            minute = timeMatch.groupValues[2].toIntOrNull() ?: minute
-        }
-
-        if (month < 1 || month > 12) month = calendar.get(Calendar.MONTH) + 1
-        if (day < 1 || day > 31) day = calendar.get(Calendar.DAY_OF_MONTH)
-        if (hour < 0 || hour > 23) hour = calendar.get(Calendar.HOUR_OF_DAY)
-        if (minute < 0 || minute > 59) minute = calendar.get(Calendar.MINUTE)
-
-        return String.format("%04d-%02d-%02d %02d:%02d", currentYear, month, day, hour, minute)
+        return SmsTransactionDateResolver.extractDateTime(message, smsTimestamp)
     }
 
     // ========== 내부 헬퍼 ==========

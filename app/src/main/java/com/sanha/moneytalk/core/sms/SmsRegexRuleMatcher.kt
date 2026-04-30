@@ -6,8 +6,6 @@ import com.sanha.moneytalk.core.database.entity.SmsPatternEntity
 import com.sanha.moneytalk.core.database.entity.SmsRegexRuleEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
-import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -36,8 +34,6 @@ class SmsRegexRuleMatcher @Inject constructor(
 
     companion object {
         private val NON_DIGIT_PATTERN = Regex("""[^\d]""")
-        private val DATE_PATTERN = Regex("""(\d{1,2})[/.-](\d{1,2})""")
-        private val TIME_PATTERN = Regex("""(\d{1,2}):(\d{2})""")
         private val BANK_TAG_PATTERN = Regex(
             """\[(KB|신한카드|신한|우리|하나|삼성카드|삼성|현대카드|현대|롯데카드|롯데|IBK|NH|농협|BC|카카오뱅크|토스뱅크|토스|SC|씨티|수협|대구|부산|광주|전북|경남|제주)\]"""
         )
@@ -620,50 +616,11 @@ class SmsRegexRuleMatcher @Inject constructor(
             }
         }
 
-        val calendar = Calendar.getInstance().apply { timeInMillis = timestamp }
-        val dateMatch = DATE_PATTERN.find(body)
-        if (dateMatch != null) {
-            val month = dateMatch.groupValues[1].toIntOrNull() ?: (calendar.get(Calendar.MONTH) + 1)
-            val day = dateMatch.groupValues[2].toIntOrNull() ?: calendar.get(Calendar.DAY_OF_MONTH)
-            calendar.set(Calendar.MONTH, month - 1)
-            calendar.set(Calendar.DAY_OF_MONTH, day)
-        }
-
-        val timeMatch = TIME_PATTERN.find(body)
-        if (timeMatch != null) {
-            val hour = timeMatch.groupValues[1].toIntOrNull() ?: calendar.get(Calendar.HOUR_OF_DAY)
-            val minute = timeMatch.groupValues[2].toIntOrNull() ?: calendar.get(Calendar.MINUTE)
-            calendar.set(Calendar.HOUR_OF_DAY, hour)
-            calendar.set(Calendar.MINUTE, minute)
-        }
-
-        return SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(calendar.time)
+        return SmsTransactionDateResolver.extractDateTime(body, timestamp)
     }
 
     private fun normalizeDateTime(raw: String, timestamp: Long): String? {
-        val trimmed = raw.trim()
-        if (trimmed.matches(Regex("""\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}"""))) {
-            return trimmed.replace(Regex("""\s+"""), " ")
-        }
-
-        val now = Calendar.getInstance().apply { timeInMillis = timestamp }
-        val mdHm = Regex("""(\d{1,2})[/.-](\d{1,2})\s+(\d{1,2}):(\d{2})""").find(trimmed)
-        if (mdHm != null) {
-            now.set(Calendar.MONTH, (mdHm.groupValues[1].toIntOrNull() ?: 1) - 1)
-            now.set(Calendar.DAY_OF_MONTH, mdHm.groupValues[2].toIntOrNull() ?: 1)
-            now.set(Calendar.HOUR_OF_DAY, mdHm.groupValues[3].toIntOrNull() ?: 0)
-            now.set(Calendar.MINUTE, mdHm.groupValues[4].toIntOrNull() ?: 0)
-            return SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(now.time)
-        }
-
-        val hm = Regex("""(\d{1,2}):(\d{2})""").find(trimmed)
-        if (hm != null) {
-            now.set(Calendar.HOUR_OF_DAY, hm.groupValues[1].toIntOrNull() ?: 0)
-            now.set(Calendar.MINUTE, hm.groupValues[2].toIntOrNull() ?: 0)
-            return SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(now.time)
-        }
-
-        return null
+        return SmsTransactionDateResolver.normalizeCapturedDateTime(raw, timestamp)
     }
 
     private fun normalizeBody(body: String): String {
@@ -702,25 +659,7 @@ class SmsRegexRuleMatcher @Inject constructor(
     }
 
     private fun extractDateTimeFromBody(body: String, timestamp: Long): String {
-        val calendar = Calendar.getInstance().apply { timeInMillis = timestamp }
-
-        val dateMatch = DATE_PATTERN.find(body)
-        if (dateMatch != null) {
-            val month = dateMatch.groupValues[1].toIntOrNull() ?: (calendar.get(Calendar.MONTH) + 1)
-            val day = dateMatch.groupValues[2].toIntOrNull() ?: calendar.get(Calendar.DAY_OF_MONTH)
-            calendar.set(Calendar.MONTH, month - 1)
-            calendar.set(Calendar.DAY_OF_MONTH, day)
-        }
-
-        val timeMatch = TIME_PATTERN.find(body)
-        if (timeMatch != null) {
-            val hour = timeMatch.groupValues[1].toIntOrNull() ?: calendar.get(Calendar.HOUR_OF_DAY)
-            val minute = timeMatch.groupValues[2].toIntOrNull() ?: calendar.get(Calendar.MINUTE)
-            calendar.set(Calendar.HOUR_OF_DAY, hour)
-            calendar.set(Calendar.MINUTE, minute)
-        }
-
-        return SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(calendar.time)
+        return SmsTransactionDateResolver.extractDateTime(body, timestamp)
     }
 
     private fun inferTypeFromBody(body: String): String {
