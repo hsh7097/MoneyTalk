@@ -57,6 +57,11 @@ class SmsReaderV2 @Inject constructor(
         val readSucceeded: Boolean
     )
 
+    private data class MmsHeader(
+        val id: String,
+        val dateMs: Long
+    )
+
     @Volatile
     private var rcsProviderRetryAfterMillis: Long = 0L
 
@@ -215,6 +220,7 @@ class SmsReaderV2 @Inject constructor(
         var totalCursorCount = 0
         val startSec = startDate / 1000
         val endSec = endDate / 1000
+        val headers = mutableListOf<MmsHeader>()
 
         try {
             val cursor = contentResolver.query(
@@ -233,49 +239,68 @@ class SmsReaderV2 @Inject constructor(
                     totalCursorCount++
                     val mmsId = it.getString(idIndex) ?: continue
                     val dateSec = it.getLong(dateIndex)
-                    val dateMs = dateSec * 1000
+                    headers.add(MmsHeader(id = mmsId, dateMs = dateSec * 1000))
+                }
+            }
 
-                    val body = getMmsTextBody(contentResolver, mmsId) ?: continue
-                    val address = getMmsAddress(contentResolver, mmsId)
+            if (headers.isNotEmpty()) {
+                val addressesById = loadMmsAddresses(contentResolver, headers.map { it.id })
+                val acceptedHeaders = mutableListOf<Pair<MmsHeader, String>>()
+
+                for (header in headers) {
+                    val address = addressesById[header.id] ?: getMmsAddress(contentResolver, header.id)
 
                     if (shouldSkipBlockedSender(address, blockedAddressSet)) {
                         channelProbeCollector.collect(
                             channel = "mms_inbox",
                             stage = "blocked_sender",
                             address = address,
-                            body = body,
-                            timestamp = dateMs
+                            body = "",
+                            timestamp = header.dateMs
                         )
                         blockedSenderSkipCount++
                         continue
                     }
 
-                    if (SmsFilter.shouldSkipBySender(address, body)) {
+                    if (SmsFilter.shouldSkipBySender(address, "")) {
                         channelProbeCollector.collect(
                             channel = "mms_inbox",
                             stage = "sender_skipped",
                             address = address,
-                            body = body,
-                            timestamp = dateMs
+                            body = "",
+                            timestamp = header.dateMs
                         )
                         senderSkipCount++
                         continue
                     }
+
+                    acceptedHeaders.add(header to address)
+                }
+
+                val bodiesById = loadMmsTextBodies(
+                    contentResolver = contentResolver,
+                    mmsIds = acceptedHeaders.map { it.first.id }
+                )
+
+                for ((header, address) in acceptedHeaders) {
+                    val body = bodiesById[header.id]
+                        ?: getMmsTextBody(contentResolver, header.id)
+                        ?: continue
 
                     channelProbeCollector.collect(
                         channel = "mms_inbox",
                         stage = "accepted",
                         address = address,
                         body = body,
-                        timestamp = dateMs
+                        timestamp = header.dateMs
                     )
 
                     result.add(
                         SmsInput(
-                            id = generateSmsId(address, body, dateMs),
+                            id = generateSmsId(address, body, header.dateMs),
                             body = body,
                             address = address,
-                            date = dateMs
+                            date = header.dateMs
                         )
                     )
                 }
@@ -286,6 +311,106 @@ class SmsReaderV2 @Inject constructor(
 
         MoneyTalkLogger.i("[SmsReaderV2][MMS] 총 ${totalCursorCount}건 조회, ${result.size}건 통과, sender스킵=${senderSkipCount}, blocked스킵=${blockedSenderSkipCount}")
         return result
+    }
+
+    private fun loadMmsAddresses(
+        contentResolver: ContentResolver,
+        mmsIds: List<String>
+    ): Map<String, String> {
+        if (mmsIds.isEmpty()) return emptyMap()
+
+        val result = mutableMapOf<String, String>()
+        for (chunk in mmsIds.chunked(400)) {
+            val selection = buildInSelection("msg_id", chunk.size)
+            try {
+                val cursor = contentResolver.query(
+                    Uri.parse("content://mms/addr"),
+                    arrayOf("msg_id", "address", "type"),
+                    selection,
+                    chunk.toTypedArray(),
+                    null
+                )
+                cursor?.use {
+                    val msgIdIndex = it.getColumnIndex("msg_id")
+                    val addressIndex = it.getColumnIndex("address")
+                    val typeIndex = it.getColumnIndex("type")
+                    if (msgIdIndex < 0 || addressIndex < 0 || typeIndex < 0) return@use
+
+                    while (it.moveToNext()) {
+                        val msgId = it.getString(msgIdIndex) ?: continue
+                        val address = it.getString(addressIndex)
+                        if (address.isNullOrBlank() || address == "insert-address-token") continue
+
+                        val type = it.getInt(typeIndex)
+                        if (!result.containsKey(msgId) || type == 137) {
+                            result[msgId] = address
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                MoneyTalkLogger.w("MMS 주소 bulk 읽기 실패: ${e.message}")
+                return result
+            }
+        }
+
+        return result
+    }
+
+    private fun loadMmsTextBodies(
+        contentResolver: ContentResolver,
+        mmsIds: List<String>
+    ): Map<String, String> {
+        if (mmsIds.isEmpty()) return emptyMap()
+
+        val bodyPartsById = linkedMapOf<String, StringBuilder>()
+        for (chunk in mmsIds.chunked(400)) {
+            val selection = buildInSelection("mid", chunk.size)
+            try {
+                val cursor = contentResolver.query(
+                    MMS_PART_URI,
+                    arrayOf("_id", "mid", "ct", "text"),
+                    selection,
+                    chunk.toTypedArray(),
+                    null
+                )
+                cursor?.use {
+                    val partIdIndex = it.getColumnIndex("_id")
+                    val midIndex = it.getColumnIndex("mid")
+                    val contentTypeIndex = it.getColumnIndex("ct")
+                    val textIndex = it.getColumnIndex("text")
+                    if (partIdIndex < 0 || midIndex < 0 || contentTypeIndex < 0 || textIndex < 0) {
+                        return@use
+                    }
+
+                    while (it.moveToNext()) {
+                        val contentType = it.getString(contentTypeIndex) ?: continue
+                        if (contentType != "text/plain") continue
+
+                        val mid = it.getString(midIndex) ?: continue
+                        val text = it.getString(textIndex)
+                        val body = if (!text.isNullOrBlank()) {
+                            text
+                        } else {
+                            val partId = it.getString(partIdIndex) ?: continue
+                            readMmsPartText(contentResolver, partId).orEmpty()
+                        }
+                        if (body.isNotBlank()) {
+                            bodyPartsById.getOrPut(mid) { StringBuilder() }.append(body)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                MoneyTalkLogger.w("MMS 본문 bulk 읽기 실패: ${e.message}")
+                return bodyPartsById.mapValues { it.value.toString() }
+            }
+        }
+
+        return bodyPartsById.mapValues { it.value.toString() }
+    }
+
+    private fun buildInSelection(columnName: String, size: Int): String {
+        val placeholders = List(size) { "?" }.joinToString(",")
+        return "$columnName IN ($placeholders)"
     }
 
     /**
@@ -315,14 +440,8 @@ class SmsReaderV2 @Inject constructor(
                             sb.append(text)
                         } else {
                             val partId = it.getString(idIndex) ?: continue
-                            try {
-                                val partUri = Uri.parse("content://mms/part/$partId")
-                                contentResolver.openInputStream(partUri)?.use { inputStream ->
-                                    val reader = BufferedReader(InputStreamReader(inputStream, "UTF-8"))
-                                    sb.append(reader.readText())
-                                }
-                            } catch (e: Exception) {
-                                MoneyTalkLogger.w("MMS part 읽기 실패 (partId=$partId): ${e.message}")
+                            readMmsPartText(contentResolver, partId)?.let { body ->
+                                sb.append(body)
                             }
                         }
                     }
@@ -332,6 +451,19 @@ class SmsReaderV2 @Inject constructor(
             MoneyTalkLogger.w("MMS 본문 읽기 실패 (mmsId=$mmsId): ${e.message}")
         }
         return sb.toString().takeIf { it.isNotBlank() }
+    }
+
+    private fun readMmsPartText(contentResolver: ContentResolver, partId: String): String? {
+        return try {
+            val partUri = Uri.parse("content://mms/part/$partId")
+            contentResolver.openInputStream(partUri)?.use { inputStream ->
+                val reader = BufferedReader(InputStreamReader(inputStream, "UTF-8"))
+                reader.readText()
+            }
+        } catch (e: Exception) {
+            MoneyTalkLogger.w("MMS part 읽기 실패 (partId=$partId): ${e.message}")
+            null
+        }
     }
 
     /**

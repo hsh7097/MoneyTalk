@@ -43,6 +43,9 @@ class SmsSyncCoordinator @Inject constructor(
     private val regexRuleSyncService: SmsRegexRuleSyncService,
     private val originSampleCollector: SmsOriginSampleCollector
 ) {
+    companion object {
+        private const val PERF_LOG_PREFIX = "[SyncPerf]"
+    }
 
     /**
      * ★ sms 패키지의 유일한 외부 진입점 ★
@@ -79,6 +82,7 @@ class SmsSyncCoordinator @Inject constructor(
         smsList: List<SmsInput>,
         onProgress: ((stepIndex: Int, step: String, current: Int, total: Int) -> Unit)? = null
     ): SyncResult {
+        val totalStart = System.currentTimeMillis()
         if (smsList.isEmpty()) {
             return SyncResult(
                 expenses = emptyList(),
@@ -89,17 +93,28 @@ class SmsSyncCoordinator @Inject constructor(
         MoneyTalkLogger.i("SmsSyncCoordinator 시작: 입력 ${smsList.size}건")
         originSampleCollector.resetSession()
 
+        val regexSyncStart = System.currentTimeMillis()
         runCatching {
             regexRuleSyncService.syncRules()
         }.onFailure { e ->
             MoneyTalkLogger.w("Regex 룰 동기화 실패 (폴백 진행): ${e.message}")
         }
+        MoneyTalkLogger.i(
+            "$PERF_LOG_PREFIX coordinator.regexSync.done " +
+                "elapsedMs=${System.currentTimeMillis() - regexSyncStart}"
+        )
 
         // Step 0: 사전 필터링 (광고, 인증번호, 배송 알림 등 비결제 SMS 제거)
         // SmsPipeline 진입 전에 여기서 처리 → 불필요한 분류/임베딩 방지
         onProgress?.invoke(SmsPipeline.STEP_FILTER, "문자 분류 준비 중...", 0, smsList.size)
+        val preFilterStart = System.currentTimeMillis()
         val filtered = preFilter.filter(smsList)
+        val preFilterElapsed = System.currentTimeMillis() - preFilterStart
         MoneyTalkLogger.i("Step0 PreFilter: ${smsList.size}건 → ${filtered.size}건")
+        MoneyTalkLogger.i(
+            "$PERF_LOG_PREFIX coordinator.preFilter.done " +
+                "input=${smsList.size}, output=${filtered.size}, elapsedMs=$preFilterElapsed"
+        )
 
         if (filtered.isEmpty()) {
             return SyncResult(
@@ -111,15 +126,29 @@ class SmsSyncCoordinator @Inject constructor(
 
         // Step 1: 수입/결제 분류 (필터 통과한 SMS만 대상)
         onProgress?.invoke(SmsPipeline.STEP_FILTER, "결제 문자 찾는 중...", 0, filtered.size)
+        val incomeFilterStart = System.currentTimeMillis()
         val (paymentCandidates, incomeCandidates, skipped) = incomeFilter.classifyAll(filtered)
+        val incomeFilterElapsed = System.currentTimeMillis() - incomeFilterStart
         MoneyTalkLogger.i("Step1 IncomeFilter: 결제 ${paymentCandidates.size}건, 수입 ${incomeCandidates.size}건, 스킵 ${skipped.size}건"
+        )
+        MoneyTalkLogger.i(
+            "$PERF_LOG_PREFIX coordinator.incomeFilter.done " +
+                "input=${filtered.size}, payments=${paymentCandidates.size}, incomes=${incomeCandidates.size}, " +
+                "skipped=${skipped.size}, elapsedMs=$incomeFilterElapsed"
         )
 
         // Step 1.5: sender 기반 로컬 regex 룰 매칭 (Fast Path)
+        val regexMatchStart = System.currentTimeMillis()
         val regexMatchResult = regexRuleMatcher.matchPaymentCandidates(paymentCandidates)
+        val regexMatchElapsed = System.currentTimeMillis() - regexMatchStart
         val fastPathMatched = regexMatchResult.matched
         val fastPathUnmatched = regexMatchResult.unmatched
         MoneyTalkLogger.i("Step1.5 SenderRegex: 매칭 ${fastPathMatched.size}건, 폴백 ${fastPathUnmatched.size}건")
+        MoneyTalkLogger.i(
+            "$PERF_LOG_PREFIX coordinator.regexMatch.done " +
+                "input=${paymentCandidates.size}, matched=${fastPathMatched.size}, " +
+                "fallback=${fastPathUnmatched.size}, elapsedMs=$regexMatchElapsed"
+        )
         if (fastPathUnmatched.isNotEmpty()) {
             val reasonSummary = regexMatchResult.failureReasonCounts.entries
                 .take(5)
@@ -150,11 +179,13 @@ class SmsSyncCoordinator @Inject constructor(
         }
 
         // Step 2: Fast Path 미매칭 결제 후보만 SmsPipeline에 전달 (사전 필터링 스킵)
+        val pipelineStart = System.currentTimeMillis()
         val pipelineResult = if (fastPathUnmatched.isNotEmpty()) {
             pipeline.process(fastPathUnmatched, onProgress, skipPreFilter = true)
         } else {
             SmsPipeline.PipelineResult(emptyList(), 0, 0)
         }
+        val pipelineElapsed = System.currentTimeMillis() - pipelineStart
 
         val expenses = (fastPathMatched + pipelineResult.results)
             .distinctBy { it.input.id }
@@ -189,6 +220,13 @@ class SmsSyncCoordinator @Inject constructor(
             pipelineDroppedCount = pipelineResult.droppedCount
         )
         MoneyTalkLogger.i("SmsSyncCoordinator 완료: 지출 ${expenses.size}건, 수입 ${incomeCandidates.size}건"
+        )
+        MoneyTalkLogger.i(
+            "$PERF_LOG_PREFIX coordinator.done " +
+                "input=${smsList.size}, filtered=${filtered.size}, payments=${paymentCandidates.size}, " +
+                "incomes=${incomeCandidates.size}, fastPath=${fastPathMatched.size}, " +
+                "pipelineInput=${fastPathUnmatched.size}, pipelineMs=$pipelineElapsed, " +
+                "expenses=${expenses.size}, elapsedMs=${System.currentTimeMillis() - totalStart}"
         )
 
 

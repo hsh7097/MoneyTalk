@@ -39,7 +39,9 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
     private val categoryProvider: CategoryProvider
 ) : GeminiCategoryRepository {
     companion object {
-        private const val BATCH_SIZE = 50
+        private const val PERF_LOG_PREFIX = "[CategoryPerf]"
+        private const val CATEGORY_BATCH_SIZE = 13
+        private const val INCOME_BATCH_SIZE = 50
         private const val MAX_RETRIES = 3
         /** LLM 배치 병렬 동시 실행 수 (API 키 5개 × 키당 1 = 5, LLM은 임베딩보다 무거움) */
         private const val LLM_CONCURRENCY = 5
@@ -92,6 +94,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
      */
     override suspend fun classifyStoreNames(storeNames: List<String>): Map<String, String> =
         withContext(Dispatchers.IO) {
+            val totalStart = System.currentTimeMillis()
             val apiKey = apiKeyProvider.getApiKey()
             if (apiKey.isBlank()) {
                 MoneyTalkLogger.e("API 키가 설정되지 않음")
@@ -120,9 +123,15 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 ""
             }
 
-            // 배치 처리 (한 번에 최대 50개, 병렬)
+            // 배치 처리 (카테고리는 prompt가 길어 작은 배치가 wall time에 유리)
             val results = mutableMapOf<String, String>()
-            val batches = storeNames.chunked(BATCH_SIZE)
+            val batches = storeNames.chunked(CATEGORY_BATCH_SIZE)
+
+            MoneyTalkLogger.i(
+                "$PERF_LOG_PREFIX gemini.category.start " +
+                    "stores=${storeNames.size}, batchSize=$CATEGORY_BATCH_SIZE, batches=${batches.size}, " +
+                    "model=${currentModelConfig.categoryClassifier}"
+            )
 
 
             val llmSemaphore = Semaphore(LLM_CONCURRENCY)
@@ -142,6 +151,11 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                             )
                             val batchElapsed = System.currentTimeMillis() - batchStart
                             val successCount = result.first?.size ?: 0
+                            MoneyTalkLogger.i(
+                                "$PERF_LOG_PREFIX gemini.category.batch " +
+                                    "batch=${index + 1}/${batches.size}, input=${batch.size}, " +
+                                    "success=$successCount, rateLimited=${result.second}, elapsedMs=$batchElapsed"
+                            )
                             result
                         }
                     }
@@ -164,6 +178,13 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             if (failedBatches.isNotEmpty()) {
                 MoneyTalkLogger.w("총 ${failedBatches.size}개 배치 처리 실패: $failedBatches")
             }
+
+            MoneyTalkLogger.i(
+                "$PERF_LOG_PREFIX gemini.category.done " +
+                    "stores=${storeNames.size}, batches=${batches.size}, result=${results.size}, " +
+                    "failedBatches=${failedBatches.size}, llmMs=$classifyElapsed, " +
+                    "elapsedMs=${System.currentTimeMillis() - totalStart}"
+            )
 
             results
         }
@@ -190,9 +211,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             try {
                 val prompt = buildClassificationPrompt(batch, categories, referenceText)
 
-                val startTime = System.currentTimeMillis()
                 val response = model.generateContent(prompt)
-                val elapsed = System.currentTimeMillis() - startTime
 
                 val text = response.text
 
@@ -436,7 +455,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
         val incomeCategories = categoryProvider.getIncomeDisplayNames()
         val items = incomeDescriptions.entries.toList()
         val results = mutableMapOf<String, String>()
-        val batches = items.chunked(BATCH_SIZE)
+        val batches = items.chunked(INCOME_BATCH_SIZE)
 
         val llmSemaphore = Semaphore(LLM_CONCURRENCY)
         val batchResults = coroutineScope {

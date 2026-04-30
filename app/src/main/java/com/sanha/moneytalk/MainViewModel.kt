@@ -121,6 +121,9 @@ class MainViewModel @Inject constructor(
         /** fuzzy dedupe 후보 조회 시 대상 기간 앞뒤로 확장할 범위 */
         private const val FUZZY_CANDIDATE_PADDING_MS = 3L * 24 * 60 * 60 * 1000
 
+        private const val CATEGORY_PERF_LOG_PREFIX = "[CategoryPerf]"
+        private const val SYNC_PERF_LOG_PREFIX = "[SyncPerf]"
+
     }
 
     private val _uiState = MutableStateFlow(MainUiState())
@@ -630,17 +633,38 @@ class MainViewModel @Inject constructor(
         updateLastSyncTime: Boolean,
         silent: Boolean
     ): SyncResult {
+        val syncStart = System.currentTimeMillis()
+        MoneyTalkLogger.i(
+            "$SYNC_PERF_LOG_PREFIX sync.start " +
+                "start=${targetMonthRange.first}, end=${targetMonthRange.second}, " +
+                "updateLastSyncTime=$updateLastSyncTime, silent=$silent"
+        )
+
         // 제외 키워드 설정
+        val excludeStart = System.currentTimeMillis()
         val userExcludeKeywords = smsExclusionRepository.getUserKeywords()
         smsSyncCoordinator.setUserExcludeKeywords(userExcludeKeywords)
         SmsIncomeParser.setUserExcludeKeywords(userExcludeKeywords)
+        MoneyTalkLogger.i(
+            "$SYNC_PERF_LOG_PREFIX excludeKeywords.done " +
+                "count=${userExcludeKeywords.size}, elapsedMs=${System.currentTimeMillis() - excludeStart}"
+        )
 
         // Step 1: SMS 읽기 + 중복 제거
+        val readStart = System.currentTimeMillis()
         val allSmsList = readSmsInputs(targetMonthRange)
+        MoneyTalkLogger.i(
+            "$SYNC_PERF_LOG_PREFIX readSms.done " +
+                "count=${allSmsList.size}, elapsedMs=${System.currentTimeMillis() - readStart}"
+        )
         if (allSmsList.isEmpty()) {
             if (updateLastSyncTime) {
                 settingsDataStore.saveLastSyncTime(targetMonthRange.second)
             }
+            MoneyTalkLogger.i(
+                "$SYNC_PERF_LOG_PREFIX sync.done " +
+                    "expenses=0, incomes=0, reason=emptySms, elapsedMs=${System.currentTimeMillis() - syncStart}"
+            )
             return SyncResult(
                 expenseCount = 0,
                 incomeCount = 0,
@@ -650,19 +674,44 @@ class MainViewModel @Inject constructor(
         }
 
         _uiState.update { it.copy(syncProgress = "이미 등록된 내역 확인 중...") }
+        val snapshotStart = System.currentTimeMillis()
         val existingSnapshot = buildExistingSmsSnapshot(allSmsList, targetMonthRange)
+        MoneyTalkLogger.i(
+            "$SYNC_PERF_LOG_PREFIX snapshot.done " +
+                "exactIds=${existingSnapshot.exactSmsIds.size}, " +
+                "expenseExisting=${existingSnapshot.expensesBySmsId.size}, " +
+                "incomeExisting=${existingSnapshot.incomesBySmsId.size}, " +
+                "contentKeys=${existingSnapshot.contentIndex.size}, " +
+                "elapsedMs=${System.currentTimeMillis() - snapshotStart}"
+        )
+        val pendingStart = System.currentTimeMillis()
         val pendingReconciliationIds = SmsInstantProcessor.snapshotPendingReconciliationIds()
         val pendingContentIndex = buildSmsIdCandidateIndex(pendingReconciliationIds)
+        MoneyTalkLogger.i(
+            "$SYNC_PERF_LOG_PREFIX pendingIndex.done " +
+                "pending=${pendingReconciliationIds.size}, keys=${pendingContentIndex.size}, " +
+                "elapsedMs=${System.currentTimeMillis() - pendingStart}"
+        )
+        val filterStart = System.currentTimeMillis()
         val smsInputs = readAndFilterSms(
             allSmsList = allSmsList,
             pendingContentIndex = pendingContentIndex,
             existingSnapshot = existingSnapshot
+        )
+        MoneyTalkLogger.i(
+            "$SYNC_PERF_LOG_PREFIX filterNew.done " +
+                "input=${allSmsList.size}, output=${smsInputs.size}, " +
+                "elapsedMs=${System.currentTimeMillis() - filterStart}"
         )
         MoneyTalkLogger.i("syncSmsV2 Step1 완료: 신규 SMS ${smsInputs.size}건")
         if (smsInputs.isEmpty()) {
             if (updateLastSyncTime) {
                 settingsDataStore.saveLastSyncTime(targetMonthRange.second)
             }
+            MoneyTalkLogger.i(
+                "$SYNC_PERF_LOG_PREFIX sync.done " +
+                    "expenses=0, incomes=0, reason=noNewSms, elapsedMs=${System.currentTimeMillis() - syncStart}"
+            )
             return SyncResult(
                 expenseCount = 0,
                 incomeCount = 0,
@@ -672,7 +721,16 @@ class MainViewModel @Inject constructor(
         }
 
         // Step 2: sms 파이프라인 실행
+        val pipelineStart = System.currentTimeMillis()
         val syncResult = processSmsPipeline(smsInputs, silent)
+        MoneyTalkLogger.i(
+            "$SYNC_PERF_LOG_PREFIX pipeline.done " +
+                "input=${smsInputs.size}, expenses=${syncResult.expenses.size}, " +
+                "incomes=${syncResult.incomes.size}, skipped=${syncResult.stats.skipped}, " +
+                "fastPath=${syncResult.stats.fastPathMatchCount}, fallback=${syncResult.stats.fallbackToPipelineCount}, " +
+                "vector=${syncResult.stats.vectorMatchCount}, llm=${syncResult.stats.llmProcessCount}, " +
+                "elapsedMs=${System.currentTimeMillis() - pipelineStart}"
+        )
 
         val reconciledExpenseIds = syncResult.expenses
             .flatMap { parsed -> findMatchingSmsIds(parsed.input.id, pendingContentIndex) }
@@ -682,12 +740,33 @@ class MainViewModel @Inject constructor(
             .toSet()
 
         // Step 3: DB 저장
+        val saveStart = System.currentTimeMillis()
         val expenseSaveResult = saveExpenses(syncResult.expenses, existingSnapshot)
         val incomeSaveResult = saveIncomes(syncResult.incomes, existingSnapshot)
+        MoneyTalkLogger.i(
+            "$SYNC_PERF_LOG_PREFIX save.done " +
+                "expenses=${expenseSaveResult.newCount}, incomes=${incomeSaveResult.newCount}, " +
+                "reconciledExpenses=${expenseSaveResult.reconciledCount}, " +
+                "reconciledIncomes=${incomeSaveResult.reconciledCount}, " +
+                "elapsedMs=${System.currentTimeMillis() - saveStart}"
+        )
 
         // Step 4: 후처리 (카테고리 분류, 패턴 정리, lastSyncTime 갱신)
+        val cleanupStart = System.currentTimeMillis()
         val cleanup = postSyncCleanup(updateLastSyncTime, targetMonthRange.second)
         SmsInstantProcessor.clearPendingReconciliationIds(reconciledExpenseIds + reconciledIncomeIds)
+        MoneyTalkLogger.i(
+            "$SYNC_PERF_LOG_PREFIX cleanup.done " +
+                "cards=${cleanup.cardNames.size}, elapsedMs=${System.currentTimeMillis() - cleanupStart}"
+        )
+
+        MoneyTalkLogger.i(
+            "$SYNC_PERF_LOG_PREFIX sync.done " +
+                "expenses=${expenseSaveResult.newCount}, incomes=${incomeSaveResult.newCount}, " +
+                "reconciledExpenses=${expenseSaveResult.reconciledCount}, " +
+                "reconciledIncomes=${incomeSaveResult.reconciledCount}, " +
+                "elapsedMs=${System.currentTimeMillis() - syncStart}"
+        )
 
         return SyncResult(
             expenseCount = expenseSaveResult.newCount,
@@ -968,9 +1047,17 @@ class MainViewModel @Inject constructor(
     ): SaveResult {
         if (expenses.isEmpty()) return SaveResult()
 
+        val totalStart = System.currentTimeMillis()
+        val uniqueStoreCount = expenses.map { it.analysis.storeName }.distinct().size
+        MoneyTalkLogger.i(
+            "$CATEGORY_PERF_LOG_PREFIX saveExpenses.start " +
+                "expenses=${expenses.size}, uniqueStores=$uniqueStoreCount"
+        )
+
         _uiState.update { it.copy(syncStepIndex = SmsPipeline.STEP_SAVE, syncProgress = "지출 저장 중...") }
 
         // Phase 1: 엔티티 빌드 + 로컬 분류
+        val localStart = System.currentTimeMillis()
         val entities = ArrayList<ExpenseEntity>(expenses.size)
         for (parsed in expenses) {
             val localCategory = if (parsed.analysis.category.isNotBlank() &&
@@ -998,15 +1085,23 @@ class MainViewModel @Inject constructor(
                 )
             )
         }
+        val localElapsed = System.currentTimeMillis() - localStart
+        MoneyTalkLogger.i(
+            "$CATEGORY_PERF_LOG_PREFIX saveExpenses.localClassify.done " +
+                "entities=${entities.size}, elapsedMs=$localElapsed"
+        )
 
         // Phase 1.5: StoreRule 적용 (최우선 = Tier 0)
+        val storeRuleStart = System.currentTimeMillis()
         val allRules = storeRuleRepository.getAllOnce()
+        var storeRuleMatchedCount = 0
         if (allRules.isNotEmpty()) {
             for (i in entities.indices) {
                 val entity = entities[i]
                 val lowerStore = entity.storeName.lowercase()
                 val matchedRule = allRules.firstOrNull { lowerStore.contains(it.keyword.lowercase()) }
                 if (matchedRule != null) {
+                    storeRuleMatchedCount++
                     entities[i] = entity.copy(
                         category = matchedRule.category ?: entity.category,
                         isFixed = if (supportsFixedExpense(entity)) {
@@ -1018,6 +1113,11 @@ class MainViewModel @Inject constructor(
                 }
             }
         }
+        val storeRuleElapsed = System.currentTimeMillis() - storeRuleStart
+        MoneyTalkLogger.i(
+            "$CATEGORY_PERF_LOG_PREFIX saveExpenses.storeRule.done " +
+                "rules=${allRules.size}, matched=$storeRuleMatchedCount, elapsedMs=$storeRuleElapsed"
+        )
 
         // Phase 2: "미분류" 가게명을 Gemini로 사전 분류 (DB INSERT 전)
         val unclassifiedStores = entities
@@ -1025,11 +1125,15 @@ class MainViewModel @Inject constructor(
             .map { it.storeName }
             .distinct()
 
+        var geminiPreClassifyElapsed = 0L
+        var geminiPreClassifiedCount = 0
+        var geminiPreClassifyStart = 0L
         if (unclassifiedStores.isNotEmpty() && geminiRepository.hasApiKey()) {
             _uiState.update {
                 it.copy(syncProgress = "AI가 카테고리 분류 중...")
             }
             try {
+                geminiPreClassifyStart = System.currentTimeMillis()
                 val geminiResults = categoryClassifierService.classifyStoreNamesInMemory(
                     storeNames = unclassifiedStores,
                     onStepProgress = { step, current, total ->
@@ -1042,6 +1146,8 @@ class MainViewModel @Inject constructor(
                         }
                     }
                 )
+                geminiPreClassifyElapsed = System.currentTimeMillis() - geminiPreClassifyStart
+                geminiPreClassifiedCount = geminiResults.size
 
                 if (geminiResults.isNotEmpty()) {
                     for (i in entities.indices) {
@@ -1060,16 +1166,31 @@ class MainViewModel @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
+                if (geminiPreClassifyStart > 0L) {
+                    geminiPreClassifyElapsed = System.currentTimeMillis() - geminiPreClassifyStart
+                }
                 MoneyTalkLogger.w("사전 카테고리 분류 실패 (무시): ${e.message}")
             }
         }
+        MoneyTalkLogger.i(
+            "$CATEGORY_PERF_LOG_PREFIX saveExpenses.geminiPreClassify.done " +
+                "unclassifiedStores=${unclassifiedStores.size}, " +
+                "classified=$geminiPreClassifiedCount, elapsedMs=$geminiPreClassifyElapsed"
+        )
 
+        val dedupeLoadStart = System.currentTimeMillis()
         val smsIds = entities.map { it.smsId }.distinct()
         val existingExpensesBySmsId = expenseRepository.getExpensesBySmsIds(smsIds)
             .associateBy { it.smsId }
         val existingIncomesBySmsId = incomeRepository.getIncomesBySmsIds(smsIds)
             .mapNotNull { income -> income.smsId?.let { it to income } }
             .toMap()
+        val dedupeLoadElapsed = System.currentTimeMillis() - dedupeLoadStart
+        MoneyTalkLogger.i(
+            "$CATEGORY_PERF_LOG_PREFIX saveExpenses.dedupeLoad.done " +
+                "smsIds=${smsIds.size}, existingExpenses=${existingExpensesBySmsId.size}, " +
+                "existingIncomes=${existingIncomesBySmsId.size}, elapsedMs=$dedupeLoadElapsed"
+        )
         val crossTypeIncomeIdsToDelete = mutableSetOf<Long>()
         val isNewFlags = BooleanArray(entities.size)
         var newCount = 0
@@ -1126,9 +1247,22 @@ class MainViewModel @Inject constructor(
         // Phase 3: 사용자가 삭제한 항목 제외 후 DB에 배치 저장
         val filteredEntities = entities.filterNot { DeletedSmsTracker.isDeleted(it.smsId) }
         _uiState.update { it.copy(syncProgress = "지출 저장 중...") }
+        val insertStart = System.currentTimeMillis()
         for (chunk in filteredEntities.chunked(DB_BATCH_INSERT_SIZE)) {
             expenseRepository.insertAll(chunk)
         }
+        val insertElapsed = System.currentTimeMillis() - insertStart
+        MoneyTalkLogger.i(
+            "$CATEGORY_PERF_LOG_PREFIX saveExpenses.insert.done " +
+                "inserted=${filteredEntities.size}, elapsedMs=$insertElapsed"
+        )
+
+        val totalElapsed = System.currentTimeMillis() - totalStart
+        MoneyTalkLogger.i(
+            "$CATEGORY_PERF_LOG_PREFIX saveExpenses.done " +
+                "new=$newCount, reconciled=$reconciledCount, " +
+                "deletedFiltered=${entities.size - filteredEntities.size}, elapsedMs=$totalElapsed"
+        )
 
         return SaveResult(
             newCount = newCount,
