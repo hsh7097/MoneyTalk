@@ -47,6 +47,37 @@
     <string name="chat_default_session_title">새 대화</string>
     <string name="chat_previous_session_title">이전 대화</string>
 
+    <!-- AI 프롬프트 조립용 보조 문자열 (프롬프트 본문 템플릿은 string_prompt.xml) -->
+    <string name="ai_home_insight_top_category_item" translatable="false">%1$s %2$s원</string>
+    <string name="ai_home_insight_no_data" translatable="false">데이터 없음</string>
+    <string name="ai_home_insight_direction_increase" translatable="false">증가</string>
+    <string name="ai_home_insight_direction_decrease" translatable="false">감소</string>
+    <string name="ai_home_insight_direction_same" translatable="false">동일</string>
+    <string name="ai_home_insight_category_comparison" translatable="false">\n카테고리별 전월 대비 계산 결과: %1$s</string>
+    <string name="ai_home_insight_category_comparison_item" translatable="false">%1$s %2$s원 %3$s (%4$d%% %3$s)</string>
+    <string name="ai_home_insight_category_comparison_insufficient_item" translatable="false">%1$s 전월 데이터 부족으로 비율 판단 불가</string>
+    <string name="ai_home_insight_category_comparison_insufficient" translatable="false">\n카테고리별 전월 대비 계산 결과: 비교 데이터 부족</string>
+    <string name="ai_home_insight_budget" translatable="false">\n월 예산: %1$s원\n예산 사용률: %2$d%%</string>
+    <string name="ai_home_insight_month_comparison" translatable="false">\n전월 대비 계산 결과: %1$s원 %2$s (%3$d%% %2$s)</string>
+    <string name="ai_home_insight_month_comparison_no_previous" translatable="false">\n전월 대비 계산 결과: 전월 지출 0원/데이터 부족으로 비율 판단 불가</string>
+    <string name="ai_home_insight_month_comparison_insufficient" translatable="false">\n전월 대비 계산 결과: 비교 데이터 부족</string>
+    <string name="ai_home_insight_no_expense_hint" translatable="false">\n데이터 상태: 이번 달 지출 0원. 소비가 없다고 단정하지 말고 데이터 부족 가능성을 고려.</string>
+    <string name="ai_chat_section_previous_summary" translatable="false">[이전 대화 요약]</string>
+    <string name="ai_chat_section_recent_messages" translatable="false">[최근 대화]</string>
+    <string name="ai_chat_section_current_question" translatable="false">[현재 질문]</string>
+    <string name="ai_chat_section_queried_data" translatable="false">[조회된 데이터]</string>
+    <string name="ai_chat_section_action_results" translatable="false">[실행된 액션 결과]</string>
+    <string name="ai_chat_section_monthly_income" translatable="false">[월 수입] %1$s원</string>
+    <string name="ai_chat_section_monthly_income_unset" translatable="false">[월 수입] 미설정</string>
+    <string name="ai_chat_role_user" translatable="false">사용자</string>
+    <string name="ai_chat_role_advisor" translatable="false">상담사</string>
+    <string name="ai_sms_date_info" translatable="false">\n(SMS 수신 날짜: %1$s)</string>
+    <string name="ai_sms_batch_item_date_info" translatable="false"> (수신: %1$s)</string>
+    <string name="ai_sms_batch_item" translatable="false">%1$d번%2$s: %3$s</string>
+    <string name="ai_sms_regex_main_card_line" translatable="false">메인 cardRegex: %1$s</string>
+    <string name="ai_sms_regex_repair_failed_sample" translatable="false">실패%1$d: %2$s\n  → %3$s</string>
+    <string name="ai_sms_regex_repair_failure_reason" translatable="false">%1$d개 샘플 중 %2$d개만 매칭됩니다 (%3$d%%). 아래 실패 샘플과 진단을 참고하여 regex를 수정하세요:\n%4$s</string>
+
     <!-- 세션 삭제 다이얼로그 -->
     <string name="dialog_delete_session_title">대화 삭제</string>
     <string name="dialog_delete_session_message">이 대화를 삭제하시겠습니까?\n삭제된 대화는 복구할 수 없습니다.</string>

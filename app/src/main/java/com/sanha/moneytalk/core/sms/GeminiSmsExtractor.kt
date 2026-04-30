@@ -354,7 +354,10 @@ class GeminiSmsExtractor @Inject constructor(
 
     private fun buildDateInfo(smsTimestamp: Long): String {
         return if (smsTimestamp > 0) {
-            "\n(SMS 수신 날짜: ${smsDateFormat.format(Date(smsTimestamp))})"
+            context.getString(
+                R.string.ai_sms_date_info,
+                smsDateFormat.format(Date(smsTimestamp))
+            )
         } else {
             ""
         }
@@ -366,9 +369,16 @@ class GeminiSmsExtractor @Inject constructor(
     ): String {
         return smsMessages.mapIndexed { idx, body ->
             val dateInfo = smsTimestamps.getOrNull(idx)?.let { ts ->
-                if (ts > 0) " (수신: ${smsDateFormat.format(Date(ts))})" else ""
+                if (ts > 0) {
+                    context.getString(
+                        R.string.ai_sms_batch_item_date_info,
+                        smsDateFormat.format(Date(ts))
+                    )
+                } else {
+                    ""
+                }
             } ?: ""
-            "${idx + 1}번$dateInfo: $body"
+            context.getString(R.string.ai_sms_batch_item, idx + 1, dateInfo, body)
         }.joinToString("\n\n")
     }
 
@@ -632,12 +642,21 @@ class GeminiSmsExtractor @Inject constructor(
             val failedSamplesWithDiag = failedSampleBodies.take(3).mapIndexed { idx, body ->
                 val diag = failedSampleDiagnostics.getOrNull(idx)
                     ?: diagnoseRegexFailure(currentRegex, body)
-                "실패${idx + 1}: ${toCompactRegexSample(body, 120)}\n  → $diag"
+                context.getString(
+                    R.string.ai_sms_regex_repair_failed_sample,
+                    idx + 1,
+                    toCompactRegexSample(body, 120),
+                    diag
+                )
             }.joinToString("\n")
 
-            val failureReason = "${totalCount}개 샘플 중 ${passCount}개만 매칭됩니다 " +
-                "(${(passRatio * 100).toInt()}%). " +
-                "아래 실패 샘플과 진단을 참고하여 regex를 수정하세요:\n$failedSamplesWithDiag"
+            val failureReason = context.getString(
+                R.string.ai_sms_regex_repair_failure_reason,
+                totalCount,
+                passCount,
+                (passRatio * 100).toInt(),
+                failedSamplesWithDiag
+            )
 
             MoneyTalkLogger.w("[repairFromClassifier] repair 시도 (passRatio=${(passRatio * 100).toInt()}%, failed=${failedSampleBodies.size}건)")
 
@@ -791,7 +810,10 @@ class GeminiSmsExtractor @Inject constructor(
         return if (mainRegexContext != null) {
             val mainSample = toCompactRegexSample(mainRegexContext.sampleBody, 150)
             val cardRegexLine = if (mainRegexContext.cardRegex.isNotBlank()) {
-                "메인 cardRegex: ${mainRegexContext.cardRegex}"
+                context.getString(
+                    R.string.ai_sms_regex_main_card_line,
+                    mainRegexContext.cardRegex
+                )
             } else ""
             context.getString(
                 R.string.prompt_sms_regex_with_main_ref,

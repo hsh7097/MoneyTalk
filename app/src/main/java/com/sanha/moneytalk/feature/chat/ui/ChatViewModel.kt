@@ -3,6 +3,7 @@ package com.sanha.moneytalk.feature.chat.ui
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
 import android.app.Activity
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.ad.RewardAdManager
@@ -35,6 +36,7 @@ import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.core.firebase.PremiumManager
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.compose.runtime.Stable
 import kotlinx.coroutines.Dispatchers
@@ -96,6 +98,7 @@ data class ChatUiState(
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val geminiRepository: GeminiRepository,
     private val chatRepository: ChatRepository,
     private val expenseRepository: ExpenseRepository,
@@ -469,7 +472,7 @@ class ChatViewModel @Inject constructor(
 
                 // 2단계: 대화 맥락을 포함하여 쿼리 분석 요청
                 val contextualMessage =
-                    ChatContextBuilder.buildQueryAnalysisContext(chatContext)
+                    ChatContextBuilder.buildQueryAnalysisContext(appContext, chatContext)
                 val analyzeResult = geminiRepository.analyzeQueryNeeds(contextualMessage)
 
                 val queryResults = mutableListOf<QueryResult>()
@@ -551,7 +554,8 @@ class ChatViewModel @Inject constructor(
                         actionResults.joinToString("\n") { "- ${it.message}" }
 
                     val finalPrompt = ChatContextBuilder.buildFinalAnswerPrompt(
-                        context = chatContext,
+                        context = appContext,
+                        chatContext = chatContext,
                         queryResults = dataContext,
                         monthlyIncome = monthlyIncome,
                         actionResults = actionContext

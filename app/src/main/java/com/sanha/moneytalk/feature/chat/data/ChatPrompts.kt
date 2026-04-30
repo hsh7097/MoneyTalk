@@ -16,6 +16,7 @@ import com.sanha.moneytalk.feature.chat.data.ChatPrompts.getSummarySystemInstruc
  * - [getSummarySystemInstruction]: 대화 요약 모델 (gemini-2.5-flash)
  * - [getQueryAnalyzerSystemInstruction]: 쿼리/액션 분석 모델 (gemini-2.5-pro)
  * - [getFinancialAdvisorSystemInstruction]: 재무 상담 답변 모델 (gemini-2.5-pro)
+ * - [getHomeInsightSystemInstruction]: 홈 한줄 인사이트 모델
  */
 object ChatPrompts {
 
@@ -27,4 +28,7 @@ object ChatPrompts {
 
     fun getFinancialAdvisorSystemInstruction(context: Context): String =
         context.getString(R.string.prompt_financial_advisor_system)
+
+    fun getHomeInsightSystemInstruction(context: Context): String =
+        context.getString(R.string.prompt_home_insight_system)
 }
