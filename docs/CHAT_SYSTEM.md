@@ -397,8 +397,8 @@ chat_history 테이블
 | 대화 히스토리 벡터 검색 | ❌ 미사용 | 대화 기록은 벡터화하지 않음 |
 | RAG (Retrieval Augmented Generation) | ❌ 미사용 | 과거 대화에서 관련 내용 검색하는 기능 없음 |
 | Rolling Summary | ✅ 사용 | LLM 기반 요약으로 맥락 압축 (벡터 불필요) |
-| 지출 데이터 컨텍스트 | ✅ 사용 | Room DB 직접 쿼리 (SQL, 벡터 불필요) |
-| ANALYTICS 인메모리 분석 | ✅ 사용 | 클라이언트 사이드 필터/그룹핑/집계 |
+| 지출 데이터 컨텍스트 | ✅ 사용 | Room DB 직접 쿼리 (SQL, 벡터 불필요), 통계 제외 거래는 집계 제외 |
+| ANALYTICS 인메모리 분석 | ✅ 사용 | 클라이언트 사이드 필터/그룹핑/집계, `isExcludedFromStats` 제외 |
 
 현재 채팅 시스템은 **순차적 맥락 관리**(Rolling Summary)만 사용합니다.
 벡터 임베딩은 SMS 분류(`SmsPatternEntity`)와 카테고리 분류(`StoreEmbeddingEntity`)에만 활용됩니다.

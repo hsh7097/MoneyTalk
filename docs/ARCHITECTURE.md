@@ -15,7 +15,7 @@ com.sanha.moneytalk/
 │
 ├── core/                                  # 공통 모듈
 │   ├── database/                          # Room 데이터베이스
-│   │   ├── AppDatabase.kt                 # Room Database 정의 (v2, 15 entities)
+│   │   ├── AppDatabase.kt                 # Room Database 정의 (v6, 15 entities)
 │   │   ├── converter/
 │   │   │   └── FloatListConverter.kt      # Float 리스트 타입 컨버터
 │   │   ├── dao/                           # Data Access Objects
@@ -59,7 +59,7 @@ com.sanha.moneytalk/
 │   │   ├── CrashlyticsHelper.kt          # Crashlytics 래퍼
 │   │   ├── ForceUpdateChecker.kt         # 강제 업데이트 판정
 │   │   ├── PremiumConfig.kt              # 서버 설정 data class (API 키 풀, 모델 설정)
-│   │   └── PremiumManager.kt             # Firebase RTDB 설정 실시간 감시
+│   │   └── PremiumManager.kt             # Firebase RTDB 설정 감시 + 마지막 정상 설정 캐시
 │   │
 │   ├── model/                            # 공통 모델
 │   │   ├── Category.kt                   # 지출 카테고리 Enum (18개)

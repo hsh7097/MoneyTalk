@@ -263,6 +263,8 @@ SMS 본문에 아래 키워드 중 하나라도 포함되면 비결제:
 | 배송 | `배송`, `택배`, `운송장` |
 | 금융광고 | `대출`, `투자`, `분양`, `모델하우스` |
 
+> 카드대금/이용대금은 명세서·청구서 안내면 제외하지만, 은행 계좌에서 실제 출금된 `카드대금`, `카드결제`, `결제대금` 문자는 거래 기록으로 저장한다. 이 경우 신규 저장 시 `isExcludedFromStats=true`로 표시되어 월별 합계/카테고리/AI 분석에서는 제외된다.
+
 **2. 구조 필터 — `lacksPaymentRequirements(body)`**
 
 | 조건 | 판정 |
@@ -291,10 +293,11 @@ SMS 본문에 아래 키워드 중 하나라도 포함되면 비결제:
 4. 금융기관 키워드 없음 → SKIP
 5. 금액 패턴 없음 → SKIP
 6. 취소 키워드 (출금취소, 승인취소 등) → INCOME
-7. 수입 제외 키워드 (자동이체출금, 보험료 등) → SKIP
-8. 결제 키워드 (결제, 승인, 사용, 출금) → PAYMENT
-9. 수입 키워드 (입금, 급여, 송금 등) → INCOME
-10. 그 외 (금융+금액 있지만 명시적 키워드 없음) → PAYMENT (벡터/LLM에 맡김)
+7. 카드대금 실제 출금 → PAYMENT (저장 후 통계 제외)
+8. 수입 제외 키워드 (자동이체출금, 보험료 등) → SKIP
+9. 결제 키워드 (결제, 승인, 사용, 출금) → PAYMENT
+10. 수입 키워드 (입금, 급여, 송금 등) → INCOME
+11. 그 외 (금융+금액 있지만 명시적 키워드 없음) → PAYMENT (벡터/LLM에 맡김)
 ```
 
 ### 금융기관 키워드 (46개)
@@ -780,6 +783,8 @@ syncSmsV2(targetMonthRange, updateLastSyncTime, silent, trigger)
   │
   ├── saveExpenses()
   │   ├ SmsParseResult → ExpenseEntity 변환 (카테고리 fallback 포함)
+  │   ├ StoreRule 통계 제외 규칙이 있으면 우선 적용
+  │   ├ 카드대금 납부 SMS는 StatsExclusionClassifier로 통계 제외 플래그 적용
   │   └ DB_BATCH_INSERT_SIZE 단위 배치 삽입
   │
   ├── saveIncomes()

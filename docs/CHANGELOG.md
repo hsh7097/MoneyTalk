@@ -7,24 +7,33 @@
 ### Added (2026-04-30)
 - **월별 SMS 동기화 순서 회귀 테스트**: 2025년 1월부터 현재월까지 10개 월별 읽기 순서(순차/역순/셔플 포함)로 SMS ID 집합, 거래월 집계, coverage/CTA 판정을 검증
 - **실기기 SMS Provider/UI 이동 검증**: 실제 SMS/MMS/RCS provider 읽기 순서 검증과 홈/가계부 월 이동 instrumented test 추가
+- **거래별 통계 제외 플래그**: `ExpenseEntity.isExcludedFromStats` + Room v5 마이그레이션 추가, 카드대금 납부 SMS는 신규 저장 시 기본 통계 제외 처리
+- **거래처별 통계 제외 규칙**: `StoreRuleEntity.isExcludedFromStats` + Room v6 마이그레이션 추가, 거래 수정에서 통계 제외를 동일 거래처에 소급/미래 적용
 
 ### Fixed (2026-04-30)
 - **연말/연초 SMS 날짜 보정**: 연도 없는 `MM/DD` 거래 문자를 수신 시각과 가장 가까운 연도로 저장하여 1월에 수신한 12월 환불/결제 내역이 다음 12월로 밀리는 문제 수정
+- **이체 방향 표시/부호 보정**: 거래 수정 화면에서 이체 입금은 `+`, 출금은 `-`로 표시하고, 방향 하단 문구를 `입금/출금` 단일 라벨로 표시
 
 ### Changed (2026-04-30)
 - **SMS 동기화 책임 분리**: 문자 원본 읽기, 동기화 기간 계산, 월별 coverage/CTA 판정, SMS 거래 날짜 해석 로직을 전용 클래스로 분리
 - **AI 프롬프트 XML 정리**: 채팅/홈 인사이트/요약/제목 생성의 시스템·유저 프롬프트 템플릿을 `string_prompt.xml`로 통합하고, 프롬프트 조립용 보조 문자열은 `strings.xml`의 `ai_*` key로 분리
 - **AI 프롬프트 지침 보정**: 카테고리/날짜 지침을 현재 파싱 정책에 맞게 보정하고, 카테고리 분류가 목록 밖 축약명 대신 실제 displayName을 반환하도록 강화
+- **통계 집계 기준 정리**: 월별 합계, 카테고리, 누적 차트, 예산/AI 분석에서 통계 제외 거래와 이체 입금 지출 중복 집계를 제외
+- **카드대금 출금 SMS 필터 기준 보정**: 청구/예정 안내는 계속 제외하되, 실제 출금 완료 문자는 거래 기록으로 저장 후 통계 제외 처리
+- **통계 제외 거래 목록 표시**: 취소선 대신 `통계 제외` 배지와 중립 톤 다운으로 표시하여 정상 기록과 통계 제외 상태를 구분
+- **거래 수정 UX 정리**: 자동 정리에서 고정 거래/통계 제외를 행 단위 제목·설명·우측 스위치로 정리하고, 동일 거래처 적용은 체크 항목이 있을 때만 헤더 우측에 표시, 매칭 키워드는 자동 정리 아래 별도 카드로 표시. 헤더 최소 높이와 260~320ms 수준의 펼침 애니메이션을 적용해 체크박스/카드 노출 시 레이아웃 튐을 방지
+- **인트로 진입 속도 개선**: 스플래시를 1.2초로 고정하고 RTDB 설정 대기를 제거. `/config` 마지막 정상 값을 기기에 저장해 서버 설정이 없어도 캐시/기본값으로 즉시 진입하도록 개선
 
 ### Removed (2026-04-30)
 - **임시 성능 측정 로그 제거**: 전체 문자 동기화/카테고리 분류 병목 확인용 `SyncPerf`/`CategoryPerf` 운영 로그와 타이밍 변수를 정리
+- **중복/스냅샷 문서 정리**: `APP_MAP.md`, `QUICK_START.md`, `SMS_ISSUER_COVERAGE.md` 제거. 라우팅/화면 정보는 `ARCHITECTURE.md`/`COMPOSABLE_MAP.md`/`SCREEN_REQUIREMENTS.md`, SMS 룰 갱신 절차는 `SMS_RULE_JSON_UPDATE_GUIDE.md`로 일원화
 
 ### Changed (2026-04-24)
 - **sms_origin 운영 감사 도구 및 비거래 필터 보강**: RTDB export와 local asset 매칭 상태를 비교하는 `scripts/sms_origin_rule_audit.py` 추가, 통신 단가/요율 안내 SMS를 Fast Path 실패 후보에서 제외하도록 `SmsPreFilter` 보강
 - **RTDB sms_origin 기반 SMS Regex 룰 갱신**: 신한 카드번호입력승인, NH 지역화폐 체크 승인, 농협 자동출금, 롯데 무누적/제휴카드 승인 구조를 asset 룰과 synthetic 회귀 테스트에 반영
 - **SMS Regex 룰 정합성 정리**: `sms_rules_v1.json`에서 실행되지 않는 income Fast Path 룰 제거, ruleKey 결정식 불일치 룰 키 보정
 - **SMS 룰 회귀 테스트 추가**: asset JSON 구조/타입/ruleKey 검증 및 주요 카드사 synthetic payment sample 매칭 테스트 추가
-- **카드사 룰 커버리지 문서화**: 현재 커버 카드사와 우선 확장 대상(하나/BC/IBK/카카오뱅크/토스뱅크/씨티) 관리 문서 추가
+- **카드사 룰 커버리지 문서화**: 현재 커버 카드사와 우선 확장 대상(하나/BC/IBK/카카오뱅크/토스뱅크/씨티) 관리 기준 추가
 
 ### Added (2026-04-03)
 - **운영용 메시지 앱 알림 리스너**: `NotificationTransactionService` + `NotificationContentParser` 추가
@@ -32,7 +41,7 @@
   - 앱 프로세스가 죽어 있을 때 놓치던 RCS/비즈메시지 실시간 거래 저장/알림 보완
 
 ### Changed (2026-04-03)
-- **SMS_PARSING/ARCHITECTURE/QUICK_START 문서 정합성 갱신**: 실시간 RCS 보완 경로와 현재 sms 중심 구조 반영
+- **SMS_PARSING/ARCHITECTURE 문서 정합성 갱신**: 실시간 RCS 보완 경로와 현재 sms 중심 구조 반영
 - **feature 화면 레이어 정리**: `categorydetail/categorysettings/smssettings/storerulesettings/transactionedit/transactionlist`의 `Activity/ViewModel`을 `ui/` 기준으로 통일
   - 화면 전용 모델은 `ui/model/`에 배치하고, feature 루트에는 기능 경계만 남기도록 구조 정리
 

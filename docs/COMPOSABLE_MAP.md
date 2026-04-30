@@ -9,14 +9,14 @@
 ## IntroActivity (LAUNCHER)
 
 ```
-IntroActivity                        ← 앱 초기 진입 (스플래시 + 온보딩 + 권한 + RTDB + 강제 업데이트)
+IntroActivity                        ← 앱 초기 진입 (스플래시 + 온보딩 + 권한 + 설정 캐시 + 강제 업데이트)
 ├── SplashScreen                     ← 로고 페이드인 애니메이션
 ├── OnboardingScreen                 ← 3페이지 스와이프 인트로 (앱 핵심 가치 전달)
 │   ├── OnboardingPageContent        ← 페이지 콘텐츠 (이모지 + 제목 + 설명 + feature bullets)
 │   └── PageIndicatorDot             ← 페이지 인디케이터 점
 ├── PermissionScreen                 ← SMS 권한 설명 + 동의/비동의
 ├── ForceUpdateDialog                ← 강제 업데이트 다이얼로그 (닫기 불가)
-└── [NAVIGATING 배경]               ← RTDB 대기 중 그라데이션 배경
+└── [NAVIGATING 배경]               ← MainActivity 전환 직전 그라데이션 배경
 ```
 
 | 함수 | 설명 | 참조 |
@@ -65,7 +65,7 @@ HomeScreen                           ← 홈 탭 메인 화면
 ├── CategoryExpenseSection           ← 카테고리 TOP 4 지출 리스트 (예산 진척률 포함)
 │   └── CategoryIcon                 ← 카테고리 이모지 아이콘 (공통)
 ├── AiInsightCard                    ← "AI가 본 이번 달" 소비 분석 요약
-├── TransactionCardCompose           ← 오늘 거래 카드 (공통, 설정 카드와 동일한 surface/outlineVariant 톤)
+├── TransactionCardCompose           ← 오늘 거래 카드 (공통, 설정 카드 톤 + 통계 제외 배지/톤 다운)
 │   └── CategoryIcon                 ← 카테고리 이모지 아이콘 (공통)
 ├── ImportDataCtaSection             ← 데이터 가져오기 CTA (현재월, 권한 없거나 데이터 없음)
 ├── EmptyExpenseSection              ← 지출 없을 때 빈 상태
@@ -296,7 +296,9 @@ TransactionEditActivity               ← 거래 편집/추가 (별도 Activity)
     │   ├── TransactionEditTopBar     ← X 닫기 + 거래 상세/추가 제목 + 저장
     │   ├── TransactionHeroCard       ← 거래처/금액 인라인 편집 + 지출/수입/이체 전환
     │   ├── TransactionBasicInfoCard  ← 카테고리/날짜·시간/메모 + 카테고리 일괄 적용
-    │   ├── TransactionAutomationCard ← 고정 거래 + 고정 일괄 적용 + 매칭 키워드
+    │   ├── TransactionAutomationCard ← 고정 거래/통계 제외 행 + 조건부 헤더 우측 동일 거래처 적용
+    │   │   ├── AutomationOptionRow   ← 제목/설명 + 우측 스위치
+    │   ├── TransactionSameStoreRuleCard ← 동일 거래처 적용 시 자동 정리 아래 매칭 키워드 카드
     │   ├── TransactionOriginalSmsCard← 원본 문자 전체 표시 카드
     │   └── TransactionEditBottomActions ← 하단 삭제 + 저장 버튼
     ├── CategorySelectDialog          ← 카테고리 선택 + 카테고리 추가 진입 (공통)
@@ -313,7 +315,9 @@ TransactionEditActivity               ← 거래 편집/추가 (별도 Activity)
 | TransactionEditDetailContent | 라이트/다크 카드형 상세 UI 본문 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
 | TransactionHeroCard | 거래처/금액 인라인 편집 + 지출/수입/이체 전환 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
 | TransactionBasicInfoCard | 카테고리, 날짜·시간, 메모, 카테고리 일괄 적용 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
-| TransactionAutomationCard | 고정 거래, 고정 일괄 적용, 매칭 키워드 입력 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
+| TransactionAutomationCard | 고정 거래/통계 제외 행, 체크 항목이 있을 때 헤더 우측 동일 거래처 적용 표시 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
+| AutomationOptionRow | 자동 정리 항목의 제목/설명과 우측 스위치 표시 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
+| TransactionSameStoreRuleCard | 카테고리/자동 정리 동일 거래처 적용 시 자동 정리 아래에 표시되는 매칭 키워드 카드 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
 | TransactionOriginalSmsCard | 원본 문자 전체 표시 카드 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
 | CategoryAddDialog | 카테고리 추가 공통 다이얼로그 | [CategoryAddDialogKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/CategoryAddDialog.kt) |
 | TimePickerDialog | TimePicker AlertDialog 래퍼 | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
@@ -393,7 +397,7 @@ StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Acti
 └── StoreRuleSettingsScreen             ← 거래처 규칙 메인 화면
     ├── LazyColumn                      ← 규칙 목록
     │   ├── 설명 텍스트
-    │   ├── StoreRuleListItem × N       ← 키워드 + 카테고리/고정지출 표시 + 삭제
+    │   ├── StoreRuleListItem × N       ← 키워드 + 카테고리/고정지출/통계 제외 표시 + 삭제
     │   └── "+ 규칙 추가" 버튼
     ├── CoachMarkOverlay               ← 거래처 규칙 온보딩 오버레이 (첫 진입 시)
     ├── [AlertDialog: 추가/편집]         ← 키워드 입력 + 카테고리 선택 + 고정지출 토글
@@ -411,7 +415,7 @@ StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Acti
 
 | 함수 | 설명 | 사용 화면 | 참조 |
 |------|------|----------|------|
-| TransactionCardCompose | 지출/수입 통합 거래 카드 | 홈, 내역(목록/달력) | [TransactionCardComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/card/TransactionCardCompose.kt) |
+| TransactionCardCompose | 지출/수입 통합 거래 카드 (통계 제외 배지/톤 다운 포함) | 홈, 내역(목록/달력) | [TransactionCardComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/card/TransactionCardCompose.kt) |
 | TransactionGroupHeaderCompose | 날짜/가게/금액 그룹 헤더 | 내역(목록) | [TransactionGroupHeaderComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/header/TransactionGroupHeaderCompose.kt) |
 | SegmentedTabRowCompose | 세그먼트 스타일 탭 Row | 내역(FilterTabRow) | [SegmentedTabRowComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/tab/SegmentedTabRowCompose.kt) |
 | ImportDataCtaSection | 데이터 가져오기 CTA | 홈, 내역 | [ImportDataCtaSectionKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/cta/ImportDataCtaSection.kt) |
@@ -456,7 +460,7 @@ StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Acti
 
 | Interface | 설명 | 참조 |
 |-----------|------|------|
-| TransactionCardInfo | 거래 카드 데이터 계약 | [TransactionCardInfo](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/card/TransactionCardInfo.kt) |
+| TransactionCardInfo | 거래 카드 데이터 계약 (고정/통계 제외 표시 포함) | [TransactionCardInfo](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/card/TransactionCardInfo.kt) |
 | TransactionGroupHeaderInfo | 그룹 헤더 데이터 계약 | [TransactionGroupHeaderInfo](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/header/TransactionGroupHeaderInfo.kt) |
 | SegmentedTabInfo | 탭 데이터 계약 | [SegmentedTabInfo](../app/src/main/java/com/sanha/moneytalk/core/ui/component/tab/SegmentedTabInfo.kt) |
 | SettingsItemInfo | 설정 아이템 데이터 계약 | [SettingsItemInfo](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsItemInfo.kt) |

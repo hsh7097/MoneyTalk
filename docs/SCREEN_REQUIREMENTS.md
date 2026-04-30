@@ -27,9 +27,9 @@
 
 | 항목 | 스펙 |
 |------|------|
-| 애니메이션 | 지갑 아이콘 + 앱명 + 태그라인, scale/alpha 500ms + 1.5s 딜레이 |
+| 애니메이션 | 지갑 아이콘 + 앱명 + 태그라인, scale/alpha 병렬 500ms + 0.7s 딜레이 |
 | 배경 | Primary 그라데이션 (PrimaryLight → Primary → PrimaryDark) |
-| 전환 | 총 2초 후 자동 전환 |
+| 전환 | 약 1.2초 후 자동 전환 |
 | 분기 | onboardingCompleted → 바로 MainActivity / 아니면 → Onboarding |
 
 ### 1.2 온보딩 인트로
@@ -55,14 +55,14 @@
 | UI | 딤 배경 + 카드형 모달 |
 | 요청 권한 | READ_SMS, RECEIVE_SMS (Android 13+: POST_NOTIFICATIONS 추가) |
 | 버튼 | "동의함" / "동의안함" (둘 다 진행 가능) |
-| 완료 후 | onboardingCompleted=true → RTDB 설정 로드 (3초 타임아웃) → MainActivity |
+| 완료 후 | onboardingCompleted=true → RTDB 응답 대기 없이 현재 보유 설정(캐시/기본값) 기준 확인 → MainActivity |
 
 ### 1.4 강제 업데이트
 
 | 항목 | 스펙 |
 |------|------|
-| 조건 | RTDB의 minVersionCode > 현재 versionCode |
-| UI | AlertDialog (취소 불가, Predictive Back 방어) + 업데이트 메시지 (RTDB에서 가져옴) |
+| 조건 | 현재 보유 설정의 minVersionName > 현재 VERSION_NAME |
+| UI | AlertDialog (취소 불가, Predictive Back 방어) + 업데이트 메시지 (RTDB 또는 마지막 저장 설정에서 가져옴) |
 | 동작 | Play Store로 이동 |
 
 ---
@@ -987,7 +987,9 @@ SpendingTrendInfo (interface)
 | 원본 SMS | 기존 거래만 (읽기전용 카드) |
 | 하단 | 저장 버튼 + 삭제 버튼(기존 거래만) |
 | 일괄 적용 (카테고리) | 기존 거래 편집 시 "동일 거래처에 카테고리 일괄 적용" 체크박스 표시 |
-| 일괄 적용 (고정지출) | 기존 거래 편집 시 "동일 거래처에 고정지출 일괄 적용" 체크박스 표시 |
+| 자동 정리 | 고정 거래/통계 제외는 제목과 설명을 왼쪽에 두고 우측 스위치로 상태 표시, 헤더는 동일 거래처 적용 표시 여부와 무관하게 최소 높이 유지 |
+| 일괄 적용 (자동 정리) | 기존 거래 편집 시 고정 거래/통계 제외 중 하나라도 켜져 있을 때만 자동 정리 제목 오른쪽에 "동일 거래처 적용" 표시 |
+| 매칭 키워드 | 카테고리 또는 자동 정리 동일 거래처 적용 시 자동 정리 아래의 별도 카드에 입력 표시, fade + vertical expand/shrink로 260~320ms 수준의 부드러운 전환 |
 
 ### CRUD
 
@@ -1033,8 +1035,9 @@ SpendingTrendInfo (interface)
 | 좌측 | 카테고리 아이콘 (원형 배경) 또는 수입 이모지 (💰) |
 | 중앙 | 가게명(Bold) + 카테고리 태그 칩 + 시간/카드명(소, 회색) |
 | 우측 | 금액 (지출=빨강, 수입=초록, Bold) |
+| 통계 제외 | 취소선 대신 `통계 제외` 배지 + 카드/금액 중립 톤 다운 |
 | 스타일 | 12dp radius, 1dp 테두리, 가벼운 elevation |
-| Interface | TransactionCardInfo (title, subtitle, amount, isIncome, category, etc.) |
+| Interface | TransactionCardInfo (title, subtitle, amount, isIncome, category, isExcludedFromStats, etc.) |
 
 ### 7.2 TransactionGroupHeaderCompose
 
@@ -1130,7 +1133,7 @@ SpendingTrendInfo (interface)
 |------|------|
 | 트리거 | `SmsReceiver` (BroadcastReceiver, SMS_RECEIVED_ACTION) |
 | 처리 | `SmsInstantProcessor.processAndSave()` — goAsync() + IO 코루틴 |
-| 파이프라인 | 발신번호필터 → SmsPreFilter → 제외키워드 → 수입/지출분류 → Regex매칭 → StoreRule → DB저장 |
+| 파이프라인 | 발신번호필터 → SmsPreFilter → 제외키워드 → 수입/지출분류 → Regex매칭 → StoreRule(카테고리/고정/통계 제외) → DB저장 |
 | 알림 | `SmsNotificationManager` — 채널 `sms_transaction`, IMPORTANCE_DEFAULT |
 | 알림 형식 (지출) | "{이모지} {가맹점} {금액}원 ({카드}" |
 | 알림 형식 (수입) | "💰 {출처} {금액}원" |
@@ -1158,11 +1161,11 @@ SpendingTrendInfo (interface)
 | 2 | 로컬 키워드 매칭 | 70%+ | $0 |
 | 3 | Gemini 배치 분류 | 95%+ | $0.001/건 |
 
-### 8.6 Room DB 스키마 (v6, 10 entities)
+### 8.6 Room DB 스키마
 
 | Entity | PK | 주요 필드 |
 |--------|----|----------|
-| ExpenseEntity | auto | amount, cardName, storeName, category, dateTime, memo, smsId(UNIQUE) |
+| ExpenseEntity | auto | amount, cardName, storeName, category, dateTime, memo, smsId(UNIQUE), transactionType, transferDirection, isExcludedFromStats |
 | IncomeEntity | auto | amount, source, type, dateTime, memo, smsId(UNIQUE) |
 | BudgetEntity | yearMonth+category | monthlyLimit |
 | ChatEntity | auto | sessionId(FK), message, isUser, timestamp |
@@ -1187,10 +1190,10 @@ SpendingTrendInfo (interface)
 
 | 서비스 | 용도 |
 |--------|------|
-| RTDB | 원격 SMS 규칙, API 키 풀링, 모델 버전, 최소 버전 |
+| RTDB | 원격 SMS 규칙, API 키 풀링, 모델 버전, 최소 버전. `/config`는 마지막 정상 값을 기기에 저장하고 다음 실행 시 캐시를 먼저 사용 |
 | Analytics | 화면 PV + 클릭 이벤트 (7개) |
 | Crashlytics | Release 빌드 크래시 모니터링 |
-| 강제 업데이트 | minVersionCode 비교 → AlertDialog |
+| 강제 업데이트 | minVersionName 비교 → AlertDialog |
 
 ---
 

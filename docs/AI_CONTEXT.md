@@ -15,7 +15,7 @@
 - **AI**: Google Gemini (2.5-pro/2.5-flash/2.5-flash-lite)
 - **Min SDK**: 26 (Android 8.0)
 - **Package**: `com.sanha.moneytalk`
-- **DB 버전**: 2 (`moneytalk.db`)
+- **DB 버전**: 6 (`moneytalk.db`)
 
 ---
 
@@ -92,13 +92,13 @@ app/src/main/java/com/sanha/moneytalk/
 | AI 채팅 (3-step) | 쿼리분석 → DB조회/액션 → 답변생성 | [ChatViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt), [GeminiRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) |
 | 카드 관리 | 소유 카드 화이트리스트 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
 | SMS 필터링 | 제외 키워드 블랙리스트 | [SmsExclusionRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/SmsExclusionRepository.kt) |
-| 거래처 규칙 (StoreRule) | 거래처 키워드→카테고리/고정지출 자동 적용 (Tier 0) | [StoreRuleRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreRuleRepository.kt), [StoreRuleSettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/ui/StoreRuleSettingsViewModel.kt) |
+| 거래처 규칙 (StoreRule) | 거래처 키워드→카테고리/고정지출/통계 제외 자동 적용 (Tier 0) | [StoreRuleRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreRuleRepository.kt), [StoreRuleSettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/ui/StoreRuleSettingsViewModel.kt) |
 
 ### 2-3. DB 엔티티 (15개)
 
 | Entity | 테이블 | 용도 |
 |--------|--------|------|
-| ExpenseEntity | expenses | 지출 내역 |
+| ExpenseEntity | expenses | 지출/이체 내역, 통계 제외 플래그 |
 | IncomeEntity | incomes | 수입 내역 |
 | BudgetEntity | budgets | 예산 |
 | ChatEntity | chat_history | 채팅 메시지 |
@@ -112,12 +112,14 @@ app/src/main/java/com/sanha/moneytalk/
 | SmsExclusionKeywordEntity | sms_exclusion_keywords | SMS 제외 키워드 |
 | SmsRegexRuleEntity | sms_regex_rules | SMS regex 룰 (sender+type+ruleKey 복합키) |
 | CustomCategoryEntity | custom_categories | 사용자 정의 카테고리 |
-| StoreRuleEntity | store_rules | 거래처 규칙 (keyword→category/isFixed 자동 적용) |
+| StoreRuleEntity | store_rules | 거래처 규칙 (keyword→category/isFixed/isExcludedFromStats 자동 적용) |
 
 ### 2-4. DB 버전 정보
 
-- **현재 버전**: v2
-- **Migration 코드**: `MIGRATION_1_2` (채널 진단 로그 테이블 추가)
+- **현재 버전**: v6
+- **Migration 코드**: `MIGRATION_1_2` ~ `MIGRATION_5_6`
+  - v5: `expenses.is_excluded_from_stats`
+  - v6: `store_rules.is_excluded_from_stats`
 - 이후 스키마 변경 시 추가 Migration 필수
 
 ---
@@ -405,6 +407,7 @@ MainViewModel.syncSmsV2(targetMonthRange)
          - 예산 초과: regex 스킵→LLM 직접 강등 (데이터 누락 방지)
          - 백그라운드 학습 큐: 성공 패턴 비동기 등록 (learningQueue, dedup)
    → saveExpenses(): SmsParseResult → ExpenseEntity 변환 + 배치 저장
+     - 카드대금 납부로 판단되는 신규 지출은 `isExcludedFromStats=true`로 저장
    → saveIncomes(): SmsIncomeParser 파싱 → IncomeEntity 변환 + 배치 저장
      - SMS 본문 거래 날짜는 SmsTransactionDateResolver가 공통 해석
      - 연도 없는 MM/DD는 SMS 수신 시각과 가장 가까운 연도로 보정
@@ -437,7 +440,7 @@ RCS/비즈메시지(프로세스 cold start) → NotificationTransactionService
 ### 5-2. 카테고리 자동 분류 흐름
 ```
 CategoryClassifierService.getCategory(storeName)
-   → Tier 0: StoreRule contains 매칭 (storeName에 keyword 포함 → category/isFixed 즉시 적용)
+   → Tier 0: StoreRule contains 매칭 (storeName에 keyword 포함 → category/isFixed/isExcludedFromStats 즉시 적용)
    → Tier 1: Room DB 정확 매칭 (storeName → category)
    → Tier 1.5: 임베딩 1회 생성 → 1.5a/b 모두에서 재사용
       → 1.5a: findCategoryByStoreName(storeName, queryVector)
@@ -477,9 +480,9 @@ ChatViewModel.sendMessage(message)
 ## 6. UI 공통 컴포넌트 (core/ui/component/, 11개 파일)
 
 ### 6-1. TransactionCard (거래 카드)
-- **Interface**: `TransactionCardInfo` — title, subtitle, amount, isIncome, category, iconEmoji, categoryTag, time, cardNameText, memoText, isFixed
+- **Interface**: `TransactionCardInfo` — title, subtitle, amount, isIncome, category, iconEmoji, categoryTag, time, cardNameText, memoText, isFixed, isExcludedFromStats
 - **구현체**: `ExpenseTransactionCardInfo`, `IncomeTransactionCardInfo`
-- **Composable**: `TransactionCardCompose` — 지출/수입 통합 카드 렌더링 (고정지출 태그 포함)
+- **Composable**: `TransactionCardCompose` — 지출/수입 통합 카드 렌더링 (고정지출/통계 제외 태그 포함)
 - **사용처**: HomeScreen, HistoryScreen, CategoryDetailScreen
 
 ### 6-2. TransactionGroupHeader (그룹 헤더)
