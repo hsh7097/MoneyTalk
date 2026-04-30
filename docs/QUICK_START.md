@@ -117,9 +117,14 @@ C:\Users\hsh70\AndroidStudioProjects\MoneyTalk\docs\AI_CONTEXT.md
 
 | 파일 | 설명 |
 |------|------|
-| [`feature/home/ui/HomeViewModel.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeViewModel.kt) | 동기화, 데이터 로딩 핵심 로직 |
+| [`MainViewModel.kt`](../app/src/main/java/com/sanha/moneytalk/MainViewModel.kt) | SMS 동기화/권한/광고 전역 오케스트레이터 |
+| [`feature/home/ui/HomeViewModel.kt`](../app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeViewModel.kt) | 홈 월별 데이터 로딩/캐시 |
 | [`core/sms/SmsSyncCoordinator.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsSyncCoordinator.kt) | 배치 SMS 파싱 메인 진입점 |
 | [`core/sms/SmsReaderV2.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsReaderV2.kt) | SMS/MMS/RCS 통합 읽기 |
+| [`core/sms/SmsSyncMessageReader.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsSyncMessageReader.kt) | 동기화 대상 기간 SMS 원본 읽기 래퍼 |
+| [`core/sms/SmsTransactionDateResolver.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsTransactionDateResolver.kt) | SMS 본문 거래 날짜/시간 공통 해석 |
+| [`core/sync/SmsSyncRangeCalculator.kt`](../app/src/main/java/com/sanha/moneytalk/core/sync/SmsSyncRangeCalculator.kt) | 증분/월별 동기화 기간 계산 |
+| [`core/sync/SyncCoveragePagePolicy.kt`](../app/src/main/java/com/sanha/moneytalk/core/sync/SyncCoveragePagePolicy.kt) | 월별 coverage/CTA 판정 |
 | [`core/sms/SmsInstantProcessor.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsInstantProcessor.kt) | 실시간 SMS/MMS/RCS 처리 |
 | [`receiver/NotificationTransactionService.kt`](../app/src/main/java/com/sanha/moneytalk/receiver/NotificationTransactionService.kt) | 메시지 앱 알림 기반 RCS 보완 |
 | [`feature/chat/data/GeminiRepository.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) | Gemini API 통신 |
@@ -128,4 +133,4 @@ C:\Users\hsh70\AndroidStudioProjects\MoneyTalk\docs\AI_CONTEXT.md
 
 ---
 
-*최종 업데이트: 2026-04-03*
+*최종 업데이트: 2026-04-30*

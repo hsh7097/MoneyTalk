@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### Fixed (2026-04-30)
+- **연말/연초 SMS 날짜 보정**: 연도 없는 `MM/DD` 거래 문자를 수신 시각과 가장 가까운 연도로 저장하여 1월에 수신한 12월 환불/결제 내역이 다음 12월로 밀리는 문제 수정
+
+### Changed (2026-04-30)
+- **SMS 동기화 책임 분리**: 문자 원본 읽기, 동기화 기간 계산, 월별 coverage/CTA 판정, SMS 거래 날짜 해석 로직을 전용 클래스로 분리
+
 ### Changed (2026-04-24)
 - **sms_origin 운영 감사 도구 및 비거래 필터 보강**: RTDB export와 local asset 매칭 상태를 비교하는 `scripts/sms_origin_rule_audit.py` 추가, 통신 단가/요율 안내 SMS를 Fast Path 실패 후보에서 제외하도록 `SmsPreFilter` 보강
 - **RTDB sms_origin 기반 SMS Regex 룰 갱신**: 신한 카드번호입력승인, NH 지역화폐 체크 승인, 농협 자동출금, 롯데 무누적/제휴카드 승인 구조를 asset 룰과 synthetic 회귀 테스트에 반영

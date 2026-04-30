@@ -1,7 +1,7 @@
 # MONETIZATION.md - 수익 구조 설계
 
 > MoneyTalk 수익 모델 설계 문서
-> **최종 갱신**: 2026-02-18
+> **최종 갱신**: 2026-04-30
 
 ---
 
@@ -206,25 +206,26 @@
 
 ---
 
-## 8. SMS 동기화 범위 제한 + 보상형 광고 모델
+## 8. 월별 SMS 동기화 CTA + 보상형 광고 모델
 
 ### 개요
 
-첫 동기화 시 전체 SMS를 스캔하는 대신 **최근 3개월만 무료 동기화**하고,
-나머지 과거 데이터는 **보상형 광고(Rewarded Ad) 시청 후 전체 동기화**로 해제한다.
+초기/증분 동기화는 최근 사용 범위를 자동으로 읽고, 사용자가 과거 월을 열었을 때 해당 월 coverage가 부족하면
+**보상형 광고(Rewarded Ad) 시청 후 해당 월만 추가 동기화**한다.
+현재 구현은 전역 `FULL_SYNC_UNLOCKED`가 아니라 `SyncCoverageRepository`에 기록된 월별 coverage를 기준으로 CTA 노출을 판단한다.
 
-### 무료 / 광고 해제 구분
+### 무료 / 광고 구분
 
 | 구분 | 범위 | 비용 |
 |------|------|------|
-| 무료 (기본) | 최근 3개월 SMS | 없음 |
-| 광고 시청 후 해제 | **전체 SMS** (기기 보유분 전량) | 보상형 광고 1회 |
+| 무료 (기본) | 초기/증분 동기화 범위 (`SmsSyncRangeCalculator`) | 없음 |
+| 광고 시청 후 월별 동기화 | 사용자가 요청한 월의 custom month range | 보상형 광고 1회 |
 | 실시간 수신 | 새 SMS 수신 즉시 처리 | 항상 무료 |
 
-- **한번 동기화된 데이터는 영구 유지** — 광고를 다시 볼 필요 없음
+- **한번 coverage가 기록된 월은 CTA가 다시 뜨지 않음** — 같은 월을 다시 광고로 해제할 필요 없음
 - 실시간 수신(SmsReceiver)은 광고와 무관하게 항상 동작
 
-### 수익성 분석 (1,000회 기준)
+### 수익성 분석 (월별 동기화 1,000회 기준)
 
 | 항목 | 금액 |
 |------|------|
@@ -233,39 +234,44 @@
 | **순수익** | **~$13 (₩17,300)** |
 | **수익률** | **약 7.5배** |
 
-#### API 비용 상세 (전체 동기화 1회 평균)
+#### API 비용 상세 (월별 동기화 1회 평균)
 
 | 단계 | 대상 건수 | 비용 |
 |------|----------|------|
-| Regex 처리 (Tier 1) | ~300건 (60%) | $0 |
-| 사전 필터링 (100자+비결제) | ~125건 (25%) | $0 |
-| 임베딩 생성 (text-embedding-004) | ~75건 | $0 (무료) |
-| 벡터 캐시 히트 (Tier 2) | ~50건 | $0 |
-| **LLM 호출 (Gemini Flash)** | **~25건 × 200 tokens** | **~$0.002** |
+| Regex 처리 (Tier 1) | 다수 | $0 |
+| 사전 필터링 (비결제/광고/안내) | 다수 | $0 |
+| 임베딩 생성 | Vector 후보 | $0 (무료 할당 활용) |
+| 벡터 캐시 히트 (Tier 2) | 재방문 패턴 | $0 |
+| **LLM 호출 (Gemini Flash 계열)** | **미매칭/regex 실패 일부** | 사용량 기반 |
 
-> 가정: 사용자당 평균 SMS 보유량 ~500건 (1~2년치)
+> 월별 동기화는 전체 기기 SMS 전량보다 대상 범위가 작고, Regex/Vector 캐시가 쌓일수록 LLM 호출 비중이 낮아진다.
 
 ### UI 흐름
 
 ```
 [첫 설치 → 홈 화면]
-  "최근 3개월 데이터를 동기화합니다" → 자동 실행
+  초기/증분 SMS 동기화 실행
   ↓
-[3개월 이전으로 스와이프 시]
-  "이전 데이터가 없습니다"
-  [📺 광고 보고 전체 데이터 불러오기] 버튼
+[과거 월로 스와이프]
+  SyncCoveragePagePolicy가 해당 월 coverage 확인
+  coverage 부족 시 월별 데이터 가져오기 CTA 표시
   ↓
 [광고 시청 완료]
-  전체 SMS 동기화 시작 → 완료 후 전체 기간 조회 가능
+  MainViewModel.syncSmsV2(monthRange, updateLastSyncTime=false)
+  ↓
+  SyncCoverageRecorder.recordSuccessfulRange()
+  완료 후 해당 월 CTA 미노출
 ```
 
 ### 데이터 구조
 
 ```kotlin
-// DataStore 또는 SharedPreferences
-data class SyncState(
-    val oldestSyncedDate: Long,     // 가장 오래된 동기화 날짜
-    val isFullSyncUnlocked: Boolean // 광고 시청으로 전체 해제 여부
+data class SyncCoverageEntity(
+    val startMillis: Long,
+    val endMillis: Long,
+    val trigger: SyncCoverageTrigger,
+    val expenseCount: Int,
+    val incomeCount: Int
 )
 ```
 
@@ -273,16 +279,16 @@ data class SyncState(
 
 | # | 항목 | 설명 |
 |---|------|------|
-| 1 | SmsReader 날짜 범위 제한 | `readAllCardMessages()`에 startDate 파라미터 추가 |
-| 2 | SyncState 저장 | DataStore에 동기화 범위/해제 상태 저장 |
-| 3 | 보상형 광고 연동 | AdMob Rewarded Ad SDK 추가 (`build.gradle` 변경 필요) |
-| 4 | 해제 후 전체 동기화 트리거 | 광고 콜백에서 `forceFullSync = true` 실행 |
-| 5 | HorizontalPager 연동 | 미해제 상태에서 3개월 이전 페이지 접근 시 안내 UI |
+| 1 | 날짜 범위 계산 | `SmsSyncRangeCalculator.calculateIncrementalRange()` / `calculateMonthRange()` |
+| 2 | SMS 원본 읽기 | `SmsSyncMessageReader.read(range)`가 `SmsReaderV2` 호출과 provider 실패 처리를 담당 |
+| 3 | CTA 판정 | `SyncCoveragePagePolicy`가 월별 coverage/부분 coverage를 계산 |
+| 4 | 월별 동기화 트리거 | 광고 완료 후 `syncSmsV2(monthRange, updateLastSyncTime=false)` 실행 |
+| 5 | coverage 기록 | 성공 시 `SyncCoverageRecorder.recordSuccessfulRange()`로 월 범위 기록 |
 
 ### 주의사항
 
 - 광고 로드 실패 시 폴백 필요 (네트워크 오프라인 등)
-- 구독 사용자는 광고 없이 전체 동기화 자동 해제
+- 구독 사용자는 광고 없이 월별 동기화를 실행할 수 있는 정책 분기 필요
 - Google Play 정책: 보상형 광고는 사용자 선택형이므로 정책 위반 아님
 
 ---
@@ -357,7 +363,7 @@ assets/seed_patterns.json
 - 임베딩은 빌드 타임에 생성 → **설치 시 API 호출 0**
 - 시드 패턴만으로 주요 카드사 결제 SMS 80%+ 매칭 커버 가능
 
-### 비용 비교 (전체 동기화 1회)
+### 비용 비교 (월별 동기화 1회)
 
 | 단계 | 현재 | 제안 |
 |------|------|------|

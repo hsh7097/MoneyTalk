@@ -2,7 +2,7 @@
 
 > **목적**: AI 에이전트가 작업 시 요구사항을 놓치지 않도록, 화면별 현재 구현 상태와 스펙을 코드 기준으로 정리한 문서
 >
-> **최종 갱신**: 2026-02-24 | **기준 브랜치**: develop (62a0c45)
+> **최종 갱신**: 2026-04-30 | **기준 브랜치**: develop (62a0c45)
 
 ---
 
@@ -159,7 +159,7 @@
 |-----------|------|
 | ExpenseDetailDialog | 지출 상세 (카테고리 변경, 메모, 삭제) |
 | IncomeDetailDialog | 수입 상세 (메모, 삭제) |
-| SMS Sync Progress | 증분/전체 동기화 진행 (취소 불가) |
+| SMS Sync Progress | 증분/월별 동기화 진행 (취소 불가) |
 | Category Classification | 미분류 항목 분류 진행 |
 | Full Sync Ad Dialog | 광고 시청 → 과거 월 동기화 잠금 해제 |
 
@@ -169,8 +169,8 @@
 |------|------|
 | 증분 동기화 | lastSyncTime - 5분 ~ 현재 (경계 SMS 안전 마진) |
 | 초기 동기화 | 전월 1일 ~ 현재 (monthStartDay > 1이면 2개월 전부터) |
-| 전체 동기화 | 처음 N회 무료 (RTDB `free_sync_count`, 기본 3) → 이후 광고 시청 필요 |
-| 실시간 수신 | SmsProcessingService (BroadcastReceiver, 항상 무료) |
+| 월별 CTA 동기화 | 과거 월 per-month: 처음 N회 무료 (RTDB `free_sync_count`, 기본 3) → 이후 광고 시청 필요 |
+| 실시간 수신 | SmsReceiver + SmsInstantProcessor (BroadcastReceiver, 항상 무료) |
 | Auto Backup 감지 | lastSyncTime > 0 but DB 비어있음 → 초기로 리셋 |
 | 최대 범위 | 현재일 - 60일 |
 | Silent 모드 | 다이얼로그 없이 백그라운드 (새 데이터 시 스낵바) |
@@ -230,7 +230,7 @@ settingsDataStore.monthStartDayFlow (distinctUntilChanged)
   → loadCurrentAndAdjacentPages()           // 새 기간으로 재로드
 ```
 
-#### SMS 동기화 날짜 범위 (`calculateIncrementalRange`)
+#### SMS 동기화 날짜 범위 (`SmsSyncRangeCalculator.calculateIncrementalRange`)
 
 ```
 증분 동기화:
@@ -241,7 +241,7 @@ settingsDataStore.monthStartDayFlow (distinctUntilChanged)
   monthStartDay = 1 → 전월 1일 00:00
   monthStartDay > 1 → 2개월 전 monthStartDay 00:00
 
-전체 동기화 (광고 잠금 해제):
+월별 동기화 (광고 시청/CTA):
   시작 = getCustomMonthPeriod(year, month).first
   종료 = getCustomMonthPeriod(year, month).second
   ※ lastSyncTime 갱신 안 함
@@ -367,15 +367,15 @@ buildBudgetCumulativePoints(monthlyBudget, daysInMonth):
 
 ### 2.16 [구현 상세] 이벤트 구독 & 반응
 
-| 이벤트 | HomeViewModel 반응 |
-|--------|-------------------|
+| 이벤트 | 반응 |
+|--------|------|
 | `ALL_DATA_DELETED` | classificationState.cancel → clearAllPageCache → loadSettings 재시작 |
 | `CATEGORY_UPDATED` | refreshCurrentPages(forceReload=true) — 캐시 유지, 데이터 덮어쓰기 |
 | `OWNED_CARD_UPDATED` | refreshCurrentPages(forceReload=true) |
 | `TRANSACTION_ADDED` | refreshCurrentPages(forceReload=true) |
-| `SMS_RECEIVED` | calculateIncrementalRange → syncSmsV2(silent=true) |
-| `monthSyncEvent` | calculateMonthRange → syncSmsV2(updateLastSyncTime=false) |
-| `incrementalSyncEvent` | consumeIncrementalSync → syncIncremental |
+| `SMS_RECEIVED` | SmsSyncRangeCalculator.calculateIncrementalRange → MainViewModel.syncSmsV2(silent=true) |
+| `monthSyncEvent` | SmsSyncRangeCalculator.calculateMonthRange → MainViewModel.syncSmsV2(updateLastSyncTime=false) |
+| `incrementalSyncEvent` | consumeIncrementalSync → MainViewModel.syncIncremental |
 
 ---
 
@@ -1136,7 +1136,7 @@ SpendingTrendInfo (interface)
 | 알림 형식 (수입) | "💰 {출처} {금액}원" |
 | Dedup | smsId 형식 `${address}_${date}_${body.hashCode()}` (SmsReaderV2 동일) |
 | 후속 동기화 | 즉시 처리 후 항상 `DataRefreshEvent.SMS_RECEIVED` 발행 → MainViewModel 증분 동기화 |
-| 제한 | Regex 미매칭 SMS는 Skipped → 전체 동기화에서 벡터/LLM으로 처리 |
+| 제한 | Regex 미매칭 SMS는 Skipped → 후속 배치 동기화에서 벡터/LLM으로 처리 |
 
 ### 8.4 SMS 파싱 파이프라인
 
@@ -1177,7 +1177,7 @@ SpendingTrendInfo (interface)
 
 | 항목 | 스펙 |
 |------|------|
-| 전체 동기화 | 과거 월 per-month: 처음 N회 무료 (RTDB `free_sync_count`) → 이후 광고 |
+| 월별 SMS 동기화 | 과거 월 per-month: 처음 N회 무료 (RTDB `free_sync_count`) → 이후 광고 |
 | AI 채팅 | remaining=0 시 광고 → N회 무료 |
 | 실시간 수신 | 항상 무료 (BroadcastReceiver) |
 | 프리로드 | 자동 |
@@ -1198,4 +1198,5 @@ SpendingTrendInfo (interface)
 
 | 날짜 | 변경 내용 |
 |------|----------|
+| 2026-04-30 | SMS 동기화 범위 계산/월별 CTA 동기화 설명을 SmsSyncRangeCalculator/MainViewModel 구조 기준으로 갱신 |
 | 2026-02-24 | 최초 작성 (코드 기반 전수 조사) + 구현 상세 추가 + 리뷰 기반 오기재 6건 수정 (토글 기본값, 쿼리/액션 개수, 문자열 3건) |

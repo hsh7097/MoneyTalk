@@ -98,9 +98,11 @@ com.sanha.moneytalk/
 │   │               ├── TransactionGroupHeaderCompose.kt # 그룹 헤더
 │   │               └── TransactionGroupHeaderInfo.kt    # 그룹 헤더 Contract
 │   │
-│   ├── sms/                              # SMS 통합 패키지 (배치 + 실시간 + 보조 유틸, 25개)
+│   ├── sms/                              # SMS 통합 패키지 (배치 + 실시간 + 보조 유틸)
 │   │   ├── SmsSyncCoordinator.kt         # 배치 동기화 외부 진입점
 │   │   ├── SmsReaderV2.kt                # SMS/MMS/RCS 통합 읽기
+│   │   ├── SmsSyncMessageReader.kt       # 동기화 대상 기간의 SMS 원본 읽기 래퍼
+│   │   ├── SmsTransactionDateResolver.kt # SMS 본문 거래 날짜/시간 해석
 │   │   ├── SmsInstantProcessor.kt        # 실시간 1건 처리
 │   │   ├── SmsPreFilter.kt               # Step 0 사전 필터링
 │   │   ├── SmsIncomeFilter.kt            # Step 1 PAYMENT/INCOME/SKIP 분류
@@ -114,6 +116,11 @@ com.sanha.moneytalk/
 │   │   ├── DeletedSmsTracker.kt          # 삭제 SMS 재삽입 방지
 │   │   ├── SmsChannelProbeCollector.kt   # DEBUG 채널 진단 수집
 │   │   └── RemoteSmsRule*.kt / SmsRegexRule*.kt # Fast Path 룰/시드/동기화
+│   │
+│   ├── sync/                             # SMS 동기화 범위/coverage 정책
+│   │   ├── SmsSyncRangeCalculator.kt     # 증분/월별 동기화 기간 계산
+│   │   ├── SyncCoveragePagePolicy.kt     # 월별 coverage/CTA 판정
+│   │   └── SyncCoverageRecorder.kt       # 성공한 동기화 구간 기록
 │   │
 │   └── util/                             # 유틸리티 (12개)
 │       ├── CategoryReferenceProvider.kt  # 카테고리 참조 데이터 제공
@@ -298,7 +305,7 @@ SMS 읽기 (SmsReaderV2) → SmsSyncCoordinator
   → SmsPreFilter → SmsIncomeFilter (PAYMENT/INCOME/SKIP)
   → PAYMENT만 SmsRegexRuleMatcher (sender Fast Path)
   → Fast Path miss만 SmsPipeline: 템플릿+임베딩 → 벡터매칭 → 그룹+LLM
-  → INCOME은 SmsIncomeParser로 저장
+  → 날짜는 SmsTransactionDateResolver, INCOME은 SmsIncomeParser로 저장
 ```
 
 | 단계 | 엔진 (sms) | 비용 | 설명 |
@@ -366,8 +373,9 @@ RCS/비즈메시지(cold start) → NotificationTransactionService → 최근 pr
 
 ### SMS → 지출 저장 (배치 동기화 — sms)
 ```
-HomeViewModel.syncSmsV2()
-  → SmsReaderV2.readAllMessagesByDateRange() → SmsReadResult.messages
+MainViewModel.syncSmsV2()
+  → SmsSyncRangeCalculator: 증분/월별 동기화 기간 계산
+  → SmsSyncMessageReader → SmsReaderV2.readAllMessagesByDateRange() → SmsReadResult.messages
   → 중복 제거 (expenseRepository + incomeRepository smsId)
   → SmsSyncCoordinator.process()
     → SmsPreFilter (비결제 제거)
@@ -378,7 +386,9 @@ HomeViewModel.syncSmsV2()
       → SmsPatternMatcher (벡터 매칭 + regex 파싱)
       → SmsGroupClassifier (그룹핑 + LLM 추출 + regex 생성)
   → saveExpenses() / saveIncomes(SmsIncomeParser)
+    → 거래 날짜는 SmsTransactionDateResolver가 연말/연초 연도 보정 포함 처리
   → CategoryClassifierService (4-tier 카테고리 분류)
+  → SyncCoverageRecorder: 성공한 동기화 구간 기록
   → UI 반영
 ```
 
