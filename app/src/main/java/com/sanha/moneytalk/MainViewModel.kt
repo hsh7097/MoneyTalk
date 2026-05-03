@@ -1264,6 +1264,7 @@ class MainViewModel @Inject constructor(
         val existingExpensesBySmsId = expenseRepository.getExpensesBySmsIds(batchSmsIds.toList())
             .associateBy { it.smsId }
         val crossTypeExpenseIdsToDelete = mutableSetOf<Long>()
+        val duplicateIncomeIdsToDelete = mutableSetOf<Long>()
         val isNewFlags = BooleanArray(batch.size)
         val skipInsertFlags = BooleanArray(batch.size)
         val refundDuplicateCandidates = existingSnapshot.incomes
@@ -1315,6 +1316,9 @@ class MainViewModel @Inject constructor(
                     }
                     refundDuplicateCandidates.removeAll { it.batchIndex == duplicateIndex }
                 }
+                if (semanticDuplicateIncome.batchIndex == null && semanticDuplicateIncome.income.id > 0) {
+                    duplicateIncomeIdsToDelete += semanticDuplicateIncome.income.id
+                }
                 isNewFlags[i] = true
                 newCount++
             } else if (semanticDuplicateIncome != null) {
@@ -1353,6 +1357,7 @@ class MainViewModel @Inject constructor(
         }
 
         crossTypeExpenseIdsToDelete.forEach { expenseRepository.deleteById(it) }
+        duplicateIncomeIdsToDelete.forEach { incomeRepository.deleteById(it) }
 
         // 사용자가 삭제한 항목 제외 후 저장
         val filteredBatch = batch.filterIndexed { index, entity ->
