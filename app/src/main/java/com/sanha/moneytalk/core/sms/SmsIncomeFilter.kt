@@ -100,6 +100,10 @@ class SmsIncomeFilter @Inject constructor() {
         "출금취소", "승인취소", "결제취소", "취소승인", "취소완료"
     )
 
+    private val cancellationNoticePatterns = listOf(
+        Regex("""(?:0?[1-9]|1[0-2])월\s*(?:0?[1-9]|[12]\d|3[01])일\s*이용건\s*(?:0?[1-9]|1[0-2])월\s*(?:0?[1-9]|[12]\d|3[01])일\s*취소완료""")
+    )
+
     /** 수입 제외 키워드 (자동이체 출금 안내 등) */
     private val incomeExcludeKeywords = listOf(
         "자동이체출금", "출금예정", "결제예정", "납부",
@@ -164,6 +168,10 @@ class SmsIncomeFilter @Inject constructor() {
         if (matchedExclude != null) return SmsType.SKIP to "excludeKw[$matchedExclude]"
         val matchedUserExclude = userExcludeKeywords.firstOrNull { bodyLower.contains(it) }
         if (matchedUserExclude != null) return SmsType.SKIP to "userExcludeKw[$matchedUserExclude]"
+
+        if (cancellationNoticePatterns.any { it.containsMatchIn(body) }) {
+            return SmsType.SKIP to "cancellationNotice"
+        }
 
         // 2. 금융기관 키워드
         if (financialKeywords.none { bodyLower.contains(it) }) return SmsType.SKIP to "noFinancialKw"

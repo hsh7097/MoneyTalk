@@ -1,5 +1,8 @@
 package com.sanha.moneytalk.core.sms
 
+import com.sanha.moneytalk.core.util.DateUtils
+import java.util.Calendar
+
 /**
  * 수입 SMS 파싱 유틸리티 (sms 전용)
  *
@@ -49,6 +52,8 @@ object SmsIncomeParser {
     private val BRACKET_PATTERN = Regex("""\[.+\]""")
     /** 대괄호+날짜시간 복합 패턴 (출처 추출 시 제외) */
     private val BRACKET_DATETIME_PATTERN = Regex("""^\[.+\]\d{1,2}[/.-]\d{1,2}\s+\d{1,2}:\d{2}$""")
+    private val CANCEL_COMPLETED_DATE_PATTERN =
+        Regex("""(0?[1-9]|1[0-2])월\s*(0?[1-9]|[12]\d|3[01])일\s*취소완료""")
 
     /** 수입 키워드 (extractIncomeSource에서 출처 제외용) */
     private val incomeKeywords = listOf(
@@ -161,7 +166,23 @@ object SmsIncomeParser {
      * @return "YYYY-MM-DD HH:mm" 형식
      */
     fun extractDateTime(message: String, smsTimestamp: Long): String {
+        extractCancelCompletedDateTime(message, smsTimestamp)?.let { return it }
         return SmsTransactionDateResolver.extractDateTime(message, smsTimestamp)
+    }
+
+    private fun extractCancelCompletedDateTime(message: String, smsTimestamp: Long): String? {
+        if (!message.contains("취소완료")) return null
+
+        val match = CANCEL_COMPLETED_DATE_PATTERN.find(message) ?: return null
+        val month = match.groupValues[1].toIntOrNull() ?: return null
+        val day = match.groupValues[2].toIntOrNull() ?: return null
+        if (month !in 1..12 || day !in 1..31) return null
+
+        val calendar = Calendar.getInstance().apply { timeInMillis = smsTimestamp }
+        calendar.set(Calendar.YEAR, DateUtils.resolveYearForMonthDay(smsTimestamp, month, day))
+        calendar.set(Calendar.MONTH, month - 1)
+        calendar.set(Calendar.DAY_OF_MONTH, day.coerceAtMost(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)))
+        return DateUtils.formatDateTime(calendar.timeInMillis)
     }
 
     // ========== 내부 헬퍼 ==========

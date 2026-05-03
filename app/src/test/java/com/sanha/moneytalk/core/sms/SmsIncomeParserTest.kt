@@ -34,6 +34,16 @@ class SmsIncomeParserTest {
         assertEquals("2026-01-05 10:29", dateTime)
     }
 
+    @Test
+    fun `취소완료 SMS는 원 이용일이 아니라 취소완료일로 저장한다`() {
+        val timestamp = timestamp(2026, 2, 2, 9, 3)
+        val body = "[KB국민카드] 6310 하*현님 쿠팡(쿠페이)-쿠 01월28일 이용건 02월02일 취소완료(-15,990원)"
+
+        val dateTime = SmsIncomeParser.extractDateTime(body, timestamp)
+
+        assertEquals("2026-02-02 09:03", dateTime)
+    }
+
     private fun timestamp(
         year: Int,
         month: Int,

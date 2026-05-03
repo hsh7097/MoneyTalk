@@ -25,4 +25,14 @@ class SmsIncomeFilterTest {
 
         assertEquals(SmsType.SKIP, type)
     }
+
+    @Test
+    fun `card cancellation notice with original use date is skipped`() {
+        val body = "[KB국민카드] 6310 하*현님 쿠팡(쿠페이)-쿠 01월28일 이용건 02월02일 취소완료(-15,990원)"
+
+        val (type, reason) = filter.classify(body)
+
+        assertEquals(SmsType.SKIP, type)
+        assertEquals("cancellationNotice", reason)
+    }
 }

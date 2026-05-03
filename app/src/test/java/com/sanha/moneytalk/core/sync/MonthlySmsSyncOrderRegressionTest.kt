@@ -27,6 +27,42 @@ class MonthlySmsSyncOrderRegressionTest {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA)
 
     @Test
+    fun `month sync includes next-month received refund for target month only`() {
+        val targetMonth = YearMonth(2025, 12)
+        val nextMonth = targetMonth.next()
+        val normalPayment = SmsInput(
+            id = "payment-${targetMonth.key}",
+            address = "1588-0000",
+            date = timestamp(2025, 12, 15, 10, 10),
+            body = "[KB]12/15 10:10\n체크카드출금\n5,000원\n편의점"
+        )
+        val refundReceivedNextMonth = SmsInput(
+            id = "refund-${nextMonth.key}-for-${targetMonth.key}",
+            address = "1588-0000",
+            date = timestamp(2026, 1, 2, 0, 5),
+            body = "[KB]12/31 23:50\n출금취소\n10,000원"
+        )
+        val nextMonthPayment = SmsInput(
+            id = "payment-${nextMonth.key}",
+            address = "1588-0000",
+            date = timestamp(2026, 1, 3, 9, 0),
+            body = "[KB]01/03 09:00\n체크카드출금\n9,000원\n카페"
+        )
+
+        val saved = listOf(normalPayment, refundReceivedNextMonth, nextMonthPayment)
+            .sortedByDescending { it.date }
+            .mapNotNull { sms -> parseForSimulation(sms) }
+            .filter { it.transactionTime in targetMonth.range.first..targetMonth.range.second }
+            .associateBy { it.smsId }
+
+        assertEquals(setOf(normalPayment.id, refundReceivedNextMonth.id), saved.keys)
+        assertEquals(
+            timestamp(2025, 12, 31, 23, 50),
+            saved.getValue(refundReceivedNextMonth.id).transactionTime
+        )
+    }
+
+    @Test
     fun `2025년 1월부터 현재월까지 월별 동기화 순서가 달라도 데이터가 손실되지 않는다`() {
         val months = monthsFrom2025JanuaryToCurrent()
         val fixtures = buildFixtures(months)

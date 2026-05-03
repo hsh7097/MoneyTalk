@@ -467,11 +467,8 @@ fun HomePageContent(
             } else {
                 String.format(syncMonthLabelFormat, month)
             }
-            val showEmptyCta = hasNoData && !isCurrentMonth && !isMonthSynced
-            val showPartialCta = !showImportCta &&
-                    !hasNoData &&
+            val showPastMonthSyncCta = !showImportCta &&
                     !isCurrentMonth &&
-                    isPartiallyCovered &&
                     !isMonthSynced
 
             // ━━━ BLOCK 1: CTA — 필요할 때 홈 최상단에 노출 ━━━
@@ -489,25 +486,14 @@ fun HomePageContent(
                 }
             }
 
-            if (showEmptyCta) {
+            if (showPastMonthSyncCta) {
                 item {
                     FullSyncCtaSection(
                         onRequestFullSync = onFullSync,
                         monthLabel = ctaMonthLabel,
+                        isPartial = isPartiallyCovered,
                         isSyncing = isSyncing,
                         isAdEnabled = isAdEnabled
-                    )
-                }
-            }
-
-            if (showPartialCta) {
-                item {
-                    FullSyncCtaSection(
-                        onRequestFullSync = onFullSync,
-                        monthLabel = ctaMonthLabel,
-                        isPartial = true,
-                        isSyncing = isSyncing,
-                        isAdEnabled = !isCurrentMonth && isAdEnabled
                     )
                 }
             }

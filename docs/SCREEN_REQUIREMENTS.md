@@ -98,8 +98,8 @@
 | 조건 | CTA 종류 | 동작 |
 |------|----------|------|
 | 현재월 + 권한없음/데이터없음 | ImportDataCtaSection | SMS 권한 요청 + 증분 동기화 |
-| 과거월 + 미동기화 | FullSyncCtaSection | 무료 잔여 시 바로 동기화 / 소진 후 광고 시청 → 동기화 |
-| 과거월 + 부분 커버리지 | FullSyncCtaSection (variant) | 무료 잔여 시 바로 동기화 / 소진 후 광고 시청 → 동기화 |
+| 과거월 + 미동기화 | FullSyncCtaSection | 데이터 존재 여부와 관계없이 CTA 노출, 무료 잔여 시 바로 동기화 / 소진 후 광고 시청 → 동기화 |
+| 과거월 + 부분 커버리지 | FullSyncCtaSection (variant) | 부분 데이터 안내 문구로 노출, 무료 잔여 시 바로 동기화 / 소진 후 광고 시청 → 동기화 |
 
 ### 2.4 누적 추이 차트 (SpendingTrendSection)
 
@@ -244,6 +244,8 @@ settingsDataStore.monthStartDayFlow (distinctUntilChanged)
 월별 동기화 (광고 시청/CTA):
   시작 = getCustomMonthPeriod(year, month).first
   종료 = getCustomMonthPeriod(year, month).second
+  읽기 범위 = 대상 월 + 다음 월 말(현재 시각까지만)
+  저장 범위 = 파싱된 거래일이 대상 월 안인 SMS만 저장
   ※ lastSyncTime 갱신 안 함
 
 Auto Backup 감지:
@@ -374,7 +376,7 @@ buildBudgetCumulativePoints(monthlyBudget, daysInMonth):
 | `OWNED_CARD_UPDATED` | refreshCurrentPages(forceReload=true) |
 | `TRANSACTION_ADDED` | refreshCurrentPages(forceReload=true) |
 | `SMS_RECEIVED` | SmsSyncRangeCalculator.calculateIncrementalRange → MainViewModel.syncSmsV2(silent=true) |
-| `monthSyncEvent` | SmsSyncRangeCalculator.calculateMonthRange → MainViewModel.syncSmsV2(updateLastSyncTime=false) |
+| `monthSyncEvent` | MainViewModel.calculateMonthReadPlan → syncSmsV2(updateLastSyncTime=false) |
 | `incrementalSyncEvent` | consumeIncrementalSync → MainViewModel.syncIncremental |
 
 ---
@@ -1146,7 +1148,7 @@ SpendingTrendInfo (interface)
 | 단계 | 설명 |
 |------|------|
 | SmsPreFilter | 100자 이상 + 제외 키워드 필터 |
-| SmsIncomeFilter | 결제/수입/SKIP 3분류 (46개 키워드) |
+| SmsIncomeFilter | 결제/수입/SKIP 3분류 (46개 키워드), 카드 취소완료 보조 알림은 SKIP |
 | SmsPipeline Step 1 | SmsTemplateEngine (템플릿 + Embedding 배치) |
 | SmsPipeline Step 2 | SmsPatternMatcher (벡터 코사인 유사도 ≥ 0.92) |
 | SmsPipeline Step 3 | SmsGroupClassifier (3레벨 그룹핑 → LLM 배치) |

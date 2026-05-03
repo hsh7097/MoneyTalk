@@ -515,14 +515,13 @@ fun TransactionListView(
             if (
                 !showCurrentMonthImportCta &&
                 !isCurrentMonth &&
-                isPartiallyCovered &&
                 !isMonthSynced
             ) {
                 item(key = "partial_cta") {
                     FullSyncCtaSection(
                         onRequestFullSync = onRequestFullSync,
                         monthLabel = monthLabel,
-                        isPartial = true,
+                        isPartial = isPartiallyCovered,
                         isAdEnabled = !isCurrentMonth && isAdEnabled
                     )
                 }

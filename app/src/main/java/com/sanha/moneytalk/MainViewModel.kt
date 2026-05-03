@@ -62,6 +62,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
+import java.util.Calendar
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import kotlin.coroutines.coroutineContext
@@ -122,6 +123,11 @@ class MainViewModel @Inject constructor(
 
         /** fuzzy dedupe 후보 조회 시 대상 기간 앞뒤로 확장할 범위 */
         private const val FUZZY_CANDIDATE_PADDING_MS = 3L * 24 * 60 * 60 * 1000
+
+        /** 취소/환불 보조 알림 중복 판단 윈도우 */
+        private const val REFUND_SEMANTIC_DUPLICATE_WINDOW_MS = 3L * 24 * 60 * 60 * 1000
+
+        private val REFUND_NOTICE_HINT_PATTERN = Regex("""이용\s*건.*취소|취소.*이용\s*건""")
 
     }
 
@@ -376,10 +382,16 @@ class MainViewModel @Inject constructor(
         val timestamp: Long
     )
 
+    private data class RefundDuplicateCandidate(
+        val income: IncomeEntity,
+        val batchIndex: Int? = null
+    )
+
     private data class ExistingSmsSnapshot(
         val exactSmsIds: Set<String> = emptySet(),
         val expensesBySmsId: Map<String, ExpenseEntity> = emptyMap(),
         val incomesBySmsId: Map<String, IncomeEntity> = emptyMap(),
+        val incomes: List<IncomeEntity> = emptyList(),
         val contentIndex: Map<String, List<SmsMatchCandidate>> = emptyMap()
     )
 
@@ -393,6 +405,12 @@ class MainViewModel @Inject constructor(
         val classifiedCount: Int,
         /** 파이프라인 엔진 통계 (초기 동기화 요약 카드용) */
         val stats: SyncStats = SyncStats()
+    )
+
+    private data class SyncReadPlan(
+        val targetRange: Pair<Long, Long>,
+        val readRange: Pair<Long, Long> = targetRange,
+        val filterTransactionRange: Pair<Long, Long>? = null
     )
 
     /**
@@ -426,7 +444,11 @@ class MainViewModel @Inject constructor(
                     )
                 }
                 val result = withContext(Dispatchers.IO) {
-                    syncSmsV2Internal(fullRange, updateLastSyncTime = true, silent = false)
+                    syncSmsV2Internal(
+                        readPlan = SyncReadPlan(targetRange = fullRange),
+                        updateLastSyncTime = true,
+                        silent = false
+                    )
                 }
                 recordSuccessfulSyncCoverage(
                     targetMonthRange = fullRange,
@@ -552,12 +574,13 @@ class MainViewModel @Inject constructor(
      * @param silent true면 다이얼로그/진행 상태 표시 안함
      * @param onSyncComplete 동기화 성공 완료 시 추가 콜백 (월별 해제 마킹 등)
      */
-    fun syncSmsV2(
+    private fun syncSmsV2(
         targetMonthRange: Pair<Long, Long>,
         updateLastSyncTime: Boolean = true,
         silent: Boolean = false,
         trigger: SyncCoverageTrigger = SyncCoverageTrigger.MANUAL_INCREMENTAL,
-        onSyncComplete: (suspend () -> Unit)? = null
+        onSyncComplete: (suspend () -> Unit)? = null,
+        readPlan: SyncReadPlan = SyncReadPlan(targetRange = targetMonthRange)
     ) {
         if (!isSyncRunning.compareAndSet(false, true)) {
             if (silent) {
@@ -590,7 +613,7 @@ class MainViewModel @Inject constructor(
 
             try {
                 val result = withContext(Dispatchers.IO) {
-                    syncSmsV2Internal(targetMonthRange, updateLastSyncTime, silent)
+                    syncSmsV2Internal(readPlan, updateLastSyncTime, silent)
                 }
 
                 recordSuccessfulSyncCoverage(targetMonthRange, trigger, result)
@@ -628,7 +651,7 @@ class MainViewModel @Inject constructor(
      * isSyncRunning, viewModelScope.launch 관리 없이 순수 로직만 실행.
      */
     private suspend fun syncSmsV2Internal(
-        targetMonthRange: Pair<Long, Long>,
+        readPlan: SyncReadPlan,
         updateLastSyncTime: Boolean,
         silent: Boolean
     ): SyncResult {
@@ -638,10 +661,10 @@ class MainViewModel @Inject constructor(
         SmsIncomeParser.setUserExcludeKeywords(userExcludeKeywords)
 
         // Step 1: SMS 읽기 + 중복 제거
-        val allSmsList = readSmsInputs(targetMonthRange)
+        val allSmsList = readSmsInputs(readPlan.readRange)
         if (allSmsList.isEmpty()) {
             if (updateLastSyncTime) {
-                settingsDataStore.saveLastSyncTime(targetMonthRange.second)
+                settingsDataStore.saveLastSyncTime(readPlan.targetRange.second)
             }
             return SyncResult(
                 expenseCount = 0,
@@ -652,7 +675,7 @@ class MainViewModel @Inject constructor(
         }
 
         _uiState.update { it.copy(syncProgress = "이미 등록된 내역 확인 중...") }
-        val existingSnapshot = buildExistingSmsSnapshot(allSmsList, targetMonthRange)
+        val existingSnapshot = buildExistingSmsSnapshot(allSmsList, readPlan.readRange)
         val pendingReconciliationIds = SmsInstantProcessor.snapshotPendingReconciliationIds()
         val pendingContentIndex = buildSmsIdCandidateIndex(pendingReconciliationIds)
         val smsInputs = readAndFilterSms(
@@ -663,7 +686,7 @@ class MainViewModel @Inject constructor(
         MoneyTalkLogger.i("syncSmsV2 Step1 완료: 신규 SMS ${smsInputs.size}건")
         if (smsInputs.isEmpty()) {
             if (updateLastSyncTime) {
-                settingsDataStore.saveLastSyncTime(targetMonthRange.second)
+                settingsDataStore.saveLastSyncTime(readPlan.targetRange.second)
             }
             return SyncResult(
                 expenseCount = 0,
@@ -675,20 +698,24 @@ class MainViewModel @Inject constructor(
 
         // Step 2: sms 파이프라인 실행
         val syncResult = processSmsPipeline(smsInputs, silent)
+        val targetFilteredResult = filterSyncResultByTransactionRange(
+            syncResult = syncResult,
+            transactionRange = readPlan.filterTransactionRange
+        )
 
-        val reconciledExpenseIds = syncResult.expenses
+        val reconciledExpenseIds = targetFilteredResult.expenses
             .flatMap { parsed -> findMatchingSmsIds(parsed.input.id, pendingContentIndex) }
             .toSet()
-        val reconciledIncomeIds = syncResult.incomes
+        val reconciledIncomeIds = targetFilteredResult.incomes
             .flatMap { income -> findMatchingSmsIds(income.id, pendingContentIndex) }
             .toSet()
 
         // Step 3: DB 저장
-        val expenseSaveResult = saveExpenses(syncResult.expenses, existingSnapshot)
-        val incomeSaveResult = saveIncomes(syncResult.incomes, existingSnapshot)
+        val expenseSaveResult = saveExpenses(targetFilteredResult.expenses, existingSnapshot)
+        val incomeSaveResult = saveIncomes(targetFilteredResult.incomes, existingSnapshot)
 
         // Step 4: 후처리 (카테고리 분류, 패턴 정리, lastSyncTime 갱신)
-        val cleanup = postSyncCleanup(updateLastSyncTime, targetMonthRange.second)
+        val cleanup = postSyncCleanup(updateLastSyncTime, readPlan.targetRange.second)
         SmsInstantProcessor.clearPendingReconciliationIds(reconciledExpenseIds + reconciledIncomeIds)
 
         return SyncResult(
@@ -698,7 +725,7 @@ class MainViewModel @Inject constructor(
             reconciledIncomeCount = incomeSaveResult.reconciledCount,
             detectedCardNames = cleanup.cardNames,
             classifiedCount = cleanup.classifiedCount,
-            stats = syncResult.stats
+            stats = targetFilteredResult.stats
         )
     }
 
@@ -709,6 +736,32 @@ class MainViewModel @Inject constructor(
         targetMonthRange: Pair<Long, Long>
     ): List<SmsInput> {
         return smsSyncMessageReader.read(targetMonthRange)
+    }
+
+    private fun filterSyncResultByTransactionRange(
+        syncResult: com.sanha.moneytalk.core.sms.SyncResult,
+        transactionRange: Pair<Long, Long>?
+    ): com.sanha.moneytalk.core.sms.SyncResult {
+        if (transactionRange == null) return syncResult
+
+        val filteredExpenses = syncResult.expenses.filter { parsed ->
+            DateUtils.parseDateTime(parsed.analysis.dateTime) in transactionRange.first..transactionRange.second
+        }
+        val filteredIncomes = syncResult.incomes.filter { income ->
+            val dateTime = SmsIncomeParser.extractDateTime(income.body, income.date)
+            DateUtils.parseDateTime(dateTime) in transactionRange.first..transactionRange.second
+        }
+
+        val droppedByRange = syncResult.expenses.size + syncResult.incomes.size -
+            filteredExpenses.size - filteredIncomes.size
+        if (droppedByRange > 0) {
+            MoneyTalkLogger.i("월 동기화 저장 범위 밖 SMS ${droppedByRange}건 제외")
+        }
+
+        return syncResult.copy(
+            expenses = filteredExpenses,
+            incomes = filteredIncomes
+        )
     }
 
     /**
@@ -810,6 +863,7 @@ class MainViewModel @Inject constructor(
             incomesBySmsId = existingIncomes
                 .mapNotNull { income -> income.smsId?.let { it to income } }
                 .toMap(),
+            incomes = existingIncomes,
             contentIndex = buildExistingContentIndex(existingExpenses, existingIncomes)
         )
     }
@@ -1211,6 +1265,11 @@ class MainViewModel @Inject constructor(
             .associateBy { it.smsId }
         val crossTypeExpenseIdsToDelete = mutableSetOf<Long>()
         val isNewFlags = BooleanArray(batch.size)
+        val skipInsertFlags = BooleanArray(batch.size)
+        val refundDuplicateCandidates = existingSnapshot.incomes
+            .filter { isRefundLikeIncome(it) }
+            .map { RefundDuplicateCandidate(income = it) }
+            .toMutableList()
 
         for (i in batch.indices) {
             val entity = batch[i]
@@ -1238,7 +1297,33 @@ class MainViewModel @Inject constructor(
                 }
             }
 
-            if (existingIncome != null || existingExpense != null) {
+            val semanticDuplicateIncome = if (existingIncome == null && existingExpense == null) {
+                findSemanticDuplicateRefundIncome(entity, refundDuplicateCandidates)
+            } else {
+                null
+            }
+
+            if (
+                semanticDuplicateIncome != null &&
+                shouldPreferCurrentRefundIncome(entity, semanticDuplicateIncome.income)
+            ) {
+                semanticDuplicateIncome.batchIndex?.let { duplicateIndex ->
+                    skipInsertFlags[duplicateIndex] = true
+                    if (isNewFlags[duplicateIndex]) {
+                        isNewFlags[duplicateIndex] = false
+                        newCount--
+                    }
+                    refundDuplicateCandidates.removeAll { it.batchIndex == duplicateIndex }
+                }
+                isNewFlags[i] = true
+                newCount++
+            } else if (semanticDuplicateIncome != null) {
+                reconciledCount++
+                skipInsertFlags[i] = true
+                MoneyTalkLogger.i(
+                    "수입 중복 알림 스킵: amount=${entity.amount}, existingId=${semanticDuplicateIncome.income.id}"
+                )
+            } else if (existingIncome != null || existingExpense != null) {
                 reconciledCount++
             } else {
                 isNewFlags[i] = true
@@ -1257,13 +1342,22 @@ class MainViewModel @Inject constructor(
                     createdAt = existingIncome.createdAt
                 )
             }
+
+            val isDeletedIncome = batch[i].smsId?.let { DeletedSmsTracker.isDeleted(it) } == true
+            if (!skipInsertFlags[i] && !isDeletedIncome && isRefundLikeIncome(batch[i])) {
+                refundDuplicateCandidates += RefundDuplicateCandidate(
+                    income = batch[i],
+                    batchIndex = i
+                )
+            }
         }
 
         crossTypeExpenseIdsToDelete.forEach { expenseRepository.deleteById(it) }
 
         // 사용자가 삭제한 항목 제외 후 저장
-        val filteredBatch = batch.filterNot { entity ->
-            entity.smsId?.let { DeletedSmsTracker.isDeleted(it) } == true
+        val filteredBatch = batch.filterIndexed { index, entity ->
+            !skipInsertFlags[index] &&
+                entity.smsId?.let { DeletedSmsTracker.isDeleted(it) } != true
         }
         if (filteredBatch.isNotEmpty()) {
             for (chunk in filteredBatch.chunked(DB_BATCH_INSERT_SIZE)) {
@@ -1276,6 +1370,45 @@ class MainViewModel @Inject constructor(
             reconciledCount = reconciledCount
         )
     }
+
+    private fun findSemanticDuplicateRefundIncome(
+        entity: IncomeEntity,
+        candidates: List<RefundDuplicateCandidate>
+    ): RefundDuplicateCandidate? {
+        if (!isRefundLikeIncome(entity)) return null
+
+        return candidates.firstOrNull { candidate ->
+            val existing = candidate.income
+            existing.smsId != entity.smsId &&
+                existing.amount == entity.amount &&
+                isRefundLikeIncome(existing) &&
+                abs(existing.dateTime - entity.dateTime) <= REFUND_SEMANTIC_DUPLICATE_WINDOW_MS &&
+                (isRefundNoticeIncome(entity) || isRefundNoticeIncome(existing))
+        }
+    }
+
+    private fun shouldPreferCurrentRefundIncome(
+        entity: IncomeEntity,
+        duplicate: IncomeEntity
+    ): Boolean {
+        return !isRefundNoticeIncome(entity) && isRefundNoticeIncome(duplicate)
+    }
+
+    private fun isRefundLikeIncome(entity: IncomeEntity): Boolean {
+        val text = listOf(
+            entity.type,
+            entity.source,
+            entity.description,
+            entity.originalSms.orEmpty()
+        ).joinToString(" ")
+
+        return text.contains("취소") || text.contains("환불")
+    }
+
+    private fun isRefundNoticeIncome(entity: IncomeEntity): Boolean {
+        return REFUND_NOTICE_HINT_PATTERN.containsMatchIn(entity.originalSms.orEmpty())
+    }
+
     /**
      * 동기화 후처리 (카테고리 캐시 정리, lastSyncTime 갱신)
      *
@@ -1449,12 +1582,12 @@ class MainViewModel @Inject constructor(
         val yearMonth = String.format("%04d-%02d", year, month)
         _uiState.update { it.copy(showFullSyncAdDialog = false) }
 
-        val monthRange = calculateMonthRange(year, month)
+        val readPlan = calculateMonthReadPlan(year, month)
         val monthLabel = buildSyncMonthLabel(year, month)
         snackbarBus.show(appContext.getString(R.string.full_sync_unlocked_message, monthLabel))
 
         syncSmsV2(
-            monthRange,
+            readPlan.targetRange,
             updateLastSyncTime = false,
             trigger = SyncCoverageTrigger.MANUAL_MONTH_UNLOCK,
             onSyncComplete = {
@@ -1462,7 +1595,8 @@ class MainViewModel @Inject constructor(
                 if (isFreeSyncUsed) {
                     settingsDataStore.incrementFreeSyncUsedCount()
                 }
-            }
+            },
+            readPlan = readPlan
         )
     }
 
@@ -1495,6 +1629,26 @@ class MainViewModel @Inject constructor(
         )
     }
 
+    private fun calculateMonthReadPlan(year: Int, month: Int): SyncReadPlan {
+        val targetRange = calculateMonthRange(year, month)
+        val nextMonth = Calendar.getInstance().apply {
+            clear()
+            set(year, month - 1, 1, 0, 0, 0)
+            add(Calendar.MONTH, 1)
+        }
+        val nextRange = calculateMonthRange(
+            year = nextMonth.get(Calendar.YEAR),
+            month = nextMonth.get(Calendar.MONTH) + 1
+        )
+        val readEnd = minOf(nextRange.second, System.currentTimeMillis())
+
+        return SyncReadPlan(
+            targetRange = targetRange,
+            readRange = targetRange.first to maxOf(targetRange.second, readEnd),
+            filterTransactionRange = targetRange
+        )
+    }
+
     /**
      * 해당 페이지의 커스텀 월이 동기화 범위에 부분만 포함되는지 판단
      *
@@ -1518,11 +1672,12 @@ class MainViewModel @Inject constructor(
      * 특정 월 데이터만 동기화 (해제 후 메뉴에서 호출)
      */
     fun syncMonthData(year: Int, month: Int) {
-        val monthRange = calculateMonthRange(year, month)
+        val readPlan = calculateMonthReadPlan(year, month)
         syncSmsV2(
-            monthRange,
+            readPlan.targetRange,
             updateLastSyncTime = false,
-            trigger = SyncCoverageTrigger.MANUAL_MONTH_SYNC
+            trigger = SyncCoverageTrigger.MANUAL_MONTH_SYNC,
+            readPlan = readPlan
         )
     }
 
