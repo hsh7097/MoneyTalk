@@ -118,6 +118,9 @@ class MainViewModel @Inject constructor(
         /** 즉시 저장 후 silent 동기화 전환 판단 윈도우 (60초) */
         private const val INSTANT_SAVE_SILENT_WINDOW_MS = 60_000L
 
+        /** 앱 진입/수신 후속 동기화에서 provider 누락을 복구할 최근 읽기 범위 */
+        private const val PROVIDER_CATCH_UP_LOOKBACK_MS = 24L * 60 * 60 * 1000
+
         /** smsId 타임스탬프 오차 허용 범위 */
         private const val FUZZY_TIME_MARGIN_MS = 10_000L
 
@@ -188,6 +191,7 @@ class MainViewModel @Inject constructor(
 
     init {
         loadSettings()
+        normalizeStoredCardNames()
         observeSyncCoverage()
         observeDataRefreshEvents()
         rewardAdManager.preloadAd()
@@ -230,7 +234,8 @@ class MainViewModel @Inject constructor(
                         targetMonthRange = range,
                         updateLastSyncTime = true,
                         silent = true,
-                        trigger = SyncCoverageTrigger.APP_RESUME_INCREMENTAL
+                        trigger = SyncCoverageTrigger.APP_RESUME_INCREMENTAL,
+                        readPlan = buildProviderCatchUpReadPlan(range)
                     )
                 }
                 syncTriggered = true
@@ -321,7 +326,8 @@ class MainViewModel @Inject constructor(
                             targetMonthRange = range,
                             updateLastSyncTime = true,
                             silent = true,
-                            trigger = SyncCoverageTrigger.SMS_RECEIVED_INCREMENTAL
+                            trigger = SyncCoverageTrigger.SMS_RECEIVED_INCREMENTAL,
+                            readPlan = buildProviderCatchUpReadPlan(range)
                         )
                     }
 
@@ -352,6 +358,23 @@ class MainViewModel @Inject constructor(
 
                     else -> { /* CATEGORY_UPDATED, OWNED_CARD_UPDATED, TRANSACTION_ADDED → HomeVM/HistoryVM이 처리 */ }
                 }
+            }
+        }
+    }
+
+    private fun normalizeStoredCardNames() {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val updatedCount = expenseRepository.normalizeStoredCardNames()
+                if (updatedCount > 0) {
+                    ownedCardRepository.registerCardsFromSync(
+                        expenseRepository.getAllCardNamesWithDuplicates()
+                    )
+                    MoneyTalkLogger.i("저장 카드명 정규화 완료: ${updatedCount}건")
+                    notifyDataChanged()
+                }
+            }.onFailure { e ->
+                MoneyTalkLogger.w("저장 카드명 정규화 실패: ${e.message}")
             }
         }
     }
@@ -413,6 +436,15 @@ class MainViewModel @Inject constructor(
         val filterTransactionRange: Pair<Long, Long>? = null
     )
 
+    private fun buildProviderCatchUpReadPlan(targetRange: Pair<Long, Long>): SyncReadPlan {
+        val catchUpStart = (targetRange.second - PROVIDER_CATCH_UP_LOOKBACK_MS)
+            .coerceAtLeast(0L)
+        return SyncReadPlan(
+            targetRange = targetRange,
+            readRange = minOf(targetRange.first, catchUpStart) to targetRange.second
+        )
+    }
+
     /**
      * SMS 동기화 (초기/증분 공통)
      *
@@ -445,7 +477,7 @@ class MainViewModel @Inject constructor(
                 }
                 val result = withContext(Dispatchers.IO) {
                     syncSmsV2Internal(
-                        readPlan = SyncReadPlan(targetRange = fullRange),
+                        readPlan = buildProviderCatchUpReadPlan(fullRange),
                         updateLastSyncTime = true,
                         silent = false
                     )
@@ -640,7 +672,8 @@ class MainViewModel @Inject constructor(
                 targetMonthRange = range,
                 updateLastSyncTime = true,
                 silent = true,
-                trigger = SyncCoverageTrigger.PENDING_SILENT_INCREMENTAL
+                trigger = SyncCoverageTrigger.PENDING_SILENT_INCREMENTAL,
+                readPlan = buildProviderCatchUpReadPlan(range)
             )
         }
     }

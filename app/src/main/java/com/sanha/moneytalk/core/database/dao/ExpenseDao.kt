@@ -101,6 +101,10 @@ interface ExpenseDao {
     @Query("SELECT smsId FROM expenses")
     suspend fun getAllSmsIds(): List<String>
 
+    /** 저장된 카드명 정규화 */
+    @Query("UPDATE expenses SET cardName = :newCardName WHERE cardName = :oldCardName")
+    suspend fun updateCardName(oldCardName: String, newCardName: String): Int
+
     /** 주어진 smsId 목록 중 이미 저장된 항목만 조회 (중복 체크 최적화) */
     @Query("SELECT smsId FROM expenses WHERE smsId IN (:smsIds)")
     suspend fun getExistingSmsIds(smsIds: List<String>): List<String>

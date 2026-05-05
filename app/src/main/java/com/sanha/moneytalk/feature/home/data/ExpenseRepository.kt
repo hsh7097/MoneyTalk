@@ -5,6 +5,7 @@ import com.sanha.moneytalk.core.database.dao.DailySum
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.MonthlySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.util.CardNameNormalizer
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -153,6 +154,18 @@ class ExpenseRepository @Inject constructor(
     /** 모든 카드명 목록 조회 (필터 드롭다운용) */
     suspend fun getAllCardNames(): List<String> =
         expenseDao.getAllCardNames()
+
+    /** 저장된 카드명을 현재 정규화 규칙에 맞게 보정 */
+    suspend fun normalizeStoredCardNames(): Int {
+        var updatedCount = 0
+        for (cardName in expenseDao.getAllCardNames()) {
+            val normalized = CardNameNormalizer.normalize(cardName)
+            if (normalized.isNotBlank() && normalized != cardName) {
+                updatedCount += expenseDao.updateCardName(cardName, normalized)
+            }
+        }
+        return updatedCount
+    }
 
     /** 카드별 지출 건수 포함 카드명 목록 (OwnedCard seenCount 계산용) */
     suspend fun getAllCardNamesWithDuplicates(): List<String> =

@@ -5,10 +5,12 @@ import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.Telephony
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.sanha.moneytalk.core.database.SmsBlockedSenderRepository
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import javax.inject.Inject
@@ -34,17 +36,15 @@ class SmsReaderV2 @Inject constructor(
     companion object {
 
         // MMS URI
-        private val MMS_INBOX_URI = Uri.parse("content://mms/inbox")
-        private val MMS_PART_URI = Uri.parse("content://mms/part")
+        private val MMS_INBOX_URI: Uri by lazy { Uri.parse("content://mms/inbox") }
+        private val MMS_PART_URI: Uri by lazy { Uri.parse("content://mms/part") }
 
         // RCS (채팅+) URI — 삼성 메시지 앱에서 사용
-        private val RCS_URI = Uri.parse("content://im/chat")
+        private val RCS_URI: Uri by lazy { Uri.parse("content://im/chat") }
 
         /** RCS JSON에서 텍스트를 찾을 키 목록 */
         private val TEXT_KEYS = listOf("text", "description", "body", "title", "content", "message", "msg")
 
-        /** RCS provider 실패 후 재시도까지 대기 시간 */
-        private const val RCS_PROVIDER_RETRY_DELAY_MS = 10 * 60 * 1000L
     }
 
     data class SmsReadResult(
@@ -61,9 +61,6 @@ class SmsReaderV2 @Inject constructor(
         val id: String,
         val dateMs: Long
     )
-
-    @Volatile
-    private var rcsProviderRetryAfterMillis: Long = 0L
 
     /**
      * SMS + MMS + RCS 통합: 특정 기간의 모든 메시지를 SmsInput으로 반환
@@ -517,7 +514,6 @@ class SmsReaderV2 @Inject constructor(
         var senderSkipCount = 0
         var blockedSenderSkipCount = 0
         var totalCursorCount = 0
-        if (shouldSkipRcsProvider()) return result
 
         try {
             val cursor = contentResolver.query(
@@ -528,7 +524,6 @@ class SmsReaderV2 @Inject constructor(
                 "date DESC"
             )
             if (cursor == null) {
-                markRcsProviderUnavailable()
                 MoneyTalkLogger.w("[SmsReaderV2][RCS] provider cursor null")
                 return result
             }
@@ -539,7 +534,6 @@ class SmsReaderV2 @Inject constructor(
                 val bodyIndex = it.getColumnIndex("body")
                 val dateIndex = it.getColumnIndex("date")
                 if (idIndex < 0 || addressIndex < 0 || bodyIndex < 0 || dateIndex < 0) {
-                    markRcsProviderUnavailable()
                     MoneyTalkLogger.w("[SmsReaderV2][RCS] 필수 컬럼 누락")
                     return result
                 }
@@ -596,26 +590,12 @@ class SmsReaderV2 @Inject constructor(
                     )
                 }
             }
-            markRcsProviderAvailable()
         } catch (e: Exception) {
-            markRcsProviderUnavailable()
             MoneyTalkLogger.e("RCS 읽기 실패: ${e.message}")
         }
 
         MoneyTalkLogger.i("[SmsReaderV2][RCS] 총 ${totalCursorCount}건 조회, ${result.size}건 통과, sender스킵=${senderSkipCount}, blocked스킵=${blockedSenderSkipCount}")
         return result
-    }
-
-    private fun shouldSkipRcsProvider(): Boolean {
-        return System.currentTimeMillis() < rcsProviderRetryAfterMillis
-    }
-
-    private fun markRcsProviderUnavailable() {
-        rcsProviderRetryAfterMillis = System.currentTimeMillis() + RCS_PROVIDER_RETRY_DELAY_MS
-    }
-
-    private fun markRcsProviderAvailable() {
-        rcsProviderRetryAfterMillis = 0L
     }
 
     /** 수신거부 발신번호 여부 확인 */
@@ -638,24 +618,23 @@ class SmsReaderV2 @Inject constructor(
         if (!trimmed.startsWith("{")) return rawBody
 
         return try {
-            val json = JSONObject(trimmed)
+            val json = JsonParser.parseString(trimmed).asJsonObject
 
             // 1. 최상위에서 text 키 우선 탐색 (JSON 값은 스킵)
             for (key in TEXT_KEYS) {
-                val value = json.optString(key, "")
+                val value = json.get(key).asStringOrBlank()
                 if (value.isNotBlank() && !value.startsWith("{")) {
                     return value
                 }
             }
 
-            // 2. nested JSONObject 재귀 탐색 (generalPurposeCard 등)
+            // 2. nested JSON object 재귀 탐색 (generalPurposeCard 등)
             val nested = extractTextFromNestedRcs(json)
             if (nested.isNotBlank()) return nested
 
             // 3. layout 기반 추출
-            val layoutStr = json.optString("layout", "")
-            if (layoutStr.isNotBlank() && layoutStr.startsWith("{")) {
-                val layoutJson = JSONObject(layoutStr)
+            val layoutJson = json.get("layout").asJsonObjectFromRcsValue()
+            if (layoutJson != null) {
                 val texts = mutableListOf<String>()
                 extractTextsFromLayout(layoutJson, texts)
                 if (texts.isNotEmpty()) {
@@ -673,41 +652,38 @@ class SmsReaderV2 @Inject constructor(
      * nested RCS JSON에서 텍스트 재귀 추출
      *
      * generalPurposeCard 등 nested 구조에서 description/text/title 필드를 찾는다.
-     * TEXT_KEYS 값이 JSONObject인 경우(예: content가 JSONObject)도 재귀 처리.
+     * TEXT_KEYS 값이 JSON object인 경우(예: content가 object)도 재귀 처리.
      * 최대 깊이 5로 제한하여 무한 재귀 방지.
      */
-    private fun extractTextFromNestedRcs(json: JSONObject, depth: Int = 0): String {
+    private fun extractTextFromNestedRcs(json: JsonObject, depth: Int = 0): String {
         if (depth > 5) return ""
 
         // 현재 레벨에서 텍스트 필드 탐색 (plain string 우선, JSONObject는 재귀)
         for (key in TEXT_KEYS) {
-            val raw = json.opt(key) ?: continue
+            val raw = json.get(key) ?: continue
             when {
                 // plain string → 바로 반환
-                raw is String && raw.isNotBlank() && !raw.startsWith("{") -> return raw
-                // JSONObject → 재귀 추출
-                raw is JSONObject -> {
-                    val extracted = extractTextFromNestedRcs(raw, depth + 1)
-                    if (extracted.isNotBlank()) return extracted
-                }
-                // JSON 형태 문자열 → 파싱 후 재귀 추출
-                raw is String && raw.isNotBlank() && raw.startsWith("{") -> {
-                    try {
-                        val nested = JSONObject(raw)
+                raw.isJsonPrimitive -> {
+                    val value = raw.asStringOrBlank()
+                    if (value.isNotBlank() && !value.startsWith("{")) return value
+                    val nested = raw.asJsonObjectFromRcsValue()
+                    if (nested != null) {
                         val extracted = extractTextFromNestedRcs(nested, depth + 1)
                         if (extracted.isNotBlank()) return extracted
-                    } catch (_: Exception) { /* 유효하지 않은 JSON, 건너뜀 */ }
+                    }
+                }
+                // JSON object → 재귀 추출
+                raw.isJsonObject -> {
+                    val extracted = extractTextFromNestedRcs(raw.asJsonObject, depth + 1)
+                    if (extracted.isNotBlank()) return extracted
                 }
             }
         }
 
         // 하위 JSONObject 재귀 탐색
-        val keys = json.keys()
-        while (keys.hasNext()) {
-            val key = keys.next()
-            val child = json.optJSONObject(key)
-            if (child != null) {
-                val extracted = extractTextFromNestedRcs(child, depth + 1)
+        for ((_, child) in json.entrySet()) {
+            if (child.isJsonObject) {
+                val extracted = extractTextFromNestedRcs(child.asJsonObject, depth + 1)
                 if (extracted.isNotBlank()) return extracted
             }
         }
@@ -718,24 +694,35 @@ class SmsReaderV2 @Inject constructor(
     /**
      * RCS layout JSON에서 모든 TextView의 text 값을 재귀적으로 추출
      */
-    private fun extractTextsFromLayout(json: JSONObject, texts: MutableList<String>) {
-        val widget = json.optString("widget", "")
+    private fun extractTextsFromLayout(json: JsonObject, texts: MutableList<String>) {
+        val widget = json.get("widget").asStringOrBlank()
         if (widget == "TextView") {
-            val text = json.optString("text", "")
+            val text = json.get("text").asStringOrBlank()
             if (text.isNotBlank()) {
                 texts.add(text)
             }
         }
 
-        val children = json.optJSONArray("children")
-        if (children != null) {
-            for (i in 0 until children.length()) {
-                val child = children.optJSONObject(i)
-                if (child != null) {
-                    extractTextsFromLayout(child, texts)
-                }
+        val children = json.get("children")
+        if (children != null && children.isJsonArray) {
+            for (child in children.asJsonArray) {
+                if (child.isJsonObject) extractTextsFromLayout(child.asJsonObject, texts)
             }
         }
+    }
+
+    private fun JsonElement?.asStringOrBlank(): String {
+        if (this == null || isJsonNull || !isJsonPrimitive) return ""
+        return runCatching { asString }.getOrDefault("")
+    }
+
+    private fun JsonElement?.asJsonObjectFromRcsValue(): JsonObject? {
+        if (this == null || isJsonNull) return null
+        if (isJsonObject) return asJsonObject
+
+        val value = asStringOrBlank().trim()
+        if (!value.startsWith("{")) return null
+        return runCatching { JsonParser.parseString(value).asJsonObject }.getOrNull()
     }
 
     // ========== 유틸리티 ==========

@@ -33,7 +33,7 @@ object CardNameNormalizer {
         ),
         "신한" to listOf("신한", "신한카드", "신한체크", "sol", "쏠", "shinhan", "신한은행"),
         "삼성" to listOf("삼성", "삼성카드", "삼성체크", "samsung"),
-        "현대" to listOf("현대", "현대카드", "현대체크", "hyundai", "현대m"),
+        "현대" to listOf("현대", "현대카드", "현대체크", "hyundai", "현대m", "스마일카드", "smilecard"),
         "롯데" to listOf("롯데", "롯데카드", "롯데체크", "lotte"),
         "하나" to listOf("하나", "하나카드", "하나체크", "하나은행", "hana", "하나머니"),
         "우리" to listOf("우리", "우리카드", "우리체크", "우리은행", "woori"),

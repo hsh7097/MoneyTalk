@@ -18,6 +18,16 @@ class SmsIncomeFilterTest {
     }
 
     @Test
+    fun `smile card approval is classified as payment`() {
+        val body = "스마일카드승인 하*현 491,770원 일시불 05/06 01:16 G마켓_스마일카드 누적527,270원"
+
+        val (type, reason) = filter.classify(body)
+
+        assertEquals(SmsType.PAYMENT, type)
+        assertEquals("paymentKw", reason)
+    }
+
+    @Test
     fun `card bill notice is skipped`() {
         val body = "[Web발신]\n이번 달 카드대금 결제예정 금액은 120,000원입니다"
 
