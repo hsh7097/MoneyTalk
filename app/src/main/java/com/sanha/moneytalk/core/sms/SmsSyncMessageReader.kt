@@ -18,17 +18,30 @@ class SmsSyncMessageReader @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
-    suspend fun read(range: Pair<Long, Long>): List<SmsInput> {
+    data class ReadResult(
+        val messages: List<SmsInput>,
+        val rcsProviderReadSucceeded: Boolean
+    )
+
+    suspend fun read(
+        range: Pair<Long, Long>,
+        rcsRange: Pair<Long, Long> = range
+    ): ReadResult {
         val readResult = smsReaderV2.readAllMessagesByDateRange(
             context.contentResolver,
             range.first,
-            range.second
+            range.second,
+            rcsStartDate = rcsRange.first,
+            rcsEndDate = rcsRange.second
         )
         if (!readResult.smsProviderReadSucceeded) {
             throw SmsPrimaryProviderReadException(context.getString(R.string.sync_sms_read_failed))
         }
 
         MoneyTalkLogger.i("syncSmsV2 SMS 읽기: ${readResult.messages.size}건")
-        return readResult.messages
+        return ReadResult(
+            messages = readResult.messages,
+            rcsProviderReadSucceeded = readResult.rcsProviderReadSucceeded
+        )
     }
 }

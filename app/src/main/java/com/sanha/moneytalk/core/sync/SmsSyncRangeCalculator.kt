@@ -43,11 +43,17 @@ class SmsSyncRangeCalculator @Inject constructor(
         return DateUtils.getCustomMonthPeriod(year, month, monthStartDay)
     }
 
+    fun calculateDefaultProviderCatchUpStart(endTime: Long, monthStartDay: Int): Long {
+        return (endTime - DEFAULT_SYNC_PERIOD_MILLIS - customMonthExtraMillis(monthStartDay))
+            .coerceAtLeast(0L)
+    }
+
     private suspend fun resolveEffectiveSyncTime(savedSyncTime: Long): Long {
         val dbCount = expenseDao.getExpenseCount() + incomeDao.getIncomeCount()
         if (savedSyncTime > 0 && dbCount == 0) {
             MoneyTalkLogger.w("Auto Backup 감지: savedSyncTime 있으나 DB 비어있음 → 리셋")
             settingsDataStore.saveLastSyncTime(0L)
+            settingsDataStore.saveLastRcsProviderScanTime(0L)
             return 0L
         }
         return savedSyncTime

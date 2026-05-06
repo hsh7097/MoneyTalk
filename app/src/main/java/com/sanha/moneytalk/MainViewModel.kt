@@ -36,6 +36,7 @@ import com.sanha.moneytalk.core.sms.SmsPipeline
 import com.sanha.moneytalk.core.sms.SmsSyncMessageReader
 import com.sanha.moneytalk.core.sms.SmsSyncCoordinator
 import com.sanha.moneytalk.core.sms.SyncStats
+import com.sanha.moneytalk.core.sync.ProviderReadRangeCalculator
 import com.sanha.moneytalk.core.sync.SmsSyncRangeCalculator
 import com.sanha.moneytalk.core.sync.SyncCoveragePagePolicy
 import com.sanha.moneytalk.core.sync.SyncCoverageRecordCounts
@@ -118,8 +119,8 @@ class MainViewModel @Inject constructor(
         /** 즉시 저장 후 silent 동기화 전환 판단 윈도우 (60초) */
         private const val INSTANT_SAVE_SILENT_WINDOW_MS = 60_000L
 
-        /** 앱 진입/수신 후속 동기화에서 provider 누락을 복구할 최근 읽기 범위 */
-        private const val PROVIDER_CATCH_UP_LOOKBACK_MS = 24L * 60 * 60 * 1000
+        /** provider scan 경계 누락 방지용 overlap */
+        private const val PROVIDER_SCAN_OVERLAP_MARGIN_MS = 5L * 60 * 1000
 
         /** smsId 타임스탬프 오차 허용 범위 */
         private const val FUZZY_TIME_MARGIN_MS = 10_000L
@@ -230,12 +231,15 @@ class MainViewModel @Inject constructor(
                 }
                 viewModelScope.launch {
                     val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
+                    val readPlan = withContext(Dispatchers.IO) {
+                        buildProviderCatchUpReadPlan(range)
+                    }
                     syncSmsV2(
                         targetMonthRange = range,
                         updateLastSyncTime = true,
                         silent = true,
                         trigger = SyncCoverageTrigger.APP_RESUME_INCREMENTAL,
-                        readPlan = buildProviderCatchUpReadPlan(range)
+                        readPlan = readPlan
                     )
                 }
                 syncTriggered = true
@@ -322,12 +326,15 @@ class MainViewModel @Inject constructor(
                     DataRefreshEvent.RefreshType.SMS_RECEIVED -> {
                         MoneyTalkLogger.i("SMS 수신 이벤트 → silent 증분 동기화 시작")
                         val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
+                        val readPlan = withContext(Dispatchers.IO) {
+                            buildProviderCatchUpReadPlan(range)
+                        }
                         syncSmsV2(
                             targetMonthRange = range,
                             updateLastSyncTime = true,
                             silent = true,
                             trigger = SyncCoverageTrigger.SMS_RECEIVED_INCREMENTAL,
-                            readPlan = buildProviderCatchUpReadPlan(range)
+                            readPlan = readPlan
                         )
                     }
 
@@ -433,15 +440,28 @@ class MainViewModel @Inject constructor(
     private data class SyncReadPlan(
         val targetRange: Pair<Long, Long>,
         val readRange: Pair<Long, Long> = targetRange,
+        val rcsReadRange: Pair<Long, Long> = readRange,
         val filterTransactionRange: Pair<Long, Long>? = null
     )
 
-    private fun buildProviderCatchUpReadPlan(targetRange: Pair<Long, Long>): SyncReadPlan {
-        val catchUpStart = (targetRange.second - PROVIDER_CATCH_UP_LOOKBACK_MS)
-            .coerceAtLeast(0L)
+    private suspend fun buildProviderCatchUpReadPlan(targetRange: Pair<Long, Long>): SyncReadPlan {
+        val lastRcsScanTime = settingsDataStore.getLastRcsProviderScanTime()
+        val fallbackStart = smsSyncRangeCalculator.calculateDefaultProviderCatchUpStart(
+            endTime = targetRange.second,
+            monthStartDay = _uiState.value.monthStartDay
+        )
+        // 앱 lastSyncTime과 별개로 RCS provider 성공 scan 지점부터 다시 읽어 지연 노출 row를 복구한다.
+        val rcsReadStart = ProviderReadRangeCalculator.calculateCatchUpStart(
+            endTime = targetRange.second,
+            lastSuccessfulScanTime = lastRcsScanTime,
+            fallbackStart = fallbackStart,
+            overlapMargin = PROVIDER_SCAN_OVERLAP_MARGIN_MS
+        )
+
         return SyncReadPlan(
             targetRange = targetRange,
-            readRange = minOf(targetRange.first, catchUpStart) to targetRange.second
+            readRange = targetRange,
+            rcsReadRange = rcsReadStart to targetRange.second
         )
     }
 
@@ -587,10 +607,14 @@ class MainViewModel @Inject constructor(
     fun syncIncremental() {
         viewModelScope.launch {
             val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
+            val readPlan = withContext(Dispatchers.IO) {
+                buildProviderCatchUpReadPlan(range)
+            }
             syncSmsV2(
                 targetMonthRange = range,
                 updateLastSyncTime = true,
-                trigger = SyncCoverageTrigger.MANUAL_INCREMENTAL
+                trigger = SyncCoverageTrigger.MANUAL_INCREMENTAL,
+                readPlan = readPlan
             )
         }
     }
@@ -668,12 +692,15 @@ class MainViewModel @Inject constructor(
         pendingSilentSyncRequest = false
         viewModelScope.launch {
             val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
+            val readPlan = withContext(Dispatchers.IO) {
+                buildProviderCatchUpReadPlan(range)
+            }
             syncSmsV2(
                 targetMonthRange = range,
                 updateLastSyncTime = true,
                 silent = true,
                 trigger = SyncCoverageTrigger.PENDING_SILENT_INCREMENTAL,
-                readPlan = buildProviderCatchUpReadPlan(range)
+                readPlan = readPlan
             )
         }
     }
@@ -694,11 +721,14 @@ class MainViewModel @Inject constructor(
         SmsIncomeParser.setUserExcludeKeywords(userExcludeKeywords)
 
         // Step 1: SMS 읽기 + 중복 제거
-        val allSmsList = readSmsInputs(readPlan.readRange)
+        val readResult = readSmsInputs(readPlan)
+        val allSmsList = readResult.messages
         if (allSmsList.isEmpty()) {
-            if (updateLastSyncTime) {
-                settingsDataStore.saveLastSyncTime(readPlan.targetRange.second)
-            }
+            saveSyncWatermarks(
+                updateLastSyncTime = updateLastSyncTime,
+                endTime = readPlan.targetRange.second,
+                rcsProviderReadSucceeded = readResult.rcsProviderReadSucceeded
+            )
             return SyncResult(
                 expenseCount = 0,
                 incomeCount = 0,
@@ -718,9 +748,11 @@ class MainViewModel @Inject constructor(
         )
         MoneyTalkLogger.i("syncSmsV2 Step1 완료: 신규 SMS ${smsInputs.size}건")
         if (smsInputs.isEmpty()) {
-            if (updateLastSyncTime) {
-                settingsDataStore.saveLastSyncTime(readPlan.targetRange.second)
-            }
+            saveSyncWatermarks(
+                updateLastSyncTime = updateLastSyncTime,
+                endTime = readPlan.targetRange.second,
+                rcsProviderReadSucceeded = readResult.rcsProviderReadSucceeded
+            )
             return SyncResult(
                 expenseCount = 0,
                 incomeCount = 0,
@@ -748,7 +780,11 @@ class MainViewModel @Inject constructor(
         val incomeSaveResult = saveIncomes(targetFilteredResult.incomes, existingSnapshot)
 
         // Step 4: 후처리 (카테고리 분류, 패턴 정리, lastSyncTime 갱신)
-        val cleanup = postSyncCleanup(updateLastSyncTime, readPlan.targetRange.second)
+        val cleanup = postSyncCleanup(
+            updateLastSyncTime = updateLastSyncTime,
+            endTime = readPlan.targetRange.second,
+            rcsProviderReadSucceeded = readResult.rcsProviderReadSucceeded
+        )
         SmsInstantProcessor.clearPendingReconciliationIds(reconciledExpenseIds + reconciledIncomeIds)
 
         return SyncResult(
@@ -766,9 +802,12 @@ class MainViewModel @Inject constructor(
      * 대상 기간의 SMS 입력 목록을 읽는다.
      */
     private suspend fun readSmsInputs(
-        targetMonthRange: Pair<Long, Long>
-    ): List<SmsInput> {
-        return smsSyncMessageReader.read(targetMonthRange)
+        readPlan: SyncReadPlan
+    ): SmsSyncMessageReader.ReadResult {
+        return smsSyncMessageReader.read(
+            range = readPlan.readRange,
+            rcsRange = readPlan.rcsReadRange
+        )
     }
 
     private fun filterSyncResultByTransactionRange(
@@ -1455,15 +1494,14 @@ class MainViewModel @Inject constructor(
      */
     private suspend fun postSyncCleanup(
         updateLastSyncTime: Boolean,
-        endTime: Long
+        endTime: Long,
+        rcsProviderReadSucceeded: Boolean
     ): PostSyncResult {
         _uiState.update { it.copy(syncProgress = "마무리 중...") }
         categoryClassifierService.flushPendingMappings()
         categoryClassifierService.clearCategoryCache()
 
-        if (updateLastSyncTime) {
-            settingsDataStore.saveLastSyncTime(endTime)
-        }
+        saveSyncWatermarks(updateLastSyncTime, endTime, rcsProviderReadSucceeded)
 
         val allCardNames = expenseRepository.getAllCardNamesWithDuplicates()
 
@@ -1471,6 +1509,19 @@ class MainViewModel @Inject constructor(
             cardNames = allCardNames,
             classifiedCount = 0
         )
+    }
+
+    private suspend fun saveSyncWatermarks(
+        updateLastSyncTime: Boolean,
+        endTime: Long,
+        rcsProviderReadSucceeded: Boolean
+    ) {
+        if (!updateLastSyncTime) return
+
+        settingsDataStore.saveLastSyncTime(endTime)
+        if (rcsProviderReadSucceeded) {
+            settingsDataStore.saveLastRcsProviderScanTime(endTime)
+        }
     }
 
     /**

@@ -738,6 +738,7 @@ class SettingsViewModel @Inject constructor(
                     settingsDataStore.saveMonthStartDay(1)
                     // 마지막 동기화 시간 초기화 (다음 동기화 시 전체 동기화 되도록)
                     settingsDataStore.saveLastSyncTime(0L)
+                    settingsDataStore.saveLastRcsProviderScanTime(0L)
                     // 실제 동기화 구간 기록도 함께 제거
                     syncCoverageRepository.clearAll()
                     // 광고 시청 기록 초기화 (월별 전체 동기화 다시 가능하도록)

@@ -49,7 +49,8 @@ class SmsReaderV2 @Inject constructor(
 
     data class SmsReadResult(
         val messages: List<SmsInput>,
-        val smsProviderReadSucceeded: Boolean
+        val smsProviderReadSucceeded: Boolean,
+        val rcsProviderReadSucceeded: Boolean
     )
 
     private data class ChannelReadResult(
@@ -71,12 +72,16 @@ class SmsReaderV2 @Inject constructor(
      * @param contentResolver ContentResolver
      * @param startDate 시작 시간 (밀리초)
      * @param endDate 종료 시간 (밀리초)
+     * @param rcsStartDate RCS provider만 별도로 다시 읽을 시작 시간
+     * @param rcsEndDate RCS provider만 별도로 다시 읽을 종료 시간
      * @return 모든 메시지의 SmsInput 리스트와 SMS 기본 provider 읽기 성공 여부
      */
     suspend fun readAllMessagesByDateRange(
         contentResolver: ContentResolver,
         startDate: Long,
-        endDate: Long
+        endDate: Long,
+        rcsStartDate: Long = startDate,
+        rcsEndDate: Long = endDate
     ): SmsReadResult = coroutineScope {
         val blockedAddressSet = smsBlockedSenderRepository.getBlockedAddressSet()
         val smsDeferred = async {
@@ -86,20 +91,21 @@ class SmsReaderV2 @Inject constructor(
             readAllMmsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
         }
         val rcsDeferred = async {
-            readAllRcsByDateRange(contentResolver, startDate, endDate, blockedAddressSet)
+            readAllRcsByDateRange(contentResolver, rcsStartDate, rcsEndDate, blockedAddressSet)
         }
 
         val smsResult = smsDeferred.await()
         val mmsList = mmsDeferred.await()
-        val rcsList = rcsDeferred.await()
+        val rcsResult = rcsDeferred.await()
 
-        MoneyTalkLogger.i("[SmsReaderV2] 채널별 읽기 결과: SMS=${smsResult.messages.size}, MMS=${mmsList.size}, RCS=${rcsList.size}")
+        MoneyTalkLogger.i("[SmsReaderV2] 채널별 읽기 결과: SMS=${smsResult.messages.size}, MMS=${mmsList.size}, RCS=${rcsResult.messages.size}")
 
         SmsReadResult(
-            messages = (smsResult.messages + mmsList + rcsList)
+            messages = (smsResult.messages + mmsList + rcsResult.messages)
                 .distinctBy { it.id }
                 .sortedByDescending { it.date },
-            smsProviderReadSucceeded = smsResult.readSucceeded
+            smsProviderReadSucceeded = smsResult.readSucceeded,
+            rcsProviderReadSucceeded = rcsResult.readSucceeded
         )
     }
 
@@ -509,7 +515,7 @@ class SmsReaderV2 @Inject constructor(
         startDate: Long,
         endDate: Long,
         blockedAddressSet: Set<String>
-    ): List<SmsInput> {
+    ): ChannelReadResult {
         val result = mutableListOf<SmsInput>()
         var senderSkipCount = 0
         var blockedSenderSkipCount = 0
@@ -525,7 +531,7 @@ class SmsReaderV2 @Inject constructor(
             )
             if (cursor == null) {
                 MoneyTalkLogger.w("[SmsReaderV2][RCS] provider cursor null")
-                return result
+                return ChannelReadResult(result, readSucceeded = false)
             }
 
             cursor.use {
@@ -535,7 +541,7 @@ class SmsReaderV2 @Inject constructor(
                 val dateIndex = it.getColumnIndex("date")
                 if (idIndex < 0 || addressIndex < 0 || bodyIndex < 0 || dateIndex < 0) {
                     MoneyTalkLogger.w("[SmsReaderV2][RCS] 필수 컬럼 누락")
-                    return result
+                    return ChannelReadResult(result, readSucceeded = false)
                 }
 
                 while (it.moveToNext()) {
@@ -592,10 +598,11 @@ class SmsReaderV2 @Inject constructor(
             }
         } catch (e: Exception) {
             MoneyTalkLogger.e("RCS 읽기 실패: ${e.message}")
+            return ChannelReadResult(result, readSucceeded = false)
         }
 
         MoneyTalkLogger.i("[SmsReaderV2][RCS] 총 ${totalCursorCount}건 조회, ${result.size}건 통과, sender스킵=${senderSkipCount}, blocked스킵=${blockedSenderSkipCount}")
-        return result
+        return ChannelReadResult(result, readSucceeded = true)
     }
 
     /** 수신거부 발신번호 여부 확인 */

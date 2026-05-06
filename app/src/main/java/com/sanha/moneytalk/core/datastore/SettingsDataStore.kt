@@ -31,6 +31,7 @@ class SettingsDataStore @Inject constructor(
         private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
         private val MONTHLY_INCOME = intPreferencesKey("monthly_income")
         private val LAST_SYNC_TIME = longPreferencesKey("last_sync_time")
+        private val LAST_RCS_PROVIDER_SCAN_TIME = longPreferencesKey("last_rcs_provider_scan_time")
         private val MONTH_START_DAY = intPreferencesKey("month_start_day")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
         private val SERVICE_TIER = stringPreferencesKey("service_tier")
@@ -131,6 +132,18 @@ class SettingsDataStore @Inject constructor(
     // 마지막 동기화 시간 Flow
     val lastSyncTimeFlow: Flow<Long> = context.dataStore.data.map { preferences ->
         preferences[LAST_SYNC_TIME] ?: 0L
+    }
+
+    // RCS provider 마지막 성공 scan 시간 저장
+    suspend fun saveLastRcsProviderScanTime(timestamp: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[LAST_RCS_PROVIDER_SCAN_TIME] = timestamp
+        }
+    }
+
+    // RCS provider 마지막 성공 scan 시간 가져오기
+    suspend fun getLastRcsProviderScanTime(): Long {
+        return context.dataStore.data.first()[LAST_RCS_PROVIDER_SCAN_TIME] ?: 0L
     }
 
     // 월 시작일 저장 (1-31)

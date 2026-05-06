@@ -167,7 +167,7 @@
 
 | 항목 | 스펙 |
 |------|------|
-| 증분 동기화 | 대상 범위는 lastSyncTime - 5분 ~ 현재, 앱 진입/수신 후속 silent 동기화는 최근 24시간까지 읽기 범위를 확장해 provider 누락 복구 |
+| 증분 동기화 | 대상 범위는 lastSyncTime - 5분 ~ 현재, RCS는 마지막 provider 성공 scan 시각부터 별도 재읽기해 provider 누락 복구 |
 | 초기 동기화 | 전월 1일 ~ 현재 (monthStartDay > 1이면 2개월 전부터) |
 | 월별 CTA 동기화 | 과거 월 per-month: 처음 N회 무료 (RTDB `free_sync_count`, 기본 3) → 이후 광고 시청 필요 |
 | 실시간 수신 | SMS는 SmsReceiver + SmsInstantProcessor, MMS/RCS는 ContentObserver로 보완 (BroadcastReceiver/Observer, 항상 무료) |
@@ -236,7 +236,8 @@ settingsDataStore.monthStartDayFlow (distinctUntilChanged)
 증분 동기화:
   시작 = max(lastSyncTime - 5분, now - 60일 - monthStartDay마진)
   종료 = now
-  앱 진입/수신 후속 silent 읽기 범위 = max(대상 시작, now - 24시간) 대신 더 이른 시각까지 확장
+  RCS 읽기 범위 = last_rcs_provider_scan_time - 5분 ~ 현재
+  RCS provider 실패 시 last_rcs_provider_scan_time 미갱신 → 다음 동기화에서 같은 지점부터 재시도
   저장 기준 = smsId/content dedup으로 기존 거래 중복 저장 방지
 
 초기 동기화 (lastSyncTime = 0):
@@ -251,14 +252,14 @@ settingsDataStore.monthStartDayFlow (distinctUntilChanged)
   ※ lastSyncTime 갱신 안 함
 
 Auto Backup 감지:
-  savedSyncTime > 0 AND dbCount == 0 → syncTime을 0으로 리셋 → 초기 동기화
+  savedSyncTime > 0 AND dbCount == 0 → syncTime/RCS scan time을 0으로 리셋 → 초기 동기화
 ```
 
 | 상수 | 값 | 용도 |
 |------|------|------|
 | `DEFAULT_SYNC_PERIOD_MILLIS` | 60일 | 기본 증분 동기화 커버리지 |
 | `OVERLAP_MARGIN_MILLIS` | 5분 | 네트워크 지연 안전 마진 |
-| `PROVIDER_CATCH_UP_LOOKBACK_MS` | 24시간 | 앱 진입/수신 후속 silent 동기화 provider 누락 복구 |
+| `PROVIDER_SCAN_OVERLAP_MARGIN_MS` | 5분 | RCS provider scan 경계 누락 방지 |
 | `DB_BATCH_INSERT_SIZE` | 100 | DB 배치 삽입 크기 |
 
 ### 2.13 [구현 상세] 차트 Y축 & 토글 처리
@@ -378,7 +379,7 @@ buildBudgetCumulativePoints(monthlyBudget, daysInMonth):
 | `CATEGORY_UPDATED` | refreshCurrentPages(forceReload=true) — 캐시 유지, 데이터 덮어쓰기 |
 | `OWNED_CARD_UPDATED` | refreshCurrentPages(forceReload=true) |
 | `TRANSACTION_ADDED` | refreshCurrentPages(forceReload=true) |
-| `SMS_RECEIVED` | SmsSyncRangeCalculator.calculateIncrementalRange → MainViewModel.syncSmsV2(silent=true, readPlan=provider catch-up) |
+| `SMS_RECEIVED` | SmsSyncRangeCalculator.calculateIncrementalRange → MainViewModel.syncSmsV2(silent=true, readPlan=RCS provider watermark catch-up) |
 | `monthSyncEvent` | MainViewModel.calculateMonthReadPlan → syncSmsV2(updateLastSyncTime=false) |
 | `incrementalSyncEvent` | consumeIncrementalSync → MainViewModel.syncIncremental |
 
@@ -1206,6 +1207,7 @@ SpendingTrendInfo (interface)
 
 | 날짜 | 변경 내용 |
 |------|----------|
-| 2026-05-06 | 앱 진입/수신 후속 silent 동기화의 24시간 provider catch-up, RCS/MMS 보완 경로, 스마일카드 인식 규칙 반영 |
+| 2026-05-06 | RCS provider 누락 복구를 최근 24시간 고정 범위에서 `last_rcs_provider_scan_time` 기반 재읽기로 변경 |
+| 2026-05-06 | 앱 진입/수신 후속 silent 동기화의 provider catch-up, RCS/MMS 보완 경로, 스마일카드 인식 규칙 반영 |
 | 2026-04-30 | SMS 동기화 범위 계산/월별 CTA 동기화 설명을 SmsSyncRangeCalculator/MainViewModel 구조 기준으로 갱신 |
 | 2026-02-24 | 최초 작성 (코드 기반 전수 조사) + 구현 상세 추가 + 리뷰 기반 오기재 6건 수정 (토글 기본값, 쿼리/액션 개수, 문자열 3건) |
