@@ -173,7 +173,9 @@ class TransactionEditViewModel @Inject constructor(
                         storeName = expense.storeName,
                         category = expense.category,
                         cardName = expense.cardName,
-                        dateMillis = expense.dateTime,
+                        dateMillis = TransactionEditDateTimeMapper.toDatePickerMillis(
+                            expense.dateTime
+                        ),
                         hour = cal.get(Calendar.HOUR_OF_DAY),
                         minute = cal.get(Calendar.MINUTE),
                         memo = expense.memo ?: "",
@@ -213,7 +215,9 @@ class TransactionEditViewModel @Inject constructor(
                         category = income.category,
                         incomeType = income.type,
                         source = income.source,
-                        dateMillis = income.dateTime,
+                        dateMillis = TransactionEditDateTimeMapper.toDatePickerMillis(
+                            income.dateTime
+                        ),
                         hour = cal.get(Calendar.HOUR_OF_DAY),
                         minute = cal.get(Calendar.MINUTE),
                         memo = income.memo ?: "",
@@ -240,7 +244,7 @@ class TransactionEditViewModel @Inject constructor(
                 isNew = true,
                 transactionType = TransactionType.EXPENSE,
                 isLoading = false,
-                dateMillis = initialDate,
+                dateMillis = TransactionEditDateTimeMapper.toDatePickerMillis(initialDate),
                 hour = cal.get(Calendar.HOUR_OF_DAY),
                 minute = cal.get(Calendar.MINUTE),
                 applyStatsExcludeToAll = false,
@@ -488,7 +492,11 @@ class TransactionEditViewModel @Inject constructor(
             return
         }
 
-        val dateTime = buildDateTime(state.dateMillis, state.hour, state.minute)
+        val dateTime = TransactionEditDateTimeMapper.buildDateTime(
+            state.dateMillis,
+            state.hour,
+            state.minute
+        )
 
         viewModelScope.launch {
             try {
@@ -632,7 +640,11 @@ class TransactionEditViewModel @Inject constructor(
             return
         }
 
-        val dateTime = buildDateTime(state.dateMillis, state.hour, state.minute)
+        val dateTime = TransactionEditDateTimeMapper.buildDateTime(
+            state.dateMillis,
+            state.hour,
+            state.minute
+        )
 
         viewModelScope.launch {
             try {
@@ -739,29 +751,6 @@ class TransactionEditViewModel @Inject constructor(
         viewModelScope.launch {
             settingsDataStore.setScreenOnboardingSeen(screenId)
         }
-    }
-
-    /**
-     * dateMillis(DatePicker 반환값, UTC 자정 기준)에서 년/월/일만 추출하여
-     * 로컬 타임존의 hour/minute과 조합.
-     * DatePicker.selectedDateMillis는 UTC 기반이므로 직접 timeInMillis에 넣으면
-     * UTC 서쪽 타임존에서 날짜가 하루 밀릴 수 있다.
-     */
-    private fun buildDateTime(dateMillis: Long, hour: Int, minute: Int): Long {
-        // UTC 기준 Calendar로 년/월/일만 추출
-        val utcCal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
-            timeInMillis = dateMillis
-        }
-        // 로컬 Calendar에 년/월/일 + 시/분 설정
-        return Calendar.getInstance().apply {
-            set(Calendar.YEAR, utcCal.get(Calendar.YEAR))
-            set(Calendar.MONTH, utcCal.get(Calendar.MONTH))
-            set(Calendar.DAY_OF_MONTH, utcCal.get(Calendar.DAY_OF_MONTH))
-            set(Calendar.HOUR_OF_DAY, hour)
-            set(Calendar.MINUTE, minute)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
     }
 
     private fun supportsFixedExpense(transactionType: TransactionType): Boolean {
