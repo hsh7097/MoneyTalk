@@ -11,7 +11,6 @@ import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
-import com.sanha.moneytalk.core.database.entity.isIncludedInExpenseStats
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryProvider
@@ -330,7 +329,7 @@ class CategoryDetailViewModel @Inject constructor(
                         categoryNames, lastMonthFullStart, lastMonthFullEnd
                     )
                 }
-                val filteredFullLastMonthExpenses = filterByExclusion(
+                val filteredFullLastMonthExpenses = CategoryDetailExpenseFilters.filterStatsExpenses(
                     fullLastMonthExpenses, exclusionKeywords
                 )
                 val lastMonthCumulative = CumulativeChartDataBuilder.buildDailyCumulative(
@@ -342,7 +341,7 @@ class CategoryDetailViewModel @Inject constructor(
                     val raw = expenseRepository.getExpensesByCategoriesAndDateRangeOnce(
                         categoryNames, s, e
                     )
-                    filterByExclusion(raw, exclusionKeywords)
+                    CategoryDetailExpenseFilters.filterStatsExpenses(raw, exclusionKeywords)
                 }
                 val avgThreeMonthCumulative = withContext(Dispatchers.IO) {
                     CumulativeChartDataBuilder.buildAvgNMonthCumulative(
@@ -389,17 +388,22 @@ class CategoryDetailViewModel @Inject constructor(
                         )
                     }
                     .collect { allExpenses ->
-                        val expenses = filterByExclusion(allExpenses, exclusionKeywords)
-                        val totalExpense = expenses.sumOf { it.amount }
+                        val displayExpenses = CategoryDetailExpenseFilters.filterDisplayExpenses(
+                            allExpenses, exclusionKeywords
+                        )
+                        val statsExpenses = CategoryDetailExpenseFilters.filterStatsExpenses(
+                            displayExpenses
+                        )
+                        val totalExpense = statsExpenses.sumOf { it.amount }
 
                         // 이번 달 일별 누적 지출
                         val dailyCumulative = CumulativeChartDataBuilder.buildDailyCumulative(
-                            expenses, monthStart, daysInMonth
+                            statsExpenses, monthStart, daysInMonth
                         )
 
                         // 날짜별 그룹핑 거래 목록 (정렬 적용)
                         val transactionItems = buildTransactionItems(
-                            expenses, _uiState.value.sortOrder
+                            displayExpenses, _uiState.value.sortOrder
                         )
 
                         val current =
@@ -450,7 +454,8 @@ class CategoryDetailViewModel @Inject constructor(
 
         sortedDates.forEach { date ->
             val dayExpenses = grouped[date] ?: return@forEach
-            val dailyTotal = dayExpenses.sumOf { it.amount }
+            val dailyTotal = CategoryDetailExpenseFilters.filterStatsExpenses(dayExpenses)
+                .sumOf { it.amount }
 
             val calendar = Calendar.getInstance().apply { time = date }
             val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
@@ -506,24 +511,6 @@ class CategoryDetailViewModel @Inject constructor(
             Calendar.FRIDAY -> R.string.day_friday
             Calendar.SATURDAY -> R.string.day_saturday
             else -> R.string.day_sunday
-        }
-    }
-
-    // ========== 제외 키워드 필터 ==========
-
-    /** 제외 키워드와 통계 제외 플래그로 카테고리 통계용 지출 목록 필터링 */
-    private fun filterByExclusion(
-        expenses: List<ExpenseEntity>,
-        exclusionKeywords: Set<String>
-    ): List<ExpenseEntity> {
-        return expenses.filter { expense ->
-            val isKeywordAllowed = if (exclusionKeywords.isEmpty()) {
-                true
-            } else {
-                val smsLower = expense.originalSms.lowercase()
-                exclusionKeywords.none { kw -> smsLower.contains(kw) }
-            }
-            isKeywordAllowed && expense.isIncludedInExpenseStats()
         }
     }
 
