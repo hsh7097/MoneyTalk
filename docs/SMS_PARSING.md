@@ -886,6 +886,36 @@ RCS/비즈메시지는 앱 프로세스가 죽어 있을 때 `ContentObserver`�
 - 따라서 `15889955` 같은 실제 발신번호 기반 regex 룰을 그대로 사용할 수 있다.
 - cold start 상태에서 늦게 등록되는 `RcsContentObserver`의 한계를 `NotificationListenerService`가 보완한다.
 
+### 금융 앱 알림 직접 처리 경로
+
+카카오뱅크/토스처럼 SMS/MMS/RCS provider row를 만들지 않고 앱 알림만 보내는 금융 앱은
+provider 재조회가 불가능하므로 알림 본문 자체를 거래 후보로 처리합니다.
+
+```
+[금융 앱 알림]
+  → NotificationContentParser.parse()
+  → 금융 앱 allowlist 확인 (예: com.kakaobank.channel, viva.republica.toss, com.hyundaicard.appcard)
+  → RTDB 승인 금융앱 로컬 캐시 확인
+  → SmsInstantProcessor.processAppNotificationAndSave()
+  → 1차: app:{packageName} sender 기반 regex 룰 매칭
+  → 2차: AppNotificationTransactionParser 휴리스틱 파싱
+  → 성공: 거래 저장 + MoneyTalk 거래 알림
+  → 스킵: provider/batch fallback 없음 (알림 본문 외 원본 없음)
+```
+
+핵심 포인트:
+- 앱 알림은 `address = app:{packageName}` 형태로 저장하여 SMS 발신번호와 분리한다.
+- 설치된 금융 앱 감지는 `AndroidManifest.xml`의 `<queries>` 패키지 목록을 사용한다.
+- 보안/인증/쇼핑/메신저 앱은 기본 처리 대상에서 제외한다. 카카오톡 알림도 금융 앱 알림으로 처리하지 않는다.
+- 코드에 없는 금융앱은 RTDB `/financial_apps/v1/packages` 승인 목록을 내려받아
+  `financial_app_candidates` 로컬 DB에 `SUPPORTED`로 캐시한 뒤 사용한다.
+- RTDB에서 비활성화되거나 제거된 원격 금융앱은 로컬 `SUPPORTED` 캐시에서도 철회한다.
+- 미등록 앱에서 거래 후보 알림이 감지되면 알림 원문 없이 `packageName/displayName`만 LLM으로 분류한다.
+  debug 빌드에서만 RTDB `/financial_app_reports/v1`로 후보를 전송하며, 성공한 패키지는 로컬 DB에
+  `REPORTED`로 저장하여 같은 패키지를 반복 전송하지 않는다. release 빌드는 후보 전송을 비활성화한다.
+- 앱 알림은 실제 provider row가 없으므로 배치 동기화로 재처리할 수 없다.
+- 사용자 알림 접근 권한이 켜진 이후 새로 올라오는 알림만 처리 대상이다.
+
 ---
 
 ## 14. 데이터 모델
