@@ -1161,35 +1161,42 @@ class MainViewModel @Inject constructor(
             }
         }
 
-        // Phase 2: "미분류" 가게명을 Gemini로 사전 분류 (DB INSERT 전)
+        // Phase 2: "미분류" 가게명을 사전 분류 (로컬 규칙은 API 키 없이도 수행)
         val unclassifiedStores = entities
             .filter { it.category == "미분류" }
             .map { it.storeName }
             .distinct()
 
-        if (unclassifiedStores.isNotEmpty() && geminiRepository.hasApiKey()) {
-            _uiState.update {
-                it.copy(syncProgress = "AI가 카테고리 분류 중...")
+        if (unclassifiedStores.isNotEmpty()) {
+            val hasGeminiApiKey = geminiRepository.hasApiKey()
+            if (hasGeminiApiKey) {
+                _uiState.update {
+                    it.copy(syncProgress = "AI가 카테고리 분류 중...")
+                }
             }
             try {
-                val geminiResults = categoryClassifierService.classifyStoreNamesInMemory(
+                val classificationResults = categoryClassifierService.classifyStoreNamesInMemory(
                     storeNames = unclassifiedStores,
-                    onStepProgress = { step, current, total ->
-                        _uiState.update {
-                            it.copy(
-                                syncProgress = "AI가 카테고리 분류 중...\n$step",
-                                syncProgressCurrent = current,
-                                syncProgressTotal = total
-                            )
+                    onStepProgress = if (hasGeminiApiKey) {
+                        { step, current, total ->
+                            _uiState.update {
+                                it.copy(
+                                    syncProgress = "AI가 카테고리 분류 중...\n$step",
+                                    syncProgressCurrent = current,
+                                    syncProgressTotal = total
+                                )
+                            }
                         }
+                    } else {
+                        null
                     }
                 )
 
-                if (geminiResults.isNotEmpty()) {
+                if (classificationResults.isNotEmpty()) {
                     for (i in entities.indices) {
                         val entity = entities[i]
                         if (entity.category == "미분류") {
-                            val newCategory = geminiResults[entity.storeName]
+                            val newCategory = classificationResults[entity.storeName]
                             if (newCategory != null) {
                                 val isTransfer = newCategory == Category.TRANSFER_GENERAL.displayName
                                 val updated = entity.copy(
