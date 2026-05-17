@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.Category
@@ -215,8 +217,11 @@ fun PeriodSummaryCard(
                     text = stringResource(R.string.home_expense),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.width(28.dp),
-                    textAlign = TextAlign.End
+                    modifier = Modifier.widthIn(min = 44.dp),
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    softWrap = false
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
@@ -224,7 +229,10 @@ fun PeriodSummaryCard(
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.toDpTextUnit),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.End
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    softWrap = false
                 )
             }
             // 수입 (0원이어도 항상 표시)
@@ -237,8 +245,11 @@ fun PeriodSummaryCard(
                     text = stringResource(R.string.home_income),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.width(28.dp),
-                    textAlign = TextAlign.End
+                    modifier = Modifier.widthIn(min = 44.dp),
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    softWrap = false
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
@@ -249,7 +260,10 @@ fun PeriodSummaryCard(
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.toDpTextUnit),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.moneyTalkColors.income,
-                    textAlign = TextAlign.End
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    softWrap = false
                 )
             }
         }

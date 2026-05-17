@@ -32,7 +32,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
@@ -71,6 +74,9 @@ fun BillingCycleCalendarView(
     dailyIncomeTotals: Map<String, Int> = emptyMap() // "yyyy-MM-dd" -> income amount
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val compactNumberFormat = NumberFormat.getNumberInstance(Locale.KOREA).apply {
+        maximumFractionDigits = 1
+    }
     val context = LocalContext.current
     val today = Calendar.getInstance()
     val todayYear = today.get(Calendar.YEAR)
@@ -209,9 +215,16 @@ fun BillingCycleCalendarView(
                         ) {
                             if (weekIncomeTotal > 0) {
                                 Text(
-                                    text = "+${numberFormat.format(weekIncomeTotal)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.moneyTalkColors.income
+                                    text = "+${formatCompactCalendarAmount(weekIncomeTotal, compactNumberFormat)}",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontSize = 10.toDpTextUnit,
+                                        lineHeight = 12.toDpTextUnit,
+                                        letterSpacing = 0.toDpTextUnit
+                                    ),
+                                    color = MaterialTheme.moneyTalkColors.income,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Clip,
+                                    softWrap = false
                                 )
                                 if (weekTotal > 0) {
                                     Spacer(modifier = Modifier.width(8.dp))
@@ -219,9 +232,16 @@ fun BillingCycleCalendarView(
                             }
                             if (weekTotal > 0) {
                                 Text(
-                                    text = "-${numberFormat.format(weekTotal)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error
+                                    text = "-${formatCompactCalendarAmount(weekTotal, compactNumberFormat)}",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontSize = 10.toDpTextUnit,
+                                        lineHeight = 12.toDpTextUnit,
+                                        letterSpacing = 0.toDpTextUnit
+                                    ),
+                                    color = MaterialTheme.colorScheme.error,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Clip,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -291,7 +311,10 @@ fun CalendarDayCell(
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val compactNumberFormat = NumberFormat.getNumberInstance(Locale.KOREA).apply {
+        maximumFractionDigits = 1
+    }
+    val exactNumberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
 
     Box(
         modifier = modifier
@@ -324,7 +347,7 @@ fun CalendarDayCell(
             ) {
                 Text(
                     text = calendarDay.day.toString(),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.toDpTextUnit),
                     fontWeight = if (calendarDay.isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
                     color = when {
                         calendarDay.isToday -> Color.White
@@ -341,26 +364,64 @@ fun CalendarDayCell(
 
             // 일별 수입 (있을 때만 표시, 미래 날짜는 표시 안함)
             if (dayIncome > 0 && !calendarDay.isFuture && calendarDay.isCurrentPeriod) {
+                val incomeDescription = stringResource(
+                    R.string.common_won,
+                    exactNumberFormat.format(dayIncome)
+                )
                 Text(
-                    text = "+${numberFormat.format(dayIncome)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = 9.toDpTextUnit,
+                    text = "+${formatCompactCalendarAmount(dayIncome, compactNumberFormat)}",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 8.toDpTextUnit,
+                        lineHeight = 10.toDpTextUnit,
+                        letterSpacing = 0.toDpTextUnit
+                    ),
                     color = MaterialTheme.moneyTalkColors.income,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    softWrap = false,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics {
+                            contentDescription = "+$incomeDescription"
+                        }
                 )
             }
 
             // 일별 지출 (있을 때만 표시, 미래 날짜는 표시 안함)
             if (dayTotal > 0 && !calendarDay.isFuture && calendarDay.isCurrentPeriod) {
+                val expenseDescription = stringResource(
+                    R.string.common_won,
+                    exactNumberFormat.format(dayTotal)
+                )
                 Text(
-                    text = "-${numberFormat.format(dayTotal)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = 9.toDpTextUnit,
+                    text = "-${formatCompactCalendarAmount(dayTotal, compactNumberFormat)}",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 8.toDpTextUnit,
+                        lineHeight = 10.toDpTextUnit,
+                        letterSpacing = 0.toDpTextUnit
+                    ),
                     color = MaterialTheme.colorScheme.error,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    softWrap = false,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics {
+                            contentDescription = "-$expenseDescription"
+                        }
                 )
             }
         }
+    }
+}
+
+private fun formatCompactCalendarAmount(amount: Int, numberFormat: NumberFormat): String {
+    return when {
+        amount >= 100_000_000 -> "${numberFormat.format(amount / 100_000_000.0)}억"
+        amount >= 10_000 -> "${numberFormat.format(amount / 10_000.0)}만"
+        else -> numberFormat.format(amount)
     }
 }
 
