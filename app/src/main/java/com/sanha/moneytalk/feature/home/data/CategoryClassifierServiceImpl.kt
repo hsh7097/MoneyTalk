@@ -348,6 +348,7 @@ class CategoryClassifierServiceImpl @Inject constructor(
     ): Map<String, String> {
         if (storeNames.isEmpty()) return emptyMap()
 
+        val inputCount = storeNames.size
         val result = mutableMapOf<String, String>()
 
         // 1. 이체 패턴 감지
@@ -360,6 +361,16 @@ class CategoryClassifierServiceImpl @Inject constructor(
 
         val remaining = storeNames.filter { it !in result }
         if (remaining.isEmpty()) {
+            logInMemoryClassificationSummary(
+                inputCount = inputCount,
+                transferCount = transferNames.size,
+                ruleCount = 0,
+                geminiCandidateCount = 0,
+                groupCount = 0,
+                geminiResultCount = 0,
+                apiKeySkipped = false,
+                resultCount = result.size
+            )
             return result
         }
 
@@ -372,7 +383,38 @@ class CategoryClassifierServiceImpl @Inject constructor(
             saveMappingsIfNeeded(
                 classifications = result,
                 originalStoreNames = storeNames,
+                source = "local",
                 saveEmbeddings = false
+            )
+            logInMemoryClassificationSummary(
+                inputCount = inputCount,
+                transferCount = transferNames.size,
+                ruleCount = ruleClassified.size,
+                geminiCandidateCount = 0,
+                groupCount = 0,
+                geminiResultCount = 0,
+                apiKeySkipped = false,
+                resultCount = result.size
+            )
+            return result
+        }
+
+        if (!geminiRepository.hasApiKey()) {
+            saveMappingsIfNeeded(
+                classifications = result,
+                originalStoreNames = storeNames,
+                source = "local",
+                saveEmbeddings = false
+            )
+            logInMemoryClassificationSummary(
+                inputCount = inputCount,
+                transferCount = transferNames.size,
+                ruleCount = ruleClassified.size,
+                geminiCandidateCount = storeNamesForGemini.size,
+                groupCount = 0,
+                geminiResultCount = 0,
+                apiKeySkipped = true,
+                resultCount = result.size
             )
             return result
         }
@@ -404,9 +446,11 @@ class CategoryClassifierServiceImpl @Inject constructor(
 
         // 4. Gemini 배치 분류
         val representatives = groups.map { it.representative }
+        var geminiResultCount = 0
         if (representatives.isNotEmpty()) {
             onStepProgress?.invoke("AI가 분류하는 중...", 0, representatives.size)
             val classifications = geminiRepository.classifyStoreNames(representatives)
+            geminiResultCount = classifications.size
 
             for (group in groups) {
                 val category = classifications[group.representative] ?: continue
@@ -424,7 +468,35 @@ class CategoryClassifierServiceImpl @Inject constructor(
             saveEmbeddings = shouldUseSemanticGrouping && groupingResult.embeddingsByStoreName.isNotEmpty()
         )
 
+        logInMemoryClassificationSummary(
+            inputCount = inputCount,
+            transferCount = transferNames.size,
+            ruleCount = ruleClassified.size,
+            geminiCandidateCount = storeNamesForGemini.size,
+            groupCount = groups.size,
+            geminiResultCount = geminiResultCount,
+            apiKeySkipped = false,
+            resultCount = result.size
+        )
+
         return result
+    }
+
+    private fun logInMemoryClassificationSummary(
+        inputCount: Int,
+        transferCount: Int,
+        ruleCount: Int,
+        geminiCandidateCount: Int,
+        groupCount: Int,
+        geminiResultCount: Int,
+        apiKeySkipped: Boolean,
+        resultCount: Int
+    ) {
+        MoneyTalkLogger.i(
+            "[CategoryClassifier][inMemory] input=$inputCount, transfer=$transferCount, " +
+                    "rule=$ruleCount, geminiCandidates=$geminiCandidateCount, groups=$groupCount, " +
+                    "geminiResults=$geminiResultCount, apiKeySkipped=$apiKeySkipped, result=$resultCount"
+        )
     }
 
     /** 분류 결과를 Room 매핑 + 벡터 DB에 저장 */
@@ -432,13 +504,14 @@ class CategoryClassifierServiceImpl @Inject constructor(
         classifications: Map<String, String>,
         originalStoreNames: List<String>,
         embeddingsByStoreName: Map<String, List<Float>> = emptyMap(),
+        source: String = "gemini",
         saveEmbeddings: Boolean = true
     ) {
         val toSave = classifications.filter { it.key in originalStoreNames }
         if (toSave.isEmpty()) return
 
         val mappings = toSave.map { (store, category) -> store to category }
-        categoryRepository.saveMappings(mappings, "gemini")
+        categoryRepository.saveMappings(mappings, source)
         try {
             if (saveEmbeddings) {
                 val embeddingTargets = if (embeddingsByStoreName.isEmpty()) {
