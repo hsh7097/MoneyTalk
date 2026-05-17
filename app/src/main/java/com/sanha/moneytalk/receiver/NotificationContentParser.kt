@@ -2,13 +2,14 @@ package com.sanha.moneytalk.receiver
 
 import android.app.Notification
 import android.service.notification.StatusBarNotification
+import com.sanha.moneytalk.core.notification.FinancialAppPackageRegistry
 import java.util.Calendar
 
 /**
- * 메시지 앱 알림에서 금융 거래 후보 텍스트를 추출한다.
+ * 알림에서 금융 거래 후보 텍스트를 추출한다.
  *
- * 현재는 삼성/구글 메시지 계열만 지원하며,
- * 알림 자체를 바로 저장하기보다 최근 SMS/MMS/RCS provider row를 찾기 위한 힌트로 사용한다.
+ * 메시지 앱 알림은 최근 SMS/MMS/RCS provider row를 찾기 위한 힌트로 사용하고,
+ * 금융 앱 알림은 provider row가 없으므로 알림 본문 자체를 직접 처리한다.
  */
 object NotificationContentParser {
 
@@ -23,7 +24,7 @@ object NotificationContentParser {
         "입금", "출금", "결제", "승인", "취소", "송금", "이체", "잔액", "일시불", "할부", "이용"
     )
 
-    private val supportedPackagePrefixes = listOf(
+    private val messagePackagePrefixes = listOf(
         "com.samsung.android.messaging",
         "com.google.android.apps.messaging",
         "com.android.messaging",
@@ -46,11 +47,20 @@ object NotificationContentParser {
     )
 
     fun isSupportedPackage(packageName: String): Boolean =
-        supportedPackagePrefixes.any { packageName.startsWith(it) }
+        isMessagePackage(packageName) || isFinancialAppPackage(packageName)
 
-    fun parse(sbn: StatusBarNotification): ParsedNotification? {
+    fun isMessagePackage(packageName: String): Boolean =
+        messagePackagePrefixes.any { packageName.startsWith(it) }
+
+    fun isFinancialAppPackage(packageName: String): Boolean =
+        FinancialAppPackageRegistry.isSupportedAppNotificationPackage(packageName)
+
+    fun parse(
+        sbn: StatusBarNotification,
+        requireSupportedPackage: Boolean = true
+    ): ParsedNotification? {
         if (sbn.packageName == selfPackageName) return null
-        if (!isSupportedPackage(sbn.packageName)) return null
+        if (requireSupportedPackage && !isSupportedPackage(sbn.packageName)) return null
 
         val extras = sbn.notification.extras
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()

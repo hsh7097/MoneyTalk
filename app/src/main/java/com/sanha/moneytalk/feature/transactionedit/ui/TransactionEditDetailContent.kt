@@ -835,9 +835,12 @@ private fun DetailRowFrame(
 private fun DetailLabel(text: String) {
     Text(
         text = text,
-        style = MaterialTheme.typography.bodyMedium,
+        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.toDpTextUnit),
         color = TransactionEditDesignColors.textSecondary,
-        modifier = Modifier.width(86.dp)
+        maxLines = 1,
+        overflow = TextOverflow.Clip,
+        softWrap = false,
+        modifier = Modifier.width(112.dp)
     )
 }
 

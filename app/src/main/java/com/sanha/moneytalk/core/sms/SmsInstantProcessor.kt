@@ -55,6 +55,23 @@ class SmsInstantProcessor @Inject constructor(
         private val pendingReconciliationIds = ConcurrentHashMap.newKeySet<String>()
         /** 동시 다발 수신/알림 경로에서 같은 smsId 중복 처리 방지 */
         private val inFlightSmsIds = ConcurrentHashMap.newKeySet<String>()
+        private val APP_NOTIFICATION_AMOUNT_PATTERN = Regex("""[\d,]+원""")
+        private val APP_NOTIFICATION_BLOCK_KEYWORDS = listOf(
+            "인증", "otp", "본인확인", "비밀번호", "광고", "이벤트", "혜택",
+            "청구서", "명세서", "결제예정", "출금예정", "승인거절"
+        )
+        private val APP_NOTIFICATION_TRANSACTION_HINTS = listOf(
+            "결제", "승인", "출금", "사용", "이용", "입금", "송금", "이체", "취소"
+        )
+        private val APP_NOTIFICATION_PAYMENT_HINTS = listOf(
+            "결제", "승인", "출금", "사용", "이용"
+        )
+        private val APP_NOTIFICATION_INCOME_HINTS = listOf(
+            "입금", "이체입금", "송금받", "받았", "받으셨"
+        )
+        private val APP_NOTIFICATION_CANCEL_HINTS = listOf(
+            "출금취소", "승인취소", "결제취소", "취소완료"
+        )
 
         fun snapshotPendingReconciliationIds(): Set<String> = pendingReconciliationIds.toSet()
 
@@ -68,9 +85,14 @@ class SmsInstantProcessor @Inject constructor(
             inFlightSmsIds.remove(smsId)
         }
 
-        private fun markPendingReconciliation(smsId: String) {
+        private fun markPendingReconciliation(
+            smsId: String,
+            needsReconciliation: Boolean = true
+        ) {
             lastInstantSaveTime = System.currentTimeMillis()
-            pendingReconciliationIds.add(smsId)
+            if (needsReconciliation) {
+                pendingReconciliationIds.add(smsId)
+            }
         }
     }
 
@@ -146,6 +168,69 @@ class SmsInstantProcessor @Inject constructor(
         }
     }
 
+    /**
+     * SMS provider row가 없는 금융 앱 알림을 즉시 파싱 → DB 저장 → 알림 표시.
+     *
+     * 알림 앱 패키지를 sender처럼 사용하되 010/070 발신번호 필터는 적용하지 않는다.
+     */
+    suspend fun processAppNotificationAndSave(
+        packageName: String,
+        appLabel: String,
+        body: String,
+        timestampMillis: Long
+    ): Result {
+        val address = buildAppNotificationAddress(packageName)
+
+        if (isObviouslyNonPaymentAppNotification(body)) {
+            return Result.Skipped
+        }
+
+        if (lacksAppNotificationRequirements(body)) {
+            return Result.Skipped
+        }
+
+        val exclusionKeywords = smsExclusionRepository.getAllKeywordStrings()
+        if (exclusionKeywords.isNotEmpty()) {
+            val bodyLower = body.lowercase()
+            if (exclusionKeywords.any { bodyLower.contains(it) }) {
+                return Result.Skipped
+            }
+        }
+
+        val smsId = generateSmsId(address, body, timestampMillis)
+        if (DeletedSmsTracker.isDeleted(smsId)) {
+            return Result.Skipped
+        }
+
+        if (!tryAcquireInFlight(smsId)) {
+            MoneyTalkLogger.i("[InstantAppNoti] in-flight 중복 스킵: ${smsId.take(30)}")
+            return Result.Skipped
+        }
+
+        return try {
+            when (classifyAppNotification(body)) {
+                SmsType.PAYMENT -> processAppNotificationExpense(
+                    address = address,
+                    packageName = packageName,
+                    appLabel = appLabel,
+                    body = body,
+                    timestamp = timestampMillis,
+                    smsId = smsId
+                )
+                SmsType.INCOME -> processIncome(
+                    address = address,
+                    body = body,
+                    timestamp = timestampMillis,
+                    smsId = smsId,
+                    needsReconciliation = false
+                )
+                SmsType.SKIP -> Result.Skipped
+            }
+        } finally {
+            releaseInFlight(smsId)
+        }
+    }
+
     private suspend fun processExpense(
         address: String,
         body: String,
@@ -212,11 +297,89 @@ class SmsInstantProcessor @Inject constructor(
         return Result.Expense(entity)
     }
 
+    private suspend fun processAppNotificationExpense(
+        address: String,
+        packageName: String,
+        appLabel: String,
+        body: String,
+        timestamp: Long,
+        smsId: String
+    ): Result {
+        if (expenseRepository.existsBySmsId(smsId)) {
+            return Result.Skipped
+        }
+
+        val smsInput = SmsInput(id = smsId, body = body, address = address, date = timestamp)
+        val matchResult = regexRuleMatcher.matchPaymentCandidates(listOf(smsInput))
+        val regexParsed = matchResult.matched.firstOrNull()
+
+        val baseEntity = if (regexParsed != null) {
+            val category = if (regexParsed.analysis.category.isNotBlank() &&
+                regexParsed.analysis.category != "미분류" &&
+                regexParsed.analysis.category != "기타"
+            ) {
+                regexParsed.analysis.category
+            } else {
+                SmsParser.inferCategory(regexParsed.analysis.storeName, body)
+            }
+
+            ExpenseEntity(
+                amount = regexParsed.analysis.amount,
+                storeName = regexParsed.analysis.storeName,
+                category = category,
+                cardName = CardNameNormalizer.normalizeWithFallback(
+                    regexParsed.analysis.cardName.ifBlank { appLabel },
+                    body
+                ),
+                dateTime = DateUtils.parseDateTime(regexParsed.analysis.dateTime),
+                originalSms = body,
+                smsId = smsId,
+                senderAddress = SmsFilter.normalizeAddress(address)
+            )
+        } else {
+            val candidate = AppNotificationTransactionParser.parseExpense(
+                body = body,
+                appLabel = appLabel,
+                packageName = packageName
+            ) ?: return Result.Skipped
+
+            ExpenseEntity(
+                amount = candidate.amount,
+                storeName = candidate.storeName,
+                category = candidate.category,
+                cardName = CardNameNormalizer.normalizeWithFallback(candidate.cardName, body),
+                dateTime = timestamp,
+                originalSms = body,
+                smsId = smsId,
+                senderAddress = SmsFilter.normalizeAddress(address)
+            )
+        }
+
+        val entity = applyStoreRules(baseEntity)
+        expenseRepository.insert(entity)
+        markPendingReconciliation(smsId, needsReconciliation = false)
+        MoneyTalkLogger.i(
+            "[InstantAppNoti] 지출 저장: " +
+                "${entity.storeName} ${entity.amount}원 [${entity.category}]"
+        )
+
+        if (settingsDataStore.isNotificationEnabled()) {
+            notificationManager.showExpenseNotification(
+                amount = entity.amount,
+                storeName = entity.storeName,
+                cardName = entity.cardName
+            )
+        }
+
+        return Result.Expense(entity)
+    }
+
     private suspend fun processIncome(
         address: String,
         body: String,
         timestamp: Long,
-        smsId: String
+        smsId: String,
+        needsReconciliation: Boolean = true
     ): Result {
         // Dedup 체크
         if (incomeRepository.existsBySmsId(smsId)) {
@@ -245,7 +408,7 @@ class SmsInstantProcessor @Inject constructor(
         )
 
         incomeRepository.insert(entity)
-        markPendingReconciliation(smsId)
+        markPendingReconciliation(smsId, needsReconciliation = needsReconciliation)
         MoneyTalkLogger.i("[InstantSMS] 수입 저장: ${entity.source} ${entity.amount}원 [$category]")
 
         // 알림 (설정에서 활성화된 경우만)
@@ -294,6 +457,34 @@ class SmsInstantProcessor @Inject constructor(
     /** SmsReaderV2.generateSmsId()와 동일한 형식으로 smsId 생성 (address 정규화 필수) */
     private fun generateSmsId(address: String, body: String, date: Long): String {
         return "${SmsFilter.normalizeAddress(address)}_${date}_${body.hashCode()}"
+    }
+
+    private fun buildAppNotificationAddress(packageName: String): String {
+        return "app:$packageName"
+    }
+
+    private fun lacksAppNotificationRequirements(body: String): Boolean {
+        if (body.length < 8) return true
+        if (!APP_NOTIFICATION_AMOUNT_PATTERN.containsMatchIn(body)) return true
+        return APP_NOTIFICATION_TRANSACTION_HINTS.none { body.contains(it, ignoreCase = true) }
+    }
+
+    private fun isObviouslyNonPaymentAppNotification(body: String): Boolean {
+        val lowerBody = body.lowercase()
+        return APP_NOTIFICATION_BLOCK_KEYWORDS.any { lowerBody.contains(it) }
+    }
+
+    private fun classifyAppNotification(body: String): SmsType {
+        if (APP_NOTIFICATION_CANCEL_HINTS.any { body.contains(it, ignoreCase = true) }) {
+            return SmsType.INCOME
+        }
+        if (APP_NOTIFICATION_PAYMENT_HINTS.any { body.contains(it, ignoreCase = true) }) {
+            return SmsType.PAYMENT
+        }
+        if (APP_NOTIFICATION_INCOME_HINTS.any { body.contains(it, ignoreCase = true) }) {
+            return SmsType.INCOME
+        }
+        return SmsType.SKIP
     }
 
     private fun supportsFixedExpense(entity: ExpenseEntity): Boolean {
