@@ -58,7 +58,8 @@ class SmsInstantProcessor @Inject constructor(
         private val APP_NOTIFICATION_AMOUNT_PATTERN = Regex("""[\d,]+원""")
         private val APP_NOTIFICATION_BLOCK_KEYWORDS = listOf(
             "인증", "otp", "본인확인", "비밀번호", "광고", "이벤트", "혜택",
-            "청구서", "명세서", "결제예정", "출금예정", "승인거절"
+            "청구서", "명세서", "결제예정", "출금예정", "납입일", "납입예정",
+            "납부일", "납부예정", "승인거절"
         )
         private val APP_NOTIFICATION_TRANSACTION_HINTS = listOf(
             "결제", "승인", "출금", "사용", "이용", "입금", "송금", "이체", "취소"
@@ -471,7 +472,8 @@ class SmsInstantProcessor @Inject constructor(
 
     private fun isObviouslyNonPaymentAppNotification(body: String): Boolean {
         val lowerBody = body.lowercase()
-        return APP_NOTIFICATION_BLOCK_KEYWORDS.any { lowerBody.contains(it) }
+        return AppNotificationTransactionParser.isNonTransactionNotice(body) ||
+            APP_NOTIFICATION_BLOCK_KEYWORDS.any { lowerBody.contains(it) }
     }
 
     private fun classifyAppNotification(body: String): SmsType {

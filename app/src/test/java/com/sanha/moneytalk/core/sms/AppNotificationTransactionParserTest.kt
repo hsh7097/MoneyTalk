@@ -2,6 +2,7 @@ package com.sanha.moneytalk.core.sms
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class AppNotificationTransactionParserTest {
@@ -129,5 +130,23 @@ class AppNotificationTransactionParserTest {
         assertNotNull(result)
         assertEquals(1_450_770, result?.amount)
         assertEquals("하상현현대카드", result?.storeName)
+    }
+
+    @Test
+    fun `kakaobank loan interest due notice is skipped`() {
+        val body = """
+            대출 이자 납입일 안내
+            신용대출(6148)의 이자 납입일은 2026.05.22 입니다.
+            납입예정금액: 47,653원 (4.701%, 발송일자 기준)
+            * 실제 납입금액은 기준금리 변동 등으로 변경될 수 있습니다.
+        """.trimIndent()
+
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = body,
+            appLabel = "카카오뱅크",
+            packageName = "com.kakaobank.channel"
+        )
+
+        assertNull(result)
     }
 }

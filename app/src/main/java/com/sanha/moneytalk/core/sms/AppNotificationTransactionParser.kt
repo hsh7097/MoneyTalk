@@ -33,12 +33,29 @@ object AppNotificationTransactionParser {
     private val invalidStoreKeywords = listOf(
         "알림", "입금", "취소", "잔액", "누적", "잔고", "보유"
     )
+    private val nonTransactionNoticePatterns = listOf(
+        Regex("""납입\s*일"""),
+        Regex("""납입\s*예정"""),
+        Regex("""납부\s*일"""),
+        Regex("""납부\s*예정"""),
+        Regex("""발송일자\s*기준"""),
+        Regex(
+            pattern = """(?=.*대출)(?=.*납입)(?=.*안내).*""",
+            options = setOf(RegexOption.DOT_MATCHES_ALL)
+        )
+    )
+
+    internal fun isNonTransactionNotice(body: String): Boolean {
+        return nonTransactionNoticePatterns.any { it.containsMatchIn(body) }
+    }
 
     fun parseExpense(
         body: String,
         appLabel: String,
         packageName: String
     ): ExpenseCandidate? {
+        if (isNonTransactionNotice(body)) return null
+
         val amountMatch = findTransactionAmount(body) ?: return null
         val amount = amountMatch.value
             .replace(",", "")
