@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Changed (2026-05-15)
+- **AI 탭 문구 정리**: 채팅/상담 중심 문구를 인사이트 확인 중심으로 조정해 AI 기능의 사용 목적을 더 명확하게 표현
+
 ### Added (2026-04-30)
 - **월별 SMS 동기화 순서 회귀 테스트**: 2025년 1월부터 현재월까지 10개 월별 읽기 순서(순차/역순/셔플 포함)로 SMS ID 집합, 거래월 집계, coverage/CTA 판정을 검증
 - **실기기 SMS Provider/UI 이동 검증**: 실제 SMS/MMS/RCS provider 읽기 순서 검증과 홈/가계부 월 이동 instrumented test 추가

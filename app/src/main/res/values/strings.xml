@@ -20,7 +20,7 @@
     <string name="common_unknown_error">알 수 없는 오류</string>
     <string name="nav_home">홈</string>
     <string name="nav_history">가계부</string>
-    <string name="nav_chat">상담</string>
+    <string name="nav_chat">인사이트</string>
     <string name="nav_settings">설정</string>
     <string name="error_response">죄송해요, 응답을 받는 중 오류가 발생했어요: %s</string>
     <string name="error_general">오류가 발생했어요: %s</string>
@@ -30,22 +30,22 @@
     <string name="splash_tagline">스마트한 가계부</string>
 
     <!-- 채팅 화면 -->
-    <string name="chat_title">AI 재무 상담</string>
-    <string name="chat_subtitle_with_api">Gemini와 대화하세요</string>
-    <string name="chat_subtitle_no_api">API 키를 설정해주세요</string>
+    <string name="chat_title">AI 인사이트</string>
+    <string name="chat_subtitle_with_api">자주 보는 소비 질문을 바로 확인하세요</string>
+    <string name="chat_subtitle_no_api">AI 인사이트를 쓰려면 API 키를 설정해주세요</string>
     <string name="chat_input_placeholder">메시지를 입력하세요…</string>
     <string name="chat_send">전송</string>
     <string name="chat_ai_disclaimer">AI는 실수할 수 있습니다. 중요한 정보는 직접 확인하세요.</string>
     <string name="chat_thinking">생각 중…</string>
     <string name="chat_session_list">대화 목록</string>
-    <string name="chat_new_session">새 대화</string>
+    <string name="chat_new_session">새 질문</string>
     <string name="chat_close">닫기</string>
     <string name="chat_delete">삭제</string>
-    <string name="chat_no_sessions">대화 내역이 없습니다</string>
-    <string name="chat_start_new">새 대화 시작</string>
+    <string name="chat_no_sessions">아직 저장된 인사이트가 없습니다</string>
+    <string name="chat_start_new">인사이트 질문 시작</string>
     <string name="chat_retry">다시 요청</string>
-    <string name="chat_default_session_title">새 대화</string>
-    <string name="chat_previous_session_title">이전 대화</string>
+    <string name="chat_default_session_title">새 인사이트</string>
+    <string name="chat_previous_session_title">이전 인사이트</string>
 
     <!-- AI 프롬프트 조립용 보조 문자열 (프롬프트 본문 템플릿은 string_prompt.xml) -->
     <string name="ai_home_insight_top_category_item" translatable="false">%1$s %2$s원</string>
@@ -79,8 +79,8 @@
     <string name="ai_sms_regex_repair_failure_reason" translatable="false">%1$d개 샘플 중 %2$d개만 매칭됩니다 (%3$d%%). 아래 실패 샘플과 진단을 참고하여 regex를 수정하세요:\n%4$s</string>
 
     <!-- 세션 삭제 다이얼로그 -->
-    <string name="dialog_delete_session_title">대화 삭제</string>
-    <string name="dialog_delete_session_message">이 대화를 삭제하시겠습니까?\n삭제된 대화는 복구할 수 없습니다.</string>
+    <string name="dialog_delete_session_title">인사이트 기록 삭제</string>
+    <string name="dialog_delete_session_message">이 인사이트 기록을 삭제하시겠습니까?\n삭제된 기록은 복구할 수 없습니다.</string>
     <string name="dialog_confirm">확인</string>
     <string name="dialog_cancel">취소</string>
 
@@ -92,14 +92,14 @@
     <string name="api_key_setting">API 키 설정</string>
 
     <!-- 가이드 질문 -->
-    <string name="guide_welcome">안녕하세요!</string>
-    <string name="guide_intro">저는 AI 재무 상담사 머니톡이에요.\n아래 질문을 눌러 시작해보세요!</string>
+    <string name="guide_welcome">확인할 인사이트를 골라보세요</string>
+    <string name="guide_intro">자주 보는 소비 점검을 바로 실행할 수 있어요.\n질문을 고르면 내 지출 데이터로 답변합니다.</string>
     <string name="guide_api_key_required">* API 키를 먼저 설정해주세요</string>
 
     <!-- 가이드 질문 카테고리 -->
-    <string name="guide_category_expense_search">지출 조회</string>
-    <string name="guide_category_analysis">분석</string>
-    <string name="guide_category_manage">정리/관리</string>
+    <string name="guide_category_expense_search">빠른 조회</string>
+    <string name="guide_category_analysis">소비 점검</string>
+    <string name="guide_category_manage">정리 필요</string>
 
     <!-- 가이드 질문 예시 -->
     <string name="guide_q_expense_coupang">이번 달 총 지출 얼마야?</string>
