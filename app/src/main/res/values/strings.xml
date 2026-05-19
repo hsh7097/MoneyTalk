@@ -392,7 +392,7 @@
     <string name="privacy_thirdparty_detail">\u0020\u0020• AI 분류/상담을 위해 가게명, 금액, 거래 맥락 또는 마스킹된 문자 일부가 Google Gemini API로 전송될 수 있습니다\n\u0020\u0020• 전화번호 등 직접 식별정보는 가능한 한 제거하거나 축소해 처리합니다\n\u0020\u0020• 광고/분석/오류 진단을 위해 Google AdMob 및 Firebase SDK가 기기·앱 사용 정보를 처리할 수 있습니다\n\u0020\u0020• 개인정보를 판매하지 않으며, 고지한 목적 외로 공유하지 않습니다</string>
     <string name="privacy_section_rights">5. 사용자 권리</string>
     <string name="privacy_rights_detail">\u0020\u0020• 설정에서 언제든 모든 데이터를 삭제할 수 있습니다\n\u0020\u0020• 앱 삭제 시 모든 로컬 데이터가 함께 삭제됩니다</string>
-    <string name="privacy_last_updated">최종 수정: 2026년 4월 25일</string>
+    <string name="privacy_last_updated">최종 수정: 2026년 5월 19일</string>
 
     <!-- 전체 삭제 다이얼로그 -->
     <string name="dialog_delete_all_title">전체 데이터 삭제</string>
