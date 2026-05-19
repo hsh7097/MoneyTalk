@@ -230,7 +230,7 @@
     <string name="privacy_thirdparty_detail">\u0020\u0020• Store names, amounts, transaction context, or masked message snippets may be sent to Google Gemini API for AI classification and advice\n\u0020\u0020• Direct identifiers such as phone numbers are removed or minimized where possible\n\u0020\u0020• Google AdMob and Firebase SDKs may process device and app usage data for ads, analytics, and crash diagnostics\n\u0020\u0020• We do not sell personal data or share it beyond the disclosed purposes</string>
     <string name="privacy_section_rights">5. Your Rights</string>
     <string name="privacy_rights_detail">\u0020\u0020• You can delete all data at any time from Settings\n\u0020\u0020• Uninstalling the app removes all local data</string>
-    <string name="privacy_last_updated">Last updated: April 25, 2026</string>
+    <string name="privacy_last_updated">Last updated: May 19, 2026</string>
 
     <!-- Delete All Dialog -->
     <string name="dialog_delete_all_title">Delete All Data</string>
