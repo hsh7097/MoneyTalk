@@ -64,6 +64,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import java.util.Calendar
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import kotlin.coroutines.coroutineContext
@@ -1675,7 +1676,7 @@ class MainViewModel @Inject constructor(
      * @param month 대상 월
      */
     fun unlockFullSync(year: Int, month: Int, isFreeSyncUsed: Boolean = false) {
-        val yearMonth = String.format("%04d-%02d", year, month)
+        val yearMonth = String.format(Locale.ROOT, "%04d-%02d", year, month)
         _uiState.update { it.copy(showFullSyncAdDialog = false) }
 
         val readPlan = calculateMonthReadPlan(year, month)

@@ -269,7 +269,7 @@
     <string name="dialog_month_start_title">Month Start Date</string>
     <string name="dialog_month_start_message">Set the start date for your monthly budget.\nE.g., setting 21 means 21st to 20th of next month.</string>
     <string name="dialog_month_start_label">Start Day</string>
-    <string name="dialog_month_start_hint">Enter a number between 1-31</string>
+    <string name="dialog_month_start_hint">Enter a number between 1–31</string>
 
     <!-- API Key Dialog (Settings) -->
     <string name="dialog_api_key_message_settings">Get a free API key from\nGoogle AI Studio (aistudio.google.com)</string>
@@ -395,7 +395,7 @@
     <string name="settings_classify_unclassified">%d unclassified</string>
     <string name="settings_classify_already_running">Category cleanup is already running</string>
     <string name="settings_classify_nothing_to_process">No items to classify</string>
-    <string name="settings_classify_preparing">Preparing cleanup...</string>
+    <string name="settings_classify_preparing">Preparing cleanup…</string>
     <string name="settings_classify_step_progress">%1$s (%2$d/%3$d)</string>
     <string name="settings_classify_success">%d categories were cleaned up</string>
     <string name="settings_classify_no_result">No items were cleaned up. Please try again later.</string>
@@ -461,12 +461,12 @@
     <string name="sms_settings_blocked_sender_empty">No blocked numbers registered</string>
 
     <!-- SMS regex repair failure reasons -->
-    <string name="sms_regex_reason_json_parse_failed" translatable="false">Response is not valid JSON. Return JSON format only.</string>
-    <string name="sms_regex_reason_is_payment_false" translatable="false">isPayment is false. Set it to true for payment SMS.</string>
-    <string name="sms_regex_reason_required_regex_blank" translatable="false">amountRegex or storeRegex is empty. Both fields are required.</string>
-    <string name="sms_regex_reason_amount_compile_failed" translatable="false">amountRegex is not a valid regex. Check JSON escaping.</string>
-    <string name="sms_regex_reason_store_compile_failed" translatable="false">storeRegex is not a valid regex. Check JSON escaping.</string>
-    <string name="sms_regex_reason_card_compile_failed" translatable="false">cardRegex is not a valid regex. Check JSON escaping.</string>
+    <string name="sms_regex_reason_json_parse_failed">Response is not valid JSON. Return JSON format only.</string>
+    <string name="sms_regex_reason_is_payment_false">isPayment is false. Set it to true for payment SMS.</string>
+    <string name="sms_regex_reason_required_regex_blank">amountRegex or storeRegex is empty. Both fields are required.</string>
+    <string name="sms_regex_reason_amount_compile_failed">amountRegex is not a valid regex. Check JSON escaping.</string>
+    <string name="sms_regex_reason_store_compile_failed">storeRegex is not a valid regex. Check JSON escaping.</string>
+    <string name="sms_regex_reason_card_compile_failed">cardRegex is not a valid regex. Check JSON escaping.</string>
 
     <!-- Category detail sort -->
     <string name="category_detail_monthly_summary">This month %s spending</string>

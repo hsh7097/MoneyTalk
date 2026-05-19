@@ -4,6 +4,7 @@ import com.sanha.moneytalk.core.database.SyncCoverageRepository
 import com.sanha.moneytalk.core.database.SyncCoverageStatus
 import com.sanha.moneytalk.core.database.entity.SyncCoverageEntity
 import com.sanha.moneytalk.core.util.DateUtils
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -66,6 +67,6 @@ class SyncCoveragePagePolicy @Inject constructor(
     }
 
     private fun yearMonthKey(year: Int, month: Int): String {
-        return String.format("%04d-%02d", year, month)
+        return String.format(Locale.ROOT, "%04d-%02d", year, month)
     }
 }
