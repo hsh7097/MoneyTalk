@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.core.sms
 
+import com.sanha.moneytalk.core.util.StatsExclusionClassifier
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,10 +21,11 @@ import javax.inject.Singleton
  * 2. 금융기관 키워드 없음 → SKIP
  * 3. 금액 패턴 없음 → SKIP
  * 4. 취소 키워드 → INCOME (출금취소 = 돈 돌아옴)
- * 5. 수입 제외 키워드 → SKIP (자동이체출금, 출금예정 등 안내성 문구)
- * 6. 결제 키워드 → PAYMENT
- * 7. 수입 키워드 → INCOME
- * 8. 그 외 (금융+금액은 있지만 명시적 키워드 없음) → PAYMENT (벡터/LLM에 맡김)
+ * 5. 카드대금 실제 출금 → PAYMENT (저장 후 통계 제외)
+ * 6. 수입 제외 키워드 → SKIP (자동이체출금, 출금예정 등 안내성 문구)
+ * 7. 결제 키워드 → PAYMENT
+ * 8. 수입 키워드 → INCOME
+ * 9. 그 외 (금융+금액은 있지만 명시적 키워드 없음) → PAYMENT (벡터/LLM에 맡김)
  *
  * 의존성: 없음 (모든 키워드를 자체 보유, core/sms 미참조)
  *
@@ -56,7 +58,7 @@ class SmsIncomeFilter @Inject constructor() {
         // 신한
         "신한", "sol", "쏠",
         // 삼성, 현대, 롯데, 하나, 우리
-        "삼성", "현대", "롯데", "하나", "우리",
+        "삼성", "현대", "스마일", "smile", "롯데", "하나", "우리",
         // NH농협
         "nh", "농협",
         // BC
@@ -96,6 +98,10 @@ class SmsIncomeFilter @Inject constructor() {
     /** 취소/환불 키워드 (결제 키워드를 포함하지만 실제로는 수입) */
     private val cancellationKeywords = listOf(
         "출금취소", "승인취소", "결제취소", "취소승인", "취소완료"
+    )
+
+    private val cancellationNoticePatterns = listOf(
+        Regex("""(?:0?[1-9]|1[0-2])월\s*(?:0?[1-9]|[12]\d|3[01])일\s*이용건\s*(?:0?[1-9]|1[0-2])월\s*(?:0?[1-9]|[12]\d|3[01])일\s*취소완료""")
     )
 
     /** 수입 제외 키워드 (자동이체 출금 안내 등) */
@@ -153,11 +159,19 @@ class SmsIncomeFilter @Inject constructor() {
 
         val bodyLower = body.lowercase()
 
+        if (StatsExclusionClassifier.isCardBillDebitText(body, requireWonAmount = true)) {
+            return SmsType.PAYMENT to "cardBillDebit"
+        }
+
         // 제외 키워드 (광고, 안내 등)
         val matchedExclude = excludeKeywords.firstOrNull { bodyLower.contains(it) }
         if (matchedExclude != null) return SmsType.SKIP to "excludeKw[$matchedExclude]"
         val matchedUserExclude = userExcludeKeywords.firstOrNull { bodyLower.contains(it) }
         if (matchedUserExclude != null) return SmsType.SKIP to "userExcludeKw[$matchedUserExclude]"
+
+        if (cancellationNoticePatterns.any { it.containsMatchIn(body) }) {
+            return SmsType.SKIP to "cancellationNotice"
+        }
 
         // 2. 금융기관 키워드
         if (financialKeywords.none { bodyLower.contains(it) }) return SmsType.SKIP to "noFinancialKw"

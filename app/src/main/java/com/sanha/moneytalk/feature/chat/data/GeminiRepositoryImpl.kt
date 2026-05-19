@@ -6,6 +6,7 @@ import android.content.Context
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
 import com.google.ai.client.generativeai.type.generationConfig
+import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
 import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.util.ActionResult
@@ -15,6 +16,7 @@ import com.sanha.moneytalk.core.util.QueryResult
 import kotlinx.coroutines.delay
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Calendar
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -149,7 +151,8 @@ class GeminiRepositoryImpl @Inject constructor(
         lastMonthExpense: Int,
         todayExpense: Int,
         topCategories: List<Pair<String, Int>>,
-        lastMonthTopCategories: List<Pair<String, Int>>
+        lastMonthTopCategories: List<Pair<String, Int>>,
+        monthlyBudget: Int?
     ): String? {
         val apiKey = getApiKey()
         if (apiKey.isBlank()) return null
@@ -160,29 +163,114 @@ class GeminiRepositoryImpl @Inject constructor(
             generationConfig = generationConfig {
                 temperature = 0.7f
                 maxOutputTokens = 100
+            },
+            systemInstruction = content {
+                text(ChatPrompts.getHomeInsightSystemInstruction(context))
             }
         )
-        val topCatText = topCategories.joinToString(", ") { "${it.first} ${it.second}원" }
-        val lastMonthCatText = if (lastMonthTopCategories.isNotEmpty()) {
-            "\n전월 동일 카테고리: " + lastMonthTopCategories.joinToString(", ") { "${it.first} ${it.second}원" }
-        } else ""
-        val noExpenseHint = if (monthlyExpense == 0) "\n※ 이번 달 지출이 아직 없습니다. 격려/기대감 톤으로 작성." else ""
-        val prompt = """
-                재무 어드바이저로서 한국어로 한줄 인사이트를 작성해.
-                이번 달 지출: ${monthlyExpense}원
-                지난 달 지출: ${lastMonthExpense}원
-                오늘 지출: ${todayExpense}원
-                이번 달 주요 카테고리: $topCatText$lastMonthCatText$noExpenseHint
+        val topCatText = topCategories
+            .joinToString(", ") {
+                context.getString(
+                    R.string.ai_home_insight_top_category_item,
+                    it.first,
+                    it.second.formatWon()
+                )
+            }
+            .ifBlank { context.getString(R.string.ai_home_insight_no_data) }
+        val lastMonthCategoryMap = lastMonthTopCategories.toMap()
+        val categoryComparisonText = if (topCategories.isNotEmpty()) {
+            val comparison = topCategories.joinToString(", ") { (category, amount) ->
+                val lastAmount = lastMonthCategoryMap[category] ?: 0
+                if (lastAmount > 0) {
+                    val difference = amount - lastAmount
+                    val absDifference = kotlin.math.abs(difference)
+                    val percent = absDifference.toLong() * 100 / lastAmount
+                    val direction = when {
+                        difference > 0 -> context.getString(
+                            R.string.ai_home_insight_direction_increase
+                        )
+                        difference < 0 -> context.getString(
+                            R.string.ai_home_insight_direction_decrease
+                        )
+                        else -> context.getString(R.string.ai_home_insight_direction_same)
+                    }
+                    context.getString(
+                        R.string.ai_home_insight_category_comparison_item,
+                        category,
+                        absDifference.formatWon(),
+                        direction,
+                        percent
+                    )
+                } else {
+                    context.getString(
+                        R.string.ai_home_insight_category_comparison_insufficient_item,
+                        category
+                    )
+                }
+            }
+            context.getString(R.string.ai_home_insight_category_comparison, comparison)
+        } else {
+            context.getString(R.string.ai_home_insight_category_comparison_insufficient)
+        }
+        val budgetText = monthlyBudget
+            ?.takeIf { it > 0 }
+            ?.let {
+                val usagePercent = monthlyExpense.toLong() * 100 / it
+                context.getString(
+                    R.string.ai_home_insight_budget,
+                    it.formatWon(),
+                    usagePercent
+                )
+            }
+            .orEmpty()
+        val monthComparisonText = when {
+            lastMonthExpense > 0 -> {
+                val difference = monthlyExpense - lastMonthExpense
+                val absDifference = kotlin.math.abs(difference)
+                val percent = absDifference.toLong() * 100 / lastMonthExpense
+                val direction = when {
+                    difference > 0 -> context.getString(
+                        R.string.ai_home_insight_direction_increase
+                    )
+                    difference < 0 -> context.getString(
+                        R.string.ai_home_insight_direction_decrease
+                    )
+                    else -> context.getString(R.string.ai_home_insight_direction_same)
+                }
+                context.getString(
+                    R.string.ai_home_insight_month_comparison,
+                    absDifference.formatWon(),
+                    direction,
+                    percent
+                )
+            }
 
-                규칙: 이모지 1개 + 한줄(30자 이내). 격려/경고/팁 중 적절한 톤 선택.
-                카테고리별 전월 대비 증감을 참고하여 인사이트 생성.
-                예시: "💪 지난달보다 15% 절약 중이에요!" 또는 "☕ 카페 지출이 늘고 있어요"
-            """.trimIndent()
+            monthlyExpense > 0 -> context.getString(
+                R.string.ai_home_insight_month_comparison_no_previous
+            )
+            else -> context.getString(R.string.ai_home_insight_month_comparison_insufficient)
+        }
+        val noExpenseHint = if (monthlyExpense == 0) {
+            context.getString(R.string.ai_home_insight_no_expense_hint)
+        } else {
+            ""
+        }
+        val prompt = context.getString(
+            R.string.prompt_home_insight_user,
+            monthlyExpense.formatWon(),
+            lastMonthExpense.formatWon(),
+            todayExpense.formatWon(),
+            topCatText,
+            categoryComparisonText,
+            budgetText,
+            monthComparisonText,
+            noExpenseHint
+        )
 
         for (attempt in 1..HOME_INSIGHT_MAX_ATTEMPTS) {
             try {
                 val response = model.generateContent(prompt)
-                val insight = response.text?.trim()
+                val insight = sanitizeHomeInsight(response.text)
                 if (!insight.isNullOrBlank()) return insight
                 throw IllegalStateException("인사이트 응답이 비어있습니다")
             } catch (e: Exception) {
@@ -209,6 +297,24 @@ class GeminiRepositoryImpl @Inject constructor(
         return null
     }
 
+    private fun sanitizeHomeInsight(raw: String?): String? {
+        val line = raw
+            ?.lineSequence()
+            ?.map { it.trim().trim('"', '\'', '“', '”') }
+            ?.firstOrNull { it.isNotBlank() }
+            ?: return null
+
+        val cleaned = line
+            .removePrefix("-")
+            .removePrefix("*")
+            .trim()
+            .replace(Regex("\\s+"), " ")
+
+        return cleaned.takeIf { it.isNotBlank() }?.let {
+            if (it.length <= 36) it else it.take(35).trimEnd() + "…"
+        }
+    }
+
     @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
     override suspend fun setApiKey(key: String) {
         // RTDB 기반 키 관리로 전환 — 로컬 키 저장 제거
@@ -233,11 +339,11 @@ class GeminiRepositoryImpl @Inject constructor(
                 calendar.get(Calendar.DAY_OF_MONTH)
             }일"
 
-            val prompt = """오늘: $today
-
-$contextualMessage
-
-위 질문에 필요한 데이터 쿼리를 JSON으로 반환해줘:"""
+            val prompt = context.getString(
+                R.string.prompt_query_analyzer_user,
+                today,
+                contextualMessage
+            )
 
 
             val response = model.generateContent(prompt)
@@ -272,20 +378,32 @@ $contextualMessage
             val dataContext = queryResults.joinToString("\n\n") { result ->
                 "[${result.queryType.name}]\n${result.data}"
             }
+            val safeDataContext = dataContext.ifBlank {
+                context.getString(R.string.prompt_final_answer_empty_data_context)
+            }
 
             val actionContext = if (actionResults.isNotEmpty()) {
-                "\n\n[실행된 액션 결과]\n" + actionResults.joinToString("\n") { result ->
+                "\n\n${context.getString(R.string.ai_chat_section_action_results)}\n" +
+                    actionResults.joinToString("\n") { result ->
                     "- ${result.message}"
                 }
             } else ""
+            val incomeContext = if (monthlyIncome > 0) {
+                context.getString(
+                    R.string.ai_chat_section_monthly_income,
+                    String.format(Locale.KOREA, "%,d", monthlyIncome)
+                ) + "\n\n"
+            } else {
+                context.getString(R.string.ai_chat_section_monthly_income_unset) + "\n\n"
+            }
 
-            val prompt = """[월 수입] ${String.format("%,d", monthlyIncome)}원
-
-[조회된 데이터]
-$dataContext$actionContext
-
-[사용자 질문]
-$userMessage"""
+            val prompt = context.getString(
+                R.string.prompt_final_answer_user,
+                incomeContext,
+                safeDataContext,
+                actionContext,
+                userMessage
+            )
 
 
             val response = model.generateContent(prompt)
@@ -345,19 +463,7 @@ $userMessage"""
         return try {
             val model = getSummaryModel() ?: return null
 
-            val prompt = """다음 대화 내용을 보고, 이 대화를 가장 잘 나타내는 짧은 제목을 한국어로 만들어줘.
-
-규칙:
-- 반드시 15자 이내
-- 이모지 금지
-- 따옴표 금지
-- 핵심 주제만 담기
-- 예시: "이번 달 식비 분석", "카페 지출 줄이기", "저축 계획 상담"
-
-대화 내용:
-$recentMessages
-
-제목:"""
+            val prompt = context.getString(R.string.prompt_chat_title_user, recentMessages)
 
             val response = model.generateContent(prompt)
             val title = response.text?.trim()?.take(20)
@@ -381,18 +487,14 @@ $recentMessages
 
             val prompt = if (existingSummary.isNullOrBlank()) {
                 // 첫 요약: 새 메시지만으로 요약 생성
-                """다음 대화 내용을 요약해주세요:
-
-$newMessages"""
+                context.getString(R.string.prompt_rolling_summary_initial_user, newMessages)
             } else {
                 // 누적 요약: 기존 요약 + 새 메시지를 통합
-                """다음 기존 요약본과 새로운 대화 내용을 통합하여 하나의 누적 요약본을 생성해주세요.
-
-[기존 요약본]
-$existingSummary
-
-[새로운 대화 내용]
-$newMessages"""
+                context.getString(
+                    R.string.prompt_rolling_summary_update_user,
+                    existingSummary,
+                    newMessages
+                )
             }
 
             val response = model.generateContent(prompt)
@@ -404,4 +506,6 @@ $newMessages"""
             Result.failure(Exception("요약 생성 실패: ${e.message}"))
         }
     }
+
+    private fun Int.formatWon(): String = String.format(Locale.KOREA, "%,d", this)
 }

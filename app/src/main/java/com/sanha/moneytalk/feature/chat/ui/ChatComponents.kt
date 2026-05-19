@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.util.DateUtils
@@ -63,17 +64,17 @@ data class GuideQuestion(
 )
 
 val guideQuestions = listOf(
-    // 지출 분석
-    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_food),
-    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_category),
-    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_compare),
-    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_saving_tip),
     // 지출 조회
     GuideQuestion(R.string.guide_category_expense_search, R.string.guide_q_expense_coupang),
     GuideQuestion(R.string.guide_category_expense_search, R.string.guide_q_expense_starbucks),
     GuideQuestion(R.string.guide_category_expense_search, R.string.guide_q_expense_delivery),
     GuideQuestion(R.string.guide_category_expense_search, R.string.guide_q_expense_top_store),
-    // 카테고리 관리
+    // 지출 분석
+    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_food),
+    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_category),
+    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_compare),
+    GuideQuestion(R.string.guide_category_analysis, R.string.guide_q_analysis_saving_tip),
+    // 정리/관리
     GuideQuestion(R.string.guide_category_manage, R.string.guide_q_manage_coupang),
     GuideQuestion(R.string.guide_category_manage, R.string.guide_q_manage_baemin),
     GuideQuestion(R.string.guide_category_manage, R.string.guide_q_manage_uncategorized)
@@ -123,7 +124,7 @@ fun GuideQuestionsOverlay(
                 )
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp)
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
                     Text(
                         text = stringResource(R.string.guide_welcome),
@@ -146,22 +147,22 @@ fun GuideQuestionsOverlay(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    groupedQuestions.forEach { (category, categoryQuestions) ->
+                    groupedQuestions.entries.forEachIndexed { index, (category, categoryQuestions) ->
                         Text(
                             text = "${categoryEmojis[category] ?: "\uD83D\uDCAC"} $category",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
 
                         categoryQuestions.forEach { resolvedQuestion ->
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 3.dp)
+                                    .padding(vertical = 2.dp)
                                     .clickable(enabled = hasApiKey) {
                                         onQuestionClick(resolvedQuestion.question)
                                     },
@@ -172,7 +173,7 @@ fun GuideQuestionsOverlay(
                                     text = resolvedQuestion.question,
                                     modifier = Modifier.padding(
                                         horizontal = 14.dp,
-                                        vertical = 10.dp
+                                        vertical = 8.dp
                                     ),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = if (hasApiKey) {
@@ -184,7 +185,9 @@ fun GuideQuestionsOverlay(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        if (index < groupedQuestions.size - 1) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
                     }
                 }
             }
@@ -312,7 +315,7 @@ fun TypingIndicator() {
                 Box(
                     modifier = Modifier
                         .size((10 * dotScales[index].value).dp)
-                        .offset(y = dotOffsets[index].value.dp)
+                        .offset { IntOffset(0, dotOffsets[index].value.dp.roundToPx()) }
                         .clip(CircleShape)
                         .background(
                             MaterialTheme.colorScheme.primary.copy(

@@ -2,6 +2,7 @@ package com.sanha.moneytalk.feature.home.data
 
 import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
 import com.sanha.moneytalk.core.database.entity.supportsFixedExpense
+import com.sanha.moneytalk.core.util.StatsExclusionClassifier
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -12,6 +13,7 @@ import javax.inject.Singleton
  * - 현재 규칙은 즉시 소급 적용
  * - 제거된 카테고리 규칙은 재분류
  * - 제거된 고정지출 true 규칙은 false로 원복
+ * - 제거된 통계 제외 규칙은 자동 판별 기준으로 원복
  */
 @Singleton
 class StoreRuleSyncService @Inject constructor(
@@ -46,12 +48,17 @@ class StoreRuleSyncService @Inject constructor(
                     (newRule?.category == null || keywordChanged)
             val fixedRuleRemoved = oldRule.isFixed != null &&
                     (newRule?.isFixed == null || keywordChanged)
+            val statsExcludeRuleRemoved = oldRule.isExcludedFromStats != null &&
+                    (newRule?.isExcludedFromStats == null || keywordChanged)
 
             if (fixedRuleRemoved) {
                 reapplyFixedStateByKeyword(oldRule.keyword)
             }
             if (categoryRemoved) {
                 reclassifyExpensesByKeyword(oldRule.keyword)
+            }
+            if (statsExcludeRuleRemoved) {
+                reapplyStatsExcludedByKeyword(oldRule.keyword)
             }
         }
 
@@ -65,6 +72,14 @@ class StoreRuleSyncService @Inject constructor(
                         val nextFixed = if (expense.supportsFixedExpense()) isFixed else false
                         if (expense.isFixed != nextFixed) {
                             expenseRepository.updateFixedById(expense.id, nextFixed)
+                        }
+                    }
+            }
+            currentRule.isExcludedFromStats?.let { isExcluded ->
+                expenseRepository.getExpensesByStoreNameContaining(currentRule.keyword)
+                    .forEach { expense ->
+                        if (expense.isExcludedFromStats != isExcluded) {
+                            expenseRepository.updateStatsExcludedById(expense.id, isExcluded)
                         }
                     }
             }
@@ -101,4 +116,16 @@ class StoreRuleSyncService @Inject constructor(
         }
     }
 
+    private suspend fun reapplyStatsExcludedByKeyword(keyword: String) {
+        val expenses = expenseRepository.getExpensesByStoreNameContaining(keyword)
+
+        for (expense in expenses) {
+            val isExcluded = storeRuleRepository.findMatchingRule(expense.storeName)
+                ?.isExcludedFromStats
+                ?: StatsExclusionClassifier.shouldExcludeExpense(expense)
+            if (expense.isExcludedFromStats != isExcluded) {
+                expenseRepository.updateStatsExcludedById(expense.id, isExcluded)
+            }
+        }
+    }
 }

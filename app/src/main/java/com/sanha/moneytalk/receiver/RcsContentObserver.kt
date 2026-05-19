@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -49,6 +50,7 @@ class RcsContentObserver @Inject constructor(
 
     private val processedRcsIds = ConcurrentHashMap<String, Long>()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val processMutex = Mutex()
     private var cachedContentResolver: ContentResolver? = null
 
     fun register(contentResolver: ContentResolver) {
@@ -68,10 +70,13 @@ class RcsContentObserver @Inject constructor(
     override fun onChange(selfChange: Boolean, uri: Uri?) {
         super.onChange(selfChange, uri)
         scope.launch {
+            if (!processMutex.tryLock()) return@launch
             try {
                 processRecentRcs()
             } catch (e: Exception) {
                 MoneyTalkLogger.e("[RcsObserver] 처리 예외: ${e.message}")
+            } finally {
+                processMutex.unlock()
             }
         }
     }

@@ -220,6 +220,7 @@ fun StoreRuleSettingsScreen(
             currentCategory = uiState.addCategory,
             categoryType = CategoryType.EXPENSE,
             showAllOption = false,
+            customCategories = uiState.categoryEntries,
             onDismiss = { viewModel.dismissCategorySelect() },
             onCategorySelected = { selected ->
                 viewModel.updateCategory(selected)
@@ -285,6 +286,22 @@ private fun StoreRuleListItem(
                         text = stringResource(R.string.store_rule_settings_fixed_label),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                rule.isExcludedFromStats?.let { isExcluded ->
+                    Text(
+                        text = stringResource(
+                            R.string.store_rule_settings_stats_excluded_label,
+                            stringResource(
+                                if (isExcluded) {
+                                    R.string.store_rule_settings_stats_excluded_on
+                                } else {
+                                    R.string.store_rule_settings_stats_excluded_off
+                                }
+                            )
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary
                     )
                 }
             }

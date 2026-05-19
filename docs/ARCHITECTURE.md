@@ -15,7 +15,7 @@ com.sanha.moneytalk/
 │
 ├── core/                                  # 공통 모듈
 │   ├── database/                          # Room 데이터베이스
-│   │   ├── AppDatabase.kt                 # Room Database 정의 (v2, 15 entities)
+│   │   ├── AppDatabase.kt                 # Room Database 정의 (v6, 15 entities)
 │   │   ├── converter/
 │   │   │   └── FloatListConverter.kt      # Float 리스트 타입 컨버터
 │   │   ├── dao/                           # Data Access Objects
@@ -59,7 +59,7 @@ com.sanha.moneytalk/
 │   │   ├── CrashlyticsHelper.kt          # Crashlytics 래퍼
 │   │   ├── ForceUpdateChecker.kt         # 강제 업데이트 판정
 │   │   ├── PremiumConfig.kt              # 서버 설정 data class (API 키 풀, 모델 설정)
-│   │   └── PremiumManager.kt             # Firebase RTDB 설정 실시간 감시
+│   │   └── PremiumManager.kt             # Firebase RTDB 설정 감시 + 마지막 정상 설정 캐시
 │   │
 │   ├── model/                            # 공통 모델
 │   │   ├── Category.kt                   # 지출 카테고리 Enum (18개)
@@ -98,9 +98,11 @@ com.sanha.moneytalk/
 │   │               ├── TransactionGroupHeaderCompose.kt # 그룹 헤더
 │   │               └── TransactionGroupHeaderInfo.kt    # 그룹 헤더 Contract
 │   │
-│   ├── sms/                              # SMS 통합 패키지 (배치 + 실시간 + 보조 유틸, 25개)
+│   ├── sms/                              # SMS 통합 패키지 (배치 + 실시간 + 보조 유틸)
 │   │   ├── SmsSyncCoordinator.kt         # 배치 동기화 외부 진입점
 │   │   ├── SmsReaderV2.kt                # SMS/MMS/RCS 통합 읽기
+│   │   ├── SmsSyncMessageReader.kt       # 동기화 대상 기간의 SMS 원본 읽기 래퍼
+│   │   ├── SmsTransactionDateResolver.kt # SMS 본문 거래 날짜/시간 해석
 │   │   ├── SmsInstantProcessor.kt        # 실시간 1건 처리
 │   │   ├── SmsPreFilter.kt               # Step 0 사전 필터링
 │   │   ├── SmsIncomeFilter.kt            # Step 1 PAYMENT/INCOME/SKIP 분류
@@ -115,13 +117,18 @@ com.sanha.moneytalk/
 │   │   ├── SmsChannelProbeCollector.kt   # DEBUG 채널 진단 수집
 │   │   └── RemoteSmsRule*.kt / SmsRegexRule*.kt # Fast Path 룰/시드/동기화
 │   │
+│   ├── sync/                             # SMS 동기화 범위/coverage 정책
+│   │   ├── SmsSyncRangeCalculator.kt     # 증분/월별 동기화 기간 계산
+│   │   ├── SyncCoveragePagePolicy.kt     # 월별 coverage/CTA 판정
+│   │   └── SyncCoverageRecorder.kt       # 성공한 동기화 구간 기록
+│   │
 │   └── util/                             # 유틸리티 (12개)
 │       ├── CategoryReferenceProvider.kt  # 카테고리 참조 데이터 제공
 │       ├── StoreNameGrouper.kt           # 가게명 그룹화
 │       ├── StoreAliasManager.kt          # 가게명 별칭 관리
 │       ├── CardNameNormalizer.kt         # 카드사 명칭 정규화 (25+)
 │       ├── ChatContextBuilder.kt         # 채팅 컨텍스트 빌더
-│       ├── DataQueryParser.kt            # 데이터 쿼리 파서 (17 쿼리 + 12 액션)
+│       ├── DataQueryParser.kt            # 데이터 쿼리 파서 (18 쿼리 + 13 액션)
 │       ├── DateParser.kt                 # 날짜 파서
 │       ├── DateUtils.kt                  # 날짜/시간 유틸리티
 │       ├── DpTextUnit.kt                 # fontScale 무관 고정 텍스트 크기
@@ -239,7 +246,15 @@ com.sanha.moneytalk/
     └── NotificationContentParser.kt      # 메시지 앱 알림 파서
 ```
 
-**총 217개 .kt 파일**
+**총 229개 main .kt 파일**
+
+### 테스트 구조
+
+| 경로 | 주요 테스트 | 용도 |
+|------|-------------|------|
+| `app/src/test/java/com/sanha/moneytalk/core/sync/` | `MonthlySmsSyncOrderRegressionTest` | 월별 SMS 동기화 순서가 달라도 저장 결과/coverage/CTA 판정이 동일한지 JVM에서 검증 |
+| `app/src/androidTest/java/com/sanha/moneytalk/core/sync/` | `RealDeviceMonthlySmsSyncOrderInstrumentedTest` | 실기기 SMS/MMS/RCS provider를 직접 읽어 월별 순서 독립성 검증 |
+| `app/src/androidTest/java/com/sanha/moneytalk/core/sync/` | `RealDeviceMonthlyPageNavigationInstrumentedTest` | 홈/가계부 화면에서 실제 월 이동 탭으로 월 표시 동기화 검증 |
 
 ### Feature 패키지 원칙
 
@@ -298,7 +313,7 @@ SMS 읽기 (SmsReaderV2) → SmsSyncCoordinator
   → SmsPreFilter → SmsIncomeFilter (PAYMENT/INCOME/SKIP)
   → PAYMENT만 SmsRegexRuleMatcher (sender Fast Path)
   → Fast Path miss만 SmsPipeline: 템플릿+임베딩 → 벡터매칭 → 그룹+LLM
-  → INCOME은 SmsIncomeParser로 저장
+  → 날짜는 SmsTransactionDateResolver, INCOME은 SmsIncomeParser로 저장
 ```
 
 | 단계 | 엔진 (sms) | 비용 | 설명 |
@@ -335,22 +350,24 @@ RCS/비즈메시지(cold start) → NotificationTransactionService → 최근 pr
 
 | Step | 모델 | 프롬프트 위치 | 역할 |
 |------|------|-------------|------|
-| 1 | gemini-2.5-pro | string_prompt.xml (QUERY_ANALYZER) | 질문 → 쿼리/액션 JSON 변환 (17 쿼리 + 12 액션) |
+| 1 | gemini-2.5-pro | string_prompt.xml (QUERY_ANALYZER) | 질문 → 쿼리/액션 JSON 변환 (18 쿼리 + 13 액션) |
 | 2 | - | ChatViewModel.kt | DB 조회, 액션 실행, ANALYTICS 분석 |
 | 3 | gemini-2.5-pro | string_prompt.xml (FINANCIAL_ADVISOR) | 데이터 기반 최종 답변 생성 |
 
 ## AI 프롬프트 위치
 
-> 모든 시스템 프롬프트는 [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml)에서 관리
+> 시스템 instruction과 user prompt template은 [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml)에서 관리한다.
+> 프롬프트 조립에 필요한 섹션 라벨/방향값/상태값은 [`res/values/strings.xml`](../app/src/main/res/values/strings.xml)의 `ai_*` key로 분리한다.
 
-| 프롬프트 | XML key | 모델 | 목적 |
-|---------|---------|------|------|
-| 쿼리 분석기 | `prompt_query_analyzer_system` | gemini-2.5-pro | 사용자 질문 → 쿼리/액션 JSON |
-| 재무 상담사 | `prompt_financial_advisor_system` | gemini-2.5-pro | 재무 상담 답변 생성 |
-| 대화 요약 | `prompt_summary_system` | gemini-2.5-flash | 대화 요약 |
-| SMS 추출 (단일) | `prompt_sms_extract_system` | gemini-2.5-flash-lite | SMS → 결제 정보 추출 |
-| SMS 추출 (배치) | `prompt_sms_batch_extract_system` | gemini-2.5-flash-lite | 다건 SMS 배치 추출 |
-| 카테고리 분류 | `prompt_category_classification` | gemini-2.5-flash-lite | 가게명 → 카테고리 분류 |
+| 프롬프트 그룹 | XML key | 모델 | 목적 |
+|-------------|---------|------|------|
+| 쿼리 분석기 | `prompt_query_analyzer_system`, `prompt_query_analyzer_user` | gemini-2.5-pro | 사용자 질문 → 쿼리/액션 JSON |
+| 재무 상담사 | `prompt_financial_advisor_system`, `prompt_final_answer_*` | gemini-2.5-pro | 데이터 기반 최종 답변 생성 |
+| 홈 한줄 인사이트 | `prompt_home_insight_*` | gemini-2.5-pro | 홈 화면 소비 코멘트 생성 |
+| 대화 요약/제목 | `prompt_summary_system`, `prompt_rolling_summary_*`, `prompt_chat_title_user` | gemini-2.5-flash | Rolling Summary 및 채팅방 제목 생성 |
+| SMS 추출 | `prompt_sms_extract_*`, `prompt_sms_context_*`, `prompt_sms_batch_*` | gemini-2.5-flash-lite | SMS → 결제 정보 추출 |
+| SMS Regex 생성/수선 | `prompt_sms_regex_*` | gemini-2.5-flash-lite | 발신번호별 SMS regex 룰 생성/수선 |
+| 카테고리/수입 분류 | `prompt_category_classification`, `prompt_income_classification` | gemini-2.5-flash-lite | 가게명/수입명 → 카테고리 분류 |
 
 ## 유사도 정책 (core/similarity/)
 
@@ -366,8 +383,9 @@ RCS/비즈메시지(cold start) → NotificationTransactionService → 최근 pr
 
 ### SMS → 지출 저장 (배치 동기화 — sms)
 ```
-HomeViewModel.syncSmsV2()
-  → SmsReaderV2.readAllMessagesByDateRange() → List<SmsInput>
+MainViewModel.syncSmsV2()
+  → SmsSyncRangeCalculator: 증분/월별 동기화 기간 계산
+  → SmsSyncMessageReader → SmsReaderV2.readAllMessagesByDateRange() → SmsReadResult.messages
   → 중복 제거 (expenseRepository + incomeRepository smsId)
   → SmsSyncCoordinator.process()
     → SmsPreFilter (비결제 제거)
@@ -378,7 +396,9 @@ HomeViewModel.syncSmsV2()
       → SmsPatternMatcher (벡터 매칭 + regex 파싱)
       → SmsGroupClassifier (그룹핑 + LLM 추출 + regex 생성)
   → saveExpenses() / saveIncomes(SmsIncomeParser)
+    → 거래 날짜는 SmsTransactionDateResolver가 연말/연초 연도 보정 포함 처리
   → CategoryClassifierService (4-tier 카테고리 분류)
+  → SyncCoverageRecorder: 성공한 동기화 구간 기록
   → UI 반영
 ```
 

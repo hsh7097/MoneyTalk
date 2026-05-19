@@ -4,6 +4,7 @@ import android.net.Uri
 import android.provider.Telephony
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import com.sanha.moneytalk.core.notification.FinancialAppDiscoveryRepository
 import com.sanha.moneytalk.core.sms.SmsInstantProcessor
 import com.sanha.moneytalk.core.sms.SmsReaderV2
 import com.sanha.moneytalk.core.util.DataRefreshEvent
@@ -22,10 +23,11 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
 /**
- * 메시지 앱 알림을 트리거로 사용해 최근 SMS/MMS/RCS provider row를 즉시 처리한다.
+ * 알림을 트리거로 사용해 거래 후보를 즉시 처리한다.
  *
  * SMS는 기존 BroadcastReceiver가 주 경로이고,
- * 이 서비스는 앱 프로세스가 죽어 있을 때 놓치던 RCS/비즈메시지 실시간 처리를 보완한다.
+ * 메시지 앱 알림은 앱 프로세스가 죽어 있을 때 놓치던 RCS/비즈메시지 실시간 처리를 보완한다.
+ * 금융 앱 알림은 SMS provider row가 없으므로 알림 본문 자체를 직접 처리한다.
  */
 class NotificationTransactionService : NotificationListenerService() {
 
@@ -35,6 +37,7 @@ class NotificationTransactionService : NotificationListenerService() {
         fun instantProcessor(): SmsInstantProcessor
         fun dataRefreshEvent(): DataRefreshEvent
         fun smsReaderV2(): SmsReaderV2
+        fun financialAppDiscoveryRepository(): FinancialAppDiscoveryRepository
     }
 
     companion object {
@@ -69,6 +72,9 @@ class NotificationTransactionService : NotificationListenerService() {
         super.onListenerConnected()
         NotificationContentParser.selfPackageName = applicationContext.packageName
         MoneyTalkLogger.i("[NotiService] 알림 리스너 연결")
+
+        scope.launch { processActiveNotifications() }
+        scope.launch { entryPoint.financialAppDiscoveryRepository().refreshRemoteAppsIfNeeded() }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -76,27 +82,119 @@ class NotificationTransactionService : NotificationListenerService() {
 
         scope.launch {
             try {
-                val parsed = NotificationContentParser.parse(sbn) ?: return@launch
-                if (!NotificationContentParser.looksLikeFinancialMessage(parsed)) return@launch
-
-                val dedupKey = "${sbn.key}_${parsed.body.hashCode()}"
-                cleanExpiredEntries()
-                if (processedNotifications.putIfAbsent(dedupKey, System.currentTimeMillis()) != null) {
-                    return@launch
-                }
-
-                val providerMessage = awaitRecentProviderMessage(parsed)
-                if (providerMessage == null) {
-                    MoneyTalkLogger.w(
-                        "[NotiService] 최근 provider row 미발견: " +
-                            "pkg=${parsed.packageName}, body=${parsed.body.take(80)}"
-                    )
-                    return@launch
-                }
-
-                processProviderMessage(providerMessage)
+                processNotification(sbn)
             } catch (e: Exception) {
                 MoneyTalkLogger.e("[NotiService] 알림 처리 예외: ${e.message}")
+            }
+        }
+    }
+
+    private suspend fun processActiveNotifications() {
+        val notifications = runCatching { activeNotifications.toList() }
+            .getOrElse { e ->
+                MoneyTalkLogger.w("[NotiService] 활성 알림 조회 실패: ${e.message}")
+                emptyList()
+            }
+        if (notifications.isEmpty()) return
+
+        MoneyTalkLogger.i("[NotiService] 활성 알림 재검사: ${notifications.size}건")
+        notifications.forEach { sbn ->
+            runCatching {
+                processNotification(sbn)
+            }.onFailure { e ->
+                MoneyTalkLogger.w("[NotiService] 활성 알림 처리 실패: ${e.message}")
+            }
+        }
+    }
+
+    private suspend fun processNotification(sbn: StatusBarNotification) {
+        val parsed = NotificationContentParser.parse(
+            sbn = sbn,
+            requireSupportedPackage = false
+        ) ?: return
+        if (!NotificationContentParser.looksLikeFinancialMessage(parsed)) return
+
+        val dedupKey = "${sbn.key}_${parsed.body.hashCode()}"
+        cleanExpiredEntries()
+        if (processedNotifications.putIfAbsent(dedupKey, System.currentTimeMillis()) != null) {
+            return
+        }
+
+        val financialAppDiscoveryRepository = entryPoint.financialAppDiscoveryRepository()
+        var isKnownFinancialApp = financialAppDiscoveryRepository
+            .isSupportedFinancialApp(parsed.packageName)
+        if (!isKnownFinancialApp && !NotificationContentParser.isMessagePackage(parsed.packageName)) {
+            financialAppDiscoveryRepository.refreshRemoteAppsIfNeeded()
+            isKnownFinancialApp = financialAppDiscoveryRepository
+                .isSupportedFinancialApp(parsed.packageName)
+        }
+        if (isKnownFinancialApp) {
+            processFinancialAppNotification(parsed)
+            return
+        }
+
+        if (!NotificationContentParser.isMessagePackage(parsed.packageName)) {
+            financialAppDiscoveryRepository.handleUnknownFinancialCandidate(
+                packageName = parsed.packageName,
+                displayName = resolveAppLabel(parsed.packageName)
+            )
+            return
+        }
+
+        val providerMessage = awaitRecentProviderMessage(parsed)
+        if (providerMessage == null) {
+            MoneyTalkLogger.w(
+                "[NotiService] 최근 provider row 미발견: " +
+                    "pkg=${parsed.packageName}, body=${parsed.body.take(80)}"
+            )
+            return
+        }
+
+        processProviderMessage(providerMessage)
+    }
+
+    private suspend fun processFinancialAppNotification(
+        parsed: NotificationContentParser.ParsedNotification
+    ) {
+        val instantProcessor = entryPoint.instantProcessor()
+        val dataRefreshEvent = entryPoint.dataRefreshEvent()
+        val appLabel = resolveAppLabel(parsed.packageName)
+
+        when (val result = instantProcessor.processAppNotificationAndSave(
+            packageName = parsed.packageName,
+            appLabel = appLabel,
+            body = parsed.body,
+            timestampMillis = parsed.timestamp
+        )) {
+            is SmsInstantProcessor.Result.Expense -> {
+                MoneyTalkLogger.i(
+                    "[NotiService] 앱 알림 즉시 지출 저장: " +
+                        "pkg=${parsed.packageName}, " +
+                        "${result.entity.storeName} ${result.entity.amount}원"
+                )
+                dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+            }
+
+            is SmsInstantProcessor.Result.Income -> {
+                MoneyTalkLogger.i(
+                    "[NotiService] 앱 알림 즉시 수입 저장: " +
+                        "pkg=${parsed.packageName}, ${result.entity.amount}원"
+                )
+                dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+            }
+
+            is SmsInstantProcessor.Result.Skipped -> {
+                MoneyTalkLogger.i(
+                    "[NotiService] 앱 알림 즉시 처리 스킵: " +
+                        "pkg=${parsed.packageName}, body=${parsed.body.take(80)}"
+                )
+            }
+
+            is SmsInstantProcessor.Result.Error -> {
+                MoneyTalkLogger.w(
+                    "[NotiService] 앱 알림 즉시 처리 실패: " +
+                        "pkg=${parsed.packageName}, ${result.message}"
+                )
             }
         }
     }
@@ -347,5 +445,15 @@ class NotificationTransactionService : NotificationListenerService() {
     private fun cleanExpiredEntries() {
         val now = System.currentTimeMillis()
         processedNotifications.entries.removeIf { now - it.value > DEDUP_TTL_MS }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun resolveAppLabel(packageName: String): String {
+        return runCatching {
+            val applicationInfo = packageManager.getApplicationInfo(packageName, 0)
+            packageManager.getApplicationLabel(applicationInfo).toString()
+        }.getOrElse {
+            packageName.substringAfterLast('.')
+        }
     }
 }

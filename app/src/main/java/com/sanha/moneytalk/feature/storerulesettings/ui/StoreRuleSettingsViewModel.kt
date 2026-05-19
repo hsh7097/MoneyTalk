@@ -7,6 +7,9 @@ import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.CategoryInfo
+import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
 import com.sanha.moneytalk.feature.home.data.StoreRuleSyncService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,13 +30,15 @@ data class StoreRuleSettingsUiState(
     val addIsFixed: Boolean = false,
     @StringRes val addErrorResId: Int? = null,
     val showDeleteConfirm: Long? = null,
-    val showCategorySelect: Boolean = false
+    val showCategorySelect: Boolean = false,
+    val categoryEntries: List<CategoryInfo> = Category.expenseEntries
 )
 
 @HiltViewModel
 class StoreRuleSettingsViewModel @Inject constructor(
     private val storeRuleRepository: StoreRuleRepository,
     private val storeRuleSyncService: StoreRuleSyncService,
+    private val categoryProvider: CategoryProvider,
     private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
 
@@ -42,6 +47,7 @@ class StoreRuleSettingsViewModel @Inject constructor(
 
     init {
         loadRules()
+        loadCategories()
     }
 
     private fun loadRules() {
@@ -49,6 +55,13 @@ class StoreRuleSettingsViewModel @Inject constructor(
             storeRuleRepository.getAll().collect { rules ->
                 _uiState.update { it.copy(rules = rules) }
             }
+        }
+    }
+
+    private fun loadCategories() {
+        viewModelScope.launch {
+            val categories = categoryProvider.getExpenseEntries()
+            _uiState.update { it.copy(categoryEntries = categories) }
         }
     }
 
@@ -111,7 +124,7 @@ class StoreRuleSettingsViewModel @Inject constructor(
             return
         }
 
-        if (state.addCategory == null && !state.addIsFixed) {
+        if (state.addCategory == null && !state.addIsFixed && state.editingRule?.isExcludedFromStats == null) {
             _uiState.update { it.copy(addErrorResId = R.string.store_rule_error_no_rule) }
             return
         }
@@ -122,7 +135,9 @@ class StoreRuleSettingsViewModel @Inject constructor(
                 id = oldRule?.id ?: 0,
                 keyword = keyword,
                 category = state.addCategory,
-                isFixed = if (state.addIsFixed) true else null
+                isFixed = if (state.addIsFixed) true else null,
+                isExcludedFromStats = oldRule?.isExcludedFromStats,
+                createdAt = oldRule?.createdAt ?: System.currentTimeMillis()
             )
             storeRuleSyncService.applyRuleChange(
                 previousRule = oldRule,

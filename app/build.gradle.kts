@@ -22,6 +22,16 @@ if (localPropertiesFile.exists()) {
     localProperties.load(localPropertiesFile.inputStream())
 }
 
+// Gemini API key pool (local default key + 4 fallbacks)
+val geminiKeys = listOf(
+    localProperties.getProperty("GEMINI_API_KEY", ""),
+    localProperties.getProperty("GEMINI_API_KEY_1", ""),
+    localProperties.getProperty("GEMINI_API_KEY_2", ""),
+    localProperties.getProperty("GEMINI_API_KEY_3", ""),
+    localProperties.getProperty("GEMINI_API_KEY_4", "")
+).filter { key -> key.isNotBlank() }
+val geminiKeysBuildConfigValue = "{${geminiKeys.joinToString(", ") { key -> "\"$key\"" }}}"
+
 android {
     namespace = "com.sanha.moneytalk"
     compileSdk = 35
@@ -29,9 +39,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file(localProperties.getProperty("STORE_FILE", "moneytalk-release.jks"))
-            storePassword = localProperties.getProperty("STORE_PASSWORD", "")
-            keyAlias = localProperties.getProperty("KEY_ALIAS", "")
-            keyPassword = localProperties.getProperty("KEY_PASSWORD", "")
+            storePassword = localProperties.getProperty("STORE_PASSWORD", "moneytalk")
+            keyAlias = localProperties.getProperty("KEY_ALIAS", "moneytalk")
+            keyPassword = localProperties.getProperty("KEY_PASSWORD", "moneytalk")
         }
     }
 
@@ -39,7 +49,7 @@ android {
         applicationId = "com.sanha.moneytalk"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
+        versionCode = 16
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -60,17 +70,10 @@ android {
         )
 
         // Gemini API 키 풀 (로컬 기본 키 5개)
-        val geminiKeys = listOf(
-            localProperties.getProperty("GEMINI_API_KEY", ""),
-            localProperties.getProperty("GEMINI_API_KEY_1", ""),
-            localProperties.getProperty("GEMINI_API_KEY_2", ""),
-            localProperties.getProperty("GEMINI_API_KEY_3", ""),
-            localProperties.getProperty("GEMINI_API_KEY_4", "")
-        ).filter { it.isNotBlank() }
         buildConfigField(
             "String[]",
             "GEMINI_API_KEYS",
-            "{${geminiKeys.joinToString(", ") { "\"$it\"" }}}"
+            geminiKeysBuildConfigValue
         )
     }
 

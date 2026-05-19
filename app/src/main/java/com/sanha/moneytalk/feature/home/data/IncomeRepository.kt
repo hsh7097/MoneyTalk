@@ -88,4 +88,12 @@ class IncomeRepository @Inject constructor(
     suspend fun updateCategoryBySource(source: String, newCategory: String): Int =
         incomeDao.updateCategoryBySource(source, newCategory)
 
+    /** 설명/출처 키워드 기준 카테고리 일괄 변경 */
+    suspend fun updateCategoryByKeyword(keyword: String, newCategory: String): Int =
+        incomeDao.updateCategoryByKeyword(keyword, newCategory)
+
+    /** 설명/출처 키워드 기준 고정 수입 일괄 변경 */
+    suspend fun updateRecurringByKeyword(keyword: String, isRecurring: Boolean): Int =
+        incomeDao.updateRecurringByKeyword(keyword, isRecurring)
+
 }

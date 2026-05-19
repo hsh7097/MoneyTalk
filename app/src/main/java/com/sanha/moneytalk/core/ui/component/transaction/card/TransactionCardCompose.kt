@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
 import com.sanha.moneytalk.core.ui.component.getCustomCategoryBackgroundColor
@@ -58,16 +59,56 @@ fun TransactionCardCompose(
     val amountPrefix = if (info.isIncome) "+" else "-"
     val formattedAmount =
         "${amountPrefix}${stringResource(R.string.common_won, numberFormat.format(info.amount))}"
+    val isStatsExcluded = info.isExcludedFromStats
+    val cardContainer = if (isStatsExcluded) {
+        MaterialTheme.colorScheme.surfaceVariant.copy(
+            alpha = if (FriendlyMoneyColors.isDark) 0.58f else 0.48f
+        )
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+    val cardBorder = if (isStatsExcluded) {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
+    } else {
+        MaterialTheme.colorScheme.outlineVariant
+    }
+    val contentPrimary = if (isStatsExcluded) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        FriendlyMoneyColors.textPrimary
+    }
+    val contentSecondary = if (isStatsExcluded) {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
+    } else {
+        FriendlyMoneyColors.textSecondary
+    }
+    val tagContainer = if (isStatsExcluded) {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.44f)
+    } else {
+        FriendlyMoneyColors.mintTint
+    }
+    val tagContent = if (isStatsExcluded) {
+        contentSecondary
+    } else {
+        FriendlyMoneyColors.mintTintContent
+    }
+    val amountColor = if (isStatsExcluded) {
+        contentSecondary
+    } else if (info.isIncome) {
+        MaterialTheme.moneyTalkColors.income
+    } else {
+        MaterialTheme.colorScheme.error
+    }
 
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = cardContainer
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = BorderStroke(1.dp, cardBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier
@@ -121,7 +162,7 @@ fun TransactionCardCompose(
                             append(")")
                             addStyle(
                                 style = SpanStyle(
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    color = contentSecondary,
                                     fontSize = MaterialTheme.typography.bodyMedium.fontSize
                                 ),
                                 start = memoStart,
@@ -133,6 +174,7 @@ fun TransactionCardCompose(
                         text = titleText,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
+                        color = contentPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -153,10 +195,10 @@ fun TransactionCardCompose(
                                 Text(
                                     text = tag,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = tagContent,
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(tagContainer)
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
@@ -173,19 +215,27 @@ fun TransactionCardCompose(
                                 Text(
                                     text = detail,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = contentSecondary,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
 
-                            // 고정지출 태그
+                            // 고정 거래 태그
                             if (info.isFixed) {
                                 Text(
                                     text = stringResource(R.string.transaction_card_fixed_tag),
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = FriendlyMoneyColors.Coral
+                                )
+                            }
+                            if (isStatsExcluded) {
+                                Text(
+                                    text = stringResource(R.string.transaction_card_stats_excluded_tag),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = contentSecondary
                                 )
                             }
                         }
@@ -194,7 +244,7 @@ fun TransactionCardCompose(
                         Text(
                             text = info.subtitle,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = contentSecondary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -205,9 +255,9 @@ fun TransactionCardCompose(
             // 금액 (-50,000원 / +10,000원)
             Text(
                 text = formattedAmount,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (info.isIncome) MaterialTheme.moneyTalkColors.income else MaterialTheme.colorScheme.error
+                color = amountColor
             )
         }
     }

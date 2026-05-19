@@ -118,6 +118,28 @@ interface IncomeDao {
     @Query("UPDATE incomes SET category = :newCategory WHERE source = :source AND category = '미분류'")
     suspend fun updateCategoryBySource(source: String, newCategory: String): Int
 
+    /** 설명/출처 키워드 기준 카테고리 일괄 변경 */
+    @Query(
+        """
+        UPDATE incomes
+        SET category = :newCategory
+        WHERE description LIKE '%' || :keyword || '%'
+           OR source LIKE '%' || :keyword || '%'
+        """
+    )
+    suspend fun updateCategoryByKeyword(keyword: String, newCategory: String): Int
+
+    /** 설명/출처 키워드 기준 고정 수입 일괄 변경 */
+    @Query(
+        """
+        UPDATE incomes
+        SET isRecurring = :isRecurring
+        WHERE description LIKE '%' || :keyword || '%'
+           OR source LIKE '%' || :keyword || '%'
+        """
+    )
+    suspend fun updateRecurringByKeyword(keyword: String, isRecurring: Boolean): Int
+
     /** 검색 (설명, 유형, 출처, 카테고리, 메모에서 검색) */
     @Query(
         """

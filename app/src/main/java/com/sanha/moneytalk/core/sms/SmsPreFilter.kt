@@ -1,5 +1,7 @@
 package com.sanha.moneytalk.core.sms
 
+import com.sanha.moneytalk.core.util.StatsExclusionClassifier
+
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -89,7 +91,19 @@ class SmsPreFilter @Inject constructor() {
             Regex("""승인거절"""),
             Regex("""정지카드"""),
             Regex("""가맹점이용취소[\s\S]{0,20}입금"""),
-            Regex("""통지수수료""")
+            Regex("""통지수수료"""),
+            Regex(
+                pattern = """(?=.*(?:요율|단가))(?=.*(?:안내|부가세|VAT|MMS|데이터|로밍|국제)).*""",
+                options = setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+            ),
+            Regex(
+                pattern = """(?:MMS|SMS|데이터)[\s\S]{0,80}\d+(?:\.\d+)?원\s*/\s*\d+(?:\.\d+)?\s*(?:KB|MB|GB)""",
+                options = setOf(RegexOption.IGNORE_CASE)
+            ),
+            Regex(
+                pattern = """(?:걸\s*때|받을\s*때)[\s\S]{0,80}\d+(?:\.\d+)?원\s*/\s*초""",
+                options = setOf(RegexOption.IGNORE_CASE)
+            )
         )
 
         /** HTTP 링크 패턴 — 광고/안내 링크 포함 SMS 제외용 */
@@ -136,11 +150,11 @@ class SmsPreFilter @Inject constructor() {
         return smsList.filter smsFilter@{ sms ->
             val body = sms.body
 
-            // 키워드 필터
-            if (isObviouslyNonPayment(body)) return@smsFilter false
-
             // 구조 필터
             if (lacksPaymentRequirements(body)) return@smsFilter false
+
+            // 키워드 필터
+            if (isObviouslyNonPayment(body)) return@smsFilter false
 
             true
         }
@@ -162,6 +176,8 @@ class SmsPreFilter @Inject constructor() {
         // 수입 보호: 수입 키워드가 포함된 SMS는 필터링하지 않고 SmsIncomeFilter로 전달
         // 예: "보험금 입금 완료" → "보험금"(비결제)보다 "입금"(수입)이 우선
         if (INCOME_PROTECTION_KEYWORDS.any { lowerBody.contains(it) }) return false
+
+        if (StatsExclusionClassifier.isCardBillDebitText(body, requireWonAmount = true)) return false
 
         return NON_PAYMENT_KEYWORDS_LOWER.any { lowerBody.contains(it) }
     }

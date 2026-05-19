@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.core.ui.component.transaction.header
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,8 +15,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import java.text.NumberFormat
 import java.util.Locale
@@ -46,10 +49,17 @@ fun TransactionGroupHeaderCompose(
         Text(
             text = info.title,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            fontWeight = FontWeight.SemiBold,
+            color = FriendlyMoneyColors.textSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp)
         )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             if (info.incomeTotal > 0) {
                 Text(
@@ -61,7 +71,10 @@ fun TransactionGroupHeaderCompose(
                     }",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.moneyTalkColors.income
+                    color = MaterialTheme.moneyTalkColors.income,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    softWrap = false
                 )
             }
             if (info.expenseTotal > 0) {
@@ -74,7 +87,10 @@ fun TransactionGroupHeaderCompose(
                     }",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
+                    color = MaterialTheme.colorScheme.error,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    softWrap = false
                 )
             }
         }

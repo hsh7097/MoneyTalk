@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 private const val EXTRA_CATEGORY = "extra_category"
@@ -224,7 +225,7 @@ class CategoryDetailViewModel @Inject constructor(
                     }
 
                     DataRefreshEvent.RefreshType.DEBUG_FULL_SYNC_ALL_MESSAGES -> {
-                        // MainViewModel이 전체 동기화 수행 후 TRANSACTION_ADDED로 갱신됨
+                        // MainViewModel이 디버그 전체 동기화 수행 후 TRANSACTION_ADDED로 갱신됨
                     }
 
                     DataRefreshEvent.RefreshType.DEBUG_SYNC_TODAY_MESSAGES -> {
@@ -329,7 +330,7 @@ class CategoryDetailViewModel @Inject constructor(
                         categoryNames, lastMonthFullStart, lastMonthFullEnd
                     )
                 }
-                val filteredFullLastMonthExpenses = filterByExclusion(
+                val filteredFullLastMonthExpenses = CategoryDetailExpenseFilters.filterStatsExpenses(
                     fullLastMonthExpenses, exclusionKeywords
                 )
                 val lastMonthCumulative = CumulativeChartDataBuilder.buildDailyCumulative(
@@ -341,7 +342,7 @@ class CategoryDetailViewModel @Inject constructor(
                     val raw = expenseRepository.getExpensesByCategoriesAndDateRangeOnce(
                         categoryNames, s, e
                     )
-                    filterByExclusion(raw, exclusionKeywords)
+                    CategoryDetailExpenseFilters.filterStatsExpenses(raw, exclusionKeywords)
                 }
                 val avgThreeMonthCumulative = withContext(Dispatchers.IO) {
                     CumulativeChartDataBuilder.buildAvgNMonthCumulative(
@@ -355,7 +356,7 @@ class CategoryDetailViewModel @Inject constructor(
                 }
 
                 // 카테고리 예산 로드
-                val yearMonth = String.format("%04d-%02d", year, month)
+                val yearMonth = String.format(Locale.ROOT, "%04d-%02d", year, month)
                 val categoryBudget = withContext(Dispatchers.IO) {
                     budgetDao.getBudgetByCategory(categoryDisplayName, yearMonth)?.monthlyLimit
                 }
@@ -388,17 +389,22 @@ class CategoryDetailViewModel @Inject constructor(
                         )
                     }
                     .collect { allExpenses ->
-                        val expenses = filterByExclusion(allExpenses, exclusionKeywords)
-                        val totalExpense = expenses.sumOf { it.amount }
+                        val displayExpenses = CategoryDetailExpenseFilters.filterDisplayExpenses(
+                            allExpenses, exclusionKeywords
+                        )
+                        val statsExpenses = CategoryDetailExpenseFilters.filterStatsExpenses(
+                            displayExpenses
+                        )
+                        val totalExpense = statsExpenses.sumOf { it.amount }
 
                         // 이번 달 일별 누적 지출
                         val dailyCumulative = CumulativeChartDataBuilder.buildDailyCumulative(
-                            expenses, monthStart, daysInMonth
+                            statsExpenses, monthStart, daysInMonth
                         )
 
                         // 날짜별 그룹핑 거래 목록 (정렬 적용)
                         val transactionItems = buildTransactionItems(
-                            expenses, _uiState.value.sortOrder
+                            displayExpenses, _uiState.value.sortOrder
                         )
 
                         val current =
@@ -449,7 +455,8 @@ class CategoryDetailViewModel @Inject constructor(
 
         sortedDates.forEach { date ->
             val dayExpenses = grouped[date] ?: return@forEach
-            val dailyTotal = dayExpenses.sumOf { it.amount }
+            val dailyTotal = CategoryDetailExpenseFilters.filterStatsExpenses(dayExpenses)
+                .sumOf { it.amount }
 
             val calendar = Calendar.getInstance().apply { time = date }
             val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
@@ -505,20 +512,6 @@ class CategoryDetailViewModel @Inject constructor(
             Calendar.FRIDAY -> R.string.day_friday
             Calendar.SATURDAY -> R.string.day_saturday
             else -> R.string.day_sunday
-        }
-    }
-
-    // ========== 제외 키워드 필터 ==========
-
-    /** 제외 키워드로 지출 목록 필터링 */
-    private fun filterByExclusion(
-        expenses: List<ExpenseEntity>,
-        exclusionKeywords: Set<String>
-    ): List<ExpenseEntity> {
-        if (exclusionKeywords.isEmpty()) return expenses
-        return expenses.filter { expense ->
-            val smsLower = expense.originalSms.lowercase()
-            exclusionKeywords.none { kw -> smsLower.contains(kw) }
         }
     }
 

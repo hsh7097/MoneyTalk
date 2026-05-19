@@ -49,8 +49,12 @@ interface TransactionCardInfo {
     val memoText: String?
         get() = null
 
-    /** 고정지출 여부 */
+    /** 고정 거래 여부 */
     val isFixed: Boolean
+        get() = false
+
+    /** 통계 제외 여부 */
+    val isExcludedFromStats: Boolean
         get() = false
 }
 
@@ -77,6 +81,7 @@ class ExpenseTransactionCardInfo(
     override val cardNameText: String = expense.cardName
     override val memoText: String? = expense.memo?.takeIf { it.isNotBlank() }
     override val isFixed: Boolean = expense.isFixed
+    override val isExcludedFromStats: Boolean = expense.isExcludedFromStats
 }
 
 /** IncomeEntity → TransactionCardInfo 변환 */

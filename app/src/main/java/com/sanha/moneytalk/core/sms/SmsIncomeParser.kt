@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.core.sms
 
+import com.sanha.moneytalk.core.util.DateUtils
 import java.util.Calendar
 
 /**
@@ -37,13 +38,6 @@ object SmsIncomeParser {
     /** 숫자+원+한글 (가게명 등 제외용) */
     private val AMOUNT_WON_HANGUL_PATTERN = Regex(""".*\d+원[가-힣]+.*""")
 
-    /** 날짜 패턴: MM/DD, MM-DD, MM.DD */
-    private val DATE_PATTERN_SLASH = Regex("""(\d{1,2})[/.-](\d{1,2})""")
-    /** 날짜 패턴: M월 D일 */
-    private val DATE_PATTERN_KOREAN = Regex("""(\d{1,2})월\s*(\d{1,2})일""")
-    /** 시간 패턴: HH:mm */
-    private val TIME_PATTERN = Regex("""(\d{1,2}):(\d{2})""")
-
     /** "OOO님으로부터" 패턴 */
     private val FROM_PATTERN = Regex("""([가-힣a-zA-Z0-9]+)(님)?으?로부터""")
     /** "입금 OOO" 또는 "OOO 입금" 패턴 */
@@ -58,6 +52,8 @@ object SmsIncomeParser {
     private val BRACKET_PATTERN = Regex("""\[.+\]""")
     /** 대괄호+날짜시간 복합 패턴 (출처 추출 시 제외) */
     private val BRACKET_DATETIME_PATTERN = Regex("""^\[.+\]\d{1,2}[/.-]\d{1,2}\s+\d{1,2}:\d{2}$""")
+    private val CANCEL_COMPLETED_DATE_PATTERN =
+        Regex("""(0?[1-9]|1[0-2])월\s*(0?[1-9]|[12]\d|3[01])일\s*취소완료""")
 
     /** 수입 키워드 (extractIncomeSource에서 출처 제외용) */
     private val incomeKeywords = listOf(
@@ -170,38 +166,23 @@ object SmsIncomeParser {
      * @return "YYYY-MM-DD HH:mm" 형식
      */
     fun extractDateTime(message: String, smsTimestamp: Long): String {
-        val calendar = Calendar.getInstance()
-        calendar.timeInMillis = smsTimestamp
-        val currentYear = calendar.get(Calendar.YEAR)
+        extractCancelCompletedDateTime(message, smsTimestamp)?.let { return it }
+        return SmsTransactionDateResolver.extractDateTime(message, smsTimestamp)
+    }
 
-        var month = calendar.get(Calendar.MONTH) + 1
-        var day = calendar.get(Calendar.DAY_OF_MONTH)
-        var hour = calendar.get(Calendar.HOUR_OF_DAY)
-        var minute = calendar.get(Calendar.MINUTE)
+    private fun extractCancelCompletedDateTime(message: String, smsTimestamp: Long): String? {
+        if (!message.contains("취소완료")) return null
 
-        val dateMatch1 = DATE_PATTERN_SLASH.find(message)
-        val dateMatch2 = DATE_PATTERN_KOREAN.find(message)
+        val match = CANCEL_COMPLETED_DATE_PATTERN.find(message) ?: return null
+        val month = match.groupValues[1].toIntOrNull() ?: return null
+        val day = match.groupValues[2].toIntOrNull() ?: return null
+        if (month !in 1..12 || day !in 1..31) return null
 
-        if (dateMatch1 != null) {
-            month = dateMatch1.groupValues[1].toIntOrNull() ?: month
-            day = dateMatch1.groupValues[2].toIntOrNull() ?: day
-        } else if (dateMatch2 != null) {
-            month = dateMatch2.groupValues[1].toIntOrNull() ?: month
-            day = dateMatch2.groupValues[2].toIntOrNull() ?: day
-        }
-
-        val timeMatch = TIME_PATTERN.find(message)
-        if (timeMatch != null) {
-            hour = timeMatch.groupValues[1].toIntOrNull() ?: hour
-            minute = timeMatch.groupValues[2].toIntOrNull() ?: minute
-        }
-
-        if (month < 1 || month > 12) month = calendar.get(Calendar.MONTH) + 1
-        if (day < 1 || day > 31) day = calendar.get(Calendar.DAY_OF_MONTH)
-        if (hour < 0 || hour > 23) hour = calendar.get(Calendar.HOUR_OF_DAY)
-        if (minute < 0 || minute > 59) minute = calendar.get(Calendar.MINUTE)
-
-        return String.format("%04d-%02d-%02d %02d:%02d", currentYear, month, day, hour, minute)
+        val calendar = Calendar.getInstance().apply { timeInMillis = smsTimestamp }
+        calendar.set(Calendar.YEAR, DateUtils.resolveYearForMonthDay(smsTimestamp, month, day))
+        calendar.set(Calendar.MONTH, month - 1)
+        calendar.set(Calendar.DAY_OF_MONTH, day.coerceAtMost(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)))
+        return DateUtils.formatDateTime(calendar.timeInMillis)
     }
 
     // ========== 내부 헬퍼 ==========

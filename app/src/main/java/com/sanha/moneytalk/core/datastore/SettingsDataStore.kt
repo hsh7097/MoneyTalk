@@ -31,6 +31,7 @@ class SettingsDataStore @Inject constructor(
         private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
         private val MONTHLY_INCOME = intPreferencesKey("monthly_income")
         private val LAST_SYNC_TIME = longPreferencesKey("last_sync_time")
+        private val LAST_RCS_PROVIDER_SCAN_TIME = longPreferencesKey("last_rcs_provider_scan_time")
         private val MONTH_START_DAY = intPreferencesKey("month_start_day")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
         private val SERVICE_TIER = stringPreferencesKey("service_tier")
@@ -40,6 +41,7 @@ class SettingsDataStore @Inject constructor(
         private val FREE_SYNC_USED_COUNT = intPreferencesKey("free_sync_used_count")
         private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         private val NOTIFICATION_ENABLED = booleanPreferencesKey("notification_enabled")
+        private val PREMIUM_CONFIG_JSON = stringPreferencesKey("premium_config_json")
 
         // ===== 화면별 온보딩 (코치마크) =====
         private val SCREEN_ONBOARDING_KEYS = mapOf(
@@ -132,6 +134,18 @@ class SettingsDataStore @Inject constructor(
         preferences[LAST_SYNC_TIME] ?: 0L
     }
 
+    // RCS provider 마지막 성공 scan 시간 저장
+    suspend fun saveLastRcsProviderScanTime(timestamp: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[LAST_RCS_PROVIDER_SCAN_TIME] = timestamp
+        }
+    }
+
+    // RCS provider 마지막 성공 scan 시간 가져오기
+    suspend fun getLastRcsProviderScanTime(): Long {
+        return context.dataStore.data.first()[LAST_RCS_PROVIDER_SCAN_TIME] ?: 0L
+    }
+
     // 월 시작일 저장 (1-31)
     suspend fun saveMonthStartDay(day: Int) {
         context.dataStore.edit { preferences ->
@@ -193,10 +207,10 @@ class SettingsDataStore @Inject constructor(
         return context.dataStore.data.first()[REWARD_CHAT_REMAINING] ?: 0
     }
 
-    // ===== 월별 동기화 해제 관리 =====
+    // ===== 월별 동기화 완료 기록 관리 =====
 
     /**
-     * 특정 월의 동기화 해제 기록 추가
+     * 특정 월의 동기화 완료 기록 추가
      * @param yearMonth "YYYY-MM" 형식 (예: "2026-02")
      */
     suspend fun addSyncedMonth(yearMonth: String) {
@@ -206,18 +220,18 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
-    /** 동기화 해제된 월 목록 Flow */
+    /** 동기화 완료된 월 목록 Flow */
     val syncedMonthsFlow: Flow<Set<String>> = context.dataStore.data.map { preferences ->
         preferences[SYNCED_MONTHS] ?: emptySet()
     }
 
-    /** 특정 월이 동기화 해제되었는지 확인 */
+    /** 특정 월이 동기화 완료되었는지 확인 */
     suspend fun isMonthSynced(yearMonth: String): Boolean {
         val months = context.dataStore.data.first()[SYNCED_MONTHS] ?: emptySet()
         return yearMonth in months
     }
 
-    /** 동기화 해제된 월이 하나라도 있는지 (= 광고를 한 번이라도 시청했는지) */
+    /** 동기화 완료된 월이 하나라도 있는지 (= 월별 CTA를 한 번이라도 완료했는지) */
     suspend fun hasAnySyncedMonth(): Boolean {
         val prefs = context.dataStore.data.first()
         val months = prefs[SYNCED_MONTHS] ?: emptySet()
@@ -299,6 +313,20 @@ class SettingsDataStore @Inject constructor(
         context.dataStore.edit { preferences ->
             preferences[NOTIFICATION_ENABLED] = enabled
         }
+    }
+
+    // ===== 서버 설정 캐시 =====
+
+    /** 마지막으로 정상 수신한 서버 설정 JSON 저장 */
+    suspend fun savePremiumConfigJson(json: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PREMIUM_CONFIG_JSON] = json
+        }
+    }
+
+    /** 마지막으로 정상 수신한 서버 설정 JSON 즉시 조회 */
+    suspend fun getPremiumConfigJson(): String {
+        return context.dataStore.data.first()[PREMIUM_CONFIG_JSON].orEmpty()
     }
 
     /** 무료 동기화 사용 횟수 1 증가 */

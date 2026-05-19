@@ -32,6 +32,10 @@ import com.sanha.moneytalk.core.theme.PrimaryDark
 import com.sanha.moneytalk.core.theme.PrimaryLight
 import com.sanha.moneytalk.core.util.toDpTextUnit
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+private const val SPLASH_ANIMATION_DURATION_MS = 500
+private const val SPLASH_HOLD_DURATION_MS = 700L
 
 /** 스플래시 화면. 앱 로고 페이드인 애니메이션 후 홈 화면으로 자동 전환 */
 @Composable
@@ -42,18 +46,22 @@ fun SplashScreen(
     val alpha = remember { Animatable(0f) }
 
     LaunchedEffect(key1 = true) {
-        // 애니메이션 시작
-        scale.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 500)
-        )
-        alpha.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 500)
-        )
+        val scaleAnimation = launch {
+            scale.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = SPLASH_ANIMATION_DURATION_MS)
+            )
+        }
+        val alphaAnimation = launch {
+            alpha.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = SPLASH_ANIMATION_DURATION_MS)
+            )
+        }
+        scaleAnimation.join()
+        alphaAnimation.join()
 
-        // 잠시 대기 후 홈 화면으로 이동
-        delay(1500)
+        delay(SPLASH_HOLD_DURATION_MS)
         onSplashFinished()
     }
 

@@ -8,10 +8,10 @@
 
 **MoneyTalk** = SMS 파싱 기반 자동 지출 추적 + Gemini AI 재무 상담 Android 앱
 
-- Kotlin / Jetpack Compose / MVVM / Hilt DI / Room DB (v5, 10 entities)
+- Kotlin / Jetpack Compose / MVVM / Hilt DI / Room DB (v6, 15 entities)
 - 3-tier SMS 분류 (Regex → Vector → Gemini LLM)
 - 4-tier 카테고리 분류 (Room → Vector → Keyword → Gemini Batch)
-- 3-step AI 채팅 (쿼리분석 → DB조회/액션/분석 → 답변생성) — 17 쿼리 + 12 액션
+- 3-step AI 채팅 (쿼리분석 → DB조회/액션/분석 → 답변생성) — 18 쿼리 + 13 액션
 - 카드 화이트리스트 (OwnedCard) + SMS 제외 키워드 (블랙리스트)
 
 ---
@@ -53,8 +53,6 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 | [docs/COMPOSABLE_MAP.md](docs/COMPOSABLE_MAP.md) | 화면별 Composable 계층 구조 + IDE 점프 링크 | UI 작업 시 |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | 버전별 변경 이력 | 변경 히스토리 확인 시 |
 | [docs/GIT_CONVENTION.md](docs/GIT_CONVENTION.md) | Git 컨벤션 | 커밋/브랜치/푸시/PR 규칙 확인 시 |
-| [docs/QUICK_START.md](docs/QUICK_START.md) | 빠른 시작 가이드 | 환경 설정 시 |
-| [docs/APP_MAP.md](docs/APP_MAP.md) | 앱 진입점/네비게이션 맵 | 라우팅 파악 시 |
 | [docs/MONETIZATION.md](docs/MONETIZATION.md) | 과금 전략, 요금제, 광고, API 비용 구조 | 과금/수익화 관련 작업 시 |
 | [docs/SCREEN_REQUIREMENTS.md](docs/SCREEN_REQUIREMENTS.md) | 화면별 요구사항 명세 (기능+구현 상세) | **모든 UI 작업 전 필수** |
 

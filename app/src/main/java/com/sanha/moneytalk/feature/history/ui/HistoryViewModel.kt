@@ -7,10 +7,14 @@ import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.database.entity.isIncludedInExpenseStats
+import com.sanha.moneytalk.core.database.entity.isIncludedInTransferIncomeStats
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.CategoryInfo
+import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
@@ -52,12 +56,28 @@ enum class SortOrder {
 }
 
 /**
- * 고정지출 필터
+ * 고정 거래 필터
  */
 enum class FixedExpenseFilter {
     ALL,            // 포함 (기본값)
-    FIXED_ONLY,     // 고정지출만 표시
-    EXCLUDE_FIXED   // 고정지출 제외
+    FIXED_ONLY,     // 고정 거래만 표시
+    EXCLUDE_FIXED   // 고정 거래 제외
+}
+
+private fun List<ExpenseEntity>.filterExpensesByFixed(
+    fixedFilter: FixedExpenseFilter
+): List<ExpenseEntity> = when (fixedFilter) {
+    FixedExpenseFilter.ALL -> this
+    FixedExpenseFilter.FIXED_ONLY -> filter { it.isFixed }
+    FixedExpenseFilter.EXCLUDE_FIXED -> filter { !it.isFixed }
+}
+
+private fun List<IncomeEntity>.filterIncomesByFixed(
+    fixedFilter: FixedExpenseFilter
+): List<IncomeEntity> = when (fixedFilter) {
+    FixedExpenseFilter.ALL -> this
+    FixedExpenseFilter.FIXED_ONLY -> filter { it.isRecurring }
+    FixedExpenseFilter.EXCLUDE_FIXED -> filter { !it.isRecurring }
 }
 
 /**
@@ -161,6 +181,9 @@ data class HistoryUiState(
     val showIncomes: Boolean = true,
     val showTransfers: Boolean = true,
     val fixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL,
+    val expenseCategories: List<CategoryInfo> = Category.expenseEntries,
+    val incomeCategories: List<CategoryInfo> = Category.incomeEntries,
+    val transferCategories: List<CategoryInfo> = Category.transferEntries,
     // 다이얼로그 상태 (Composable에서 remember 대신 ViewModel에서 관리)
     val selectedExpense: ExpenseEntity? = null,
     val selectedIncome: IncomeEntity? = null
@@ -169,20 +192,14 @@ data class HistoryUiState(
     private val currentPageData: HistoryPageData
         get() = pageCache[MonthKey(selectedYear, selectedMonth)] ?: HistoryPageData()
 
-    /** 필터 적용된 지출 총합 (고정지출 필터 반영) */
+    /** 필터 적용된 지출 총합 (고정 거래 필터 반영) */
     val filteredExpenseTotal: Int
         get() {
-            val expenses = currentPageData.expenses
-            val fixedFiltered = when (fixedExpenseFilter) {
-                FixedExpenseFilter.ALL -> expenses
-                FixedExpenseFilter.FIXED_ONLY -> expenses.filter { it.isFixed }
-                FixedExpenseFilter.EXCLUDE_FIXED -> expenses.filter { !it.isFixed }
-            }
-            return fixedFiltered.filter { expense ->
+            return currentPageData.expenses.filterExpensesByFixed(fixedExpenseFilter).filter { expense ->
                 if (expense.transactionType == "TRANSFER") {
-                    showTransfers && expense.transferDirection != TransferDirection.DEPOSIT.dbValue
+                    showTransfers && expense.isIncludedInExpenseStats()
                 } else {
-                    showExpenses
+                    showExpenses && expense.isIncludedInExpenseStats()
                 }
             }.sumOf { it.amount }
         }
@@ -190,22 +207,16 @@ data class HistoryUiState(
     /** 필터 적용된 수입 총합 (수입 + 이체 입금) */
     val filteredIncomeTotal: Int
         get() {
-            val expenses = currentPageData.expenses
-            val fixedFiltered = when (fixedExpenseFilter) {
-                FixedExpenseFilter.ALL -> expenses
-                FixedExpenseFilter.FIXED_ONLY -> expenses.filter { it.isFixed }
-                FixedExpenseFilter.EXCLUDE_FIXED -> expenses.filter { !it.isFixed }
-            }
-            // 고정만 필터 시 수입은 고정 개념이 없으므로 합계에서 제외
-            val incomeTotal = if (showIncomes && fixedExpenseFilter != FixedExpenseFilter.FIXED_ONLY) {
-                currentPageData.incomes.sumOf { it.amount }
+            val fixedFilteredExpenses = currentPageData.expenses.filterExpensesByFixed(fixedExpenseFilter)
+            val incomeTotal = if (showIncomes) {
+                currentPageData.incomes.filterIncomesByFixed(fixedExpenseFilter).sumOf { it.amount }
             } else {
                 0
             }
             val transferDepositTotal = if (showTransfers) {
-                fixedFiltered.filter {
+                fixedFilteredExpenses.filter {
                     it.transactionType == "TRANSFER" &&
-                            it.transferDirection == TransferDirection.DEPOSIT.dbValue
+                            it.isIncludedInTransferIncomeStats()
                 }.sumOf { it.amount }
             } else {
                 0
@@ -240,6 +251,7 @@ class HistoryViewModel @Inject constructor(
     private val incomeRepository: IncomeRepository,
     private val settingsDataStore: SettingsDataStore,
     private val categoryClassifierService: CategoryClassifierService,
+    private val categoryProvider: CategoryProvider,
     private val dataRefreshEvent: DataRefreshEvent,
     private val snackbarBus: AppSnackbarBus,
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
@@ -260,6 +272,7 @@ class HistoryViewModel @Inject constructor(
 
     init {
         loadSettings()
+        loadFilterCategories()
         observeDataRefreshEvents()
     }
 
@@ -327,6 +340,27 @@ class HistoryViewModel @Inject constructor(
 
     // ========== 전역 이벤트 처리 ==========
 
+    private fun loadFilterCategories() {
+        viewModelScope.launch {
+            val expenseCategories = withContext(Dispatchers.IO) {
+                categoryProvider.getExpenseEntries()
+            }
+            val incomeCategories = withContext(Dispatchers.IO) {
+                categoryProvider.getIncomeEntries()
+            }
+            val transferCategories = withContext(Dispatchers.IO) {
+                categoryProvider.getTransferEntries()
+            }
+            _uiState.update {
+                it.copy(
+                    expenseCategories = expenseCategories,
+                    incomeCategories = incomeCategories,
+                    transferCategories = transferCategories
+                )
+            }
+        }
+    }
+
     /** 내 카드 변경 등 전역 이벤트 감지 */
     private fun observeDataRefreshEvents() {
         viewModelScope.launch {
@@ -335,6 +369,7 @@ class HistoryViewModel @Inject constructor(
                     DataRefreshEvent.RefreshType.OWNED_CARD_UPDATED,
                     DataRefreshEvent.RefreshType.CATEGORY_UPDATED -> {
                         // 전체 월 데이터에 영향 → 비가시 캐시 제거 + 현재 페이지 갱신
+                        loadFilterCategories()
                         clearAllPageCache()
                         loadCurrentAndAdjacentPages()
                     }
@@ -353,7 +388,7 @@ class HistoryViewModel @Inject constructor(
                     }
 
                     DataRefreshEvent.RefreshType.DEBUG_FULL_SYNC_ALL_MESSAGES -> {
-                        // MainViewModel이 전체 동기화 수행 후 TRANSACTION_ADDED로 갱신됨
+                        // MainViewModel이 디버그 전체 동기화 수행 후 TRANSACTION_ADDED로 갱신됨
                     }
 
                     DataRefreshEvent.RefreshType.DEBUG_SYNC_TODAY_MESSAGES -> {
@@ -446,13 +481,14 @@ class HistoryViewModel @Inject constructor(
             }
 
             val incomeCategoriesForFilter = state.selectedIncomeCategories.takeIf { it.isNotEmpty() }
-            val filteredIncomes = if (!state.showIncomes) {
+            val typeCategoryFilteredIncomes = if (!state.showIncomes) {
                 emptyList()
             } else {
                 keywordFilteredIncomes.filter { income ->
                     incomeCategoriesForFilter?.contains(income.category) ?: true
                 }
             }
+            val filteredIncomes = typeCategoryFilteredIncomes.filterIncomesByFixed(state.fixedExpenseFilter)
             val sortedIncomes = filteredIncomes.sortedByDescending { inc -> inc.dateTime }
             val incomeTotal = sortedIncomes.sumOf { it.amount }
 
@@ -493,7 +529,7 @@ class HistoryViewModel @Inject constructor(
                     val transferCategoriesForFilter =
                         currentState.selectedTransferCategories.takeIf { it.isNotEmpty() }
 
-                    val filteredExpenses = keywordFilteredExpenses.filter { expense ->
+                    val typeCategoryFilteredExpenses = keywordFilteredExpenses.filter { expense ->
                         val isTransfer = expense.transactionType == "TRANSFER"
                         if (isTransfer) {
                             if (!currentState.showTransfers) return@filter false
@@ -503,9 +539,12 @@ class HistoryViewModel @Inject constructor(
                             expenseCategoriesForFilter?.contains(expense.category) ?: true
                         }
                     }
+                    val filteredExpenses =
+                        typeCategoryFilteredExpenses.filterExpensesByFixed(currentState.fixedExpenseFilter)
+                    val statsExpenses = filteredExpenses.filter { it.isIncludedInExpenseStats() }
                     val sortedExpenses = sortExpenses(filteredExpenses, currentState.sortOrder)
                     val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
-                    val dailyTotalsMap = filteredExpenses
+                    val dailyTotalsMap = statsExpenses
                         .groupBy { dateFormat.format(java.util.Date(it.dateTime)) }
                         .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
                     val incomesForList = _uiState.value.pageCache[key]?.incomes ?: emptyList()
@@ -514,7 +553,7 @@ class HistoryViewModel @Inject constructor(
                     updatePageCache(key, cached.copy(
                         isLoading = false,
                         expenses = sortedExpenses,
-                        monthlyTotal = filteredExpenses.sumOf { it.amount },
+                        monthlyTotal = statsExpenses.sumOf { it.amount },
                         dailyTotals = dailyTotalsMap,
                         transactionListItems = buildTransactionListItems(
                             sortedExpenses, incomesForList, currentState.sortOrder,
@@ -727,10 +766,13 @@ class HistoryViewModel @Inject constructor(
                 }
                 val currentState = _uiState.value
                 val sortedResults = sortExpenses(results, currentState.sortOrder)
+                val filteredResults = results.filterExpensesByFixed(currentState.fixedExpenseFilter)
                 updatePageCache(key, HistoryPageData(
                     isLoading = false,
                     expenses = sortedResults,
-                    monthlyTotal = results.sumOf { e -> e.amount },
+                    monthlyTotal = filteredResults
+                        .filter { it.isIncludedInExpenseStats() }
+                        .sumOf { e -> e.amount },
                     transactionListItems = buildTransactionListItems(
                         sortedResults, emptyList(), currentState.sortOrder,
                         currentState.showExpenses, currentState.showIncomes, currentState.showTransfers,
@@ -983,20 +1025,10 @@ class HistoryViewModel @Inject constructor(
         showTransfers: Boolean,
         fixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL
     ): List<TransactionListItem> {
-        val fixedFiltered = when (fixedExpenseFilter) {
-            FixedExpenseFilter.ALL -> expenses
-            FixedExpenseFilter.FIXED_ONLY -> expenses.filter { it.isFixed }
-            FixedExpenseFilter.EXCLUDE_FIXED -> expenses.filter { !it.isFixed }
-        }
-        val filteredExpenses = fixedFiltered.filter { expense ->
+        val filteredExpenses = expenses.filterExpensesByFixed(fixedExpenseFilter).filter { expense ->
             if (expense.transactionType == "TRANSFER") showTransfers else showExpenses
         }
-        // 고정만 필터 시 수입은 고정 개념이 없으므로 제외
-        val filteredIncomes = if (fixedExpenseFilter == FixedExpenseFilter.FIXED_ONLY) {
-            emptyList()
-        } else {
-            if (showIncomes) incomes else emptyList()
-        }
+        val filteredIncomes = if (showIncomes) incomes.filterIncomesByFixed(fixedExpenseFilter) else emptyList()
 
         // 둘 다 해제된 경우 빈 리스트
         if (!showExpenses && !showIncomes && !showTransfers) {
@@ -1030,8 +1062,13 @@ class HistoryViewModel @Inject constructor(
         allDates.forEach { date ->
             val dayExpenses = groupedExpenses[date] ?: emptyList()
             val dayIncomes = groupedIncomes[date] ?: emptyList()
-            val dailyExpenseTotal = dayExpenses.sumOf { it.amount }
-            val dailyIncomeTotal = dayIncomes.sumOf { it.amount }
+            val dailyExpenseTotal = dayExpenses
+                .filter { it.isIncludedInExpenseStats() }
+                .sumOf { it.amount }
+            val dailyIncomeTotal = dayIncomes.sumOf { it.amount } +
+                dayExpenses
+                    .filter { it.isIncludedInTransferIncomeStats() }
+                    .sumOf { it.amount }
 
             val calendar = Calendar.getInstance().apply { time = date }
             val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
@@ -1068,8 +1105,9 @@ class HistoryViewModel @Inject constructor(
                 title = "${context.getString(R.string.history_sort_amount)} (${
                     context.getString(R.string.history_count_with_unit, totalCount)
                 })",
-                expenseTotal = expenses.sumOf { it.amount },
-                incomeTotal = incomes.sumOf { it.amount }
+                expenseTotal = expenses.filter { it.isIncludedInExpenseStats() }.sumOf { it.amount },
+                incomeTotal = incomes.sumOf { it.amount } +
+                    expenses.filter { it.isIncludedInTransferIncomeStats() }.sumOf { it.amount }
             )
         )
         // 지출+수입 금액 높은순 통합 정렬
@@ -1093,13 +1131,19 @@ class HistoryViewModel @Inject constructor(
             .sortedByDescending { it.value.size }
 
         storeGroups.forEach { (storeName, storeExpenses) ->
-            val storeTotal = storeExpenses.sumOf { it.amount }
+            val storeExpenseTotal = storeExpenses
+                .filter { it.isIncludedInExpenseStats() }
+                .sumOf { it.amount }
+            val storeIncomeTotal = storeExpenses
+                .filter { it.isIncludedInTransferIncomeStats() }
+                .sumOf { it.amount }
             items.add(
                 TransactionListItem.Header(
                     title = "$storeName (${
                         context.getString(R.string.history_visit_with_unit, storeExpenses.size)
                     })",
-                    expenseTotal = storeTotal
+                    expenseTotal = storeExpenseTotal,
+                    incomeTotal = storeIncomeTotal
                 )
             )
             storeExpenses.sortedByDescending { it.dateTime }

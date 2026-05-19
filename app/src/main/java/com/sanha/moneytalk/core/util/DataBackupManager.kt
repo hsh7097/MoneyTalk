@@ -60,7 +60,8 @@ data class ExpenseBackup(
     val originalSms: String,
     val smsId: String,
     val senderAddress: String = "",
-    val memo: String?
+    val memo: String?,
+    val isExcludedFromStats: Boolean = false
 )
 
 data class IncomeBackup(
@@ -175,7 +176,8 @@ object DataBackupManager {
                     originalSms = expense.originalSms,
                     smsId = expense.smsId,
                     senderAddress = expense.senderAddress,
-                    memo = expense.memo
+                    memo = expense.memo,
+                    isExcludedFromStats = expense.isExcludedFromStats
                 )
             },
             incomes = incomes.map { income ->
@@ -205,7 +207,7 @@ object DataBackupManager {
         sb.append('\uFEFF')
 
         // 헤더
-        sb.appendLine("날짜,가맹점,카테고리,카드,전화번호,금액,메모,문자원본")
+        sb.appendLine("날짜,가맹점,카테고리,카드,전화번호,금액,통계제외,메모,문자원본")
 
         // 데이터
         expenses.forEach { expense ->
@@ -216,6 +218,7 @@ object DataBackupManager {
                         "${escapeCsv(expense.cardName)}," +
                         "${escapeCsv(expense.senderAddress)}," +
                         "${expense.amount}," +
+                        "${expense.isExcludedFromStats}," +
                         "${escapeCsv(expense.memo ?: "")}," +
                         escapeCsv(expense.originalSms)
             )
@@ -263,7 +266,7 @@ object DataBackupManager {
         sb.append('\uFEFF')
 
         // 헤더
-        sb.appendLine("유형,날짜,이름,카테고리,카드/출처,전화번호,메모,금액,문자원본")
+        sb.appendLine("유형,날짜,이름,카테고리,카드/출처,전화번호,메모,금액,통계제외,문자원본")
 
         // 지출 데이터
         expenses.forEach { expense ->
@@ -276,6 +279,7 @@ object DataBackupManager {
                         "${escapeCsv(expense.senderAddress)}," +
                         "${escapeCsv(expense.memo ?: "")}," +
                         "-${expense.amount}," +
+                        "${expense.isExcludedFromStats}," +
                         escapeCsv(expense.originalSms)
             )
         }
@@ -291,6 +295,7 @@ object DataBackupManager {
                         "${escapeCsv(income.senderAddress)}," +
                         "${escapeCsv(income.description)}," +
                         "+${income.amount}," +
+                        "false," +
                         escapeCsv(income.originalSms ?: "")
             )
         }
@@ -361,6 +366,7 @@ object DataBackupManager {
                 smsId = backup.smsId,
                 senderAddress = backup.senderAddress,
                 memo = backup.memo,
+                isExcludedFromStats = backup.isExcludedFromStats,
                 createdAt = System.currentTimeMillis()
             )
         }

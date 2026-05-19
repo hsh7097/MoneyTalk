@@ -91,10 +91,12 @@ interface StoreEmbeddingRepository {
      *
      * @param storeCategories 가게명→카테고리 매핑 목록
      * @param source 분류 출처
+     * @param embeddingsByStoreName 이미 생성된 임베딩. 제공된 가게명은 API 재호출 없이 저장합니다.
      */
     suspend fun saveStoreEmbeddings(
         storeCategories: Map<String, String>,
-        source: String = "gemini"
+        source: String = "gemini",
+        embeddingsByStoreName: Map<String, List<Float>> = emptyMap()
     )
 
     /**

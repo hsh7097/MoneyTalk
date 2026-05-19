@@ -7,7 +7,7 @@
         android:name="android.hardware.telephony"
         android:required="false" />
 
-    <!-- SMS 권한 -->
+    <!-- SMS-based money management core feature. Play Console declaration required before production release. -->
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
 
@@ -17,6 +17,46 @@
     <!-- 인터넷 권한 (Claude API) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <queries>
+        <!-- 금융 앱 알림 설정 화면에서 설치 여부를 확인할 앱 목록 -->
+        <package android:name="com.kakaobank.channel" />        <!-- 카카오뱅크 -->
+        <package android:name="com.kbcard.cxh.appcard" />       <!-- KB Pay -->
+        <package android:name="com.kbstar.liivbank" />          <!-- Liiv -->
+        <package android:name="com.kbstar.reboot" />            <!-- Liiv Next -->
+        <package android:name="com.kbstar.kbbank" />            <!-- KB국민은행 스타뱅킹 -->
+        <package android:name="com.lcacApp" />                  <!-- 롯데카드 -->
+        <package android:name="com.wooricard.smartapp" />       <!-- 우리WON카드 -->
+        <package android:name="com.wooribank.smart.npib" />     <!-- 우리WON뱅킹 -->
+        <package android:name="nh.smart.nhallonepay" />         <!-- NH카드 -->
+        <package android:name="kr.co.citibank.citimobile" />    <!-- 씨티카드 -->
+        <package android:name="com.hyundaicard.appcard" />      <!-- 현대카드 -->
+        <package android:name="kr.co.samsungcard.mpocket" />    <!-- 삼성카드 -->
+        <package android:name="net.ib.android.smcard" />        <!-- 삼성 monimo -->
+        <package android:name="com.hanaskcard.paycla" />        <!-- 하나카드 -->
+        <package android:name="kr.co.hanamembers.hmscustomer" /><!-- 하나멤버스 -->
+        <package android:name="com.shinhancard.smartshinhan" /> <!-- 신한카드 -->
+        <package android:name="com.shcard.smartpay" />          <!-- 신한카드 -->
+        <package android:name="com.shinhan.smartcaremgr" />     <!-- 신한카드 SOL -->
+        <package android:name="com.ssg.serviceapp.android.egiftcertificate" /> <!-- 신세계페이 -->
+        <package android:name="kvp.jjy.MispAndroid320" />       <!-- 비씨카드 -->
+        <package android:name="viva.republica.toss" />          <!-- 토스 -->
+        <package android:name="com.nhnent.payapp" />            <!-- 페이코 -->
+        <package android:name="com.mysmilepay.app" />           <!-- 스마일페이 -->
+        <package android:name="com.samsung.android.spay" />     <!-- 삼성페이 -->
+        <package android:name="com.samsung.android.spaylite" /> <!-- 삼성페이 미니 -->
+        <package android:name="com.sec.android.wallet" />       <!-- 삼성월렛 -->
+        <package android:name="com.lge.lgpay" />                <!-- LG페이 -->
+        <package android:name="com.lottemembers.android" />     <!-- L.POINT/L페이 -->
+        <package android:name="kr.danal.app.damoum" />          <!-- 다날 결제 -->
+        <package android:name="com.kftc.bankpay.android" />     <!-- 금융결제원/뱅크페이 -->
+        <package android:name="com.nh.cashcardapp" />           <!-- 농협 앱캐시 -->
+        <package android:name="kr.co.kfcc.mobilebank" />        <!-- MG새마을금고 -->
+        <package android:name="com.knb.psb" />                  <!-- 경남은행 -->
+        <package android:name="com.tmoney.inapp" />             <!-- 티머니 인앱결제 -->
+        <package android:name="com.tmoney.nfc_pay" />           <!-- 티머니 NFC -->
+        <package android:name="uplus.membership" />             <!-- LGU+ 휴대폰결제 -->
+    </queries>
 
     <application
         android:name=".MoneyTalkApplication"
@@ -45,7 +85,6 @@
         <activity
             android:name=".feature.intro.ui.IntroActivity"
             android:exported="true"
-            android:label="@string/app_name"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MoneyTalk">
             <intent-filter>
@@ -57,7 +96,6 @@
         <activity
             android:name=".MainActivity"
             android:exported="false"
-            android:label="@string/app_name"
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MoneyTalk" />

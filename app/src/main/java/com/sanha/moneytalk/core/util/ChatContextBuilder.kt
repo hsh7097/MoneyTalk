@@ -1,7 +1,10 @@
 package com.sanha.moneytalk.core.util
 
+import android.content.Context
+import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.database.entity.ChatEntity
 import com.sanha.moneytalk.feature.chat.data.ChatContext
+import java.util.Locale
 
 /**
  * LLM 입력 프롬프트 구성 유틸리티
@@ -15,27 +18,30 @@ object ChatContextBuilder {
      * 쿼리 분석용 컨텍스트 구성
      * 대화 맥락을 포함하여 쿼리 분석 정확도 향상
      */
-    fun buildQueryAnalysisContext(context: ChatContext): String {
+    fun buildQueryAnalysisContext(
+        context: Context,
+        chatContext: ChatContext
+    ): String {
         val sb = StringBuilder()
 
         // 요약이 있으면 포함
-        context.summary?.takeIf { it.isNotBlank() }?.let {
-            sb.appendLine("[이전 대화 요약]")
+        chatContext.summary?.takeIf { it.isNotBlank() }?.let {
+            sb.appendLine(context.getString(R.string.ai_chat_section_previous_summary))
             sb.appendLine(it)
             sb.appendLine()
         }
 
         // 최근 대화 (현재 메시지 제외)
-        val recentWithoutCurrent = context.recentMessages.dropLast(1)
+        val recentWithoutCurrent = chatContext.recentMessages.dropLast(1)
         if (recentWithoutCurrent.isNotEmpty()) {
-            sb.appendLine("[최근 대화]")
-            sb.appendLine(formatMessages(recentWithoutCurrent))
+            sb.appendLine(context.getString(R.string.ai_chat_section_recent_messages))
+            sb.appendLine(formatMessages(context, recentWithoutCurrent))
             sb.appendLine()
         }
 
         // 현재 질문
-        sb.appendLine("[현재 질문]")
-        sb.appendLine(context.currentUserMessage)
+        sb.appendLine(context.getString(R.string.ai_chat_section_current_question))
+        sb.appendLine(chatContext.currentUserMessage)
 
         return sb.toString().trim()
     }
@@ -45,47 +51,59 @@ object ChatContextBuilder {
      * 대화 맥락 + 쿼리 결과 + 액션 결과를 통합
      */
     fun buildFinalAnswerPrompt(
-        context: ChatContext,
+        context: Context,
+        chatContext: ChatContext,
         queryResults: String,
-        monthlyIncome: Int,
+        monthlyIncome: Int?,
         actionResults: String = ""
     ): String {
         val sb = StringBuilder()
 
         // 대화 요약
-        context.summary?.takeIf { it.isNotBlank() }?.let {
-            sb.appendLine("[이전 대화 요약]")
+        chatContext.summary?.takeIf { it.isNotBlank() }?.let {
+            sb.appendLine(context.getString(R.string.ai_chat_section_previous_summary))
             sb.appendLine(it)
             sb.appendLine()
         }
 
         // 최근 대화 (현재 메시지 제외)
-        val recentWithoutCurrent = context.recentMessages.dropLast(1)
+        val recentWithoutCurrent = chatContext.recentMessages.dropLast(1)
         if (recentWithoutCurrent.isNotEmpty()) {
-            sb.appendLine("[최근 대화]")
-            sb.appendLine(formatMessages(recentWithoutCurrent))
+            sb.appendLine(context.getString(R.string.ai_chat_section_recent_messages))
+            sb.appendLine(formatMessages(context, recentWithoutCurrent))
             sb.appendLine()
         }
 
-        // 월 수입
-        sb.appendLine("[월 수입] ${String.format("%,d", monthlyIncome)}원")
-        sb.appendLine()
+        // 월 수입은 조회/분석에 필요한 경우에만 포함한다.
+        monthlyIncome?.let {
+            sb.appendLine(
+                context.getString(
+                    R.string.ai_chat_section_monthly_income,
+                    String.format(Locale.KOREA, "%,d", it)
+                )
+            )
+            sb.appendLine()
+        }
 
         // 쿼리 결과
-        sb.appendLine("[조회된 데이터]")
-        sb.appendLine(queryResults)
+        sb.appendLine(context.getString(R.string.ai_chat_section_queried_data))
+        sb.appendLine(
+            queryResults.ifBlank {
+                context.getString(R.string.prompt_final_answer_empty_data_context)
+            }
+        )
 
         // 액션 결과
         if (actionResults.isNotBlank()) {
             sb.appendLine()
-            sb.appendLine("[실행된 액션 결과]")
+            sb.appendLine(context.getString(R.string.ai_chat_section_action_results))
             sb.appendLine(actionResults)
         }
 
         // 현재 질문
         sb.appendLine()
-        sb.appendLine("[현재 질문]")
-        sb.appendLine(context.currentUserMessage)
+        sb.appendLine(context.getString(R.string.ai_chat_section_current_question))
+        sb.appendLine(chatContext.currentUserMessage)
 
         return sb.toString().trim()
     }
@@ -93,9 +111,13 @@ object ChatContextBuilder {
     /**
      * 메시지 리스트를 텍스트로 변환
      */
-    private fun formatMessages(messages: List<ChatEntity>): String {
+    private fun formatMessages(context: Context, messages: List<ChatEntity>): String {
         return messages.joinToString("\n") { msg ->
-            val role = if (msg.isUser) "사용자" else "상담사"
+            val role = if (msg.isUser) {
+                context.getString(R.string.ai_chat_role_user)
+            } else {
+                context.getString(R.string.ai_chat_role_advisor)
+            }
             "$role: ${msg.message}"
         }
     }

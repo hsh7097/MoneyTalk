@@ -65,6 +65,10 @@ data class ExpenseEntity(
     @ColumnInfo(name = "is_fixed", defaultValue = "0")
     val isFixed: Boolean = false,
 
+    /** 통계 제외 여부 (기록은 유지하되 월별 합계/카테고리/AI 분석에서 제외) */
+    @ColumnInfo(name = "is_excluded_from_stats", defaultValue = "0")
+    val isExcludedFromStats: Boolean = false,
+
     /** 거래 유형 (EXPENSE 또는 TRANSFER) */
     @ColumnInfo(name = "transaction_type", defaultValue = "EXPENSE")
     val transactionType: String = "EXPENSE",

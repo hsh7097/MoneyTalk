@@ -5,6 +5,7 @@ import com.sanha.moneytalk.core.database.dao.DailySum
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.MonthlySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.util.CardNameNormalizer
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -154,6 +155,18 @@ class ExpenseRepository @Inject constructor(
     suspend fun getAllCardNames(): List<String> =
         expenseDao.getAllCardNames()
 
+    /** 저장된 카드명을 현재 정규화 규칙에 맞게 보정 */
+    suspend fun normalizeStoredCardNames(): Int {
+        var updatedCount = 0
+        for (cardName in expenseDao.getAllCardNames()) {
+            val normalized = CardNameNormalizer.normalize(cardName)
+            if (normalized.isNotBlank() && normalized != cardName) {
+                updatedCount += expenseDao.updateCardName(cardName, normalized)
+            }
+        }
+        return updatedCount
+    }
+
     /** 카드별 지출 건수 포함 카드명 목록 (OwnedCard seenCount 계산용) */
     suspend fun getAllCardNamesWithDuplicates(): List<String> =
         expenseDao.getAllCardNamesWithDuplicates()
@@ -224,6 +237,10 @@ class ExpenseRepository @Inject constructor(
     /** 특정 ID의 고정지출 여부 변경 */
     suspend fun updateFixedById(expenseId: Long, isFixed: Boolean): Int =
         expenseDao.updateFixedById(expenseId, isFixed)
+
+    /** 특정 ID의 통계 제외 여부 변경 */
+    suspend fun updateStatsExcludedById(expenseId: Long, isExcluded: Boolean): Int =
+        expenseDao.updateStatsExcludedById(expenseId, isExcluded)
 
     /** 특정 카테고리의 지출 조회 (일회성) */
     suspend fun getExpensesByCategoryOnce(category: String): List<ExpenseEntity> =
