@@ -843,7 +843,6 @@ class ChatViewModel @Inject constructor(
                 }
 
                 val totalExpense = allCategoryExpenses.sumOf { it.total }  // 전체 지출 총액 (비율 계산용)
-                val filteredTotal = categoryExpenses.sumOf { it.total }    // 필터된 카테고리 합계
 
                 val ratioBreakdown = categoryExpenses.joinToString("\n") { item ->
                     val category = Category.fromDisplayName(item.category)
@@ -853,10 +852,11 @@ class ChatViewModel @Inject constructor(
                         if (totalExpense > 0) (item.total * 100.0 / totalExpense) else 0.0
                     "${category.emoji} ${category.displayName}: ${numberFormat.format(item.total)}원 (수입의 ${
                         String.format(
+                            Locale.KOREA,
                             "%.1f",
                             incomeRatio
                         )
-                    }%, 지출의 ${String.format("%.1f", expenseRatio)}%)"
+                    }%, 지출의 ${String.format(Locale.KOREA, "%.1f", expenseRatio)}%)"
                 }.ifEmpty { "해당 기간 지출 내역이 없습니다." }
 
                 val totalIncomeRatio =
@@ -871,6 +871,7 @@ class ChatViewModel @Inject constructor(
                         )
                     }원\n총 지출: ${numberFormat.format(totalExpense)}원 (수입의 ${
                         String.format(
+                            Locale.KOREA,
                             "%.1f",
                             totalIncomeRatio
                         )
@@ -1028,6 +1029,7 @@ class ChatViewModel @Inject constructor(
         ) {
             yearMonths.add(
                 String.format(
+                    Locale.ROOT,
                     "%04d-%02d",
                     iterCal.get(Calendar.YEAR),
                     iterCal.get(Calendar.MONTH) + 1
@@ -1148,7 +1150,7 @@ class ChatViewModel @Inject constructor(
             val groupResults = grouped.map { (key, items) ->
                 val metricValues = metrics.map { metric ->
                     val label = getMetricLabel(metric.op)
-                    val value: Number = computeMetric(items, metric.op, metric.field)
+                    val value: Number = computeMetric(items, metric.op)
                     label to value
                 }
                 val sortValue = metricValues.firstOrNull()?.second ?: 0
@@ -1449,7 +1451,7 @@ class ChatViewModel @Inject constructor(
     }
 
     /** 메트릭 연산 실행 */
-    private fun computeMetric(items: List<ExpenseEntity>, op: String, field: String): Number {
+    private fun computeMetric(items: List<ExpenseEntity>, op: String): Number {
         // 현재 amount만 지원
         val values = items.map { it.amount }
         return when (op) {
@@ -1928,6 +1930,7 @@ class ChatViewModel @Inject constructor(
     }
 
     @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
+    @Suppress("UNUSED_PARAMETER")
     fun setApiKey(key: String) {
         // RTDB 기반 키 관리로 전환 — 로컬 키 저장 제거
     }

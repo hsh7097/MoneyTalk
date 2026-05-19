@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.util.DateUtils
@@ -314,7 +315,7 @@ fun TypingIndicator() {
                 Box(
                     modifier = Modifier
                         .size((10 * dotScales[index].value).dp)
-                        .offset(y = dotOffsets[index].value.dp)
+                        .offset { IntOffset(0, dotOffsets[index].value.dp.roundToPx()) }
                         .clip(CircleShape)
                         .background(
                             MaterialTheme.colorScheme.primary.copy(

@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 private const val EXTRA_CATEGORY = "extra_category"
@@ -355,7 +356,7 @@ class CategoryDetailViewModel @Inject constructor(
                 }
 
                 // 카테고리 예산 로드
-                val yearMonth = String.format("%04d-%02d", year, month)
+                val yearMonth = String.format(Locale.ROOT, "%04d-%02d", year, month)
                 val categoryBudget = withContext(Dispatchers.IO) {
                     budgetDao.getBudgetByCategory(categoryDisplayName, yearMonth)?.monthlyLimit
                 }
