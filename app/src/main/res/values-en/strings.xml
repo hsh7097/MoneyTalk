@@ -19,7 +19,7 @@
     <string name="common_unknown_error">Unknown error</string>
     <string name="nav_home">Home</string>
     <string name="nav_history">History</string>
-    <string name="nav_chat">Chat</string>
+    <string name="nav_chat">Insights</string>
     <string name="nav_settings">Settings</string>
     <string name="error_response">Sorry, an error occurred while getting a response: %s</string>
     <string name="error_general">An error occurred: %s</string>
@@ -48,24 +48,24 @@
     <string name="onboarding_skip">Skip</string>
 
     <!-- Chat Screen -->
-    <string name="chat_title">AI Financial Advisor</string>
-    <string name="chat_subtitle_with_api">Chat with Gemini</string>
-    <string name="chat_subtitle_no_api">Please set up API key</string>
+    <string name="chat_title">AI Insights</string>
+    <string name="chat_subtitle_with_api">Check common spending questions quickly</string>
+    <string name="chat_subtitle_no_api">Set up an API key to use AI insights</string>
     <string name="chat_input_placeholder">Type a message…</string>
     <string name="chat_send">Send</string>
     <string name="chat_thinking">Thinking…</string>
     <string name="chat_session_list">Conversations</string>
-    <string name="chat_new_session">New Chat</string>
+    <string name="chat_new_session">New Question</string>
     <string name="chat_close">Close</string>
     <string name="chat_delete">Delete</string>
-    <string name="chat_no_sessions">No conversations yet</string>
-    <string name="chat_start_new">Start New Chat</string>
-    <string name="chat_default_session_title">New Chat</string>
-    <string name="chat_previous_session_title">Previous Chat</string>
+    <string name="chat_no_sessions">No saved insights yet</string>
+    <string name="chat_start_new">Start Insight Question</string>
+    <string name="chat_default_session_title">New Insight</string>
+    <string name="chat_previous_session_title">Previous Insight</string>
 
     <!-- Session Delete Dialog -->
-    <string name="dialog_delete_session_title">Delete Conversation</string>
-    <string name="dialog_delete_session_message">Delete this conversation?\nThis action cannot be undone.</string>
+    <string name="dialog_delete_session_title">Delete Insight Record</string>
+    <string name="dialog_delete_session_message">Delete this insight record?\nThis action cannot be undone.</string>
     <string name="dialog_confirm">Confirm</string>
     <string name="dialog_cancel">Cancel</string>
 
@@ -77,14 +77,14 @@
     <string name="api_key_setting">API Key Settings</string>
 
     <!-- Guide Questions -->
-    <string name="guide_welcome">Hello!</string>
-    <string name="guide_intro">I\'m your AI financial advisor.\nTap a question below to get started!</string>
+    <string name="guide_welcome">Pick an insight to check</string>
+    <string name="guide_intro">Run common spending checks quickly.\nChoose a question and MoneyTalk will answer from your data.</string>
     <string name="guide_api_key_required">* Please set up API key first</string>
 
     <!-- Guide Question Categories -->
-    <string name="guide_category_expense_search">Expenses</string>
-    <string name="guide_category_analysis">Analysis</string>
-    <string name="guide_category_manage">Review &amp; Manage</string>
+    <string name="guide_category_expense_search">Quick Checks</string>
+    <string name="guide_category_analysis">Spending Review</string>
+    <string name="guide_category_manage">Needs Review</string>
 
     <!-- Guide Question Examples -->
     <string name="guide_q_expense_coupang">How much did I spend this month?</string>
