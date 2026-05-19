@@ -23,6 +23,9 @@ class OwnedCardRepository @Inject constructor(
     /** 모든 카드 목록 (Flow) */
     fun getAllCards(): Flow<List<OwnedCardEntity>> = ownedCardDao.getAllCards()
 
+    /** 모든 카드 목록 (1회성) */
+    suspend fun getAllCardsOnce(): List<OwnedCardEntity> = ownedCardDao.getAllCardsOnce()
+
     /** 내 카드명 목록 (Flow) */
     fun getOwnedCardNamesFlow(): Flow<List<String>> = ownedCardDao.getOwnedCardNamesFlow()
 
@@ -72,6 +75,13 @@ class OwnedCardRepository @Inject constructor(
                     )
                 )
             }
+        }
+    }
+
+    /** 백업 복원용 카드 일괄 저장 */
+    suspend fun upsertAll(cards: List<OwnedCardEntity>) {
+        if (cards.isNotEmpty()) {
+            ownedCardDao.upsertAll(cards)
         }
     }
 

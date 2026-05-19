@@ -57,6 +57,13 @@ class CategoryRepository @Inject constructor(
         categoryMappingDao.insertAll(entities)
     }
 
+    /** 백업 복원용 매핑 일괄 저장 */
+    suspend fun restoreMappings(mappings: List<CategoryMappingEntity>) {
+        if (mappings.isNotEmpty()) {
+            categoryMappingDao.insertAll(mappings)
+        }
+    }
+
     /**
      * 기존 매핑의 카테고리 업데이트
      */

@@ -28,6 +28,13 @@ class StoreRuleRepository @Inject constructor(
     /** 규칙 추가/갱신 */
     suspend fun upsert(rule: StoreRuleEntity) = storeRuleDao.upsert(rule)
 
+    /** 규칙 일괄 추가/갱신 */
+    suspend fun upsertAll(rules: List<StoreRuleEntity>) {
+        if (rules.isNotEmpty()) {
+            storeRuleDao.upsertAll(rules)
+        }
+    }
+
     /** 규칙 삭제 */
     suspend fun delete(rule: StoreRuleEntity) = storeRuleDao.delete(rule)
 

@@ -4,8 +4,14 @@ import android.content.Context
 import android.net.Uri
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.sanha.moneytalk.core.database.entity.BudgetEntity
+import com.sanha.moneytalk.core.database.entity.CategoryMappingEntity
+import com.sanha.moneytalk.core.database.entity.CustomCategoryEntity
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.database.entity.OwnedCardEntity
+import com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity
+import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
@@ -38,11 +44,17 @@ enum class ExportFormat {
  * 백업 데이터 모델
  */
 data class BackupData(
-    val version: Int = 1,
+    val version: Int = 2,
     val createdAt: String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date()),
     val settings: BackupSettings = BackupSettings(),
     val expenses: List<ExpenseBackup> = emptyList(),
-    val incomes: List<IncomeBackup> = emptyList()
+    val incomes: List<IncomeBackup> = emptyList(),
+    val categoryMappings: List<CategoryMappingBackup> = emptyList(),
+    val customCategories: List<CustomCategoryBackup> = emptyList(),
+    val storeRules: List<StoreRuleBackup> = emptyList(),
+    val budgets: List<BudgetBackup> = emptyList(),
+    val ownedCards: List<OwnedCardBackup> = emptyList(),
+    val smsExclusionKeywords: List<SmsExclusionKeywordBackup> = emptyList()
 )
 
 data class BackupSettings(
@@ -61,7 +73,9 @@ data class ExpenseBackup(
     val smsId: String,
     val senderAddress: String = "",
     val memo: String?,
-    val isExcludedFromStats: Boolean = false
+    val isExcludedFromStats: Boolean = false,
+    val transactionType: String = "EXPENSE",
+    val transferDirection: String = ""
 )
 
 data class IncomeBackup(
@@ -75,6 +89,51 @@ data class IncomeBackup(
     val originalSms: String? = null
 )
 
+data class CategoryMappingBackup(
+    val storeName: String,
+    val category: String,
+    val source: String = "local",
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+data class CustomCategoryBackup(
+    val displayName: String,
+    val emoji: String,
+    val categoryType: String,
+    val displayOrder: Int = 0,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+data class StoreRuleBackup(
+    val keyword: String,
+    val category: String? = null,
+    val isFixed: Boolean? = null,
+    val isExcludedFromStats: Boolean? = null,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+data class BudgetBackup(
+    val category: String,
+    val monthlyLimit: Int,
+    val yearMonth: String = "default"
+)
+
+data class OwnedCardBackup(
+    val cardName: String,
+    val isOwned: Boolean = true,
+    val firstSeenAt: Long = System.currentTimeMillis(),
+    val lastSeenAt: Long = System.currentTimeMillis(),
+    val seenCount: Int = 1,
+    val source: String = "sms_sync"
+)
+
+data class SmsExclusionKeywordBackup(
+    val keyword: String,
+    val source: String = "user",
+    val createdAt: Long = System.currentTimeMillis()
+)
+
 /**
  * 데이터 백업/복원 매니저
  */
@@ -85,6 +144,10 @@ object DataBackupManager {
         .create()
 
     private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA)
+
+    private fun String?.orDefaultIfBlank(defaultValue: String): String {
+        return if (isNullOrBlank()) defaultValue else this
+    }
 
     /**
      * 필터를 적용한 지출 데이터 필터링
@@ -159,7 +222,13 @@ object DataBackupManager {
         expenses: List<ExpenseEntity>,
         incomes: List<IncomeEntity>,
         monthlyIncome: Int,
-        monthStartDay: Int
+        monthStartDay: Int,
+        categoryMappings: List<CategoryMappingEntity> = emptyList(),
+        customCategories: List<CustomCategoryEntity> = emptyList(),
+        storeRules: List<StoreRuleEntity> = emptyList(),
+        budgets: List<BudgetEntity> = emptyList(),
+        ownedCards: List<OwnedCardEntity> = emptyList(),
+        smsExclusionKeywords: List<SmsExclusionKeywordEntity> = emptyList()
     ): String {
         val backupData = BackupData(
             settings = BackupSettings(
@@ -177,7 +246,9 @@ object DataBackupManager {
                     smsId = expense.smsId,
                     senderAddress = expense.senderAddress,
                     memo = expense.memo,
-                    isExcludedFromStats = expense.isExcludedFromStats
+                    isExcludedFromStats = expense.isExcludedFromStats,
+                    transactionType = expense.transactionType,
+                    transferDirection = expense.transferDirection
                 )
             },
             incomes = incomes.map { income ->
@@ -191,7 +262,60 @@ object DataBackupManager {
                     senderAddress = income.senderAddress,
                     originalSms = income.originalSms
                 )
-            }
+            },
+            categoryMappings = categoryMappings.map { mapping ->
+                CategoryMappingBackup(
+                    storeName = mapping.storeName,
+                    category = mapping.category,
+                    source = mapping.source,
+                    createdAt = mapping.createdAt,
+                    updatedAt = mapping.updatedAt
+                )
+            },
+            customCategories = customCategories.map { category ->
+                CustomCategoryBackup(
+                    displayName = category.displayName,
+                    emoji = category.emoji,
+                    categoryType = category.categoryType,
+                    displayOrder = category.displayOrder,
+                    createdAt = category.createdAt
+                )
+            },
+            storeRules = storeRules.map { rule ->
+                StoreRuleBackup(
+                    keyword = rule.keyword,
+                    category = rule.category,
+                    isFixed = rule.isFixed,
+                    isExcludedFromStats = rule.isExcludedFromStats,
+                    createdAt = rule.createdAt
+                )
+            },
+            budgets = budgets.map { budget ->
+                BudgetBackup(
+                    category = budget.category,
+                    monthlyLimit = budget.monthlyLimit,
+                    yearMonth = budget.yearMonth
+                )
+            },
+            ownedCards = ownedCards.map { card ->
+                OwnedCardBackup(
+                    cardName = card.cardName,
+                    isOwned = card.isOwned,
+                    firstSeenAt = card.firstSeenAt,
+                    lastSeenAt = card.lastSeenAt,
+                    seenCount = card.seenCount,
+                    source = card.source
+                )
+            },
+            smsExclusionKeywords = smsExclusionKeywords
+                .filter { it.source != "default" }
+                .map { keyword ->
+                    SmsExclusionKeywordBackup(
+                        keyword = keyword.keyword,
+                        source = keyword.source,
+                        createdAt = keyword.createdAt
+                    )
+                }
         )
 
         return gson.toJson(backupData)
@@ -364,9 +488,11 @@ object DataBackupManager {
                 dateTime = backup.dateTime,
                 originalSms = backup.originalSms,
                 smsId = backup.smsId,
-                senderAddress = backup.senderAddress,
+                senderAddress = backup.senderAddress.orEmpty(),
                 memo = backup.memo,
                 isExcludedFromStats = backup.isExcludedFromStats,
+                transactionType = backup.transactionType.orDefaultIfBlank("EXPENSE"),
+                transferDirection = backup.transferDirection.orEmpty(),
                 createdAt = System.currentTimeMillis()
             )
         }
@@ -382,10 +508,119 @@ object DataBackupManager {
                 isRecurring = backup.isRecurring,
                 recurringDay = backup.recurringDay,
                 dateTime = backup.dateTime,
-                senderAddress = backup.senderAddress,
+                senderAddress = backup.senderAddress.orEmpty(),
                 originalSms = backup.originalSms,
                 createdAt = System.currentTimeMillis()
             )
+        }
+    }
+
+    fun convertToCategoryMappingEntities(
+        backups: List<CategoryMappingBackup>
+    ): List<CategoryMappingEntity> {
+        return backups.mapNotNull { backup ->
+            val storeName = backup.storeName.trim()
+            val category = backup.category.trim()
+            if (storeName.isBlank() || category.isBlank()) {
+                null
+            } else {
+                CategoryMappingEntity(
+                    id = 0,
+                    storeName = storeName,
+                    category = category,
+                    source = backup.source.orDefaultIfBlank("local"),
+                    createdAt = backup.createdAt,
+                    updatedAt = backup.updatedAt
+                )
+            }
+        }
+    }
+
+    fun convertToCustomCategoryEntities(
+        backups: List<CustomCategoryBackup>
+    ): List<CustomCategoryEntity> {
+        return backups.mapNotNull { backup ->
+            val displayName = backup.displayName.trim()
+            if (displayName.isBlank()) {
+                null
+            } else {
+                CustomCategoryEntity(
+                    id = 0,
+                    displayName = displayName,
+                    emoji = backup.emoji.orDefaultIfBlank("\uD83D\uDCE6"),
+                    categoryType = backup.categoryType.orDefaultIfBlank("EXPENSE"),
+                    displayOrder = backup.displayOrder,
+                    createdAt = backup.createdAt
+                )
+            }
+        }
+    }
+
+    fun convertToStoreRuleEntities(backups: List<StoreRuleBackup>): List<StoreRuleEntity> {
+        return backups.mapNotNull { backup ->
+            val keyword = backup.keyword.trim()
+            if (keyword.isBlank()) {
+                null
+            } else {
+                StoreRuleEntity(
+                    id = 0,
+                    keyword = keyword,
+                    category = backup.category,
+                    isFixed = backup.isFixed,
+                    isExcludedFromStats = backup.isExcludedFromStats,
+                    createdAt = backup.createdAt
+                )
+            }
+        }
+    }
+
+    fun convertToBudgetEntities(backups: List<BudgetBackup>): List<BudgetEntity> {
+        return backups.mapNotNull { backup ->
+            val category = backup.category.trim()
+            if (category.isBlank() || backup.monthlyLimit <= 0) {
+                null
+            } else {
+                BudgetEntity(
+                    category = category,
+                    monthlyLimit = backup.monthlyLimit,
+                    yearMonth = backup.yearMonth.orDefaultIfBlank("default")
+                )
+            }
+        }
+    }
+
+    fun convertToOwnedCardEntities(backups: List<OwnedCardBackup>): List<OwnedCardEntity> {
+        return backups.mapNotNull { backup ->
+            val cardName = backup.cardName.trim()
+            if (cardName.isBlank()) {
+                null
+            } else {
+                OwnedCardEntity(
+                    cardName = cardName,
+                    isOwned = backup.isOwned,
+                    firstSeenAt = backup.firstSeenAt,
+                    lastSeenAt = backup.lastSeenAt,
+                    seenCount = backup.seenCount.coerceAtLeast(0),
+                    source = backup.source.orDefaultIfBlank("sms_sync")
+                )
+            }
+        }
+    }
+
+    fun convertToSmsExclusionKeywordEntities(
+        backups: List<SmsExclusionKeywordBackup>
+    ): List<SmsExclusionKeywordEntity> {
+        return backups.mapNotNull { backup ->
+            val keyword = backup.keyword.trim().lowercase()
+            if (keyword.isBlank() || backup.source == "default") {
+                null
+            } else {
+                SmsExclusionKeywordEntity(
+                    keyword = keyword,
+                    source = backup.source.orDefaultIfBlank("user"),
+                    createdAt = backup.createdAt
+                )
+            }
         }
     }
 

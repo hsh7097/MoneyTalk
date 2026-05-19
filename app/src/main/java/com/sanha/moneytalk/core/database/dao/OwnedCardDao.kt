@@ -49,6 +49,10 @@ interface OwnedCardDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(card: OwnedCardEntity)
 
+    /** 카드 일괄 삽입/업데이트 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(cards: List<OwnedCardEntity>)
+
     /** 내 카드 여부 변경 */
     @Query("UPDATE owned_cards SET isOwned = :isOwned WHERE cardName = :cardName")
     suspend fun updateOwnership(cardName: String, isOwned: Boolean)

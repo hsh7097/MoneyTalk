@@ -238,7 +238,8 @@
 
     <!-- Restore Dialog -->
     <string name="dialog_restore_title">Restore Data</string>
-    <string name="dialog_restore_message">Restore data from backup file.\nAll existing data will be replaced.\n\nContinue?</string>
+    <string name="dialog_restore_message">Restore data from a backup file.\nExisting data will be merged, and matching items will be updated from the backup.\n\nContinue?</string>
+    <string name="settings_restore_complete_with_settings">Restore complete: %1$d expenses, %2$d incomes, %3$d category settings, %4$d store rules, %5$d other settings</string>
 
     <!-- Export Dialog -->
     <string name="export_dialog_title">Export Data</string>
