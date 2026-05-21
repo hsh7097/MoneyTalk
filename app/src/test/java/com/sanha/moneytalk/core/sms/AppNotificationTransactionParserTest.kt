@@ -61,6 +61,21 @@ class AppNotificationTransactionParserTest {
     }
 
     @Test
+    fun `woori app notification extracts merchant after cumulative amount`() {
+        val body = "승인내역 [일시불.승인(1690)]05/21 21:10 3,000원 / 누적:188,800원 ㈜아성다이소"
+
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = body,
+            appLabel = "우리카드",
+            packageName = "com.wooricard.smartapp"
+        )
+
+        assertNotNull(result)
+        assertEquals(3_000, result?.amount)
+        assertEquals("㈜아성다이소", result?.storeName)
+    }
+
+    @Test
     fun `balance amount is not selected as transaction amount`() {
         val body = """
             카카오뱅크
