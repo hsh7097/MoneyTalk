@@ -438,6 +438,9 @@ RCS/비즈메시지(프로세스 cold start) → NotificationTransactionService
    → SmsInstantProcessor
 ```
 
+실시간 저장 직전에는 SMS와 금융 앱 알림이 같은 카드 거래를 각각 보낸 경우를 보정한다.
+1분 이내/동일 카드사/동일 가게명/동일 금액이 모두 맞는 교차 소스 거래만 중복으로 보고, 양쪽 본문에서 카드 suffix가 모두 추출되면 suffix까지 일치해야 한다. SMS가 나중에 들어오면 기존 앱 알림 레코드를 SMS 레코드로 대체한다.
+
 ### 5-2. 카테고리 자동 분류 흐름
 ```
 CategoryClassifierService.getCategory(storeName)

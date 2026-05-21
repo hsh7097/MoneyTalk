@@ -859,6 +859,7 @@ processAndSave(address, body, timestampMillis) → Result
   ├── DeletedSmsTracker.isDeleted(smsId)            // 삭제 이력 → Skipped
   ├── SmsIncomeFilter.classify(body) → SmsType
   │   ├── PAYMENT → processExpense() → regex 매칭 시도
+  │   │   ├── 교차 소스 중복 감지 → 앱 알림 저장본이 있으면 SMS 저장본으로 대체
   │   │   ├── 매칭 성공 → ExpenseEntity DB 저장 → Result.Expense
   │   │   └── 미매칭 → Result.Skipped (후속 batch sync에서 Vector/LLM 폴백)
   │   ├── INCOME → processIncome() → IncomeEntity DB 저장 → Result.Income
@@ -905,6 +906,9 @@ provider 재조회가 불가능하므로 알림 본문 자체를 거래 후보�
 
 핵심 포인트:
 - 앱 알림은 `address = app:{packageName}` 형태로 저장하여 SMS 발신번호와 분리한다.
+- SMS와 앱 알림이 같은 카드 거래를 각각 보낼 수 있으므로, 저장 직전 1분 이내/동일 카드사/동일 가게명/동일 금액이 모두 맞을 때만 교차 소스 중복으로 검사한다.
+- 양쪽 본문에서 카드 suffix(마스킹된 카드번호 끝자리)가 모두 추출되면 suffix까지 같아야 중복으로 본다. 한쪽에 suffix가 없으면 기본 4조건만 적용한다.
+- SMS 저장 시 이미 같은 앱 알림 거래가 있으면 앱 알림 레코드를 삭제하고 SMS 레코드로 대체한다. 앱 알림 저장 시 이미 SMS 레코드가 있으면 저장하지 않는다.
 - 설치된 금융 앱 감지는 `AndroidManifest.xml`의 `<queries>` 패키지 목록을 사용한다.
 - 보안/인증/쇼핑/메신저 앱은 기본 처리 대상에서 제외한다. 카카오톡 알림도 금융 앱 알림으로 처리하지 않는다.
 - 코드에 없는 금융앱은 RTDB `/financial_apps/v1/packages` 승인 목록을 내려받아

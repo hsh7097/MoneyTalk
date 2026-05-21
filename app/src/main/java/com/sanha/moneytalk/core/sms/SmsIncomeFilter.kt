@@ -23,9 +23,10 @@ import javax.inject.Singleton
  * 4. 취소 키워드 → INCOME (출금취소 = 돈 돌아옴)
  * 5. 카드대금 실제 출금 → PAYMENT (저장 후 통계 제외)
  * 6. 수입 제외 키워드 → SKIP (자동이체출금, 출금예정 등 안내성 문구)
- * 7. 결제 키워드 → PAYMENT
- * 8. 수입 키워드 → INCOME
- * 9. 그 외 (금융+금액은 있지만 명시적 키워드 없음) → PAYMENT (벡터/LLM에 맡김)
+ * 7. 명확한 수입 키워드 → INCOME
+ * 8. 결제 키워드 → PAYMENT
+ * 9. 기타 수입 키워드 → INCOME
+ * 10. 그 외 (금융+금액은 있지만 명시적 키워드 없음) → PAYMENT (벡터/LLM에 맡김)
  *
  * 의존성: 없음 (모든 키워드를 자체 보유, core/sms 미참조)
  *
@@ -93,6 +94,13 @@ class SmsIncomeFilter @Inject constructor() {
         "환급", "정산", "송금", "받으셨습니다", "입금되었습니다",
         "자동이체입금", "무통장입금", "계좌입금",
         "출금취소"  // 출금 취소 = 돈이 돌아옴 → 수입
+    )
+
+    /** 결제 키워드보다 먼저 볼 수 있는 명확한 수입 키워드 */
+    private val priorityIncomeKeywords = listOf(
+        "입금", "이체입금", "급여", "월급", "보너스", "상여",
+        "환급", "정산", "받으셨습니다", "입금되었습니다",
+        "자동이체입금", "무통장입금", "계좌입금"
     )
 
     /** 취소/환불 키워드 (결제 키워드를 포함하지만 실제로는 수입) */
@@ -188,13 +196,18 @@ class SmsIncomeFilter @Inject constructor() {
         // 결제 키워드("출금")와 겹치는 안내성 문구를 먼저 제외하여 오분류 방지
         if (incomeExcludeKeywords.any { bodyLower.contains(it) }) return SmsType.SKIP to "incomeExclude"
 
-        // 6. 결제 → 지출
+        // 6. 명확한 수입 키워드
+        // "입금 ... 출금계좌"처럼 출금 키워드가 보조 설명으로 함께 오는 케이스를 우선 보정
+        val matchedPriorityIncome = priorityIncomeKeywords.firstOrNull { bodyLower.contains(it) }
+        if (matchedPriorityIncome != null) return SmsType.INCOME to "incomeKw[$matchedPriorityIncome]"
+
+        // 7. 결제 → 지출
         if (paymentKeywords.any { bodyLower.contains(it) }) return SmsType.PAYMENT to "paymentKw"
 
-        // 7. 수입 키워드
+        // 8. 수입 키워드
         if (incomeKeywords.any { bodyLower.contains(it) }) return SmsType.INCOME to "incomeKw"
 
-        // 8. 금융 키워드 + 금액은 있지만 결제/수입 키워드 없음
+        // 9. 금융 키워드 + 금액은 있지만 결제/수입 키워드 없음
         // → SmsPipeline에 넘겨서 벡터/LLM으로 판단하게 함
         return SmsType.PAYMENT to "fallback"
     }

@@ -45,4 +45,14 @@ class SmsIncomeFilterTest {
         assertEquals(SmsType.SKIP, type)
         assertEquals("cancellationNotice", reason)
     }
+
+    @Test
+    fun `kakaotalk deposit with withdrawal account text is classified as income`() {
+        val body = "카카오톡 입금 50,000원 출금계좌 카카오뱅크"
+
+        val (type, reason) = filter.classify(body)
+
+        assertEquals(SmsType.INCOME, type)
+        assertEquals("incomeKw[입금]", reason)
+    }
 }
