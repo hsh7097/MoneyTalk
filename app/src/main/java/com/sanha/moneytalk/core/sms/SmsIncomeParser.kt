@@ -55,7 +55,7 @@ object SmsIncomeParser {
     private val CANCEL_COMPLETED_DATE_PATTERN =
         Regex("""(0?[1-9]|1[0-2])월\s*(0?[1-9]|[12]\d|3[01])일\s*취소완료""")
     private val REFUND_HINT_PATTERN =
-        Regex("""(?:출금|승인|결제|사용|이용)\s*취소|취소\s*(?:승인|완료|처리|환불)|환불""")
+        Regex("""(?:출금|승인|결제|사용|이용)\s*취소|취소\s*(?:승인|완료|처리|환불)?|환불""")
 
     /** 수입 키워드 (extractIncomeSource에서 출처 제외용) */
     private val incomeKeywords = listOf(

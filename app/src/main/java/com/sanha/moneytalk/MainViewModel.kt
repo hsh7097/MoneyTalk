@@ -125,7 +125,7 @@ class MainViewModel @Inject constructor(
         private const val PROVIDER_SCAN_OVERLAP_MARGIN_MS = 5L * 60 * 1000
 
         /** smsId 타임스탬프 오차 허용 범위 */
-        private const val FUZZY_TIME_MARGIN_MS = 10_000L
+        private const val FUZZY_TIME_MARGIN_MS = 60_000L
 
         /** fuzzy dedupe 후보 조회 시 대상 기간 앞뒤로 확장할 범위 */
         private const val FUZZY_CANDIDATE_PADDING_MS = 3L * 24 * 60 * 60 * 1000
@@ -841,11 +841,19 @@ class MainViewModel @Inject constructor(
         pendingContentIndex: Map<String, List<SmsMatchCandidate>>,
         existingSnapshot: ExistingSmsSnapshot
     ): List<SmsInput> {
-        val newSmsList = allSmsList.filter { sms ->
+        val acceptedContentIndex = mutableMapOf<String, MutableList<SmsMatchCandidate>>()
+        val newSmsList = mutableListOf<SmsInput>()
+
+        for (sms in allSmsList) {
             // 사용자가 명시적으로 삭제한 SMS는 재처리하지 않음
-            if (DeletedSmsTracker.isDeleted(sms.id)) return@filter false
+            if (DeletedSmsTracker.isDeleted(sms.id)) continue
 
             val contentKey = buildContentKey(sms.address, sms.body)
+            val existsInCurrentBatch = findClosestCandidate(
+                contentKey = contentKey,
+                timestamp = sms.date,
+                candidateIndex = acceptedContentIndex
+            ) != null
             val existsInDbExact = sms.id in existingSnapshot.exactSmsIds
             val existsInDbFuzzy = findClosestCandidate(
                 contentKey = contentKey,
@@ -860,10 +868,19 @@ class MainViewModel @Inject constructor(
                 candidateIndex = pendingContentIndex
             ) != null
 
-            when {
+            val shouldProcess = when {
+                existsInCurrentBatch -> false
                 existsInDb && existsInPending -> true
                 existsInDb -> false
                 else -> true
+            }
+
+            if (shouldProcess) {
+                newSmsList += sms
+                acceptedContentIndex.getOrPut(contentKey) { mutableListOf() } += SmsMatchCandidate(
+                    smsId = sms.id,
+                    timestamp = sms.date
+                )
             }
         }
         MoneyTalkLogger.i("syncSmsV2 중복 제거: ${allSmsList.size}건 → ${newSmsList.size}건")

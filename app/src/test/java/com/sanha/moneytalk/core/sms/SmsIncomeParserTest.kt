@@ -53,6 +53,15 @@ class SmsIncomeParserTest {
         assertEquals("환불", type)
     }
 
+    @Test
+    fun `카드 취소 단독 문구는 환불 유형으로 파싱한다`() {
+        val body = "[Web발신]\n현대카드 MX Black 취소 하*현\n27,000원 일시불\n06/28 11:51\n주식회사위대"
+
+        val type = SmsIncomeParser.extractIncomeType(body)
+
+        assertEquals("환불", type)
+    }
+
     private fun timestamp(
         year: Int,
         month: Int,

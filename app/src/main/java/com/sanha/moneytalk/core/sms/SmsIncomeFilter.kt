@@ -105,7 +105,7 @@ class SmsIncomeFilter @Inject constructor() {
 
     /** 취소/환불 키워드 (결제 키워드를 포함하지만 실제로는 수입) */
     private val cancellationKeywordPattern = Regex(
-        """(?:출금|승인|결제|사용|이용)\s*취소|취소\s*(?:승인|완료|처리|환불)|환불"""
+        """(?:출금|승인|결제|사용|이용)\s*취소|취소\s*(?:승인|완료|처리|환불)?|환불"""
     )
 
     private val cancellationNoticePatterns = listOf(
