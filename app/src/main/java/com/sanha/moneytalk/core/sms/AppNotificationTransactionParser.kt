@@ -24,6 +24,9 @@ object AppNotificationTransactionParser {
     private val accountTargetPattern = Regex(
         """(?:입출금통장|통장|계좌)\([^)]*\)\s*(?:→|->|>)\s*(.+)$"""
     )
+    private val storeAfterBalanceAmountPattern = Regex(
+        """(?:잔액|누적|잔고|보유)\s*[:：]?\s*[\d,]+\s*원?\s+(.+)$"""
+    )
 
     private val balanceKeywords = listOf("잔액", "누적", "잔고", "보유")
     private val transactionKeywords = listOf(
@@ -31,7 +34,7 @@ object AppNotificationTransactionParser {
     )
     private val appNameKeywords = listOf("카카오뱅크", "토스")
     private val invalidStoreKeywords = listOf(
-        "알림", "입금", "취소", "잔액", "누적", "잔고", "보유"
+        "알림", "입금", "취소", "잔액", "누적", "잔고", "보유", "내역"
     )
     private val nonTransactionNoticePatterns = listOf(
         Regex("""납입\s*일"""),
@@ -98,6 +101,7 @@ object AppNotificationTransactionParser {
         appLabel: String
     ): String? {
         extractStoreFromAccountTargetLine(body, appLabel)?.let { return it }
+        extractStoreAfterBalanceAmount(body, appLabel)?.let { return it }
         extractStoreFromAmountLine(body, amountRange, appLabel)?.let { return it }
 
         val lines = body.lines().map(::normalizeText).filter { it.isNotBlank() }
@@ -130,6 +134,22 @@ object AppNotificationTransactionParser {
                     appLabel = appLabel,
                     allowShort = true,
                     preserveCardWord = true
+                )
+            }
+            .firstOrNull()
+    }
+
+    private fun extractStoreAfterBalanceAmount(
+        body: String,
+        appLabel: String
+    ): String? {
+        return body.lineSequence()
+            .map(::normalizeText)
+            .mapNotNull { line ->
+                val match = storeAfterBalanceAmountPattern.find(line) ?: return@mapNotNull null
+                sanitizeStoreCandidate(
+                    raw = match.groupValues.getOrNull(1).orEmpty(),
+                    appLabel = appLabel
                 )
             }
             .firstOrNull()
