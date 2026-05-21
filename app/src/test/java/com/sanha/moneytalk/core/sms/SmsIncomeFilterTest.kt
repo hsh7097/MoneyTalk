@@ -65,4 +65,14 @@ class SmsIncomeFilterTest {
         assertEquals(SmsType.INCOME, type)
         assertEquals("cancel", reason)
     }
+
+    @Test
+    fun `standalone card cancel is classified as income`() {
+        val body = "[Web발신]\n현대카드 MX Black 취소 하*현\n27,000원 일시불\n06/28 11:51\n주식회사위대"
+
+        val (type, reason) = filter.classify(body)
+
+        assertEquals(SmsType.INCOME, type)
+        assertEquals("cancel", reason)
+    }
 }

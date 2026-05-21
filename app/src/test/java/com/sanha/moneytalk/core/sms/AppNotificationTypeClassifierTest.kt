@@ -40,4 +40,13 @@ class AppNotificationTypeClassifierTest {
 
         assertEquals(SmsType.INCOME, type)
     }
+
+    @Test
+    fun `standalone card cancel notification is income`() {
+        val body = "현대카드 MX Black 취소 하*현 27,000원 일시불 06/28 11:51 주식회사위대"
+
+        val type = AppNotificationTypeClassifier.classify(body)
+
+        assertEquals(SmsType.INCOME, type)
+    }
 }

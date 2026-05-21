@@ -17,7 +17,7 @@ object AppNotificationTypeClassifier {
     )
 
     private val cancelHintPattern = Regex(
-        """(?:출금|승인|결제|사용|이용)\s*취소|취소\s*(?:승인|완료|처리|환불)|환불"""
+        """(?:출금|승인|결제|사용|이용)\s*취소|취소\s*(?:승인|완료|처리|환불)?|환불"""
     )
 
     fun classify(body: String): SmsType {
