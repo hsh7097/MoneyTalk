@@ -54,6 +54,8 @@ object SmsIncomeParser {
     private val BRACKET_DATETIME_PATTERN = Regex("""^\[.+\]\d{1,2}[/.-]\d{1,2}\s+\d{1,2}:\d{2}$""")
     private val CANCEL_COMPLETED_DATE_PATTERN =
         Regex("""(0?[1-9]|1[0-2])월\s*(0?[1-9]|[12]\d|3[01])일\s*취소완료""")
+    private val REFUND_HINT_PATTERN =
+        Regex("""(?:출금|승인|결제|사용|이용)\s*취소|취소\s*(?:승인|완료|처리|환불)|환불""")
 
     /** 수입 키워드 (extractIncomeSource에서 출처 제외용) */
     private val incomeKeywords = listOf(
@@ -89,9 +91,7 @@ object SmsIncomeParser {
     fun extractIncomeType(message: String): String {
         return when {
             // 취소/환불 (결제 키워드와 겹치므로 우선 체크)
-            message.contains("출금취소") || message.contains("승인취소") ||
-                message.contains("결제취소") || message.contains("취소승인") ||
-                message.contains("취소완료") -> "환불"
+            REFUND_HINT_PATTERN.containsMatchIn(message) -> "환불"
             message.contains("급여") || message.contains("월급") -> "급여"
             message.contains("보너스") || message.contains("상여") -> "보너스"
             message.contains("환급") -> "환급"

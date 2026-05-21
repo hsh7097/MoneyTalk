@@ -104,8 +104,8 @@ class SmsIncomeFilter @Inject constructor() {
     )
 
     /** 취소/환불 키워드 (결제 키워드를 포함하지만 실제로는 수입) */
-    private val cancellationKeywords = listOf(
-        "출금취소", "승인취소", "결제취소", "취소승인", "취소완료"
+    private val cancellationKeywordPattern = Regex(
+        """(?:출금|승인|결제|사용|이용)\s*취소|취소\s*(?:승인|완료|처리|환불)|환불"""
     )
 
     private val cancellationNoticePatterns = listOf(
@@ -190,7 +190,7 @@ class SmsIncomeFilter @Inject constructor() {
         if (!hasAmount) return SmsType.SKIP to "noAmount"
 
         // 4. 취소 → 수입 (결제 키워드보다 우선)
-        if (cancellationKeywords.any { bodyLower.contains(it) }) return SmsType.INCOME to "cancel"
+        if (cancellationKeywordPattern.containsMatchIn(bodyLower)) return SmsType.INCOME to "cancel"
 
         // 5. 수입 제외 키워드 (자동이체 출금 안내 등)
         // 결제 키워드("출금")와 겹치는 안내성 문구를 먼저 제외하여 오분류 방지

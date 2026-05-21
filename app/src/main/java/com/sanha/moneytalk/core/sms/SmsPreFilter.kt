@@ -83,7 +83,7 @@ class SmsPreFilter @Inject constructor() {
          */
         private val INCOME_PROTECTION_KEYWORDS = listOf(
             "입금", "급여", "월급", "환급", "송금", "정산", "지급",
-            "출금취소", "승인취소", "결제취소"
+            "출금취소", "승인취소", "결제취소", "출금 취소", "승인 취소", "결제 취소"
         )
 
         private val HIGH_CONFIDENCE_NON_PAYMENT_PATTERNS = listOf(

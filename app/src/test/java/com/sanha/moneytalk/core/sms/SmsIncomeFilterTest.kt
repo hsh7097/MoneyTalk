@@ -55,4 +55,14 @@ class SmsIncomeFilterTest {
         assertEquals(SmsType.INCOME, type)
         assertEquals("incomeKw[입금]", reason)
     }
+
+    @Test
+    fun `spaced payment cancel is classified as income`() {
+        val body = "14,500원 결제 취소 KB국민체크 | 구글페이먼트코리아(일시불)"
+
+        val (type, reason) = filter.classify(body)
+
+        assertEquals(SmsType.INCOME, type)
+        assertEquals("cancel", reason)
+    }
 }

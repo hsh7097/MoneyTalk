@@ -16,12 +16,12 @@ object AppNotificationTypeClassifier {
         "입금", "이체입금", "송금받", "받았", "받으셨"
     )
 
-    private val cancelHints = listOf(
-        "출금취소", "승인취소", "결제취소", "취소완료"
+    private val cancelHintPattern = Regex(
+        """(?:출금|승인|결제|사용|이용)\s*취소|취소\s*(?:승인|완료|처리|환불)|환불"""
     )
 
     fun classify(body: String): SmsType {
-        if (cancelHints.any { body.contains(it, ignoreCase = true) }) {
+        if (cancelHintPattern.containsMatchIn(body)) {
             return SmsType.INCOME
         }
         if (incomeHints.any { body.contains(it, ignoreCase = true) }) {
