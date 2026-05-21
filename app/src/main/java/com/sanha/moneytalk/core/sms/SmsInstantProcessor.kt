@@ -64,16 +64,6 @@ class SmsInstantProcessor @Inject constructor(
         private val APP_NOTIFICATION_TRANSACTION_HINTS = listOf(
             "결제", "승인", "출금", "사용", "이용", "입금", "송금", "이체", "취소"
         )
-        private val APP_NOTIFICATION_PAYMENT_HINTS = listOf(
-            "결제", "승인", "출금", "사용", "이용"
-        )
-        private val APP_NOTIFICATION_INCOME_HINTS = listOf(
-            "입금", "이체입금", "송금받", "받았", "받으셨"
-        )
-        private val APP_NOTIFICATION_CANCEL_HINTS = listOf(
-            "출금취소", "승인취소", "결제취소", "취소완료"
-        )
-
         fun snapshotPendingReconciliationIds(): Set<String> = pendingReconciliationIds.toSet()
 
         fun clearPendingReconciliationIds(smsIds: Collection<String>) {
@@ -279,15 +269,20 @@ class SmsInstantProcessor @Inject constructor(
             senderAddress = SmsFilter.normalizeAddress(address)
         )
 
-        // StoreRule 적용 (Tier 0)
         entity = applyStoreRules(entity)
+        val appNotificationDuplicate = findCrossSourceDuplicateExpense(entity)
+            ?.takeIf(TransactionSemanticDedupe::isAppGenerated)
 
         expenseRepository.insert(entity)
+        val replacedAppNotificationDuplicate = deleteAppNotificationDuplicateIfNeeded(
+            entity = entity,
+            duplicate = appNotificationDuplicate
+        )
         markPendingReconciliation(smsId)
         MoneyTalkLogger.i("[InstantSMS] 지출 저장: ${entity.storeName} ${entity.amount}원 [${entity.category}]")
 
         // 알림 (설정에서 활성화된 경우만)
-        if (settingsDataStore.isNotificationEnabled()) {
+        if (!replacedAppNotificationDuplicate && settingsDataStore.isNotificationEnabled()) {
             notificationManager.showExpenseNotification(
                 amount = entity.amount,
                 storeName = entity.storeName,
@@ -357,6 +352,15 @@ class SmsInstantProcessor @Inject constructor(
         }
 
         val entity = applyStoreRules(baseEntity)
+        val duplicate = findCrossSourceDuplicateExpense(entity)
+        if (duplicate != null) {
+            MoneyTalkLogger.i(
+                "[InstantAppNoti] 교차 소스 중복 스킵: " +
+                    "${entity.amount}원 existing=${duplicate.id}"
+            )
+            return Result.Skipped
+        }
+
         expenseRepository.insert(entity)
         markPendingReconciliation(smsId, needsReconciliation = false)
         MoneyTalkLogger.i(
@@ -477,20 +481,41 @@ class SmsInstantProcessor @Inject constructor(
     }
 
     private fun classifyAppNotification(body: String): SmsType {
-        if (APP_NOTIFICATION_CANCEL_HINTS.any { body.contains(it, ignoreCase = true) }) {
-            return SmsType.INCOME
-        }
-        if (APP_NOTIFICATION_PAYMENT_HINTS.any { body.contains(it, ignoreCase = true) }) {
-            return SmsType.PAYMENT
-        }
-        if (APP_NOTIFICATION_INCOME_HINTS.any { body.contains(it, ignoreCase = true) }) {
-            return SmsType.INCOME
-        }
-        return SmsType.SKIP
+        return AppNotificationTypeClassifier.classify(body)
     }
 
     private fun supportsFixedExpense(entity: ExpenseEntity): Boolean {
         return entity.transactionType == "EXPENSE" ||
             entity.transactionType == "TRANSFER"
+    }
+
+    private suspend fun deleteAppNotificationDuplicateIfNeeded(
+        entity: ExpenseEntity,
+        duplicate: ExpenseEntity?
+    ): Boolean {
+        duplicate ?: return false
+        if (duplicate.id > 0L) {
+            expenseRepository.deleteById(duplicate.id)
+        }
+        MoneyTalkLogger.i(
+            "[InstantSMS] 앱 알림 중복 대체: " +
+                "${entity.amount}원 appExpense=${duplicate.id}"
+        )
+        return true
+    }
+
+    private suspend fun findCrossSourceDuplicateExpense(
+        entity: ExpenseEntity
+    ): ExpenseEntity? {
+        val start = maxOf(
+            0L,
+            entity.dateTime - TransactionSemanticDedupe.CROSS_SOURCE_WINDOW_MS
+        )
+        val end = entity.dateTime + TransactionSemanticDedupe.CROSS_SOURCE_WINDOW_MS
+        val existingExpenses = expenseRepository.getExpensesByDateRangeOnce(start, end)
+        return TransactionSemanticDedupe.findPotentialCrossSourceDuplicate(
+            candidate = entity,
+            existingExpenses = existingExpenses
+        )
     }
 }
