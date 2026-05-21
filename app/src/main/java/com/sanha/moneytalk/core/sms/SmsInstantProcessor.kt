@@ -12,6 +12,8 @@ import com.sanha.moneytalk.core.util.StatsExclusionClassifier
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -55,6 +57,8 @@ class SmsInstantProcessor @Inject constructor(
         private val pendingReconciliationIds = ConcurrentHashMap.newKeySet<String>()
         /** 동시 다발 수신/알림 경로에서 같은 smsId 중복 처리 방지 */
         private val inFlightSmsIds = ConcurrentHashMap.newKeySet<String>()
+        /** 환불 알림/입금 알림 동시 수신 시 같은 금액 수입 저장 구간 직렬화 */
+        private val incomeSemanticLocks = ConcurrentHashMap<Int, Mutex>()
         private val APP_NOTIFICATION_AMOUNT_PATTERN = Regex("""[\d,]+원""")
         private val APP_NOTIFICATION_BLOCK_KEYWORDS = listOf(
             "인증", "otp", "본인확인", "비밀번호", "광고", "이벤트", "혜택",
@@ -74,6 +78,10 @@ class SmsInstantProcessor @Inject constructor(
 
         private fun releaseInFlight(smsId: String) {
             inFlightSmsIds.remove(smsId)
+        }
+
+        private fun incomeSemanticLockFor(amount: Int): Mutex {
+            return incomeSemanticLocks.getOrPut(amount) { Mutex() }
         }
 
         private fun markPendingReconciliation(
@@ -412,12 +420,45 @@ class SmsInstantProcessor @Inject constructor(
             category = category
         )
 
+        return incomeSemanticLockFor(entity.amount).withLock {
+            processIncomeEntity(
+                entity = entity,
+                smsId = smsId,
+                needsReconciliation = needsReconciliation
+            )
+        }
+    }
+
+    private suspend fun processIncomeEntity(
+        entity: IncomeEntity,
+        smsId: String,
+        needsReconciliation: Boolean
+    ): Result {
+        val duplicate = findSemanticDuplicateRefundIncome(entity)
+        val replacedRefundNotice = if (
+            duplicate != null &&
+            RefundIncomeSemanticDedupe.shouldPreferCandidate(entity, duplicate)
+        ) {
+            true
+        } else if (duplicate != null) {
+            MoneyTalkLogger.i(
+                "[InstantSMS] 환불 수입 중복 스킵: " +
+                    "${entity.amount}원 existing=${duplicate.id}"
+            )
+            return Result.Skipped
+        } else {
+            false
+        }
+
         incomeRepository.insert(entity)
+        if (replacedRefundNotice && duplicate != null && duplicate.id > 0L) {
+            incomeRepository.deleteById(duplicate.id)
+        }
         markPendingReconciliation(smsId, needsReconciliation = needsReconciliation)
-        MoneyTalkLogger.i("[InstantSMS] 수입 저장: ${entity.source} ${entity.amount}원 [$category]")
+        MoneyTalkLogger.i("[InstantSMS] 수입 저장: ${entity.source} ${entity.amount}원 [${entity.category}]")
 
         // 알림 (설정에서 활성화된 경우만)
-        if (settingsDataStore.isNotificationEnabled()) {
+        if (!replacedRefundNotice && settingsDataStore.isNotificationEnabled()) {
             notificationManager.showIncomeNotification(
                 amount = entity.amount,
                 source = entity.source,
@@ -426,6 +467,18 @@ class SmsInstantProcessor @Inject constructor(
         }
 
         return Result.Income(entity)
+    }
+
+    private suspend fun findSemanticDuplicateRefundIncome(entity: IncomeEntity): IncomeEntity? {
+        val start = maxOf(
+            0L,
+            entity.dateTime - RefundIncomeSemanticDedupe.DEFAULT_WINDOW_MS
+        )
+        val end = entity.dateTime + RefundIncomeSemanticDedupe.DEFAULT_WINDOW_MS
+        return incomeRepository.getIncomesByDateRangeOnce(start, end)
+            .firstOrNull { existing ->
+                RefundIncomeSemanticDedupe.isPotentialDuplicate(entity, existing)
+            }
     }
 
     /** StoreRule 적용 (카테고리 + 고정지출 + 통계 제외) */

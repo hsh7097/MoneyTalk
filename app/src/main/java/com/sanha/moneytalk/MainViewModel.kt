@@ -27,6 +27,7 @@ import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.CardNameNormalizer
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.util.StatsExclusionClassifier
+import com.sanha.moneytalk.core.sms.RefundIncomeSemanticDedupe
 import com.sanha.moneytalk.core.sms.SmsIncomeParser
 import com.sanha.moneytalk.core.sms.SmsInput
 import com.sanha.moneytalk.core.sms.SmsFilter
@@ -128,11 +129,6 @@ class MainViewModel @Inject constructor(
 
         /** fuzzy dedupe 후보 조회 시 대상 기간 앞뒤로 확장할 범위 */
         private const val FUZZY_CANDIDATE_PADDING_MS = 3L * 24 * 60 * 60 * 1000
-
-        /** 취소/환불 보조 알림 중복 판단 윈도우 */
-        private const val REFUND_SEMANTIC_DUPLICATE_WINDOW_MS = 3L * 24 * 60 * 60 * 1000
-
-        private val REFUND_NOTICE_HINT_PATTERN = Regex("""이용\s*건.*취소|취소.*이용\s*건""")
 
     }
 
@@ -1348,7 +1344,6 @@ class MainViewModel @Inject constructor(
         val isNewFlags = BooleanArray(batch.size)
         val skipInsertFlags = BooleanArray(batch.size)
         val refundDuplicateCandidates = existingSnapshot.incomes
-            .filter { isRefundLikeIncome(it) }
             .map { RefundDuplicateCandidate(income = it) }
             .toMutableList()
 
@@ -1428,7 +1423,7 @@ class MainViewModel @Inject constructor(
             }
 
             val isDeletedIncome = batch[i].smsId?.let { DeletedSmsTracker.isDeleted(it) } == true
-            if (!skipInsertFlags[i] && !isDeletedIncome && isRefundLikeIncome(batch[i])) {
+            if (!skipInsertFlags[i] && !isDeletedIncome) {
                 refundDuplicateCandidates += RefundDuplicateCandidate(
                     income = batch[i],
                     batchIndex = i
@@ -1460,15 +1455,9 @@ class MainViewModel @Inject constructor(
         entity: IncomeEntity,
         candidates: List<RefundDuplicateCandidate>
     ): RefundDuplicateCandidate? {
-        if (!isRefundLikeIncome(entity)) return null
-
         return candidates.firstOrNull { candidate ->
             val existing = candidate.income
-            existing.smsId != entity.smsId &&
-                existing.amount == entity.amount &&
-                isRefundLikeIncome(existing) &&
-                abs(existing.dateTime - entity.dateTime) <= REFUND_SEMANTIC_DUPLICATE_WINDOW_MS &&
-                (isRefundNoticeIncome(entity) || isRefundNoticeIncome(existing))
+            RefundIncomeSemanticDedupe.isPotentialDuplicate(entity, existing)
         }
     }
 
@@ -1476,22 +1465,15 @@ class MainViewModel @Inject constructor(
         entity: IncomeEntity,
         duplicate: IncomeEntity
     ): Boolean {
-        return !isRefundNoticeIncome(entity) && isRefundNoticeIncome(duplicate)
+        return RefundIncomeSemanticDedupe.shouldPreferCandidate(entity, duplicate)
     }
 
     private fun isRefundLikeIncome(entity: IncomeEntity): Boolean {
-        val text = listOf(
-            entity.type,
-            entity.source,
-            entity.description,
-            entity.originalSms.orEmpty()
-        ).joinToString(" ")
-
-        return text.contains("취소") || text.contains("환불")
+        return RefundIncomeSemanticDedupe.isRefundLike(entity)
     }
 
     private fun isRefundNoticeIncome(entity: IncomeEntity): Boolean {
-        return REFUND_NOTICE_HINT_PATTERN.containsMatchIn(entity.originalSms.orEmpty())
+        return RefundIncomeSemanticDedupe.isRefundNotice(entity)
     }
 
     /**

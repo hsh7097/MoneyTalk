@@ -44,6 +44,15 @@ class SmsIncomeParserTest {
         assertEquals("2026-02-02 09:03", dateTime)
     }
 
+    @Test
+    fun `공백이 포함된 결제 취소 SMS는 환불 유형으로 파싱한다`() {
+        val body = "14,500원 결제 취소 KB국민체크 | 구글페이먼트코리아(일시불)"
+
+        val type = SmsIncomeParser.extractIncomeType(body)
+
+        assertEquals("환불", type)
+    }
+
     private fun timestamp(
         year: Int,
         month: Int,

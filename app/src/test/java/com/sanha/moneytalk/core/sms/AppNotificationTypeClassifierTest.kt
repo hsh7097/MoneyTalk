@@ -31,4 +31,13 @@ class AppNotificationTypeClassifierTest {
 
         assertEquals(SmsType.INCOME, type)
     }
+
+    @Test
+    fun `spaced payment cancel notification is income`() {
+        val body = "14,500원 결제 취소 KB국민체크 | 구글페이먼트코리아(일시불)"
+
+        val type = AppNotificationTypeClassifier.classify(body)
+
+        assertEquals(SmsType.INCOME, type)
+    }
 }
