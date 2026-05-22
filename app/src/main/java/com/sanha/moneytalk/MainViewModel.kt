@@ -342,7 +342,11 @@ class MainViewModel @Inject constructor(
                             targetMonthRange = range,
                             updateLastSyncTime = true,
                             silent = false,
-                            trigger = SyncCoverageTrigger.DEBUG_FULL_SYNC
+                            trigger = SyncCoverageTrigger.DEBUG_FULL_SYNC,
+                            readPlan = SyncReadPlan(
+                                targetRange = range,
+                                reprocessExisting = true
+                            )
                         )
                     }
 
@@ -428,6 +432,7 @@ class MainViewModel @Inject constructor(
         val incomeCount: Int,
         val reconciledExpenseCount: Int = 0,
         val reconciledIncomeCount: Int = 0,
+        val repairedIncomeSourceCount: Int = 0,
         val detectedCardNames: List<String>,
         val classifiedCount: Int,
         /** 파이프라인 엔진 통계 (초기 동기화 요약 카드용) */
@@ -438,7 +443,8 @@ class MainViewModel @Inject constructor(
         val targetRange: Pair<Long, Long>,
         val readRange: Pair<Long, Long> = targetRange,
         val rcsReadRange: Pair<Long, Long> = readRange,
-        val filterTransactionRange: Pair<Long, Long>? = null
+        val filterTransactionRange: Pair<Long, Long>? = null,
+        val reprocessExisting: Boolean = false
     )
 
     private suspend fun buildProviderCatchUpReadPlan(targetRange: Pair<Long, Long>): SyncReadPlan {
@@ -585,13 +591,19 @@ class MainViewModel @Inject constructor(
     }
 
     /** 결과 메시지 빌드 헬퍼 */
-    private fun buildResultMessage(expenseCount: Int, incomeCount: Int): String = when {
+    private fun buildResultMessage(
+        expenseCount: Int,
+        incomeCount: Int,
+        repairedIncomeSourceCount: Int = 0
+    ): String = when {
         expenseCount > 0 && incomeCount > 0 ->
             "${expenseCount}건의 지출, ${incomeCount}건의 수입이 추가되었습니다"
         expenseCount > 0 ->
             "${expenseCount}건의 새 지출이 추가되었습니다"
         incomeCount > 0 ->
             "${incomeCount}건의 새 수입이 추가되었습니다"
+        repairedIncomeSourceCount > 0 ->
+            appContext.getString(R.string.sync_income_source_repaired, repairedIncomeSourceCount)
         else -> "새로운 내역이 없습니다"
     }
 
@@ -721,6 +733,7 @@ class MainViewModel @Inject constructor(
         val readResult = readSmsInputs(readPlan)
         val allSmsList = readResult.messages
         if (allSmsList.isEmpty()) {
+            val repairedIncomeSourceCount = repairStoredIncomeSourcesIfNeeded(readPlan)
             saveSyncWatermarks(
                 updateLastSyncTime = updateLastSyncTime,
                 endTime = readPlan.targetRange.second,
@@ -730,7 +743,8 @@ class MainViewModel @Inject constructor(
                 expenseCount = 0,
                 incomeCount = 0,
                 detectedCardNames = emptyList(),
-                classifiedCount = 0
+                classifiedCount = 0,
+                repairedIncomeSourceCount = repairedIncomeSourceCount
             )
         }
 
@@ -741,10 +755,12 @@ class MainViewModel @Inject constructor(
         val smsInputs = readAndFilterSms(
             allSmsList = allSmsList,
             pendingContentIndex = pendingContentIndex,
-            existingSnapshot = existingSnapshot
+            existingSnapshot = existingSnapshot,
+            reprocessExisting = readPlan.reprocessExisting
         )
         MoneyTalkLogger.i("syncSmsV2 Step1 완료: 신규 SMS ${smsInputs.size}건")
         if (smsInputs.isEmpty()) {
+            val repairedIncomeSourceCount = repairStoredIncomeSourcesIfNeeded(readPlan)
             saveSyncWatermarks(
                 updateLastSyncTime = updateLastSyncTime,
                 endTime = readPlan.targetRange.second,
@@ -754,7 +770,8 @@ class MainViewModel @Inject constructor(
                 expenseCount = 0,
                 incomeCount = 0,
                 detectedCardNames = emptyList(),
-                classifiedCount = 0
+                classifiedCount = 0,
+                repairedIncomeSourceCount = repairedIncomeSourceCount
             )
         }
 
@@ -775,6 +792,7 @@ class MainViewModel @Inject constructor(
         // Step 3: DB 저장
         val expenseSaveResult = saveExpenses(targetFilteredResult.expenses, existingSnapshot)
         val incomeSaveResult = saveIncomes(targetFilteredResult.incomes, existingSnapshot)
+        val repairedIncomeSourceCount = repairStoredIncomeSourcesIfNeeded(readPlan)
 
         // Step 4: 후처리 (카테고리 분류, 패턴 정리, lastSyncTime 갱신)
         val cleanup = postSyncCleanup(
@@ -789,6 +807,7 @@ class MainViewModel @Inject constructor(
             incomeCount = incomeSaveResult.newCount,
             reconciledExpenseCount = expenseSaveResult.reconciledCount,
             reconciledIncomeCount = incomeSaveResult.reconciledCount,
+            repairedIncomeSourceCount = repairedIncomeSourceCount,
             detectedCardNames = cleanup.cardNames,
             classifiedCount = cleanup.classifiedCount,
             stats = targetFilteredResult.stats
@@ -839,7 +858,8 @@ class MainViewModel @Inject constructor(
     private fun readAndFilterSms(
         allSmsList: List<SmsInput>,
         pendingContentIndex: Map<String, List<SmsMatchCandidate>>,
-        existingSnapshot: ExistingSmsSnapshot
+        existingSnapshot: ExistingSmsSnapshot,
+        reprocessExisting: Boolean = false
     ): List<SmsInput> {
         val acceptedContentIndex = mutableMapOf<String, MutableList<SmsMatchCandidate>>()
         val newSmsList = mutableListOf<SmsInput>()
@@ -870,6 +890,7 @@ class MainViewModel @Inject constructor(
 
             val shouldProcess = when {
                 existsInCurrentBatch -> false
+                reprocessExisting -> true
                 existsInDb && existsInPending -> true
                 existsInDb -> false
                 else -> true
@@ -886,6 +907,55 @@ class MainViewModel @Inject constructor(
         MoneyTalkLogger.i("syncSmsV2 중복 제거: ${allSmsList.size}건 → ${newSmsList.size}건")
 
         return newSmsList
+    }
+
+    private suspend fun repairStoredIncomeSourcesIfNeeded(readPlan: SyncReadPlan): Int {
+        if (!readPlan.reprocessExisting) return 0
+
+        _uiState.update {
+            it.copy(syncProgress = appContext.getString(R.string.sync_repair_income_sources))
+        }
+
+        val incomes = incomeRepository.getIncomesByDateRangeOnce(
+            readPlan.targetRange.first,
+            readPlan.targetRange.second
+        )
+        var repairedCount = 0
+
+        for (income in incomes) {
+            val originalSms = income.originalSms?.takeIf { it.isNotBlank() } ?: continue
+            val parsedSource = SmsIncomeParser.extractIncomeSource(originalSms)
+            val shouldRepair = when {
+                parsedSource.isNotBlank() &&
+                    parsedSource != income.source &&
+                    SmsIncomeParser.isInvalidIncomeSource(income.source) -> true
+                parsedSource.isBlank() &&
+                    income.source.isNotBlank() &&
+                    SmsIncomeParser.isInvalidIncomeSource(income.source) -> true
+                else -> false
+            }
+            if (!shouldRepair) continue
+
+            val incomeType = income.type.ifBlank { SmsIncomeParser.extractIncomeType(originalSms) }
+            val description = if (parsedSource.isNotBlank()) {
+                "${parsedSource}에서 $incomeType"
+            } else {
+                incomeType
+            }
+            incomeRepository.update(
+                income.copy(
+                    source = parsedSource,
+                    description = description
+                )
+            )
+            repairedCount++
+        }
+
+        if (repairedCount > 0) {
+            MoneyTalkLogger.i("기존 수입 출처 보정 완료: ${repairedCount}건")
+        }
+
+        return repairedCount
     }
 
     /**
@@ -1551,7 +1621,8 @@ class MainViewModel @Inject constructor(
     ) {
         MoneyTalkLogger.i(
             "syncSmsV2 완료: 신규 지출 ${result.expenseCount}건, 신규 수입 ${result.incomeCount}건, " +
-                "교체 지출 ${result.reconciledExpenseCount}건, 교체 수입 ${result.reconciledIncomeCount}건"
+                "교체 지출 ${result.reconciledExpenseCount}건, 교체 수입 ${result.reconciledIncomeCount}건, " +
+                "수입 출처 보정 ${result.repairedIncomeSourceCount}건"
         )
 
         // 카드 자동 등록 (백그라운드)
@@ -1567,16 +1638,21 @@ class MainViewModel @Inject constructor(
 
         // 실제 데이터 변경이 있을 때만 HomeVM/HistoryVM에 통지 (불필요한 UI 갱신 방지)
         val hasDataChange = result.expenseCount > 0 || result.incomeCount > 0 ||
-            result.reconciledExpenseCount > 0 || result.reconciledIncomeCount > 0
+            result.reconciledExpenseCount > 0 || result.reconciledIncomeCount > 0 ||
+            result.repairedIncomeSourceCount > 0
         if (hasDataChange) {
             notifyDataChanged()
         }
 
-        val resultMessage = buildResultMessage(result.expenseCount, result.incomeCount)
+        val resultMessage = buildResultMessage(
+            expenseCount = result.expenseCount,
+            incomeCount = result.incomeCount,
+            repairedIncomeSourceCount = result.repairedIncomeSourceCount
+        )
 
         if (silent || _uiState.value.syncDialogDismissed) {
             _uiState.update { it.copy(isSyncing = false) }
-            if (result.expenseCount > 0 || result.incomeCount > 0) {
+            if (hasDataChange) {
                 snackbarBus.show(resultMessage)
             }
         } else {
@@ -1590,7 +1666,7 @@ class MainViewModel @Inject constructor(
                     syncStepIndex = 0
                 )
             }
-            if (result.expenseCount > 0 || result.incomeCount > 0) {
+            if (hasDataChange) {
                 snackbarBus.show(resultMessage)
             } else if (showNoDataMessage) {
                 snackbarBus.show(appContext.getString(R.string.sync_no_data))

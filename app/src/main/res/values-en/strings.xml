@@ -342,6 +342,8 @@
     <string name="history_filter_collapse_sheet">Compact</string>
     <string name="history_filter_selected_count">%d selected</string>
     <string name="home_sync_dialog_title">Reading expense history</string>
+    <string name="sync_repair_income_sources">Repairing saved income sources...</string>
+    <string name="sync_income_source_repaired">%1$d saved income sources repaired</string>
     <string name="sync_dialog_dismiss">Continue in background</string>
     <string name="sync_in_progress_button">Syncing…</string>
     <string name="sync_in_progress_note">Processing data in the background</string>

@@ -705,14 +705,18 @@ Object singleton으로 구현 (DI 불필요).
 |--------|----------|----------|
 | `extractIncomeAmount(body)` | 입금 금액 (Int) | `숫자+원` 패턴, KB 스타일 줄바꿈 |
 | `extractIncomeType(body)` | 입금 유형 (String) | 키워드 매칭 (급여/이체/환급/송금 등) |
-| `extractIncomeSource(body)` | 송금인/출처 (String) | 3가지 패턴 순차 시도 |
+| `extractIncomeSource(body)` | 송금인/출처 (String) | 4가지 패턴 순차 시도 |
 | `extractDateTime(body, ts)` | 날짜/시간 (String) | SmsTransactionDateResolver 위임 (MM/DD, M월 D일, HH:mm + 연말/연초 연도 보정) |
 
 ### extractIncomeSource 패턴 (순서)
 
 1. **KB 스타일 멀티라인**: `입금` 줄 위에서 출처 탐색 (카드번호/날짜/대괄호 제외)
 2. **`OOO님으로부터`** 또는 **`OOO으로부터`** 패턴
-3. **`입금 OOO`** 또는 **`OOO 입금`** 패턴 (같은 줄 내에서만)
+3. **카카오뱅크 입금 알림**: `입금 100,000원` 다음 `송금인 → 입출금통장(1234)`의 화살표 왼쪽
+4. **`입금 OOO`** 또는 **`OOO 입금`** 패턴 (같은 줄 내에서만)
+
+금액, 카드번호, 날짜/시간, 대괄호 헤더, `[Web발신]`, 출금계좌/앱명 토큰은 출처 후보에서 제외한다.
+DEBUG 전체 문자 읽기에서는 기존 앱 알림 수입 레코드도 원문 기준으로 출처를 재계산해 잘못 저장된 금액/앱명 출처를 보정한다.
 
 ### 날짜 해석 — SmsTransactionDateResolver
 

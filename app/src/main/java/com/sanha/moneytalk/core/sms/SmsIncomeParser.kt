@@ -43,6 +43,12 @@ object SmsIncomeParser {
     /** "입금 OOO" 또는 "OOO 입금" 패턴 */
     private val DEPOSIT_PATTERN =
         Regex("""입금\s*([가-힣a-zA-Z0-9]{2,10})|([가-힣a-zA-Z0-9]{2,10})\s*입금""")
+    /** "입금 100,000원 OOO → 입출금통장" 패턴 */
+    private val DEPOSIT_AMOUNT_SOURCE_PATTERN =
+        Regex("""입금\s*[\d,]+\s*원\s+(.+?)(?:\s*(?:→|->|>)\s*(?:입출금통장|통장|계좌)\([^)]*\)|$)""")
+    /** "OOO → 입출금통장(1234)" 패턴 */
+    private val ACCOUNT_INCOME_SOURCE_PATTERN =
+        Regex("""^(.+?)\s*(?:→|->|>)\s*(?:입출금통장|통장|계좌)\([^)]*\)""")
 
     /** 카드번호 패턴 (출처 추출 시 제외) */
     private val CARD_NUMBER_PATTERN = Regex("""[\d*]+""")
@@ -63,6 +69,10 @@ object SmsIncomeParser {
         "환급", "정산", "송금", "받으셨습니다", "입금되었습니다",
         "자동이체입금", "무통장입금", "계좌입금",
         "출금취소"
+    )
+    private val invalidSourceKeywords = listOf(
+        "출금", "출금계좌", "입출금통장", "통장", "계좌", "잔액",
+        "카카오톡", "카카오뱅크", "토스", "토스뱅크"
     )
 
     // ========== 가게명 정리용 ==========
@@ -142,15 +152,24 @@ object SmsIncomeParser {
 
         // 패턴 1: "OOO님으로부터" 또는 "OOO으로부터"
         FROM_PATTERN.find(message)?.let {
-            return it.groupValues[1]
+            val cleanSource = cleanSourceCandidate(it.groupValues[1])
+            if (cleanSource.isNotBlank()) {
+                return cleanSource
+            }
         }
 
-        // 패턴 2: "입금 OOO" 또는 "OOO 입금" (같은 줄 내에서만 매칭)
+        // 패턴 2: 카카오뱅크 스타일 - "입금 100,000원" 다음 줄의 "송금인 → 입출금통장"
+        extractAccountIncomeSource(message, lines)?.let {
+            return it
+        }
+
+        // 패턴 3: "입금 OOO" 또는 "OOO 입금" (같은 줄 내에서만 매칭)
         for (line in lines) {
             DEPOSIT_PATTERN.find(line)?.let {
                 val source = it.groupValues[1].ifEmpty { it.groupValues[2] }
-                if (source.isNotBlank() && !incomeKeywords.any { keyword -> source == keyword }) {
-                    return source
+                val cleanSource = cleanSourceCandidate(source)
+                if (cleanSource.isNotBlank()) {
+                    return cleanSource
                 }
             }
         }
@@ -168,6 +187,13 @@ object SmsIncomeParser {
     fun extractDateTime(message: String, smsTimestamp: Long): String {
         extractCancelCompletedDateTime(message, smsTimestamp)?.let { return it }
         return SmsTransactionDateResolver.extractDateTime(message, smsTimestamp)
+    }
+
+    /**
+     * 저장된 수입 출처가 파서 후보로 부적합한 값인지 확인한다.
+     */
+    fun isInvalidIncomeSource(source: String): Boolean {
+        return source.isBlank() || isInvalidSourceCandidate(source)
     }
 
     private fun extractCancelCompletedDateTime(message: String, smsTimestamp: Long): String? {
@@ -255,5 +281,61 @@ object SmsIncomeParser {
         cleaned = CLEAN_CORP_PATTERN.replace(cleaned, "")
         cleaned = CLEAN_SPECIAL_CHAR_PATTERN.replace(cleaned, "")
         return cleaned.trim()
+    }
+
+    private fun extractAccountIncomeSource(
+        message: String,
+        lines: List<String>
+    ): String? {
+        DEPOSIT_AMOUNT_SOURCE_PATTERN.find(message)?.let { match ->
+            val source = cleanSourceCandidate(match.groupValues.getOrNull(1).orEmpty())
+            if (source.isNotBlank()) return source
+        }
+
+        if (!message.contains("입금")) return null
+
+        return lines.firstNotNullOfOrNull { line ->
+            val match = ACCOUNT_INCOME_SOURCE_PATTERN.find(line) ?: return@firstNotNullOfOrNull null
+            cleanSourceCandidate(match.groupValues.getOrNull(1).orEmpty()).takeIf { it.isNotBlank() }
+        }
+    }
+
+    private fun cleanSourceCandidate(raw: String): String {
+        if (isInvalidSourceCandidate(raw)) return ""
+
+        val source = cleanStoreName(raw)
+            .substringBefore("잔액")
+            .substringBefore("입출금통장")
+            .substringBefore("통장")
+            .substringBefore("계좌")
+            .trim(' ', '→', '-', '>', ':', '|')
+
+        if (source.isBlank()) return ""
+        if (incomeKeywords.any { keyword -> source == keyword }) return ""
+        if (invalidSourceKeywords.any { keyword -> source == keyword }) return ""
+        if (source.matches(CARD_NUMBER_PATTERN)) return ""
+        if (source.matches(DATETIME_PATTERN)) return ""
+        if (source.matches(BRACKET_PATTERN)) return ""
+        if (source.matches(BRACKET_DATETIME_PATTERN)) return ""
+        if (source.all { it.isDigit() || it.isWhitespace() || it in ",.-:/" }) return ""
+        if (AMOUNT_EXTRACT_WITH_WON.containsMatchIn(source)) return ""
+        if (PURE_NUMBER_PATTERN.matches(source)) return ""
+
+        return source
+    }
+
+    private fun isInvalidSourceCandidate(source: String): Boolean {
+        if (source.isBlank()) return true
+        if (invalidSourceKeywords.any { keyword -> source.contains(keyword) }) return true
+        if (incomeKeywords.any { keyword -> source == keyword }) return true
+        if (source.matches(CARD_NUMBER_PATTERN)) return true
+        if (source.matches(DATETIME_PATTERN)) return true
+        if (source.matches(BRACKET_PATTERN)) return true
+        if (source.matches(BRACKET_DATETIME_PATTERN)) return true
+        if (source.all { it.isDigit() || it.isWhitespace() || it in ",.-:/" }) return true
+        if (AMOUNT_EXTRACT_WITH_WON.containsMatchIn(source)) return true
+        if (PURE_NUMBER_PATTERN.matches(source)) return true
+
+        return false
     }
 }

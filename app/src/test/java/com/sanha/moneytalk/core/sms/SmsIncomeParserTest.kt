@@ -1,6 +1,8 @@
 package com.sanha.moneytalk.core.sms
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Calendar
 
@@ -60,6 +62,52 @@ class SmsIncomeParserTest {
         val type = SmsIncomeParser.extractIncomeType(body)
 
         assertEquals("환불", type)
+    }
+
+    @Test
+    fun `카카오뱅크 입금 알림은 금액이 아니라 송금인을 출처로 파싱한다`() {
+        val body = "입금 100,000원\n하상현 → 입출금통장(9103)\n잔액 4,514,631원"
+
+        val source = SmsIncomeParser.extractIncomeSource(body)
+
+        assertEquals("하상현", source)
+    }
+
+    @Test
+    fun `카카오뱅크 입금 알림은 금액 유형 출처 시간을 모두 파싱한다`() {
+        val timestamp = timestamp(2026, 5, 22, 9, 35)
+        val body = "입금 100,000원\n하상현 → 입출금통장(9103)\n잔액 4,514,631원"
+
+        assertEquals(100000, SmsIncomeParser.extractIncomeAmount(body))
+        assertEquals("입금", SmsIncomeParser.extractIncomeType(body))
+        assertEquals("하상현", SmsIncomeParser.extractIncomeSource(body))
+        assertEquals("2026-05-22 09:35", SmsIncomeParser.extractDateTime(body, timestamp))
+    }
+
+    @Test
+    fun `한 줄 카카오뱅크 입금 알림도 송금인을 출처로 파싱한다`() {
+        val body = "입금 100,000원 하상현 → 입출금통장(9103) 잔액 4,514,631원"
+
+        val source = SmsIncomeParser.extractIncomeSource(body)
+
+        assertEquals("하상현", source)
+    }
+
+    @Test
+    fun `입금 뒤 금액은 송금인으로 사용하지 않는다`() {
+        val body = "카카오톡 입금 50,000원 출금계좌 카카오뱅크"
+
+        val source = SmsIncomeParser.extractIncomeSource(body)
+
+        assertEquals("", source)
+    }
+
+    @Test
+    fun `금액과 앱명은 저장된 수입 출처 보정 대상이다`() {
+        assertTrue(SmsIncomeParser.isInvalidIncomeSource("100"))
+        assertTrue(SmsIncomeParser.isInvalidIncomeSource("카카오톡"))
+        assertTrue(SmsIncomeParser.isInvalidIncomeSource("50,000원"))
+        assertFalse(SmsIncomeParser.isInvalidIncomeSource("하상현"))
     }
 
     private fun timestamp(
