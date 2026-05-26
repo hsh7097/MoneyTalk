@@ -10,6 +10,7 @@ import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
 import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryProvider
+import com.sanha.moneytalk.core.util.StoreNameNormalizer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -344,8 +345,12 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 // 유효한 카테고리인지 확인
                 if (category in validCategories) {
                     // 원래 가게명 찾기 (정확히 일치 우선, 그 다음 부분 일치)
-                    val originalName = storeNames.find { it == storeName }
-                        ?: storeNames.find { it.contains(storeName) || storeName.contains(it) }
+                    val originalName = storeNames.find {
+                        StoreNameNormalizer.equalsForComparison(it, storeName)
+                    } ?: storeNames.find {
+                        StoreNameNormalizer.containsForComparison(it, storeName) ||
+                            StoreNameNormalizer.containsForComparison(storeName, it)
+                    }
 
                     if (originalName != null) {
                         results[originalName] = category

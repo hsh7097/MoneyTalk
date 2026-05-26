@@ -2,6 +2,7 @@ package com.sanha.moneytalk.feature.home.data
 
 import com.sanha.moneytalk.core.database.dao.StoreRuleDao
 import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
+import com.sanha.moneytalk.core.util.StoreNameNormalizer
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -10,12 +11,61 @@ import javax.inject.Singleton
  * 거래처 규칙 Repository
  *
  * 거래처명 키워드 기반으로 카테고리/고정지출/통계 제외를 자동 적용하는 규칙을 관리합니다.
- * contains 매칭: storeName에 keyword가 포함되면 규칙 적용.
+ * contains 매칭: 거래처명/키워드의 내부 공백과 대소문자를 제거한 뒤 포함되면 규칙 적용.
  */
 @Singleton
 class StoreRuleRepository @Inject constructor(
     private val storeRuleDao: StoreRuleDao
 ) {
+    companion object {
+        data class StoreRuleMatchCandidate(
+            val rule: StoreRuleEntity,
+            val normalizedKeyword: String
+        )
+
+        fun buildMatchCandidates(rules: List<StoreRuleEntity>): List<StoreRuleMatchCandidate> {
+            return rules.mapNotNull { rule ->
+                val normalizedKeyword = StoreNameNormalizer.normalizeForComparison(rule.keyword)
+                if (normalizedKeyword.isEmpty()) {
+                    null
+                } else {
+                    StoreRuleMatchCandidate(rule, normalizedKeyword)
+                }
+            }
+        }
+
+        fun findBestMatchingRule(
+            rules: List<StoreRuleEntity>,
+            storeName: String
+        ): StoreRuleEntity? {
+            return findBestMatchingRuleFromCandidates(
+                candidates = buildMatchCandidates(rules),
+                storeName = storeName
+            )
+        }
+
+        fun findBestMatchingRuleFromCandidates(
+            candidates: List<StoreRuleMatchCandidate>,
+            storeName: String
+        ): StoreRuleEntity? {
+            if (candidates.isEmpty()) return null
+            val normalizedStore = StoreNameNormalizer.normalizeForComparison(storeName)
+            if (normalizedStore.isEmpty()) return null
+
+            return candidates.asSequence()
+                .filter { candidate ->
+                    normalizedStore.contains(candidate.normalizedKeyword)
+                }
+                .maxWithOrNull(
+                    compareBy<StoreRuleMatchCandidate>(
+                        { it.normalizedKeyword.length },
+                        { it.rule.createdAt }
+                    )
+                )
+                ?.rule
+        }
+    }
+
     /** 모든 규칙 (Flow) */
     fun getAll(): Flow<List<StoreRuleEntity>> = storeRuleDao.getAll()
 
@@ -47,12 +97,6 @@ class StoreRuleRepository @Inject constructor(
      */
     suspend fun findMatchingRule(storeName: String): StoreRuleEntity? {
         val rules = getAllOnce()
-        if (rules.isEmpty()) return null
-        val lowerStore = storeName.lowercase()
-        return rules
-            .filter { lowerStore.contains(it.keyword.lowercase()) }
-            .maxWithOrNull(
-                compareBy<StoreRuleEntity>({ it.keyword.length }, { it.createdAt })
-            )
+        return findBestMatchingRule(rules, storeName)
     }
 }

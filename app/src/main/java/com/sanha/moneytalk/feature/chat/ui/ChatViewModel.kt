@@ -32,6 +32,7 @@ import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.util.QueryResult
 import com.sanha.moneytalk.core.util.QueryType
 import com.sanha.moneytalk.core.util.StoreAliasManager
+import com.sanha.moneytalk.core.util.StoreNameNormalizer
 import com.sanha.moneytalk.feature.chat.data.ChatRepository
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
@@ -1274,22 +1275,16 @@ class ChatViewModel @Inject constructor(
                 "storeName" -> {
                     val value = filter.value?.toString() ?: ""
                     when (filter.op) {
-                        "==" -> expense.storeName.equals(value, ignoreCase = true)
-                        "!=" -> !expense.storeName.equals(value, ignoreCase = true)
-                        "contains" -> expense.storeName.contains(value, ignoreCase = true)
-                        "not_contains" -> !expense.storeName.contains(value, ignoreCase = true)
+                        "==" -> StoreNameNormalizer.equalsForComparison(expense.storeName, value)
+                        "!=" -> !StoreNameNormalizer.equalsForComparison(expense.storeName, value)
+                        "contains" -> StoreNameNormalizer.containsForComparison(expense.storeName, value)
+                        "not_contains" -> !StoreNameNormalizer.containsForComparison(expense.storeName, value)
                         "in" -> toStringList(filter.value).any {
-                            expense.storeName.equals(
-                                it,
-                                ignoreCase = true
-                            )
+                            StoreNameNormalizer.equalsForComparison(expense.storeName, it)
                         }
 
                         "not_in" -> toStringList(filter.value).none {
-                            expense.storeName.equals(
-                                it,
-                                ignoreCase = true
-                            )
+                            StoreNameNormalizer.equalsForComparison(expense.storeName, it)
                         }
 
                         else -> true

@@ -7,6 +7,7 @@ import com.sanha.moneytalk.core.model.IncomeCategoryMapper
 import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.sms.SmsParser
 import com.sanha.moneytalk.core.util.StoreNameGrouper
+import com.sanha.moneytalk.core.util.StoreNameNormalizer
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -50,6 +51,8 @@ class CategoryClassifierServiceImpl @Inject constructor(
 
         /** 이체 키워드 */
         private val TRANSFER_KEYWORDS = listOf("이체", "송금", "자동이체", "내계좌", "계좌출금")
+        private val TRANSFER_KEYWORDS_COMPARISON =
+            TRANSFER_KEYWORDS.map { StoreNameNormalizer.normalizeForComparison(it) }
 
         /** 2글자 한글이지만 가게명인 예외 목록 */
         private val PERSON_NAME_EXCEPTIONS = setOf(
@@ -59,18 +62,30 @@ class CategoryClassifierServiceImpl @Inject constructor(
             "신세계", "홈플", "마켓", "위메프", "티몬",
             "오늘의", "오아시스", "컬리", "번개", "중고나라"
         )
+        private val PERSON_NAME_EXCEPTIONS_COMPARISON =
+            PERSON_NAME_EXCEPTIONS.mapTo(mutableSetOf()) {
+                StoreNameNormalizer.normalizeForComparison(it)
+            }
 
         /** 이체 패턴 감지 (마스킹된 인명 또는 이체 키워드) */
         fun isTransferPattern(storeName: String): Boolean {
             val trimmed = storeName.trim()
+            val comparisonName = StoreNameNormalizer.normalizeForComparison(trimmed)
 
             // 마스킹된 이름 패턴 (하*현, 김**, 이*수)
             if (MASKED_NAME_PATTERN.matches(trimmed)) return true
 
             // 이체 키워드 포함
-            if (TRANSFER_KEYWORDS.any { trimmed.contains(it) }) return true
+            if (TRANSFER_KEYWORDS_COMPARISON.any { comparisonName.contains(it) }) {
+                return true
+            }
 
             return false
+        }
+
+        private fun isPersonNameException(storeName: String): Boolean {
+            return StoreNameNormalizer.normalizeForComparison(storeName) in
+                PERSON_NAME_EXCEPTIONS_COMPARISON
         }
 
         /** 수입 type 기반 사전 분류 */
@@ -150,10 +165,10 @@ class CategoryClassifierServiceImpl @Inject constructor(
             ) to "기타"
         )
 
-        /** 사전 컴파일된 lowercase 룰 */
-        private val PRE_CLASSIFY_RULES_LOWER: List<Pair<List<String>, String>> =
+        /** 사전 컴파일된 비교용 룰 */
+        private val PRE_CLASSIFY_RULES_COMPARISON: List<Pair<List<String>, String>> =
             PRE_CLASSIFY_RULES.map { (keywords, category) ->
-                keywords.map { it.lowercase() } to category
+                keywords.map { StoreNameNormalizer.normalizeForComparison(it) } to category
             }
     }
 
@@ -272,11 +287,11 @@ class CategoryClassifierServiceImpl @Inject constructor(
         val remaining = mutableListOf<String>()
 
         for (storeName in storeNames) {
-            val lowerName = storeName.lowercase()
+            val comparisonName = StoreNameNormalizer.normalizeForComparison(storeName)
             var matched = false
 
-            for ((keywords, category) in PRE_CLASSIFY_RULES_LOWER) {
-                if (keywords.any { keyword -> lowerName.contains(keyword) }) {
+            for ((keywords, category) in PRE_CLASSIFY_RULES_COMPARISON) {
+                if (keywords.any { keyword -> comparisonName.contains(keyword) }) {
                     classified[storeName] = category
                     matched = true
                     break
@@ -309,15 +324,19 @@ class CategoryClassifierServiceImpl @Inject constructor(
         cache[storeName]?.let { return it }
 
         // 2. 캐시에서 부분 매칭 (짧은 가게명이 긴 가게명에 포함되는 케이스)
+        val normalizedStoreName = StoreNameNormalizer.normalizeForComparison(storeName)
         for ((cachedName, category) in cache) {
-            if (storeName.length >= cachedName.length) {
-                if (storeName.contains(cachedName)) {
+            val normalizedCachedName = StoreNameNormalizer.normalizeForComparison(cachedName)
+            if (normalizedStoreName.isEmpty() || normalizedCachedName.isEmpty()) continue
+
+            if (normalizedStoreName.length >= normalizedCachedName.length) {
+                if (normalizedStoreName.contains(normalizedCachedName)) {
                     // 부분 매칭 성공 → 캐시에 정확 매핑 추가 (다음 조회 O(1))
                     cache[storeName] = category
                     return category
                 }
             } else {
-                if (cachedName.contains(storeName)) {
+                if (normalizedCachedName.contains(normalizedStoreName)) {
                     cache[storeName] = category
                     return category
                 }
@@ -353,7 +372,7 @@ class CategoryClassifierServiceImpl @Inject constructor(
 
         // 1. 이체 패턴 감지
         val transferNames = storeNames.filter {
-            isTransferPattern(it) && it !in PERSON_NAME_EXCEPTIONS
+            isTransferPattern(it) && !isPersonNameException(it)
         }
         for (name in transferNames) {
             result[name] = Category.TRANSFER_GENERAL.displayName
@@ -428,17 +447,13 @@ class CategoryClassifierServiceImpl @Inject constructor(
             } catch (e: Exception) {
                 MoneyTalkLogger.w("시맨틱 그룹핑 실패, 개별 처리로 폴백: ${e.message}")
                 StoreNameGrouper.StoreGroupingResult(
-                    groups = storeNamesForGemini.map {
-                        StoreNameGrouper.StoreGroup(representative = it, members = listOf(it))
-                    },
+                    groups = storeNameGrouper.groupStoreNamesByComparisonKey(storeNamesForGemini),
                     embeddingsByStoreName = emptyMap()
                 )
             }
         } else {
             StoreNameGrouper.StoreGroupingResult(
-                groups = storeNamesForGemini.map {
-                    StoreNameGrouper.StoreGroup(representative = it, members = listOf(it))
-                },
+                groups = storeNameGrouper.groupStoreNamesByComparisonKey(storeNamesForGemini),
                 embeddingsByStoreName = emptyMap()
             )
         }
@@ -559,7 +574,7 @@ class CategoryClassifierServiceImpl @Inject constructor(
             .filter { expense ->
                 expense.transactionType == "TRANSFER" ||
                         (isTransferPattern(expense.storeName) &&
-                                expense.storeName !in PERSON_NAME_EXCEPTIONS)
+                                !isPersonNameException(expense.storeName))
             }
             .map { it.storeName }
             .distinct()
@@ -619,23 +634,13 @@ class CategoryClassifierServiceImpl @Inject constructor(
             } catch (e: Exception) {
                 MoneyTalkLogger.w("시맨틱 그룹핑 실패, 개별 처리로 폴백: ${e.message}")
                 StoreNameGrouper.StoreGroupingResult(
-                    groups = storeNamesForGemini.map {
-                        StoreNameGrouper.StoreGroup(
-                            representative = it,
-                            members = listOf(it)
-                        )
-                    },
+                    groups = storeNameGrouper.groupStoreNamesByComparisonKey(storeNamesForGemini),
                     embeddingsByStoreName = emptyMap()
                 )
             }
         } else {
             StoreNameGrouper.StoreGroupingResult(
-                groups = storeNamesForGemini.map {
-                    StoreNameGrouper.StoreGroup(
-                        representative = it,
-                        members = listOf(it)
-                    )
-                },
+                groups = storeNameGrouper.groupStoreNamesByComparisonKey(storeNamesForGemini),
                 embeddingsByStoreName = emptyMap()
             )
         }
@@ -836,7 +841,7 @@ class CategoryClassifierServiceImpl @Inject constructor(
         val transferSources = unclassified
             .map { it.source }
             .distinct()
-            .filter { isTransferPattern(it) && it !in PERSON_NAME_EXCEPTIONS }
+            .filter { isTransferPattern(it) && !isPersonNameException(it) }
 
         if (transferSources.isNotEmpty()) {
             for (source in transferSources) {
