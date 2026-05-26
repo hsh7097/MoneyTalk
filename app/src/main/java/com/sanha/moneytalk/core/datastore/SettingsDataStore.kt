@@ -42,6 +42,7 @@ class SettingsDataStore @Inject constructor(
         private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         private val NOTIFICATION_ENABLED = booleanPreferencesKey("notification_enabled")
         private val PREMIUM_CONFIG_JSON = stringPreferencesKey("premium_config_json")
+        private val APP_ENTRY_COUNT = intPreferencesKey("app_entry_count")
 
         // ===== 화면별 온보딩 (코치마크) =====
         private val SCREEN_ONBOARDING_KEYS = mapOf(
@@ -327,6 +328,19 @@ class SettingsDataStore @Inject constructor(
     /** 마지막으로 정상 수신한 서버 설정 JSON 즉시 조회 */
     suspend fun getPremiumConfigJson(): String {
         return context.dataStore.data.first()[PREMIUM_CONFIG_JSON].orEmpty()
+    }
+
+    /** 앱 진입 횟수 Flow */
+    val appEntryCountFlow: Flow<Int> = context.dataStore.data.map { preferences ->
+        preferences[APP_ENTRY_COUNT] ?: 0
+    }
+
+    /** 앱 진입 횟수 1 증가 */
+    suspend fun incrementAppEntryCount() {
+        context.dataStore.edit { preferences ->
+            val current = preferences[APP_ENTRY_COUNT] ?: 0
+            preferences[APP_ENTRY_COUNT] = current + 1
+        }
     }
 
     /** 무료 동기화 사용 횟수 1 증가 */

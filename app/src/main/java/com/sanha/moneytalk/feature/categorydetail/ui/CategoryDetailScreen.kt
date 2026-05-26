@@ -184,7 +184,7 @@ fun CategoryDetailScreen(
             )
         }
 
-        // 배너 광고 (RTDB reward_ad_enabled 연동)
+        // 배너 광고 (RTDB reward_ad_enabled + 앱 진입 5회 이상)
         if (isBannerAdEnabled) {
             BannerAdCompose(adUnitId = BannerAdIds.CATEGORY_DETAIL)
         }

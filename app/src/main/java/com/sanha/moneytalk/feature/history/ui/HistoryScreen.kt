@@ -261,6 +261,8 @@ fun HistoryScreen(
 
         val isBannerAdEnabled by mainViewModel.adManager.isBannerAdEnabledFlow
             .collectAsStateWithLifecycle(initialValue = false)
+        val isRewardAdEnabled by mainViewModel.adManager.isRewardAdEnabledFlow
+            .collectAsStateWithLifecycle(initialValue = false)
 
         // 콘텐츠 — HorizontalPager로 월별 페이징
         HorizontalPager(
@@ -303,7 +305,7 @@ fun HistoryScreen(
                         isPartiallyCovered = mainViewModel.isPagePartiallyCovered(pageYear, pageMonth),
                         hasSmsPermission = mainScreenUiState.hasSmsPermission,
                         monthLabel = pageMonthLabel,
-                        isAdEnabled = isBannerAdEnabled && !mainScreenUiState.hasFreeSyncRemaining,
+                        isAdEnabled = isRewardAdEnabled && !mainScreenUiState.hasFreeSyncRemaining,
                         onImportData = {
                             onRequestSmsPermission {
                                 mainViewModel.syncMonthData(pageYear, pageMonth)
@@ -315,7 +317,7 @@ fun HistoryScreen(
                                 onRequestSmsPermission {
                                     mainViewModel.syncMonthData(pageYear, pageMonth)
                                 }
-                            } else if (!isBannerAdEnabled) {
+                            } else if (!isRewardAdEnabled) {
                                 // 광고 비활성 → 광고 없이 바로 월별 동기화
                                 onRequestSmsPermission {
                                     mainViewModel.unlockFullSync(pageYear, pageMonth)
@@ -353,7 +355,7 @@ fun HistoryScreen(
             }
         }
 
-        // 배너 광고 (RTDB reward_ad_enabled 연동)
+        // 배너 광고 (RTDB reward_ad_enabled + 앱 진입 5회 이상)
         if (isBannerAdEnabled) {
             BannerAdCompose(adUnitId = BannerAdIds.HISTORY)
         }

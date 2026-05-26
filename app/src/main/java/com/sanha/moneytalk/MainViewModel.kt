@@ -188,6 +188,7 @@ class MainViewModel @Inject constructor(
     private var isFirstLaunch = true
 
     init {
+        recordAppEntry()
         loadSettings()
         normalizeStoredCardNames()
         observeSyncCoverage()
@@ -196,6 +197,12 @@ class MainViewModel @Inject constructor(
     }
 
     // ========== 앱 라이프사이클 ==========
+
+    private fun recordAppEntry() {
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsDataStore.incrementAppEntryCount()
+        }
+    }
 
     /**
      * Activity의 ON_RESUME에서 호출

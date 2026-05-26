@@ -8,6 +8,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.ad.RewardAdManager
 import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
@@ -90,7 +91,7 @@ class CategoryDetailViewModel @Inject constructor(
     private val categoryClassifierService: CategoryClassifierService,
     private val categoryProvider: CategoryProvider,
     private val budgetDao: BudgetDao,
-    private val premiumManager: com.sanha.moneytalk.core.firebase.PremiumManager,
+    private val rewardAdManager: RewardAdManager,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -99,10 +100,8 @@ class CategoryDetailViewModel @Inject constructor(
         private const val PAGE_CACHE_RANGE = 2
     }
 
-    /** 배너 광고 노출 여부 (RTDB reward_ad_enabled 연동, 변경 시 자동 반영) */
-    val isBannerAdEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
-        .map { it.rewardAdEnabled }
-        .distinctUntilChanged()
+    /** 배너 광고 노출 여부 (RTDB reward_ad_enabled + 앱 진입 5회 이상) */
+    val isBannerAdEnabledFlow: Flow<Boolean> = rewardAdManager.isBannerAdEnabledFlow
 
     // Intent extras (SavedStateHandle로 주입)
     private val categoryDisplayName: String =

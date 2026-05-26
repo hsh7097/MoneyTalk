@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -203,9 +204,19 @@ class RewardAdManager @Inject constructor(
         return premiumManager.premiumConfig.value.rewardAdEnabled
     }
 
-    /** 배너 광고 활성화 여부를 반응적으로 관찰하기 위한 Flow (RTDB 변경 시 자동 반영) */
-    val isBannerAdEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
+    /** 리워드 광고 활성화 여부를 반응적으로 관찰하기 위한 Flow (RTDB 변경 시 자동 반영) */
+    val isRewardAdEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
         .map { it.rewardAdEnabled }
+        .distinctUntilChanged()
+
+    /** 배너 광고 노출 여부 Flow (RTDB 활성 + 앱 진입 5회 이상) */
+    val isBannerAdEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
+        .combine(settingsDataStore.appEntryCountFlow) { config, appEntryCount ->
+            BannerAdVisibilityPolicy.canShowBanner(
+                rewardAdEnabled = config.rewardAdEnabled,
+                appEntryCount = appEntryCount
+            )
+        }
         .distinctUntilChanged()
 
     /**

@@ -72,7 +72,7 @@ HomeScreen                           ← 홈 탭 메인 화면
 ├── [지출/수입 선택 시]              → TransactionEditActivity 이동
 ├── [AlertDialog]                    ← 분류 확인/진행률 다이얼로그
 ├── CoachMarkOverlay                 ← 화면별 온보딩 스포트라이트 오버레이 (첫 진입 시)
-└── BannerAdCompose                  ← 하단 고정 배너 광고 (RTDB reward_ad_enabled 연동, 공통)
+└── BannerAdCompose                  ← 하단 고정 배너 광고 (reward_ad_enabled + 앱 진입 5회 이상, 공통)
 ```
 
 | 함수 | 설명 | 참조 |
@@ -135,7 +135,7 @@ HistoryScreen                        ← 내역 탭 메인 화면
 ├── IncomeDetailDialog               ← 수입 상세 + 원본 SMS 표시
 ├── [+ 버튼]                          → TransactionEditActivity (새 거래 모드) 이동
 ├── CoachMarkOverlay                 ← 화면별 온보딩 스포트라이트 오버레이 (첫 진입 시)
-└── BannerAdCompose                  ← 하단 고정 배너 광고 (RTDB reward_ad_enabled 연동, 공통)
+└── BannerAdCompose                  ← 하단 고정 배너 광고 (reward_ad_enabled + 앱 진입 5회 이상, 공통)
 ```
 
 | 함수 | 설명 | 참조 |
@@ -274,7 +274,7 @@ CategoryDetailScreen                 ← 카테고리 상세 (Activity, 홈에�
 │       ├── TransactionGroupHeaderCompose ← 날짜 그룹 헤더 (공통)
 │       └── TransactionCardCompose   ← 거래 카드 (공통)
 ├── [지출 선택 시]                    → TransactionEditActivity 이동
-└── BannerAdCompose                  ← 하단 고정 배너 광고 (RTDB reward_ad_enabled 연동, 공통)
+└── BannerAdCompose                  ← 하단 고정 배너 광고 (reward_ad_enabled + 앱 진입 5회 이상, 공통)
 ```
 
 | 함수 | 설명 | 참조 |
@@ -431,7 +431,7 @@ StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Acti
 | CategoryPickerDialog | 카테고리 선택 (하위 호환) | legacy | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
 | SettingsSectionCompose | 설정 섹션 (타이틀 + Card) | 설정 | [SettingsSectionComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsSectionCompose.kt) |
 | SettingsItemCompose | 설정 아이템 (아이콘 + 텍스트) | 설정 | [SettingsItemComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsItemCompose.kt) |
-| BannerAdCompose | 하단 고정 배너 광고 (AdMob, RTDB 연동) | 홈, 내역, 카테고리 상세 | [BannerAdComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/BannerAdCompose.kt) |
+| BannerAdCompose | 하단 고정 배너 광고 (AdMob, reward_ad_enabled + 앱 진입 5회 이상) | 홈, 내역, 카테고리 상세 | [BannerAdComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/BannerAdCompose.kt) |
 | MonthPagerUtils | HorizontalPager 페이지↔월 변환 유틸 | 홈, 내역 | [MonthPagerUtilsKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/MonthPagerUtils.kt) |
 | EmojiPickerCompose | 이모지 선택 5열 그리드 (80개 프리셋) | 카테고리 설정 | [EmojiPickerComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/EmojiPickerCompose.kt) |
 | CoachMarkOverlay | 스포트라이트 + 툴팁 온보딩 오버레이 | 홈, 내역, 필터, 거래편집, 거래처규칙, 채팅, 설정 | [CoachMarkOverlayKt](../app/src/main/java/com/sanha/moneytalk/core/ui/coachmark/CoachMarkOverlay.kt) |

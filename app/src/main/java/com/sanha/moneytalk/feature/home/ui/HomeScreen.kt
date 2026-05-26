@@ -162,6 +162,8 @@ fun HomeScreen(
 
     val isBannerAdEnabled by mainViewModel.adManager.isBannerAdEnabledFlow
         .collectAsStateWithLifecycle(initialValue = false)
+    val isRewardAdEnabled by mainViewModel.adManager.isRewardAdEnabledFlow
+        .collectAsStateWithLifecycle(initialValue = false)
 
     // ===== 코치마크 (화면별 온보딩) =====
     val coachMarkRegistry = remember { CoachMarkTargetRegistry() }
@@ -218,7 +220,7 @@ fun HomeScreen(
                 hasSmsPermission = mainScreenUiState.hasSmsPermission,
                 selectedCategory = uiState.selectedCategory,
                 isSyncing = mainScreenUiState.isSyncing,
-                isAdEnabled = isBannerAdEnabled && !mainScreenUiState.hasFreeSyncRemaining,
+                isAdEnabled = isRewardAdEnabled && !mainScreenUiState.hasFreeSyncRemaining,
                 onPreviousMonth = {
                     coroutineScope.launch {
                         pagerState.animateScrollToPage(pagerState.currentPage - 1)
@@ -251,7 +253,7 @@ fun HomeScreen(
                         onRequestSmsPermission {
                             mainViewModel.syncMonthData(pageYear, pageMonth)
                         }
-                    } else if (!isBannerAdEnabled) {
+                    } else if (!isRewardAdEnabled) {
                         // 광고 비활성 → 광고 없이 바로 월별 동기화
                         onRequestSmsPermission {
                             mainViewModel.unlockFullSync(pageYear, pageMonth)
@@ -288,7 +290,7 @@ fun HomeScreen(
             )
         } // HorizontalPager
 
-        // 배너 광고 (RTDB reward_ad_enabled 연동)
+        // 배너 광고 (RTDB reward_ad_enabled + 앱 진입 5회 이상)
         if (isBannerAdEnabled) {
             BannerAdCompose(adUnitId = BannerAdIds.HOME)
         }

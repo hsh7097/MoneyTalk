@@ -1190,6 +1190,7 @@ SpendingTrendInfo (interface)
 |------|------|
 | 월별 SMS 동기화 | 과거 월 per-month: 처음 N회 무료 (RTDB `free_sync_count`) → 이후 광고 |
 | AI 채팅 | remaining=0 시 광고 → N회 무료 |
+| 배너 광고 | RTDB `reward_ad_enabled=true`이고 앱 진입 횟수 5회 이상일 때만 노출 |
 | 실시간 수신 | 항상 무료 (BroadcastReceiver) |
 | 프리로드 | 자동 |
 | 실패 처리 | 사용자 친화 (보상 적용) |
@@ -1209,6 +1210,7 @@ SpendingTrendInfo (interface)
 
 | 날짜 | 변경 내용 |
 |------|----------|
+| 2026-05-27 | 배너 광고 노출 조건을 `reward_ad_enabled=true` + 앱 진입 5회 이상으로 보정 |
 | 2026-05-06 | RCS provider 누락 복구를 최근 24시간 고정 범위에서 `last_rcs_provider_scan_time` 기반 재읽기로 변경 |
 | 2026-05-06 | 앱 진입/수신 후속 silent 동기화의 provider catch-up, RCS/MMS 보완 경로, 스마일카드 인식 규칙 반영 |
 | 2026-04-30 | SMS 동기화 범위 계산/월별 CTA 동기화 설명을 SmsSyncRangeCalculator/MainViewModel 구조 기준으로 갱신 |
