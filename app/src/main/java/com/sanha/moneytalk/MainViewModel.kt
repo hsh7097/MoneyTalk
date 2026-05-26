@@ -1213,13 +1213,9 @@ class MainViewModel @Inject constructor(
 
         // Phase 1.5: StoreRule 적용 (최우선 = Tier 0)
         val allRules = storeRuleRepository.getAllOnce()
+        val ruleCandidates = StoreRuleRepository.buildMatchCandidates(allRules)
         fun findMatchingStoreRule(storeName: String): StoreRuleEntity? {
-            val lowerStore = storeName.lowercase()
-            return allRules
-                .filter { lowerStore.contains(it.keyword.lowercase()) }
-                .maxWithOrNull(
-                    compareBy<StoreRuleEntity>({ it.keyword.length }, { it.createdAt })
-                )
+            return StoreRuleRepository.findBestMatchingRuleFromCandidates(ruleCandidates, storeName)
         }
 
         fun resolveStatsExclusion(entity: ExpenseEntity): Boolean {

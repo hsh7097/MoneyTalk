@@ -70,9 +70,9 @@ object StoreAliasManager {
         val map = mutableMapOf<String, String>()
         aliasMap.forEach { (mainName, aliases) ->
             // 메인 이름도 자기 자신에 매핑
-            map[mainName.lowercase()] = mainName
+            map[StoreNameNormalizer.normalizeForComparison(mainName)] = mainName
             aliases.forEach { alias ->
-                map[alias.lowercase()] = mainName
+                map[StoreNameNormalizer.normalizeForComparison(alias)] = mainName
             }
         }
         map
@@ -84,7 +84,7 @@ object StoreAliasManager {
      * 예: "coupang" → ["쿠팡", "coupang", "쿠페이", "쿠팡이츠", ...]
      */
     fun getAllAliases(keyword: String): Set<String> {
-        val normalizedKeyword = keyword.lowercase().trim()
+        val normalizedKeyword = StoreNameNormalizer.normalizeForComparison(keyword)
 
         // 메인 이름 찾기
         val mainName = reverseMap[normalizedKeyword]
@@ -103,11 +103,11 @@ object StoreAliasManager {
      * 예: storeName="쿠팡(쿠페이)", keyword="coupang" → true
      */
     fun matchesStore(storeName: String, keyword: String): Boolean {
-        val normalizedStore = storeName.lowercase()
+        val normalizedStore = StoreNameNormalizer.normalizeForComparison(storeName)
         val allAliases = getAllAliases(keyword)
 
         return allAliases.any { alias ->
-            normalizedStore.contains(alias.lowercase())
+            normalizedStore.contains(StoreNameNormalizer.normalizeForComparison(alias))
         }
     }
 
@@ -116,7 +116,7 @@ object StoreAliasManager {
      * 예: "STARBUCKS 강남점" → "스타벅스"
      */
     fun normalizeStoreName(storeName: String): String? {
-        val normalizedStore = storeName.lowercase()
+        val normalizedStore = StoreNameNormalizer.normalizeForComparison(storeName)
 
         reverseMap.forEach { (alias, mainName) ->
             if (normalizedStore.contains(alias)) {
@@ -133,6 +133,7 @@ object StoreAliasManager {
     private val customAliases = mutableMapOf<String, MutableSet<String>>()
 
     fun addCustomAlias(mainName: String, alias: String) {
-        customAliases.getOrPut(mainName) { mutableSetOf() }.add(alias.lowercase())
+        customAliases.getOrPut(mainName) { mutableSetOf() }
+            .add(StoreNameNormalizer.normalizeForComparison(alias))
     }
 }

@@ -61,6 +61,20 @@ class StoreNameGrouper @Inject constructor(
     )
 
     /**
+     * 비교용 거래처명이 같은 항목을 API 호출 없이 먼저 묶습니다.
+     * 예: "가나 다라", "가나다라" -> 같은 그룹
+     */
+    fun groupStoreNamesByComparisonKey(storeNames: List<String>): List<StoreGroup> {
+        if (storeNames.isEmpty()) return emptyList()
+
+        return storeNames
+            .groupBy { StoreNameNormalizer.normalizeForComparison(it) }
+            .values
+            .map { names -> StoreGroup(representative = names.first(), members = names) }
+            .sortedByDescending { it.members.size }
+    }
+
+    /**
      * 가게명 목록을 시맨틱 유사도로 그룹핑
      *
      * @param storeNames 그룹핑할 가게명 목록
@@ -77,22 +91,29 @@ class StoreNameGrouper @Inject constructor(
      * 임베딩 API 재호출을 피합니다.
      */
     suspend fun groupStoreNamesWithEmbeddings(storeNames: List<String>): StoreGroupingResult {
-        if (storeNames.size <= 1) {
-            val groups = storeNames.map { StoreGroup(representative = it, members = listOf(it)) }
-            return StoreGroupingResult(groups = groups, embeddingsByStoreName = emptyMap())
+        val comparisonGroups = groupStoreNamesByComparisonKey(storeNames)
+        if (comparisonGroups.size <= 1) {
+            return StoreGroupingResult(groups = comparisonGroups, embeddingsByStoreName = emptyMap())
         }
 
         // Step 1: 배치 임베딩 생성
-        val embeddedStores = generateBatchEmbeddings(storeNames)
+        val representativeToGroup = comparisonGroups.associateBy { it.representative }
+        val embeddedStores = generateBatchEmbeddings(comparisonGroups.map { it.representative })
 
         if (embeddedStores.isEmpty()) {
             MoneyTalkLogger.w("임베딩 생성 실패, 그룹핑 없이 반환")
-            val groups = storeNames.map { StoreGroup(representative = it, members = listOf(it)) }
-            return StoreGroupingResult(groups = groups, embeddingsByStoreName = emptyMap())
+            return StoreGroupingResult(groups = comparisonGroups, embeddingsByStoreName = emptyMap())
         }
 
         // Step 2: 그리디 클러스터링
         val groups = clusterByGreedy(embeddedStores)
+            .map { group ->
+                val members = group.members.flatMap { representative ->
+                    representativeToGroup[representative]?.members ?: listOf(representative)
+                }
+                StoreGroup(representative = group.representative, members = members)
+            }
+            .sortedByDescending { it.members.size }
 
         return StoreGroupingResult(
             groups = groups,

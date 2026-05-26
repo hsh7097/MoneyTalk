@@ -203,11 +203,23 @@ interface ExpenseDao {
     suspend fun deleteAll()
 
     // 가게명으로 지출 조회 (정확히 일치)
-    @Query("SELECT * FROM expenses WHERE storeName = :storeName ORDER BY dateTime DESC")
+    @Query(
+        """
+        SELECT * FROM expenses
+        WHERE replace(lower(storeName), ' ', '') = replace(lower(:storeName), ' ', '')
+        ORDER BY dateTime DESC
+    """
+    )
     suspend fun getExpensesByStoreName(storeName: String): List<ExpenseEntity>
 
     // 가게명에 키워드 포함된 지출 조회
-    @Query("SELECT * FROM expenses WHERE storeName LIKE '%' || :keyword || '%' ORDER BY dateTime DESC")
+    @Query(
+        """
+        SELECT * FROM expenses
+        WHERE replace(lower(storeName), ' ', '') LIKE '%' || replace(lower(:keyword), ' ', '') || '%'
+        ORDER BY dateTime DESC
+    """
+    )
     suspend fun getExpensesByStoreNameContaining(keyword: String): List<ExpenseEntity>
 
     // 미분류 항목 조회
@@ -218,7 +230,8 @@ interface ExpenseDao {
     @Query(
         """
         UPDATE expenses SET category = :newCategory
-        WHERE transaction_type = 'EXPENSE' AND storeName = :storeName
+        WHERE transaction_type = 'EXPENSE'
+          AND replace(lower(storeName), ' ', '') = replace(lower(:storeName), ' ', '')
     """
     )
     suspend fun updateCategoryByStoreName(storeName: String, newCategory: String): Int
@@ -227,7 +240,8 @@ interface ExpenseDao {
     @Query(
         """
         UPDATE expenses SET category = :newCategory
-        WHERE transaction_type = 'EXPENSE' AND storeName LIKE '%' || :keyword || '%'
+        WHERE transaction_type = 'EXPENSE'
+          AND replace(lower(storeName), ' ', '') LIKE '%' || replace(lower(:keyword), ' ', '') || '%'
     """
     )
     suspend fun updateCategoryByStoreNameContaining(keyword: String, newCategory: String): Int
@@ -240,7 +254,8 @@ interface ExpenseDao {
     @Query(
         """
         UPDATE expenses SET is_fixed = :isFixed
-        WHERE transaction_type = 'EXPENSE' AND storeName = :storeName
+        WHERE transaction_type = 'EXPENSE'
+          AND replace(lower(storeName), ' ', '') = replace(lower(:storeName), ' ', '')
     """
     )
     suspend fun updateFixedByStoreName(storeName: String, isFixed: Boolean): Int
@@ -249,7 +264,8 @@ interface ExpenseDao {
     @Query(
         """
         UPDATE expenses SET is_fixed = :isFixed
-        WHERE transaction_type = 'EXPENSE' AND storeName LIKE '%' || :keyword || '%'
+        WHERE transaction_type = 'EXPENSE'
+          AND replace(lower(storeName), ' ', '') LIKE '%' || replace(lower(:keyword), ' ', '') || '%'
     """
     )
     suspend fun updateFixedByStoreNameContaining(keyword: String, isFixed: Boolean): Int
@@ -290,7 +306,7 @@ interface ExpenseDao {
     @Query(
         """
         SELECT * FROM expenses
-        WHERE storeName LIKE '%' || :query || '%'
+        WHERE replace(lower(storeName), ' ', '') LIKE '%' || replace(lower(:query), ' ', '') || '%'
            OR category LIKE '%' || :query || '%'
            OR cardName LIKE '%' || :query || '%'
            OR memo LIKE '%' || :query || '%'
@@ -303,7 +319,7 @@ interface ExpenseDao {
     @Query(
         """
         DELETE FROM expenses
-        WHERE storeName LIKE '%' || :keyword || '%'
+        WHERE replace(lower(storeName), ' ', '') LIKE '%' || replace(lower(:keyword), ' ', '') || '%'
            OR category LIKE '%' || :keyword || '%'
            OR cardName LIKE '%' || :keyword || '%'
            OR memo LIKE '%' || :keyword || '%'
@@ -328,7 +344,8 @@ interface ExpenseDao {
         """
         UPDATE expenses SET category = :category, transaction_type = :transactionType,
         transfer_direction = :transferDirection
-        WHERE storeName = :storeName AND category = '미분류'
+        WHERE replace(lower(storeName), ' ', '') = replace(lower(:storeName), ' ', '')
+          AND category = '미분류'
     """
     )
     suspend fun updateTransferByStoreName(
