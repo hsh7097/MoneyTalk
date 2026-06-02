@@ -205,7 +205,7 @@ class RewardAdManager @Inject constructor(
     }
 
     suspend fun refundChatCredits(amount: Int, relatedSessionId: Long? = null) {
-        if (!isAdFeatureEnabled() || amount <= 0) return
+        if (amount <= 0) return
         aiCreditRepository.refundCredits(
             amount = amount,
             reason = AiCreditRepository.REASON_CHAT_REFUND,

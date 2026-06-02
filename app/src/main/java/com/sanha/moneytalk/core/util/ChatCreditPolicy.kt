@@ -82,12 +82,18 @@ object ChatCreditPolicy {
     private val lightAdviceKeywords = listOf(
         "어때",
         "많아",
+        "많은",
+        "많이",
         "괜찮",
         "줄일",
+        "줄여",
         "절약",
         "추천",
         "조언",
         "평가",
-        "봐줘"
+        "봐줘",
+        "과소비",
+        "낭비",
+        "부담"
     )
 }

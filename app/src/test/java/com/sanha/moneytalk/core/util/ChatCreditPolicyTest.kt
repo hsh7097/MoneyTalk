@@ -30,6 +30,14 @@ class ChatCreditPolicyTest {
     }
 
     @Test
+    fun `natural spending evaluation costs one credit`() {
+        val decision = ChatCreditPolicy.estimate("이번 달 식비가 많은 편이야?")
+
+        assertEquals(ChatCreditTier.LIGHT_ADVICE, decision.tier)
+        assertEquals(1, decision.cost)
+    }
+
+    @Test
     fun `standard spending analysis costs three credits`() {
         val decision = ChatCreditPolicy.estimate("올해 소비 흐름 분석해줘")
 
