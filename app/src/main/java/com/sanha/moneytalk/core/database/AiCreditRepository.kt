@@ -6,6 +6,8 @@ import com.sanha.moneytalk.core.database.entity.AiCreditLedgerType
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -14,6 +16,8 @@ class AiCreditRepository @Inject constructor(
     private val aiCreditDao: AiCreditDao,
     private val settingsDataStore: SettingsDataStore
 ) {
+    private val legacyMigrationMutex = Mutex()
+
     companion object {
         const val CHAT_MESSAGE_COST = 1
         const val REASON_CHAT_MESSAGE = "chat_message"
@@ -90,14 +94,18 @@ class AiCreditRepository @Inject constructor(
     suspend fun ensureLegacyRewardChatMigrated() {
         if (settingsDataStore.isAiCreditLegacyMigrated()) return
 
-        val legacyRemaining = settingsDataStore.getRewardChatRemaining()
-        if (legacyRemaining > 0) {
-            aiCreditDao.grantCredits(
-                amount = legacyRemaining,
-                type = AiCreditLedgerType.ADMIN,
-                reason = REASON_LEGACY_REWARD_CHAT
-            )
+        legacyMigrationMutex.withLock {
+            if (settingsDataStore.isAiCreditLegacyMigrated()) return@withLock
+
+            val legacyRemaining = settingsDataStore.getRewardChatRemaining()
+            if (legacyRemaining > 0) {
+                aiCreditDao.grantCredits(
+                    amount = legacyRemaining,
+                    type = AiCreditLedgerType.ADMIN,
+                    reason = REASON_LEGACY_REWARD_CHAT
+                )
+            }
+            settingsDataStore.markAiCreditLegacyMigrated()
         }
-        settingsDataStore.markAiCreditLegacyMigrated()
     }
 }

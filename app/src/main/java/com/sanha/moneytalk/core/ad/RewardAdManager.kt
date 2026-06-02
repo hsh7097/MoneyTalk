@@ -47,7 +47,7 @@ sealed class AdState {
  * Google AdMob 리워드 광고의 로드, 표시, 보상 처리를 담당합니다.
  * Firebase RTDB의 reward_ad_enabled 설정에 따라 동작하며,
  * 디버그 빌드에서는 설정값과 무관하게 광고를 로드/표시하지 않습니다.
- * 광고 시청 시 reward_ad_chat_count만큼 채팅 횟수를 충전합니다.
+ * 광고 시청 완료 시 reward_ad_chat_count만큼 AI 크레딧을 충전합니다.
  *
  * ## 광고 ID
  * - 앱 ID: ca-app-pub-4707673176609005~5012288836
@@ -149,11 +149,20 @@ class RewardAdManager @Inject constructor(
         }
 
         _adState.value = AdState.Showing
+        var rewardEarned = false
+        var failureNotified = false
+        fun notifyFailedOnce() {
+            if (!rewardEarned && !failureNotified) {
+                failureNotified = true
+                onFailed()
+            }
+        }
 
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
                 rewardedAd = null
                 _adState.value = AdState.Idle
+                notifyFailedOnce()
                 // 다음 광고 미리 로드
                 preloadAd()
             }
@@ -162,7 +171,7 @@ class RewardAdManager @Inject constructor(
                 MoneyTalkLogger.e("광고 표시 실패: ${error.message}")
                 rewardedAd = null
                 _adState.value = AdState.Error(error.message)
-                onFailed()
+                notifyFailedOnce()
                 // 다시 로드 시도
                 preloadAd()
             }
@@ -172,13 +181,14 @@ class RewardAdManager @Inject constructor(
         }
 
         ad.show(activity) {
+            rewardEarned = true
             onRewarded()
         }
     }
 
     /**
-     * 리워드 채팅 횟수 1회 차감
-     * @return true면 차감 성공, false면 잔여 횟수 부족
+     * AI 크레딧 1회 차감
+     * @return true면 차감 성공, false면 잔여 크레딧 부족
      */
     suspend fun consumeRewardChat(): Boolean {
         if (!isAdFeatureEnabled()) {
@@ -189,7 +199,7 @@ class RewardAdManager @Inject constructor(
     }
 
     /**
-     * 리워드 채팅 횟수 충전 (광고 시청 보상)
+     * AI 크레딧 충전 (광고 시청 보상)
      * PremiumConfig의 rewardAdChatCount만큼 추가
      */
     suspend fun addRewardChats() {
@@ -199,7 +209,7 @@ class RewardAdManager @Inject constructor(
 
     /**
      * 광고 시청이 필요한지 확인
-     * @return true면 광고 시청 필요 (광고 활성 && 잔여 횟수 0)
+     * @return true면 광고 시청 필요 (광고 활성 && AI 크레딧 부족)
      */
     suspend fun isAdRequired(): Boolean {
         if (!isAdFeatureEnabled()) return false
@@ -228,9 +238,7 @@ class RewardAdManager @Inject constructor(
         }
         .distinctUntilChanged()
 
-    /**
-     * 리워드 1회 시청 시 충전되는 횟수
-     */
+    /** 리워드 1회 시청 시 충전되는 AI 크레딧 */
     fun getRewardChatCount(): Int {
         return premiumManager.premiumConfig.value.rewardAdChatCount
     }
