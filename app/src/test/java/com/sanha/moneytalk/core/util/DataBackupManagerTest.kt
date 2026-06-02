@@ -26,6 +26,7 @@ class DataBackupManagerTest {
                     dateTime = 1_700_000_000_000L,
                     originalSms = "스타벅스 12000원 입금",
                     smsId = "sms-1",
+                    isFixed = true,
                     isExcludedFromStats = true,
                     transactionType = "TRANSFER",
                     transferDirection = "DEPOSIT"
@@ -85,6 +86,7 @@ class DataBackupManagerTest {
         assertEquals(19, backupData.settings.monthStartDay)
         assertEquals("TRANSFER", backupData.expenses.single().transactionType)
         assertEquals("DEPOSIT", backupData.expenses.single().transferDirection)
+        assertTrue(backupData.expenses.single().isFixed)
         assertTrue(backupData.expenses.single().isExcludedFromStats)
         assertEquals(1, backupData.categoryMappings.size)
         assertEquals(1, backupData.customCategories.size)
@@ -125,5 +127,64 @@ class DataBackupManagerTest {
 
         assertEquals("EXPENSE", expense.transactionType)
         assertEquals("", expense.transferDirection)
+    }
+
+    @Test
+    fun `난독화된 릴리즈 백업 필드도 설정 데이터로 복원한다`() {
+        val releaseJson = """
+            {
+              "version": 2,
+              "settings": {
+                "monthlyIncome": 0,
+                "monthStartDay": 19
+              },
+              "categoryMappings": [
+                { "a": "유튜브프리미엄", "b": "구독", "c": "user", "d": 10, "e": 20 }
+              ],
+              "customCategories": [
+                { "a": "회사", "b": "B", "c": "EXPENSE", "d": 0, "e": 30 }
+              ],
+              "storeRules": [
+                { "a": "유튜브프리미엄", "c": true, "e": 40 },
+                { "a": "막", "b": "회사", "e": 50 }
+              ],
+              "ownedCards": [
+                { "a": "신한", "b": false, "c": 60, "d": 70, "e": 3, "f": "manual" }
+              ],
+              "smsExclusionKeywords": [
+                { "a": "카카오뱅크", "b": "user", "c": 80 }
+              ]
+            }
+        """.trimIndent()
+
+        val backupData = Gson().fromJson(releaseJson, BackupData::class.java)
+
+        val categoryMapping = DataBackupManager.convertToCategoryMappingEntities(
+            backupData.categoryMappings.orEmpty()
+        ).single()
+        val customCategory = DataBackupManager.convertToCustomCategoryEntities(
+            backupData.customCategories.orEmpty()
+        ).single()
+        val storeRules = DataBackupManager.convertToStoreRuleEntities(
+            backupData.storeRules.orEmpty()
+        )
+        val ownedCard = DataBackupManager.convertToOwnedCardEntities(
+            backupData.ownedCards.orEmpty()
+        ).single()
+        val exclusionKeyword = DataBackupManager.convertToSmsExclusionKeywordEntities(
+            backupData.smsExclusionKeywords.orEmpty()
+        ).single()
+
+        assertEquals("유튜브프리미엄", categoryMapping.storeName)
+        assertEquals("구독", categoryMapping.category)
+        assertEquals("회사", customCategory.displayName)
+        assertEquals("EXPENSE", customCategory.categoryType)
+        assertEquals("유튜브프리미엄", storeRules[0].keyword)
+        assertEquals(true, storeRules[0].isFixed)
+        assertEquals("막", storeRules[1].keyword)
+        assertEquals("회사", storeRules[1].category)
+        assertEquals("신한", ownedCard.cardName)
+        assertEquals(false, ownedCard.isOwned)
+        assertEquals("카카오뱅크", exclusionKeyword.keyword)
     }
 }

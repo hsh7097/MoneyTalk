@@ -3,6 +3,7 @@ package com.sanha.moneytalk.feature.home.data
 import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
 import com.sanha.moneytalk.core.database.entity.supportsFixedExpense
 import com.sanha.moneytalk.core.util.StatsExclusionClassifier
+import com.sanha.moneytalk.core.util.StoreNameNormalizer
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -64,10 +65,16 @@ class StoreRuleSyncService @Inject constructor(
 
         newRule?.let { currentRule ->
             currentRule.category?.let { category ->
-                expenseRepository.updateCategoryByStoreNameContaining(currentRule.keyword, category)
+                getExpensesMatchingStoreRule(currentRule.keyword)
+                    .filter { it.transactionType == "EXPENSE" }
+                    .forEach { expense ->
+                        if (expense.category != category) {
+                            expenseRepository.updateCategoryById(expense.id, category)
+                        }
+                    }
             }
             currentRule.isFixed?.let { isFixed ->
-                expenseRepository.getExpensesByStoreNameContaining(currentRule.keyword)
+                getExpensesMatchingStoreRule(currentRule.keyword)
                     .forEach { expense ->
                         val nextFixed = if (expense.supportsFixedExpense()) isFixed else false
                         if (expense.isFixed != nextFixed) {
@@ -76,7 +83,7 @@ class StoreRuleSyncService @Inject constructor(
                     }
             }
             currentRule.isExcludedFromStats?.let { isExcluded ->
-                expenseRepository.getExpensesByStoreNameContaining(currentRule.keyword)
+                getExpensesMatchingStoreRule(currentRule.keyword)
                     .forEach { expense ->
                         if (expense.isExcludedFromStats != isExcluded) {
                             expenseRepository.updateStatsExcludedById(expense.id, isExcluded)
@@ -86,8 +93,17 @@ class StoreRuleSyncService @Inject constructor(
         }
     }
 
+    suspend fun reapplyAllRules() {
+        storeRuleRepository.getAllOnce().forEach { rule ->
+            applyRuleChange(
+                previousRule = null,
+                newRule = rule
+            )
+        }
+    }
+
     private suspend fun reclassifyExpensesByKeyword(keyword: String) {
-        val expenses = expenseRepository.getExpensesByStoreNameContaining(keyword)
+        val expenses = getExpensesMatchingStoreRule(keyword)
             .filter { it.transactionType != "TRANSFER" }
 
         for (expense in expenses) {
@@ -102,7 +118,7 @@ class StoreRuleSyncService @Inject constructor(
     }
 
     private suspend fun reapplyFixedStateByKeyword(keyword: String) {
-        val expenses = expenseRepository.getExpensesByStoreNameContaining(keyword)
+        val expenses = getExpensesMatchingStoreRule(keyword)
 
         for (expense in expenses) {
             val isFixed = if (expense.supportsFixedExpense()) {
@@ -117,7 +133,7 @@ class StoreRuleSyncService @Inject constructor(
     }
 
     private suspend fun reapplyStatsExcludedByKeyword(keyword: String) {
-        val expenses = expenseRepository.getExpensesByStoreNameContaining(keyword)
+        val expenses = getExpensesMatchingStoreRule(keyword)
 
         for (expense in expenses) {
             val isExcluded = storeRuleRepository.findMatchingRule(expense.storeName)
@@ -128,4 +144,13 @@ class StoreRuleSyncService @Inject constructor(
             }
         }
     }
+
+    private suspend fun getExpensesMatchingStoreRule(keyword: String) =
+        expenseRepository.getAllExpensesOnce()
+            .filter { expense ->
+                StoreNameNormalizer.matchesStoreRule(
+                    text = expense.storeName,
+                    keyword = keyword
+                )
+            }
 }

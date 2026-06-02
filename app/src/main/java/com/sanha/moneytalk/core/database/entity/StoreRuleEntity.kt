@@ -9,9 +9,9 @@ import androidx.room.PrimaryKey
  * 거래처 규칙 엔티티
  *
  * 거래처명에 대한 카테고리/고정지출/통계 제외 규칙을 저장합니다.
- * SMS 수신 시 거래처명에 keyword가 포함(contains)되면 해당 규칙이 자동 적용됩니다.
+ * SMS 수신 시 거래처명에 keyword가 포함되거나 거래처명이 keyword의 잘린 접두어이면 해당 규칙이 자동 적용됩니다.
  *
- * 매칭 방식: 거래처명/키워드의 내부 공백과 대소문자를 제거한 뒤 contains 비교
+ * 매칭 방식: 거래처명/키워드의 내부 공백과 대소문자를 제거한 뒤 동일 거래처 비교
  *
  * 적용 우선순위: StoreRule > Room 매핑 > Vector > Keyword > Gemini (Tier 0)
  *

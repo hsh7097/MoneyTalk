@@ -278,25 +278,69 @@ interface ExpenseDao {
     @Query("UPDATE expenses SET is_excluded_from_stats = :isExcluded WHERE id = :expenseId")
     suspend fun updateStatsExcludedById(expenseId: Long, isExcluded: Boolean): Int
 
-    // 중복 데이터 조회 (금액, 가게명, 날짜시간이 동일한 항목)
+    // 중복 데이터 조회 (금액, 가게명, 카드, 날짜시간이 동일한 항목)
     @Query(
         """
         SELECT * FROM expenses
-        WHERE id NOT IN (
-            SELECT MIN(id) FROM expenses
-            GROUP BY amount, storeName, dateTime
+        WHERE EXISTS (
+            SELECT 1 FROM expenses keep
+            WHERE keep.amount = expenses.amount
+              AND replace(lower(keep.storeName), ' ', '') = replace(lower(expenses.storeName), ' ', '')
+              AND keep.cardName = expenses.cardName
+              AND keep.dateTime = expenses.dateTime
+              AND (
+                  keep.is_fixed > expenses.is_fixed
+                  OR (
+                      keep.is_fixed = expenses.is_fixed
+                      AND keep.is_excluded_from_stats > expenses.is_excluded_from_stats
+                  )
+                  OR (
+                      keep.is_fixed = expenses.is_fixed
+                      AND keep.is_excluded_from_stats = expenses.is_excluded_from_stats
+                      AND keep.memo IS NOT NULL
+                      AND expenses.memo IS NULL
+                  )
+                  OR (
+                      keep.is_fixed = expenses.is_fixed
+                      AND keep.is_excluded_from_stats = expenses.is_excluded_from_stats
+                      AND (keep.memo IS NOT NULL) = (expenses.memo IS NOT NULL)
+                      AND keep.id < expenses.id
+                  )
+              )
         )
     """
     )
     suspend fun getDuplicateExpenses(): List<ExpenseEntity>
 
-    // 중복 데이터 삭제 (금액, 가게명, 날짜시간이 동일한 항목 중 가장 오래된 것만 남김)
+    // 중복 데이터 삭제 (동일 거래 중 규칙/메모가 보존된 항목을 우선 남김)
     @Query(
         """
         DELETE FROM expenses
-        WHERE id NOT IN (
-            SELECT MIN(id) FROM expenses
-            GROUP BY amount, storeName, dateTime
+        WHERE EXISTS (
+            SELECT 1 FROM expenses keep
+            WHERE keep.amount = expenses.amount
+              AND replace(lower(keep.storeName), ' ', '') = replace(lower(expenses.storeName), ' ', '')
+              AND keep.cardName = expenses.cardName
+              AND keep.dateTime = expenses.dateTime
+              AND (
+                  keep.is_fixed > expenses.is_fixed
+                  OR (
+                      keep.is_fixed = expenses.is_fixed
+                      AND keep.is_excluded_from_stats > expenses.is_excluded_from_stats
+                  )
+                  OR (
+                      keep.is_fixed = expenses.is_fixed
+                      AND keep.is_excluded_from_stats = expenses.is_excluded_from_stats
+                      AND keep.memo IS NOT NULL
+                      AND expenses.memo IS NULL
+                  )
+                  OR (
+                      keep.is_fixed = expenses.is_fixed
+                      AND keep.is_excluded_from_stats = expenses.is_excluded_from_stats
+                      AND (keep.memo IS NOT NULL) = (expenses.memo IS NOT NULL)
+                      AND keep.id < expenses.id
+                  )
+              )
         )
     """
     )

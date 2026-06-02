@@ -3,7 +3,7 @@ package com.sanha.moneytalk.core.util
 /**
  * 거래처명 비교용 정규화 유틸.
  *
- * 화면/DB에 저장되는 원본 거래처명은 유지하고, 동일 거래처 판정이나 contains 비교에서만
+ * 화면/DB에 저장되는 원본 거래처명은 유지하고, 동일 거래처 판정이나 규칙 매칭에서만
  * 내부 공백과 대소문자 차이를 제거한 키를 사용합니다.
  */
 object StoreNameNormalizer {
@@ -42,5 +42,14 @@ object StoreNameNormalizer {
         if (normalizedKeyword.isEmpty()) return false
 
         return normalizeForComparison(text).contains(normalizedKeyword)
+    }
+
+    fun matchesStoreRule(text: String, keyword: String): Boolean {
+        val normalizedText = normalizeForComparison(text)
+        val normalizedKeyword = normalizeForComparison(keyword)
+        if (normalizedText.isEmpty() || normalizedKeyword.isEmpty()) return false
+
+        return normalizedText.contains(normalizedKeyword) ||
+            normalizedKeyword.startsWith(normalizedText)
     }
 }

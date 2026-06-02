@@ -92,8 +92,8 @@ app/src/main/java/com/sanha/moneytalk/
 | AI 채팅 (3-step) | 쿼리분석 → DB조회/액션 → 답변생성 | [ChatViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt), [GeminiRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) |
 | 카드 관리 | 카드 표시/숨김 설정 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
 | SMS 필터링 | 제외 키워드 블랙리스트 | [SmsExclusionRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/SmsExclusionRepository.kt) |
-| 거래처 규칙 (StoreRule) | 거래처 키워드→카테고리/고정지출/통계 제외 자동 적용 (Tier 0, 내부 공백 제거 후 contains 매칭) | [StoreRuleRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreRuleRepository.kt), [StoreRuleSettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/ui/StoreRuleSettingsViewModel.kt) |
-| 설정 백업/복원 | JSON 백업은 거래 내역과 카테고리/거래처 규칙/예산/내 카드/SMS 제외 키워드를 함께 병합 복원 | [DataBackupManager.kt](../app/src/main/java/com/sanha/moneytalk/core/util/DataBackupManager.kt), [SettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsViewModel.kt) |
+| 거래처 규칙 (StoreRule) | 거래처 키워드→카테고리/고정지출/통계 제외 자동 적용 (Tier 0, 내부 공백 제거 후 contains + 잘린 접두어 매칭) | [StoreRuleRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreRuleRepository.kt), [StoreRuleSettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/ui/StoreRuleSettingsViewModel.kt) |
+| 설정 백업/복원 | JSON 백업은 거래 내역과 카테고리/거래처 규칙/예산/내 카드/SMS 제외 키워드를 함께 병합 복원한다. 릴리즈 난독화 백업 필드명도 읽고, 복원 후 거래처 규칙 소급 적용과 중복 정리를 수행한다. | [DataBackupManager.kt](../app/src/main/java/com/sanha/moneytalk/core/util/DataBackupManager.kt), [SettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsViewModel.kt) |
 
 ### 2-3. DB 엔티티 (15개)
 
@@ -449,7 +449,7 @@ RCS/비즈메시지(프로세스 cold start) → NotificationTransactionService
 ### 5-2. 카테고리 자동 분류 흐름
 ```
 CategoryClassifierService.getCategory(storeName)
-   → Tier 0: StoreRule contains 매칭 (storeName/keyword 내부 공백 제거 후 포함 → category/isFixed/isExcludedFromStats 즉시 적용)
+   → Tier 0: StoreRule 매칭 (storeName/keyword 내부 공백 제거 후 포함 또는 잘린 접두어 → category/isFixed/isExcludedFromStats 즉시 적용)
    → Tier 1: Room DB 정확 매칭 (storeName → category)
    → Tier 1.5: 임베딩 1회 생성 → 1.5a/b 모두에서 재사용
       → 1.5a: findCategoryByStoreName(storeName, queryVector)

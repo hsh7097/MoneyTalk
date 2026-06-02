@@ -11,7 +11,8 @@ import javax.inject.Singleton
  * 거래처 규칙 Repository
  *
  * 거래처명 키워드 기반으로 카테고리/고정지출/통계 제외를 자동 적용하는 규칙을 관리합니다.
- * contains 매칭: 거래처명/키워드의 내부 공백과 대소문자를 제거한 뒤 포함되면 규칙 적용.
+ * 매칭: 거래처명/키워드의 내부 공백과 대소문자를 제거한 뒤 포함되거나,
+ * 거래처명이 키워드의 잘린 접두어이면 규칙 적용.
  */
 @Singleton
 class StoreRuleRepository @Inject constructor(
@@ -54,7 +55,10 @@ class StoreRuleRepository @Inject constructor(
 
             return candidates.asSequence()
                 .filter { candidate ->
-                    normalizedStore.contains(candidate.normalizedKeyword)
+                    StoreNameNormalizer.matchesStoreRule(
+                        text = normalizedStore,
+                        keyword = candidate.normalizedKeyword
+                    )
                 }
                 .maxWithOrNull(
                     compareBy<StoreRuleMatchCandidate>(
@@ -92,7 +96,7 @@ class StoreRuleRepository @Inject constructor(
     suspend fun deleteById(id: Long) = storeRuleDao.deleteById(id)
 
     /**
-     * storeName에 매칭되는 가장 구체적인 규칙 반환 (contains 매칭).
+     * storeName에 매칭되는 가장 구체적인 규칙 반환.
      * keyword 길이가 긴 규칙을 우선하고, 길이가 같으면 최신 규칙을 선택한다.
      */
     suspend fun findMatchingRule(storeName: String): StoreRuleEntity? {

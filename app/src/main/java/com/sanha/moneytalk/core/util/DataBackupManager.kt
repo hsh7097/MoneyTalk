@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.annotations.SerializedName
 import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import com.sanha.moneytalk.core.database.entity.CategoryMappingEntity
 import com.sanha.moneytalk.core.database.entity.CustomCategoryEntity
@@ -44,93 +45,155 @@ enum class ExportFormat {
  * 백업 데이터 모델
  */
 data class BackupData(
+    @SerializedName("version")
     val version: Int = 2,
+    @SerializedName("createdAt")
     val createdAt: String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date()),
+    @SerializedName("settings")
     val settings: BackupSettings = BackupSettings(),
+    @SerializedName("expenses")
     val expenses: List<ExpenseBackup> = emptyList(),
+    @SerializedName("incomes")
     val incomes: List<IncomeBackup> = emptyList(),
+    @SerializedName("categoryMappings")
     val categoryMappings: List<CategoryMappingBackup> = emptyList(),
+    @SerializedName("customCategories")
     val customCategories: List<CustomCategoryBackup> = emptyList(),
+    @SerializedName("storeRules")
     val storeRules: List<StoreRuleBackup> = emptyList(),
+    @SerializedName("budgets")
     val budgets: List<BudgetBackup> = emptyList(),
+    @SerializedName("ownedCards")
     val ownedCards: List<OwnedCardBackup> = emptyList(),
+    @SerializedName("smsExclusionKeywords")
     val smsExclusionKeywords: List<SmsExclusionKeywordBackup> = emptyList()
 )
 
 data class BackupSettings(
+    @SerializedName("monthlyIncome")
     val monthlyIncome: Int = 0,
+    @SerializedName("monthStartDay")
     val monthStartDay: Int = 1
     // API 키는 보안상 백업에 포함하지 않음
 )
 
 data class ExpenseBackup(
+    @SerializedName("amount")
     val amount: Int,
+    @SerializedName("storeName")
     val storeName: String,
+    @SerializedName("category")
     val category: String,
+    @SerializedName("dateTime")
     val dateTime: Long,
+    @SerializedName("cardName")
     val cardName: String,
+    @SerializedName("originalSms")
     val originalSms: String,
+    @SerializedName("smsId")
     val smsId: String,
+    @SerializedName("senderAddress")
     val senderAddress: String = "",
+    @SerializedName("memo")
     val memo: String?,
+    @SerializedName("isFixed")
+    val isFixed: Boolean = false,
+    @SerializedName("isExcludedFromStats")
     val isExcludedFromStats: Boolean = false,
+    @SerializedName("transactionType")
     val transactionType: String = "EXPENSE",
+    @SerializedName("transferDirection")
     val transferDirection: String = ""
 )
 
 data class IncomeBackup(
+    @SerializedName("amount")
     val amount: Int,
+    @SerializedName("type")
     val type: String,
+    @SerializedName("description")
     val description: String,
+    @SerializedName("isRecurring")
     val isRecurring: Boolean,
+    @SerializedName("recurringDay")
     val recurringDay: Int?,
+    @SerializedName("dateTime")
     val dateTime: Long,
+    @SerializedName("senderAddress")
     val senderAddress: String = "",
+    @SerializedName("originalSms")
     val originalSms: String? = null
 )
 
 data class CategoryMappingBackup(
+    @SerializedName(value = "storeName", alternate = ["a"])
     val storeName: String,
+    @SerializedName(value = "category", alternate = ["b"])
     val category: String,
+    @SerializedName(value = "source", alternate = ["c"])
     val source: String = "local",
+    @SerializedName(value = "createdAt", alternate = ["d"])
     val createdAt: Long = System.currentTimeMillis(),
+    @SerializedName(value = "updatedAt", alternate = ["e"])
     val updatedAt: Long = System.currentTimeMillis()
 )
 
 data class CustomCategoryBackup(
+    @SerializedName(value = "displayName", alternate = ["a"])
     val displayName: String,
+    @SerializedName(value = "emoji", alternate = ["b"])
     val emoji: String,
+    @SerializedName(value = "categoryType", alternate = ["c"])
     val categoryType: String,
+    @SerializedName(value = "displayOrder", alternate = ["d"])
     val displayOrder: Int = 0,
+    @SerializedName(value = "createdAt", alternate = ["e"])
     val createdAt: Long = System.currentTimeMillis()
 )
 
 data class StoreRuleBackup(
+    @SerializedName(value = "keyword", alternate = ["a"])
     val keyword: String,
+    @SerializedName(value = "category", alternate = ["b"])
     val category: String? = null,
+    @SerializedName(value = "isFixed", alternate = ["c"])
     val isFixed: Boolean? = null,
+    @SerializedName(value = "isExcludedFromStats", alternate = ["d"])
     val isExcludedFromStats: Boolean? = null,
+    @SerializedName(value = "createdAt", alternate = ["e"])
     val createdAt: Long = System.currentTimeMillis()
 )
 
 data class BudgetBackup(
+    @SerializedName(value = "category", alternate = ["a"])
     val category: String,
+    @SerializedName(value = "monthlyLimit", alternate = ["b"])
     val monthlyLimit: Int,
+    @SerializedName(value = "yearMonth", alternate = ["c"])
     val yearMonth: String = "default"
 )
 
 data class OwnedCardBackup(
+    @SerializedName(value = "cardName", alternate = ["a"])
     val cardName: String,
+    @SerializedName(value = "isOwned", alternate = ["b"])
     val isOwned: Boolean = true,
+    @SerializedName(value = "firstSeenAt", alternate = ["c"])
     val firstSeenAt: Long = System.currentTimeMillis(),
+    @SerializedName(value = "lastSeenAt", alternate = ["d"])
     val lastSeenAt: Long = System.currentTimeMillis(),
+    @SerializedName(value = "seenCount", alternate = ["e"])
     val seenCount: Int = 1,
+    @SerializedName(value = "source", alternate = ["f"])
     val source: String = "sms_sync"
 )
 
 data class SmsExclusionKeywordBackup(
+    @SerializedName(value = "keyword", alternate = ["a"])
     val keyword: String,
+    @SerializedName(value = "source", alternate = ["b"])
     val source: String = "user",
+    @SerializedName(value = "createdAt", alternate = ["c"])
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -246,6 +309,7 @@ object DataBackupManager {
                     smsId = expense.smsId,
                     senderAddress = expense.senderAddress,
                     memo = expense.memo,
+                    isFixed = expense.isFixed,
                     isExcludedFromStats = expense.isExcludedFromStats,
                     transactionType = expense.transactionType,
                     transferDirection = expense.transferDirection
@@ -490,6 +554,7 @@ object DataBackupManager {
                 smsId = backup.smsId,
                 senderAddress = backup.senderAddress.orEmpty(),
                 memo = backup.memo,
+                isFixed = backup.isFixed,
                 isExcludedFromStats = backup.isExcludedFromStats,
                 transactionType = backup.transactionType.orDefaultIfBlank("EXPENSE"),
                 transferDirection = backup.transferDirection.orEmpty(),

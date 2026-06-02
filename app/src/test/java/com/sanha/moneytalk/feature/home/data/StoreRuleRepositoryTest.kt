@@ -45,6 +45,23 @@ class StoreRuleRepositoryTest {
     }
 
     @Test
+    fun findBestMatchingRule_matchesTruncatedPrefixStoreName() {
+        val rule = StoreRuleEntity(
+            keyword = "유튜브프리미엄",
+            category = "구독",
+            isFixed = true,
+            createdAt = 1L
+        )
+
+        val result = StoreRuleRepository.findBestMatchingRule(
+            rules = listOf(rule),
+            storeName = "유튜브프리미"
+        )
+
+        assertEquals(rule, result)
+    }
+
+    @Test
     fun findBestMatchingRule_returnsNullForBlankStoreName() {
         val rule = StoreRuleEntity(keyword = "가나다라")
 

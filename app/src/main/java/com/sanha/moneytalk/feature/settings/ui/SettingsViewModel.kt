@@ -34,6 +34,7 @@ import com.sanha.moneytalk.feature.home.data.CategoryRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
+import com.sanha.moneytalk.feature.home.data.StoreRuleSyncService
 import com.sanha.moneytalk.receiver.NotificationTransactionService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -161,6 +162,7 @@ class SettingsViewModel @Inject constructor(
     private val customCategoryRepository: CustomCategoryRepository,
     private val categoryProvider: CategoryProvider,
     private val storeRuleRepository: StoreRuleRepository,
+    private val storeRuleSyncService: StoreRuleSyncService,
     private val smsExclusionRepository: SmsExclusionRepository,
     private val appDatabase: AppDatabase,
     private val chatDao: ChatDao,
@@ -716,7 +718,13 @@ class SettingsViewModel @Inject constructor(
                 val storeRules = DataBackupManager.convertToStoreRuleEntities(
                     backupData.storeRules.orEmpty()
                 )
-                storeRuleRepository.upsertAll(storeRules)
+                storeRules.forEach { rule ->
+                    storeRuleSyncService.applyRuleChange(
+                        previousRule = null,
+                        newRule = rule
+                    )
+                }
+                storeRuleSyncService.reapplyAllRules()
 
                 val budgets = DataBackupManager.convertToBudgetEntities(backupData.budgets.orEmpty())
                 if (budgets.isNotEmpty()) {
@@ -732,6 +740,7 @@ class SettingsViewModel @Inject constructor(
                     backupData.smsExclusionKeywords.orEmpty()
                 )
                 smsExclusionRepository.restoreKeywords(smsExclusionKeywords)
+                expenseRepository.deleteDuplicates()
 
                 RestoreCounts(
                     expenses = expenses.size,
@@ -1231,6 +1240,7 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             try {
                 val deletedCount = withContext(Dispatchers.IO) {
+                    storeRuleSyncService.reapplyAllRules()
                     expenseRepository.deleteDuplicates()
                 }
                 snackbarBus.show(

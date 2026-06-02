@@ -22,4 +22,9 @@ class StoreNameNormalizerTest {
     fun containsForComparison_rejectsBlankKeyword() {
         assertFalse(StoreNameNormalizer.containsForComparison("가나다라", "   "))
     }
+
+    @Test
+    fun matchesStoreRule_acceptsTruncatedPrefixStoreName() {
+        assertTrue(StoreNameNormalizer.matchesStoreRule("유튜브프리미", "유튜브프리미엄"))
+    }
 }
