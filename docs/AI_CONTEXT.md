@@ -1,7 +1,7 @@
 # AI_CONTEXT.md - MoneyTalk 프로젝트 컨텍스트
 
 > AI 에이전트가 MoneyTalk 프로젝트를 이해하고 작업하기 위한 핵심 컨텍스트 문서
-> **최종 갱신**: 2026-04-30
+> **최종 갱신**: 2026-06-02
 
 ---
 
@@ -32,6 +32,7 @@ app/src/main/java/com/sanha/moneytalk/
 │   │   ├── OwnedCardRepository.kt      # 카드 화이트리스트
 │   │   └── SmsExclusionRepository.kt   # SMS 제외 키워드
 │   ├── firebase/          # Firebase (PremiumManager, ForceUpdateChecker, CrashlyticsHelper)
+│   ├── appfunctions/      # Android App Functions (월간 요약 + DB 조회/수정)
 │   ├── datastore/         # DataStore (설정값)
 │   ├── di/                # Hilt DI 모듈
 │   ├── model/             # Category enum, SmsAnalysisResult 등
@@ -90,10 +91,21 @@ app/src/main/java/com/sanha/moneytalk/
 | SMS 동기화 검증 | 월별 읽기 순서 독립성 + 실기기 Provider/UI 이동 회귀 검증 | [MonthlySmsSyncOrderRegressionTest.kt](../app/src/test/java/com/sanha/moneytalk/core/sync/MonthlySmsSyncOrderRegressionTest.kt), [RealDeviceMonthlySmsSyncOrderInstrumentedTest.kt](../app/src/androidTest/java/com/sanha/moneytalk/core/sync/RealDeviceMonthlySmsSyncOrderInstrumentedTest.kt), [RealDeviceMonthlyPageNavigationInstrumentedTest.kt](../app/src/androidTest/java/com/sanha/moneytalk/core/sync/RealDeviceMonthlyPageNavigationInstrumentedTest.kt) |
 | 카테고리 분류 (4-tier) | Room → Vector → Keyword → Gemini Batch | [CategoryClassifierService.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt), [StoreEmbeddingRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreEmbeddingRepository.kt) |
 | AI 채팅 (3-step) | 쿼리분석 → DB조회/액션 → 답변생성 | [ChatViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt), [GeminiRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) |
+| Android App Functions | Assistant/agent가 앱 내부 DB 조회/수정 기능과 월간 가계 요약을 호출 | [MoneyTalkFinanceAppFunctions.kt](../app/src/main/java/com/sanha/moneytalk/core/appfunctions/MoneyTalkFinanceAppFunctions.kt), [MoneyTalkChatAppFunctions.kt](../app/src/main/java/com/sanha/moneytalk/core/appfunctions/MoneyTalkChatAppFunctions.kt), [MoneyTalkChatAppFunctionReader.kt](../app/src/main/java/com/sanha/moneytalk/core/appfunctions/MoneyTalkChatAppFunctionReader.kt), [MoneyTalkApplication.kt](../app/src/main/java/com/sanha/moneytalk/MoneyTalkApplication.kt) |
 | 카드 관리 | 카드 표시/숨김 설정 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
 | SMS 필터링 | 제외 키워드 블랙리스트 | [SmsExclusionRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/SmsExclusionRepository.kt) |
 | 거래처 규칙 (StoreRule) | 거래처 키워드→카테고리/고정지출/통계 제외 자동 적용 (Tier 0, 내부 공백 제거 후 contains + 잘린 접두어 매칭) | [StoreRuleRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreRuleRepository.kt), [StoreRuleSettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/ui/StoreRuleSettingsViewModel.kt) |
 | 설정 백업/복원 | JSON 백업은 거래 내역과 카테고리/거래처 규칙/예산/내 카드/SMS 제외 키워드를 함께 병합 복원한다. 릴리즈 난독화 백업 필드명도 읽고, 복원 후 거래처 규칙 소급 적용과 중복 정리를 수행한다. | [DataBackupManager.kt](../app/src/main/java/com/sanha/moneytalk/core/util/DataBackupManager.kt), [SettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsViewModel.kt) |
+
+#### Android App Functions 노출 범위
+
+- 최신 확인: `androidx.appfunctions:appfunctions-*:1.0.0-alpha09`는 2026-05-06 릴리스지만 `compileSdk 37+`와 `AGP 9.1.0+`가 필요하다. 현재 프로젝트는 `compileSdk 36`/`AGP 8.10.1`이므로 빌드 가능한 최신 호환 버전인 `1.0.0-alpha08`을 유지한다.
+- `MoneyTalkFinanceAppFunctions`: 월간 가계 요약 조회.
+- `MoneyTalkChatAppFunctions`: DB 스냅샷, 지출/수입/카드/거래처 규칙/커스텀 카테고리/예산/SMS 제외 키워드 조회.
+- `MoneyTalkChatAppFunctions`: 지출 카테고리·메모·거래처·금액·고정지출·통계 제외 수정, 수입 추가·메모·카테고리·고정수입 수정, 카드 표시/숨김, 월 수입·월 시작일, 거래처 규칙, 커스텀 카테고리, 예산, SMS 제외 키워드 수정.
+- 데이터 삭제성 함수(`deleteExpense`, `deleteExpensesByKeyword`, `deleteDuplicateExpenses`, `deleteStoreRule`)는 함수 정의는 유지하되 기본 활성화하지 않는다.
+- 구현 원칙: App Function은 기본 main thread 실행이므로 노출 함수 본문은 `withContext(Dispatchers.IO)`로 DB 작업을 오프로드한다.
+- 메타데이터 원칙: 현재는 MoneyTalk 전용 도메인 함수라 사전 정의 schema 없이 KDoc 기반 `parameters`/`response` 설명으로 노출한다. 표준화된 금융 schema가 생기면 `AppFunctionSchemaDefinition` 적용을 검토한다.
 
 ### 2-3. DB 엔티티 (15개)
 

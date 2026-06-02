@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<app-function-app-metadata xmlns:appfunctions="http://schemas.android.com/apk/res-auto"
+    appfunctions:description="@string/app_functions_app_description"
+    appfunctions:displayDescription="@string/app_functions_app_display_description" />
