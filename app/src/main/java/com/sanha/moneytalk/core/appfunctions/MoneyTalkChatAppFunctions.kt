@@ -424,7 +424,7 @@ class MoneyTalkChatAppFunctions(
      * @param expenseId 삭제할 지출 ID.
      * @return 삭제 결과.
      */
-    @AppFunction(isDescribedByKDoc = true)
+    @AppFunction(isEnabled = false, isDescribedByKDoc = true)
     suspend fun deleteExpense(
         appFunctionContext: AppFunctionContext,
         expenseId: Long? = null
@@ -438,7 +438,7 @@ class MoneyTalkChatAppFunctions(
      * @param keyword 거래처, 카테고리, 카드명, 메모 검색 키워드.
      * @return 삭제 결과.
      */
-    @AppFunction(isDescribedByKDoc = true)
+    @AppFunction(isEnabled = false, isDescribedByKDoc = true)
     suspend fun deleteExpensesByKeyword(
         appFunctionContext: AppFunctionContext,
         keyword: String? = null
@@ -451,7 +451,7 @@ class MoneyTalkChatAppFunctions(
      *
      * @return 삭제 결과.
      */
-    @AppFunction(isDescribedByKDoc = true)
+    @AppFunction(isEnabled = false, isDescribedByKDoc = true)
     suspend fun deleteDuplicateExpenses(
         appFunctionContext: AppFunctionContext
     ): MoneyTalkOperationResult {
@@ -783,7 +783,7 @@ class MoneyTalkChatAppFunctions(
      * @param keyword 삭제할 규칙 키워드. ruleId가 없을 때 사용합니다.
      * @return 삭제 결과.
      */
-    @AppFunction(isDescribedByKDoc = true)
+    @AppFunction(isEnabled = false, isDescribedByKDoc = true)
     suspend fun deleteStoreRule(
         appFunctionContext: AppFunctionContext,
         ruleId: Long? = null,

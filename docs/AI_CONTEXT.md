@@ -103,6 +103,7 @@ app/src/main/java/com/sanha/moneytalk/
 - `MoneyTalkFinanceAppFunctions`: 월간 가계 요약 조회.
 - `MoneyTalkChatAppFunctions`: DB 스냅샷, 지출/수입/카드/거래처 규칙/커스텀 카테고리/예산/SMS 제외 키워드 조회.
 - `MoneyTalkChatAppFunctions`: 지출 카테고리·메모·거래처·금액·고정지출·통계 제외 수정, 수입 추가·메모·카테고리·고정수입 수정, 카드 표시/숨김, 월 수입·월 시작일, 거래처 규칙, 커스텀 카테고리, 예산, SMS 제외 키워드 수정.
+- 데이터 삭제성 함수(`deleteExpense`, `deleteExpensesByKeyword`, `deleteDuplicateExpenses`, `deleteStoreRule`)는 함수 정의는 유지하되 기본 활성화하지 않는다.
 - 구현 원칙: App Function은 기본 main thread 실행이므로 노출 함수 본문은 `withContext(Dispatchers.IO)`로 DB 작업을 오프로드한다.
 - 메타데이터 원칙: 현재는 MoneyTalk 전용 도메인 함수라 사전 정의 schema 없이 KDoc 기반 `parameters`/`response` 설명으로 노출한다. 표준화된 금융 schema가 생기면 `AppFunctionSchemaDefinition` 적용을 검토한다.
 
