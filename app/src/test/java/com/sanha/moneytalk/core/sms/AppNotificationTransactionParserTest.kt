@@ -1,0 +1,167 @@
+package com.sanha.moneytalk.core.sms
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+class AppNotificationTransactionParserTest {
+
+    @Test
+    fun `multiline app notification extracts store and amount`() {
+        val body = """
+            카카오뱅크
+            체크카드 결제
+            스타벅스
+            5,000원
+            잔액 120,000원
+        """.trimIndent()
+
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = body,
+            appLabel = "카카오뱅크",
+            packageName = "com.kakaobank.channel"
+        )
+
+        assertNotNull(result)
+        assertEquals(5_000, result?.amount)
+        assertEquals("스타벅스", result?.storeName)
+        assertEquals("카페/간식", result?.category)
+        assertEquals("카카오뱅크", result?.cardName)
+    }
+
+    @Test
+    fun `single line app notification extracts store before amount`() {
+        val body = "스타벅스에서 5,000원 결제"
+
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = body,
+            appLabel = "카카오뱅크",
+            packageName = "com.kakaobank.channel"
+        )
+
+        assertNotNull(result)
+        assertEquals(5_000, result?.amount)
+        assertEquals("스타벅스", result?.storeName)
+    }
+
+    @Test
+    fun `single line with app label extracts merchant token`() {
+        val body = "카카오뱅크 체크카드 결제 스타벅스 5,000원"
+
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = body,
+            appLabel = "카카오뱅크",
+            packageName = "com.kakaobank.channel"
+        )
+
+        assertNotNull(result)
+        assertEquals(5_000, result?.amount)
+        assertEquals("스타벅스", result?.storeName)
+    }
+
+    @Test
+    fun `woori app notification extracts merchant after cumulative amount`() {
+        val body = "승인내역 [일시불.승인(1690)]05/21 21:10 3,000원 / 누적:188,800원 ㈜아성다이소"
+
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = body,
+            appLabel = "우리카드",
+            packageName = "com.wooricard.smartapp"
+        )
+
+        assertNotNull(result)
+        assertEquals(3_000, result?.amount)
+        assertEquals("㈜아성다이소", result?.storeName)
+    }
+
+    @Test
+    fun `balance amount is not selected as transaction amount`() {
+        val body = """
+            카카오뱅크
+            스타벅스 5,000원 결제
+            잔액 120,000원
+        """.trimIndent()
+
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = body,
+            appLabel = "카카오뱅크",
+            packageName = "com.kakaobank.channel"
+        )
+
+        assertNotNull(result)
+        assertEquals(5_000, result?.amount)
+        assertEquals("스타벅스", result?.storeName)
+    }
+
+    @Test
+    fun `kakaobank withdrawal extracts account target as store`() {
+        val body = """
+            출금 30,000원
+            입출금통장(2193) → 탄
+            잔액 795,430원
+        """.trimIndent()
+
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = body,
+            appLabel = "카카오뱅크",
+            packageName = "com.kakaobank.channel"
+        )
+
+        assertNotNull(result)
+        assertEquals(30_000, result?.amount)
+        assertEquals("탄", result?.storeName)
+    }
+
+    @Test
+    fun `kakaobank withdrawal preserves card target as store`() {
+        val body = """
+            출금 1,450,770원
+            입출금통장(2193) → 하상현현대카드
+            잔액 825,430원
+        """.trimIndent()
+
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = body,
+            appLabel = "카카오뱅크",
+            packageName = "com.kakaobank.channel"
+        )
+
+        assertNotNull(result)
+        assertEquals(1_450_770, result?.amount)
+        assertEquals("하상현현대카드", result?.storeName)
+    }
+
+    @Test
+    fun `single line kakaobank withdrawal trims balance after account target`() {
+        val body = "출금 1,450,770원 입출금통장(2193) → 하상현현대카드 잔액 825,430원"
+
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = body,
+            appLabel = "카카오뱅크",
+            packageName = "com.kakaobank.channel"
+        )
+
+        assertNotNull(result)
+        assertEquals(1_450_770, result?.amount)
+        assertEquals("하상현현대카드", result?.storeName)
+    }
+
+    @Test
+    fun `kakaobank loan interest due notice is skipped`() {
+        val body = """
+            대출 이자 납입일 안내
+            신용대출(6148)의 이자 납입일은 2026.05.22 입니다.
+            납입예정금액: 47,653원 (4.701%, 발송일자 기준)
+            * 실제 납입금액은 기준금리 변동 등으로 변경될 수 있습니다.
+        """.trimIndent()
+
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = body,
+            appLabel = "카카오뱅크",
+            packageName = "com.kakaobank.channel"
+        )
+
+        assertNull(result)
+    }
+}

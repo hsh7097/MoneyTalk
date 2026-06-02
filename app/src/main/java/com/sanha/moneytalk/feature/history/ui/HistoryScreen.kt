@@ -232,11 +232,13 @@ fun HistoryScreen(
                 selectedExpenseCategories = uiState.selectedExpenseCategories,
                 selectedIncomeCategories = uiState.selectedIncomeCategories,
                 selectedTransferCategories = uiState.selectedTransferCategories,
+                selectedCardNames = uiState.selectedCardNames,
+                availableCardNames = uiState.availableCardNames,
                 expenseCategories = uiState.expenseCategories,
                 incomeCategories = uiState.incomeCategories,
                 transferCategories = uiState.transferCategories,
                 fixedExpenseFilter = uiState.fixedExpenseFilter,
-                onApplyFilter = { sortOrder, showExp, showInc, showTransfer, expenseCategories, incomeCategories, transferCategories, fixedFilter ->
+                onApplyFilter = { sortOrder, showExp, showInc, showTransfer, expenseCategories, incomeCategories, transferCategories, cardNames, fixedFilter ->
                     viewModel.applyFilter(
                         sortOrder = sortOrder,
                         showExpenses = showExp,
@@ -245,6 +247,7 @@ fun HistoryScreen(
                         expenseCategories = expenseCategories,
                         incomeCategories = incomeCategories,
                         transferCategories = transferCategories,
+                        cardNames = cardNames,
                         fixedExpenseFilter = fixedFilter
                     )
                 },
@@ -260,6 +263,8 @@ fun HistoryScreen(
         }
 
         val isBannerAdEnabled by mainViewModel.adManager.isBannerAdEnabledFlow
+            .collectAsStateWithLifecycle(initialValue = false)
+        val isRewardAdEnabled by mainViewModel.adManager.isRewardAdEnabledFlow
             .collectAsStateWithLifecycle(initialValue = false)
 
         // 콘텐츠 — HorizontalPager로 월별 페이징
@@ -282,7 +287,13 @@ fun HistoryScreen(
             // CTA 판별용: 현재 실효 월 여부
             val (effYearCta, effMonthCta) = com.sanha.moneytalk.core.util.DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
             val isCurrentMonth = pageYear == effYearCta && pageMonth == effMonthCta
-            val pageMonthLabel = if (isCurrentMonth) "이번달" else "${pageMonth}월"
+            val currentMonthSyncLabel = stringResource(R.string.home_current_month_sync_label)
+            val syncMonthLabelFormat = stringResource(R.string.home_sync_month_label_format)
+            val pageMonthLabel = if (isCurrentMonth) {
+                currentMonthSyncLabel
+            } else {
+                String.format(syncMonthLabelFormat, pageMonth)
+            }
 
             when {
                 viewMode == ViewMode.LIST -> {
@@ -291,13 +302,13 @@ fun HistoryScreen(
                         isLoading = pageData.isLoading,
                         showExpenses = uiState.showExpenses,
                         showIncomes = uiState.showIncomes,
-                        hasActiveFilter = uiState.hasCategoryFilter,
+                        hasActiveFilter = uiState.hasActiveFilter,
                         isCurrentMonth = isCurrentMonth,
                         isMonthSynced = mainViewModel.isMonthSynced(pageYear, pageMonth),
                         isPartiallyCovered = mainViewModel.isPagePartiallyCovered(pageYear, pageMonth),
                         hasSmsPermission = mainScreenUiState.hasSmsPermission,
                         monthLabel = pageMonthLabel,
-                        isAdEnabled = isBannerAdEnabled && !mainScreenUiState.hasFreeSyncRemaining,
+                        isAdEnabled = isRewardAdEnabled && !mainScreenUiState.hasFreeSyncRemaining,
                         onImportData = {
                             onRequestSmsPermission {
                                 mainViewModel.syncMonthData(pageYear, pageMonth)
@@ -309,8 +320,8 @@ fun HistoryScreen(
                                 onRequestSmsPermission {
                                     mainViewModel.syncMonthData(pageYear, pageMonth)
                                 }
-                            } else if (!isBannerAdEnabled) {
-                                // 광고 비활성 → 광고 없이 바로 전체 동기화 해제
+                            } else if (!isRewardAdEnabled) {
+                                // 광고 비활성 → 광고 없이 바로 월별 동기화
                                 onRequestSmsPermission {
                                     mainViewModel.unlockFullSync(pageYear, pageMonth)
                                 }
@@ -331,8 +342,7 @@ fun HistoryScreen(
                             ),
                             uiState.sortOrder,
                             pageYear to pageMonth
-                        ),
-                        onIntent = viewModel::onIntent
+                        )
                     )
                 }
 
@@ -348,7 +358,7 @@ fun HistoryScreen(
             }
         }
 
-        // 배너 광고 (RTDB reward_ad_enabled 연동)
+        // 배너 광고 (RTDB reward_ad_enabled + 앱 진입 5회 이상)
         if (isBannerAdEnabled) {
             BannerAdCompose(adUnitId = BannerAdIds.HISTORY)
         }
@@ -397,12 +407,11 @@ fun TransactionListView(
     isMonthSynced: Boolean = false,
     isPartiallyCovered: Boolean = false,
     hasSmsPermission: Boolean = true,
-    monthLabel: String = "이번달",
+    monthLabel: String = "",
     isAdEnabled: Boolean = true,
     onImportData: () -> Unit = {},
     onRequestFullSync: () -> Unit = {},
-    scrollResetKey: Any? = null,
-    onIntent: (HistoryIntent) -> Unit
+    scrollResetKey: Any? = null
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -436,7 +445,7 @@ fun TransactionListView(
         val showImportCta = isCurrentMonth &&
                 !hasActiveFilter &&
                 (!hasSmsPermission || !isMonthSynced)
-        // 전체 동기화 CTA: 과거 월 + 미해제 + 필터 없음
+        // 월별 데이터 CTA: 과거 월 + 미동기화 + 필터 없음
         val showFullSyncCta = !isCurrentMonth && !isMonthSynced && !hasActiveFilter
         if (showImportCta || showFullSyncCta) {
             LazyColumn(
@@ -511,14 +520,13 @@ fun TransactionListView(
             if (
                 !showCurrentMonthImportCta &&
                 !isCurrentMonth &&
-                isPartiallyCovered &&
                 !isMonthSynced
             ) {
                 item(key = "partial_cta") {
                     FullSyncCtaSection(
                         onRequestFullSync = onRequestFullSync,
                         monthLabel = monthLabel,
-                        isPartial = true,
+                        isPartial = isPartiallyCovered,
                         isAdEnabled = !isCurrentMonth && isAdEnabled
                     )
                 }

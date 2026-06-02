@@ -32,4 +32,27 @@ class SmsPreFilterTest {
         assertFalse(preFilter.isObviouslyNonPayment(body))
         assertFalse(preFilter.lacksPaymentRequirements(body))
     }
+
+    @Test
+    fun `card bill debit is kept for transaction record`() {
+        val body = "[Web발신]\n우리카드결제 120,000원 출금 완료 잔액 500,000원"
+
+        assertFalse(preFilter.isObviouslyNonPayment(body))
+        assertFalse(preFilter.lacksPaymentRequirements(body))
+    }
+
+    @Test
+    fun `standalone card cancel is kept for income classification`() {
+        val body = "[Web발신]\n현대카드 MX Black 취소 하*현\n27,000원 일시불\n06/28 11:51\n주식회사위대"
+
+        assertFalse(preFilter.isObviouslyNonPayment(body))
+        assertFalse(preFilter.lacksPaymentRequirements(body))
+    }
+
+    @Test
+    fun `card bill notice is filtered`() {
+        val body = "[Web발신]\n이번 달 카드대금 결제예정 금액은 120,000원입니다"
+
+        assertTrue(preFilter.isObviouslyNonPayment(body))
+    }
 }

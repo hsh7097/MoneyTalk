@@ -8,6 +8,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.ad.RewardAdManager
+import com.sanha.moneytalk.core.database.OwnedCardRepository
 import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
@@ -41,6 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 private const val EXTRA_CATEGORY = "extra_category"
@@ -86,10 +89,11 @@ class CategoryDetailViewModel @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val dataRefreshEvent: DataRefreshEvent,
     private val smsExclusionRepository: SmsExclusionRepository,
+    private val ownedCardRepository: OwnedCardRepository,
     private val categoryClassifierService: CategoryClassifierService,
     private val categoryProvider: CategoryProvider,
     private val budgetDao: BudgetDao,
-    private val premiumManager: com.sanha.moneytalk.core.firebase.PremiumManager,
+    private val rewardAdManager: RewardAdManager,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -98,10 +102,8 @@ class CategoryDetailViewModel @Inject constructor(
         private const val PAGE_CACHE_RANGE = 2
     }
 
-    /** 배너 광고 노출 여부 (RTDB reward_ad_enabled 연동, 변경 시 자동 반영) */
-    val isBannerAdEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
-        .map { it.rewardAdEnabled }
-        .distinctUntilChanged()
+    /** 배너 광고 노출 여부 (RTDB reward_ad_enabled + 앱 진입 5회 이상) */
+    val isBannerAdEnabledFlow: Flow<Boolean> = rewardAdManager.isBannerAdEnabledFlow
 
     // Intent extras (SavedStateHandle로 주입)
     private val categoryDisplayName: String =
@@ -224,7 +226,7 @@ class CategoryDetailViewModel @Inject constructor(
                     }
 
                     DataRefreshEvent.RefreshType.DEBUG_FULL_SYNC_ALL_MESSAGES -> {
-                        // MainViewModel이 전체 동기화 수행 후 TRANSACTION_ADDED로 갱신됨
+                        // MainViewModel이 디버그 전체 동기화 수행 후 TRANSACTION_ADDED로 갱신됨
                     }
 
                     DataRefreshEvent.RefreshType.DEBUG_SYNC_TODAY_MESSAGES -> {
@@ -309,6 +311,9 @@ class CategoryDetailViewModel @Inject constructor(
                 val exclusionKeywords = withContext(Dispatchers.IO) {
                     smsExclusionRepository.getAllKeywordStrings()
                 }
+                val excludedCardNames = withContext(Dispatchers.IO) {
+                    ownedCardRepository.getExcludedCardNames()
+                }
 
                 val now = System.currentTimeMillis()
                 val daysInMonth = ((monthEnd - monthStart) / (24L * 60 * 60 * 1000)).toInt() + 1
@@ -329,8 +334,8 @@ class CategoryDetailViewModel @Inject constructor(
                         categoryNames, lastMonthFullStart, lastMonthFullEnd
                     )
                 }
-                val filteredFullLastMonthExpenses = filterByExclusion(
-                    fullLastMonthExpenses, exclusionKeywords
+                val filteredFullLastMonthExpenses = CategoryDetailExpenseFilters.filterStatsExpenses(
+                    fullLastMonthExpenses, exclusionKeywords, excludedCardNames
                 )
                 val lastMonthCumulative = CumulativeChartDataBuilder.buildDailyCumulative(
                     filteredFullLastMonthExpenses, lastMonthFullStart, lastMonthDaysInMonth
@@ -341,7 +346,11 @@ class CategoryDetailViewModel @Inject constructor(
                     val raw = expenseRepository.getExpensesByCategoriesAndDateRangeOnce(
                         categoryNames, s, e
                     )
-                    filterByExclusion(raw, exclusionKeywords)
+                    CategoryDetailExpenseFilters.filterStatsExpenses(
+                        raw,
+                        exclusionKeywords,
+                        excludedCardNames
+                    )
                 }
                 val avgThreeMonthCumulative = withContext(Dispatchers.IO) {
                     CumulativeChartDataBuilder.buildAvgNMonthCumulative(
@@ -355,7 +364,7 @@ class CategoryDetailViewModel @Inject constructor(
                 }
 
                 // 카테고리 예산 로드
-                val yearMonth = String.format("%04d-%02d", year, month)
+                val yearMonth = String.format(Locale.ROOT, "%04d-%02d", year, month)
                 val categoryBudget = withContext(Dispatchers.IO) {
                     budgetDao.getBudgetByCategory(categoryDisplayName, yearMonth)?.monthlyLimit
                 }
@@ -388,17 +397,22 @@ class CategoryDetailViewModel @Inject constructor(
                         )
                     }
                     .collect { allExpenses ->
-                        val expenses = filterByExclusion(allExpenses, exclusionKeywords)
-                        val totalExpense = expenses.sumOf { it.amount }
+                        val displayExpenses = CategoryDetailExpenseFilters.filterDisplayExpenses(
+                            allExpenses, exclusionKeywords, excludedCardNames
+                        )
+                        val statsExpenses = CategoryDetailExpenseFilters.filterStatsExpenses(
+                            displayExpenses
+                        )
+                        val totalExpense = statsExpenses.sumOf { it.amount }
 
                         // 이번 달 일별 누적 지출
                         val dailyCumulative = CumulativeChartDataBuilder.buildDailyCumulative(
-                            expenses, monthStart, daysInMonth
+                            statsExpenses, monthStart, daysInMonth
                         )
 
                         // 날짜별 그룹핑 거래 목록 (정렬 적용)
                         val transactionItems = buildTransactionItems(
-                            expenses, _uiState.value.sortOrder
+                            displayExpenses, _uiState.value.sortOrder
                         )
 
                         val current =
@@ -449,7 +463,8 @@ class CategoryDetailViewModel @Inject constructor(
 
         sortedDates.forEach { date ->
             val dayExpenses = grouped[date] ?: return@forEach
-            val dailyTotal = dayExpenses.sumOf { it.amount }
+            val dailyTotal = CategoryDetailExpenseFilters.filterStatsExpenses(dayExpenses)
+                .sumOf { it.amount }
 
             val calendar = Calendar.getInstance().apply { time = date }
             val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
@@ -505,20 +520,6 @@ class CategoryDetailViewModel @Inject constructor(
             Calendar.FRIDAY -> R.string.day_friday
             Calendar.SATURDAY -> R.string.day_saturday
             else -> R.string.day_sunday
-        }
-    }
-
-    // ========== 제외 키워드 필터 ==========
-
-    /** 제외 키워드로 지출 목록 필터링 */
-    private fun filterByExclusion(
-        expenses: List<ExpenseEntity>,
-        exclusionKeywords: Set<String>
-    ): List<ExpenseEntity> {
-        if (exclusionKeywords.isEmpty()) return expenses
-        return expenses.filter { expense ->
-            val smsLower = expense.originalSms.lowercase()
-            exclusionKeywords.none { kw -> smsLower.contains(kw) }
         }
     }
 

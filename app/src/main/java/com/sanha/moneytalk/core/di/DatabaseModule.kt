@@ -8,6 +8,7 @@ import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.dao.CustomCategoryDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
+import com.sanha.moneytalk.core.database.dao.FinancialAppCandidateDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
 import com.sanha.moneytalk.core.database.dao.OwnedCardDao
 import com.sanha.moneytalk.core.database.dao.SmsBlockedSenderDao
@@ -56,6 +57,9 @@ object DatabaseModule {
             .addMigrations(AppDatabase.MIGRATION_1_2)
             .addMigrations(AppDatabase.MIGRATION_2_3)
             .addMigrations(AppDatabase.MIGRATION_3_4)
+            .addMigrations(AppDatabase.MIGRATION_4_5)
+            .addMigrations(AppDatabase.MIGRATION_5_6)
+            .addMigrations(AppDatabase.MIGRATION_6_7)
             .build()
     }
 
@@ -162,5 +166,12 @@ object DatabaseModule {
     @Singleton
     fun provideSyncCoverageDao(database: AppDatabase): SyncCoverageDao {
         return database.syncCoverageDao()
+    }
+
+    /** 앱 알림 금융앱 후보 캐시 DAO 제공 */
+    @Provides
+    @Singleton
+    fun provideFinancialAppCandidateDao(database: AppDatabase): FinancialAppCandidateDao {
+        return database.financialAppCandidateDao()
     }
 }

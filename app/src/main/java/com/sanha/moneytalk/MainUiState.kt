@@ -32,7 +32,7 @@ data class MainUiState(
     val engineSummaryPatterns: Int = 0,
     val engineSummaryExpenses: Int = 0,
     val engineSummaryIncomes: Int = 0,
-    // 월별 동기화 해제 (리워드 광고)
+    // 월별 SMS 동기화 CTA (리워드 광고)
     val syncedMonths: Set<String> = emptySet(),
     /** 실제 동기화 구간 목록 변경 감지용 버전 */
     val syncCoverageVersion: Int = 0,

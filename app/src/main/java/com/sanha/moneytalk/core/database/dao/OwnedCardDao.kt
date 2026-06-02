@@ -29,6 +29,10 @@ interface OwnedCardDao {
     @Query("SELECT cardName FROM owned_cards WHERE isOwned = 1")
     suspend fun getOwnedCardNames(): List<String>
 
+    /** 제외 카드(isOwned=false) 목록 조회 (일회성) */
+    @Query("SELECT cardName FROM owned_cards WHERE isOwned = 0")
+    suspend fun getExcludedCardNames(): List<String>
+
     /** 내 카드(isOwned=true) 목록 조회 (실시간 Flow) */
     @Query("SELECT cardName FROM owned_cards WHERE isOwned = 1")
     fun getOwnedCardNamesFlow(): Flow<List<String>>
@@ -48,6 +52,10 @@ interface OwnedCardDao {
     /** 카드 삽입/업데이트 */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(card: OwnedCardEntity)
+
+    /** 카드 일괄 삽입/업데이트 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(cards: List<OwnedCardEntity>)
 
     /** 내 카드 여부 변경 */
     @Query("UPDATE owned_cards SET isOwned = :isOwned WHERE cardName = :cardName")

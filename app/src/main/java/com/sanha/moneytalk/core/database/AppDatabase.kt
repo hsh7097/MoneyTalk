@@ -8,6 +8,7 @@ import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
+import com.sanha.moneytalk.core.database.dao.FinancialAppCandidateDao
 import com.sanha.moneytalk.core.database.dao.IncomeDao
 import com.sanha.moneytalk.core.database.dao.OwnedCardDao
 import com.sanha.moneytalk.core.database.dao.SmsBlockedSenderDao
@@ -25,6 +26,7 @@ import com.sanha.moneytalk.core.database.entity.CategoryMappingEntity
 import com.sanha.moneytalk.core.database.entity.ChatEntity
 import com.sanha.moneytalk.core.database.entity.ChatSessionEntity
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.database.entity.FinancialAppCandidateEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.database.entity.OwnedCardEntity
 import com.sanha.moneytalk.core.database.entity.SmsBlockedSenderEntity
@@ -53,6 +55,7 @@ import com.sanha.moneytalk.core.database.entity.SyncCoverageEntity
  * - OwnedCardEntity: 보유 카드 관리 (사용자 카드 화이트리스트)
  * - SmsExclusionKeywordEntity: SMS 제외 키워드 (블랙리스트)
  * - SmsBlockedSenderEntity: SMS 수신거부 발신번호
+ * - FinancialAppCandidateEntity: 앱 알림 금융앱 후보/승인 캐시
  *
  * TypeConverters:
  * - FloatListConverter: 임베딩 벡터(List<Float>)를 JSON String으로 변환
@@ -78,9 +81,10 @@ import com.sanha.moneytalk.core.database.entity.SyncCoverageEntity
         SmsRegexRuleEntity::class,
         CustomCategoryEntity::class,
         StoreRuleEntity::class,
-        SyncCoverageEntity::class
+        SyncCoverageEntity::class,
+        FinancialAppCandidateEntity::class
     ],
-    version = 4,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(FloatListConverter::class)
@@ -130,6 +134,9 @@ abstract class AppDatabase : RoomDatabase() {
 
     /** 실제 동기화 구간 DAO */
     abstract fun syncCoverageDao(): SyncCoverageDao
+
+    /** 앱 알림 금융앱 후보 캐시 DAO */
+    abstract fun financialAppCandidateDao(): FinancialAppCandidateDao
 
     companion object {
         /** 데이터베이스 파일명 */
@@ -214,6 +221,51 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL(
                     "CREATE UNIQUE INDEX IF NOT EXISTS index_incomes_smsId ON incomes(smsId)"
+                )
+            }
+        }
+
+        val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE expenses ADD COLUMN is_excluded_from_stats INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
+        val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE store_rules ADD COLUMN is_excluded_from_stats INTEGER"
+                )
+            }
+        }
+
+        val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS financial_app_candidates (
+                        packageName TEXT NOT NULL PRIMARY KEY,
+                        displayName TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        appType TEXT NOT NULL,
+                        parserProfile TEXT NOT NULL,
+                        confidence REAL NOT NULL,
+                        reason TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        reportedAt INTEGER,
+                        lastSeenAt INTEGER NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_financial_app_candidates_status ON financial_app_candidates(status)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_financial_app_candidates_updatedAt ON financial_app_candidates(updatedAt)"
                 )
             }
         }

@@ -10,16 +10,20 @@ MoneyTalk은 **sms 통합 파이프라인**으로 SMS에서 결제/수입 정보
 **3-tier 구조**: sender regex Fast Path → Vector → LLM.
 Step 1.5에서 결제 후보에만 sender 기반 regex 룰 매칭을 먼저 시도하고, 미매칭만 임베딩 경로(Vector → LLM)로 처리합니다.
 수입 SMS는 Fast Path 룰 대상이 아니며 `SmsIncomeFilter -> SmsIncomeParser` 경로로 파싱합니다.
+본문 날짜/시간은 `SmsTransactionDateResolver`가 공통 해석하고, 연도 없는 MM/DD는 SMS 수신 시각 기준으로 보정합니다.
 
 ```
-SMS/MMS/RCS 수신 (SmsReaderV2)
+동기화 범위 계산 (SmsSyncRangeCalculator)
+  │
+  ▼
+SMS/MMS/RCS 수신 (SmsSyncMessageReader → SmsReaderV2)
   │
   ▼
 List<SmsInput> (원본 보존)
   │
   ▼
 ┌─────────────────────────────────────────────────────────┐
-│ SmsSyncCoordinator.process() ★ 유일한 외부 진입점        │
+│ SmsSyncCoordinator.process() ★ 배치 파싱 외부 진입점      │
 │                                                          │
 │  Step 0: SmsPreFilter.filter()                           │
 │    비결제 키워드/구조 필터 (인증번호, 광고, 배송 등)        │
@@ -66,7 +70,7 @@ List<SmsInput> (원본 보존)
   ▼
 호출자(MainViewModel.syncSmsV2)
   ├ expenses → ExpenseEntity → DB 저장
-  └ incomes → SmsIncomeParser로 파싱 → IncomeEntity → DB 저장
+  └ incomes → SmsIncomeParser + SmsTransactionDateResolver → IncomeEntity → DB 저장
 ```
 
 ### 3-tier 구조의 이점
@@ -103,12 +107,19 @@ core/sms/                           ★ sms 통합 파이프라인
 ├── SmsInstantProcessor.kt            # 실시간 1건 처리 (SMS/MMS/RCS/provider 원본 기준)
 ├── DeletedSmsTracker.kt              # 삭제된 SMS 추적 (재삽입 방지, SharedPreferences)
 ├── SmsReaderV2.kt                   # SMS/MMS/RCS 통합 읽기 (ContentResolver → List<SmsInput>)
-├── SmsIncomeParser.kt               # 수입 SMS 파싱 (금액/유형/출처/날짜 추출)
+├── SmsSyncMessageReader.kt          # 동기화 대상 기간의 SMS 원본 읽기 래퍼
+├── SmsTransactionDateResolver.kt    # SMS 본문 거래 날짜/시간 공통 해석
+├── SmsIncomeParser.kt               # 수입 SMS 파싱 (금액/유형/출처 추출 + 날짜 해석 위임)
 ├── RemoteSmsRule.kt                 # 원격 SMS regex 룰 데이터 클래스 (RTDB → 로컬 매칭)
 ├── RemoteSmsRuleRepository.kt       # 원격 룰 리포지토리 (RTDB 로드 + 메모리 캐시 + TTL)
 ├── SmsRegexRuleAssetLoader.kt       # Asset JSON 기본 룰 시드 로더
 ├── SmsRegexRemoteRuleLoader.kt      # RTDB overlay 룰 로더 (10분 캐시)
 └── SmsRegexRuleSyncService.kt       # Asset seed + RTDB overlay 병합 서비스
+
+core/sync/
+├── SmsSyncRangeCalculator.kt        # 증분/월별 동기화 기간 계산
+├── SyncCoveragePagePolicy.kt        # 월별 coverage/CTA 판정
+└── SyncCoverageRecorder.kt          # 성공한 동기화 구간 기록
 
 core/database/
 └── SmsRegexRuleRepository.kt        # 룰 Repository (DAO 래핑)
@@ -127,15 +138,16 @@ receiver/
 └── NotificationContentParser.kt     # 메시지 앱 알림에서 거래 후보 텍스트 추출
 ```
 
-현재는 `core/sms/` 하나로 통합되어 있습니다.
-배치 동기화, 실시간 수신, 공용 파서/필터, Fast Path 룰 관리가 모두 이 패키지 안에서 동작합니다.
+현재 SMS 원본 읽기/파싱은 `core/sms/`, 동기화 기간/coverage 정책은 `core/sync/`로 분리되어 있습니다.
+배치 파싱, 실시간 수신, 공용 파서/필터, Fast Path 룰 관리는 `core/sms/`에서 동작합니다.
 
 ---
 
-## 3. 메시지 읽기 — SmsReaderV2
+## 3. 메시지 읽기 — SmsSyncMessageReader / SmsReaderV2
 
 ### 파일 위치
-[`core/sms/SmsReaderV2.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsReaderV2.kt)
+- [`core/sms/SmsSyncMessageReader.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsSyncMessageReader.kt)
+- [`core/sms/SmsReaderV2.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsReaderV2.kt)
 
 ### 지원 메시지 유형
 
@@ -152,8 +164,8 @@ receiver/
 | `readAllMessagesByDateRange(cr, start, end)` | `SmsReadResult` | SMS+MMS+RCS 통합 읽기 + SMS provider 성공 여부 |
 
 V1의 `SmsReader`는 `SmsMessage`를 반환했지만, **SmsReaderV2는 `SmsInput`을 직접 반환**합니다.
-중간 변환 단계가 없어 호출자(MainViewModel)가 바로 SmsSyncCoordinator에 전달 가능.
-SMS/MMS/RCS는 병렬로 읽고, SMS 기본 provider 조회가 실패하면 빈 목록으로 간주하지 않고 동기화 실패로 전파합니다.
+중간 변환 단계가 없어 `MainViewModel`이 중복 제거 후 바로 SmsSyncCoordinator에 전달합니다.
+동기화 경로에서는 `SmsSyncMessageReader`가 ContentResolver 접근을 감싸며, SMS 기본 provider 조회가 실패하면 빈 목록으로 간주하지 않고 동기화 실패로 전파합니다.
 이 경우 `lastSyncTime`을 갱신하지 않아 다음 동기화에서 누락 없이 다시 읽을 수 있습니다.
 
 ### SMS ID 생성
@@ -210,13 +222,13 @@ process(smsList: List<SmsInput>, onProgress) → SyncResult
 ```
 
 `incomeCandidates`는 이 단계에서 regex Fast Path로 보내지지 않습니다.
-호출자(MainViewModel)가 `SmsIncomeParser`로 금액/유형/출처/날짜를 추출한 뒤 `IncomeEntity`로 저장합니다.
+호출자(MainViewModel)가 `SmsIncomeParser`로 금액/유형/출처를 추출하고 `SmsTransactionDateResolver`로 날짜를 해석한 뒤 `IncomeEntity`로 저장합니다.
 
 ### 책임 분리
 
 | SmsSyncCoordinator가 하는 것 | 호출자(MainViewModel)가 하는 것 |
 |-----------------------------|-------------------------------|
-| 사전 필터링 | SMS 읽기 (ContentResolver) |
+| 사전 필터링 | SMS 읽기 (`SmsSyncMessageReader`) |
 | 수입/결제 분류 | 중복 제거 (기존 SMS ID) |
 | 결제 파이프라인 실행 | DB 저장 (Expense/Income) |
 | SyncResult 반환 | 카테고리 분류, 카드 등록 |
@@ -251,6 +263,8 @@ SMS 본문에 아래 키워드 중 하나라도 포함되면 비결제:
 | 배송 | `배송`, `택배`, `운송장` |
 | 금융광고 | `대출`, `투자`, `분양`, `모델하우스` |
 
+> 카드대금/이용대금은 명세서·청구서 안내면 제외하지만, 은행 계좌에서 실제 출금된 `카드대금`, `카드결제`, `결제대금` 문자는 거래 기록으로 저장한다. 이 경우 신규 저장 시 `isExcludedFromStats=true`로 표시되어 월별 합계/카테고리/AI 분석에서는 제외된다.
+
 **2. 구조 필터 — `lacksPaymentRequirements(body)`**
 
 | 조건 | 판정 |
@@ -279,10 +293,11 @@ SMS 본문에 아래 키워드 중 하나라도 포함되면 비결제:
 4. 금융기관 키워드 없음 → SKIP
 5. 금액 패턴 없음 → SKIP
 6. 취소 키워드 (출금취소, 승인취소 등) → INCOME
-7. 수입 제외 키워드 (자동이체출금, 보험료 등) → SKIP
-8. 결제 키워드 (결제, 승인, 사용, 출금) → PAYMENT
-9. 수입 키워드 (입금, 급여, 송금 등) → INCOME
-10. 그 외 (금융+금액 있지만 명시적 키워드 없음) → PAYMENT (벡터/LLM에 맡김)
+7. 카드대금 실제 출금 → PAYMENT (저장 후 통계 제외)
+8. 수입 제외 키워드 (자동이체출금, 보험료 등) → SKIP
+9. 결제 키워드 (결제, 승인, 사용, 출금) → PAYMENT
+10. 수입 키워드 (입금, 급여, 송금 등) → INCOME
+11. 그 외 (금융+금액 있지만 명시적 키워드 없음) → PAYMENT (벡터/LLM에 맡김)
 ```
 
 ### 금융기관 키워드 (46개)
@@ -431,7 +446,7 @@ matchPatterns(embeddedSmsList)
     ├ 금액: amountRegex group1 → 실패 시 fallbackAmount
     ├ 가게명: storeRegex group1 → sanitize → validate → 실패 시 fallbackStoreName
     ├ 카드: cardRegex group1 → validate → 실패 시 fallbackCardName
-    ├ 날짜: extractDateTime(body, timestamp)
+    ├ 날짜: SmsTransactionDateResolver.extractDateTime(body, timestamp)
     └ 카테고리: fallbackCategory
 
 regex 없거나 파싱 실패:
@@ -681,7 +696,7 @@ cardRegex:   "\[([^\]]+)\]"
 [`core/sms/SmsIncomeParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsIncomeParser.kt)
 
 ### 역할
-SmsIncomeFilter가 INCOME으로 분류한 SMS에서 금액/유형/출처/날짜를 추출.
+SmsIncomeFilter가 INCOME으로 분류한 SMS에서 금액/유형/출처를 추출하고, 날짜/시간은 SmsTransactionDateResolver에 위임.
 Object singleton으로 구현 (DI 불필요).
 
 ### 추출 메소드
@@ -690,14 +705,23 @@ Object singleton으로 구현 (DI 불필요).
 |--------|----------|----------|
 | `extractIncomeAmount(body)` | 입금 금액 (Int) | `숫자+원` 패턴, KB 스타일 줄바꿈 |
 | `extractIncomeType(body)` | 입금 유형 (String) | 키워드 매칭 (급여/이체/환급/송금 등) |
-| `extractIncomeSource(body)` | 송금인/출처 (String) | 3가지 패턴 순차 시도 |
-| `extractDateTime(body, ts)` | 날짜/시간 (String) | MM/DD, M월 D일, HH:mm 패턴 |
+| `extractIncomeSource(body)` | 송금인/출처 (String) | 4가지 패턴 순차 시도 |
+| `extractDateTime(body, ts)` | 날짜/시간 (String) | SmsTransactionDateResolver 위임 (MM/DD, M월 D일, HH:mm + 연말/연초 연도 보정) |
 
 ### extractIncomeSource 패턴 (순서)
 
 1. **KB 스타일 멀티라인**: `입금` 줄 위에서 출처 탐색 (카드번호/날짜/대괄호 제외)
 2. **`OOO님으로부터`** 또는 **`OOO으로부터`** 패턴
-3. **`입금 OOO`** 또는 **`OOO 입금`** 패턴 (같은 줄 내에서만)
+3. **카카오뱅크 입금 알림**: `입금 100,000원` 다음 `송금인 → 입출금통장(1234)`의 화살표 왼쪽
+4. **`입금 OOO`** 또는 **`OOO 입금`** 패턴 (같은 줄 내에서만)
+
+금액, 카드번호, 날짜/시간, 대괄호 헤더, `[Web발신]`, 출금계좌/앱명 토큰은 출처 후보에서 제외한다.
+DEBUG 전체 문자 읽기에서는 기존 앱 알림 수입 레코드도 원문 기준으로 출처를 재계산해 잘못 저장된 금액/앱명 출처를 보정한다.
+
+### 날짜 해석 — SmsTransactionDateResolver
+
+- SmsIncomeParser, SmsRegexRuleMatcher, SmsPatternMatcher는 `SmsTransactionDateResolver`를 공통 사용.
+- 연도 없는 `MM/DD`는 SMS 수신 시각과 가장 가까운 연도로 보정한다. 예: 2026-01-02 수신 `12/31 23:50` → `2025-12-31 23:50`.
 
 ---
 
@@ -746,13 +770,16 @@ LLM이 반환한 비표준 카테고리를 앱 17개 카테고리로 매핑:
 ### syncSmsV2 오케스트레이터 (5 Phase)
 
 ```
-syncSmsV2(contentResolver, targetMonthRange, updateLastSyncTime)
+syncSmsV2(targetMonthRange, updateLastSyncTime, silent, trigger)
+  │
+  ├── readSmsInputs()
+  │   └ SmsSyncMessageReader.read(range)
+  │       └ SmsReaderV2.readAllMessagesByDateRange(start, end) → SmsReadResult.messages
   │
   ├── readAndFilterSms()
-  │   ├ SmsReaderV2.readAllMessagesByDateRange(start, end) → SmsReadResult.messages
-  │   ├ SmsInstantProcessor.drainPendingNotifications() → pendingNotifications (§13-A)
-  │   ├ allSmsList = deviceSmsList + pendingNotifications
-  │   └ 기존 SMS ID로 중복 제거 (expenseRepository + incomeRepository)
+  │   ├ 기존 DB 스냅샷(exact smsId + content/timestamp fuzzy 후보)
+  │   ├ SmsInstantProcessor pending reconciliation ID와 비교
+  │   └ 삭제 추적/기존 저장/즉시 저장 상태 기준 신규 처리 대상만 유지
   │
   ├── processSmsPipeline()
   │   ├ categoryClassifierService.initCategoryCache()
@@ -760,37 +787,56 @@ syncSmsV2(contentResolver, targetMonthRange, updateLastSyncTime)
   │
   ├── saveExpenses()
   │   ├ SmsParseResult → ExpenseEntity 변환 (카테고리 fallback 포함)
+  │   ├ StoreRule 통계 제외 규칙이 있으면 우선 적용
+  │   ├ 카드대금 납부 SMS는 StatsExclusionClassifier로 통계 제외 플래그 적용
   │   └ DB_BATCH_INSERT_SIZE 단위 배치 삽입
   │
   ├── saveIncomes()
-  │   ├ SmsIncomeParser.extractIncomeAmount/Type/Source/DateTime()
+  │   ├ SmsIncomeParser.extractIncomeAmount/Type/Source()
+  │   ├ SmsTransactionDateResolver.extractDateTime()
   │   └ IncomeEntity 변환 + 배치 삽입
   │
-  └── postSyncCleanup()
-      ├ categoryClassifierService.flushPendingMappings() + clearCategoryCache()
-      ├ updateLastSyncTime이면 settingsDataStore.saveLastSyncTime()
-      └ 잔여 미분류 항목은 tryResumeClassification()에서 백그라운드 처리
+  ├── postSyncCleanup()
+  │   ├ categoryClassifierService.flushPendingMappings() + clearCategoryCache()
+  │   ├ updateLastSyncTime이면 settingsDataStore.saveLastSyncTime()
+  │   └ 잔여 미분류 항목은 tryResumeClassification()에서 백그라운드 처리
+  │
+  └── recordSuccessfulSyncCoverage()
+      └ SyncCoverageRecorder.recordSuccessfulRange()
 ```
 
 ### 호출 경로
 
 | 호출부 | 메소드 | 설명 |
 |--------|--------|------|
-| HomeScreen (버튼) | `syncIncremental(cr)` | 증분 동기화 (lastSyncTime~now) |
-| HomeScreen (자동) | `syncIncremental(cr)` | 자동 증분 동기화 |
-| MainViewModel (월별) | `syncSmsV2(cr, monthRange, false)` | 광고 시청 후 월별 동기화 |
-| MainViewModel (resume) | `syncSmsV2(cr, range, true, silent=true)` | 앱 재진입 시 silent 증분 동기화 |
+| HomeScreen (버튼) | `syncIncremental()` | 증분 동기화 |
+| HomeScreen (자동/이벤트) | `syncIncremental()` 또는 `syncSmsV2(range, silent=true)` | 자동/silent 증분 동기화 |
+| MainViewModel (월별) | `syncSmsV2(monthRange, updateLastSyncTime=false)` | 광고 시청/월별 CTA 동기화 |
+| MainViewModel (resume) | `syncSmsV2(range, updateLastSyncTime=true, silent=true)` | 앱 재진입 시 silent 증분 동기화 |
 
-`syncIncremental()`은 `calculateIncrementalRange()`로 시작~종료 시간을 계산한 뒤 `syncSmsV2()`를 호출합니다.
+`syncIncremental()`은 `SmsSyncRangeCalculator.calculateIncrementalRange()`로 시작~종료 시간을 계산한 뒤 `syncSmsV2()`를 호출합니다.
 
-### calculateIncrementalRange() 범위 결정
+### SmsSyncRangeCalculator.calculateIncrementalRange() 범위 결정
 
 | 조건 | 시작 시간 |
 |------|----------|
-| 첫 동기화 + 미해제 | 60일 전 (DEFAULT_SYNC_PERIOD_MILLIS) |
-| 첫 동기화 + 해제 | 전체 (0L) |
-| 증분 | lastSyncTime |
-| DB 비어있는데 lastSyncTime > 0 | 리셋 후 60일 전 (Auto Backup 감지) |
+| 첫 동기화 + 월 시작일 1일 | 전월 1일 00:00 |
+| 첫 동기화 + 월 시작일 2일 이상 | 2개월 전 월 시작일 00:00 |
+| 증분 | max(lastSyncTime - 5분, now - 60일 - 월 시작일 마진) |
+| DB 비어있는데 lastSyncTime > 0 | lastSyncTime을 0으로 리셋 후 초기 동기화 범위 (Auto Backup 감지) |
+
+### 월별 동기화 순서 검증
+
+월별 동기화는 사용자가 과거 월을 임의 순서로 열 수 있으므로, **읽기 순서와 저장 결과가 독립적**이어야 합니다.
+특히 1월 수신 문자에 12월 거래일이 들어 있는 환불/취소 SMS는 수신월과 거래월이 달라질 수 있어 회귀 검증 대상입니다.
+
+| 테스트 | 위치 | 검증 내용 |
+|--------|------|-----------|
+| JVM 회귀 | [`MonthlySmsSyncOrderRegressionTest.kt`](../app/src/test/java/com/sanha/moneytalk/core/sync/MonthlySmsSyncOrderRegressionTest.kt) | 2025-01부터 현재월까지 10개 순서(순차/역순/셔플 포함)로 저장 SMS ID 집합, 거래월별 집계, coverage/CTA 판정 동일성 검증 |
+| 실기기 Provider | [`RealDeviceMonthlySmsSyncOrderInstrumentedTest.kt`](../app/src/androidTest/java/com/sanha/moneytalk/core/sync/RealDeviceMonthlySmsSyncOrderInstrumentedTest.kt) | 실제 SMS/MMS/RCS provider를 월별로 읽어 순서가 달라도 메시지 ID 집합과 거래월별 PAYMENT/INCOME 집계가 같은지 검증 |
+| 실기기 화면 이동 | [`RealDeviceMonthlyPageNavigationInstrumentedTest.kt`](../app/src/androidTest/java/com/sanha/moneytalk/core/sync/RealDeviceMonthlyPageNavigationInstrumentedTest.kt) | 홈/가계부 화면에서 월 이동 버튼을 실제 탭하여 각 월 타이틀/기간이 정상 반영되는지 검증 |
+
+실기기 화면 이동 테스트는 현재 `SM-F966N` 해상도 좌표 기반 검증이므로 다른 기기에서는 `Assume`으로 스킵됩니다.
 
 ---
 
@@ -817,6 +863,7 @@ processAndSave(address, body, timestampMillis) → Result
   ├── DeletedSmsTracker.isDeleted(smsId)            // 삭제 이력 → Skipped
   ├── SmsIncomeFilter.classify(body) → SmsType
   │   ├── PAYMENT → processExpense() → regex 매칭 시도
+  │   │   ├── 교차 소스 중복 감지 → 앱 알림 저장본이 있으면 SMS 저장본으로 대체
   │   │   ├── 매칭 성공 → ExpenseEntity DB 저장 → Result.Expense
   │   │   └── 미매칭 → Result.Skipped (후속 batch sync에서 Vector/LLM 폴백)
   │   ├── INCOME → processIncome() → IncomeEntity DB 저장 → Result.Income
@@ -843,6 +890,43 @@ RCS/비즈메시지는 앱 프로세스가 죽어 있을 때 `ContentObserver`�
 - 알림 본문을 직접 저장하지 않고, **실제 provider 원본**을 찾아 처리한다.
 - 따라서 `15889955` 같은 실제 발신번호 기반 regex 룰을 그대로 사용할 수 있다.
 - cold start 상태에서 늦게 등록되는 `RcsContentObserver`의 한계를 `NotificationListenerService`가 보완한다.
+
+### 금융 앱 알림 직접 처리 경로
+
+카카오뱅크/토스처럼 SMS/MMS/RCS provider row를 만들지 않고 앱 알림만 보내는 금융 앱은
+provider 재조회가 불가능하므로 알림 본문 자체를 거래 후보로 처리합니다.
+
+```
+[금융 앱 알림]
+  → NotificationContentParser.parse()
+  → 금융 앱 allowlist 확인 (예: com.kakaobank.channel, viva.republica.toss, com.hyundaicard.appcard)
+  → RTDB 승인 금융앱 로컬 캐시 확인
+  → SmsInstantProcessor.processAppNotificationAndSave()
+  → 1차: app:{packageName} sender 기반 regex 룰 매칭
+  → 2차: AppNotificationTransactionParser 휴리스틱 파싱
+  → 성공: 거래 저장 + MoneyTalk 거래 알림
+  → 스킵: provider/batch fallback 없음 (알림 본문 외 원본 없음)
+```
+
+핵심 포인트:
+- 앱 알림은 `address = app:{packageName}` 형태로 저장하여 SMS 발신번호와 분리한다.
+- SMS와 앱 알림이 같은 카드 거래를 각각 보낼 수 있으므로, 저장 직전 1분 이내/동일 카드사/동일 가게명/동일 금액이 모두 맞을 때만 교차 소스 중복으로 검사한다.
+- 우리카드처럼 `누적` 금액 뒤에 실제 거래처가 붙는 앱 알림은 해당 뒤쪽 거래처를 우선 추출하여 안내성 `내역`이 거래처로 저장되지 않게 한다.
+- 양쪽 본문에서 카드 suffix(마스킹된 카드번호 끝자리)가 모두 추출되면 suffix까지 같아야 중복으로 본다. 한쪽에 suffix가 없으면 기본 4조건만 적용한다.
+- SMS 저장 시 이미 같은 앱 알림 거래가 있으면 앱 알림 레코드를 삭제하고 SMS 레코드로 대체한다. 앱 알림 저장 시 이미 SMS 레코드가 있으면 저장하지 않는다.
+- `결제 취소`처럼 공백이 포함된 취소 문구도 환불성 수입으로 분류한다. 같은 금액의 취소 알림과 실제 입금 알림이 가까운 기간에 함께 들어오면 가맹점 토큰을 비교해 하나만 저장한다.
+- `현대카드 ... 취소`, `삼성...취소`처럼 `취소`가 단독 거래 유형으로 오는 카드사 문구도 환불성 수입으로 분류한다.
+- provider가 같은 원문 SMS를 서로 다른 id로 중복 반환할 수 있으므로, 동기화 배치 안에서 발신번호+본문이 같고 수신 시각 차이가 60초 이내인 SMS는 한 번만 처리한다.
+- 설치된 금융 앱 감지는 `AndroidManifest.xml`의 `<queries>` 패키지 목록을 사용한다.
+- 보안/인증/쇼핑/메신저 앱은 기본 처리 대상에서 제외한다. 카카오톡 알림도 금융 앱 알림으로 처리하지 않는다.
+- 코드에 없는 금융앱은 RTDB `/financial_apps/v1/packages` 승인 목록을 내려받아
+  `financial_app_candidates` 로컬 DB에 `SUPPORTED`로 캐시한 뒤 사용한다.
+- RTDB에서 비활성화되거나 제거된 원격 금융앱은 로컬 `SUPPORTED` 캐시에서도 철회한다.
+- 미등록 앱에서 거래 후보 알림이 감지되면 알림 원문 없이 `packageName/displayName`만 LLM으로 분류한다.
+  debug 빌드에서만 RTDB `/financial_app_reports/v1`로 후보를 전송하며, 성공한 패키지는 로컬 DB에
+  `REPORTED`로 저장하여 같은 패키지를 반복 전송하지 않는다. release 빌드는 후보 전송을 비활성화한다.
+- 앱 알림은 실제 provider row가 없으므로 배치 동기화로 재처리할 수 없다.
+- 사용자 알림 접근 권한이 켜진 이후 새로 올라오는 알림만 처리 대상이다.
 
 ---
 
@@ -968,6 +1052,11 @@ ORDER BY matchCount DESC LIMIT 1
 | Regex 캐시 (ConcurrentHashMap) | 동일 정규식 재컴파일 방지 |
 | 코사인 유사도 최적화 | FloatArray RandomAccess 체크 |
 | NON_PAYMENT_KEYWORDS 사전 lowercase | filter() 호출 시 매번 변환 방지 |
+
+### 성능 진단 로그 정책
+
+전체 문자 동기화/카테고리 분류 병목 확인용 `SyncPerf`/`CategoryPerf` 로그는 실기기 성능 개선 검증 후 운영 코드에서 제거했습니다.
+추가 병목 분석이 필요하면 짧은 수명 브랜치에서 임시 로그를 넣고, 검증 완료 시 동일 커밋 범위에서 제거합니다.
 
 ---
 
@@ -1110,4 +1199,4 @@ ruleKey = sha256(sender|type|canonicalRegex|amountGroup|storeGroup|cardGroup|dat
 
 ---
 
-*마지막 업데이트: 2026-03-19*
+*마지막 업데이트: 2026-04-30*

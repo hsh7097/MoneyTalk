@@ -10,6 +10,7 @@ import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
 import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryProvider
+import com.sanha.moneytalk.core.util.StoreNameNormalizer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -39,7 +40,8 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
     private val categoryProvider: CategoryProvider
 ) : GeminiCategoryRepository {
     companion object {
-        private const val BATCH_SIZE = 50
+        private const val CATEGORY_BATCH_SIZE = 13
+        private const val INCOME_BATCH_SIZE = 50
         private const val MAX_RETRIES = 3
         /** LLM 배치 병렬 동시 실행 수 (API 키 5개 × 키당 1 = 5, LLM은 임베딩보다 무거움) */
         private const val LLM_CONCURRENCY = 5
@@ -120,19 +122,16 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 ""
             }
 
-            // 배치 처리 (한 번에 최대 50개, 병렬)
+            // 배치 처리 (카테고리는 prompt가 길어 작은 배치가 wall time에 유리)
             val results = mutableMapOf<String, String>()
-            val batches = storeNames.chunked(BATCH_SIZE)
-
+            val batches = storeNames.chunked(CATEGORY_BATCH_SIZE)
 
             val llmSemaphore = Semaphore(LLM_CONCURRENCY)
-            val classifyStart = System.currentTimeMillis()
             val batchResults = coroutineScope {
                 batches.mapIndexed { index, batch ->
                     async {
                         llmSemaphore.withPermit {
-                            val batchStart = System.currentTimeMillis()
-                            val result = processBatchWithRetry(
+                            processBatchWithRetry(
                                 model,
                                 batch,
                                 categories,
@@ -140,14 +139,10 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                                 batches.size,
                                 referenceText
                             )
-                            val batchElapsed = System.currentTimeMillis() - batchStart
-                            val successCount = result.first?.size ?: 0
-                            result
                         }
                     }
                 }.awaitAll()
             }
-            val classifyElapsed = System.currentTimeMillis() - classifyStart
 
             val failedBatches = mutableListOf<Int>()
             for ((index, result) in batchResults.withIndex()) {
@@ -190,9 +185,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             try {
                 val prompt = buildClassificationPrompt(batch, categories, referenceText)
 
-                val startTime = System.currentTimeMillis()
                 val response = model.generateContent(prompt)
-                val elapsed = System.currentTimeMillis() - startTime
 
                 val text = response.text
 
@@ -352,8 +345,12 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 // 유효한 카테고리인지 확인
                 if (category in validCategories) {
                     // 원래 가게명 찾기 (정확히 일치 우선, 그 다음 부분 일치)
-                    val originalName = storeNames.find { it == storeName }
-                        ?: storeNames.find { it.contains(storeName) || storeName.contains(it) }
+                    val originalName = storeNames.find {
+                        StoreNameNormalizer.equalsForComparison(it, storeName)
+                    } ?: storeNames.find {
+                        StoreNameNormalizer.containsForComparison(it, storeName) ||
+                            StoreNameNormalizer.containsForComparison(storeName, it)
+                    }
 
                     if (originalName != null) {
                         results[originalName] = category
@@ -436,7 +433,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
         val incomeCategories = categoryProvider.getIncomeDisplayNames()
         val items = incomeDescriptions.entries.toList()
         val results = mutableMapOf<String, String>()
-        val batches = items.chunked(BATCH_SIZE)
+        val batches = items.chunked(INCOME_BATCH_SIZE)
 
         val llmSemaphore = Semaphore(LLM_CONCURRENCY)
         val batchResults = coroutineScope {

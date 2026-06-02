@@ -14,13 +14,28 @@ interface CategoryMappingDao {
     /**
      * 가게명으로 카테고리 조회
      */
-    @Query("SELECT * FROM category_mappings WHERE storeName = :storeName LIMIT 1")
+    @Query(
+        """
+        SELECT * FROM category_mappings
+        WHERE replace(lower(storeName), ' ', '') = replace(lower(:storeName), ' ', '')
+        ORDER BY updatedAt DESC
+        LIMIT 1
+    """
+    )
     suspend fun getCategoryByStoreName(storeName: String): CategoryMappingEntity?
 
     /**
      * 가게명으로 카테고리 조회 (부분 일치)
      */
-    @Query("SELECT * FROM category_mappings WHERE :storeName LIKE '%' || storeName || '%' OR storeName LIKE '%' || :storeName || '%' LIMIT 1")
+    @Query(
+        """
+        SELECT * FROM category_mappings
+        WHERE replace(lower(:storeName), ' ', '') LIKE '%' || replace(lower(storeName), ' ', '') || '%'
+           OR replace(lower(storeName), ' ', '') LIKE '%' || replace(lower(:storeName), ' ', '') || '%'
+        ORDER BY updatedAt DESC
+        LIMIT 1
+    """
+    )
     suspend fun getCategoryByStoreNamePartial(storeName: String): CategoryMappingEntity?
 
     /**
@@ -68,7 +83,13 @@ interface CategoryMappingDao {
     /**
      * 가게명으로 카테고리 업데이트
      */
-    @Query("UPDATE category_mappings SET category = :category, source = :source, updatedAt = :updatedAt WHERE storeName = :storeName")
+    @Query(
+        """
+        UPDATE category_mappings
+        SET category = :category, source = :source, updatedAt = :updatedAt
+        WHERE replace(lower(storeName), ' ', '') = replace(lower(:storeName), ' ', '')
+    """
+    )
     suspend fun updateCategoryByStoreName(
         storeName: String,
         category: String,

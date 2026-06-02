@@ -1,7 +1,7 @@
 # AI_CONTEXT.md - MoneyTalk 프로젝트 컨텍스트
 
 > AI 에이전트가 MoneyTalk 프로젝트를 이해하고 작업하기 위한 핵심 컨텍스트 문서
-> **최종 갱신**: 2026-04-28
+> **최종 갱신**: 2026-06-02
 
 ---
 
@@ -15,7 +15,7 @@
 - **AI**: Google Gemini (2.5-pro/2.5-flash/2.5-flash-lite)
 - **Min SDK**: 26 (Android 8.0)
 - **Package**: `com.sanha.moneytalk`
-- **DB 버전**: 2 (`moneytalk.db`)
+- **DB 버전**: 6 (`moneytalk.db`)
 
 ---
 
@@ -32,7 +32,7 @@ app/src/main/java/com/sanha/moneytalk/
 │   │   ├── OwnedCardRepository.kt      # 카드 화이트리스트
 │   │   └── SmsExclusionRepository.kt   # SMS 제외 키워드
 │   ├── firebase/          # Firebase (PremiumManager, ForceUpdateChecker, CrashlyticsHelper)
-│   ├── appfunctions/      # Android App Functions (월간 가계 요약 외부 호출)
+│   ├── appfunctions/      # Android App Functions (월간 요약 + DB 조회/수정)
 │   ├── datastore/         # DataStore (설정값)
 │   ├── di/                # Hilt DI 모듈
 │   ├── model/             # Category enum, SmsAnalysisResult 등
@@ -43,7 +43,8 @@ app/src/main/java/com/sanha/moneytalk/
 │   │       ├── tab/               # SegmentedTabRowCompose/Info
 │   │       └── transaction/       # card/ (TransactionCard), header/ (GroupHeader)
 │   ├── similarity/        # 유사도 판정 정책 (SimilarityPolicy 구현체)
-│   ├── sms/               # SMS 통합 패키지 (25개: 배치=SmsSyncCoordinator/SmsPipeline, 실시간=SmsInstantProcessor/SmsReaderV2, 공용=SmsParser/SmsFilter, 룰=SmsRegexRuleMatcher/RemoteSmsRuleRepository, 진단=DeletedSmsTracker/SmsChannelProbeCollector)
+│   ├── sms/               # SMS 통합 패키지 (배치=SmsSyncCoordinator/SmsPipeline, 읽기=SmsSyncMessageReader/SmsReaderV2, 날짜=SmsTransactionDateResolver, 실시간=SmsInstantProcessor, 룰=SmsRegexRuleMatcher)
+│   ├── sync/              # 동기화 기간/coverage 정책 (SmsSyncRangeCalculator, SyncCoveragePagePolicy, SyncCoverageRecorder)
 │   └── util/              # 유틸 (DateUtils, CardNameNormalizer, StoreNameGrouper 등)
 ├── feature/
 │   ├── home/              # 홈 화면 (월간 현황, SMS 동기화)
@@ -84,20 +85,29 @@ app/src/main/java/com/sanha/moneytalk/
 | 시스템 | 설명 | 핵심 파일 |
 |--------|------|-----------|
 | SMS 파싱 (sms, 3-tier) | Regex Fast Path → Vector → Gemini LLM (배치 동기화) | [SmsSyncCoordinator.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsSyncCoordinator.kt), [SmsRegexRuleMatcher.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsRegexRuleMatcher.kt), [SmsPipeline.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsPipeline.kt) |
+| SMS 동기화 범위/coverage | 증분/월별 기간 계산 + CTA용 coverage 판정 | [SmsSyncRangeCalculator.kt](../app/src/main/java/com/sanha/moneytalk/core/sync/SmsSyncRangeCalculator.kt), [SyncCoveragePagePolicy.kt](../app/src/main/java/com/sanha/moneytalk/core/sync/SyncCoveragePagePolicy.kt), [SyncCoverageRecorder.kt](../app/src/main/java/com/sanha/moneytalk/core/sync/SyncCoverageRecorder.kt) |
 | SMS 파싱 (실시간) | SmsInstantProcessor 기반 즉시 처리 + 메시지 앱 알림 보완 | [SmsInstantProcessor.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsInstantProcessor.kt), [SmsReceiver.kt](../app/src/main/java/com/sanha/moneytalk/receiver/SmsReceiver.kt), [MmsContentObserver.kt](../app/src/main/java/com/sanha/moneytalk/receiver/MmsContentObserver.kt), [RcsContentObserver.kt](../app/src/main/java/com/sanha/moneytalk/receiver/RcsContentObserver.kt), [NotificationTransactionService.kt](../app/src/main/java/com/sanha/moneytalk/receiver/NotificationTransactionService.kt) |
 | SMS 필터링 (발신자) | 010/070 조건부 제외 + 금융 힌트 보존 | [SmsFilter.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsFilter.kt) |
+| SMS 동기화 검증 | 월별 읽기 순서 독립성 + 실기기 Provider/UI 이동 회귀 검증 | [MonthlySmsSyncOrderRegressionTest.kt](../app/src/test/java/com/sanha/moneytalk/core/sync/MonthlySmsSyncOrderRegressionTest.kt), [RealDeviceMonthlySmsSyncOrderInstrumentedTest.kt](../app/src/androidTest/java/com/sanha/moneytalk/core/sync/RealDeviceMonthlySmsSyncOrderInstrumentedTest.kt), [RealDeviceMonthlyPageNavigationInstrumentedTest.kt](../app/src/androidTest/java/com/sanha/moneytalk/core/sync/RealDeviceMonthlyPageNavigationInstrumentedTest.kt) |
 | 카테고리 분류 (4-tier) | Room → Vector → Keyword → Gemini Batch | [CategoryClassifierService.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt), [StoreEmbeddingRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreEmbeddingRepository.kt) |
 | AI 채팅 (3-step) | 쿼리분석 → DB조회/액션 → 답변생성 | [ChatViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt), [GeminiRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) |
-| Android App Functions | Assistant/agent가 앱 내부 월간 가계 요약을 조회 | [MoneyTalkFinanceAppFunctions.kt](../app/src/main/java/com/sanha/moneytalk/core/appfunctions/MoneyTalkFinanceAppFunctions.kt), [MoneyTalkFinanceSummaryReader.kt](../app/src/main/java/com/sanha/moneytalk/core/appfunctions/MoneyTalkFinanceSummaryReader.kt), [MoneyTalkApplication.kt](../app/src/main/java/com/sanha/moneytalk/MoneyTalkApplication.kt) |
-| 카드 관리 | 소유 카드 화이트리스트 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
+| Android App Functions | Assistant/agent가 앱 내부 DB 조회/수정 기능과 월간 가계 요약을 호출 | [MoneyTalkFinanceAppFunctions.kt](../app/src/main/java/com/sanha/moneytalk/core/appfunctions/MoneyTalkFinanceAppFunctions.kt), [MoneyTalkChatAppFunctions.kt](../app/src/main/java/com/sanha/moneytalk/core/appfunctions/MoneyTalkChatAppFunctions.kt), [MoneyTalkChatAppFunctionReader.kt](../app/src/main/java/com/sanha/moneytalk/core/appfunctions/MoneyTalkChatAppFunctionReader.kt), [MoneyTalkApplication.kt](../app/src/main/java/com/sanha/moneytalk/MoneyTalkApplication.kt) |
+| 카드 관리 | 카드 표시/숨김 설정 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
 | SMS 필터링 | 제외 키워드 블랙리스트 | [SmsExclusionRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/SmsExclusionRepository.kt) |
-| 거래처 규칙 (StoreRule) | 거래처 키워드→카테고리/고정지출 자동 적용 (Tier 0) | [StoreRuleRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreRuleRepository.kt), [StoreRuleSettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/ui/StoreRuleSettingsViewModel.kt) |
+| 거래처 규칙 (StoreRule) | 거래처 키워드→카테고리/고정지출/통계 제외 자동 적용 (Tier 0, 내부 공백 제거 후 contains 매칭) | [StoreRuleRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreRuleRepository.kt), [StoreRuleSettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/ui/StoreRuleSettingsViewModel.kt) |
+| 설정 백업/복원 | JSON 백업은 거래 내역과 카테고리/거래처 규칙/예산/내 카드/SMS 제외 키워드를 함께 병합 복원 | [DataBackupManager.kt](../app/src/main/java/com/sanha/moneytalk/core/util/DataBackupManager.kt), [SettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsViewModel.kt) |
+
+#### Android App Functions 노출 범위
+
+- `MoneyTalkFinanceAppFunctions`: 월간 가계 요약 조회.
+- `MoneyTalkChatAppFunctions`: DB 스냅샷, 지출/수입/카드/거래처 규칙/커스텀 카테고리/예산/SMS 제외 키워드 조회.
+- `MoneyTalkChatAppFunctions`: 지출 카테고리·메모·거래처·금액·고정지출·통계 제외 수정, 수입 추가·메모·카테고리·고정수입 수정, 카드 표시/숨김, 월 수입·월 시작일, 거래처 규칙, 커스텀 카테고리, 예산, SMS 제외 키워드 수정.
 
 ### 2-3. DB 엔티티 (15개)
 
 | Entity | 테이블 | 용도 |
 |--------|--------|------|
-| ExpenseEntity | expenses | 지출 내역 |
+| ExpenseEntity | expenses | 지출/이체 내역, 통계 제외 플래그 |
 | IncomeEntity | incomes | 수입 내역 |
 | BudgetEntity | budgets | 예산 |
 | ChatEntity | chat_history | 채팅 메시지 |
@@ -105,18 +115,20 @@ app/src/main/java/com/sanha/moneytalk/
 | CategoryMappingEntity | category_mappings | 가게명→카테고리 매핑 캐시 |
 | SmsPatternEntity | sms_patterns | SMS 패턴 벡터 캐시 |
 | StoreEmbeddingEntity | store_embeddings | 가게명 벡터 임베딩 |
-| OwnedCardEntity | owned_cards | 소유 카드 화이트리스트 |
+| OwnedCardEntity | owned_cards | 카드 표시/숨김 설정 |
 | SmsBlockedSenderEntity | sms_blocked_senders | 수신 차단 발신번호 |
 | SmsChannelProbeLogEntity | sms_channel_probe_logs | 채널 진단 로그 |
 | SmsExclusionKeywordEntity | sms_exclusion_keywords | SMS 제외 키워드 |
 | SmsRegexRuleEntity | sms_regex_rules | SMS regex 룰 (sender+type+ruleKey 복합키) |
 | CustomCategoryEntity | custom_categories | 사용자 정의 카테고리 |
-| StoreRuleEntity | store_rules | 거래처 규칙 (keyword→category/isFixed 자동 적용) |
+| StoreRuleEntity | store_rules | 거래처 규칙 (keyword→category/isFixed/isExcludedFromStats 자동 적용) |
 
 ### 2-4. DB 버전 정보
 
-- **현재 버전**: v2
-- **Migration 코드**: `MIGRATION_1_2` (채널 진단 로그 테이블 추가)
+- **현재 버전**: v6
+- **Migration 코드**: `MIGRATION_1_2` ~ `MIGRATION_5_6`
+  - v5: `expenses.is_excluded_from_stats`
+  - v6: `store_rules.is_excluded_from_stats`
 - 이후 스키마 변경 시 추가 Migration 필수
 
 ---
@@ -344,16 +356,25 @@ ANALYTICS 쿼리는 ChatViewModel에서 클라이언트 사이드로 실행되�
 
 ### 4-5. 프롬프트 위치
 
-> 모든 시스템 프롬프트는 [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml)에서 관리
+> AI 요청 프롬프트 템플릿은 [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml)에서 관리한다.
+> 프롬프트 본문이 아닌 섹션 라벨/방향값/상태값 같은 보조 문자열은 [`res/values/strings.xml`](../app/src/main/res/values/strings.xml)의 `ai_*` key로 관리한다.
 
-| 프롬프트 | XML key | 모델 |
-|---------|---------|------|
-| 쿼리 분석기 | `prompt_query_analyzer_system` | gemini-2.5-pro |
-| 재무 상담사 | `prompt_financial_advisor_system` | gemini-2.5-pro |
-| 대화 요약 | `prompt_summary_system` | gemini-2.5-flash |
-| SMS 추출 (단일) | `prompt_sms_extract_system` | gemini-2.5-flash-lite |
-| SMS 추출 (배치) | `prompt_sms_batch_extract_system` | gemini-2.5-flash-lite |
-| 카테고리 분류 | `prompt_category_classification` | gemini-2.5-flash-lite |
+| 프롬프트 그룹 | XML key | 모델 |
+|-------------|---------|------|
+| 쿼리 분석기 | `prompt_query_analyzer_system`, `prompt_query_analyzer_user` | gemini-2.5-pro |
+| 재무 상담사 | `prompt_financial_advisor_system`, `prompt_final_answer_*` | gemini-2.5-pro |
+| 홈 한줄 인사이트 | `prompt_home_insight_*` | gemini-2.5-pro |
+| 대화 요약/제목 | `prompt_summary_system`, `prompt_rolling_summary_*`, `prompt_chat_title_user` | gemini-2.5-flash |
+| SMS 추출 | `prompt_sms_extract_*`, `prompt_sms_context_*`, `prompt_sms_batch_*` | gemini-2.5-flash-lite |
+| SMS Regex 생성/수선 | `prompt_sms_regex_*` | gemini-2.5-flash-lite |
+| 카테고리/수입 분류 | `prompt_category_classification`, `prompt_income_classification` | gemini-2.5-flash-lite |
+
+프롬프트 정책:
+
+- SMS 날짜 지침은 본문 full date 우선, 연도 없는 `MM/DD`는 SMS 수신일에 가장 가까운 연도 보정으로 통일한다.
+- 지출 카테고리 예시는 실제 displayName 기준으로 작성한다. 예: `카페/간식`, 배달앱은 `식비`.
+- 카테고리 분류 프롬프트는 목록에 없는 축약명(`카페`, `쇼핑`, `배달`)을 만들지 않고, 입력 순서와 가게명을 유지하도록 지시한다.
+- 최종 답변 모델은 앱에서 계산한 `[조회된 데이터]`와 `[ANALYTICS 계산 결과]`만 인용하고 직접 합산/평균/비율 계산을 하지 않는다.
 
 ---
 
@@ -363,8 +384,10 @@ ANALYTICS 쿼리는 ChatViewModel에서 클라이언트 사이드로 실행되�
 
 **배치 동기화 (메인 경로 — sms)**:
 ```
-HomeViewModel.syncSmsV2(contentResolver, targetMonthRange)
-   → readAndFilterSms(): SmsReaderV2.readAllMessagesByDateRange() → SmsReadResult.messages
+MainViewModel.syncSmsV2(targetMonthRange)
+   → SmsSyncRangeCalculator: 증분/월별 동기화 기간 계산
+   → SmsSyncMessageReader: SmsReaderV2.readAllMessagesByDateRange() → SmsReadResult.messages
+   → readAndFilterSms(): 기존 DB 스냅샷 + pending 즉시 저장 상태 기준 중복 제거
      → 010/070 발신자 조건부 제외 (SmsFilter.shouldSkipBySender)
      → smsId 중복 제거 (expenseRepository + incomeRepository)
    → processSmsPipeline(): SmsSyncCoordinator.process(smsInputs)
@@ -393,13 +416,24 @@ HomeViewModel.syncSmsV2(contentResolver, targetMonthRange)
          - 예산 초과: regex 스킵→LLM 직접 강등 (데이터 누락 방지)
          - 백그라운드 학습 큐: 성공 패턴 비동기 등록 (learningQueue, dedup)
    → saveExpenses(): SmsParseResult → ExpenseEntity 변환 + 배치 저장
+     - 카드대금 납부로 판단되는 신규 지출은 `isExcludedFromStats=true`로 저장
    → saveIncomes(): SmsIncomeParser 파싱 → IncomeEntity 변환 + 배치 저장
-   → postSyncCleanup(): 카테고리 분류 + 패턴 정리 + lastSyncTime + 카드 등록
+     - SMS 본문 거래 날짜는 SmsTransactionDateResolver가 공통 해석
+     - 연도 없는 MM/DD는 SMS 수신 시각과 가장 가까운 연도로 보정
+   → postSyncCleanup(): 카테고리 캐시 정리 + lastSyncTime 갱신
+   → handleSyncResult(): 카드 자동 등록 + 데이터 변경 통지
+   → SyncCoverageRecorder: 성공한 동기화 구간 기록
 
-HomeViewModel.syncIncremental(contentResolver):
-   → calculateIncrementalRange() (lastSyncTime/fullSyncUnlocked/Auto Backup 감지)
-   → syncSmsV2(contentResolver, range)
+MainViewModel.syncIncremental():
+   → SmsSyncRangeCalculator.calculateIncrementalRange() (lastSyncTime/Auto Backup 감지)
+   → syncSmsV2(range)
 ```
+
+**월별 동기화 회귀 검증 기준**:
+- 2025년 1월부터 현재월까지 모든 월을 대상으로 10개 읽기 순서(순차, 역순, 셔플 포함)를 검증한다.
+- 순서가 달라도 저장 대상 SMS ID 집합, 거래월별 PAYMENT/INCOME 집계, `SyncCoveragePagePolicy`의 coverage/CTA 판정이 같아야 한다.
+- 1월에 수신된 12월 환불처럼 수신월과 거래월이 다른 케이스를 fixture와 실기기 Provider 검증에 포함한다.
+- 실기기 UI 검증은 홈/가계부 탭에서 월 이동 버튼을 실제 탭하여 월 타이틀/기간 반영까지 확인한다.
 
 **실시간 수신**:
 ```
@@ -412,10 +446,18 @@ RCS/비즈메시지(프로세스 cold start) → NotificationTransactionService
    → SmsInstantProcessor
 ```
 
+실시간 저장 직전에는 SMS와 금융 앱 알림이 같은 카드 거래를 각각 보낸 경우를 보정한다.
+1분 이내/동일 카드사/동일 가게명/동일 금액이 모두 맞는 교차 소스 거래만 중복으로 보고, 양쪽 본문에서 카드 suffix가 모두 추출되면 suffix까지 일치해야 한다. SMS가 나중에 들어오면 기존 앱 알림 레코드를 SMS 레코드로 대체한다.
+우리카드처럼 `누적` 금액 뒤에 실제 거래처가 붙는 앱 알림은 해당 뒤쪽 거래처를 우선 추출해 안내성 `내역`이 거래처로 저장되지 않게 한다.
+`결제 취소` 공백형 취소 문구는 환불성 수입으로 분류하고, 취소 알림과 실제 입금 알림은 금액/시간/가맹점 토큰이 맞을 때 환불 중복으로 정리한다.
+현대/삼성 등 카드사의 `취소` 단독 문구도 환불성 수입으로 분류한다. 같은 원문 SMS가 provider에서 서로 다른 id로 중복 노출되는 경우에는 본문/발신번호 기준 60초 이내 중복을 동기화 배치 안에서 한 번만 처리한다.
+카카오뱅크/카카오톡 입금 알림의 `입금 100,000원` 금액 토큰은 송금인으로 쓰지 않고, `송금인 → 입출금통장(1234)` 구조에서는 화살표 왼쪽을 수입 출처로 사용한다.
+디버그 전체 문자 동기화는 기존 저장 SMS와 앱 알림 수입 레코드도 재분석하여 동일 `smsId` 레코드를 새 파서 결과로 업데이트한다.
+
 ### 5-2. 카테고리 자동 분류 흐름
 ```
 CategoryClassifierService.getCategory(storeName)
-   → Tier 0: StoreRule contains 매칭 (storeName에 keyword 포함 → category/isFixed 즉시 적용)
+   → Tier 0: StoreRule contains 매칭 (storeName/keyword 내부 공백 제거 후 포함 → category/isFixed/isExcludedFromStats 즉시 적용)
    → Tier 1: Room DB 정확 매칭 (storeName → category)
    → Tier 1.5: 임베딩 1회 생성 → 1.5a/b 모두에서 재사용
       → 1.5a: findCategoryByStoreName(storeName, queryVector)
@@ -455,9 +497,9 @@ ChatViewModel.sendMessage(message)
 ## 6. UI 공통 컴포넌트 (core/ui/component/, 11개 파일)
 
 ### 6-1. TransactionCard (거래 카드)
-- **Interface**: `TransactionCardInfo` — title, subtitle, amount, isIncome, category, iconEmoji, categoryTag, time, cardNameText, memoText, isFixed
+- **Interface**: `TransactionCardInfo` — title, subtitle, amount, isIncome, category, iconEmoji, categoryTag, time, cardNameText, memoText, isFixed, isExcludedFromStats
 - **구현체**: `ExpenseTransactionCardInfo`, `IncomeTransactionCardInfo`
-- **Composable**: `TransactionCardCompose` — 지출/수입 통합 카드 렌더링 (고정지출 태그 포함)
+- **Composable**: `TransactionCardCompose` — 지출/수입 통합 카드 렌더링 (고정지출/통계 제외 태그 포함)
 - **사용처**: HomeScreen, HistoryScreen, CategoryDetailScreen
 
 ### 6-2. TransactionGroupHeader (그룹 헤더)

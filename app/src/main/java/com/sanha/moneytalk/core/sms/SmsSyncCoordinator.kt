@@ -43,7 +43,6 @@ class SmsSyncCoordinator @Inject constructor(
     private val regexRuleSyncService: SmsRegexRuleSyncService,
     private val originSampleCollector: SmsOriginSampleCollector
 ) {
-
     /**
      * ★ sms 패키지의 유일한 외부 진입점 ★
      *

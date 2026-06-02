@@ -26,7 +26,7 @@
     <string name="app_function_error_invalid_date">Date must be in yyyy-MM-dd format, and start date cannot be after end date.</string>
     <string name="nav_home">Home</string>
     <string name="nav_history">History</string>
-    <string name="nav_chat">Chat</string>
+    <string name="nav_chat">Insights</string>
     <string name="nav_settings">Settings</string>
     <string name="error_response">Sorry, an error occurred while getting a response: %s</string>
     <string name="error_general">An error occurred: %s</string>
@@ -55,24 +55,24 @@
     <string name="onboarding_skip">Skip</string>
 
     <!-- Chat Screen -->
-    <string name="chat_title">AI Financial Advisor</string>
-    <string name="chat_subtitle_with_api">Chat with Gemini</string>
-    <string name="chat_subtitle_no_api">Please set up API key</string>
+    <string name="chat_title">AI Insights</string>
+    <string name="chat_subtitle_with_api">Check common spending questions quickly</string>
+    <string name="chat_subtitle_no_api">Set up an API key to use AI insights</string>
     <string name="chat_input_placeholder">Type a message…</string>
     <string name="chat_send">Send</string>
     <string name="chat_thinking">Thinking…</string>
     <string name="chat_session_list">Conversations</string>
-    <string name="chat_new_session">New Chat</string>
+    <string name="chat_new_session">New Question</string>
     <string name="chat_close">Close</string>
     <string name="chat_delete">Delete</string>
-    <string name="chat_no_sessions">No conversations yet</string>
-    <string name="chat_start_new">Start New Chat</string>
-    <string name="chat_default_session_title">New Chat</string>
-    <string name="chat_previous_session_title">Previous Chat</string>
+    <string name="chat_no_sessions">No saved insights yet</string>
+    <string name="chat_start_new">Start Insight Question</string>
+    <string name="chat_default_session_title">New Insight</string>
+    <string name="chat_previous_session_title">Previous Insight</string>
 
     <!-- Session Delete Dialog -->
-    <string name="dialog_delete_session_title">Delete Conversation</string>
-    <string name="dialog_delete_session_message">Delete this conversation?\nThis action cannot be undone.</string>
+    <string name="dialog_delete_session_title">Delete Insight Record</string>
+    <string name="dialog_delete_session_message">Delete this insight record?\nThis action cannot be undone.</string>
     <string name="dialog_confirm">Confirm</string>
     <string name="dialog_cancel">Cancel</string>
 
@@ -84,14 +84,14 @@
     <string name="api_key_setting">API Key Settings</string>
 
     <!-- Guide Questions -->
-    <string name="guide_welcome">Hello!</string>
-    <string name="guide_intro">I\'m your AI financial advisor.\nTap a question below to get started!</string>
+    <string name="guide_welcome">Pick an insight to check</string>
+    <string name="guide_intro">Run common spending checks quickly.\nChoose a question and MoneyTalk will answer from your data.</string>
     <string name="guide_api_key_required">* Please set up API key first</string>
 
     <!-- Guide Question Categories -->
-    <string name="guide_category_expense_search">Expenses</string>
-    <string name="guide_category_analysis">Analysis</string>
-    <string name="guide_category_manage">Review &amp; Manage</string>
+    <string name="guide_category_expense_search">Quick Checks</string>
+    <string name="guide_category_analysis">Spending Review</string>
+    <string name="guide_category_manage">Needs Review</string>
 
     <!-- Guide Question Examples -->
     <string name="guide_q_expense_coupang">How much did I spend this month?</string>
@@ -237,7 +237,7 @@
     <string name="privacy_thirdparty_detail">\u0020\u0020• Store names, amounts, transaction context, or masked message snippets may be sent to Google Gemini API for AI classification and advice\n\u0020\u0020• Direct identifiers such as phone numbers are removed or minimized where possible\n\u0020\u0020• Google AdMob and Firebase SDKs may process device and app usage data for ads, analytics, and crash diagnostics\n\u0020\u0020• We do not sell personal data or share it beyond the disclosed purposes</string>
     <string name="privacy_section_rights">5. Your Rights</string>
     <string name="privacy_rights_detail">\u0020\u0020• You can delete all data at any time from Settings\n\u0020\u0020• Uninstalling the app removes all local data</string>
-    <string name="privacy_last_updated">Last updated: April 25, 2026</string>
+    <string name="privacy_last_updated">Last updated: May 19, 2026</string>
 
     <!-- Delete All Dialog -->
     <string name="dialog_delete_all_title">Delete All Data</string>
@@ -245,7 +245,8 @@
 
     <!-- Restore Dialog -->
     <string name="dialog_restore_title">Restore Data</string>
-    <string name="dialog_restore_message">Restore data from backup file.\nAll existing data will be replaced.\n\nContinue?</string>
+    <string name="dialog_restore_message">Restore data from a backup file.\nExisting data will be merged, and matching items will be updated from the backup.\n\nContinue?</string>
+    <string name="settings_restore_complete_with_settings">Restore complete: %1$d expenses, %2$d incomes, %3$d category settings, %4$d store rules, %5$d other settings</string>
 
     <!-- Export Dialog -->
     <string name="export_dialog_title">Export Data</string>
@@ -276,7 +277,7 @@
     <string name="dialog_month_start_title">Month Start Date</string>
     <string name="dialog_month_start_message">Set the start date for your monthly budget.\nE.g., setting 21 means 21st to 20th of next month.</string>
     <string name="dialog_month_start_label">Start Day</string>
-    <string name="dialog_month_start_hint">Enter a number between 1-31</string>
+    <string name="dialog_month_start_hint">Enter a number between 1–31</string>
 
     <!-- API Key Dialog (Settings) -->
     <string name="dialog_api_key_message_settings">Get a free API key from\nGoogle AI Studio (aistudio.google.com)</string>
@@ -323,6 +324,7 @@
     <string name="history_filter_active_category">Category filter active</string>
     <string name="history_filter_active_type">Type filter active</string>
     <string name="history_filter_active_sort">Sort filter active</string>
+    <string name="history_filter_active_card">Card filter active</string>
     <string name="history_filter_active_combined">Filter active</string>
     <string name="history_filter_active_fixed_only">Fixed transactions only</string>
     <string name="history_filter_active_fixed_exclude">Fixed transactions excluded</string>
@@ -342,12 +344,19 @@
     <string name="home_sync_month_label_format">Month %d</string>
     <string name="home_income_badge">Income %s won</string>
     <string name="home_no_today_transactions">No transactions yet today</string>
+    <string name="history_filter_card">Card</string>
+    <string name="history_filter_card_helper">Show only spending and transfers from selected cards.</string>
+    <string name="history_filter_no_cards">No cards available</string>
     <string name="history_filter_category_helper">Narrow categories inside the selected transaction types.</string>
     <string name="history_filter_more_categories">More</string>
     <string name="history_filter_expand_sheet">Full screen</string>
     <string name="history_filter_collapse_sheet">Compact</string>
     <string name="history_filter_selected_count">%d selected</string>
+    <string name="history_filter_all_cards">All Cards</string>
+    <string name="history_filter_card_title">Choose Card</string>
     <string name="home_sync_dialog_title">Reading expense history</string>
+    <string name="sync_repair_income_sources">Repairing saved income sources...</string>
+    <string name="sync_income_source_repaired">%1$d saved income sources repaired</string>
     <string name="sync_dialog_dismiss">Continue in background</string>
     <string name="sync_in_progress_button">Syncing…</string>
     <string name="sync_in_progress_note">Processing data in the background</string>
@@ -402,7 +411,7 @@
     <string name="settings_classify_unclassified">%d unclassified</string>
     <string name="settings_classify_already_running">Category cleanup is already running</string>
     <string name="settings_classify_nothing_to_process">No items to classify</string>
-    <string name="settings_classify_preparing">Preparing cleanup...</string>
+    <string name="settings_classify_preparing">Preparing cleanup…</string>
     <string name="settings_classify_step_progress">%1$s (%2$d/%3$d)</string>
     <string name="settings_classify_success">%d categories were cleaned up</string>
     <string name="settings_classify_no_result">No items were cleaned up. Please try again later.</string>
@@ -461,19 +470,28 @@
     <string name="sms_settings_blocked_sender_title">Blocked Phone Numbers</string>
     <string name="sms_settings_blocked_sender_subtitle_count">%1$d registered</string>
     <string name="sms_settings_blocked_sender_subtitle_empty">No numbers registered</string>
+    <string name="sms_settings_excluded_card_title">Excluded Cards</string>
+    <string name="sms_settings_excluded_card_subtitle_count">%1$d excluded · %2$d total</string>
+    <string name="sms_settings_excluded_card_subtitle_empty">No excluded cards</string>
     <string name="sms_settings_blocked_phrase_page_title">Blocked Phrases</string>
     <string name="sms_settings_blocked_sender_page_title">Blocked Phone Numbers</string>
+    <string name="sms_settings_excluded_card_page_title">Excluded Cards</string>
     <string name="sms_settings_blocked_sender_description">Messages from added numbers will be excluded from SMS sync.</string>
     <string name="sms_settings_blocked_sender_input_hint">Enter phone number</string>
     <string name="sms_settings_blocked_sender_empty">No blocked numbers registered</string>
+    <string name="sms_settings_excluded_card_description">Transactions from added or hidden cards are saved but hidden from Home, History, and category detail screens.</string>
+    <string name="sms_settings_excluded_card_input_hint">Enter card issuer</string>
+    <string name="sms_settings_excluded_card_empty">No cards registered</string>
+    <string name="sms_settings_excluded_card_hidden_label">Hidden</string>
+    <string name="sms_settings_excluded_card_visible_label">Visible</string>
 
     <!-- SMS regex repair failure reasons -->
-    <string name="sms_regex_reason_json_parse_failed" translatable="false">Response is not valid JSON. Return JSON format only.</string>
-    <string name="sms_regex_reason_is_payment_false" translatable="false">isPayment is false. Set it to true for payment SMS.</string>
-    <string name="sms_regex_reason_required_regex_blank" translatable="false">amountRegex or storeRegex is empty. Both fields are required.</string>
-    <string name="sms_regex_reason_amount_compile_failed" translatable="false">amountRegex is not a valid regex. Check JSON escaping.</string>
-    <string name="sms_regex_reason_store_compile_failed" translatable="false">storeRegex is not a valid regex. Check JSON escaping.</string>
-    <string name="sms_regex_reason_card_compile_failed" translatable="false">cardRegex is not a valid regex. Check JSON escaping.</string>
+    <string name="sms_regex_reason_json_parse_failed">Response is not valid JSON. Return JSON format only.</string>
+    <string name="sms_regex_reason_is_payment_false">isPayment is false. Set it to true for payment SMS.</string>
+    <string name="sms_regex_reason_required_regex_blank">amountRegex or storeRegex is empty. Both fields are required.</string>
+    <string name="sms_regex_reason_amount_compile_failed">amountRegex is not a valid regex. Check JSON escaping.</string>
+    <string name="sms_regex_reason_store_compile_failed">storeRegex is not a valid regex. Check JSON escaping.</string>
+    <string name="sms_regex_reason_card_compile_failed">cardRegex is not a valid regex. Check JSON escaping.</string>
 
     <!-- Category detail sort -->
     <string name="category_detail_monthly_summary">This month %s spending</string>
@@ -533,9 +551,12 @@
     <string name="transaction_edit_date_time_value">%1$s  %2$s</string>
     <string name="transaction_edit_basic_info">Basic Info</string>
     <string name="transaction_edit_auto_organize">Auto Organize</string>
+    <string name="transaction_edit_same_store_rule">Same Store Rule</string>
+    <string name="transaction_edit_same_store_apply_short">Same store</string>
+    <string name="transaction_edit_same_store_rule_desc">Checked options apply together to every store containing the keyword below.</string>
     <string name="transaction_edit_transfer_direction">Direction</string>
-    <string name="transfer_direction_flow_withdrawal">Withdrawal → Deposit</string>
-    <string name="transfer_direction_flow_deposit">Deposit → Withdrawal</string>
+    <string name="transaction_edit_exclude_from_stats">Exclude from stats</string>
+    <string name="transaction_edit_exclude_from_stats_desc">Keep the record but exclude it from monthly totals, categories, and AI analysis</string>
     <string name="transaction_edit_income_input_required">Please enter amount</string>
     <string name="transaction_edit_fixed_expense">Add to fixed expenses</string>
     <string name="transaction_edit_fixed_transfer">Add to fixed transfers</string>
@@ -543,14 +564,19 @@
     <string name="transaction_edit_fixed_expense_short">Fixed Expense</string>
     <string name="transaction_edit_fixed_transfer_short">Fixed Transfer</string>
     <string name="transaction_edit_fixed_income_short">Fixed Income</string>
+    <string name="transaction_edit_fixed_expense_desc">Mark as a recurring expense and include it in fixed transaction filters</string>
+    <string name="transaction_edit_fixed_transfer_desc">Mark as a recurring transfer and include it in fixed transaction filters</string>
+    <string name="transaction_edit_fixed_income_desc">Mark as recurring income and include it in fixed transaction filters</string>
     <string name="transaction_card_fixed_tag">Fixed</string>
+    <string name="transaction_card_stats_excluded_tag">Excluded</string>
     <string name="transaction_edit_apply_category_to_all">Apply to all same store</string>
     <string name="transaction_edit_apply_fixed_to_all">Apply to all same store</string>
     <string name="transaction_edit_apply_category_to_same_store">Apply category to same store</string>
     <string name="transaction_edit_apply_fixed_to_same_store">Apply fixed transaction to same store</string>
+    <string name="transaction_edit_apply_stats_exclude_to_same_store">Apply stats exclusion to same store</string>
     <string name="transaction_edit_rule_keyword_label">Match keyword</string>
     <string name="transaction_edit_rule_keyword_placeholder">e.g. KakaoPay, Starbucks</string>
-    <string name="transaction_edit_rule_keyword_hint">Applies to all transactions containing this keyword</string>
+    <string name="transaction_edit_rule_keyword_hint">Shared by category, fixed transaction, and stats exclusion batch rules</string>
     <string name="transaction_edit_keyword_guide">Rules apply to all transactions whose store name contains the keyword.\ne.g. \'Samsung\' matches \'Samsung134\', \'Samsung 8613\'</string>
     <string name="transaction_edit_keyword_guide_confirm">Got it</string>
     <string name="transaction_edit_type_label">Type</string>
@@ -561,8 +587,8 @@
 
     <!-- Store Rule Settings -->
     <string name="store_rule_settings_title">Store Rules</string>
-    <string name="store_rule_settings_subtitle">Auto-apply category/fixed expense by store</string>
-    <string name="store_rule_settings_description">Automatically applies category and fixed expense to stores containing the keyword.\nAuto-created when using \"Apply to all same store\" in transaction edit.</string>
+    <string name="store_rule_settings_subtitle">Auto-apply category/fixed expense/stats exclusion by store</string>
+    <string name="store_rule_settings_description">Automatically applies category, fixed expense, and stats exclusion to stores containing the keyword.\nAuto-created when using \"Apply to all same store\" in transaction edit.</string>
     <string name="store_rule_settings_empty">No store rules registered</string>
     <string name="store_rule_settings_add">Add Rule</string>
     <string name="store_rule_settings_add_title">Add Rule</string>
@@ -577,6 +603,9 @@
     <string name="store_rule_settings_category_select">Select</string>
     <string name="store_rule_settings_category_label">Category: %s</string>
     <string name="store_rule_settings_fixed_label">Fixed Expense</string>
+    <string name="store_rule_settings_stats_excluded_label">Stats exclusion: %s</string>
+    <string name="store_rule_settings_stats_excluded_on">Excluded</string>
+    <string name="store_rule_settings_stats_excluded_off">Included</string>
     <string name="store_rule_settings_fixed_toggle">Set as fixed expense</string>
     <string name="store_rule_error_keyword_required">Please enter a keyword</string>
     <string name="store_rule_error_no_rule">Please set either category or fixed expense</string>
@@ -652,8 +681,6 @@
     <string name="full_sync_ad_watch_button">Watch ad and import %1$s data</string>
     <string name="full_sync_ad_later">Later</string>
     <string name="full_sync_unlocked_message">Importing %1$s data.</string>
-    <string name="full_sync_already_unlocked">Full sync is already unlocked.</string>
-    <string name="home_sync_full_locked">Full Sync (Ad Required)</string>
     <string name="full_sync_cta_title">Earlier data is missing</string>
     <string name="full_sync_cta_subtitle">Watch an ad to import %1$s data</string>
     <string name="full_sync_cta_subtitle_no_ad">Tap to import %1$s data</string>

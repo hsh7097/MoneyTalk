@@ -48,7 +48,6 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
 ) : StoreEmbeddingRepository {
 
     companion object {
-
         /** 임베딩 배치 병렬 동시 실행 수 (API 키 5개 × 키당 2 = 10) */
         private const val EMBEDDING_CONCURRENCY = 10
 
@@ -68,7 +67,9 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
      * 최초 호출 시 DB에서 로드, 이후 캐시 반환
      */
     private suspend fun getEmbeddings(): List<StoreEmbeddingEntity> {
-        return cachedEmbeddings ?: storeEmbeddingDao.getAllEmbeddings().also {
+        cachedEmbeddings?.let { return it }
+
+        return storeEmbeddingDao.getAllEmbeddings().also {
             cachedEmbeddings = it
         }
     }
@@ -201,7 +202,8 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
 
     override suspend fun saveStoreEmbeddings(
         storeCategories: Map<String, String>,
-        source: String
+        source: String,
+        embeddingsByStoreName: Map<String, List<Float>>
     ) {
         if (storeCategories.isEmpty()) return
 
@@ -211,25 +213,38 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
             if (storeNames.isEmpty()) {
                 return
             }
-            val skipped = storeCategories.size - storeNames.size
-            if (skipped > 0) {
-            }
 
             try {
-                // 100건씩 청킹 → 병렬 임베딩 생성
-                val chunks = storeNames.chunked(EMBEDDING_BATCH_SIZE)
-                val semaphore = Semaphore(EMBEDDING_CONCURRENCY)
-                val batchEmbeddings = coroutineScope {
-                    chunks.map { chunk ->
-                        async {
-                            semaphore.withPermit {
-                                embeddingService.generateEmbeddings(chunk)
-                            }
-                        }
-                    }.awaitAll()
+                val precomputedEntities = storeNames.mapNotNull { storeName ->
+                    val embedding = embeddingsByStoreName[storeName] ?: return@mapNotNull null
+                    val category = storeCategories[storeName] ?: return@mapNotNull null
+                    StoreEmbeddingEntity(
+                        storeName = storeName,
+                        category = category,
+                        embedding = embedding,
+                        source = source,
+                        confidence = if (source == "user") 1.0f else 0.8f
+                    )
                 }
 
-                val allEntities = mutableListOf<StoreEmbeddingEntity>()
+                val missingStoreNames = storeNames.filter { embeddingsByStoreName[it] == null }
+                val chunks = missingStoreNames.chunked(EMBEDDING_BATCH_SIZE)
+                val batchEmbeddings = if (chunks.isEmpty()) {
+                    emptyList()
+                } else {
+                    val semaphore = Semaphore(EMBEDDING_CONCURRENCY)
+                    coroutineScope {
+                        chunks.map { chunk ->
+                            async {
+                                semaphore.withPermit {
+                                    embeddingService.generateEmbeddings(chunk)
+                                }
+                            }
+                        }.awaitAll()
+                    }
+                }
+
+                val allEntities = precomputedEntities.toMutableList()
                 for ((chunkIdx, chunk) in chunks.withIndex()) {
                     val embeddings = batchEmbeddings[chunkIdx]
                     val entities = chunk.mapIndexedNotNull { index, storeName ->

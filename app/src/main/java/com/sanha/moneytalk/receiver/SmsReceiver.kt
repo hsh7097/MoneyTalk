@@ -20,7 +20,7 @@ import javax.inject.Inject
  *
  * SMS 수신 시 두 가지 경로로 처리:
  * 1. **즉시 처리**: [SmsInstantProcessor]로 로컬 파싱 → DB 저장 → 알림 표시 (~100ms)
- * 2. **전체 동기화**: [DataRefreshEvent.SMS_RECEIVED] 발행 → MainViewModel이 증분 동기화 수행
+ * 2. **후속 배치 동기화**: [DataRefreshEvent.SMS_RECEIVED] 발행 → MainViewModel이 증분 동기화 수행
  *    (MMS/RCS 보완, Gemini 분류 보완)
  *
  * goAsync()를 사용하여 BroadcastReceiver의 10초 제한 내에서 코루틴 작업을 완료한다.
@@ -43,7 +43,7 @@ class SmsReceiver : BroadcastReceiver() {
         // Intent에서 SMS 추출
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
         if (messages.isNullOrEmpty()) {
-            MoneyTalkLogger.i("[SmsReceiver] SMS 추출 실패 → 전체 동기화만 트리거")
+            MoneyTalkLogger.i("[SmsReceiver] SMS 추출 실패 → 후속 배치 동기화만 트리거")
             dataRefreshEvent.emit(DataRefreshEvent.RefreshType.SMS_RECEIVED)
             return
         }
@@ -109,7 +109,7 @@ class SmsReceiver : BroadcastReceiver() {
                             body = body,
                             timestamp = timestamp
                         )
-                        MoneyTalkLogger.i("[SmsReceiver] 비결제 또는 미매칭 → 전체 동기화 대기")
+                        MoneyTalkLogger.i("[SmsReceiver] 비결제 또는 미매칭 → 후속 배치 동기화 대기")
                     }
                     is SmsInstantProcessor.Result.Error -> {
                         channelProbeCollector.collect(

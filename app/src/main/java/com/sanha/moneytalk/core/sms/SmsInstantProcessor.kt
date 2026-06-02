@@ -8,9 +8,12 @@ import com.sanha.moneytalk.core.notification.SmsNotificationManager
 import com.sanha.moneytalk.core.util.CardNameNormalizer
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
+import com.sanha.moneytalk.core.util.StatsExclusionClassifier
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,7 +32,7 @@ import javax.inject.Singleton
  * 5. StoreRule 적용 (Tier 0)
  * 6. DB 저장 + 알림 표시
  *
- * smsId 형식은 [SmsReaderV2]와 동일하여 후속 전체 동기화에서 dedup 처리됨.
+ * smsId 형식은 [SmsReaderV2]와 동일하여 후속 배치 동기화에서 dedup 처리됨.
  */
 @Singleton
 class SmsInstantProcessor @Inject constructor(
@@ -54,7 +57,17 @@ class SmsInstantProcessor @Inject constructor(
         private val pendingReconciliationIds = ConcurrentHashMap.newKeySet<String>()
         /** 동시 다발 수신/알림 경로에서 같은 smsId 중복 처리 방지 */
         private val inFlightSmsIds = ConcurrentHashMap.newKeySet<String>()
-
+        /** 환불 알림/입금 알림 동시 수신 시 같은 금액 수입 저장 구간 직렬화 */
+        private val incomeSemanticLocks = ConcurrentHashMap<Int, Mutex>()
+        private val APP_NOTIFICATION_AMOUNT_PATTERN = Regex("""[\d,]+원""")
+        private val APP_NOTIFICATION_BLOCK_KEYWORDS = listOf(
+            "인증", "otp", "본인확인", "비밀번호", "광고", "이벤트", "혜택",
+            "청구서", "명세서", "결제예정", "출금예정", "납입일", "납입예정",
+            "납부일", "납부예정", "승인거절"
+        )
+        private val APP_NOTIFICATION_TRANSACTION_HINTS = listOf(
+            "결제", "승인", "출금", "사용", "이용", "입금", "송금", "이체", "취소"
+        )
         fun snapshotPendingReconciliationIds(): Set<String> = pendingReconciliationIds.toSet()
 
         fun clearPendingReconciliationIds(smsIds: Collection<String>) {
@@ -67,9 +80,18 @@ class SmsInstantProcessor @Inject constructor(
             inFlightSmsIds.remove(smsId)
         }
 
-        private fun markPendingReconciliation(smsId: String) {
+        private fun incomeSemanticLockFor(amount: Int): Mutex {
+            return incomeSemanticLocks.getOrPut(amount) { Mutex() }
+        }
+
+        private fun markPendingReconciliation(
+            smsId: String,
+            needsReconciliation: Boolean = true
+        ) {
             lastInstantSaveTime = System.currentTimeMillis()
-            pendingReconciliationIds.add(smsId)
+            if (needsReconciliation) {
+                pendingReconciliationIds.add(smsId)
+            }
         }
     }
 
@@ -145,6 +167,69 @@ class SmsInstantProcessor @Inject constructor(
         }
     }
 
+    /**
+     * SMS provider row가 없는 금융 앱 알림을 즉시 파싱 → DB 저장 → 알림 표시.
+     *
+     * 알림 앱 패키지를 sender처럼 사용하되 010/070 발신번호 필터는 적용하지 않는다.
+     */
+    suspend fun processAppNotificationAndSave(
+        packageName: String,
+        appLabel: String,
+        body: String,
+        timestampMillis: Long
+    ): Result {
+        val address = buildAppNotificationAddress(packageName)
+
+        if (isObviouslyNonPaymentAppNotification(body)) {
+            return Result.Skipped
+        }
+
+        if (lacksAppNotificationRequirements(body)) {
+            return Result.Skipped
+        }
+
+        val exclusionKeywords = smsExclusionRepository.getAllKeywordStrings()
+        if (exclusionKeywords.isNotEmpty()) {
+            val bodyLower = body.lowercase()
+            if (exclusionKeywords.any { bodyLower.contains(it) }) {
+                return Result.Skipped
+            }
+        }
+
+        val smsId = generateSmsId(address, body, timestampMillis)
+        if (DeletedSmsTracker.isDeleted(smsId)) {
+            return Result.Skipped
+        }
+
+        if (!tryAcquireInFlight(smsId)) {
+            MoneyTalkLogger.i("[InstantAppNoti] in-flight 중복 스킵: ${smsId.take(30)}")
+            return Result.Skipped
+        }
+
+        return try {
+            when (classifyAppNotification(body)) {
+                SmsType.PAYMENT -> processAppNotificationExpense(
+                    address = address,
+                    packageName = packageName,
+                    appLabel = appLabel,
+                    body = body,
+                    timestamp = timestampMillis,
+                    smsId = smsId
+                )
+                SmsType.INCOME -> processIncome(
+                    address = address,
+                    body = body,
+                    timestamp = timestampMillis,
+                    smsId = smsId,
+                    needsReconciliation = false
+                )
+                SmsType.SKIP -> Result.Skipped
+            }
+        } finally {
+            releaseInFlight(smsId)
+        }
+    }
+
     private suspend fun processExpense(
         address: String,
         body: String,
@@ -162,8 +247,8 @@ class SmsInstantProcessor @Inject constructor(
         val parsed = matchResult.matched.firstOrNull()
 
         if (parsed == null) {
-            // Regex 미매칭 → 전체 동기화에서 벡터/LLM 파이프라인으로 처리
-            MoneyTalkLogger.i("[InstantSMS] regex 미매칭, 전체 동기화 대기: ${smsId.take(30)}")
+            // Regex 미매칭 → 후속 배치 동기화에서 벡터/LLM 파이프라인으로 처리
+            MoneyTalkLogger.i("[InstantSMS] regex 미매칭, 후속 배치 동기화 대기: ${smsId.take(30)}")
             return Result.Skipped
         }
 
@@ -192,14 +277,105 @@ class SmsInstantProcessor @Inject constructor(
             senderAddress = SmsFilter.normalizeAddress(address)
         )
 
-        // StoreRule 적용 (Tier 0)
         entity = applyStoreRules(entity)
+        val appNotificationDuplicate = findCrossSourceDuplicateExpense(entity)
+            ?.takeIf(TransactionSemanticDedupe::isAppGenerated)
 
         expenseRepository.insert(entity)
+        val replacedAppNotificationDuplicate = deleteAppNotificationDuplicateIfNeeded(
+            entity = entity,
+            duplicate = appNotificationDuplicate
+        )
         markPendingReconciliation(smsId)
         MoneyTalkLogger.i("[InstantSMS] 지출 저장: ${entity.storeName} ${entity.amount}원 [${entity.category}]")
 
         // 알림 (설정에서 활성화된 경우만)
+        if (!replacedAppNotificationDuplicate && settingsDataStore.isNotificationEnabled()) {
+            notificationManager.showExpenseNotification(
+                amount = entity.amount,
+                storeName = entity.storeName,
+                cardName = entity.cardName
+            )
+        }
+
+        return Result.Expense(entity)
+    }
+
+    private suspend fun processAppNotificationExpense(
+        address: String,
+        packageName: String,
+        appLabel: String,
+        body: String,
+        timestamp: Long,
+        smsId: String
+    ): Result {
+        if (expenseRepository.existsBySmsId(smsId)) {
+            return Result.Skipped
+        }
+
+        val smsInput = SmsInput(id = smsId, body = body, address = address, date = timestamp)
+        val matchResult = regexRuleMatcher.matchPaymentCandidates(listOf(smsInput))
+        val regexParsed = matchResult.matched.firstOrNull()
+
+        val baseEntity = if (regexParsed != null) {
+            val category = if (regexParsed.analysis.category.isNotBlank() &&
+                regexParsed.analysis.category != "미분류" &&
+                regexParsed.analysis.category != "기타"
+            ) {
+                regexParsed.analysis.category
+            } else {
+                SmsParser.inferCategory(regexParsed.analysis.storeName, body)
+            }
+
+            ExpenseEntity(
+                amount = regexParsed.analysis.amount,
+                storeName = regexParsed.analysis.storeName,
+                category = category,
+                cardName = CardNameNormalizer.normalizeWithFallback(
+                    regexParsed.analysis.cardName.ifBlank { appLabel },
+                    body
+                ),
+                dateTime = DateUtils.parseDateTime(regexParsed.analysis.dateTime),
+                originalSms = body,
+                smsId = smsId,
+                senderAddress = SmsFilter.normalizeAddress(address)
+            )
+        } else {
+            val candidate = AppNotificationTransactionParser.parseExpense(
+                body = body,
+                appLabel = appLabel,
+                packageName = packageName
+            ) ?: return Result.Skipped
+
+            ExpenseEntity(
+                amount = candidate.amount,
+                storeName = candidate.storeName,
+                category = candidate.category,
+                cardName = CardNameNormalizer.normalizeWithFallback(candidate.cardName, body),
+                dateTime = timestamp,
+                originalSms = body,
+                smsId = smsId,
+                senderAddress = SmsFilter.normalizeAddress(address)
+            )
+        }
+
+        val entity = applyStoreRules(baseEntity)
+        val duplicate = findCrossSourceDuplicateExpense(entity)
+        if (duplicate != null) {
+            MoneyTalkLogger.i(
+                "[InstantAppNoti] 교차 소스 중복 스킵: " +
+                    "${entity.amount}원 existing=${duplicate.id}"
+            )
+            return Result.Skipped
+        }
+
+        expenseRepository.insert(entity)
+        markPendingReconciliation(smsId, needsReconciliation = false)
+        MoneyTalkLogger.i(
+            "[InstantAppNoti] 지출 저장: " +
+                "${entity.storeName} ${entity.amount}원 [${entity.category}]"
+        )
+
         if (settingsDataStore.isNotificationEnabled()) {
             notificationManager.showExpenseNotification(
                 amount = entity.amount,
@@ -215,7 +391,8 @@ class SmsInstantProcessor @Inject constructor(
         address: String,
         body: String,
         timestamp: Long,
-        smsId: String
+        smsId: String,
+        needsReconciliation: Boolean = true
     ): Result {
         // Dedup 체크
         if (incomeRepository.existsBySmsId(smsId)) {
@@ -243,12 +420,45 @@ class SmsInstantProcessor @Inject constructor(
             category = category
         )
 
+        return incomeSemanticLockFor(entity.amount).withLock {
+            processIncomeEntity(
+                entity = entity,
+                smsId = smsId,
+                needsReconciliation = needsReconciliation
+            )
+        }
+    }
+
+    private suspend fun processIncomeEntity(
+        entity: IncomeEntity,
+        smsId: String,
+        needsReconciliation: Boolean
+    ): Result {
+        val duplicate = findSemanticDuplicateRefundIncome(entity)
+        val replacedRefundNotice = if (
+            duplicate != null &&
+            RefundIncomeSemanticDedupe.shouldPreferCandidate(entity, duplicate)
+        ) {
+            true
+        } else if (duplicate != null) {
+            MoneyTalkLogger.i(
+                "[InstantSMS] 환불 수입 중복 스킵: " +
+                    "${entity.amount}원 existing=${duplicate.id}"
+            )
+            return Result.Skipped
+        } else {
+            false
+        }
+
         incomeRepository.insert(entity)
-        markPendingReconciliation(smsId)
-        MoneyTalkLogger.i("[InstantSMS] 수입 저장: ${entity.source} ${entity.amount}원 [$category]")
+        if (replacedRefundNotice && duplicate != null && duplicate.id > 0L) {
+            incomeRepository.deleteById(duplicate.id)
+        }
+        markPendingReconciliation(smsId, needsReconciliation = needsReconciliation)
+        MoneyTalkLogger.i("[InstantSMS] 수입 저장: ${entity.source} ${entity.amount}원 [${entity.category}]")
 
         // 알림 (설정에서 활성화된 경우만)
-        if (settingsDataStore.isNotificationEnabled()) {
+        if (!replacedRefundNotice && settingsDataStore.isNotificationEnabled()) {
             notificationManager.showIncomeNotification(
                 amount = entity.amount,
                 source = entity.source,
@@ -259,17 +469,36 @@ class SmsInstantProcessor @Inject constructor(
         return Result.Income(entity)
     }
 
-    /** StoreRule 적용 (카테고리 + 고정지출) */
+    private suspend fun findSemanticDuplicateRefundIncome(entity: IncomeEntity): IncomeEntity? {
+        val start = maxOf(
+            0L,
+            entity.dateTime - RefundIncomeSemanticDedupe.DEFAULT_WINDOW_MS
+        )
+        val end = entity.dateTime + RefundIncomeSemanticDedupe.DEFAULT_WINDOW_MS
+        return incomeRepository.getIncomesByDateRangeOnce(start, end)
+            .firstOrNull { existing ->
+                RefundIncomeSemanticDedupe.isPotentialDuplicate(entity, existing)
+            }
+    }
+
+    /** StoreRule 적용 (카테고리 + 고정지출 + 통계 제외) */
     private suspend fun applyStoreRules(entity: ExpenseEntity): ExpenseEntity {
         val matchedRule = storeRuleRepository.findMatchingRule(entity.storeName)
-            ?: return entity
-        return entity.copy(
-            category = matchedRule.category ?: entity.category,
-            isFixed = if (supportsFixedExpense(entity)) {
-                matchedRule.isFixed ?: entity.isFixed
-            } else {
-                entity.isFixed
-            }
+        val updated = matchedRule?.let { rule ->
+            entity.copy(
+                category = rule.category ?: entity.category,
+                isFixed = if (supportsFixedExpense(entity)) {
+                    rule.isFixed ?: entity.isFixed
+                } else {
+                    entity.isFixed
+                },
+                isExcludedFromStats = rule.isExcludedFromStats ?: entity.isExcludedFromStats
+            )
+        } ?: entity
+
+        return updated.copy(
+            isExcludedFromStats = matchedRule?.isExcludedFromStats
+                ?: StatsExclusionClassifier.shouldExcludeExpense(updated)
         )
     }
 
@@ -288,8 +517,58 @@ class SmsInstantProcessor @Inject constructor(
         return "${SmsFilter.normalizeAddress(address)}_${date}_${body.hashCode()}"
     }
 
+    private fun buildAppNotificationAddress(packageName: String): String {
+        return "app:$packageName"
+    }
+
+    private fun lacksAppNotificationRequirements(body: String): Boolean {
+        if (body.length < 8) return true
+        if (!APP_NOTIFICATION_AMOUNT_PATTERN.containsMatchIn(body)) return true
+        return APP_NOTIFICATION_TRANSACTION_HINTS.none { body.contains(it, ignoreCase = true) }
+    }
+
+    private fun isObviouslyNonPaymentAppNotification(body: String): Boolean {
+        val lowerBody = body.lowercase()
+        return AppNotificationTransactionParser.isNonTransactionNotice(body) ||
+            APP_NOTIFICATION_BLOCK_KEYWORDS.any { lowerBody.contains(it) }
+    }
+
+    private fun classifyAppNotification(body: String): SmsType {
+        return AppNotificationTypeClassifier.classify(body)
+    }
+
     private fun supportsFixedExpense(entity: ExpenseEntity): Boolean {
         return entity.transactionType == "EXPENSE" ||
             entity.transactionType == "TRANSFER"
+    }
+
+    private suspend fun deleteAppNotificationDuplicateIfNeeded(
+        entity: ExpenseEntity,
+        duplicate: ExpenseEntity?
+    ): Boolean {
+        duplicate ?: return false
+        if (duplicate.id > 0L) {
+            expenseRepository.deleteById(duplicate.id)
+        }
+        MoneyTalkLogger.i(
+            "[InstantSMS] 앱 알림 중복 대체: " +
+                "${entity.amount}원 appExpense=${duplicate.id}"
+        )
+        return true
+    }
+
+    private suspend fun findCrossSourceDuplicateExpense(
+        entity: ExpenseEntity
+    ): ExpenseEntity? {
+        val start = maxOf(
+            0L,
+            entity.dateTime - TransactionSemanticDedupe.CROSS_SOURCE_WINDOW_MS
+        )
+        val end = entity.dateTime + TransactionSemanticDedupe.CROSS_SOURCE_WINDOW_MS
+        val existingExpenses = expenseRepository.getExpensesByDateRangeOnce(start, end)
+        return TransactionSemanticDedupe.findPotentialCrossSourceDuplicate(
+            candidate = entity,
+            existingExpenses = existingExpenses
+        )
     }
 }

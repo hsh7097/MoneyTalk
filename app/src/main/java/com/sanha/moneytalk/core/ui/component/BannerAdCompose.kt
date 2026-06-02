@@ -19,7 +19,7 @@ import com.sanha.moneytalk.BuildConfig
  * AdMob 배너 광고 Composable.
  *
  * 화면 하단에 고정 배치하여 사용.
- * 호출부에서 RTDB `reward_ad_enabled` 플래그를 확인 후 조건부 렌더링할 것.
+ * 호출부에서 배너 노출 정책을 확인 후 조건부 렌더링할 것.
  *
  * @param adUnitId 화면별 배너 광고 단위 ID
  */

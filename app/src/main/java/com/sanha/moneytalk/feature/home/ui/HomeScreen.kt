@@ -162,6 +162,8 @@ fun HomeScreen(
 
     val isBannerAdEnabled by mainViewModel.adManager.isBannerAdEnabledFlow
         .collectAsStateWithLifecycle(initialValue = false)
+    val isRewardAdEnabled by mainViewModel.adManager.isRewardAdEnabledFlow
+        .collectAsStateWithLifecycle(initialValue = false)
 
     // ===== 코치마크 (화면별 온보딩) =====
     val coachMarkRegistry = remember { CoachMarkTargetRegistry() }
@@ -218,7 +220,7 @@ fun HomeScreen(
                 hasSmsPermission = mainScreenUiState.hasSmsPermission,
                 selectedCategory = uiState.selectedCategory,
                 isSyncing = mainScreenUiState.isSyncing,
-                isAdEnabled = isBannerAdEnabled && !mainScreenUiState.hasFreeSyncRemaining,
+                isAdEnabled = isRewardAdEnabled && !mainScreenUiState.hasFreeSyncRemaining,
                 onPreviousMonth = {
                     coroutineScope.launch {
                         pagerState.animateScrollToPage(pagerState.currentPage - 1)
@@ -251,8 +253,8 @@ fun HomeScreen(
                         onRequestSmsPermission {
                             mainViewModel.syncMonthData(pageYear, pageMonth)
                         }
-                    } else if (!isBannerAdEnabled) {
-                        // 광고 비활성 → 광고 없이 바로 전체 동기화 해제
+                    } else if (!isRewardAdEnabled) {
+                        // 광고 비활성 → 광고 없이 바로 월별 동기화
                         onRequestSmsPermission {
                             mainViewModel.unlockFullSync(pageYear, pageMonth)
                         }
@@ -288,7 +290,7 @@ fun HomeScreen(
             )
         } // HorizontalPager
 
-        // 배너 광고 (RTDB reward_ad_enabled 연동)
+        // 배너 광고 (RTDB reward_ad_enabled + 앱 진입 5회 이상)
         if (isBannerAdEnabled) {
             BannerAdCompose(adUnitId = BannerAdIds.HOME)
         }
@@ -384,7 +386,7 @@ fun HomeScreen(
         )
     }
 
-    // 동기화 다이얼로그, AI 성과 요약, 전체 동기화 광고 다이얼로그는
+    // 동기화 다이얼로그, AI 성과 요약, 월별 SMS 동기화 광고 다이얼로그는
     // Activity 레벨(MoneyTalkApp)에서 MainViewModel을 통해 표시
 }
 
@@ -461,17 +463,14 @@ fun HomePageContent(
             val showImportCta = isCurrentMonth &&
                     (!hasSmsPermission || (hasNoData && !isMonthSynced))
 
-            // 과거 월 전체 동기화 CTA (광고 시청 → 데이터 가져오기)
+            // 과거 월 데이터 가져오기 CTA (광고 시청 → 월별 동기화)
             val ctaMonthLabel = if (isCurrentMonth) {
                 currentMonthSyncLabel
             } else {
                 String.format(syncMonthLabelFormat, month)
             }
-            val showEmptyCta = hasNoData && !isCurrentMonth && !isMonthSynced
-            val showPartialCta = !showImportCta &&
-                    !hasNoData &&
+            val showPastMonthSyncCta = !showImportCta &&
                     !isCurrentMonth &&
-                    isPartiallyCovered &&
                     !isMonthSynced
 
             // ━━━ BLOCK 1: CTA — 필요할 때 홈 최상단에 노출 ━━━
@@ -489,25 +488,14 @@ fun HomePageContent(
                 }
             }
 
-            if (showEmptyCta) {
+            if (showPastMonthSyncCta) {
                 item {
                     FullSyncCtaSection(
                         onRequestFullSync = onFullSync,
                         monthLabel = ctaMonthLabel,
+                        isPartial = isPartiallyCovered,
                         isSyncing = isSyncing,
                         isAdEnabled = isAdEnabled
-                    )
-                }
-            }
-
-            if (showPartialCta) {
-                item {
-                    FullSyncCtaSection(
-                        onRequestFullSync = onFullSync,
-                        monthLabel = ctaMonthLabel,
-                        isPartial = true,
-                        isSyncing = isSyncing,
-                        isAdEnabled = !isCurrentMonth && isAdEnabled
                     )
                 }
             }
@@ -583,11 +571,16 @@ fun HomePageContent(
                         Text(
                             text = stringResource(R.string.home_today_transactions),
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
                         )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Text(
                                 text = stringResource(
@@ -596,13 +589,17 @@ fun HomePageContent(
                                 ),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                softWrap = false
                             )
                             if (pageData.todayExpenseCount > 0) {
                                 Text(
                                     text = stringResource(R.string.home_today_count, pageData.todayExpenseCount),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }

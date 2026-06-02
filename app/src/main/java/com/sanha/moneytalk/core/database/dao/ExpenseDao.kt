@@ -70,10 +70,25 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE category = :category ORDER BY dateTime DESC")
     suspend fun getExpensesByCategoryOnce(category: String): List<ExpenseEntity>
 
-    @Query("SELECT SUM(amount) FROM expenses WHERE dateTime BETWEEN :startTime AND :endTime")
+    @Query(
+        """
+        SELECT SUM(amount) FROM expenses
+        WHERE dateTime BETWEEN :startTime AND :endTime
+          AND is_excluded_from_stats = 0
+          AND (transaction_type != 'TRANSFER' OR transfer_direction != 'DEPOSIT')
+    """
+    )
     suspend fun getTotalExpenseByDateRange(startTime: Long, endTime: Long): Int?
 
-    @Query("SELECT category, SUM(amount) as total FROM expenses WHERE dateTime BETWEEN :startTime AND :endTime GROUP BY category")
+    @Query(
+        """
+        SELECT category, SUM(amount) as total FROM expenses
+        WHERE dateTime BETWEEN :startTime AND :endTime
+          AND is_excluded_from_stats = 0
+          AND (transaction_type != 'TRANSFER' OR transfer_direction != 'DEPOSIT')
+        GROUP BY category
+    """
+    )
     suspend fun getExpenseSumByCategory(startTime: Long, endTime: Long): List<CategorySum>
 
     @Query("SELECT * FROM expenses ORDER BY dateTime DESC LIMIT :limit")
@@ -85,6 +100,10 @@ interface ExpenseDao {
     /** 모든 smsId 목록 조회 (배치 중복 체크용 인메모리 Set 구성) */
     @Query("SELECT smsId FROM expenses")
     suspend fun getAllSmsIds(): List<String>
+
+    /** 저장된 카드명 정규화 */
+    @Query("UPDATE expenses SET cardName = :newCardName WHERE cardName = :oldCardName")
+    suspend fun updateCardName(oldCardName: String, newCardName: String): Int
 
     /** 주어진 smsId 목록 중 이미 저장된 항목만 조회 (중복 체크 최적화) */
     @Query("SELECT smsId FROM expenses WHERE smsId IN (:smsIds)")
@@ -121,7 +140,15 @@ interface ExpenseDao {
     ): List<ExpenseEntity>
 
     /** 기간 + 카테고리 목록으로 총 지출 합산 (채팅 쿼리용) */
-    @Query("SELECT SUM(amount) FROM expenses WHERE category IN (:categories) AND dateTime BETWEEN :startTime AND :endTime")
+    @Query(
+        """
+        SELECT SUM(amount) FROM expenses
+        WHERE category IN (:categories)
+          AND dateTime BETWEEN :startTime AND :endTime
+          AND is_excluded_from_stats = 0
+          AND (transaction_type != 'TRANSFER' OR transfer_direction != 'DEPOSIT')
+    """
+    )
     suspend fun getTotalExpenseByCategoriesAndDateRange(
         categories: List<String>,
         startTime: Long,
@@ -141,11 +168,30 @@ interface ExpenseDao {
     suspend fun getAllCategories(): List<String>
 
     // 날짜별 총액 (일별 합계)
-    @Query("SELECT date(dateTime/1000, 'unixepoch', 'localtime') as date, SUM(amount) as total FROM expenses WHERE dateTime BETWEEN :startTime AND :endTime GROUP BY date ORDER BY date DESC")
+    @Query(
+        """
+        SELECT date(dateTime/1000, 'unixepoch', 'localtime') as date, SUM(amount) as total
+        FROM expenses
+        WHERE dateTime BETWEEN :startTime AND :endTime
+          AND is_excluded_from_stats = 0
+          AND (transaction_type != 'TRANSFER' OR transfer_direction != 'DEPOSIT')
+        GROUP BY date
+        ORDER BY date DESC
+    """
+    )
     suspend fun getDailyTotals(startTime: Long, endTime: Long): List<DailySum>
 
     // 월별 총액
-    @Query("SELECT strftime('%Y-%m', dateTime/1000, 'unixepoch', 'localtime') as month, SUM(amount) as total FROM expenses GROUP BY month ORDER BY month DESC")
+    @Query(
+        """
+        SELECT strftime('%Y-%m', dateTime/1000, 'unixepoch', 'localtime') as month, SUM(amount) as total
+        FROM expenses
+        WHERE is_excluded_from_stats = 0
+          AND (transaction_type != 'TRANSFER' OR transfer_direction != 'DEPOSIT')
+        GROUP BY month
+        ORDER BY month DESC
+    """
+    )
     suspend fun getMonthlyTotals(): List<MonthlySum>
 
     // 백업용 - 모든 지출 한번에 가져오기
@@ -157,11 +203,23 @@ interface ExpenseDao {
     suspend fun deleteAll()
 
     // 가게명으로 지출 조회 (정확히 일치)
-    @Query("SELECT * FROM expenses WHERE storeName = :storeName ORDER BY dateTime DESC")
+    @Query(
+        """
+        SELECT * FROM expenses
+        WHERE replace(lower(storeName), ' ', '') = replace(lower(:storeName), ' ', '')
+        ORDER BY dateTime DESC
+    """
+    )
     suspend fun getExpensesByStoreName(storeName: String): List<ExpenseEntity>
 
     // 가게명에 키워드 포함된 지출 조회
-    @Query("SELECT * FROM expenses WHERE storeName LIKE '%' || :keyword || '%' ORDER BY dateTime DESC")
+    @Query(
+        """
+        SELECT * FROM expenses
+        WHERE replace(lower(storeName), ' ', '') LIKE '%' || replace(lower(:keyword), ' ', '') || '%'
+        ORDER BY dateTime DESC
+    """
+    )
     suspend fun getExpensesByStoreNameContaining(keyword: String): List<ExpenseEntity>
 
     // 미분류 항목 조회
@@ -172,7 +230,8 @@ interface ExpenseDao {
     @Query(
         """
         UPDATE expenses SET category = :newCategory
-        WHERE transaction_type = 'EXPENSE' AND storeName = :storeName
+        WHERE transaction_type = 'EXPENSE'
+          AND replace(lower(storeName), ' ', '') = replace(lower(:storeName), ' ', '')
     """
     )
     suspend fun updateCategoryByStoreName(storeName: String, newCategory: String): Int
@@ -181,7 +240,8 @@ interface ExpenseDao {
     @Query(
         """
         UPDATE expenses SET category = :newCategory
-        WHERE transaction_type = 'EXPENSE' AND storeName LIKE '%' || :keyword || '%'
+        WHERE transaction_type = 'EXPENSE'
+          AND replace(lower(storeName), ' ', '') LIKE '%' || replace(lower(:keyword), ' ', '') || '%'
     """
     )
     suspend fun updateCategoryByStoreNameContaining(keyword: String, newCategory: String): Int
@@ -194,7 +254,8 @@ interface ExpenseDao {
     @Query(
         """
         UPDATE expenses SET is_fixed = :isFixed
-        WHERE transaction_type = 'EXPENSE' AND storeName = :storeName
+        WHERE transaction_type = 'EXPENSE'
+          AND replace(lower(storeName), ' ', '') = replace(lower(:storeName), ' ', '')
     """
     )
     suspend fun updateFixedByStoreName(storeName: String, isFixed: Boolean): Int
@@ -203,7 +264,8 @@ interface ExpenseDao {
     @Query(
         """
         UPDATE expenses SET is_fixed = :isFixed
-        WHERE transaction_type = 'EXPENSE' AND storeName LIKE '%' || :keyword || '%'
+        WHERE transaction_type = 'EXPENSE'
+          AND replace(lower(storeName), ' ', '') LIKE '%' || replace(lower(:keyword), ' ', '') || '%'
     """
     )
     suspend fun updateFixedByStoreNameContaining(keyword: String, isFixed: Boolean): Int
@@ -211,6 +273,10 @@ interface ExpenseDao {
     /** 특정 ID의 고정지출 여부 변경 */
     @Query("UPDATE expenses SET is_fixed = :isFixed WHERE id = :expenseId")
     suspend fun updateFixedById(expenseId: Long, isFixed: Boolean): Int
+
+    /** 특정 ID의 통계 제외 여부 변경 */
+    @Query("UPDATE expenses SET is_excluded_from_stats = :isExcluded WHERE id = :expenseId")
+    suspend fun updateStatsExcludedById(expenseId: Long, isExcluded: Boolean): Int
 
     // 중복 데이터 조회 (금액, 가게명, 날짜시간이 동일한 항목)
     @Query(
@@ -240,7 +306,7 @@ interface ExpenseDao {
     @Query(
         """
         SELECT * FROM expenses
-        WHERE storeName LIKE '%' || :query || '%'
+        WHERE replace(lower(storeName), ' ', '') LIKE '%' || replace(lower(:query), ' ', '') || '%'
            OR category LIKE '%' || :query || '%'
            OR cardName LIKE '%' || :query || '%'
            OR memo LIKE '%' || :query || '%'
@@ -253,7 +319,7 @@ interface ExpenseDao {
     @Query(
         """
         DELETE FROM expenses
-        WHERE storeName LIKE '%' || :keyword || '%'
+        WHERE replace(lower(storeName), ' ', '') LIKE '%' || replace(lower(:keyword), ' ', '') || '%'
            OR category LIKE '%' || :keyword || '%'
            OR cardName LIKE '%' || :keyword || '%'
            OR memo LIKE '%' || :keyword || '%'
@@ -278,7 +344,8 @@ interface ExpenseDao {
         """
         UPDATE expenses SET category = :category, transaction_type = :transactionType,
         transfer_direction = :transferDirection
-        WHERE storeName = :storeName AND category = '미분류'
+        WHERE replace(lower(storeName), ' ', '') = replace(lower(:storeName), ' ', '')
+          AND category = '미분류'
     """
     )
     suspend fun updateTransferByStoreName(
@@ -299,7 +366,15 @@ interface ExpenseDao {
     ): Flow<List<ExpenseEntity>>
 
     /** 내 카드 기준 총 지출 합계 */
-    @Query("SELECT SUM(amount) FROM expenses WHERE cardName IN (:ownedCardNames) AND dateTime BETWEEN :startTime AND :endTime")
+    @Query(
+        """
+        SELECT SUM(amount) FROM expenses
+        WHERE cardName IN (:ownedCardNames)
+          AND dateTime BETWEEN :startTime AND :endTime
+          AND is_excluded_from_stats = 0
+          AND (transaction_type != 'TRANSFER' OR transfer_direction != 'DEPOSIT')
+    """
+    )
     suspend fun getTotalExpenseByOwnedCards(
         ownedCardNames: List<String>,
         startTime: Long,
@@ -307,7 +382,16 @@ interface ExpenseDao {
     ): Int?
 
     /** 내 카드 기준 카테고리별 합계 */
-    @Query("SELECT category, SUM(amount) as total FROM expenses WHERE cardName IN (:ownedCardNames) AND dateTime BETWEEN :startTime AND :endTime GROUP BY category")
+    @Query(
+        """
+        SELECT category, SUM(amount) as total FROM expenses
+        WHERE cardName IN (:ownedCardNames)
+          AND dateTime BETWEEN :startTime AND :endTime
+          AND is_excluded_from_stats = 0
+          AND (transaction_type != 'TRANSFER' OR transfer_direction != 'DEPOSIT')
+        GROUP BY category
+    """
+    )
     suspend fun getExpenseSumByCategoryOwned(
         ownedCardNames: List<String>,
         startTime: Long,

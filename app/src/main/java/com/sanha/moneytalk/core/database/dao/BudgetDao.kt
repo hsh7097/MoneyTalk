@@ -24,6 +24,10 @@ interface BudgetDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(budget: BudgetEntity)
 
+    /** 예산 설정 일괄 삽입/업데이트 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(budgets: List<BudgetEntity>)
+
     @Update
     suspend fun update(budget: BudgetEntity)
 

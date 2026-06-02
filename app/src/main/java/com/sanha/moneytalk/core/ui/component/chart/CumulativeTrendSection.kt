@@ -30,10 +30,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.theme.moneyTalkTypography
+import com.sanha.moneytalk.core.util.toDpTextUnit
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -133,10 +136,25 @@ fun CumulativeTrendSection(
         Spacer(modifier = Modifier.height(4.dp))
 
         // 큰 금액
+        val currentAmountText = stringResource(
+            R.string.common_won,
+            numberFormat.format(info.currentAmount)
+        )
+        val amountFontSize = when {
+            currentAmountText.length >= 13 -> 22
+            currentAmountText.length >= 11 -> 24
+            else -> 28
+        }
         Text(
-            text = "₩${numberFormat.format(info.currentAmount)}",
-            style = MaterialTheme.moneyTalkTypography.numberLarge,
-            color = MaterialTheme.colorScheme.onSurface
+            text = currentAmountText,
+            style = MaterialTheme.moneyTalkTypography.numberLarge.copy(
+                fontSize = amountFontSize.toDpTextUnit,
+                lineHeight = (amountFontSize + 8).toDpTextUnit,
+                letterSpacing = 0.toDpTextUnit
+            ),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            softWrap = false
         )
 
         // 비교 문구
@@ -149,7 +167,10 @@ fun CumulativeTrendSection(
             }
             Text(
                 text = info.comparisonText,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 14.toDpTextUnit,
+                    lineHeight = 20.toDpTextUnit
+                ),
                 color = comparisonColor
             )
         }

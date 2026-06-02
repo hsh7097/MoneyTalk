@@ -2,13 +2,20 @@ package com.sanha.moneytalk.core.appfunctions
 
 import android.content.Context
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.database.CustomCategoryRepository
+import com.sanha.moneytalk.core.database.OwnedCardRepository
 import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.entity.BudgetEntity
+import com.sanha.moneytalk.core.database.entity.CustomCategoryEntity
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.database.entity.OwnedCardEntity
+import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.model.CategoryType
+import com.sanha.moneytalk.core.model.IncomeCategoryMapper
 import com.sanha.moneytalk.core.sms.DeletedSmsTracker
 import com.sanha.moneytalk.core.util.CategoryReferenceProvider
 import com.sanha.moneytalk.core.util.DataRefreshEvent
@@ -16,6 +23,8 @@ import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.util.StoreAliasManager
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
+import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
+import com.sanha.moneytalk.feature.home.data.StoreRuleSyncService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -31,6 +40,10 @@ class MoneyTalkChatAppFunctionReader @Inject constructor(
     private val incomeRepository: IncomeRepository,
     private val settingsDataStore: SettingsDataStore,
     private val smsExclusionRepository: SmsExclusionRepository,
+    private val ownedCardRepository: OwnedCardRepository,
+    private val storeRuleRepository: StoreRuleRepository,
+    private val storeRuleSyncService: StoreRuleSyncService,
+    private val customCategoryRepository: CustomCategoryRepository,
     private val categoryReferenceProvider: CategoryReferenceProvider,
     private val dataRefreshEvent: DataRefreshEvent,
     private val budgetDao: BudgetDao
@@ -41,6 +54,26 @@ class MoneyTalkChatAppFunctionReader @Inject constructor(
             resultCode = RESULT_SUPPORTED,
             affectedCount = SUPPORTED_CHAT_OPERATION_COUNT,
             resourceId = NO_RESOURCE_ID
+        )
+    }
+
+    suspend fun getDatabaseSnapshot(): MoneyTalkDatabaseSnapshot {
+        val cards = ownedCardRepository.getAllCardsOnce()
+        val storeRules = storeRuleRepository.getAllOnce()
+        val customCategories = customCategoryRepository.getAll()
+        return MoneyTalkDatabaseSnapshot(
+            expenseCount = expenseRepository.getExpenseCount(),
+            incomeCount = incomeRepository.getIncomeCount(),
+            duplicateExpenseCount = expenseRepository.getDuplicateExpenses().size,
+            cardCount = cards.size,
+            ownedCardCount = cards.count { it.isOwned },
+            excludedCardCount = cards.count { !it.isOwned },
+            storeRuleCount = storeRules.size,
+            customCategoryCount = customCategories.size,
+            monthlyIncome = settingsDataStore.getMonthlyIncome(),
+            monthStartDay = settingsDataStore.getMonthStartDay(),
+            lastSyncTime = settingsDataStore.getLastSyncTime(),
+            lastRcsProviderScanTime = settingsDataStore.getLastRcsProviderScanTime()
         )
     }
 
@@ -215,6 +248,32 @@ class MoneyTalkChatAppFunctionReader @Inject constructor(
     suspend fun getUsedCards(): MoneyTalkStringListResponse {
         val cards = expenseRepository.getAllCardNames()
         return MoneyTalkStringListResponse(totalCount = cards.size, items = cards)
+    }
+
+    suspend fun getOwnedCards(): MoneyTalkCardListResponse {
+        val cards = ownedCardRepository.getAllCardsOnce()
+        return MoneyTalkCardListResponse(
+            totalCount = cards.size,
+            ownedCount = cards.count { it.isOwned },
+            excludedCount = cards.count { !it.isOwned },
+            cards = cards.map { it.toCardRecord() }
+        )
+    }
+
+    suspend fun getStoreRules(): MoneyTalkStoreRuleListResponse {
+        val rules = storeRuleRepository.getAllOnce()
+        return MoneyTalkStoreRuleListResponse(
+            totalCount = rules.size,
+            rules = rules.map { it.toStoreRuleRecord() }
+        )
+    }
+
+    suspend fun getCustomCategories(): MoneyTalkCustomCategoryListResponse {
+        val categories = customCategoryRepository.getAll()
+        return MoneyTalkCustomCategoryListResponse(
+            totalCount = categories.size,
+            categories = categories.map { it.toCustomCategoryRecord() }
+        )
     }
 
     suspend fun getIncomes(
@@ -472,6 +531,124 @@ class MoneyTalkChatAppFunctionReader @Inject constructor(
         return resultByAffected(affected, expenseId)
     }
 
+    suspend fun updateExpenseFixed(
+        expenseId: Long?,
+        isFixed: Boolean?
+    ): MoneyTalkOperationResult {
+        if (expenseId == null || isFixed == null) return failure(RESULT_MISSING_REQUIRED_PARAMETER)
+        val affected = expenseRepository.updateFixedById(expenseId, isFixed)
+        if (affected > 0) dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+        return resultByAffected(affected, expenseId)
+    }
+
+    suspend fun updateExpenseStatsExcluded(
+        expenseId: Long?,
+        isExcludedFromStats: Boolean?
+    ): MoneyTalkOperationResult {
+        if (expenseId == null || isExcludedFromStats == null) {
+            return failure(RESULT_MISSING_REQUIRED_PARAMETER)
+        }
+        val affected = expenseRepository.updateStatsExcludedById(expenseId, isExcludedFromStats)
+        if (affected > 0) dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+        return resultByAffected(affected, expenseId)
+    }
+
+    suspend fun addIncome(
+        source: String?,
+        description: String?,
+        amount: Int?,
+        date: String?,
+        type: String?,
+        category: String?,
+        memo: String?,
+        isRecurring: Boolean?,
+        recurringDay: Int?
+    ): MoneyTalkOperationResult {
+        if (amount == null || amount <= 0) {
+            return failure(RESULT_MISSING_REQUIRED_PARAMETER)
+        }
+        val typeName = type?.takeIf { it.isNotBlank() } ?: DEFAULT_INCOME_TYPE
+        val sourceName = source.orEmpty()
+        val descriptionText = description?.takeIf { it.isNotBlank() }
+            ?: sourceName.takeIf { it.isNotBlank() }
+            ?: typeName
+        val recurring = isRecurring ?: false
+        val dateTime = if (date.isNullOrBlank()) {
+            System.currentTimeMillis()
+        } else {
+            parseDate(date, endOfDay = false)
+        }
+        val id = incomeRepository.insert(
+            IncomeEntity(
+                amount = amount,
+                type = typeName,
+                source = sourceName,
+                description = descriptionText,
+                isRecurring = recurring,
+                recurringDay = if (recurring) {
+                    recurringDay?.coerceIn(MIN_RECURRING_DAY, MAX_RECURRING_DAY)
+                } else {
+                    null
+                },
+                dateTime = dateTime,
+                smsId = "${MANUAL_INCOME_SMS_PREFIX}${System.currentTimeMillis()}",
+                category = category?.takeIf { it.isNotBlank() }?.let(::normalizeIncomeCategoryName)
+                    ?: IncomeCategoryMapper.categoryForType(typeName),
+                memo = memo
+            )
+        )
+        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+        return MoneyTalkOperationResult(
+            success = true,
+            resultCode = RESULT_SUCCESS,
+            affectedCount = 1,
+            resourceId = id
+        )
+    }
+
+    suspend fun updateIncomeMemo(
+        incomeId: Long?,
+        memo: String?
+    ): MoneyTalkOperationResult {
+        if (incomeId == null) return failure(RESULT_MISSING_REQUIRED_PARAMETER)
+        incomeRepository.getIncomeById(incomeId) ?: return failure(RESULT_NOT_FOUND)
+        incomeRepository.updateMemo(incomeId, memo)
+        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+        return MoneyTalkOperationResult(
+            success = true,
+            resultCode = RESULT_SUCCESS,
+            affectedCount = 1,
+            resourceId = incomeId
+        )
+    }
+
+    suspend fun updateIncomeCategoryByKeyword(
+        keyword: String?,
+        newCategory: String?
+    ): MoneyTalkOperationResult {
+        if (keyword.isNullOrBlank() || newCategory.isNullOrBlank()) {
+            return failure(RESULT_MISSING_REQUIRED_PARAMETER)
+        }
+        val affected = incomeRepository.updateCategoryByKeyword(keyword, normalizeIncomeCategoryName(newCategory))
+        if (affected > 0) {
+            categoryReferenceProvider.invalidateCache()
+            dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
+        }
+        return resultByAffected(affected)
+    }
+
+    suspend fun updateIncomeRecurringByKeyword(
+        keyword: String?,
+        isRecurring: Boolean?
+    ): MoneyTalkOperationResult {
+        if (keyword.isNullOrBlank() || isRecurring == null) {
+            return failure(RESULT_MISSING_REQUIRED_PARAMETER)
+        }
+        val affected = incomeRepository.updateRecurringByKeyword(keyword, isRecurring)
+        if (affected > 0) dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+        return resultByAffected(affected)
+    }
+
     suspend fun addSmsExclusionKeyword(keyword: String?): MoneyTalkOperationResult {
         if (keyword.isNullOrBlank()) return failure(RESULT_MISSING_REQUIRED_PARAMETER)
         val added = smsExclusionRepository.addKeyword(keyword, source = SOURCE_APP_FUNCTION)
@@ -487,6 +664,25 @@ class MoneyTalkChatAppFunctionReader @Inject constructor(
         if (keyword.isNullOrBlank()) return failure(RESULT_MISSING_REQUIRED_PARAMETER)
         val affected = smsExclusionRepository.removeKeyword(keyword)
         return resultByAffected(affected)
+    }
+
+    suspend fun setCardOwnership(cardName: String?, isOwned: Boolean?): MoneyTalkOperationResult {
+        if (cardName.isNullOrBlank() || isOwned == null) {
+            return failure(RESULT_MISSING_REQUIRED_PARAMETER)
+        }
+        val updated = ownedCardRepository.addManualCard(cardName, isOwned)
+        if (!updated) return failure(RESULT_INVALID_ARGUMENT)
+        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.OWNED_CARD_UPDATED)
+        return MoneyTalkOperationResult(
+            success = true,
+            resultCode = RESULT_SUCCESS,
+            affectedCount = 1,
+            resourceId = NO_RESOURCE_ID
+        )
+    }
+
+    suspend fun addManualCard(cardName: String?, isOwned: Boolean?): MoneyTalkOperationResult {
+        return setCardOwnership(cardName, isOwned ?: true)
     }
 
     suspend fun setBudget(category: String?, amount: Int?): MoneyTalkOperationResult {
@@ -511,6 +707,109 @@ class MoneyTalkChatAppFunctionReader @Inject constructor(
             resultCode = RESULT_SUCCESS,
             affectedCount = 1,
             resourceId = NO_RESOURCE_ID
+        )
+    }
+
+    suspend fun setMonthlyIncome(amount: Int?): MoneyTalkOperationResult {
+        if (amount == null || amount < 0) return failure(RESULT_MISSING_REQUIRED_PARAMETER)
+        settingsDataStore.saveMonthlyIncome(amount)
+        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+        return MoneyTalkOperationResult(
+            success = true,
+            resultCode = RESULT_SUCCESS,
+            affectedCount = 1,
+            resourceId = NO_RESOURCE_ID
+        )
+    }
+
+    suspend fun setMonthStartDay(day: Int?): MoneyTalkOperationResult {
+        if (day == null || day !in MIN_MONTH_START_DAY..MAX_MONTH_START_DAY) {
+            return failure(RESULT_INVALID_ARGUMENT)
+        }
+        settingsDataStore.saveMonthStartDay(day)
+        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+        return MoneyTalkOperationResult(
+            success = true,
+            resultCode = RESULT_SUCCESS,
+            affectedCount = 1,
+            resourceId = NO_RESOURCE_ID
+        )
+    }
+
+    suspend fun upsertStoreRule(
+        keyword: String?,
+        category: String?,
+        isFixed: Boolean?,
+        isExcludedFromStats: Boolean?
+    ): MoneyTalkOperationResult {
+        val normalizedKeyword = keyword?.trim()
+        if (normalizedKeyword.isNullOrBlank()) return failure(RESULT_MISSING_REQUIRED_PARAMETER)
+        if (category.isNullOrBlank() && isFixed == null && isExcludedFromStats == null) {
+            return failure(RESULT_MISSING_REQUIRED_PARAMETER)
+        }
+
+        val previousRule = storeRuleRepository.getByKeyword(normalizedKeyword)
+        val nextRule = StoreRuleEntity(
+            id = previousRule?.id ?: NO_RESOURCE_ID,
+            keyword = normalizedKeyword,
+            category = category?.takeIf { it.isNotBlank() }?.let(::normalizeExpenseCategoryName),
+            isFixed = isFixed,
+            isExcludedFromStats = isExcludedFromStats,
+            createdAt = previousRule?.createdAt ?: System.currentTimeMillis()
+        )
+        storeRuleSyncService.applyRuleChange(previousRule, nextRule)
+        categoryReferenceProvider.invalidateCache()
+        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
+        return MoneyTalkOperationResult(
+            success = true,
+            resultCode = RESULT_SUCCESS,
+            affectedCount = 1,
+            resourceId = previousRule?.id ?: NO_RESOURCE_ID
+        )
+    }
+
+    suspend fun deleteStoreRule(
+        ruleId: Long?,
+        keyword: String?
+    ): MoneyTalkOperationResult {
+        val previousRule = ruleId?.takeIf { it > 0 }?.let { id ->
+            storeRuleRepository.getAllOnce().firstOrNull { it.id == id }
+        } ?: keyword?.takeIf { it.isNotBlank() }?.let { storeRuleRepository.getByKeyword(it.trim()) }
+        previousRule ?: return failure(RESULT_NOT_FOUND)
+        storeRuleSyncService.applyRuleChange(previousRule, null)
+        categoryReferenceProvider.invalidateCache()
+        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
+        return MoneyTalkOperationResult(
+            success = true,
+            resultCode = RESULT_SUCCESS,
+            affectedCount = 1,
+            resourceId = previousRule.id
+        )
+    }
+
+    suspend fun addCustomCategory(
+        displayName: String?,
+        emoji: String?,
+        categoryType: String?
+    ): MoneyTalkOperationResult {
+        val name = displayName?.trim()
+        if (name.isNullOrBlank()) return failure(RESULT_MISSING_REQUIRED_PARAMETER)
+        val type = parseCategoryType(categoryType) ?: return failure(RESULT_INVALID_ARGUMENT)
+        if (customCategoryRepository.isDuplicate(name, type)) {
+            return failure(RESULT_ALREADY_EXISTS)
+        }
+        val id = customCategoryRepository.add(
+            displayName = name,
+            emoji = emoji?.takeIf { it.isNotBlank() } ?: DEFAULT_CUSTOM_CATEGORY_EMOJI,
+            categoryType = type
+        )
+        categoryReferenceProvider.invalidateCache()
+        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
+        return MoneyTalkOperationResult(
+            success = true,
+            resultCode = RESULT_SUCCESS,
+            affectedCount = 1,
+            resourceId = id
         )
     }
 
@@ -570,7 +869,9 @@ class MoneyTalkChatAppFunctionReader @Inject constructor(
             cardName = cardName,
             dateMillis = dateTime,
             dateText = DateUtils.formatDateTime(dateTime),
-            memo = memo.orEmpty()
+            memo = memo.orEmpty(),
+            isFixed = isFixed,
+            isExcludedFromStats = isExcludedFromStats
         )
     }
 
@@ -585,6 +886,42 @@ class MoneyTalkChatAppFunctionReader @Inject constructor(
             dateMillis = dateTime,
             dateText = DateUtils.formatDateTime(dateTime),
             memo = memo.orEmpty()
+        )
+    }
+
+    private fun OwnedCardEntity.toCardRecord(): MoneyTalkCardRecord {
+        return MoneyTalkCardRecord(
+            cardName = cardName,
+            isOwned = isOwned,
+            firstSeenAt = firstSeenAt,
+            lastSeenAt = lastSeenAt,
+            seenCount = seenCount,
+            source = source
+        )
+    }
+
+    private fun StoreRuleEntity.toStoreRuleRecord(): MoneyTalkStoreRuleRecord {
+        return MoneyTalkStoreRuleRecord(
+            id = id,
+            keyword = keyword,
+            category = category.orEmpty(),
+            categoryConfigured = category != null,
+            fixedConfigured = isFixed != null,
+            isFixed = isFixed ?: false,
+            statsExcludedConfigured = isExcludedFromStats != null,
+            isExcludedFromStats = isExcludedFromStats ?: false,
+            createdAt = createdAt
+        )
+    }
+
+    private fun CustomCategoryEntity.toCustomCategoryRecord(): MoneyTalkCustomCategoryRecord {
+        return MoneyTalkCustomCategoryRecord(
+            id = id,
+            displayName = displayName,
+            emoji = emoji,
+            categoryType = categoryType,
+            displayOrder = displayOrder,
+            createdAt = createdAt
         )
     }
 
@@ -634,6 +971,21 @@ class MoneyTalkChatAppFunctionReader @Inject constructor(
         } else {
             category.displayName
         }
+    }
+
+    private fun normalizeIncomeCategoryName(categoryName: String): String {
+        val trimmed = categoryName.trim()
+        val category = Category.fromDisplayName(trimmed, CategoryType.INCOME)
+        return if (category.categoryType == CategoryType.INCOME) {
+            category.displayName
+        } else {
+            trimmed
+        }
+    }
+
+    private fun parseCategoryType(value: String?): CategoryType? {
+        val normalized = value?.takeIf { it.isNotBlank() } ?: CategoryType.EXPENSE.name
+        return CategoryType.entries.firstOrNull { it.name.equals(normalized, ignoreCase = true) }
     }
 
     private fun categoryNamesIncludingCustom(categoryName: String): List<String> {
@@ -781,7 +1133,7 @@ class MoneyTalkChatAppFunctionReader @Inject constructor(
     )
 
     private companion object {
-        private const val SUPPORTED_CHAT_OPERATION_COUNT = 31
+        private const val SUPPORTED_CHAT_OPERATION_COUNT = 48
         private const val DEFAULT_LIMIT = 20
         private const val MIN_LIMIT = 1
         private const val MAX_LIMIT = 200
@@ -790,20 +1142,28 @@ class MoneyTalkChatAppFunctionReader @Inject constructor(
         private const val PERCENT_X100 = 10_000
         private const val DATE_TEXT_LENGTH = 10
         private const val MONTH_TEXT_LENGTH = 7
+        private const val MIN_RECURRING_DAY = 1
+        private const val MAX_RECURRING_DAY = 31
+        private const val MIN_MONTH_START_DAY = 1
+        private const val MAX_MONTH_START_DAY = 31
 
         private const val RESULT_SUPPORTED = "supported"
         private const val RESULT_SUCCESS = "success"
         private const val RESULT_NOT_FOUND = "not_found"
         private const val RESULT_ALREADY_EXISTS = "already_exists"
         private const val RESULT_MISSING_REQUIRED_PARAMETER = "missing_required_parameter"
+        private const val RESULT_INVALID_ARGUMENT = "invalid_argument"
 
         private const val DEFAULT_BUDGET_MONTH = "default"
         private const val TOTAL_BUDGET_CATEGORY = "전체"
         private const val UNCATEGORIZED_CATEGORY = "미분류"
+        private const val DEFAULT_INCOME_TYPE = "입금"
         private const val MANUAL_CARD_NAME = "수동입력"
         private const val MANUAL_SMS_PREFIX = "manual_app_function_"
+        private const val MANUAL_INCOME_SMS_PREFIX = "manual_income_app_function_"
         private const val SOURCE_APP_FUNCTION = "chat"
         private const val EMPTY_TEXT = ""
+        private const val DEFAULT_CUSTOM_CATEGORY_EMOJI = "📦"
 
         private const val GROUP_NONE = "none"
         private const val GROUP_ALL = "all"

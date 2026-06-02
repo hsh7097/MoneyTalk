@@ -23,6 +23,18 @@ class MoneyTalkChatAppFunctions(
     }
 
     /**
+     * 저장된 DB와 주요 설정의 현재 상태를 조회합니다.
+     *
+     * @return 지출/수입/카드/거래처 규칙/커스텀 카테고리/동기화 설정 요약.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun getDatabaseSnapshot(
+        appFunctionContext: AppFunctionContext
+    ): MoneyTalkDatabaseSnapshot {
+        return execute { reader.getDatabaseSnapshot() }
+    }
+
+    /**
      * 기간 내 총 지출을 조회합니다. 날짜를 생략하면 이번 달 1일부터 현재까지 조회합니다.
      *
      * @param startDate yyyy-MM-dd 형식 시작일.
@@ -232,6 +244,42 @@ class MoneyTalkChatAppFunctions(
         appFunctionContext: AppFunctionContext
     ): MoneyTalkStringListResponse {
         return execute { reader.getUsedCards() }
+    }
+
+    /**
+     * 카드 표시/숨김 설정 목록을 조회합니다.
+     *
+     * @return 등록 카드와 표시/숨김 상태.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun getOwnedCards(
+        appFunctionContext: AppFunctionContext
+    ): MoneyTalkCardListResponse {
+        return execute { reader.getOwnedCards() }
+    }
+
+    /**
+     * 거래처 규칙 목록을 조회합니다.
+     *
+     * @return 거래처별 카테고리/고정지출/통계 제외 규칙.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun getStoreRules(
+        appFunctionContext: AppFunctionContext
+    ): MoneyTalkStoreRuleListResponse {
+        return execute { reader.getStoreRules() }
+    }
+
+    /**
+     * 커스텀 카테고리 목록을 조회합니다.
+     *
+     * @return 사용자가 추가한 카테고리 목록.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun getCustomCategories(
+        appFunctionContext: AppFunctionContext
+    ): MoneyTalkCustomCategoryListResponse {
+        return execute { reader.getCustomCategories() }
     }
 
     /**
@@ -483,6 +531,128 @@ class MoneyTalkChatAppFunctions(
     }
 
     /**
+     * 특정 지출의 고정지출 여부를 수정합니다.
+     *
+     * @param expenseId 지출 ID.
+     * @param isFixed 고정지출 여부.
+     * @return 수정 결과.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun updateExpenseFixed(
+        appFunctionContext: AppFunctionContext,
+        expenseId: Long? = null,
+        isFixed: Boolean? = null
+    ): MoneyTalkOperationResult {
+        return execute { reader.updateExpenseFixed(expenseId, isFixed) }
+    }
+
+    /**
+     * 특정 지출의 통계 제외 여부를 수정합니다.
+     *
+     * @param expenseId 지출 ID.
+     * @param isExcludedFromStats 통계 제외 여부.
+     * @return 수정 결과.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun updateExpenseStatsExcluded(
+        appFunctionContext: AppFunctionContext,
+        expenseId: Long? = null,
+        isExcludedFromStats: Boolean? = null
+    ): MoneyTalkOperationResult {
+        return execute { reader.updateExpenseStatsExcluded(expenseId, isExcludedFromStats) }
+    }
+
+    /**
+     * 수동 수입을 추가합니다.
+     *
+     * @param source 수입 출처.
+     * @param description 수입 설명.
+     * @param amount 수입 금액.
+     * @param date yyyy-MM-dd 형식 입금일. 생략하면 현재 시각을 사용합니다.
+     * @param type 수입 유형.
+     * @param category 수입 카테고리.
+     * @param memo 메모.
+     * @param isRecurring 고정 수입 여부.
+     * @param recurringDay 매월 입금일.
+     * @return 추가 결과.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun addIncome(
+        appFunctionContext: AppFunctionContext,
+        source: String? = null,
+        description: String? = null,
+        amount: Int? = null,
+        date: String? = null,
+        type: String? = null,
+        category: String? = null,
+        memo: String? = null,
+        isRecurring: Boolean? = null,
+        recurringDay: Int? = null
+    ): MoneyTalkOperationResult {
+        return execute {
+            reader.addIncome(
+                source = source,
+                description = description,
+                amount = amount,
+                date = date,
+                type = type,
+                category = category,
+                memo = memo,
+                isRecurring = isRecurring,
+                recurringDay = recurringDay
+            )
+        }
+    }
+
+    /**
+     * 특정 수입의 메모를 수정합니다.
+     *
+     * @param incomeId 수입 ID.
+     * @param memo 새 메모. null이면 메모를 비웁니다.
+     * @return 수정 결과.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun updateIncomeMemo(
+        appFunctionContext: AppFunctionContext,
+        incomeId: Long? = null,
+        memo: String? = null
+    ): MoneyTalkOperationResult {
+        return execute { reader.updateIncomeMemo(incomeId, memo) }
+    }
+
+    /**
+     * 출처 또는 설명 키워드가 포함된 수입의 카테고리를 일괄 변경합니다.
+     *
+     * @param keyword 수입 출처/설명 검색 키워드.
+     * @param newCategory 새 수입 카테고리.
+     * @return 변경 결과.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun updateIncomeCategoryByKeyword(
+        appFunctionContext: AppFunctionContext,
+        keyword: String? = null,
+        newCategory: String? = null
+    ): MoneyTalkOperationResult {
+        return execute { reader.updateIncomeCategoryByKeyword(keyword, newCategory) }
+    }
+
+    /**
+     * 출처 또는 설명 키워드가 포함된 수입의 고정 수입 여부를 일괄 변경합니다.
+     *
+     * @param keyword 수입 출처/설명 검색 키워드.
+     * @param isRecurring 고정 수입 여부.
+     * @return 변경 결과.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun updateIncomeRecurringByKeyword(
+        appFunctionContext: AppFunctionContext,
+        keyword: String? = null,
+        isRecurring: Boolean? = null
+    ): MoneyTalkOperationResult {
+        return execute { reader.updateIncomeRecurringByKeyword(keyword, isRecurring) }
+    }
+
+    /**
      * SMS 제외 키워드를 추가합니다.
      *
      * @param keyword 제외할 키워드.
@@ -511,6 +681,38 @@ class MoneyTalkChatAppFunctions(
     }
 
     /**
+     * 카드 표시/숨김 상태를 설정합니다. 등록되지 않은 카드는 수동 카드로 추가됩니다.
+     *
+     * @param cardName 카드명.
+     * @param isOwned true면 표시, false면 숨김.
+     * @return 설정 결과.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun setCardOwnership(
+        appFunctionContext: AppFunctionContext,
+        cardName: String? = null,
+        isOwned: Boolean? = null
+    ): MoneyTalkOperationResult {
+        return execute { reader.setCardOwnership(cardName, isOwned) }
+    }
+
+    /**
+     * 문자 설정에서 사용할 수동 카드를 추가합니다.
+     *
+     * @param cardName 카드명.
+     * @param isOwned true면 표시, false면 숨김. 생략하면 표시로 추가합니다.
+     * @return 추가 결과.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun addManualCard(
+        appFunctionContext: AppFunctionContext,
+        cardName: String? = null,
+        isOwned: Boolean? = null
+    ): MoneyTalkOperationResult {
+        return execute { reader.addManualCard(cardName, isOwned) }
+    }
+
+    /**
      * 카테고리별 월 예산을 설정합니다.
      *
      * @param category 예산을 설정할 카테고리. 전체 예산은 전체를 사용합니다.
@@ -524,6 +726,88 @@ class MoneyTalkChatAppFunctions(
         amount: Int? = null
     ): MoneyTalkOperationResult {
         return execute { reader.setBudget(category, amount) }
+    }
+
+    /**
+     * 설정의 월 수입 값을 변경합니다.
+     *
+     * @param amount 월 수입 금액.
+     * @return 설정 결과.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun setMonthlyIncome(
+        appFunctionContext: AppFunctionContext,
+        amount: Int? = null
+    ): MoneyTalkOperationResult {
+        return execute { reader.setMonthlyIncome(amount) }
+    }
+
+    /**
+     * 설정의 월 시작일을 변경합니다.
+     *
+     * @param day 월 시작일. 1부터 31 사이.
+     * @return 설정 결과.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun setMonthStartDay(
+        appFunctionContext: AppFunctionContext,
+        day: Int? = null
+    ): MoneyTalkOperationResult {
+        return execute { reader.setMonthStartDay(day) }
+    }
+
+    /**
+     * 거래처 규칙을 추가하거나 갱신하고 기존 거래에 즉시 적용합니다.
+     *
+     * @param keyword 거래처 매칭 키워드.
+     * @param category 적용할 지출 카테고리.
+     * @param isFixed 고정지출 규칙 값.
+     * @param isExcludedFromStats 통계 제외 규칙 값.
+     * @return 저장 결과.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun upsertStoreRule(
+        appFunctionContext: AppFunctionContext,
+        keyword: String? = null,
+        category: String? = null,
+        isFixed: Boolean? = null,
+        isExcludedFromStats: Boolean? = null
+    ): MoneyTalkOperationResult {
+        return execute { reader.upsertStoreRule(keyword, category, isFixed, isExcludedFromStats) }
+    }
+
+    /**
+     * 거래처 규칙을 삭제하고 기존 거래를 재분류합니다.
+     *
+     * @param ruleId 삭제할 규칙 ID.
+     * @param keyword 삭제할 규칙 키워드. ruleId가 없을 때 사용합니다.
+     * @return 삭제 결과.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun deleteStoreRule(
+        appFunctionContext: AppFunctionContext,
+        ruleId: Long? = null,
+        keyword: String? = null
+    ): MoneyTalkOperationResult {
+        return execute { reader.deleteStoreRule(ruleId, keyword) }
+    }
+
+    /**
+     * 커스텀 카테고리를 추가합니다.
+     *
+     * @param displayName 카테고리 표시명.
+     * @param emoji 카테고리 이모지. 생략하면 기본 이모지를 사용합니다.
+     * @param categoryType EXPENSE, INCOME, TRANSFER 중 하나. 생략하면 EXPENSE입니다.
+     * @return 추가 결과.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun addCustomCategory(
+        appFunctionContext: AppFunctionContext,
+        displayName: String? = null,
+        emoji: String? = null,
+        categoryType: String? = null
+    ): MoneyTalkOperationResult {
+        return execute { reader.addCustomCategory(displayName, emoji, categoryType) }
     }
 
     private suspend fun <T> execute(block: suspend () -> T): T {

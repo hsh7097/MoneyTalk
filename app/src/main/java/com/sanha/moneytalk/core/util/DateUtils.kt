@@ -193,6 +193,40 @@ object DateUtils {
     }
 
     /**
+     * 연도가 없는 SMS 날짜(MM/DD, M월 D일)를 수신 시각에 가장 가까운 연도로 보정한다.
+     *
+     * 카드/은행 SMS는 보통 연도를 포함하지 않아 1월에 받은 12월 거래가
+     * 다음 12월로 저장될 수 있다. 기준 연도 전후 후보 중 수신 시각과
+     * 가장 가까운 날짜를 선택해 연말/연초 경계를 안정적으로 처리한다.
+     */
+    fun resolveYearForMonthDay(referenceTimestamp: Long, month: Int, day: Int): Int {
+        val reference = Calendar.getInstance().apply { timeInMillis = referenceTimestamp }
+        val referenceYear = reference.get(Calendar.YEAR)
+        if (month !in 1..12 || day !in 1..31) return referenceYear
+
+        return listOf(referenceYear - 1, referenceYear, referenceYear + 1)
+            .minByOrNull { candidateYear ->
+                val candidate = Calendar.getInstance().apply {
+                    clear()
+                    set(
+                        candidateYear,
+                        month - 1,
+                        1,
+                        reference.get(Calendar.HOUR_OF_DAY),
+                        reference.get(Calendar.MINUTE),
+                        0
+                    )
+                    set(Calendar.MILLISECOND, 0)
+                    set(
+                        Calendar.DAY_OF_MONTH,
+                        day.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH))
+                    )
+                }
+                kotlin.math.abs(candidate.timeInMillis - referenceTimestamp)
+            } ?: referenceYear
+    }
+
+    /**
      * 년월 표시 문자열 "yyyy년 M월"
      */
     fun formatYearMonth(year: Int, month: Int): String {
@@ -343,50 +377,4 @@ object DateUtils {
         }
     }
 
-    /**
-     * LLM/Gemini가 추출한 dateTime 문자열의 연도를 SMS 수신 시간 기준으로 검증/교정
-     *
-     * LLM이 SMS 본문에서 날짜를 추출할 때 연도를 잘못 추정할 수 있습니다.
-     * (예: 2026년 1월 SMS에서 "01/15"를 보고 "2025-01-15"로 반환)
-     *
-     * SMS 수신 시간과 추출된 날짜의 차이가 6개월 이상이면
-     * SMS 수신 시간의 연도로 교정합니다.
-     *
-     * @param extractedDateTime LLM이 추출한 "yyyy-MM-dd HH:mm" 형식 문자열
-     * @param smsTimestamp SMS 수신 시간 (밀리초)
-     * @return 교정된 dateTime 문자열
-     */
-    fun validateExtractedDateTime(extractedDateTime: String, smsTimestamp: Long): String {
-        if (extractedDateTime.isBlank()) return extractedDateTime
-
-        return try {
-            val parsedTime =
-                dateTimeFormat.parse(extractedDateTime)?.time ?: return extractedDateTime
-            val diff = kotlin.math.abs(parsedTime - smsTimestamp)
-
-            // 6개월(~183일) 이상 차이나면 연도가 잘못된 것으로 판단
-            val sixMonthsMs = 183L * 24 * 60 * 60 * 1000
-            if (diff > sixMonthsMs) {
-                // SMS 수신 시간의 연도로 교정
-                val smsCal = Calendar.getInstance().apply { timeInMillis = smsTimestamp }
-                val smsYear = smsCal.get(Calendar.YEAR)
-
-                val extractedCal = Calendar.getInstance().apply { timeInMillis = parsedTime }
-                extractedCal.set(Calendar.YEAR, smsYear)
-
-                val corrected = dateTimeFormat.format(extractedCal.time)
-                MoneyTalkLogger.w(
-                    "LLM 날짜 연도 교정: '$extractedDateTime' → '$corrected' (SMS수신: ${
-                        dateTimeFormat.format(Date(smsTimestamp))
-                    })"
-                )
-                corrected
-            } else {
-                extractedDateTime
-            }
-        } catch (e: Exception) {
-            MoneyTalkLogger.w("LLM 날짜 검증 실패: '$extractedDateTime' → 원본 유지")
-            extractedDateTime
-        }
-    }
 }

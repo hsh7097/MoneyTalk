@@ -288,6 +288,22 @@ private fun StoreRuleListItem(
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
+                rule.isExcludedFromStats?.let { isExcluded ->
+                    Text(
+                        text = stringResource(
+                            R.string.store_rule_settings_stats_excluded_label,
+                            stringResource(
+                                if (isExcluded) {
+                                    R.string.store_rule_settings_stats_excluded_on
+                                } else {
+                                    R.string.store_rule_settings_stats_excluded_off
+                                }
+                            )
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                }
             }
         }
         IconButton(onClick = onDelete) {

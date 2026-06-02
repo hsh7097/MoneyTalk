@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.Category
@@ -215,8 +217,11 @@ fun PeriodSummaryCard(
                     text = stringResource(R.string.home_expense),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.width(28.dp),
-                    textAlign = TextAlign.End
+                    modifier = Modifier.widthIn(min = 44.dp),
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    softWrap = false
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
@@ -224,7 +229,10 @@ fun PeriodSummaryCard(
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.toDpTextUnit),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.End
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    softWrap = false
                 )
             }
             // 수입 (0원이어도 항상 표시)
@@ -237,8 +245,11 @@ fun PeriodSummaryCard(
                     text = stringResource(R.string.home_income),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.width(28.dp),
-                    textAlign = TextAlign.End
+                    modifier = Modifier.widthIn(min = 44.dp),
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    softWrap = false
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
@@ -249,7 +260,10 @@ fun PeriodSummaryCard(
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.toDpTextUnit),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.moneyTalkColors.income,
-                    textAlign = TextAlign.End
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    softWrap = false
                 )
             }
         }
@@ -271,6 +285,8 @@ fun FilterTabRow(
     selectedExpenseCategories: Set<String> = emptySet(),
     selectedIncomeCategories: Set<String> = emptySet(),
     selectedTransferCategories: Set<String> = emptySet(),
+    selectedCardNames: Set<String> = emptySet(),
+    availableCardNames: List<String> = emptyList(),
     expenseCategories: List<CategoryInfo> = Category.expenseEntries,
     incomeCategories: List<CategoryInfo> = Category.incomeEntries,
     transferCategories: List<CategoryInfo> = Category.transferEntries,
@@ -283,8 +299,9 @@ fun FilterTabRow(
         Set<String>,
         Set<String>,
         Set<String>,
+        Set<String>,
         FixedExpenseFilter
-    ) -> Unit = { _, _, _, _, _, _, _, _ -> },
+    ) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onResetFilter: () -> Unit = {},
     onSearchClick: () -> Unit = {},
     onAddClick: () -> Unit = {},
@@ -296,6 +313,7 @@ fun FilterTabRow(
     val hasActiveFilter = selectedExpenseCategories.isNotEmpty()
             || selectedIncomeCategories.isNotEmpty()
             || selectedTransferCategories.isNotEmpty()
+            || selectedCardNames.isNotEmpty()
             || sortOrder != SortOrder.DATE_DESC
             || !showExpenses
             || !showIncomes
@@ -356,6 +374,7 @@ fun FilterTabRow(
                     selectedExpenseCategories.isNotEmpty() ||
                             selectedIncomeCategories.isNotEmpty() ||
                             selectedTransferCategories.isNotEmpty(),
+                    selectedCardNames.isNotEmpty(),
                     sortOrder != SortOrder.DATE_DESC,
                     !showExpenses || !showIncomes || !showTransfers,
                     fixedExpenseFilter != FixedExpenseFilter.ALL
@@ -368,6 +387,8 @@ fun FilterTabRow(
                             selectedIncomeCategories.isNotEmpty() ||
                             selectedTransferCategories.isNotEmpty() ->
                         stringResource(R.string.history_filter_active_category)
+                    selectedCardNames.isNotEmpty() ->
+                        stringResource(R.string.history_filter_active_card)
                     !showExpenses || !showIncomes || !showTransfers ->
                         stringResource(R.string.history_filter_active_type)
                     fixedExpenseFilter == FixedExpenseFilter.FIXED_ONLY ->
@@ -425,6 +446,8 @@ fun FilterTabRow(
             currentExpenseCategories = selectedExpenseCategories,
             currentIncomeCategories = selectedIncomeCategories,
             currentTransferCategories = selectedTransferCategories,
+            currentCardNames = selectedCardNames,
+            allCardNames = availableCardNames,
             allExpenseCategories = expenseCategories,
             allIncomeCategories = incomeCategories,
             allTransferCategories = transferCategories,
@@ -432,7 +455,7 @@ fun FilterTabRow(
             hasSeenFilterOnboarding = hasSeenFilterOnboarding,
             onCoachMarkComplete = onFilterCoachMarkComplete,
             onDismiss = { showBottomSheet = false },
-            onApply = { newSort, newShowExp, newShowInc, newShowTransfer, expCats, incCats, transferCats, newFixedFilter ->
+            onApply = { newSort, newShowExp, newShowInc, newShowTransfer, expCats, incCats, transferCats, cardNames, newFixedFilter ->
                 onApplyFilter(
                     newSort,
                     newShowExp,
@@ -441,6 +464,7 @@ fun FilterTabRow(
                     expCats,
                     incCats,
                     transferCats,
+                    cardNames,
                     newFixedFilter
                 )
                 showBottomSheet = false

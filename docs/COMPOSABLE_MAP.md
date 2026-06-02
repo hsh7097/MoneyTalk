@@ -2,21 +2,21 @@
 
 > 각 화면의 Composable 계층 구조를 트리로 정리한 문서
 > 함수 참조 클릭 시 IDE에서 해당 파일로 이동 가능
-> **최종 갱신**: 2026-04-24
+> **최종 갱신**: 2026-04-30
 
 ---
 
 ## IntroActivity (LAUNCHER)
 
 ```
-IntroActivity                        ← 앱 초기 진입 (스플래시 + 온보딩 + 권한 + RTDB + 강제 업데이트)
+IntroActivity                        ← 앱 초기 진입 (스플래시 + 온보딩 + 권한 + 설정 캐시 + 강제 업데이트)
 ├── SplashScreen                     ← 로고 페이드인 애니메이션
 ├── OnboardingScreen                 ← 3페이지 스와이프 인트로 (앱 핵심 가치 전달)
 │   ├── OnboardingPageContent        ← 페이지 콘텐츠 (이모지 + 제목 + 설명 + feature bullets)
 │   └── PageIndicatorDot             ← 페이지 인디케이터 점
 ├── PermissionScreen                 ← SMS 권한 설명 + 동의/비동의
 ├── ForceUpdateDialog                ← 강제 업데이트 다이얼로그 (닫기 불가)
-└── [NAVIGATING 배경]               ← RTDB 대기 중 그라데이션 배경
+└── [NAVIGATING 배경]               ← MainActivity 전환 직전 그라데이션 배경
 ```
 
 | 함수 | 설명 | 참조 |
@@ -37,7 +37,7 @@ MoneyTalkApp                         ← 앱 최상위 Scaffold + BottomNav + �
 ├── [AlertDialog: SMS 동기화]        ← SMS 동기화 진행 (Stepper UI + dismiss 가능)
 │   └── SyncStepIndicator            ← 5단계 파이프라인 진행 인디케이터
 ├── [AlertDialog: AI 성과 요약]      ← 초기 동기화 완료 후 엔진 부트스트랩 결과 표시
-├── [AlertDialog: 전체 동기화 해제]  ← 광고 시청 후 월별 동기화 해제
+├── [AlertDialog: 월별 데이터 가져오기] ← 광고 시청 후 월별 SMS 동기화
 ├── NavGraph                         ← 화면 라우팅 (홈/내역/채팅/설정)
 ├── BackPressHandler                 ← 채팅방 뒤로가기 처리
 └── MoneyTalkTheme                   ← 라이트/다크 테마 적용
@@ -65,14 +65,14 @@ HomeScreen                           ← 홈 탭 메인 화면
 ├── CategoryExpenseSection           ← 카테고리 TOP 4 지출 리스트 (예산 진척률 포함)
 │   └── CategoryIcon                 ← 카테고리 이모지 아이콘 (공통)
 ├── AiInsightCard                    ← "AI가 본 이번 달" 소비 분석 요약
-├── TransactionCardCompose           ← 오늘 거래 카드 (공통, 설정 카드와 동일한 surface/outlineVariant 톤)
+├── TransactionCardCompose           ← 오늘 거래 카드 (공통, 설정 카드 톤 + 통계 제외 배지/톤 다운)
 │   └── CategoryIcon                 ← 카테고리 이모지 아이콘 (공통)
 ├── ImportDataCtaSection             ← 데이터 가져오기 CTA (현재월, 권한 없거나 데이터 없음)
 ├── EmptyExpenseSection              ← 지출 없을 때 빈 상태
 ├── [지출/수입 선택 시]              → TransactionEditActivity 이동
 ├── [AlertDialog]                    ← 분류 확인/진행률 다이얼로그
 ├── CoachMarkOverlay                 ← 화면별 온보딩 스포트라이트 오버레이 (첫 진입 시)
-└── BannerAdCompose                  ← 하단 고정 배너 광고 (RTDB reward_ad_enabled 연동, 공통)
+└── BannerAdCompose                  ← 하단 고정 배너 광고 (reward_ad_enabled + 앱 진입 5회 이상, 공통)
 ```
 
 | 함수 | 설명 | 참조 |
@@ -112,18 +112,19 @@ HistoryScreen                        ← 내역 탭 메인 화면
 │       ├── TransactionGroupHeaderCompose ← 날짜/가게/금액 그룹 헤더 (공통)
 │       ├── TransactionCardCompose   ← 지출/수입 거래 카드 (공통)
 │       │   └── CategoryIcon         ← 카테고리 이모지 아이콘 (공통)
-│       └── FullSyncCtaSection       ← 전체 동기화 해제 CTA (공통, 빈 상태)
+│       └── FullSyncCtaSection       ← 월별 과거 데이터 동기화 CTA (공통, 빈 상태)
 │
 ├── [달력 모드]
 │   └── BillingCycleCalendarView     ← 결제 기간 기준 달력 (날짜 클릭 → TransactionDetailListActivity)
 │       └── CalendarDayCell          ← 날짜 셀 (날짜 + 수입/지출 2줄)
 │
-├── FilterBottomSheet                ← 고정 거래/정렬 우선 필터 + 카테고리/거래 유형 + 코치마크
+├── FilterBottomSheet                ← 고정 거래/정렬 우선 필터 + 카드사/카테고리/거래 유형 + 코치마크
 │   ├── FilterGuideCard              ← 거래 유형 우선 선택 안내 카드
 │   ├── FilterTransactionTypeSelector ← 전체/지출/수입/이체 선택 칩
 │   ├── FilterTypeTile               ← 거래 유형 선택 타일
 │   ├── FilterNoticeCard             ← AND 조건 안내 카드
 │   ├── FilterOptionPillRow          ← 고정 거래/정렬 옵션 pill 그룹
+│   ├── CardFilterListBottomSheet    ← 카드사 전체 목록 멀티 선택
 │   ├── FilterCategoryChipGroup      ← 단일 거래 유형 카테고리 빠른 선택 칩
 │   ├── CategoryChoiceChip           ← 카테고리 빠른 선택 칩
 │   ├── FilterCategorySummaryRow     ← 다중 거래 유형 카테고리 요약 행
@@ -135,7 +136,7 @@ HistoryScreen                        ← 내역 탭 메인 화면
 ├── IncomeDetailDialog               ← 수입 상세 + 원본 SMS 표시
 ├── [+ 버튼]                          → TransactionEditActivity (새 거래 모드) 이동
 ├── CoachMarkOverlay                 ← 화면별 온보딩 스포트라이트 오버레이 (첫 진입 시)
-└── BannerAdCompose                  ← 하단 고정 배너 광고 (RTDB reward_ad_enabled 연동, 공통)
+└── BannerAdCompose                  ← 하단 고정 배너 광고 (reward_ad_enabled + 앱 진입 5회 이상, 공통)
 ```
 
 | 함수 | 설명 | 참조 |
@@ -149,12 +150,13 @@ HistoryScreen                        ← 내역 탭 메인 화면
 | FilterStatusChip | 활성 필터 표시/초기화 칩 | [HistoryHeaderKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryHeader.kt) |
 | BillingCycleCalendarView | 결제 기간 기준 달력 뷰 | [HistoryCalendarKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryCalendar.kt) |
 | CalendarDayCell | 달력 날짜 셀 (날짜 + 수입/지출 2줄) | [HistoryCalendarKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryCalendar.kt) |
-| FilterBottomSheet | 고정 거래/정렬 우선 필터 + 카테고리/거래 유형 BottomSheet | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
+| FilterBottomSheet | 고정 거래/정렬 우선 필터 + 카드사/카테고리/거래 유형 BottomSheet | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | FilterGuideCard | 거래 유형 우선 선택 안내 카드 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | FilterTransactionTypeSelector | 전체/지출/수입/이체 선택 칩 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | FilterTypeTile | 거래 유형 선택 타일 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | FilterNoticeCard | AND 조건 안내 카드 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | FilterOptionPillRow | 고정 거래/정렬 옵션 pill 그룹 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
+| CardFilterListBottomSheet | 카드사 전체 목록 멀티 선택 BottomSheet | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | FilterCategoryChipGroup | 단일 거래 유형 카테고리 빠른 선택 칩 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | CategoryChoiceChip | 카테고리 빠른 선택 칩 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | FilterCategorySummaryRow | 다중 거래 유형 카테고리 요약 행 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
@@ -274,7 +276,7 @@ CategoryDetailScreen                 ← 카테고리 상세 (Activity, 홈에�
 │       ├── TransactionGroupHeaderCompose ← 날짜 그룹 헤더 (공통)
 │       └── TransactionCardCompose   ← 거래 카드 (공통)
 ├── [지출 선택 시]                    → TransactionEditActivity 이동
-└── BannerAdCompose                  ← 하단 고정 배너 광고 (RTDB reward_ad_enabled 연동, 공통)
+└── BannerAdCompose                  ← 하단 고정 배너 광고 (reward_ad_enabled + 앱 진입 5회 이상, 공통)
 ```
 
 | 함수 | 설명 | 참조 |
@@ -296,7 +298,9 @@ TransactionEditActivity               ← 거래 편집/추가 (별도 Activity)
     │   ├── TransactionEditTopBar     ← X 닫기 + 거래 상세/추가 제목 + 저장
     │   ├── TransactionHeroCard       ← 거래처/금액 인라인 편집 + 지출/수입/이체 전환
     │   ├── TransactionBasicInfoCard  ← 카테고리/날짜·시간/메모 + 카테고리 일괄 적용
-    │   ├── TransactionAutomationCard ← 고정 거래 + 고정 일괄 적용 + 매칭 키워드
+    │   ├── TransactionAutomationCard ← 고정 거래/통계 제외 행 + 조건부 헤더 우측 동일 거래처 적용
+    │   │   ├── AutomationOptionRow   ← 제목/설명 + 우측 스위치
+    │   ├── TransactionSameStoreRuleCard ← 동일 거래처 적용 시 자동 정리 아래 매칭 키워드 카드
     │   ├── TransactionOriginalSmsCard← 원본 문자 전체 표시 카드
     │   └── TransactionEditBottomActions ← 하단 삭제 + 저장 버튼
     ├── CategorySelectDialog          ← 카테고리 선택 + 카테고리 추가 진입 (공통)
@@ -313,7 +317,9 @@ TransactionEditActivity               ← 거래 편집/추가 (별도 Activity)
 | TransactionEditDetailContent | 라이트/다크 카드형 상세 UI 본문 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
 | TransactionHeroCard | 거래처/금액 인라인 편집 + 지출/수입/이체 전환 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
 | TransactionBasicInfoCard | 카테고리, 날짜·시간, 메모, 카테고리 일괄 적용 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
-| TransactionAutomationCard | 고정 거래, 고정 일괄 적용, 매칭 키워드 입력 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
+| TransactionAutomationCard | 고정 거래/통계 제외 행, 체크 항목이 있을 때 헤더 우측 동일 거래처 적용 표시 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
+| AutomationOptionRow | 자동 정리 항목의 제목/설명과 우측 스위치 표시 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
+| TransactionSameStoreRuleCard | 카테고리/자동 정리 동일 거래처 적용 시 자동 정리 아래에 표시되는 매칭 키워드 카드 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
 | TransactionOriginalSmsCard | 원본 문자 전체 표시 카드 | [TransactionEditDetailContentKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt) |
 | CategoryAddDialog | 카테고리 추가 공통 다이얼로그 | [CategoryAddDialogKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/CategoryAddDialog.kt) |
 | TimePickerDialog | TimePicker AlertDialog 래퍼 | [TransactionEditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditScreen.kt) |
@@ -340,16 +346,18 @@ TransactionDetailListActivity         ← 날짜별 거래 목록 (달력 날짜
 ```
 SmsSettingsScreen                    ← 문자 설정 (Activity, 설정에서 "문자 설정" 탭 시 진입)
 ├── TopAppBar                        ← 뒤로가기 + 동적 타이틀
-└── NavHost                          ← 내부 네비게이션 (MAIN/BLOCKED_PHRASES/BLOCKED_SENDERS)
+└── NavHost                          ← 내부 네비게이션 (MAIN/BLOCKED_PHRASES/BLOCKED_SENDERS/EXCLUDED_CARDS)
     ├── SmsSettingsMainContent        ← 메인 (문자분석 업데이트 + 수신차단 메뉴)
     │   ├── SettingsSectionCompose("문자 분석")
     │   │   └── SettingsItemCompose   ← 문자분석 업데이트 (SMS 재동기화 트리거)
     │   └── SettingsSectionCompose("수신 차단")
     │       ├── SettingsItemCompose   ← 수신거부 문구 관리 → BLOCKED_PHRASES
-    │       └── SettingsItemCompose   ← 수신거부 전화번호 관리 → BLOCKED_SENDERS
+    │       ├── SettingsItemCompose   ← 수신거부 전화번호 관리 → BLOCKED_SENDERS
+    │       └── SettingsItemCompose   ← 제외 카드 관리 → EXCLUDED_CARDS
     ├── BlockedPhraseManageScreen     ← 제외 키워드 CRUD (전체 화면)
     │   └── BlockedPhraseItem         ← 키워드 아이템 (소스 표시 + 삭제)
-    └── BlockedSenderManageScreen     ← 차단 번호 CRUD (전체 화면)
+    ├── BlockedSenderManageScreen     ← 차단 번호 CRUD (전체 화면)
+    └── ExcludedCardManageScreen      ← 제외 카드 추가/표시 전환 (전체 화면)
 ```
 
 | 함수 | 설명 | 참조 |
@@ -359,6 +367,7 @@ SmsSettingsScreen                    ← 문자 설정 (Activity, 설정에서 "
 | BlockedPhraseManageScreen | 제외 키워드 관리 (추가/삭제) | [SmsSettingsScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/smssettings/ui/SmsSettingsScreen.kt) |
 | BlockedPhraseItem | 키워드 아이템 (소스 라벨 + 삭제) | [SmsSettingsScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/smssettings/ui/SmsSettingsScreen.kt) |
 | BlockedSenderManageScreen | 차단 번호 관리 (추가/삭제) | [SmsSettingsScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/smssettings/ui/SmsSettingsScreen.kt) |
+| ExcludedCardManageScreen | 제외 카드 관리 (추가/표시 전환) | [SmsSettingsScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/smssettings/ui/SmsSettingsScreen.kt) |
 
 ---
 
@@ -393,7 +402,7 @@ StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Acti
 └── StoreRuleSettingsScreen             ← 거래처 규칙 메인 화면
     ├── LazyColumn                      ← 규칙 목록
     │   ├── 설명 텍스트
-    │   ├── StoreRuleListItem × N       ← 키워드 + 카테고리/고정지출 표시 + 삭제
+    │   ├── StoreRuleListItem × N       ← 키워드 + 카테고리/고정지출/통계 제외 표시 + 삭제
     │   └── "+ 규칙 추가" 버튼
     ├── CoachMarkOverlay               ← 거래처 규칙 온보딩 오버레이 (첫 진입 시)
     ├── [AlertDialog: 추가/편집]         ← 키워드 입력 + 카테고리 선택 + 고정지출 토글
@@ -411,11 +420,11 @@ StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Acti
 
 | 함수 | 설명 | 사용 화면 | 참조 |
 |------|------|----------|------|
-| TransactionCardCompose | 지출/수입 통합 거래 카드 | 홈, 내역(목록/달력) | [TransactionCardComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/card/TransactionCardCompose.kt) |
+| TransactionCardCompose | 지출/수입 통합 거래 카드 (통계 제외 배지/톤 다운 포함) | 홈, 내역(목록/달력) | [TransactionCardComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/card/TransactionCardCompose.kt) |
 | TransactionGroupHeaderCompose | 날짜/가게/금액 그룹 헤더 | 내역(목록) | [TransactionGroupHeaderComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/header/TransactionGroupHeaderCompose.kt) |
 | SegmentedTabRowCompose | 세그먼트 스타일 탭 Row | 내역(FilterTabRow) | [SegmentedTabRowComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/tab/SegmentedTabRowCompose.kt) |
 | ImportDataCtaSection | 데이터 가져오기 CTA | 홈, 내역 | [ImportDataCtaSectionKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/cta/ImportDataCtaSection.kt) |
-| FullSyncCtaSection | 전체 동기화 해제 CTA | 홈, 내역 | [FullSyncCtaSectionKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/cta/FullSyncCtaSection.kt) |
+| FullSyncCtaSection | 월별 과거 데이터 동기화 CTA | 홈, 내역 | [FullSyncCtaSectionKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/cta/FullSyncCtaSection.kt) |
 | CategoryIcon | 카테고리 이모지 아이콘 (원형 배경) | 홈, 거래 카드 | [CategoryIconKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/CategoryIcon.kt) |
 | CumulativeTrendSection | 누적 추이 섹션 (금액+비교문구+Vico차트+범례) | 홈(SpendingTrendSection) | [CumulativeTrendSectionKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/chart/CumulativeTrendSection.kt) |
 | VicoCumulativeChart | Vico 기반 누적 곡선 차트 (금융앱 스타일) | CumulativeTrendSection 내부 | [VicoCumulativeChartKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/chart/VicoCumulativeChart.kt) |
@@ -427,7 +436,7 @@ StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Acti
 | CategoryPickerDialog | 카테고리 선택 (하위 호환) | legacy | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
 | SettingsSectionCompose | 설정 섹션 (타이틀 + Card) | 설정 | [SettingsSectionComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsSectionCompose.kt) |
 | SettingsItemCompose | 설정 아이템 (아이콘 + 텍스트) | 설정 | [SettingsItemComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsItemCompose.kt) |
-| BannerAdCompose | 하단 고정 배너 광고 (AdMob, RTDB 연동) | 홈, 내역, 카테고리 상세 | [BannerAdComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/BannerAdCompose.kt) |
+| BannerAdCompose | 하단 고정 배너 광고 (AdMob, reward_ad_enabled + 앱 진입 5회 이상) | 홈, 내역, 카테고리 상세 | [BannerAdComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/BannerAdCompose.kt) |
 | MonthPagerUtils | HorizontalPager 페이지↔월 변환 유틸 | 홈, 내역 | [MonthPagerUtilsKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/MonthPagerUtils.kt) |
 | EmojiPickerCompose | 이모지 선택 5열 그리드 (80개 프리셋) | 카테고리 설정 | [EmojiPickerComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/EmojiPickerCompose.kt) |
 | CoachMarkOverlay | 스포트라이트 + 툴팁 온보딩 오버레이 | 홈, 내역, 필터, 거래편집, 거래처규칙, 채팅, 설정 | [CoachMarkOverlayKt](../app/src/main/java/com/sanha/moneytalk/core/ui/coachmark/CoachMarkOverlay.kt) |
@@ -456,7 +465,7 @@ StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Acti
 
 | Interface | 설명 | 참조 |
 |-----------|------|------|
-| TransactionCardInfo | 거래 카드 데이터 계약 | [TransactionCardInfo](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/card/TransactionCardInfo.kt) |
+| TransactionCardInfo | 거래 카드 데이터 계약 (고정/통계 제외 표시 포함) | [TransactionCardInfo](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/card/TransactionCardInfo.kt) |
 | TransactionGroupHeaderInfo | 그룹 헤더 데이터 계약 | [TransactionGroupHeaderInfo](../app/src/main/java/com/sanha/moneytalk/core/ui/component/transaction/header/TransactionGroupHeaderInfo.kt) |
 | SegmentedTabInfo | 탭 데이터 계약 | [SegmentedTabInfo](../app/src/main/java/com/sanha/moneytalk/core/ui/component/tab/SegmentedTabInfo.kt) |
 | SettingsItemInfo | 설정 아이템 데이터 계약 | [SettingsItemInfo](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsItemInfo.kt) |

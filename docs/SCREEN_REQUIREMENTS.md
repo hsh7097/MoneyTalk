@@ -2,7 +2,7 @@
 
 > **목적**: AI 에이전트가 작업 시 요구사항을 놓치지 않도록, 화면별 현재 구현 상태와 스펙을 코드 기준으로 정리한 문서
 >
-> **최종 갱신**: 2026-02-24 | **기준 브랜치**: develop (62a0c45)
+> **최종 갱신**: 2026-04-30 | **기준 브랜치**: develop (62a0c45)
 
 ---
 
@@ -27,9 +27,9 @@
 
 | 항목 | 스펙 |
 |------|------|
-| 애니메이션 | 지갑 아이콘 + 앱명 + 태그라인, scale/alpha 500ms + 1.5s 딜레이 |
+| 애니메이션 | 지갑 아이콘 + 앱명 + 태그라인, scale/alpha 병렬 500ms + 0.7s 딜레이 |
 | 배경 | Primary 그라데이션 (PrimaryLight → Primary → PrimaryDark) |
-| 전환 | 총 2초 후 자동 전환 |
+| 전환 | 약 1.2초 후 자동 전환 |
 | 분기 | onboardingCompleted → 바로 MainActivity / 아니면 → Onboarding |
 
 ### 1.2 온보딩 인트로
@@ -55,14 +55,14 @@
 | UI | 딤 배경 + 카드형 모달 |
 | 요청 권한 | READ_SMS, RECEIVE_SMS (Android 13+: POST_NOTIFICATIONS 추가) |
 | 버튼 | "동의함" / "동의안함" (둘 다 진행 가능) |
-| 완료 후 | onboardingCompleted=true → RTDB 설정 로드 (3초 타임아웃) → MainActivity |
+| 완료 후 | onboardingCompleted=true → RTDB 응답 대기 없이 현재 보유 설정(캐시/기본값) 기준 확인 → MainActivity |
 
 ### 1.4 강제 업데이트
 
 | 항목 | 스펙 |
 |------|------|
-| 조건 | RTDB의 minVersionCode > 현재 versionCode |
-| UI | AlertDialog (취소 불가, Predictive Back 방어) + 업데이트 메시지 (RTDB에서 가져옴) |
+| 조건 | 현재 보유 설정의 minVersionName > 현재 VERSION_NAME |
+| UI | AlertDialog (취소 불가, Predictive Back 방어) + 업데이트 메시지 (RTDB 또는 마지막 저장 설정에서 가져옴) |
 | 동작 | Play Store로 이동 |
 
 ---
@@ -98,8 +98,8 @@
 | 조건 | CTA 종류 | 동작 |
 |------|----------|------|
 | 현재월 + 권한없음/데이터없음 | ImportDataCtaSection | SMS 권한 요청 + 증분 동기화 |
-| 과거월 + 미동기화 | FullSyncCtaSection | 무료 잔여 시 바로 동기화 / 소진 후 광고 시청 → 동기화 |
-| 과거월 + 부분 커버리지 | FullSyncCtaSection (variant) | 무료 잔여 시 바로 동기화 / 소진 후 광고 시청 → 동기화 |
+| 과거월 + 미동기화 | FullSyncCtaSection | 데이터 존재 여부와 관계없이 CTA 노출, 무료 잔여 시 바로 동기화 / 소진 후 광고 시청 → 동기화 |
+| 과거월 + 부분 커버리지 | FullSyncCtaSection (variant) | 부분 데이터 안내 문구로 노출, 무료 잔여 시 바로 동기화 / 소진 후 광고 시청 → 동기화 |
 
 ### 2.4 누적 추이 차트 (SpendingTrendSection)
 
@@ -159,7 +159,7 @@
 |-----------|------|
 | ExpenseDetailDialog | 지출 상세 (카테고리 변경, 메모, 삭제) |
 | IncomeDetailDialog | 수입 상세 (메모, 삭제) |
-| SMS Sync Progress | 증분/전체 동기화 진행 (취소 불가) |
+| SMS Sync Progress | 증분/월별 동기화 진행 (취소 불가) |
 | Category Classification | 미분류 항목 분류 진행 |
 | Full Sync Ad Dialog | 광고 시청 → 과거 월 동기화 잠금 해제 |
 
@@ -167,10 +167,10 @@
 
 | 항목 | 스펙 |
 |------|------|
-| 증분 동기화 | lastSyncTime - 5분 ~ 현재 (경계 SMS 안전 마진) |
+| 증분 동기화 | 대상 범위는 lastSyncTime - 5분 ~ 현재, RCS는 마지막 provider 성공 scan 시각부터 별도 재읽기해 provider 누락 복구 |
 | 초기 동기화 | 전월 1일 ~ 현재 (monthStartDay > 1이면 2개월 전부터) |
-| 전체 동기화 | 처음 N회 무료 (RTDB `free_sync_count`, 기본 3) → 이후 광고 시청 필요 |
-| 실시간 수신 | SmsProcessingService (BroadcastReceiver, 항상 무료) |
+| 월별 CTA 동기화 | 과거 월 per-month: 처음 N회 무료 (RTDB `free_sync_count`, 기본 3) → 이후 광고 시청 필요 |
+| 실시간 수신 | SMS는 SmsReceiver + SmsInstantProcessor, MMS/RCS는 ContentObserver로 보완 (BroadcastReceiver/Observer, 항상 무료) |
 | Auto Backup 감지 | lastSyncTime > 0 but DB 비어있음 → 초기로 리셋 |
 | 최대 범위 | 현재일 - 60일 |
 | Silent 모드 | 다이얼로그 없이 백그라운드 (새 데이터 시 스낵바) |
@@ -230,30 +230,36 @@ settingsDataStore.monthStartDayFlow (distinctUntilChanged)
   → loadCurrentAndAdjacentPages()           // 새 기간으로 재로드
 ```
 
-#### SMS 동기화 날짜 범위 (`calculateIncrementalRange`)
+#### SMS 동기화 날짜 범위 (`SmsSyncRangeCalculator.calculateIncrementalRange`)
 
 ```
 증분 동기화:
   시작 = max(lastSyncTime - 5분, now - 60일 - monthStartDay마진)
   종료 = now
+  RCS 읽기 범위 = last_rcs_provider_scan_time - 5분 ~ 현재
+  RCS provider 실패 시 last_rcs_provider_scan_time 미갱신 → 다음 동기화에서 같은 지점부터 재시도
+  저장 기준 = smsId/content dedup으로 기존 거래 중복 저장 방지
 
 초기 동기화 (lastSyncTime = 0):
   monthStartDay = 1 → 전월 1일 00:00
   monthStartDay > 1 → 2개월 전 monthStartDay 00:00
 
-전체 동기화 (광고 잠금 해제):
+월별 동기화 (광고 시청/CTA):
   시작 = getCustomMonthPeriod(year, month).first
   종료 = getCustomMonthPeriod(year, month).second
+  읽기 범위 = 대상 월 + 다음 월 말(현재 시각까지만)
+  저장 범위 = 파싱된 거래일이 대상 월 안인 SMS만 저장
   ※ lastSyncTime 갱신 안 함
 
 Auto Backup 감지:
-  savedSyncTime > 0 AND dbCount == 0 → syncTime을 0으로 리셋 → 초기 동기화
+  savedSyncTime > 0 AND dbCount == 0 → syncTime/RCS scan time을 0으로 리셋 → 초기 동기화
 ```
 
 | 상수 | 값 | 용도 |
 |------|------|------|
 | `DEFAULT_SYNC_PERIOD_MILLIS` | 60일 | 기본 증분 동기화 커버리지 |
 | `OVERLAP_MARGIN_MILLIS` | 5분 | 네트워크 지연 안전 마진 |
+| `PROVIDER_SCAN_OVERLAP_MARGIN_MS` | 5분 | RCS provider scan 경계 누락 방지 |
 | `DB_BATCH_INSERT_SIZE` | 100 | DB 배치 삽입 크기 |
 
 ### 2.13 [구현 상세] 차트 Y축 & 토글 처리
@@ -367,15 +373,15 @@ buildBudgetCumulativePoints(monthlyBudget, daysInMonth):
 
 ### 2.16 [구현 상세] 이벤트 구독 & 반응
 
-| 이벤트 | HomeViewModel 반응 |
-|--------|-------------------|
+| 이벤트 | 반응 |
+|--------|------|
 | `ALL_DATA_DELETED` | classificationState.cancel → clearAllPageCache → loadSettings 재시작 |
 | `CATEGORY_UPDATED` | refreshCurrentPages(forceReload=true) — 캐시 유지, 데이터 덮어쓰기 |
 | `OWNED_CARD_UPDATED` | refreshCurrentPages(forceReload=true) |
 | `TRANSACTION_ADDED` | refreshCurrentPages(forceReload=true) |
-| `SMS_RECEIVED` | calculateIncrementalRange → syncSmsV2(silent=true) |
-| `monthSyncEvent` | calculateMonthRange → syncSmsV2(updateLastSyncTime=false) |
-| `incrementalSyncEvent` | consumeIncrementalSync → syncIncremental |
+| `SMS_RECEIVED` | SmsSyncRangeCalculator.calculateIncrementalRange → MainViewModel.syncSmsV2(silent=true, readPlan=RCS provider watermark catch-up) |
+| `monthSyncEvent` | MainViewModel.calculateMonthReadPlan → syncSmsV2(updateLastSyncTime=false) |
+| `incrementalSyncEvent` | consumeIncrementalSync → MainViewModel.syncIncremental |
 
 ---
 
@@ -498,9 +504,11 @@ HistoryViewModel.loadPageData(year, month):
 ```
 1. DB 쿼리: expenseRepository.getExpensesByDateRange(startTime, endTime) [Flow]
 2. 제외 키워드: expenses.filter { e → 키워드 불포함 }
-3. 카테고리 필터: selectedCategory != null → 해당 카테고리만
-4. 검색어 필터: searchQuery.isNotBlank → storeName/category/memo 매칭
-5. 정렬 적용: DATE_DESC / AMOUNT_DESC / STORE_FREQ
+3. 제외 카드: OwnedCard.isOwned=false 카드의 ExpenseEntity는 저장 유지, 화면/집계 노출 제외
+4. 카드사 필터: selectedCardNames.isNotEmpty → 해당 카드사 지출/이체만
+5. 카테고리 필터: selectedCategory != null → 해당 카테고리만
+6. 검색어 필터: searchQuery.isNotBlank → storeName/category/memo/cardName 매칭
+7. 정렬 적용: DATE_DESC / AMOUNT_DESC / STORE_FREQ
 ```
 
 #### 캐시 전략
@@ -790,11 +798,23 @@ Step 1 프롬프트에 포함:
 | 출처 | "default" (삭제불가) / "user" (설정UI) / "chat" (AI 채팅) |
 | 정규화 | lowercase + trim |
 
+#### 제외 카드
+
+| 항목 | 스펙 |
+|------|------|
+| 저장 모델 | OwnedCardEntity.isOwned=false |
+| 동작 | 거래 데이터는 계속 저장하되 Home/History/CategoryDetail/일별 상세/AI 채팅 화면과 집계에서 제외 |
+| 추가 | 문자 설정에서 카드사명 직접 입력 → CardNameNormalizer 정규화 후 OwnedCard 수동 등록 |
+| 해제 | 스위치 OFF → isOwned=true로 변경, 저장된 기존 거래가 다시 노출 |
+| 이벤트 | 변경 시 OWNED_CARD_UPDATED 발행 |
+
 #### 데이터 내보내기 (ExportDialog)
 
 | 항목 | 스펙 |
 |------|------|
 | 형식 | JSON (전체 필드) / CSV (간소화) |
+| JSON 범위 | 지출/수입, 월 수입/월 시작일, 카테고리 매핑, 커스텀 카테고리, 거래처 규칙, 기본 예산, 내 카드, 사용자/채팅 SMS 제외 키워드 |
+| CSV 범위 | 지출/수입 거래 내역 중심. 카테고리 규칙/거래처 규칙/앱 설정은 포함하지 않음 |
 | 데이터 유형 | 지출 포함/제외, 수입 포함/제외 |
 | 카드 필터 | 멀티 선택 |
 | 카테고리 필터 | 멀티 선택 (최대 10개 표시) |
@@ -806,7 +826,7 @@ Step 1 프롬프트에 포함:
 |------|------|
 | 로그인 | Interactive OAuth / Silent Sign-in |
 | 파일 목록 | 이름 + 날짜 + 복원/삭제 아이콘 |
-| 복원 | 다운로드 → JSON 파싱 → 기존 데이터와 병합 |
+| 복원 | 다운로드 → JSON 파싱 → 기존 거래/사용자 설정과 병합, 같은 키 항목은 백업 값으로 갱신 |
 | 로그아웃 | 드라이브 서비스 초기화 |
 
 #### 로컬 복원
@@ -814,7 +834,7 @@ Step 1 프롬프트에 포함:
 | 항목 | 스펙 |
 |------|------|
 | 방식 | 파일 피커 → URI 선택 → 확인 다이얼로그 → 병합 |
-| 경고 | "기존 데이터와 합쳐집니다" |
+| 경고 | 기존 데이터와 병합되며, 같은 항목은 백업 데이터로 갱신됨 |
 
 #### 중복 삭제
 
@@ -987,7 +1007,9 @@ SpendingTrendInfo (interface)
 | 원본 SMS | 기존 거래만 (읽기전용 카드) |
 | 하단 | 저장 버튼 + 삭제 버튼(기존 거래만) |
 | 일괄 적용 (카테고리) | 기존 거래 편집 시 "동일 거래처에 카테고리 일괄 적용" 체크박스 표시 |
-| 일괄 적용 (고정지출) | 기존 거래 편집 시 "동일 거래처에 고정지출 일괄 적용" 체크박스 표시 |
+| 자동 정리 | 고정 거래/통계 제외는 제목과 설명을 왼쪽에 두고 우측 스위치로 상태 표시, 헤더는 동일 거래처 적용 표시 여부와 무관하게 최소 높이 유지 |
+| 일괄 적용 (자동 정리) | 기존 거래 편집 시 고정 거래/통계 제외 중 하나라도 켜져 있을 때만 자동 정리 제목 오른쪽에 "동일 거래처 적용" 표시 |
+| 매칭 키워드 | 카테고리 또는 자동 정리 동일 거래처 적용 시 자동 정리 아래의 별도 카드에 입력 표시, fade + vertical expand/shrink로 260~320ms 수준의 부드러운 전환 |
 
 ### CRUD
 
@@ -1033,8 +1055,9 @@ SpendingTrendInfo (interface)
 | 좌측 | 카테고리 아이콘 (원형 배경) 또는 수입 이모지 (💰) |
 | 중앙 | 가게명(Bold) + 카테고리 태그 칩 + 시간/카드명(소, 회색) |
 | 우측 | 금액 (지출=빨강, 수입=초록, Bold) |
+| 통계 제외 | 취소선 대신 `통계 제외` 배지 + 카드/금액 중립 톤 다운 |
 | 스타일 | 12dp radius, 1dp 테두리, 가벼운 elevation |
-| Interface | TransactionCardInfo (title, subtitle, amount, isIncome, category, etc.) |
+| Interface | TransactionCardInfo (title, subtitle, amount, isIncome, category, isExcludedFromStats, etc.) |
 
 ### 7.2 TransactionGroupHeaderCompose
 
@@ -1113,7 +1136,7 @@ SpendingTrendInfo (interface)
 |--------|--------|--------|
 | CATEGORY_UPDATED | 카테고리 변경, SMS 제외 키워드 변경 | Home, History |
 | TRANSACTION_ADDED | 지출/수입 추가 | Home, History |
-| OWNED_CARD_UPDATED | 카드 소유 변경 | Home, History |
+| OWNED_CARD_UPDATED | 카드 표시/숨김 변경 | Home, History, CategoryDetail, 일별 상세 |
 | ALL_DATA_DELETED | 전체 삭제 | Home, History, Chat |
 
 ### 8.3 앱 전역 스낵바
@@ -1130,20 +1153,20 @@ SpendingTrendInfo (interface)
 |------|------|
 | 트리거 | `SmsReceiver` (BroadcastReceiver, SMS_RECEIVED_ACTION) |
 | 처리 | `SmsInstantProcessor.processAndSave()` — goAsync() + IO 코루틴 |
-| 파이프라인 | 발신번호필터 → SmsPreFilter → 제외키워드 → 수입/지출분류 → Regex매칭 → StoreRule → DB저장 |
+| 파이프라인 | 발신번호필터 → SmsPreFilter → 제외키워드 → 수입/지출분류 → Regex매칭 → StoreRule(카테고리/고정/통계 제외) → DB저장 |
 | 알림 | `SmsNotificationManager` — 채널 `sms_transaction`, IMPORTANCE_DEFAULT |
 | 알림 형식 (지출) | "{이모지} {가맹점} {금액}원 ({카드}" |
 | 알림 형식 (수입) | "💰 {출처} {금액}원" |
 | Dedup | smsId 형식 `${address}_${date}_${body.hashCode()}` (SmsReaderV2 동일) |
-| 후속 동기화 | 즉시 처리 후 항상 `DataRefreshEvent.SMS_RECEIVED` 발행 → MainViewModel 증분 동기화 |
-| 제한 | Regex 미매칭 SMS는 Skipped → 전체 동기화에서 벡터/LLM으로 처리 |
+| 후속 동기화 | 즉시 저장 성공 시 `TRANSACTION_ADDED`만 발행, 미매칭/실패 시 `SMS_RECEIVED` 발행 → MainViewModel provider catch-up 동기화 |
+| 제한 | Regex 미매칭 SMS는 Skipped → 후속 배치 동기화에서 벡터/LLM으로 처리 |
 
 ### 8.4 SMS 파싱 파이프라인
 
 | 단계 | 설명 |
 |------|------|
 | SmsPreFilter | 100자 이상 + 제외 키워드 필터 |
-| SmsIncomeFilter | 결제/수입/SKIP 3분류 (46개 키워드) |
+| SmsIncomeFilter | 결제/수입/SKIP 3분류 (주요 카드/은행 키워드, 스마일카드 포함), 카드 취소완료 보조 알림은 SKIP |
 | SmsPipeline Step 1 | SmsTemplateEngine (템플릿 + Embedding 배치) |
 | SmsPipeline Step 2 | SmsPatternMatcher (벡터 코사인 유사도 ≥ 0.92) |
 | SmsPipeline Step 3 | SmsGroupClassifier (3레벨 그룹핑 → LLM 배치) |
@@ -1158,11 +1181,11 @@ SpendingTrendInfo (interface)
 | 2 | 로컬 키워드 매칭 | 70%+ | $0 |
 | 3 | Gemini 배치 분류 | 95%+ | $0.001/건 |
 
-### 8.6 Room DB 스키마 (v6, 10 entities)
+### 8.6 Room DB 스키마
 
 | Entity | PK | 주요 필드 |
 |--------|----|----------|
-| ExpenseEntity | auto | amount, cardName, storeName, category, dateTime, memo, smsId(UNIQUE) |
+| ExpenseEntity | auto | amount, cardName, storeName, category, dateTime, memo, smsId(UNIQUE), transactionType, transferDirection, isExcludedFromStats |
 | IncomeEntity | auto | amount, source, type, dateTime, memo, smsId(UNIQUE) |
 | BudgetEntity | yearMonth+category | monthlyLimit |
 | ChatEntity | auto | sessionId(FK), message, isUser, timestamp |
@@ -1177,8 +1200,9 @@ SpendingTrendInfo (interface)
 
 | 항목 | 스펙 |
 |------|------|
-| 전체 동기화 | 과거 월 per-month: 처음 N회 무료 (RTDB `free_sync_count`) → 이후 광고 |
+| 월별 SMS 동기화 | 과거 월 per-month: 처음 N회 무료 (RTDB `free_sync_count`) → 이후 광고 |
 | AI 채팅 | remaining=0 시 광고 → N회 무료 |
+| 배너 광고 | RTDB `reward_ad_enabled=true`이고 앱 진입 횟수 5회 이상일 때만 노출 |
 | 실시간 수신 | 항상 무료 (BroadcastReceiver) |
 | 프리로드 | 자동 |
 | 실패 처리 | 사용자 친화 (보상 적용) |
@@ -1187,10 +1211,10 @@ SpendingTrendInfo (interface)
 
 | 서비스 | 용도 |
 |--------|------|
-| RTDB | 원격 SMS 규칙, API 키 풀링, 모델 버전, 최소 버전 |
+| RTDB | 원격 SMS 규칙, API 키 풀링, 모델 버전, 최소 버전. `/config`는 마지막 정상 값을 기기에 저장하고 다음 실행 시 캐시를 먼저 사용 |
 | Analytics | 화면 PV + 클릭 이벤트 (7개) |
 | Crashlytics | Release 빌드 크래시 모니터링 |
-| 강제 업데이트 | minVersionCode 비교 → AlertDialog |
+| 강제 업데이트 | minVersionName 비교 → AlertDialog |
 
 ---
 
@@ -1198,4 +1222,8 @@ SpendingTrendInfo (interface)
 
 | 날짜 | 변경 내용 |
 |------|----------|
+| 2026-05-27 | 배너 광고 노출 조건을 `reward_ad_enabled=true` + 앱 진입 5회 이상으로 보정 |
+| 2026-05-06 | RCS provider 누락 복구를 최근 24시간 고정 범위에서 `last_rcs_provider_scan_time` 기반 재읽기로 변경 |
+| 2026-05-06 | 앱 진입/수신 후속 silent 동기화의 provider catch-up, RCS/MMS 보완 경로, 스마일카드 인식 규칙 반영 |
+| 2026-04-30 | SMS 동기화 범위 계산/월별 CTA 동기화 설명을 SmsSyncRangeCalculator/MainViewModel 구조 기준으로 갱신 |
 | 2026-02-24 | 최초 작성 (코드 기반 전수 조사) + 구현 상세 추가 + 리뷰 기반 오기재 6건 수정 (토글 기본값, 쿼리/액션 개수, 문자열 3건) |

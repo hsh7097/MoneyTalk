@@ -4,15 +4,18 @@ import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sanha.moneytalk.core.database.OwnedCardRepository
 import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.database.entity.isIncludedInExpenseStats
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import com.sanha.moneytalk.core.sms.DeletedSmsTracker
 import com.sanha.moneytalk.core.util.CumulativeChartDataBuilder
+import com.sanha.moneytalk.core.util.CardVisibilityFilter
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
@@ -124,6 +127,7 @@ class HomeViewModel @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val dataRefreshEvent: DataRefreshEvent,
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
+    private val ownedCardRepository: OwnedCardRepository,
     private val geminiRepository: GeminiRepository,
     private val budgetDao: com.sanha.moneytalk.core.database.dao.BudgetDao
 ) : ViewModel() {
@@ -329,6 +333,20 @@ class HomeViewModel @Inject constructor(
                 val exclusionKeywords = withContext(Dispatchers.IO) {
                     smsExclusionRepository.getAllKeywordStrings()
                 }
+                val excludedCardNames = withContext(Dispatchers.IO) {
+                    ownedCardRepository.getExcludedCardNames()
+                }
+                val filterVisibleExpenses: (List<ExpenseEntity>) -> List<ExpenseEntity> = { expenses ->
+                    val keywordFiltered = if (exclusionKeywords.isEmpty()) {
+                        expenses
+                    } else {
+                        expenses.filter { expense ->
+                            val smsLower = expense.originalSms.lowercase()
+                            exclusionKeywords.none { kw -> smsLower.contains(kw) }
+                        }
+                    }
+                    CardVisibilityFilter.filterVisibleExpenses(keywordFiltered, excludedCardNames)
+                }
 
                 // 수입 로드 (1회성, 제외 키워드 필터 적용)
                 val totalIncome = withContext(Dispatchers.IO) {
@@ -350,14 +368,8 @@ class HomeViewModel @Inject constructor(
                 val todayExpenses = withContext(Dispatchers.IO) {
                     expenseRepository.getExpensesByDateRangeOnce(todayStart, todayEnd)
                 }
-                val filteredTodayExpenses = if (exclusionKeywords.isEmpty()) {
-                    todayExpenses
-                } else {
-                    todayExpenses.filter { expense ->
-                        val smsLower = expense.originalSms.lowercase()
-                        exclusionKeywords.none { kw -> smsLower.contains(kw) }
-                    }
-                }
+                val filteredTodayExpenses = filterVisibleExpenses(todayExpenses)
+                val statsTodayExpenses = filteredTodayExpenses.filter { it.isIncludedInExpenseStats() }
 
                 // 오늘의 수입 조회
                 val todayIncomesList = withContext(Dispatchers.IO) {
@@ -385,15 +397,9 @@ class HomeViewModel @Inject constructor(
                 val lastMonthExpenses = withContext(Dispatchers.IO) {
                     expenseRepository.getExpensesByDateRangeOnce(lastMonthStart, lastMonthSamePoint)
                 }
-                val filteredLastMonthExpenses = if (exclusionKeywords.isEmpty()) {
-                    lastMonthExpenses
-                } else {
-                    lastMonthExpenses.filter { expense ->
-                        val smsLower = expense.originalSms.lowercase()
-                        exclusionKeywords.none { kw -> smsLower.contains(kw) }
-                    }
-                }
-                val filteredLastMonthExpense = filteredLastMonthExpenses.sumOf { it.amount }
+                val filteredLastMonthExpenses = filterVisibleExpenses(lastMonthExpenses)
+                val statsLastMonthExpenses = filteredLastMonthExpenses.filter { it.isIncludedInExpenseStats() }
+                val filteredLastMonthExpense = statsLastMonthExpenses.sumOf { it.amount }
 
                 // 비교 기간 레이블 생성
                 val dateFormat = java.text.SimpleDateFormat("M/d", java.util.Locale.KOREA)
@@ -414,26 +420,18 @@ class HomeViewModel @Inject constructor(
                 val fullLastMonthExpenses = withContext(Dispatchers.IO) {
                     expenseRepository.getExpensesByDateRangeOnce(lastMonthFullStart, lastMonthFullEnd)
                 }
-                val filteredFullLastMonthExpenses = if (exclusionKeywords.isEmpty()) {
-                    fullLastMonthExpenses
-                } else {
-                    fullLastMonthExpenses.filter { expense ->
-                        val smsLower = expense.originalSms.lowercase()
-                        exclusionKeywords.none { kw -> smsLower.contains(kw) }
-                    }
-                }
+                val filteredFullLastMonthExpenses = filterVisibleExpenses(fullLastMonthExpenses)
                 val lastMonthCumulative = CumulativeChartDataBuilder.buildDailyCumulative(
-                    filteredFullLastMonthExpenses, lastMonthFullStart, lastMonthDaysInMonth
+                    filteredFullLastMonthExpenses.filter { it.isIncludedInExpenseStats() },
+                    lastMonthFullStart,
+                    lastMonthDaysInMonth
                 )
 
                 // 지난 3개월 / 6개월 평균 (IO에서 1회 로드)
                 // exclusionKeywords 필터링을 포함한 데이터 로드 람다
                 val loadFilteredExpenses: suspend (Long, Long) -> List<ExpenseEntity> = { s, e ->
                     val raw = expenseRepository.getExpensesByDateRangeOnce(s, e)
-                    if (exclusionKeywords.isEmpty()) raw
-                    else raw.filter { ex ->
-                        exclusionKeywords.none { kw -> ex.originalSms.lowercase().contains(kw) }
-                    }
+                    filterVisibleExpenses(raw).filter { it.isIncludedInExpenseStats() }
                 }
                 val avgThreeMonthCumulative = withContext(Dispatchers.IO) {
                     CumulativeChartDataBuilder.buildAvgNMonthCumulative(
@@ -463,7 +461,7 @@ class HomeViewModel @Inject constructor(
                     isLoading = existingData == null, // 캐시 없을 때만 로딩 표시
                     periodLabel = periodLabel,
                     monthlyIncome = totalIncome,
-                    todayExpense = filteredTodayExpenses.sumOf { e -> e.amount },
+                    todayExpense = statsTodayExpenses.sumOf { e -> e.amount },
                     todayExpenseCount = filteredTodayExpenses.size,
                     todayExpenses = filteredTodayExpenses.sortedByDescending { e -> e.dateTime },
                     todayIncomes = filteredTodayIncomes.sortedByDescending { e -> e.dateTime },
@@ -487,17 +485,10 @@ class HomeViewModel @Inject constructor(
                             .copy(isLoading = false))
                     }
                     .collect { allExpenses ->
-                        // 제외 키워드 필터 적용
-                        val expenses = if (exclusionKeywords.isEmpty()) {
-                            allExpenses
-                        } else {
-                            allExpenses.filter { expense ->
-                                val smsLower = expense.originalSms.lowercase()
-                                exclusionKeywords.none { kw -> smsLower.contains(kw) }
-                            }
-                        }
-                        val totalExpense = expenses.sumOf { it.amount }
-                        val categories = expenses
+                        val expenses = filterVisibleExpenses(allExpenses)
+                        val statsExpenses = expenses.filter { it.isIncludedInExpenseStats() }
+                        val totalExpense = statsExpenses.sumOf { it.amount }
+                        val categories = statsExpenses
                             .groupBy { expense ->
                                 val cat = Category.fromDisplayName(expense.category)
                                 // 커스텀 카테고리는 원래 이름 유지 (기타로 합치지 않음)
@@ -513,7 +504,7 @@ class HomeViewModel @Inject constructor(
                             .sortedByDescending { it.total }
 
                         // 이번 달 일별 누적 지출 계산
-                        val dailyCumulative = CumulativeChartDataBuilder.buildDailyCumulative(expenses, monthStart, daysInMonth)
+                        val dailyCumulative = CumulativeChartDataBuilder.buildDailyCumulative(statsExpenses, monthStart, daysInMonth)
 
                         // 현재 캐시의 1회성 데이터를 유지하면서 지출 데이터 업데이트
                         val current = _uiState.value.pageCache[key] ?: HomePageData()
@@ -529,7 +520,7 @@ class HomeViewModel @Inject constructor(
                         if (!insightLoaded && totalExpense > 0) {
                             insightLoaded = true
                             val top3 = categories.take(3)
-                            val lastMonthByCategory = filteredLastMonthExpenses
+                            val lastMonthByCategory = statsLastMonthExpenses
                                 .groupBy { expense ->
                                     val cat = Category.fromDisplayName(expense.category)
                                     cat.parentCategory?.displayName ?: cat.displayName

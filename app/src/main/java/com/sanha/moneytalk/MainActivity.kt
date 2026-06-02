@@ -360,7 +360,7 @@ fun MoneyTalkApp(
         )
     }
 
-    // 전체 동기화 해제 광고 다이얼로그
+    // 월별 SMS 동기화 광고 다이얼로그
     if (dialogUiState.showFullSyncAdDialog) {
         val context = LocalContext.current
         val activity = context as? android.app.Activity
@@ -368,7 +368,13 @@ fun MoneyTalkApp(
         val adMonth = dialogUiState.fullSyncAdMonth
         val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(dialogUiState.monthStartDay)
         val isCurrentMonth = adYear == effYear && adMonth == effMonth
-        val monthLabel = if (isCurrentMonth) "이번달" else "${adMonth}월"
+        val currentMonthLabel = stringResource(R.string.home_current_month_sync_label)
+        val syncMonthLabelFormat = stringResource(R.string.home_sync_month_label_format)
+        val monthLabel = if (isCurrentMonth) {
+            currentMonthLabel
+        } else {
+            String.format(syncMonthLabelFormat, adMonth)
+        }
         AlertDialog(
             onDismissRequest = { mainViewModel.dismissFullSyncAdDialog() },
             title = { Text(stringResource(R.string.full_sync_ad_dialog_title, monthLabel)) },

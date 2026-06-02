@@ -8,10 +8,10 @@ import androidx.room.PrimaryKey
 /**
  * 거래처 규칙 엔티티
  *
- * 거래처명에 대한 카테고리/고정지출 규칙을 저장합니다.
+ * 거래처명에 대한 카테고리/고정지출/통계 제외 규칙을 저장합니다.
  * SMS 수신 시 거래처명에 keyword가 포함(contains)되면 해당 규칙이 자동 적용됩니다.
  *
- * 매칭 방식: storeName.lowercase().contains(keyword.lowercase())
+ * 매칭 방식: 거래처명/키워드의 내부 공백과 대소문자를 제거한 뒤 contains 비교
  *
  * 적용 우선순위: StoreRule > Room 매핑 > Vector > Keyword > Gemini (Tier 0)
  *
@@ -34,6 +34,10 @@ data class StoreRuleEntity(
     /** 고정지출 여부 (null이면 고정지출 규칙 없음) */
     @ColumnInfo(name = "is_fixed")
     val isFixed: Boolean? = null,
+
+    /** 통계 제외 여부 (null이면 통계 제외 규칙 없음) */
+    @ColumnInfo(name = "is_excluded_from_stats")
+    val isExcludedFromStats: Boolean? = null,
 
     /** 레코드 생성 시간 */
     val createdAt: Long = System.currentTimeMillis()

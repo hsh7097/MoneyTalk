@@ -1,5 +1,7 @@
 package com.sanha.moneytalk.core.sms
 
+import com.sanha.moneytalk.core.util.StatsExclusionClassifier
+
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -81,7 +83,7 @@ class SmsPreFilter @Inject constructor() {
          */
         private val INCOME_PROTECTION_KEYWORDS = listOf(
             "입금", "급여", "월급", "환급", "송금", "정산", "지급",
-            "출금취소", "승인취소", "결제취소"
+            "출금취소", "승인취소", "결제취소", "출금 취소", "승인 취소", "결제 취소", "취소"
         )
 
         private val HIGH_CONFIDENCE_NON_PAYMENT_PATTERNS = listOf(
@@ -148,11 +150,11 @@ class SmsPreFilter @Inject constructor() {
         return smsList.filter smsFilter@{ sms ->
             val body = sms.body
 
-            // 키워드 필터
-            if (isObviouslyNonPayment(body)) return@smsFilter false
-
             // 구조 필터
             if (lacksPaymentRequirements(body)) return@smsFilter false
+
+            // 키워드 필터
+            if (isObviouslyNonPayment(body)) return@smsFilter false
 
             true
         }
@@ -174,6 +176,8 @@ class SmsPreFilter @Inject constructor() {
         // 수입 보호: 수입 키워드가 포함된 SMS는 필터링하지 않고 SmsIncomeFilter로 전달
         // 예: "보험금 입금 완료" → "보험금"(비결제)보다 "입금"(수입)이 우선
         if (INCOME_PROTECTION_KEYWORDS.any { lowerBody.contains(it) }) return false
+
+        if (StatsExclusionClassifier.isCardBillDebitText(body, requireWonAmount = true)) return false
 
         return NON_PAYMENT_KEYWORDS_LOWER.any { lowerBody.contains(it) }
     }

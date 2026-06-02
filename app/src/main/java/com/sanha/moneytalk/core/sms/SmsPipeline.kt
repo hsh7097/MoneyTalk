@@ -65,7 +65,6 @@ class SmsPipeline @Inject constructor(
 ) {
 
     companion object {
-
         /** 배치 임베딩 크기 (batchEmbedContents API 최대 100) */
         private const val EMBEDDING_BATCH_SIZE = 100
 
@@ -129,8 +128,7 @@ class SmsPipeline @Inject constructor(
             smsList
         } else {
             onProgress?.invoke(STEP_FILTER, "문자 분류 준비 중...", 0, smsList.size)
-            val result = preFilter.filter(smsList)
-            result
+            preFilter.filter(smsList)
         }
         MoneyTalkLogger.e("Step2 PreFilter: ${smsList.size}건 → ${filtered.size}건")
 

@@ -23,15 +23,41 @@ class OwnedCardRepository @Inject constructor(
     /** 모든 카드 목록 (Flow) */
     fun getAllCards(): Flow<List<OwnedCardEntity>> = ownedCardDao.getAllCards()
 
+    /** 모든 카드 목록 (1회성) */
+    suspend fun getAllCardsOnce(): List<OwnedCardEntity> = ownedCardDao.getAllCardsOnce()
+
     /** 내 카드명 목록 (Flow) */
     fun getOwnedCardNamesFlow(): Flow<List<String>> = ownedCardDao.getOwnedCardNamesFlow()
 
     /** 내 카드명 목록 (일회성) */
     suspend fun getOwnedCardNames(): List<String> = ownedCardDao.getOwnedCardNames()
 
+    /** 제외 카드명 목록 (일회성) */
+    suspend fun getExcludedCardNames(): Set<String> = ownedCardDao.getExcludedCardNames().toSet()
+
     /** 내 카드 여부 변경 */
     suspend fun updateOwnership(cardName: String, isOwned: Boolean) {
         ownedCardDao.updateOwnership(cardName, isOwned)
+    }
+
+    /** 문자 설정에서 직접 제외/표시할 카드를 추가 */
+    suspend fun addManualCard(cardName: String, isOwned: Boolean): Boolean {
+        val normalizedName = CardNameNormalizer.normalize(cardName)
+        if (normalizedName.isBlank()) return false
+
+        val existing = ownedCardDao.getCard(normalizedName)
+        if (existing != null) {
+            ownedCardDao.updateOwnership(normalizedName, isOwned)
+        } else {
+            ownedCardDao.upsert(
+                OwnedCardEntity(
+                    cardName = normalizedName,
+                    isOwned = isOwned,
+                    source = "manual"
+                )
+            )
+        }
+        return true
     }
 
     /** 내 카드 필터링 활성화 여부 */
@@ -72,6 +98,13 @@ class OwnedCardRepository @Inject constructor(
                     )
                 )
             }
+        }
+    }
+
+    /** 백업 복원용 카드 일괄 저장 */
+    suspend fun upsertAll(cards: List<OwnedCardEntity>) {
+        if (cards.isNotEmpty()) {
+            ownedCardDao.upsertAll(cards)
         }
     }
 

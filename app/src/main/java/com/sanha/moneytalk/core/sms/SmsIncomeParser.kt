@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.core.sms
 
+import com.sanha.moneytalk.core.util.DateUtils
 import java.util.Calendar
 
 /**
@@ -37,18 +38,17 @@ object SmsIncomeParser {
     /** 숫자+원+한글 (가게명 등 제외용) */
     private val AMOUNT_WON_HANGUL_PATTERN = Regex(""".*\d+원[가-힣]+.*""")
 
-    /** 날짜 패턴: MM/DD, MM-DD, MM.DD */
-    private val DATE_PATTERN_SLASH = Regex("""(\d{1,2})[/.-](\d{1,2})""")
-    /** 날짜 패턴: M월 D일 */
-    private val DATE_PATTERN_KOREAN = Regex("""(\d{1,2})월\s*(\d{1,2})일""")
-    /** 시간 패턴: HH:mm */
-    private val TIME_PATTERN = Regex("""(\d{1,2}):(\d{2})""")
-
     /** "OOO님으로부터" 패턴 */
     private val FROM_PATTERN = Regex("""([가-힣a-zA-Z0-9]+)(님)?으?로부터""")
     /** "입금 OOO" 또는 "OOO 입금" 패턴 */
     private val DEPOSIT_PATTERN =
         Regex("""입금\s*([가-힣a-zA-Z0-9]{2,10})|([가-힣a-zA-Z0-9]{2,10})\s*입금""")
+    /** "입금 100,000원 OOO → 입출금통장" 패턴 */
+    private val DEPOSIT_AMOUNT_SOURCE_PATTERN =
+        Regex("""입금\s*[\d,]+\s*원\s+(.+?)(?:\s*(?:→|->|>)\s*(?:입출금통장|통장|계좌)\([^)]*\)|$)""")
+    /** "OOO → 입출금통장(1234)" 패턴 */
+    private val ACCOUNT_INCOME_SOURCE_PATTERN =
+        Regex("""^(.+?)\s*(?:→|->|>)\s*(?:입출금통장|통장|계좌)\([^)]*\)""")
 
     /** 카드번호 패턴 (출처 추출 시 제외) */
     private val CARD_NUMBER_PATTERN = Regex("""[\d*]+""")
@@ -58,6 +58,10 @@ object SmsIncomeParser {
     private val BRACKET_PATTERN = Regex("""\[.+\]""")
     /** 대괄호+날짜시간 복합 패턴 (출처 추출 시 제외) */
     private val BRACKET_DATETIME_PATTERN = Regex("""^\[.+\]\d{1,2}[/.-]\d{1,2}\s+\d{1,2}:\d{2}$""")
+    private val CANCEL_COMPLETED_DATE_PATTERN =
+        Regex("""(0?[1-9]|1[0-2])월\s*(0?[1-9]|[12]\d|3[01])일\s*취소완료""")
+    private val REFUND_HINT_PATTERN =
+        Regex("""(?:출금|승인|결제|사용|이용)\s*취소|취소\s*(?:승인|완료|처리|환불)?|환불""")
 
     /** 수입 키워드 (extractIncomeSource에서 출처 제외용) */
     private val incomeKeywords = listOf(
@@ -65,6 +69,10 @@ object SmsIncomeParser {
         "환급", "정산", "송금", "받으셨습니다", "입금되었습니다",
         "자동이체입금", "무통장입금", "계좌입금",
         "출금취소"
+    )
+    private val invalidSourceKeywords = listOf(
+        "출금", "출금계좌", "입출금통장", "통장", "계좌", "잔액",
+        "카카오톡", "카카오뱅크", "토스", "토스뱅크"
     )
 
     // ========== 가게명 정리용 ==========
@@ -93,9 +101,7 @@ object SmsIncomeParser {
     fun extractIncomeType(message: String): String {
         return when {
             // 취소/환불 (결제 키워드와 겹치므로 우선 체크)
-            message.contains("출금취소") || message.contains("승인취소") ||
-                message.contains("결제취소") || message.contains("취소승인") ||
-                message.contains("취소완료") -> "환불"
+            REFUND_HINT_PATTERN.containsMatchIn(message) -> "환불"
             message.contains("급여") || message.contains("월급") -> "급여"
             message.contains("보너스") || message.contains("상여") -> "보너스"
             message.contains("환급") -> "환급"
@@ -146,15 +152,24 @@ object SmsIncomeParser {
 
         // 패턴 1: "OOO님으로부터" 또는 "OOO으로부터"
         FROM_PATTERN.find(message)?.let {
-            return it.groupValues[1]
+            val cleanSource = cleanSourceCandidate(it.groupValues[1])
+            if (cleanSource.isNotBlank()) {
+                return cleanSource
+            }
         }
 
-        // 패턴 2: "입금 OOO" 또는 "OOO 입금" (같은 줄 내에서만 매칭)
+        // 패턴 2: 카카오뱅크 스타일 - "입금 100,000원" 다음 줄의 "송금인 → 입출금통장"
+        extractAccountIncomeSource(message, lines)?.let {
+            return it
+        }
+
+        // 패턴 3: "입금 OOO" 또는 "OOO 입금" (같은 줄 내에서만 매칭)
         for (line in lines) {
             DEPOSIT_PATTERN.find(line)?.let {
                 val source = it.groupValues[1].ifEmpty { it.groupValues[2] }
-                if (source.isNotBlank() && !incomeKeywords.any { keyword -> source == keyword }) {
-                    return source
+                val cleanSource = cleanSourceCandidate(source)
+                if (cleanSource.isNotBlank()) {
+                    return cleanSource
                 }
             }
         }
@@ -170,38 +185,30 @@ object SmsIncomeParser {
      * @return "YYYY-MM-DD HH:mm" 형식
      */
     fun extractDateTime(message: String, smsTimestamp: Long): String {
-        val calendar = Calendar.getInstance()
-        calendar.timeInMillis = smsTimestamp
-        val currentYear = calendar.get(Calendar.YEAR)
+        extractCancelCompletedDateTime(message, smsTimestamp)?.let { return it }
+        return SmsTransactionDateResolver.extractDateTime(message, smsTimestamp)
+    }
 
-        var month = calendar.get(Calendar.MONTH) + 1
-        var day = calendar.get(Calendar.DAY_OF_MONTH)
-        var hour = calendar.get(Calendar.HOUR_OF_DAY)
-        var minute = calendar.get(Calendar.MINUTE)
+    /**
+     * 저장된 수입 출처가 파서 후보로 부적합한 값인지 확인한다.
+     */
+    fun isInvalidIncomeSource(source: String): Boolean {
+        return source.isBlank() || isInvalidSourceCandidate(source)
+    }
 
-        val dateMatch1 = DATE_PATTERN_SLASH.find(message)
-        val dateMatch2 = DATE_PATTERN_KOREAN.find(message)
+    private fun extractCancelCompletedDateTime(message: String, smsTimestamp: Long): String? {
+        if (!message.contains("취소완료")) return null
 
-        if (dateMatch1 != null) {
-            month = dateMatch1.groupValues[1].toIntOrNull() ?: month
-            day = dateMatch1.groupValues[2].toIntOrNull() ?: day
-        } else if (dateMatch2 != null) {
-            month = dateMatch2.groupValues[1].toIntOrNull() ?: month
-            day = dateMatch2.groupValues[2].toIntOrNull() ?: day
-        }
+        val match = CANCEL_COMPLETED_DATE_PATTERN.find(message) ?: return null
+        val month = match.groupValues[1].toIntOrNull() ?: return null
+        val day = match.groupValues[2].toIntOrNull() ?: return null
+        if (month !in 1..12 || day !in 1..31) return null
 
-        val timeMatch = TIME_PATTERN.find(message)
-        if (timeMatch != null) {
-            hour = timeMatch.groupValues[1].toIntOrNull() ?: hour
-            minute = timeMatch.groupValues[2].toIntOrNull() ?: minute
-        }
-
-        if (month < 1 || month > 12) month = calendar.get(Calendar.MONTH) + 1
-        if (day < 1 || day > 31) day = calendar.get(Calendar.DAY_OF_MONTH)
-        if (hour < 0 || hour > 23) hour = calendar.get(Calendar.HOUR_OF_DAY)
-        if (minute < 0 || minute > 59) minute = calendar.get(Calendar.MINUTE)
-
-        return String.format("%04d-%02d-%02d %02d:%02d", currentYear, month, day, hour, minute)
+        val calendar = Calendar.getInstance().apply { timeInMillis = smsTimestamp }
+        calendar.set(Calendar.YEAR, DateUtils.resolveYearForMonthDay(smsTimestamp, month, day))
+        calendar.set(Calendar.MONTH, month - 1)
+        calendar.set(Calendar.DAY_OF_MONTH, day.coerceAtMost(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)))
+        return DateUtils.formatDateTime(calendar.timeInMillis)
     }
 
     // ========== 내부 헬퍼 ==========
@@ -274,5 +281,61 @@ object SmsIncomeParser {
         cleaned = CLEAN_CORP_PATTERN.replace(cleaned, "")
         cleaned = CLEAN_SPECIAL_CHAR_PATTERN.replace(cleaned, "")
         return cleaned.trim()
+    }
+
+    private fun extractAccountIncomeSource(
+        message: String,
+        lines: List<String>
+    ): String? {
+        DEPOSIT_AMOUNT_SOURCE_PATTERN.find(message)?.let { match ->
+            val source = cleanSourceCandidate(match.groupValues.getOrNull(1).orEmpty())
+            if (source.isNotBlank()) return source
+        }
+
+        if (!message.contains("입금")) return null
+
+        return lines.firstNotNullOfOrNull { line ->
+            val match = ACCOUNT_INCOME_SOURCE_PATTERN.find(line) ?: return@firstNotNullOfOrNull null
+            cleanSourceCandidate(match.groupValues.getOrNull(1).orEmpty()).takeIf { it.isNotBlank() }
+        }
+    }
+
+    private fun cleanSourceCandidate(raw: String): String {
+        if (isInvalidSourceCandidate(raw)) return ""
+
+        val source = cleanStoreName(raw)
+            .substringBefore("잔액")
+            .substringBefore("입출금통장")
+            .substringBefore("통장")
+            .substringBefore("계좌")
+            .trim(' ', '→', '-', '>', ':', '|')
+
+        if (source.isBlank()) return ""
+        if (incomeKeywords.any { keyword -> source == keyword }) return ""
+        if (invalidSourceKeywords.any { keyword -> source == keyword }) return ""
+        if (source.matches(CARD_NUMBER_PATTERN)) return ""
+        if (source.matches(DATETIME_PATTERN)) return ""
+        if (source.matches(BRACKET_PATTERN)) return ""
+        if (source.matches(BRACKET_DATETIME_PATTERN)) return ""
+        if (source.all { it.isDigit() || it.isWhitespace() || it in ",.-:/" }) return ""
+        if (AMOUNT_EXTRACT_WITH_WON.containsMatchIn(source)) return ""
+        if (PURE_NUMBER_PATTERN.matches(source)) return ""
+
+        return source
+    }
+
+    private fun isInvalidSourceCandidate(source: String): Boolean {
+        if (source.isBlank()) return true
+        if (invalidSourceKeywords.any { keyword -> source.contains(keyword) }) return true
+        if (incomeKeywords.any { keyword -> source == keyword }) return true
+        if (source.matches(CARD_NUMBER_PATTERN)) return true
+        if (source.matches(DATETIME_PATTERN)) return true
+        if (source.matches(BRACKET_PATTERN)) return true
+        if (source.matches(BRACKET_DATETIME_PATTERN)) return true
+        if (source.all { it.isDigit() || it.isWhitespace() || it in ",.-:/" }) return true
+        if (AMOUNT_EXTRACT_WITH_WON.containsMatchIn(source)) return true
+        if (PURE_NUMBER_PATTERN.matches(source)) return true
+
+        return false
     }
 }

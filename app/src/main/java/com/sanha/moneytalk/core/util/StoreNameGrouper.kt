@@ -37,7 +37,6 @@ class StoreNameGrouper @Inject constructor(
     private val embeddingService: SmsEmbeddingService
 ) {
     companion object {
-
         /** 배치 임베딩 한 번에 처리할 최대 개수 (batchEmbedContents 최대 100) */
         private const val EMBEDDING_BATCH_SIZE = 100
 
@@ -56,6 +55,25 @@ class StoreNameGrouper @Inject constructor(
         val members: List<String>
     )
 
+    data class StoreGroupingResult(
+        val groups: List<StoreGroup>,
+        val embeddingsByStoreName: Map<String, List<Float>>
+    )
+
+    /**
+     * 비교용 거래처명이 같은 항목을 API 호출 없이 먼저 묶습니다.
+     * 예: "가나 다라", "가나다라" -> 같은 그룹
+     */
+    fun groupStoreNamesByComparisonKey(storeNames: List<String>): List<StoreGroup> {
+        if (storeNames.isEmpty()) return emptyList()
+
+        return storeNames
+            .groupBy { StoreNameNormalizer.normalizeForComparison(it) }
+            .values
+            .map { names -> StoreGroup(representative = names.first(), members = names) }
+            .sortedByDescending { it.members.size }
+    }
+
     /**
      * 가게명 목록을 시맨틱 유사도로 그룹핑
      *
@@ -63,27 +81,44 @@ class StoreNameGrouper @Inject constructor(
      * @return 그룹 목록 (그룹 크기 큰 순으로 정렬)
      */
     suspend fun groupStoreNames(storeNames: List<String>): List<StoreGroup> {
-        if (storeNames.size <= 1) {
-            return storeNames.map { StoreGroup(representative = it, members = listOf(it)) }
+        return groupStoreNamesWithEmbeddings(storeNames).groups
+    }
+
+    /**
+     * 가게명 목록을 시맨틱 유사도로 그룹핑하고, 그룹핑에 사용한 임베딩을 함께 반환합니다.
+     *
+     * 반환된 임베딩은 분류 결과 캐싱 단계에서 재사용하여 같은 가게명에 대한
+     * 임베딩 API 재호출을 피합니다.
+     */
+    suspend fun groupStoreNamesWithEmbeddings(storeNames: List<String>): StoreGroupingResult {
+        val comparisonGroups = groupStoreNamesByComparisonKey(storeNames)
+        if (comparisonGroups.size <= 1) {
+            return StoreGroupingResult(groups = comparisonGroups, embeddingsByStoreName = emptyMap())
         }
 
         // Step 1: 배치 임베딩 생성
-        val embeddedStores = generateBatchEmbeddings(storeNames)
+        val representativeToGroup = comparisonGroups.associateBy { it.representative }
+        val embeddedStores = generateBatchEmbeddings(comparisonGroups.map { it.representative })
 
         if (embeddedStores.isEmpty()) {
             MoneyTalkLogger.w("임베딩 생성 실패, 그룹핑 없이 반환")
-            return storeNames.map { StoreGroup(representative = it, members = listOf(it)) }
+            return StoreGroupingResult(groups = comparisonGroups, embeddingsByStoreName = emptyMap())
         }
 
         // Step 2: 그리디 클러스터링
         val groups = clusterByGreedy(embeddedStores)
-
-        for (group in groups) {
-            if (group.members.size > 1) {
+            .map { group ->
+                val members = group.members.flatMap { representative ->
+                    representativeToGroup[representative]?.members ?: listOf(representative)
+                }
+                StoreGroup(representative = group.representative, members = members)
             }
-        }
+            .sortedByDescending { it.members.size }
 
-        return groups
+        return StoreGroupingResult(
+            groups = groups,
+            embeddingsByStoreName = embeddedStores.toMap()
+        )
     }
 
     /**
@@ -95,17 +130,13 @@ class StoreNameGrouper @Inject constructor(
         storeNames: List<String>
     ): List<Pair<String, List<Float>>> {
         val batches = storeNames.chunked(EMBEDDING_BATCH_SIZE)
-        val startTime = System.currentTimeMillis()
 
         val semaphore = Semaphore(EMBEDDING_CONCURRENCY)
         val batchEmbeddings = coroutineScope {
-            batches.mapIndexed { batchIdx, batch ->
+            batches.map { batch ->
                 async {
                     semaphore.withPermit {
-                        val batchStart = System.currentTimeMillis()
-                        val embeddings = embeddingService.generateEmbeddings(batch)
-                        val elapsed = System.currentTimeMillis() - batchStart
-                        embeddings
+                        embeddingService.generateEmbeddings(batch)
                     }
                 }
             }.awaitAll()
@@ -122,7 +153,6 @@ class StoreNameGrouper @Inject constructor(
             }
         }
 
-        val elapsed = System.currentTimeMillis() - startTime
         return results
     }
 

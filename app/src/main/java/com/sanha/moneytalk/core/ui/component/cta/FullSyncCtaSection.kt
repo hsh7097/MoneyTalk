@@ -31,7 +31,7 @@ import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 /**
  * 기간 데이터 가져오기 CTA.
  *
- * 이전 월 전체 동기화/부분 동기화 안내를 동일한 CTA 스타일로 표현한다.
+ * 이전 월 데이터 가져오기/부분 동기화 안내를 동일한 CTA 스타일로 표현한다.
  */
 @Composable
 fun FullSyncCtaSection(

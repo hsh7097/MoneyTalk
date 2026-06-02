@@ -3,8 +3,10 @@ package com.sanha.moneytalk.feature.smssettings.ui
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sanha.moneytalk.core.database.OwnedCardRepository
 import com.sanha.moneytalk.core.database.SmsBlockedSenderRepository
 import com.sanha.moneytalk.core.database.SmsExclusionRepository
+import com.sanha.moneytalk.core.database.entity.OwnedCardEntity
 import com.sanha.moneytalk.core.database.entity.SmsBlockedSenderEntity
 import com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
@@ -22,6 +24,7 @@ import javax.inject.Inject
 data class SmsSettingsUiState(
     val exclusionKeywords: List<SmsExclusionKeywordEntity> = emptyList(),
     val blockedSenders: List<SmsBlockedSenderEntity> = emptyList(),
+    val ownedCards: List<OwnedCardEntity> = emptyList(),
     val lastSyncTime: Long = 0L
 )
 
@@ -29,6 +32,7 @@ data class SmsSettingsUiState(
 class SmsSettingsViewModel @Inject constructor(
     private val smsExclusionRepository: SmsExclusionRepository,
     private val smsBlockedSenderRepository: SmsBlockedSenderRepository,
+    private val ownedCardRepository: OwnedCardRepository,
     private val settingsDataStore: SettingsDataStore,
     private val dataRefreshEvent: DataRefreshEvent
 ) : ViewModel() {
@@ -38,6 +42,7 @@ class SmsSettingsViewModel @Inject constructor(
 
     init {
         observeBlockedSenders()
+        observeOwnedCards()
         observeLastSyncTime()
         loadExclusionKeywords()
     }
@@ -78,10 +83,34 @@ class SmsSettingsViewModel @Inject constructor(
         }
     }
 
+    fun addExcludedCard(cardName: String) {
+        viewModelScope.launch {
+            val added = ownedCardRepository.addManualCard(cardName, isOwned = false)
+            if (added) {
+                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.OWNED_CARD_UPDATED)
+            }
+        }
+    }
+
+    fun updateCardExclusion(cardName: String, excluded: Boolean) {
+        viewModelScope.launch {
+            ownedCardRepository.updateOwnership(cardName, isOwned = !excluded)
+            dataRefreshEvent.emit(DataRefreshEvent.RefreshType.OWNED_CARD_UPDATED)
+        }
+    }
+
     private fun observeBlockedSenders() {
         viewModelScope.launch {
             smsBlockedSenderRepository.observeBlockedSenders().collect { senders ->
                 _uiState.update { it.copy(blockedSenders = senders) }
+            }
+        }
+    }
+
+    private fun observeOwnedCards() {
+        viewModelScope.launch {
+            ownedCardRepository.getAllCards().collect { cards ->
+                _uiState.update { it.copy(ownedCards = cards) }
             }
         }
     }
