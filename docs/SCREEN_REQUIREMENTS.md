@@ -1203,6 +1203,7 @@ SpendingTrendInfo (interface)
 | 월별 SMS 동기화 | 과거 월 per-month: 처음 N회 무료 (RTDB `free_sync_count`) → 이후 광고 |
 | AI 채팅 | remaining=0 시 광고 → N회 무료 |
 | 배너 광고 | RTDB `reward_ad_enabled=true`이고 앱 진입 횟수 5회 이상일 때만 노출 |
+| 디버그 빌드 | 조건과 무관하게 AdMob 초기화/배너/보상 광고 미노출 |
 | 실시간 수신 | 항상 무료 (BroadcastReceiver) |
 | 프리로드 | 자동 |
 | 실패 처리 | 사용자 친화 (보상 적용) |

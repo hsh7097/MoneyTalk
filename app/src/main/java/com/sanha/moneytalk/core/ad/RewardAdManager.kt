@@ -45,6 +45,7 @@ sealed class AdState {
  *
  * Google AdMob 리워드 광고의 로드, 표시, 보상 처리를 담당합니다.
  * Firebase RTDB의 reward_ad_enabled 설정에 따라 동작하며,
+ * 디버그 빌드에서는 설정값과 무관하게 광고를 로드/표시하지 않습니다.
  * 광고 시청 시 reward_ad_chat_count만큼 채팅 횟수를 충전합니다.
  *
  * ## 광고 ID
@@ -58,10 +59,7 @@ class RewardAdManager @Inject constructor(
     private val premiumManager: PremiumManager
 ) {
     companion object {
-        /** Google 공식 리워드 테스트 광고 ID */
-        private const val TEST_REWARD_AD_ID = "ca-app-pub-3940256099942544/5224354917"
-        private const val PROD_REWARD_AD_ID = "ca-app-pub-4707673176609005/2566523665"
-        private val REWARD_AD_ID = if (BuildConfig.DEBUG) TEST_REWARD_AD_ID else PROD_REWARD_AD_ID
+        private const val REWARD_AD_ID = "ca-app-pub-4707673176609005/2566523665"
         private const val MAX_RETRY_COUNT = 3
     }
 
@@ -79,7 +77,10 @@ class RewardAdManager @Inject constructor(
      * 광고 기능이 활성화되어 있을 때만 로드합니다.
      */
     fun preloadAd() {
-        if (!premiumManager.premiumConfig.value.rewardAdEnabled) {
+        if (!isAdFeatureEnabled()) {
+            rewardedAd = null
+            retryCount = 0
+            _adState.value = AdState.Idle
             return
         }
 
@@ -123,6 +124,14 @@ class RewardAdManager @Inject constructor(
      * @param onFailed 실패 콜백
      */
     fun showAd(activity: Activity, onRewarded: () -> Unit, onFailed: () -> Unit) {
+        if (!isAdFeatureEnabled()) {
+            rewardedAd = null
+            retryCount = 0
+            _adState.value = AdState.Idle
+            onFailed()
+            return
+        }
+
         val ad = rewardedAd
         if (ad == null) {
             MoneyTalkLogger.e("광고가 로드되지 않음")
@@ -166,7 +175,7 @@ class RewardAdManager @Inject constructor(
      * @return true면 차감 성공, false면 잔여 횟수 부족
      */
     suspend fun consumeRewardChat(): Boolean {
-        if (!premiumManager.premiumConfig.value.rewardAdEnabled) {
+        if (!isAdFeatureEnabled()) {
             return true // 광고 비활성 시 항상 성공
         }
 
@@ -193,7 +202,7 @@ class RewardAdManager @Inject constructor(
      * @return true면 광고 시청 필요 (광고 활성 && 잔여 횟수 0)
      */
     suspend fun isAdRequired(): Boolean {
-        if (!premiumManager.premiumConfig.value.rewardAdEnabled) return false
+        if (!isAdFeatureEnabled()) return false
         return settingsDataStore.getRewardChatRemaining() <= 0
     }
 
@@ -201,19 +210,19 @@ class RewardAdManager @Inject constructor(
      * 리워드 광고 기능이 활성화되어 있는지 확인
      */
     fun isRewardAdEnabled(): Boolean {
-        return premiumManager.premiumConfig.value.rewardAdEnabled
+        return isAdFeatureEnabled()
     }
 
     /** 리워드 광고 활성화 여부를 반응적으로 관찰하기 위한 Flow (RTDB 변경 시 자동 반영) */
     val isRewardAdEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
-        .map { it.rewardAdEnabled }
+        .map { isAdFeatureEnabled(it.rewardAdEnabled) }
         .distinctUntilChanged()
 
     /** 배너 광고 노출 여부 Flow (RTDB 활성 + 앱 진입 5회 이상) */
     val isBannerAdEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
         .combine(settingsDataStore.appEntryCountFlow) { config, appEntryCount ->
             BannerAdVisibilityPolicy.canShowBanner(
-                rewardAdEnabled = config.rewardAdEnabled,
+                rewardAdEnabled = isAdFeatureEnabled(config.rewardAdEnabled),
                 appEntryCount = appEntryCount
             )
         }
@@ -236,4 +245,12 @@ class RewardAdManager @Inject constructor(
     /** 무료 동기화 허용 횟수 Flow (Compose 관찰용) */
     val freeSyncCountFlow: Flow<Int>
         get() = premiumManager.premiumConfig.map { it.freeSyncCount }
+
+    private fun isAdFeatureEnabled(): Boolean {
+        return isAdFeatureEnabled(premiumManager.premiumConfig.value.rewardAdEnabled)
+    }
+
+    private fun isAdFeatureEnabled(rewardAdEnabled: Boolean): Boolean {
+        return !BuildConfig.DEBUG && rewardAdEnabled
+    }
 }

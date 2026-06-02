@@ -367,15 +367,16 @@ class ChatViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            premiumManager.premiumConfig.collect { config ->
+            premiumManager.premiumConfig.collect {
                 val hasKey = withContext(Dispatchers.IO) { geminiRepository.hasApiKey() }
+                val isRewardAdEnabled = rewardAdManager.isRewardAdEnabled()
                 _uiState.update {
                     it.copy(
-                        isRewardAdEnabled = config.rewardAdEnabled,
+                        isRewardAdEnabled = isRewardAdEnabled,
                         hasApiKey = hasKey
                     )
                 }
-                if (config.rewardAdEnabled) {
+                if (isRewardAdEnabled) {
                     rewardAdManager.preloadAd()
                 }
             }

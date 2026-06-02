@@ -80,8 +80,10 @@ class MoneyTalkApplication : Application(), AppFunctionConfiguration.Provider {
             premiumManager.startObservingConfig()
         }
 
-        // Google AdMob 초기화 (디버그 빌드는 Google 공식 테스트 광고 ID 사용)
-        MobileAds.initialize(this) {}
+        // Google AdMob 초기화 (디버그 빌드는 광고 미노출)
+        if (!BuildConfig.DEBUG) {
+            MobileAds.initialize(this) {}
+        }
     }
 
     private fun initializeFirebase(): Boolean {

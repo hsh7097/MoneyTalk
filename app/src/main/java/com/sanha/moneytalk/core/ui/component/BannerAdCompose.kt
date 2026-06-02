@@ -28,6 +28,10 @@ fun BannerAdCompose(
     adUnitId: String,
     modifier: Modifier = Modifier
 ) {
+    if (BuildConfig.DEBUG) {
+        return
+    }
+
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -60,7 +64,7 @@ fun BannerAdCompose(
     )
 }
 
-/** 배너 광고 단위 ID (디버그 빌드 시 Google 공식 테스트 ID 사용) */
+/** 배너 광고 단위 ID (디버그 빌드에서는 노출 정책에서 차단) */
 object BannerAdIds {
     /** Google 공식 배너 테스트 광고 ID */
     private const val TEST_BANNER = "ca-app-pub-3940256099942544/6300978111"
