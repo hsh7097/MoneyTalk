@@ -27,4 +27,14 @@ class StoreNameNormalizerTest {
     fun matchesStoreRule_acceptsTruncatedPrefixStoreName() {
         assertTrue(StoreNameNormalizer.matchesStoreRule("유튜브프리미", "유튜브프리미엄"))
     }
+
+    @Test
+    fun matchesStoreRule_rejectsTooShortPrefixStoreName() {
+        assertFalse(StoreNameNormalizer.matchesStoreRule("유", "유튜브프리미엄"))
+    }
+
+    @Test
+    fun matchesStoreRule_rejectsHeavilyTruncatedPrefixStoreName() {
+        assertFalse(StoreNameNormalizer.matchesStoreRule("유튜브", "유튜브프리미엄"))
+    }
 }

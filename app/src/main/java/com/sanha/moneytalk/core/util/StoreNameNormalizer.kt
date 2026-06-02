@@ -7,6 +7,8 @@ package com.sanha.moneytalk.core.util
  * 내부 공백과 대소문자 차이를 제거한 키를 사용합니다.
  */
 object StoreNameNormalizer {
+    private const val MIN_TRUNCATED_PREFIX_LENGTH = 4
+    private const val MAX_TRUNCATED_SUFFIX_LENGTH = 3
 
     fun normalizeForComparison(value: String): String {
         val trimmed = value.trim()
@@ -49,7 +51,11 @@ object StoreNameNormalizer {
         val normalizedKeyword = normalizeForComparison(keyword)
         if (normalizedText.isEmpty() || normalizedKeyword.isEmpty()) return false
 
-        return normalizedText.contains(normalizedKeyword) ||
+        if (normalizedText.contains(normalizedKeyword)) return true
+
+        val missingSuffixLength = normalizedKeyword.length - normalizedText.length
+        return normalizedText.length >= MIN_TRUNCATED_PREFIX_LENGTH &&
+            missingSuffixLength in 1..MAX_TRUNCATED_SUFFIX_LENGTH &&
             normalizedKeyword.startsWith(normalizedText)
     }
 }
