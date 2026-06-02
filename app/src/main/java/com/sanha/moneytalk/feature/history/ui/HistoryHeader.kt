@@ -285,6 +285,8 @@ fun FilterTabRow(
     selectedExpenseCategories: Set<String> = emptySet(),
     selectedIncomeCategories: Set<String> = emptySet(),
     selectedTransferCategories: Set<String> = emptySet(),
+    selectedCardNames: Set<String> = emptySet(),
+    availableCardNames: List<String> = emptyList(),
     expenseCategories: List<CategoryInfo> = Category.expenseEntries,
     incomeCategories: List<CategoryInfo> = Category.incomeEntries,
     transferCategories: List<CategoryInfo> = Category.transferEntries,
@@ -297,8 +299,9 @@ fun FilterTabRow(
         Set<String>,
         Set<String>,
         Set<String>,
+        Set<String>,
         FixedExpenseFilter
-    ) -> Unit = { _, _, _, _, _, _, _, _ -> },
+    ) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onResetFilter: () -> Unit = {},
     onSearchClick: () -> Unit = {},
     onAddClick: () -> Unit = {},
@@ -310,6 +313,7 @@ fun FilterTabRow(
     val hasActiveFilter = selectedExpenseCategories.isNotEmpty()
             || selectedIncomeCategories.isNotEmpty()
             || selectedTransferCategories.isNotEmpty()
+            || selectedCardNames.isNotEmpty()
             || sortOrder != SortOrder.DATE_DESC
             || !showExpenses
             || !showIncomes
@@ -370,6 +374,7 @@ fun FilterTabRow(
                     selectedExpenseCategories.isNotEmpty() ||
                             selectedIncomeCategories.isNotEmpty() ||
                             selectedTransferCategories.isNotEmpty(),
+                    selectedCardNames.isNotEmpty(),
                     sortOrder != SortOrder.DATE_DESC,
                     !showExpenses || !showIncomes || !showTransfers,
                     fixedExpenseFilter != FixedExpenseFilter.ALL
@@ -382,6 +387,8 @@ fun FilterTabRow(
                             selectedIncomeCategories.isNotEmpty() ||
                             selectedTransferCategories.isNotEmpty() ->
                         stringResource(R.string.history_filter_active_category)
+                    selectedCardNames.isNotEmpty() ->
+                        stringResource(R.string.history_filter_active_card)
                     !showExpenses || !showIncomes || !showTransfers ->
                         stringResource(R.string.history_filter_active_type)
                     fixedExpenseFilter == FixedExpenseFilter.FIXED_ONLY ->
@@ -439,6 +446,8 @@ fun FilterTabRow(
             currentExpenseCategories = selectedExpenseCategories,
             currentIncomeCategories = selectedIncomeCategories,
             currentTransferCategories = selectedTransferCategories,
+            currentCardNames = selectedCardNames,
+            allCardNames = availableCardNames,
             allExpenseCategories = expenseCategories,
             allIncomeCategories = incomeCategories,
             allTransferCategories = transferCategories,
@@ -446,7 +455,7 @@ fun FilterTabRow(
             hasSeenFilterOnboarding = hasSeenFilterOnboarding,
             onCoachMarkComplete = onFilterCoachMarkComplete,
             onDismiss = { showBottomSheet = false },
-            onApply = { newSort, newShowExp, newShowInc, newShowTransfer, expCats, incCats, transferCats, newFixedFilter ->
+            onApply = { newSort, newShowExp, newShowInc, newShowTransfer, expCats, incCats, transferCats, cardNames, newFixedFilter ->
                 onApplyFilter(
                     newSort,
                     newShowExp,
@@ -455,6 +464,7 @@ fun FilterTabRow(
                     expCats,
                     incCats,
                     transferCats,
+                    cardNames,
                     newFixedFilter
                 )
                 showBottomSheet = false

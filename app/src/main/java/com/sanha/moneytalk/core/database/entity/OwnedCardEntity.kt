@@ -12,8 +12,8 @@ import androidx.room.PrimaryKey
  *
  * 데이터 흐름:
  * SMS 동기화 → 카드사명 추출 → 정규화 → OwnedCard 자동 등록
- * 설정 화면 → 사용자가 내 카드 체크/해제 → isOwned 업데이트
- * 홈 화면 → isOwned=true 카드의 지출만 필터링하여 표시
+ * 설정/문자 설정 화면 → 사용자가 카드 표시/숨김 변경 → isOwned 업데이트
+ * 주요 노출 화면 → isOwned=false 카드의 지출은 저장 유지, 화면/집계에서 제외
  */
 @Entity(tableName = "owned_cards")
 data class OwnedCardEntity(

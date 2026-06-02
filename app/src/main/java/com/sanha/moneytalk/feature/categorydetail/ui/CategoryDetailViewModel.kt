@@ -8,6 +8,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.database.OwnedCardRepository
 import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
@@ -87,6 +88,7 @@ class CategoryDetailViewModel @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val dataRefreshEvent: DataRefreshEvent,
     private val smsExclusionRepository: SmsExclusionRepository,
+    private val ownedCardRepository: OwnedCardRepository,
     private val categoryClassifierService: CategoryClassifierService,
     private val categoryProvider: CategoryProvider,
     private val budgetDao: BudgetDao,
@@ -310,6 +312,9 @@ class CategoryDetailViewModel @Inject constructor(
                 val exclusionKeywords = withContext(Dispatchers.IO) {
                     smsExclusionRepository.getAllKeywordStrings()
                 }
+                val excludedCardNames = withContext(Dispatchers.IO) {
+                    ownedCardRepository.getExcludedCardNames()
+                }
 
                 val now = System.currentTimeMillis()
                 val daysInMonth = ((monthEnd - monthStart) / (24L * 60 * 60 * 1000)).toInt() + 1
@@ -331,7 +336,7 @@ class CategoryDetailViewModel @Inject constructor(
                     )
                 }
                 val filteredFullLastMonthExpenses = CategoryDetailExpenseFilters.filterStatsExpenses(
-                    fullLastMonthExpenses, exclusionKeywords
+                    fullLastMonthExpenses, exclusionKeywords, excludedCardNames
                 )
                 val lastMonthCumulative = CumulativeChartDataBuilder.buildDailyCumulative(
                     filteredFullLastMonthExpenses, lastMonthFullStart, lastMonthDaysInMonth
@@ -342,7 +347,11 @@ class CategoryDetailViewModel @Inject constructor(
                     val raw = expenseRepository.getExpensesByCategoriesAndDateRangeOnce(
                         categoryNames, s, e
                     )
-                    CategoryDetailExpenseFilters.filterStatsExpenses(raw, exclusionKeywords)
+                    CategoryDetailExpenseFilters.filterStatsExpenses(
+                        raw,
+                        exclusionKeywords,
+                        excludedCardNames
+                    )
                 }
                 val avgThreeMonthCumulative = withContext(Dispatchers.IO) {
                     CumulativeChartDataBuilder.buildAvgNMonthCumulative(
@@ -390,7 +399,7 @@ class CategoryDetailViewModel @Inject constructor(
                     }
                     .collect { allExpenses ->
                         val displayExpenses = CategoryDetailExpenseFilters.filterDisplayExpenses(
-                            allExpenses, exclusionKeywords
+                            allExpenses, exclusionKeywords, excludedCardNames
                         )
                         val statsExpenses = CategoryDetailExpenseFilters.filterStatsExpenses(
                             displayExpenses

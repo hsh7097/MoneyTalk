@@ -102,6 +102,7 @@ private fun isFilterDefault(
     expenseCategories: Set<String>,
     incomeCategories: Set<String>,
     transferCategories: Set<String>,
+    cardNames: Set<String>,
     fixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL
 ): Boolean = sortOrder == SortOrder.DATE_DESC &&
         showExpenses &&
@@ -110,6 +111,7 @@ private fun isFilterDefault(
         expenseCategories.isEmpty() &&
         incomeCategories.isEmpty() &&
         transferCategories.isEmpty() &&
+        cardNames.isEmpty() &&
         fixedExpenseFilter == FixedExpenseFilter.ALL
 
 private fun buildCategorySummary(
@@ -123,6 +125,17 @@ private fun buildCategorySummary(
         ?.displayName ?: selectedCategories.first()
     val remainCount = selectedCategories.size - 1
     return if (remainCount <= 0) firstCategory else String.format(multiFormat, firstCategory, remainCount)
+}
+
+private fun buildTextSummary(
+    selectedItems: Set<String>,
+    allText: String,
+    multiFormat: String
+): String {
+    if (selectedItems.isEmpty()) return allText
+    val firstItem = selectedItems.first()
+    val remainCount = selectedItems.size - 1
+    return if (remainCount <= 0) firstItem else String.format(multiFormat, firstItem, remainCount)
 }
 
 private fun selectedFilterTypes(
@@ -164,6 +177,8 @@ fun FilterBottomSheet(
     currentExpenseCategories: Set<String> = emptySet(),
     currentIncomeCategories: Set<String> = emptySet(),
     currentTransferCategories: Set<String> = emptySet(),
+    currentCardNames: Set<String> = emptySet(),
+    allCardNames: List<String> = emptyList(),
     allExpenseCategories: List<CategoryInfo> = Category.expenseEntries,
     allIncomeCategories: List<CategoryInfo> = Category.incomeEntries,
     allTransferCategories: List<CategoryInfo> = Category.transferEntries,
@@ -179,6 +194,7 @@ fun FilterBottomSheet(
         Set<String>,
         Set<String>,
         Set<String>,
+        Set<String>,
         FixedExpenseFilter
     ) -> Unit
 ) {
@@ -189,8 +205,10 @@ fun FilterBottomSheet(
     var tempExpenseCategories by remember { mutableStateOf(currentExpenseCategories) }
     var tempIncomeCategories by remember { mutableStateOf(currentIncomeCategories) }
     var tempTransferCategories by remember { mutableStateOf(currentTransferCategories) }
+    var tempCardNames by remember { mutableStateOf(currentCardNames) }
     var tempFixedFilter by remember { mutableStateOf(currentFixedExpenseFilter) }
     var categorySheetType by remember { mutableStateOf<CategorySheetType?>(null) }
+    var showCardSheet by remember { mutableStateOf(false) }
 
     // 코치마크 (필터 온보딩)
     val filterCoachMarkRegistry = remember { CoachMarkTargetRegistry() }
@@ -255,6 +273,9 @@ fun FilterBottomSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val allText = stringResource(R.string.common_all)
     val summaryFormat = stringResource(R.string.history_filter_category_summary_multiple)
+    val cardOptions = remember(allCardNames, currentCardNames) {
+        (allCardNames + currentCardNames).filter { it.isNotBlank() }.distinct().sorted()
+    }
     val selectedTypes = selectedFilterTypes(tempShowExpenses, tempShowIncomes, tempShowTransfers)
     val allTypesSelected = tempShowExpenses && tempShowIncomes && tempShowTransfers
     val effectiveFixedFilter = tempFixedFilter
@@ -266,6 +287,7 @@ fun FilterBottomSheet(
         tempExpenseCategories,
         tempIncomeCategories,
         tempTransferCategories,
+        tempCardNames,
         effectiveFixedFilter
     )
     val resetFilter = {
@@ -276,6 +298,7 @@ fun FilterBottomSheet(
         tempExpenseCategories = emptySet()
         tempIncomeCategories = emptySet()
         tempTransferCategories = emptySet()
+        tempCardNames = emptySet()
         tempFixedFilter = FixedExpenseFilter.ALL
         hasAutoCollapsed = false
     }
@@ -423,6 +446,51 @@ fun FilterBottomSheet(
                                 tempSortOrder = sortOptions[index].first
                             }
                         )
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Column {
+                        Text(
+                            text = stringResource(R.string.history_filter_card),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = FriendlyMoneyColors.textPrimary,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.history_filter_card_helper),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = FriendlyMoneyColors.textSecondary,
+                            modifier = Modifier.padding(bottom = 10.dp)
+                        )
+                        if (cardOptions.isEmpty()) {
+                            Text(
+                                text = stringResource(R.string.history_filter_no_cards),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = FriendlyMoneyColors.textSecondary,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(MaterialTheme.colorScheme.background)
+                                    .border(1.dp, FriendlyMoneyColors.border, RoundedCornerShape(16.dp))
+                                    .padding(vertical = 6.dp)
+                            ) {
+                                FilterCategorySummaryRow(
+                                    label = stringResource(R.string.history_filter_card),
+                                    summary = buildTextSummary(
+                                        selectedItems = tempCardNames,
+                                        allText = allText,
+                                        multiFormat = summaryFormat
+                                    ),
+                                    onCategoryClick = { showCardSheet = true }
+                                )
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))
@@ -609,6 +677,7 @@ fun FilterBottomSheet(
                                 tempExpenseCategories,
                                 tempIncomeCategories,
                                 tempTransferCategories,
+                                tempCardNames,
                                 effectiveFixedFilter
                             )
                         },
@@ -704,6 +773,15 @@ fun FilterBottomSheet(
                 }
             },
             onDismiss = { categorySheetType = null }
+        )
+    }
+
+    if (showCardSheet) {
+        CardFilterListBottomSheet(
+            cardNames = cardOptions,
+            selectedCardNames = tempCardNames,
+            onSelectionChanged = { tempCardNames = it },
+            onDismiss = { showCardSheet = false }
         )
     }
 }
@@ -1111,6 +1189,156 @@ private fun FilterCategorySummaryRow(
                 contentDescription = null,
                 tint = FriendlyMoneyColors.textSecondary
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CardFilterListBottomSheet(
+    cardNames: List<String>,
+    selectedCardNames: Set<String>,
+    onSelectionChanged: (Set<String>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val compactSheetHeight = screenHeight * 0.68f
+    val expandedSheetHeight = screenHeight - 72.dp
+    var isExpanded by remember { mutableStateOf(false) }
+    val sheetHeight = if (isExpanded) expandedSheetHeight else compactSheetHeight
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val selectionSummary = if (selectedCardNames.isEmpty()) {
+        stringResource(R.string.history_filter_all_cards)
+    } else {
+        stringResource(R.string.history_filter_selected_count, selectedCardNames.size)
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(sheetHeight)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(sheetHeight)
+                    .padding(horizontal = 20.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.history_filter_card_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = FriendlyMoneyColors.textPrimary
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { isExpanded = !isExpanded }) {
+                            Text(
+                                text = stringResource(
+                                    if (isExpanded) {
+                                        R.string.history_filter_collapse_sheet
+                                    } else {
+                                        R.string.history_filter_expand_sheet
+                                    }
+                                ),
+                                fontWeight = FontWeight.SemiBold,
+                                color = FriendlyMoneyColors.Mint
+                            )
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = stringResource(R.string.common_close),
+                                tint = FriendlyMoneyColors.textSecondary
+                            )
+                        }
+                    }
+                }
+                Text(
+                    text = selectionSummary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = FriendlyMoneyColors.textSecondary,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        top = 0.dp,
+                        bottom = 88.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
+                ) {
+                    item {
+                        CategoryFilterListRow(
+                            emoji = null,
+                            label = stringResource(R.string.history_filter_all_cards),
+                            checked = selectedCardNames.isEmpty(),
+                            onCheckedChange = { onSelectionChanged(emptySet()) }
+                        )
+                    }
+
+                    items(cardNames, key = { it }) { cardName ->
+                        val isChecked = selectedCardNames.contains(cardName)
+                        CategoryFilterListRow(
+                            emoji = null,
+                            label = cardName,
+                            checked = isChecked,
+                            onCheckedChange = {
+                                val next = if (isChecked) {
+                                    selectedCardNames - cardName
+                                } else {
+                                    selectedCardNames + cardName
+                                }
+                                onSelectionChanged(next)
+                            }
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.background
+                            )
+                        )
+                    )
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            ) {
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.common_confirm),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 }

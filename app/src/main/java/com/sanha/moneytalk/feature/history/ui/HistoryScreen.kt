@@ -232,11 +232,13 @@ fun HistoryScreen(
                 selectedExpenseCategories = uiState.selectedExpenseCategories,
                 selectedIncomeCategories = uiState.selectedIncomeCategories,
                 selectedTransferCategories = uiState.selectedTransferCategories,
+                selectedCardNames = uiState.selectedCardNames,
+                availableCardNames = uiState.availableCardNames,
                 expenseCategories = uiState.expenseCategories,
                 incomeCategories = uiState.incomeCategories,
                 transferCategories = uiState.transferCategories,
                 fixedExpenseFilter = uiState.fixedExpenseFilter,
-                onApplyFilter = { sortOrder, showExp, showInc, showTransfer, expenseCategories, incomeCategories, transferCategories, fixedFilter ->
+                onApplyFilter = { sortOrder, showExp, showInc, showTransfer, expenseCategories, incomeCategories, transferCategories, cardNames, fixedFilter ->
                     viewModel.applyFilter(
                         sortOrder = sortOrder,
                         showExpenses = showExp,
@@ -245,6 +247,7 @@ fun HistoryScreen(
                         expenseCategories = expenseCategories,
                         incomeCategories = incomeCategories,
                         transferCategories = transferCategories,
+                        cardNames = cardNames,
                         fixedExpenseFilter = fixedFilter
                     )
                 },
@@ -297,7 +300,7 @@ fun HistoryScreen(
                         isLoading = pageData.isLoading,
                         showExpenses = uiState.showExpenses,
                         showIncomes = uiState.showIncomes,
-                        hasActiveFilter = uiState.hasCategoryFilter,
+                        hasActiveFilter = uiState.hasActiveFilter,
                         isCurrentMonth = isCurrentMonth,
                         isMonthSynced = mainViewModel.isMonthSynced(pageYear, pageMonth),
                         isPartiallyCovered = mainViewModel.isPagePartiallyCovered(pageYear, pageMonth),

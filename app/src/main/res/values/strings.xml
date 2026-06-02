@@ -255,6 +255,7 @@
     <string name="history_filter_active_category">카테고리 필터 적용 중</string>
     <string name="history_filter_active_type">유형 필터 적용 중</string>
     <string name="history_filter_active_sort">정렬 필터 적용 중</string>
+    <string name="history_filter_active_card">카드 필터 적용 중</string>
     <string name="history_filter_active_combined">필터 적용 중</string>
     <string name="history_filter_active_fixed_only">고정 거래만 표시 중</string>
     <string name="history_filter_active_fixed_exclude">고정 거래 제외 중</string>
@@ -300,14 +301,18 @@
     <string name="history_filter_reset">초기화</string>
     <string name="history_filter_sort">정렬</string>
     <string name="history_filter_type">거래 유형</string>
+    <string name="history_filter_card">카드사</string>
     <string name="history_filter_category">카테고리</string>
     <string name="history_filter_type_helper">먼저 거래 유형을 고르면 카테고리가 쉬워져요</string>
     <string name="history_filter_guide_icon">🤖</string>
     <string name="history_filter_guide_text">고정 거래와 정렬을 고른 뒤\n카테고리로 좁혀보세요</string>
     <string name="history_filter_and_notice">선택한 조건은 모두 함께 적용돼요</string>
+    <string name="history_filter_card_helper">선택한 카드사의 지출과 이체만 볼 수 있어요</string>
+    <string name="history_filter_no_cards">선택 가능한 카드가 없어요</string>
     <string name="history_filter_category_helper">선택한 거래 유형 안에서 카테고리를 좁혀볼 수 있어요</string>
     <string name="history_filter_category_summary_multiple">%1$s 외 %2$d개</string>
     <string name="history_filter_all_categories">모든 카테고리</string>
+    <string name="history_filter_all_cards">모든 카드</string>
     <string name="history_filter_more_categories">더보기</string>
     <string name="history_filter_expand_sheet">전체화면</string>
     <string name="history_filter_collapse_sheet">줄여보기</string>
@@ -315,6 +320,7 @@
     <string name="history_filter_expense_category_title">지출 카테고리 선택</string>
     <string name="history_filter_income_category_title">수입 카테고리 선택</string>
     <string name="history_filter_transfer_category_title">이체 카테고리 선택</string>
+    <string name="history_filter_card_title">카드사 선택</string>
     <string name="history_count_suffix">건</string>
     <string name="history_visit_suffix">회</string>
     <string name="history_count_with_unit">%d건</string>
@@ -528,11 +534,20 @@
     <string name="sms_settings_blocked_sender_title">수신거부 전화번호 관리</string>
     <string name="sms_settings_blocked_sender_subtitle_count">%1$d개 등록</string>
     <string name="sms_settings_blocked_sender_subtitle_empty">등록된 번호 없음</string>
+    <string name="sms_settings_excluded_card_title">제외 카드 관리</string>
+    <string name="sms_settings_excluded_card_subtitle_count">%1$d개 제외 · 전체 %2$d개</string>
+    <string name="sms_settings_excluded_card_subtitle_empty">제외된 카드 없음</string>
     <string name="sms_settings_blocked_phrase_page_title">수신거부 문구 관리</string>
     <string name="sms_settings_blocked_sender_page_title">수신거부 전화번호 관리</string>
+    <string name="sms_settings_excluded_card_page_title">제외 카드 관리</string>
     <string name="sms_settings_blocked_sender_description">추가한 번호의 문자는 SMS 동기화 대상에서 제외됩니다.</string>
     <string name="sms_settings_blocked_sender_input_hint">전화번호 입력</string>
     <string name="sms_settings_blocked_sender_empty">등록된 차단 번호가 없습니다</string>
+    <string name="sms_settings_excluded_card_description">추가하거나 숨김으로 설정한 카드의 거래는 저장되지만 홈, 가계부, 카테고리 상세에서 보이지 않습니다.</string>
+    <string name="sms_settings_excluded_card_input_hint">카드사명 입력</string>
+    <string name="sms_settings_excluded_card_empty">등록된 카드가 없습니다</string>
+    <string name="sms_settings_excluded_card_hidden_label">숨김</string>
+    <string name="sms_settings_excluded_card_visible_label">표시</string>
 
     <!-- 카테고리 설정 -->
     <string name="category_settings_title">카테고리 설정</string>
