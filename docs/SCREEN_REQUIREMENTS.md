@@ -504,9 +504,11 @@ HistoryViewModel.loadPageData(year, month):
 ```
 1. DB 쿼리: expenseRepository.getExpensesByDateRange(startTime, endTime) [Flow]
 2. 제외 키워드: expenses.filter { e → 키워드 불포함 }
-3. 카테고리 필터: selectedCategory != null → 해당 카테고리만
-4. 검색어 필터: searchQuery.isNotBlank → storeName/category/memo 매칭
-5. 정렬 적용: DATE_DESC / AMOUNT_DESC / STORE_FREQ
+3. 제외 카드: OwnedCard.isOwned=false 카드의 ExpenseEntity는 저장 유지, 화면/집계 노출 제외
+4. 카드사 필터: selectedCardNames.isNotEmpty → 해당 카드사 지출/이체만
+5. 카테고리 필터: selectedCategory != null → 해당 카테고리만
+6. 검색어 필터: searchQuery.isNotBlank → storeName/category/memo/cardName 매칭
+7. 정렬 적용: DATE_DESC / AMOUNT_DESC / STORE_FREQ
 ```
 
 #### 캐시 전략
@@ -795,6 +797,16 @@ Step 1 프롬프트에 포함:
 | 기본 키워드 | 회색 헤더 + 삭제 불가 |
 | 출처 | "default" (삭제불가) / "user" (설정UI) / "chat" (AI 채팅) |
 | 정규화 | lowercase + trim |
+
+#### 제외 카드
+
+| 항목 | 스펙 |
+|------|------|
+| 저장 모델 | OwnedCardEntity.isOwned=false |
+| 동작 | 거래 데이터는 계속 저장하되 Home/History/CategoryDetail/일별 상세/AI 채팅 화면과 집계에서 제외 |
+| 추가 | 문자 설정에서 카드사명 직접 입력 → CardNameNormalizer 정규화 후 OwnedCard 수동 등록 |
+| 해제 | 스위치 OFF → isOwned=true로 변경, 저장된 기존 거래가 다시 노출 |
+| 이벤트 | 변경 시 OWNED_CARD_UPDATED 발행 |
 
 #### 데이터 내보내기 (ExportDialog)
 
@@ -1124,7 +1136,7 @@ SpendingTrendInfo (interface)
 |--------|--------|--------|
 | CATEGORY_UPDATED | 카테고리 변경, SMS 제외 키워드 변경 | Home, History |
 | TRANSACTION_ADDED | 지출/수입 추가 | Home, History |
-| OWNED_CARD_UPDATED | 카드 소유 변경 | Home, History |
+| OWNED_CARD_UPDATED | 카드 표시/숨김 변경 | Home, History, CategoryDetail, 일별 상세 |
 | ALL_DATA_DELETED | 전체 삭제 | Home, History, Chat |
 
 ### 8.3 앱 전역 스낵바

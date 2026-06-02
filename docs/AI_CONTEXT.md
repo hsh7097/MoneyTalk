@@ -90,7 +90,7 @@ app/src/main/java/com/sanha/moneytalk/
 | SMS 동기화 검증 | 월별 읽기 순서 독립성 + 실기기 Provider/UI 이동 회귀 검증 | [MonthlySmsSyncOrderRegressionTest.kt](../app/src/test/java/com/sanha/moneytalk/core/sync/MonthlySmsSyncOrderRegressionTest.kt), [RealDeviceMonthlySmsSyncOrderInstrumentedTest.kt](../app/src/androidTest/java/com/sanha/moneytalk/core/sync/RealDeviceMonthlySmsSyncOrderInstrumentedTest.kt), [RealDeviceMonthlyPageNavigationInstrumentedTest.kt](../app/src/androidTest/java/com/sanha/moneytalk/core/sync/RealDeviceMonthlyPageNavigationInstrumentedTest.kt) |
 | 카테고리 분류 (4-tier) | Room → Vector → Keyword → Gemini Batch | [CategoryClassifierService.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt), [StoreEmbeddingRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreEmbeddingRepository.kt) |
 | AI 채팅 (3-step) | 쿼리분석 → DB조회/액션 → 답변생성 | [ChatViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt), [GeminiRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) |
-| 카드 관리 | 소유 카드 화이트리스트 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
+| 카드 관리 | 카드 표시/숨김 설정 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
 | SMS 필터링 | 제외 키워드 블랙리스트 | [SmsExclusionRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/SmsExclusionRepository.kt) |
 | 거래처 규칙 (StoreRule) | 거래처 키워드→카테고리/고정지출/통계 제외 자동 적용 (Tier 0) | [StoreRuleRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreRuleRepository.kt), [StoreRuleSettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/ui/StoreRuleSettingsViewModel.kt) |
 | 설정 백업/복원 | JSON 백업은 거래 내역과 카테고리/거래처 규칙/예산/내 카드/SMS 제외 키워드를 함께 병합 복원 | [DataBackupManager.kt](../app/src/main/java/com/sanha/moneytalk/core/util/DataBackupManager.kt), [SettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsViewModel.kt) |
@@ -107,7 +107,7 @@ app/src/main/java/com/sanha/moneytalk/
 | CategoryMappingEntity | category_mappings | 가게명→카테고리 매핑 캐시 |
 | SmsPatternEntity | sms_patterns | SMS 패턴 벡터 캐시 |
 | StoreEmbeddingEntity | store_embeddings | 가게명 벡터 임베딩 |
-| OwnedCardEntity | owned_cards | 소유 카드 화이트리스트 |
+| OwnedCardEntity | owned_cards | 카드 표시/숨김 설정 |
 | SmsBlockedSenderEntity | sms_blocked_senders | 수신 차단 발신번호 |
 | SmsChannelProbeLogEntity | sms_channel_probe_logs | 채널 진단 로그 |
 | SmsExclusionKeywordEntity | sms_exclusion_keywords | SMS 제외 키워드 |

@@ -118,12 +118,13 @@ HistoryScreen                        ← 내역 탭 메인 화면
 │   └── BillingCycleCalendarView     ← 결제 기간 기준 달력 (날짜 클릭 → TransactionDetailListActivity)
 │       └── CalendarDayCell          ← 날짜 셀 (날짜 + 수입/지출 2줄)
 │
-├── FilterBottomSheet                ← 고정 거래/정렬 우선 필터 + 카테고리/거래 유형 + 코치마크
+├── FilterBottomSheet                ← 고정 거래/정렬 우선 필터 + 카드사/카테고리/거래 유형 + 코치마크
 │   ├── FilterGuideCard              ← 거래 유형 우선 선택 안내 카드
 │   ├── FilterTransactionTypeSelector ← 전체/지출/수입/이체 선택 칩
 │   ├── FilterTypeTile               ← 거래 유형 선택 타일
 │   ├── FilterNoticeCard             ← AND 조건 안내 카드
 │   ├── FilterOptionPillRow          ← 고정 거래/정렬 옵션 pill 그룹
+│   ├── CardFilterListBottomSheet    ← 카드사 전체 목록 멀티 선택
 │   ├── FilterCategoryChipGroup      ← 단일 거래 유형 카테고리 빠른 선택 칩
 │   ├── CategoryChoiceChip           ← 카테고리 빠른 선택 칩
 │   ├── FilterCategorySummaryRow     ← 다중 거래 유형 카테고리 요약 행
@@ -149,12 +150,13 @@ HistoryScreen                        ← 내역 탭 메인 화면
 | FilterStatusChip | 활성 필터 표시/초기화 칩 | [HistoryHeaderKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryHeader.kt) |
 | BillingCycleCalendarView | 결제 기간 기준 달력 뷰 | [HistoryCalendarKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryCalendar.kt) |
 | CalendarDayCell | 달력 날짜 셀 (날짜 + 수입/지출 2줄) | [HistoryCalendarKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryCalendar.kt) |
-| FilterBottomSheet | 고정 거래/정렬 우선 필터 + 카테고리/거래 유형 BottomSheet | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
+| FilterBottomSheet | 고정 거래/정렬 우선 필터 + 카드사/카테고리/거래 유형 BottomSheet | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | FilterGuideCard | 거래 유형 우선 선택 안내 카드 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | FilterTransactionTypeSelector | 전체/지출/수입/이체 선택 칩 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | FilterTypeTile | 거래 유형 선택 타일 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | FilterNoticeCard | AND 조건 안내 카드 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | FilterOptionPillRow | 고정 거래/정렬 옵션 pill 그룹 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
+| CardFilterListBottomSheet | 카드사 전체 목록 멀티 선택 BottomSheet | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | FilterCategoryChipGroup | 단일 거래 유형 카테고리 빠른 선택 칩 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | CategoryChoiceChip | 카테고리 빠른 선택 칩 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
 | FilterCategorySummaryRow | 다중 거래 유형 카테고리 요약 행 | [HistoryFilterKt](../app/src/main/java/com/sanha/moneytalk/feature/history/ui/HistoryFilter.kt) |
@@ -344,16 +346,18 @@ TransactionDetailListActivity         ← 날짜별 거래 목록 (달력 날짜
 ```
 SmsSettingsScreen                    ← 문자 설정 (Activity, 설정에서 "문자 설정" 탭 시 진입)
 ├── TopAppBar                        ← 뒤로가기 + 동적 타이틀
-└── NavHost                          ← 내부 네비게이션 (MAIN/BLOCKED_PHRASES/BLOCKED_SENDERS)
+└── NavHost                          ← 내부 네비게이션 (MAIN/BLOCKED_PHRASES/BLOCKED_SENDERS/EXCLUDED_CARDS)
     ├── SmsSettingsMainContent        ← 메인 (문자분석 업데이트 + 수신차단 메뉴)
     │   ├── SettingsSectionCompose("문자 분석")
     │   │   └── SettingsItemCompose   ← 문자분석 업데이트 (SMS 재동기화 트리거)
     │   └── SettingsSectionCompose("수신 차단")
     │       ├── SettingsItemCompose   ← 수신거부 문구 관리 → BLOCKED_PHRASES
-    │       └── SettingsItemCompose   ← 수신거부 전화번호 관리 → BLOCKED_SENDERS
+    │       ├── SettingsItemCompose   ← 수신거부 전화번호 관리 → BLOCKED_SENDERS
+    │       └── SettingsItemCompose   ← 제외 카드 관리 → EXCLUDED_CARDS
     ├── BlockedPhraseManageScreen     ← 제외 키워드 CRUD (전체 화면)
     │   └── BlockedPhraseItem         ← 키워드 아이템 (소스 표시 + 삭제)
-    └── BlockedSenderManageScreen     ← 차단 번호 CRUD (전체 화면)
+    ├── BlockedSenderManageScreen     ← 차단 번호 CRUD (전체 화면)
+    └── ExcludedCardManageScreen      ← 제외 카드 추가/표시 전환 (전체 화면)
 ```
 
 | 함수 | 설명 | 참조 |
@@ -363,6 +367,7 @@ SmsSettingsScreen                    ← 문자 설정 (Activity, 설정에서 "
 | BlockedPhraseManageScreen | 제외 키워드 관리 (추가/삭제) | [SmsSettingsScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/smssettings/ui/SmsSettingsScreen.kt) |
 | BlockedPhraseItem | 키워드 아이템 (소스 라벨 + 삭제) | [SmsSettingsScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/smssettings/ui/SmsSettingsScreen.kt) |
 | BlockedSenderManageScreen | 차단 번호 관리 (추가/삭제) | [SmsSettingsScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/smssettings/ui/SmsSettingsScreen.kt) |
+| ExcludedCardManageScreen | 제외 카드 관리 (추가/표시 전환) | [SmsSettingsScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/smssettings/ui/SmsSettingsScreen.kt) |
 
 ---
 

@@ -131,6 +131,7 @@ ChatViewModel에서 인메모리로 실행되는 복합 분석 기능:
 - `executeQuery()`: DB 쿼리 실행 (Room DAO 호출)
 - `executeAction()`: DB 수정 액션 실행
 - `executeAnalytics()`: 클라이언트 사이드 복합 분석 (필터 → 그룹핑 → 집계)
+- 지출 조회/분석 응답은 `OwnedCardEntity.isOwned=false` 제외 카드와 통계 제외 거래를 노출/집계에서 제외
 
 쿼리 분석 실패 시 기본 폴백:
 - `TOTAL_EXPENSE` + `EXPENSE_BY_CATEGORY` + `EXPENSE_LIST` (최근 10건)
@@ -397,8 +398,8 @@ chat_history 테이블
 | 대화 히스토리 벡터 검색 | ❌ 미사용 | 대화 기록은 벡터화하지 않음 |
 | RAG (Retrieval Augmented Generation) | ❌ 미사용 | 과거 대화에서 관련 내용 검색하는 기능 없음 |
 | Rolling Summary | ✅ 사용 | LLM 기반 요약으로 맥락 압축 (벡터 불필요) |
-| 지출 데이터 컨텍스트 | ✅ 사용 | Room DB 직접 쿼리 (SQL, 벡터 불필요), 통계 제외 거래는 집계 제외 |
-| ANALYTICS 인메모리 분석 | ✅ 사용 | 클라이언트 사이드 필터/그룹핑/집계, `isExcludedFromStats` 제외 |
+| 지출 데이터 컨텍스트 | ✅ 사용 | Room DB 직접 쿼리 (SQL, 벡터 불필요), 제외 카드/통계 제외 거래는 노출·집계 제외 |
+| ANALYTICS 인메모리 분석 | ✅ 사용 | 클라이언트 사이드 필터/그룹핑/집계, 제외 카드와 `isExcludedFromStats` 제외 |
 
 현재 채팅 시스템은 **순차적 맥락 관리**(Rolling Summary)만 사용합니다.
 벡터 임베딩은 SMS 분류(`SmsPatternEntity`)와 카테고리 분류(`StoreEmbeddingEntity`)에만 활용됩니다.
