@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Close
@@ -27,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -47,6 +49,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.database.entity.OwnedCardEntity
 import com.sanha.moneytalk.core.database.entity.SmsBlockedSenderEntity
 import com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity
 import com.sanha.moneytalk.core.ui.component.settings.SettingsItemCompose
@@ -58,6 +61,7 @@ private object SmsSettingsRoute {
     const val MAIN = "main"
     const val BLOCKED_PHRASES = "blocked_phrases"
     const val BLOCKED_SENDERS = "blocked_senders"
+    const val EXCLUDED_CARDS = "excluded_cards"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,6 +87,7 @@ fun SmsSettingsScreen(
                         text = when (currentRoute) {
                             SmsSettingsRoute.BLOCKED_PHRASES -> stringResource(R.string.sms_settings_blocked_phrase_page_title)
                             SmsSettingsRoute.BLOCKED_SENDERS -> stringResource(R.string.sms_settings_blocked_sender_page_title)
+                            SmsSettingsRoute.EXCLUDED_CARDS -> stringResource(R.string.sms_settings_excluded_card_page_title)
                             else -> stringResource(R.string.sms_settings_title)
                         }
                     )
@@ -120,7 +125,8 @@ fun SmsSettingsScreen(
                         viewModel.requestSmsAnalysisUpdate()
                     },
                     onOpenBlockedPhrases = { navController.navigate(SmsSettingsRoute.BLOCKED_PHRASES) },
-                    onOpenBlockedSenders = { navController.navigate(SmsSettingsRoute.BLOCKED_SENDERS) }
+                    onOpenBlockedSenders = { navController.navigate(SmsSettingsRoute.BLOCKED_SENDERS) },
+                    onOpenExcludedCards = { navController.navigate(SmsSettingsRoute.EXCLUDED_CARDS) }
                 )
             }
 
@@ -139,6 +145,14 @@ fun SmsSettingsScreen(
                     onRemove = viewModel::removeBlockedSender
                 )
             }
+
+            composable(SmsSettingsRoute.EXCLUDED_CARDS) {
+                ExcludedCardManageScreen(
+                    cards = uiState.ownedCards,
+                    onAdd = viewModel::addExcludedCard,
+                    onExcludedChange = viewModel::updateCardExclusion
+                )
+            }
         }
     }
 }
@@ -148,10 +162,12 @@ private fun SmsSettingsMainContent(
     uiState: SmsSettingsUiState,
     onRequestSync: () -> Unit,
     onOpenBlockedPhrases: () -> Unit,
-    onOpenBlockedSenders: () -> Unit
+    onOpenBlockedSenders: () -> Unit,
+    onOpenExcludedCards: () -> Unit
 ) {
     val userPhraseCount = uiState.exclusionKeywords.count { it.source != "default" }
     val defaultPhraseCount = uiState.exclusionKeywords.count { it.source == "default" }
+    val excludedCardCount = uiState.ownedCards.count { !it.isOwned }
     val syncSubtitle = if (uiState.lastSyncTime > 0L) {
         stringResource(
             R.string.sms_settings_sync_subtitle_last,
@@ -208,6 +224,23 @@ private fun SmsSettingsMainContent(
                         }
                     },
                     onClick = onOpenBlockedSenders
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                SettingsItemCompose(
+                    info = object : SettingsItemInfo {
+                        override val icon = Icons.Default.AccountBalanceWallet
+                        override val title = stringResource(R.string.sms_settings_excluded_card_title)
+                        override val subtitle = if (excludedCardCount > 0) {
+                            stringResource(
+                                R.string.sms_settings_excluded_card_subtitle_count,
+                                excludedCardCount,
+                                uiState.ownedCards.size
+                            )
+                        } else {
+                            stringResource(R.string.sms_settings_excluded_card_subtitle_empty)
+                        }
+                    },
+                    onClick = onOpenExcludedCards
                 )
             }
         }
@@ -368,6 +401,126 @@ private fun BlockedPhraseItem(
                 tint = if (canDelete) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline
             )
         }
+    }
+}
+
+@Composable
+private fun ExcludedCardManageScreen(
+    cards: List<OwnedCardEntity>,
+    onAdd: (String) -> Unit,
+    onExcludedChange: (String, Boolean) -> Unit
+) {
+    var newCardName by remember { mutableStateOf("") }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        item {
+            Text(
+                text = stringResource(R.string.sms_settings_excluded_card_description),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = newCardName,
+                    onValueChange = { newCardName = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text(stringResource(R.string.sms_settings_excluded_card_input_hint)) },
+                    singleLine = true,
+                    trailingIcon = {
+                        if (newCardName.isNotEmpty()) {
+                            IconButton(onClick = { newCardName = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
+                            }
+                        }
+                    }
+                )
+                TextButton(
+                    onClick = {
+                        val value = newCardName.trim()
+                        if (value.isNotBlank()) {
+                            onAdd(value)
+                            newCardName = ""
+                        }
+                    },
+                    enabled = newCardName.isNotBlank()
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                    Text(text = stringResource(R.string.common_add))
+                }
+            }
+        }
+
+        if (cards.isNotEmpty()) {
+            items(cards, key = { it.cardName }) { card ->
+                ExcludedCardItem(
+                    card = card,
+                    onExcludedChange = { excluded ->
+                        onExcludedChange(card.cardName, excluded)
+                    }
+                )
+            }
+        } else {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 120.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.sms_settings_excluded_card_empty),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExcludedCardItem(
+    card: OwnedCardEntity,
+    onExcludedChange: (Boolean) -> Unit
+) {
+    val excluded = !card.isOwned
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = card.cardName,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Text(
+                text = stringResource(
+                    if (excluded) {
+                        R.string.sms_settings_excluded_card_hidden_label
+                    } else {
+                        R.string.sms_settings_excluded_card_visible_label
+                    }
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(
+            checked = excluded,
+            onCheckedChange = onExcludedChange
+        )
     }
 }
 

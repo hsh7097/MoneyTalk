@@ -4,8 +4,10 @@ import androidx.compose.runtime.Stable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sanha.moneytalk.core.database.OwnedCardRepository
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.util.CardVisibilityFilter
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
@@ -43,6 +45,7 @@ class TransactionDetailListViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
+    private val ownedCardRepository: OwnedCardRepository,
     private val dataRefreshEvent: DataRefreshEvent
 ) : ViewModel() {
 
@@ -96,7 +99,11 @@ class TransactionDetailListViewModel @Inject constructor(
             cal.set(Calendar.MILLISECOND, 999)
             val endTime = cal.timeInMillis
 
-            val expenses = expenseRepository.getExpensesByDateRangeOnce(startTime, endTime)
+            val excludedCardNames = ownedCardRepository.getExcludedCardNames()
+            val expenses = CardVisibilityFilter.filterVisibleExpenses(
+                expenseRepository.getExpensesByDateRangeOnce(startTime, endTime),
+                excludedCardNames
+            )
                 .sortedByDescending { it.dateTime }
             val incomes = incomeRepository.getIncomesByDateRangeOnce(startTime, endTime)
                 .sortedByDescending { it.dateTime }

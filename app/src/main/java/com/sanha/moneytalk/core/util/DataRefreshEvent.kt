@@ -40,7 +40,7 @@ class DataRefreshEvent @Inject constructor() {
         /** 카테고리 재분류 완료 (API 키 설정 후 백그라운드 재분류) */
         CATEGORY_UPDATED,
 
-        /** 내 카드 설정 변경 (홈/내역 필터 갱신용) */
+        /** 카드 표시/숨김 설정 변경 */
         OWNED_CARD_UPDATED,
 
         /** 실시간 SMS 수신으로 지출/수입 추가 */

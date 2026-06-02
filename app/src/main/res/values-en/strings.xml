@@ -317,6 +317,7 @@
     <string name="history_filter_active_category">Category filter active</string>
     <string name="history_filter_active_type">Type filter active</string>
     <string name="history_filter_active_sort">Sort filter active</string>
+    <string name="history_filter_active_card">Card filter active</string>
     <string name="history_filter_active_combined">Filter active</string>
     <string name="history_filter_active_fixed_only">Fixed transactions only</string>
     <string name="history_filter_active_fixed_exclude">Fixed transactions excluded</string>
@@ -336,11 +337,16 @@
     <string name="home_sync_month_label_format">Month %d</string>
     <string name="home_income_badge">Income %s won</string>
     <string name="home_no_today_transactions">No transactions yet today</string>
+    <string name="history_filter_card">Card</string>
+    <string name="history_filter_card_helper">Show only spending and transfers from selected cards.</string>
+    <string name="history_filter_no_cards">No cards available</string>
     <string name="history_filter_category_helper">Narrow categories inside the selected transaction types.</string>
     <string name="history_filter_more_categories">More</string>
     <string name="history_filter_expand_sheet">Full screen</string>
     <string name="history_filter_collapse_sheet">Compact</string>
     <string name="history_filter_selected_count">%d selected</string>
+    <string name="history_filter_all_cards">All Cards</string>
+    <string name="history_filter_card_title">Choose Card</string>
     <string name="home_sync_dialog_title">Reading expense history</string>
     <string name="sync_repair_income_sources">Repairing saved income sources...</string>
     <string name="sync_income_source_repaired">%1$d saved income sources repaired</string>
@@ -457,11 +463,20 @@
     <string name="sms_settings_blocked_sender_title">Blocked Phone Numbers</string>
     <string name="sms_settings_blocked_sender_subtitle_count">%1$d registered</string>
     <string name="sms_settings_blocked_sender_subtitle_empty">No numbers registered</string>
+    <string name="sms_settings_excluded_card_title">Excluded Cards</string>
+    <string name="sms_settings_excluded_card_subtitle_count">%1$d excluded · %2$d total</string>
+    <string name="sms_settings_excluded_card_subtitle_empty">No excluded cards</string>
     <string name="sms_settings_blocked_phrase_page_title">Blocked Phrases</string>
     <string name="sms_settings_blocked_sender_page_title">Blocked Phone Numbers</string>
+    <string name="sms_settings_excluded_card_page_title">Excluded Cards</string>
     <string name="sms_settings_blocked_sender_description">Messages from added numbers will be excluded from SMS sync.</string>
     <string name="sms_settings_blocked_sender_input_hint">Enter phone number</string>
     <string name="sms_settings_blocked_sender_empty">No blocked numbers registered</string>
+    <string name="sms_settings_excluded_card_description">Transactions from added or hidden cards are saved but hidden from Home, History, and category detail screens.</string>
+    <string name="sms_settings_excluded_card_input_hint">Enter card issuer</string>
+    <string name="sms_settings_excluded_card_empty">No cards registered</string>
+    <string name="sms_settings_excluded_card_hidden_label">Hidden</string>
+    <string name="sms_settings_excluded_card_visible_label">Visible</string>
 
     <!-- SMS regex repair failure reasons -->
     <string name="sms_regex_reason_json_parse_failed">Response is not valid JSON. Return JSON format only.</string>

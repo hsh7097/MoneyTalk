@@ -14,6 +14,7 @@ class CategoryDetailExpenseFiltersTest {
 
         val result = CategoryDetailExpenseFilters.filterDisplayExpenses(
             listOf(included, statsExcluded),
+            emptySet(),
             emptySet()
         )
 
@@ -27,6 +28,7 @@ class CategoryDetailExpenseFiltersTest {
 
         val result = CategoryDetailExpenseFilters.filterStatsExpenses(
             listOf(included, statsExcluded),
+            emptySet(),
             emptySet()
         )
 
@@ -40,7 +42,22 @@ class CategoryDetailExpenseFiltersTest {
 
         val result = CategoryDetailExpenseFilters.filterDisplayExpenses(
             listOf(normal, keywordExcluded),
-            setOf("포인트")
+            setOf("포인트"),
+            emptySet()
+        )
+
+        assertEquals(listOf(1L), result.map { it.id })
+    }
+
+    @Test
+    fun filterDisplayExpenses_removesExcludedCardExpense() {
+        val visible = baseExpense(id = 1, cardName = "신한")
+        val hidden = baseExpense(id = 2, cardName = "현대")
+
+        val result = CategoryDetailExpenseFilters.filterDisplayExpenses(
+            listOf(visible, hidden),
+            emptySet(),
+            setOf("현대")
         )
 
         assertEquals(listOf(1L), result.map { it.id })
@@ -49,14 +66,15 @@ class CategoryDetailExpenseFiltersTest {
     private fun baseExpense(
         id: Long,
         isExcludedFromStats: Boolean = false,
-        originalSms: String = "카드 승인 테스트"
+        originalSms: String = "카드 승인 테스트",
+        cardName: String = "테스트카드"
     ): ExpenseEntity {
         return ExpenseEntity(
             id = id,
             amount = 1_000,
             storeName = "테스트상점",
             category = Category.ETC.displayName,
-            cardName = "테스트카드",
+            cardName = cardName,
             dateTime = 0L,
             originalSms = originalSms,
             smsId = "test_sms_$id",

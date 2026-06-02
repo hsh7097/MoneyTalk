@@ -7,6 +7,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.ad.RewardAdManager
+import com.sanha.moneytalk.core.database.OwnedCardRepository
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
 import com.sanha.moneytalk.core.database.entity.BudgetEntity
@@ -21,6 +22,7 @@ import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.ActionType
 import com.sanha.moneytalk.core.sms.DeletedSmsTracker
+import com.sanha.moneytalk.core.util.CardVisibilityFilter
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.AnalyticsFilter
 import com.sanha.moneytalk.core.util.AnalyticsMetric
@@ -105,6 +107,7 @@ class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
+    private val ownedCardRepository: OwnedCardRepository,
     private val chatDao: ChatDao,
     private val settingsDataStore: SettingsDataStore,
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
@@ -126,6 +129,33 @@ class ChatViewModel @Inject constructor(
 
     /** 재시도를 위한 마지막 사용자 메시지 저장 */
     private var lastUserMessage: String? = null
+
+    private suspend fun filterVisibleExpenses(
+        expenses: List<ExpenseEntity>,
+        statsOnly: Boolean = false
+    ): List<ExpenseEntity> {
+        val excludedCardNames = ownedCardRepository.getExcludedCardNames()
+        val visibleExpenses = CardVisibilityFilter.filterVisibleExpenses(expenses, excludedCardNames)
+        if (!statsOnly) return visibleExpenses
+        return visibleExpenses.filter { it.isIncludedInExpenseStats() }
+    }
+
+    private suspend fun getVisibleStatsExpensesByDateRange(
+        startTimestamp: Long,
+        endTimestamp: Long
+    ): List<ExpenseEntity> {
+        return filterVisibleExpenses(
+            expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp),
+            statsOnly = true
+        )
+    }
+
+    private fun categoryTotals(expenses: List<ExpenseEntity>): List<Pair<String, Int>> {
+        return expenses
+            .groupBy { it.category }
+            .map { (category, items) -> category to items.sumOf { expense -> expense.amount } }
+            .sortedByDescending { it.second }
+    }
 
     init {
         loadSessions()
@@ -667,17 +697,13 @@ class ChatViewModel @Inject constructor(
 
         return when (query.type) {
             QueryType.TOTAL_EXPENSE -> {
+                val expenses = getVisibleStatsExpensesByDateRange(startTimestamp, endTimestamp)
                 val total = if (query.category != null) {
-                    // 카테고리 필터가 있으면 DB에서 직접 해당 카테고리(+소 카테고리)만 합산
                     val cat = Category.fromDisplayName(query.category)
                     val categoryNames = cat.displayNamesIncludingSub
-                    expenseRepository.getTotalExpenseByCategoriesAndDateRange(
-                        categoryNames,
-                        startTimestamp,
-                        endTimestamp
-                    )
+                    expenses.filter { it.category in categoryNames }.sumOf { it.amount }
                 } else {
-                    expenseRepository.getTotalExpenseByDateRange(startTimestamp, endTimestamp)
+                    expenses.sumOf { it.amount }
                 }
                 val categoryLabel = query.category?.let { " ($it)" } ?: ""
                 QueryResult(
@@ -695,21 +721,17 @@ class ChatViewModel @Inject constructor(
             }
 
             QueryType.EXPENSE_BY_CATEGORY -> {
-                val categoryExpenses =
-                    expenseRepository.getExpenseSumByCategory(startTimestamp, endTimestamp)
-                        .let { list ->
-                            if (query.category != null) {
-                                // 특정 카테고리(+소 카테고리) 필터
-                                val cat = Category.fromDisplayName(query.category)
-                                val categoryNames = cat.displayNamesIncludingSub
-                                list.filter { it.category in categoryNames }
-                            } else {
-                                list
-                            }
-                        }
-                val breakdown = categoryExpenses.joinToString("\n") { item ->
-                    val category = Category.fromDisplayName(item.category)
-                    "${category.emoji} ${category.displayName}: ${numberFormat.format(item.total)}원"
+                val expenses = getVisibleStatsExpensesByDateRange(startTimestamp, endTimestamp)
+                val filteredExpenses = if (query.category != null) {
+                    val cat = Category.fromDisplayName(query.category)
+                    val categoryNames = cat.displayNamesIncludingSub
+                    expenses.filter { it.category in categoryNames }
+                } else {
+                    expenses
+                }
+                val breakdown = categoryTotals(filteredExpenses).joinToString("\n") { (categoryName, total) ->
+                    val category = Category.fromDisplayName(categoryName)
+                    "${category.emoji} ${category.displayName}: ${numberFormat.format(total)}원"
                 }.ifEmpty { "해당 기간 지출 내역이 없습니다." }
                 val categoryLabel = query.category?.let { " ($it)" } ?: ""
                 QueryResult(
@@ -720,18 +742,20 @@ class ChatViewModel @Inject constructor(
 
             QueryType.EXPENSE_LIST -> {
                 val limit = query.limit ?: 50
-                val expenses = if (query.category != null) {
-                    // DB에서 직접 카테고리(+소 카테고리) 필터링
-                    val cat = Category.fromDisplayName(query.category)
-                    val categoryNames = cat.displayNamesIncludingSub
-                    expenseRepository.getExpensesByCategoriesAndDateRangeOnce(
-                        categoryNames,
-                        startTimestamp,
-                        endTimestamp
-                    )
-                } else {
-                    expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp)
-                }.filter { it.isIncludedInExpenseStats() }
+                val expenses = filterVisibleExpenses(
+                    if (query.category != null) {
+                        val cat = Category.fromDisplayName(query.category)
+                        val categoryNames = cat.displayNamesIncludingSub
+                        expenseRepository.getExpensesByCategoriesAndDateRangeOnce(
+                            categoryNames,
+                            startTimestamp,
+                            endTimestamp
+                        )
+                    } else {
+                        expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp)
+                    },
+                    statsOnly = true
+                )
                     .take(limit)
 
                 val expenseList = expenses.joinToString("\n") { expense ->
@@ -749,9 +773,13 @@ class ChatViewModel @Inject constructor(
             }
 
             QueryType.DAILY_TOTALS -> {
-                val dailyTotals = expenseRepository.getDailyTotals(startTimestamp, endTimestamp)
-                val totalsStr = dailyTotals.joinToString("\n") { daily ->
-                    "${daily.date}: ${numberFormat.format(daily.total)}원"
+                val dailyDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
+                val dailyTotals = getVisibleStatsExpensesByDateRange(startTimestamp, endTimestamp)
+                    .groupBy { dailyDateFormat.format(it.dateTime) }
+                    .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
+                    .toSortedMap()
+                val totalsStr = dailyTotals.entries.joinToString("\n") { (date, total) ->
+                    "$date: ${numberFormat.format(total)}원"
                 }.ifEmpty { "해당 기간 일별 지출 내역이 없습니다." }
 
                 QueryResult(
@@ -761,9 +789,13 @@ class ChatViewModel @Inject constructor(
             }
 
             QueryType.MONTHLY_TOTALS -> {
-                val monthlyTotals = expenseRepository.getMonthlyTotals()
-                val totalsStr = monthlyTotals.joinToString("\n") { monthly ->
-                    "${monthly.month}: ${numberFormat.format(monthly.total)}원"
+                val monthDateFormat = SimpleDateFormat("yyyy-MM", Locale.KOREA)
+                val monthlyTotals = getVisibleStatsExpensesByDateRange(startTimestamp, endTimestamp)
+                    .groupBy { monthDateFormat.format(it.dateTime) }
+                    .mapValues { (_, expenses) -> expenses.sumOf { it.amount } }
+                    .toSortedMap()
+                val totalsStr = monthlyTotals.entries.joinToString("\n") { (month, total) ->
+                    "$month: ${numberFormat.format(total)}원"
                 }.ifEmpty { "월별 지출 내역이 없습니다." }
 
                 QueryResult(
@@ -785,10 +817,10 @@ class ChatViewModel @Inject constructor(
 
                 // StoreAliasManager를 사용하여 모든 별칭으로 검색
                 val aliases = StoreAliasManager.getAllAliases(storeName)
-                val allExpenses = aliases.flatMap { alias ->
+                val allExpenses = filterVisibleExpenses(aliases.flatMap { alias ->
                     expenseRepository.getExpensesByStoreNameContaining(alias)
                         .filter { it.dateTime in startTimestamp..endTimestamp }
-                }.distinctBy { it.id }
+                }.distinctBy { it.id }, statsOnly = true)
                     .sortedByDescending { it.dateTime }
 
                 val total = allExpenses.sumOf { it.amount }
@@ -814,7 +846,10 @@ class ChatViewModel @Inject constructor(
 
             QueryType.UNCATEGORIZED_LIST -> {
                 val limit = query.limit ?: 20
-                val expenses = expenseRepository.getUncategorizedExpenses(limit)
+                val expenses = filterVisibleExpenses(
+                    expenseRepository.getUncategorizedExpenses(limit),
+                    statsOnly = true
+                )
                 val expenseList = expenses.joinToString("\n") { expense ->
                     "[ID:${expense.id}] ${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${
                         numberFormat.format(
@@ -831,34 +866,34 @@ class ChatViewModel @Inject constructor(
 
             QueryType.CATEGORY_RATIO -> {
                 val monthlyIncome = settingsDataStore.getMonthlyIncome()
-                val allCategoryExpenses =
-                    expenseRepository.getExpenseSumByCategory(startTimestamp, endTimestamp)
+                val allExpenses = getVisibleStatsExpensesByDateRange(startTimestamp, endTimestamp)
 
                 // category 필터가 있으면 해당 카테고리(+하위)만 필터링
                 val categoryExpenses = if (query.category != null) {
                     val cat = Category.fromDisplayName(query.category)
                     val categoryNames = cat.displayNamesIncludingSub
-                    allCategoryExpenses.filter { it.category in categoryNames }
+                    allExpenses.filter { it.category in categoryNames }
                 } else {
-                    allCategoryExpenses
+                    allExpenses
                 }
 
-                val totalExpense = allCategoryExpenses.sumOf { it.total }  // 전체 지출 총액 (비율 계산용)
+                val totalExpense = allExpenses.sumOf { it.amount }  // 전체 지출 총액 (비율 계산용)
 
-                val ratioBreakdown = categoryExpenses.joinToString("\n") { item ->
-                    val category = Category.fromDisplayName(item.category)
-                    val incomeRatio =
-                        if (monthlyIncome > 0) (item.total * 100.0 / monthlyIncome) else 0.0
-                    val expenseRatio =
-                        if (totalExpense > 0) (item.total * 100.0 / totalExpense) else 0.0
-                    "${category.emoji} ${category.displayName}: ${numberFormat.format(item.total)}원 (수입의 ${
-                        String.format(
-                            Locale.KOREA,
-                            "%.1f",
-                            incomeRatio
-                        )
-                    }%, 지출의 ${String.format(Locale.KOREA, "%.1f", expenseRatio)}%)"
-                }.ifEmpty { "해당 기간 지출 내역이 없습니다." }
+                val ratioBreakdown = categoryTotals(categoryExpenses)
+                    .joinToString("\n") { (categoryName, total) ->
+                        val category = Category.fromDisplayName(categoryName)
+                        val incomeRatio =
+                            if (monthlyIncome > 0) (total * 100.0 / monthlyIncome) else 0.0
+                        val expenseRatio =
+                            if (totalExpense > 0) (total * 100.0 / totalExpense) else 0.0
+                        "${category.emoji} ${category.displayName}: ${numberFormat.format(total)}원 (수입의 ${
+                            String.format(
+                                Locale.KOREA,
+                                "%.1f",
+                                incomeRatio
+                            )
+                        }%, 지출의 ${String.format(Locale.KOREA, "%.1f", expenseRatio)}%)"
+                    }.ifEmpty { "해당 기간 지출 내역이 없습니다." }
 
                 val totalIncomeRatio =
                     if (monthlyIncome > 0) (totalExpense * 100.0 / monthlyIncome) else 0.0
@@ -883,8 +918,7 @@ class ChatViewModel @Inject constructor(
             QueryType.EXPENSE_BY_CARD -> {
                 val cardName = query.cardName ?: query.storeName ?: return null
                 val allExpenses =
-                    expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp)
-                        .filter { it.isIncludedInExpenseStats() }
+                    getVisibleStatsExpensesByDateRange(startTimestamp, endTimestamp)
                         .filter { it.cardName.contains(cardName, ignoreCase = true) }
                         .sortedByDescending { it.dateTime }
 
@@ -911,7 +945,8 @@ class ChatViewModel @Inject constructor(
             QueryType.SEARCH_EXPENSE -> {
                 val keyword = query.searchKeyword ?: query.storeName ?: return null
                 val limit = query.limit ?: 30
-                val results = expenseRepository.searchExpenses(keyword).take(limit)
+                val results = filterVisibleExpenses(expenseRepository.searchExpenses(keyword))
+                    .take(limit)
                 val resultList = results.joinToString("\n") { expense ->
                     "[ID:${expense.id}] ${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${
                         numberFormat.format(
@@ -927,7 +962,11 @@ class ChatViewModel @Inject constructor(
             }
 
             QueryType.CARD_LIST -> {
+                val excludedCardNames = ownedCardRepository.getExcludedCardNames()
                 val cardNames = expenseRepository.getAllCardNames()
+                    .filterNot { cardName ->
+                        CardVisibilityFilter.isExcluded(cardName, excludedCardNames)
+                    }
                 val cardList = cardNames.joinToString(", ").ifEmpty { "등록된 카드가 없습니다." }
 
                 QueryResult(
@@ -961,7 +1000,7 @@ class ChatViewModel @Inject constructor(
             }
 
             QueryType.DUPLICATE_LIST -> {
-                val duplicates = expenseRepository.getDuplicateExpenses()
+                val duplicates = filterVisibleExpenses(expenseRepository.getDuplicateExpenses())
                 val dupList = duplicates.take(20).joinToString("\n") { expense ->
                     "[ID:${expense.id}] ${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${
                         numberFormat.format(
@@ -1059,15 +1098,14 @@ class ChatViewModel @Inject constructor(
             val monthEnd = minOf(endTimestamp, DateUtils.getMonthEndTimestamp(year, month))
 
             sb.appendLine("예산 현황 ($yearMonth):")
+            val visibleExpenses = getVisibleStatsExpensesByDateRange(monthStart, monthEnd)
             for (budget in budgets) {
                 val spent = if (budget.category == "전체") {
-                    expenseRepository.getTotalExpenseByDateRange(monthStart, monthEnd)
+                    visibleExpenses.sumOf { it.amount }
                 } else {
                     val cat = Category.fromDisplayName(budget.category)
                     val categoryNames = cat.displayNamesIncludingSub
-                    expenseRepository.getTotalExpenseByCategoriesAndDateRange(
-                        categoryNames, monthStart, monthEnd
-                    )
+                    visibleExpenses.filter { it.category in categoryNames }.sumOf { it.amount }
                 }
                 val remaining = budget.monthlyLimit - spent
                 val status = if (remaining >= 0) "남음" else "초과"
@@ -1105,9 +1143,7 @@ class ChatViewModel @Inject constructor(
         try {
 
             // 1. DB에서 기간 내 전체 지출 조회
-            var expenses =
-                expenseRepository.getExpensesByDateRangeOnce(startTimestamp, endTimestamp)
-                    .filter { it.isIncludedInExpenseStats() }
+            var expenses = getVisibleStatsExpensesByDateRange(startTimestamp, endTimestamp)
 
             // 2. filters 배열 순회하며 메모리 필터링
             val filters = query.filters ?: emptyList()
@@ -1880,9 +1916,10 @@ class ChatViewModel @Inject constructor(
         val results = mutableListOf<QueryResult>()
         val monthStart = DateUtils.getMonthStartTimestamp()
         val monthEnd = DateUtils.getMonthEndTimestamp()
+        val visibleMonthExpenses = getVisibleStatsExpensesByDateRange(monthStart, monthEnd)
 
         // 이번 달 총 지출
-        val totalExpense = expenseRepository.getTotalExpenseByDateRange(monthStart, monthEnd)
+        val totalExpense = visibleMonthExpenses.sumOf { it.amount }
         results.add(
             QueryResult(
                 queryType = QueryType.TOTAL_EXPENSE,
@@ -1891,11 +1928,11 @@ class ChatViewModel @Inject constructor(
         )
 
         // 카테고리별 지출
-        val categoryExpenses = expenseRepository.getExpenseSumByCategory(monthStart, monthEnd)
-        val breakdown = categoryExpenses.joinToString("\n") { item ->
-            val category = Category.fromDisplayName(item.category)
-            "${category.emoji} ${category.displayName}: ${numberFormat.format(item.total)}원"
-        }.ifEmpty { "지출 내역이 없습니다." }
+        val breakdown = categoryTotals(visibleMonthExpenses)
+            .joinToString("\n") { (categoryName, total) ->
+                val category = Category.fromDisplayName(categoryName)
+                "${category.emoji} ${category.displayName}: ${numberFormat.format(total)}원"
+            }.ifEmpty { "지출 내역이 없습니다." }
         results.add(
             QueryResult(
                 queryType = QueryType.EXPENSE_BY_CATEGORY,
@@ -1904,8 +1941,10 @@ class ChatViewModel @Inject constructor(
         )
 
         // 최근 지출 10건
-        val recentExpenses = expenseRepository.getRecentExpenses(30)
-            .filter { it.isIncludedInExpenseStats() }
+        val recentExpenses = filterVisibleExpenses(
+            expenseRepository.getRecentExpenses(30),
+            statsOnly = true
+        )
             .take(10)
         val expenseList = recentExpenses.joinToString("\n") { expense ->
             "${DateUtils.formatDateTime(expense.dateTime)} - ${expense.storeName}: ${

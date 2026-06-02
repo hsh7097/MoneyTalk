@@ -5,6 +5,7 @@ import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.database.OwnedCardRepository
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.database.entity.isIncludedInExpenseStats
@@ -24,6 +25,7 @@ import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroup
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import com.sanha.moneytalk.core.sms.DeletedSmsTracker
+import com.sanha.moneytalk.core.util.CardVisibilityFilter
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
@@ -169,6 +171,8 @@ data class HistoryUiState(
     val selectedExpenseCategories: Set<String> = emptySet(),
     val selectedIncomeCategories: Set<String> = emptySet(),
     val selectedTransferCategories: Set<String> = emptySet(),
+    val selectedCardNames: Set<String> = emptySet(),
+    val availableCardNames: List<String> = emptyList(),
     val selectedCategory: String? = null,
     val selectedYear: Int = DateUtils.getCurrentYear(),
     val selectedMonth: Int = DateUtils.getCurrentMonth(),
@@ -230,6 +234,18 @@ data class HistoryUiState(
                 selectedExpenseCategories.isNotEmpty() ||
                 selectedIncomeCategories.isNotEmpty() ||
                 selectedTransferCategories.isNotEmpty()
+
+    val hasCardFilter: Boolean
+        get() = selectedCardNames.isNotEmpty()
+
+    val hasActiveFilter: Boolean
+        get() = hasCategoryFilter ||
+                hasCardFilter ||
+                sortOrder != SortOrder.DATE_DESC ||
+                !showExpenses ||
+                !showIncomes ||
+                !showTransfers ||
+                fixedExpenseFilter != FixedExpenseFilter.ALL
 }
 
 /**
@@ -255,6 +271,7 @@ class HistoryViewModel @Inject constructor(
     private val dataRefreshEvent: DataRefreshEvent,
     private val snackbarBus: AppSnackbarBus,
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
+    private val ownedCardRepository: OwnedCardRepository,
     @ApplicationContext private val context: Context,
     private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
@@ -465,6 +482,9 @@ class HistoryViewModel @Inject constructor(
             val exclusionKeywords = withContext(Dispatchers.IO) {
                 smsExclusionRepository.getAllKeywordStrings()
             }
+            val excludedCardNames = withContext(Dispatchers.IO) {
+                ownedCardRepository.getExcludedCardNames()
+            }
 
             // 수입 로드 (1회성)
             val allIncomes = withContext(Dispatchers.IO) {
@@ -481,7 +501,7 @@ class HistoryViewModel @Inject constructor(
             }
 
             val incomeCategoriesForFilter = state.selectedIncomeCategories.takeIf { it.isNotEmpty() }
-            val typeCategoryFilteredIncomes = if (!state.showIncomes) {
+            val typeCategoryFilteredIncomes = if (!state.showIncomes || state.selectedCardNames.isNotEmpty()) {
                 emptyList()
             } else {
                 keywordFilteredIncomes.filter { income ->
@@ -528,8 +548,18 @@ class HistoryViewModel @Inject constructor(
                     val expenseCategoriesForFilter = resolveExpenseFilterCategories(currentState)
                     val transferCategoriesForFilter =
                         currentState.selectedTransferCategories.takeIf { it.isNotEmpty() }
+                    val selectedCardNamesForFilter =
+                        currentState.selectedCardNames.takeIf { it.isNotEmpty() }
+                    val visibleExpenses = CardVisibilityFilter.filterVisibleExpenses(
+                        keywordFilteredExpenses,
+                        excludedCardNames
+                    )
+                    updateAvailableCardNamesIfCurrent(key, visibleExpenses)
+                    val cardFilteredExpenses = selectedCardNamesForFilter?.let { cardNames ->
+                        CardVisibilityFilter.filterSelectedExpenses(visibleExpenses, cardNames)
+                    } ?: visibleExpenses
 
-                    val typeCategoryFilteredExpenses = keywordFilteredExpenses.filter { expense ->
+                    val typeCategoryFilteredExpenses = cardFilteredExpenses.filter { expense ->
                         val isTransfer = expense.transactionType == "TRANSFER"
                         if (isTransfer) {
                             if (!currentState.showTransfers) return@filter false
@@ -572,6 +602,22 @@ class HistoryViewModel @Inject constructor(
         return state.selectedCategory?.let {
             Category.fromDisplayName(it).displayNamesIncludingSub.toSet()
         }
+    }
+
+    private fun updateAvailableCardNamesIfCurrent(
+        key: MonthKey,
+        expenses: List<ExpenseEntity>
+    ) {
+        val state = _uiState.value
+        if (key != MonthKey(state.selectedYear, state.selectedMonth)) return
+
+        val cardNames = expenses
+            .map { it.cardName }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
+        if (state.availableCardNames == cardNames) return
+        _uiState.update { it.copy(availableCardNames = cardNames) }
     }
 
     /** 정렬 방식에 따라 지출 내역 정렬 */
@@ -648,6 +694,7 @@ class HistoryViewModel @Inject constructor(
                 selectedExpenseCategories = selectedExpenseCategories,
                 selectedIncomeCategories = emptySet(),
                 selectedTransferCategories = emptySet(),
+                selectedCardNames = emptySet(),
                 showExpenses = true,
                 showIncomes = true,
                 showTransfers = true
@@ -765,8 +812,19 @@ class HistoryViewModel @Inject constructor(
                     expenseRepository.searchExpenses(query)
                 }
                 val currentState = _uiState.value
-                val sortedResults = sortExpenses(results, currentState.sortOrder)
-                val filteredResults = results.filterExpensesByFixed(currentState.fixedExpenseFilter)
+                val excludedCardNames = withContext(Dispatchers.IO) {
+                    ownedCardRepository.getExcludedCardNames()
+                }
+                val visibleResults = CardVisibilityFilter.filterVisibleExpenses(
+                    results,
+                    excludedCardNames
+                )
+                val cardFilteredResults = CardVisibilityFilter.filterSelectedExpenses(
+                    visibleResults,
+                    currentState.selectedCardNames
+                )
+                val sortedResults = sortExpenses(cardFilteredResults, currentState.sortOrder)
+                val filteredResults = cardFilteredResults.filterExpensesByFixed(currentState.fixedExpenseFilter)
                 updatePageCache(key, HistoryPageData(
                     isLoading = false,
                     expenses = sortedResults,
@@ -880,6 +938,7 @@ class HistoryViewModel @Inject constructor(
                 selectedExpenseCategories = selectedExpenseCategories,
                 selectedIncomeCategories = emptySet(),
                 selectedTransferCategories = emptySet(),
+                selectedCardNames = emptySet(),
                 fixedExpenseFilter = fixedExpenseFilter
             )
         }
@@ -895,6 +954,7 @@ class HistoryViewModel @Inject constructor(
         expenseCategories: Set<String>,
         incomeCategories: Set<String>,
         transferCategories: Set<String>,
+        cardNames: Set<String>,
         fixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL
     ) {
         _uiState.update {
@@ -907,6 +967,7 @@ class HistoryViewModel @Inject constructor(
                 selectedExpenseCategories = expenseCategories,
                 selectedIncomeCategories = incomeCategories,
                 selectedTransferCategories = transferCategories,
+                selectedCardNames = cardNames,
                 fixedExpenseFilter = fixedExpenseFilter
             )
         }
@@ -921,6 +982,7 @@ class HistoryViewModel @Inject constructor(
                 state.selectedExpenseCategories.isNotEmpty() ||
                 state.selectedIncomeCategories.isNotEmpty() ||
                 state.selectedTransferCategories.isNotEmpty() ||
+                state.selectedCardNames.isNotEmpty() ||
                 state.isSearchMode ||
                 state.searchQuery.isNotEmpty() ||
                 state.sortOrder != SortOrder.DATE_DESC ||
@@ -936,6 +998,7 @@ class HistoryViewModel @Inject constructor(
                 selectedExpenseCategories = emptySet(),
                 selectedIncomeCategories = emptySet(),
                 selectedTransferCategories = emptySet(),
+                selectedCardNames = emptySet(),
                 isSearchMode = false,
                 searchQuery = "",
                 sortOrder = SortOrder.DATE_DESC,
