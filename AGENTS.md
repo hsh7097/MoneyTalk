@@ -51,6 +51,7 @@ cmd.exe /c "cd /d C:\Users\hsh70\project\android\MoneyTalk && .\gradlew.bat asse
 | [docs/CATEGORY_CLASSIFICATION.md](docs/CATEGORY_CLASSIFICATION.md) | 카테고리 분류 시스템 상세 | 분류 관련 작업 시 |
 | [docs/CHAT_SYSTEM.md](docs/CHAT_SYSTEM.md) | AI 채팅 시스템 상세 | 채팅 관련 작업 시 |
 | [docs/APP_FUNCTIONS.md](docs/APP_FUNCTIONS.md) | App Functions 조회/수정 함수 목록, DB 확인 플레이북 | 앱 함수/DB 조회 작업 시 |
+| [docs/AI_CREDIT_DEEP_ANALYSIS_PLAN.md](docs/AI_CREDIT_DEEP_ANALYSIS_PLAN.md) | JSON 기반 심층 상담 + AI 크레딧/결제 후속 계획 | AI 상담/수익화 고도화 작업 시 |
 | [docs/COMPOSABLE_MAP.md](docs/COMPOSABLE_MAP.md) | 화면별 Composable 계층 구조 + IDE 점프 링크 | UI 작업 시 |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | 버전별 변경 이력 | 변경 히스토리 확인 시 |
 | [docs/GIT_CONVENTION.md](docs/GIT_CONVENTION.md) | Git 컨벤션 | 커밋/브랜치/푸시/PR 규칙 확인 시 |

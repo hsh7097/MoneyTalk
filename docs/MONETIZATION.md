@@ -1,7 +1,10 @@
 # MONETIZATION.md - 수익 구조 설계
 
 > MoneyTalk 수익 모델 설계 문서
-> **최종 갱신**: 2026-04-30
+> **최종 갱신**: 2026-06-02
+
+> 후속 고도화 계획: JSON 기반 심층 재무 상담과 AI 크레딧/결제 구조는
+> [AI_CREDIT_DEEP_ANALYSIS_PLAN.md](AI_CREDIT_DEEP_ANALYSIS_PLAN.md)를 기준으로 검토한다.
 
 ---
 
