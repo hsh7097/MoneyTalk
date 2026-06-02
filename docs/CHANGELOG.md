@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Changed (2026-06-02)
+- **Android App Functions 최신 SDK 검토**: `1.0.0-alpha09`는 `compileSdk 37+`와 `AGP 9.1.0+`가 필요해 현재 프로젝트에서는 `1.0.0-alpha08`을 유지하고, 앱 메타데이터 설명을 월간 요약 전용에서 가계 데이터 조회/설정 수정 범위로 보정
+
 ### Added (2026-06-02)
 - **Android App Functions DB 조회/수정 확장**: 앱 내부 DB 스냅샷, 카드 표시/숨김, 거래처 규칙, 커스텀 카테고리, 수입/지출 상세 상태, 월 수입·월 시작일 설정을 App Functions로 조회·수정할 수 있도록 확장
 

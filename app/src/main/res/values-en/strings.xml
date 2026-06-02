@@ -17,7 +17,8 @@
     <string name="common_processing">Processing…</string>
     <string name="common_won">₩%s</string>
     <string name="common_unknown_error">Unknown error</string>
-    <string name="app_functions_app_display_description">View monthly finance summary</string>
+    <string name="app_functions_app_description">View income, expenses, budgets, cards, store rules, and category settings saved in MoneyTalk, and update selected items.</string>
+    <string name="app_functions_app_display_description">View finance data and update settings</string>
     <string name="app_function_error_rate_limited">Too many app function requests. Try again later.</string>
     <string name="app_function_error_timeout">App function execution timed out. Try again later.</string>
     <string name="app_function_error_invalid_month">Month must be between 1 and 12.</string>
