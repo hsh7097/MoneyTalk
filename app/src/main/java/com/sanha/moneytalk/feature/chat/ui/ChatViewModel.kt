@@ -28,6 +28,7 @@ import com.sanha.moneytalk.core.util.AnalyticsFilter
 import com.sanha.moneytalk.core.util.AnalyticsMetric
 import com.sanha.moneytalk.core.util.CategoryReferenceProvider
 import com.sanha.moneytalk.core.util.ChatContextBuilder
+import com.sanha.moneytalk.core.util.ChatCreditPolicy
 import com.sanha.moneytalk.core.util.DataAction
 import com.sanha.moneytalk.core.util.DataQuery
 import com.sanha.moneytalk.core.util.DateUtils
@@ -96,6 +97,8 @@ data class ChatUiState(
     val rewardChatRemaining: Int = 0,
     /** 광고 시청 후 전송할 대기 메시지 */
     val pendingMessage: String? = null,
+    /** 대기 메시지 전송에 필요한 크레딧 */
+    val pendingCreditCost: Int = 0,
     /** 리워드 광고 기능 활성화 여부 */
     val isRewardAdEnabled: Boolean = false
 )
@@ -396,7 +399,13 @@ class ChatViewModel @Inject constructor(
                 rewardAdManager.addRewardChats()
             }
             val pending = _uiState.value.pendingMessage
-            _uiState.update { it.copy(showRewardAdDialog = false, pendingMessage = null) }
+            _uiState.update {
+                it.copy(
+                    showRewardAdDialog = false,
+                    pendingMessage = null,
+                    pendingCreditCost = 0
+                )
+            }
             if (pending != null) {
                 sendMessage(pending)
             }
@@ -405,7 +414,13 @@ class ChatViewModel @Inject constructor(
 
     /** 리워드 광고 다이얼로그 닫기 (광고 시청 안 함) */
     fun onRewardAdDismissed() {
-        _uiState.update { it.copy(showRewardAdDialog = false, pendingMessage = null) }
+        _uiState.update {
+            it.copy(
+                showRewardAdDialog = false,
+                pendingMessage = null,
+                pendingCreditCost = 0
+            )
+        }
     }
 
     /**
@@ -427,36 +442,36 @@ class ChatViewModel @Inject constructor(
         if (sendMutex.isLocked) return  // 이미 처리 중이면 무시
 
         analyticsHelper.logClick(AnalyticsEvent.SCREEN_CHAT, AnalyticsEvent.CLICK_SEND_CHAT)
+        val creditDecision = ChatCreditPolicy.estimate(message)
         viewModelScope.launch {
-            // 리워드 광고 체크: 활성 상태이고 AI 크레딧이 부족하면 광고 다이얼로그 표시
-            if (rewardAdManager.isAdRequired()) {
-                _uiState.update {
-                    it.copy(showRewardAdDialog = true, pendingMessage = message)
-                }
+            // 리워드 광고 체크: 활성 상태이고 질문 유형별 필요 크레딧이 부족하면 광고 다이얼로그 표시
+            if (rewardAdManager.isAdRequired(creditDecision.cost)) {
+                showRewardAdDialog(message, creditDecision.cost)
                 return@launch
             }
 
             // AI 크레딧 차감 (광고 기능 활성 시에만 차감)
             val consumed = withContext(Dispatchers.IO) {
-                rewardAdManager.consumeRewardChat()
+                rewardAdManager.consumeRewardChat(creditDecision.cost)
             }
             if (!consumed) {
                 // race condition 방어: 차감 실패 시 광고 다이얼로그 표시
-                _uiState.update {
-                    it.copy(showRewardAdDialog = true, pendingMessage = message)
-                }
+                showRewardAdDialog(message, creditDecision.cost)
                 return@launch
             }
+            val chargedCredits =
+                if (rewardAdManager.isRewardAdEnabled()) creditDecision.cost else 0
 
             lastUserMessage = message
             _uiState.update { it.copy(canRetry = false) }
 
             val acquired = withTimeoutOrNull(90_000L) {
                 sendMutex.withLock {
-                    processSendMessage(message)
+                    processSendMessage(message, chargedCredits)
                 }
             }
             if (acquired == null) {
+                refundChargedCredits(chargedCredits, _uiState.value.currentSessionId)
                 _uiState.update {
                     it.copy(isLoading = false, loadingSessionId = null, canRetry = true)
                 }
@@ -464,10 +479,33 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    private fun showRewardAdDialog(message: String, requiredCredits: Int) {
+        _uiState.update {
+            it.copy(
+                showRewardAdDialog = true,
+                pendingMessage = message,
+                pendingCreditCost = requiredCredits
+            )
+        }
+    }
+
+    private suspend fun refundChargedCredits(amount: Int, sessionId: Long?) {
+        if (amount <= 0) return
+        rewardAdManager.refundChatCredits(amount, sessionId)
+    }
+
     /**
      * sendMessage 내부 처리 로직 (Mutex 내부에서 실행)
      */
-    private suspend fun processSendMessage(message: String) {
+    private suspend fun processSendMessage(message: String, chargedCredits: Int) {
+        var creditRefunded = false
+        suspend fun refundOnce(sessionId: Long?) {
+            if (!creditRefunded) {
+                refundChargedCredits(chargedCredits, sessionId)
+                creditRefunded = true
+            }
+        }
+
         // 현재 세션 ID 확인, 없으면 새 세션 생성
         var sessionId = _uiState.value.currentSessionId
         if (sessionId == null) {
@@ -516,6 +554,7 @@ class ChatViewModel @Inject constructor(
 
                 analyzeResult.onSuccess { queryRequest ->
                     if (queryRequest != null && queryRequest.isClarification) {
+                        refundOnce(sessionId)
                         // Clarification 응답: 추가 확인 질문을 AI 응답으로 표시
                         isClarification = true
                         chatRepository.saveAiResponseAndUpdateSummary(
@@ -604,6 +643,7 @@ class ChatViewModel @Inject constructor(
                             response
                         )
                     }.onFailure { e ->
+                        refundOnce(sessionId)
                         chatRepository.saveAiResponseAndUpdateSummary(
                             sessionId,
                             "죄송해요, 응답을 받는 중 오류가 발생했어요 😢\n(${e.message})"
@@ -615,6 +655,7 @@ class ChatViewModel @Inject constructor(
 
             _uiState.update { it.copy(isLoading = false, loadingSessionId = null) }
         } catch (e: Exception) {
+            refundOnce(sessionId)
             withContext(Dispatchers.IO) {
                 chatRepository.saveAiResponseAndUpdateSummary(
                     sessionId,

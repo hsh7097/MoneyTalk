@@ -58,6 +58,8 @@ com.sanha.moneytalk/
 │   │   └── RepositoryModule.kt           # Repository 의존성 주입
 │   │
 │   ├── firebase/                         # Firebase 관련
+│   ├── util/
+│   │   ├── ChatCreditPolicy.kt           # 질문 문구 기반 AI 크레딧 비용 산정
 │   │   ├── AnalyticsEvent.kt             # 화면/클릭 이벤트 상수
 │   │   ├── AnalyticsHelper.kt            # Firebase Analytics 래퍼 (@Singleton)
 │   │   ├── CrashlyticsHelper.kt          # Crashlytics 래퍼
@@ -292,12 +294,13 @@ com.sanha.moneytalk/
 - 채팅방 관리 (생성, 삭제, 제목 편집)
 - DB 쿼리 자동 실행 (지출 조회, 분석)
 - 채팅 액션 지원 (삭제, 추가, 수정, SMS 제외 등 12종)
+- 질문 유형별 AI 크레딧 차감 (단순 조회 무료, 상담/분석 차등 차감)
 - 대화 요약 기능 (컨텍스트 유지)
 
 ### 4. 설정 (Settings)
 - 월 수입 / 월 시작일 설정
 - Gemini API 키 설정
-- AI 크레딧 잔액/원장 확인 및 광고 충전
+- AI 크레딧 잔액/원장 확인, 광고 충전, 차감 기준/가이드 표시
 - SMS 동기화 / 카테고리 분류 (진행률 표시)
 - 소유 카드 관리 (화이트리스트)
 - SMS 제외 키워드 관리 (블랙리스트)

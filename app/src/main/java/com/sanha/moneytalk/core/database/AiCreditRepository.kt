@@ -19,8 +19,9 @@ class AiCreditRepository @Inject constructor(
     private val legacyMigrationMutex = Mutex()
 
     companion object {
-        const val CHAT_MESSAGE_COST = 1
+        const val LIGHT_CHAT_COST = 1
         const val REASON_CHAT_MESSAGE = "chat_message"
+        const val REASON_CHAT_REFUND = "chat_refund"
         const val REASON_REWARD_AD = "reward_ad"
         const val REASON_LEGACY_REWARD_CHAT = "legacy_reward_chat"
         const val REASON_PURCHASE = "purchase"
@@ -38,15 +39,15 @@ class AiCreditRepository @Inject constructor(
         return aiCreditDao.getBalance() ?: 0
     }
 
-    suspend fun hasEnoughCredits(cost: Int = CHAT_MESSAGE_COST): Boolean {
+    suspend fun hasEnoughCredits(cost: Int = LIGHT_CHAT_COST): Boolean {
         if (cost <= 0) return true
         return getBalance() >= cost
     }
 
-    suspend fun spendForChat(relatedSessionId: Long? = null): Boolean {
+    suspend fun spendForChat(cost: Int = LIGHT_CHAT_COST, relatedSessionId: Long? = null): Boolean {
         ensureLegacyRewardChatMigrated()
         return aiCreditDao.spendCredits(
-            amount = CHAT_MESSAGE_COST,
+            amount = cost,
             reason = REASON_CHAT_MESSAGE,
             relatedSessionId = relatedSessionId
         )

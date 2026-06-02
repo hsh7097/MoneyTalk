@@ -15,7 +15,7 @@
 - **AI**: Google Gemini (2.5-pro/2.5-flash/2.5-flash-lite)
 - **Min SDK**: 26 (Android 8.0)
 - **Package**: `com.sanha.moneytalk`
-- **DB 버전**: 6 (`moneytalk.db`)
+- **DB 버전**: 8 (`moneytalk.db`)
 
 ---
 
@@ -45,7 +45,7 @@ app/src/main/java/com/sanha/moneytalk/
 │   ├── similarity/        # 유사도 판정 정책 (SimilarityPolicy 구현체)
 │   ├── sms/               # SMS 통합 패키지 (배치=SmsSyncCoordinator/SmsPipeline, 읽기=SmsSyncMessageReader/SmsReaderV2, 날짜=SmsTransactionDateResolver, 실시간=SmsInstantProcessor, 룰=SmsRegexRuleMatcher)
 │   ├── sync/              # 동기화 기간/coverage 정책 (SmsSyncRangeCalculator, SyncCoveragePagePolicy, SyncCoverageRecorder)
-│   └── util/              # 유틸 (DateUtils, CardNameNormalizer, StoreNameGrouper 등)
+│   └── util/              # 유틸 (DateUtils, CardNameNormalizer, StoreNameGrouper, ChatCreditPolicy 등)
 ├── feature/
 │   ├── home/              # 홈 화면 (월간 현황, SMS 동기화)
 │   │   ├── data/          # Repository (Expense, Income, StoreEmbedding, Category, GeminiCategory, CategoryClassifier)

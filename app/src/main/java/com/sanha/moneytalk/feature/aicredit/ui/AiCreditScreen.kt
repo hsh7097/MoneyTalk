@@ -103,6 +103,10 @@ fun AiCreditScreen(
             }
 
             item {
+                AiCreditGuideCard()
+            }
+
+            item {
                 Text(
                     text = stringResource(R.string.ai_credit_recent_ledger_title),
                     style = MaterialTheme.typography.titleMedium,
@@ -218,12 +222,59 @@ private fun AiCreditPolicyCard() {
                 )
             }
             Text(
-                text = stringResource(R.string.ai_credit_policy_chat_cost),
+                text = stringResource(R.string.ai_credit_policy_lookup_free),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = stringResource(R.string.ai_credit_policy_light_advice),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = stringResource(R.string.ai_credit_policy_standard_analysis),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 text = stringResource(R.string.ai_credit_policy_deep_analysis),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun AiCreditGuideCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.ai_credit_guide_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = stringResource(R.string.ai_credit_guide_lookup),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = stringResource(R.string.ai_credit_guide_charge),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = stringResource(R.string.ai_credit_guide_refund),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -298,6 +349,7 @@ private fun ledgerReasonLabel(reason: String): String {
     return when (reason) {
         AiCreditRepository.REASON_REWARD_AD -> stringResource(R.string.ai_credit_ledger_reason_reward_ad)
         AiCreditRepository.REASON_CHAT_MESSAGE -> stringResource(R.string.ai_credit_ledger_reason_chat_message)
+        AiCreditRepository.REASON_CHAT_REFUND -> stringResource(R.string.ai_credit_ledger_reason_chat_refund)
         AiCreditRepository.REASON_LEGACY_REWARD_CHAT -> stringResource(R.string.ai_credit_ledger_reason_legacy_reward_chat)
         AiCreditRepository.REASON_PURCHASE -> stringResource(R.string.ai_credit_ledger_reason_purchase)
         else -> reason

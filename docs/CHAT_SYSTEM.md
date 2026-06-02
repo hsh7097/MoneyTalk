@@ -7,8 +7,9 @@
 ## 1. 시스템 개요
 
 MoneyTalk의 채팅 시스템은 사용자의 자연어 질문을 분석하여 실제 지출 데이터를 조회하고,
-데이터 기반의 맞춤 재무 상담을 제공합니다. 광고가 활성화된 환경에서는 일반 질문 1회마다
-AI 크레딧 1개를 차감하고, 보상형 광고로 크레딧을 충전합니다.
+데이터 기반의 맞춤 재무 상담을 제공합니다. 광고가 활성화된 환경에서는 질문 문구를
+`ChatCreditPolicy`로 먼저 분류하여 단순 조회/앱 액션은 무료로 처리하고,
+AI 해석이 필요한 상담/분석 질문만 크레딧을 차감합니다.
 
 ```
 사용자 질문: "이번 달 식비 얼마야?"
@@ -301,13 +302,15 @@ chat_history 테이블
 ```
 사용자 메시지 입력
 │
-├── 1. ChatEntity 저장 (isUser = true)
+├── 1. ChatCreditPolicy로 예상 크레딧 산정
 │
 ├── 2. AI 크레딧 확인/차감
 │   ├── 부족: 보상형 광고 충전 다이얼로그 표시
-│   └── 충분: 1크레딧 차감 후 진행
+│   └── 충분: 질문 유형별 크레딧 차감 후 진행
 │
-├── 3. ChatContextBuilder로 컨텍스트 구성
+├── 3. ChatEntity 저장 (isUser = true)
+│
+├── 4. ChatContextBuilder로 컨텍스트 구성
 │   ├── Rolling Summary 조회
 │   ├── 최근 N개 메시지 조회 (ASC)
 │   └── 통합 프롬프트 생성
@@ -387,6 +390,7 @@ chat_history 테이블
 | [`feature/chat/ui/ChatViewModel.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt) | 채팅 UI 상태 + 쿼리/액션/분석 실행 |
 | [`feature/chat/ui/ChatScreen.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatScreen.kt) | 채팅 UI (Compose) |
 | [`core/util/DataQueryParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/DataQueryParser.kt) | JSON → 쿼리/액션/clarification 파싱 + QueryType/ActionType enum |
+| [`core/util/ChatCreditPolicy.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/ChatCreditPolicy.kt) | 질문 문구 기반 크레딧 비용 산정 |
 | [`core/util/StoreAliasManager.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/StoreAliasManager.kt) | 가게명 별칭 관리 (일괄 처리 지원) |
 | [`core/database/dao/ChatDao.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/dao/ChatDao.kt) | 세션/메시지 DAO |
 | [`core/database/entity/ChatEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/ChatEntity.kt) | 메시지 엔티티 |

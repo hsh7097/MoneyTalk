@@ -373,6 +373,7 @@ fun ChatRoomView(
     // 리워드 광고 다이얼로그
     if (uiState.showRewardAdDialog) {
         RewardAdDialog(
+            requiredCreditCost = uiState.pendingCreditCost,
             rewardChatCount = rewardChatCount,
             onWatchAd = {
                 val activity = context as? Activity
@@ -388,6 +389,7 @@ fun ChatRoomView(
 /** 리워드 광고 시청 안내 다이얼로그 */
 @Composable
 fun RewardAdDialog(
+    requiredCreditCost: Int,
     rewardChatCount: Int,
     onWatchAd: () -> Unit,
     onDismiss: () -> Unit
@@ -396,7 +398,13 @@ fun RewardAdDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.reward_ad_dialog_title)) },
         text = {
-            Text(stringResource(R.string.reward_ad_dialog_message, rewardChatCount))
+            Text(
+                stringResource(
+                    R.string.reward_ad_dialog_message,
+                    requiredCreditCost,
+                    rewardChatCount
+                )
+            )
         },
         confirmButton = {
             FilledTonalButton(onClick = onWatchAd) {

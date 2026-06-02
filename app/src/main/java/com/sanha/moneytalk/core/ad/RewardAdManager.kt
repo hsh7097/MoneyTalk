@@ -186,16 +186,13 @@ class RewardAdManager @Inject constructor(
         }
     }
 
-    /**
-     * AI 크레딧 1회 차감
-     * @return true면 차감 성공, false면 잔여 크레딧 부족
-     */
-    suspend fun consumeRewardChat(): Boolean {
+    /** 질문 유형별 AI 크레딧 차감. true면 차감 성공, false면 잔여 크레딧 부족 */
+    suspend fun consumeRewardChat(cost: Int = AiCreditRepository.LIGHT_CHAT_COST): Boolean {
         if (!isAdFeatureEnabled()) {
             return true // 광고 비활성 시 항상 성공
         }
 
-        return aiCreditRepository.spendForChat()
+        return aiCreditRepository.spendForChat(cost = cost)
     }
 
     /**
@@ -207,13 +204,22 @@ class RewardAdManager @Inject constructor(
         aiCreditRepository.grantRewardAdCredits(config.rewardAdChatCount)
     }
 
+    suspend fun refundChatCredits(amount: Int, relatedSessionId: Long? = null) {
+        if (!isAdFeatureEnabled() || amount <= 0) return
+        aiCreditRepository.refundCredits(
+            amount = amount,
+            reason = AiCreditRepository.REASON_CHAT_REFUND,
+            relatedSessionId = relatedSessionId
+        )
+    }
+
     /**
      * 광고 시청이 필요한지 확인
      * @return true면 광고 시청 필요 (광고 활성 && AI 크레딧 부족)
      */
-    suspend fun isAdRequired(): Boolean {
+    suspend fun isAdRequired(cost: Int = AiCreditRepository.LIGHT_CHAT_COST): Boolean {
         if (!isAdFeatureEnabled()) return false
-        return !aiCreditRepository.hasEnoughCredits(AiCreditRepository.CHAT_MESSAGE_COST)
+        return !aiCreditRepository.hasEnoughCredits(cost)
     }
 
     /**

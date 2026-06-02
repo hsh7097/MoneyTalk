@@ -380,6 +380,7 @@ AiCreditActivity
 └── AiCreditScreen
     ├── AiCreditBalanceCard        ← 현재 잔액 + 광고 충전 버튼
     ├── AiCreditPolicyCard         ← 크레딧 차감 기준
+    ├── AiCreditGuideCard          ← 무료/차감/환불 안내
     └── AiCreditLedgerRow          ← 최근 충전/사용 원장
 ```
 
@@ -387,6 +388,7 @@ AiCreditActivity
 |------|------|------|
 | AiCreditScreen | AI 크레딧 잔액/충전/원장 화면 | [AiCreditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/aicredit/ui/AiCreditScreen.kt) |
 | AiCreditBalanceCard | 현재 잔액과 광고 충전 액션 | [AiCreditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/aicredit/ui/AiCreditScreen.kt) |
+| AiCreditGuideCard | 크레딧 무료/차감/환불 가이드 | [AiCreditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/aicredit/ui/AiCreditScreen.kt) |
 | AiCreditLedgerRow | 크레딧 충전/사용 원장 행 | [AiCreditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/aicredit/ui/AiCreditScreen.kt) |
 
 ---
