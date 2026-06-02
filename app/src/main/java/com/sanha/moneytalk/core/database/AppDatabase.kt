@@ -4,6 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.sanha.moneytalk.core.database.converter.FloatListConverter
+import com.sanha.moneytalk.core.database.dao.AiCreditDao
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
@@ -20,6 +21,8 @@ import com.sanha.moneytalk.core.database.dao.CustomCategoryDao
 import com.sanha.moneytalk.core.database.dao.StoreEmbeddingDao
 import com.sanha.moneytalk.core.database.dao.StoreRuleDao
 import com.sanha.moneytalk.core.database.dao.SyncCoverageDao
+import com.sanha.moneytalk.core.database.entity.AiCreditBalanceEntity
+import com.sanha.moneytalk.core.database.entity.AiCreditLedgerEntity
 import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import com.sanha.moneytalk.core.database.entity.CustomCategoryEntity
 import com.sanha.moneytalk.core.database.entity.CategoryMappingEntity
@@ -56,6 +59,7 @@ import com.sanha.moneytalk.core.database.entity.SyncCoverageEntity
  * - SmsExclusionKeywordEntity: SMS 제외 키워드 (블랙리스트)
  * - SmsBlockedSenderEntity: SMS 수신거부 발신번호
  * - FinancialAppCandidateEntity: 앱 알림 금융앱 후보/승인 캐시
+ * - AiCreditBalanceEntity/AiCreditLedgerEntity: AI 크레딧 잔액과 사용 원장
  *
  * TypeConverters:
  * - FloatListConverter: 임베딩 벡터(List<Float>)를 JSON String으로 변환
@@ -82,9 +86,11 @@ import com.sanha.moneytalk.core.database.entity.SyncCoverageEntity
         CustomCategoryEntity::class,
         StoreRuleEntity::class,
         SyncCoverageEntity::class,
-        FinancialAppCandidateEntity::class
+        FinancialAppCandidateEntity::class,
+        AiCreditBalanceEntity::class,
+        AiCreditLedgerEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 @TypeConverters(FloatListConverter::class)
@@ -137,6 +143,9 @@ abstract class AppDatabase : RoomDatabase() {
 
     /** 앱 알림 금융앱 후보 캐시 DAO */
     abstract fun financialAppCandidateDao(): FinancialAppCandidateDao
+
+    /** AI 크레딧 DAO */
+    abstract fun aiCreditDao(): AiCreditDao
 
     companion object {
         /** 데이터베이스 파일명 */
@@ -266,6 +275,43 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_financial_app_candidates_updatedAt ON financial_app_candidates(updatedAt)"
+                )
+            }
+        }
+
+        val MIGRATION_7_8 = object : androidx.room.migration.Migration(7, 8) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS ai_credit_balance (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        balance INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS ai_credit_ledger (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        type TEXT NOT NULL,
+                        amount INTEGER NOT NULL,
+                        reason TEXT NOT NULL,
+                        relatedSessionId INTEGER,
+                        relatedMessageId INTEGER,
+                        purchaseToken TEXT,
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_ai_credit_ledger_createdAt ON ai_credit_ledger(createdAt)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_ai_credit_ledger_type ON ai_credit_ledger(type)"
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_ai_credit_ledger_purchaseToken ON ai_credit_ledger(purchaseToken)"
                 )
             }
         }

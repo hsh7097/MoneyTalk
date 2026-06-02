@@ -55,6 +55,30 @@
     <string name="chat_default_session_title">새 인사이트</string>
     <string name="chat_previous_session_title">이전 인사이트</string>
 
+    <!-- AI 크레딧 -->
+    <string name="ai_credit_title">AI 크레딧</string>
+    <string name="ai_credit_balance_label">현재 잔액</string>
+    <string name="ai_credit_balance_value">%d크레딧</string>
+    <string name="ai_credit_ad_charge_button">광고 보고 %d크레딧 충전</string>
+    <string name="ai_credit_ad_charge_disabled">광고 충전 불가</string>
+    <string name="ai_credit_policy_title">크레딧 기준</string>
+    <string name="ai_credit_policy_chat_cost">일반 질문 1회: 1크레딧</string>
+    <string name="ai_credit_policy_deep_analysis">심층 분석은 분석 유형별 크레딧 차감으로 확장 예정</string>
+    <string name="ai_credit_recent_ledger_title">최근 내역</string>
+    <string name="ai_credit_empty_ledger">아직 크레딧 내역이 없습니다</string>
+    <string name="ai_credit_ledger_amount_plus">+%d</string>
+    <string name="ai_credit_ledger_amount_minus">-%d</string>
+    <string name="ai_credit_ledger_type_ad_reward">광고 충전</string>
+    <string name="ai_credit_ledger_type_purchase">구매 충전</string>
+    <string name="ai_credit_ledger_type_spend">크레딧 사용</string>
+    <string name="ai_credit_ledger_type_refund">환불</string>
+    <string name="ai_credit_ledger_type_admin">관리자 조정</string>
+    <string name="ai_credit_ledger_type_unknown">크레딧 변경</string>
+    <string name="ai_credit_ledger_reason_reward_ad">보상형 광고</string>
+    <string name="ai_credit_ledger_reason_chat_message">AI 질문 전송</string>
+    <string name="ai_credit_ledger_reason_legacy_reward_chat">기존 무료 상담 잔여분 이관</string>
+    <string name="ai_credit_ledger_reason_purchase">크레딧 구매</string>
+
     <!-- AI 프롬프트 조립용 보조 문자열 (프롬프트 본문 템플릿은 string_prompt.xml) -->
     <string name="ai_home_insight_top_category_item" translatable="false">%1$s %2$s원</string>
     <string name="ai_home_insight_no_data" translatable="false">데이터 없음</string>
@@ -338,6 +362,7 @@
     <!-- 설정 화면 -->
     <string name="settings_title">설정</string>
     <string name="settings_section_budget">수입/예산 관리</string>
+    <string name="settings_section_ai">AI 관리</string>
     <string name="settings_income_title">월 수입 설정</string>
     <string name="settings_income_subtitle_empty">고정 수입을 설정하세요</string>
     <string name="settings_month_start_title">월 시작일 설정</string>
@@ -586,15 +611,17 @@
     <string name="settings_duplicate_deleted">중복 데이터 %d건이 삭제되었습니다</string>
     <string name="settings_duplicate_empty">중복 데이터가 없습니다</string>
     <string name="settings_duplicate_failed">중복 삭제 실패: %s</string>
+    <string name="settings_ai_credit_title">AI 크레딧</string>
+    <string name="settings_ai_credit_subtitle">%d크레딧 보유</string>
 
     <!-- 리워드 광고 -->
-    <string name="reward_ad_dialog_title">무료 상담 횟수 소진</string>
-    <string name="reward_ad_dialog_message">무료 채팅 횟수를 모두 사용했습니다.\n광고를 시청하면 %d회 추가 상담이 가능합니다.</string>
-    <string name="reward_ad_watch_button">광고 보고 %d회 충전</string>
+    <string name="reward_ad_dialog_title">AI 크레딧 부족</string>
+    <string name="reward_ad_dialog_message">질문 전송에 필요한 AI 크레딧이 부족합니다.\n광고를 시청하면 %d크레딧이 충전됩니다.</string>
+    <string name="reward_ad_watch_button">광고 보고 %d크레딧 충전</string>
     <string name="reward_ad_later">나중에</string>
-    <string name="reward_ad_remaining">남은 무료 상담: %d회</string>
+    <string name="reward_ad_remaining">AI 크레딧: %d</string>
     <string name="reward_ad_load_failed">광고 로드에 실패했습니다. 잠시 후 다시 시도해주세요.</string>
-    <string name="reward_ad_rewarded">%d회 무료 상담이 충전되었습니다!</string>
+    <string name="reward_ad_rewarded">%d크레딧이 충전되었습니다!</string>
 
     <!-- 월별 SMS 동기화 CTA (리워드 광고) -->
     <string name="full_sync_ad_dialog_title">%1$s 문자 동기화</string>

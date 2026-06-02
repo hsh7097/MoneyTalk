@@ -139,6 +139,13 @@
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- AI 크레딧 -->
+        <activity
+            android:name=".feature.aicredit.ui.AiCreditActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.MoneyTalk"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- 거래처 규칙 설정 -->
         <activity
             android:name=".feature.storerulesettings.ui.StoreRuleSettingsActivity"

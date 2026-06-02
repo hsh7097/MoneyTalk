@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added (2026-06-02)
+- **AI 크레딧 기반 채팅/광고 충전 1차 구현**: `ai_credit_balance`/`ai_credit_ledger` Room 테이블과 v8 마이그레이션을 추가하고, 채팅 리워드 광고 보상을 AI 크레딧 충전/사용 원장으로 전환. 설정에서 AI 크레딧 잔액과 최근 내역을 확인하는 화면을 추가
 - **AI 크레딧/심층 분석 후속 계획서**: JSON 기반 재무 상담 컨텍스트, AI 크레딧, 보상형 광고 충전, Play Billing 소비형 크레딧 구매, 크레딧 확인 페이지 도입 계획을 `docs/AI_CREDIT_DEEP_ANALYSIS_PLAN.md`에 정리
 
 ### Fixed (2026-06-02)

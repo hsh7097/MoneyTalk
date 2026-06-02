@@ -126,13 +126,19 @@ app/src/main/java/com/sanha/moneytalk/
 | SmsRegexRuleEntity | sms_regex_rules | SMS regex 룰 (sender+type+ruleKey 복합키) |
 | CustomCategoryEntity | custom_categories | 사용자 정의 카테고리 |
 | StoreRuleEntity | store_rules | 거래처 규칙 (keyword→category/isFixed/isExcludedFromStats 자동 적용) |
+| SyncCoverageEntity | sync_coverage | 실제 SMS 동기화 구간 |
+| FinancialAppCandidateEntity | financial_app_candidates | 앱 알림 금융앱 후보/승인 캐시 |
+| AiCreditBalanceEntity | ai_credit_balance | AI 크레딧 현재 잔액 |
+| AiCreditLedgerEntity | ai_credit_ledger | AI 크레딧 충전/사용 원장 |
 
 ### 2-4. DB 버전 정보
 
-- **현재 버전**: v6
-- **Migration 코드**: `MIGRATION_1_2` ~ `MIGRATION_5_6`
+- **현재 버전**: v8
+- **Migration 코드**: `MIGRATION_1_2` ~ `MIGRATION_7_8`
   - v5: `expenses.is_excluded_from_stats`
   - v6: `store_rules.is_excluded_from_stats`
+  - v7: `financial_app_candidates`
+  - v8: `ai_credit_balance`, `ai_credit_ledger`
 - 이후 스키마 변경 시 추가 Migration 필수
 
 ---

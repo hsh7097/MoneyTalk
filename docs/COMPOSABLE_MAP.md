@@ -214,6 +214,8 @@ SettingsScreen                       ← 설정 탭 메인 화면
 ├── SettingsSectionCompose("수입/예산 관리")
 │   ├── SettingsItemCompose          ← 월 시작일
 │   └── SettingsItemCompose          ← 월 예산
+├── SettingsSectionCompose("AI 관리")
+│   └── SettingsItemCompose          ← AI 크레딧 화면 진입
 ├── SettingsSectionCompose("카테고리 관리")
 │   ├── Row                          ← 카테고리 정리 (클릭 시 RTDB API 키/미분류 건수 재검증)
 │   ├── SettingsItemCompose          ← 카테고리 설정
@@ -371,7 +373,25 @@ SmsSettingsScreen                    ← 문자 설정 (Activity, 설정에서 "
 
 ---
 
-## 9. 카테고리 설정 화면 (CategorySettingsScreen)
+## 9. AI 크레딧 화면 (AiCreditScreen)
+
+```
+AiCreditActivity
+└── AiCreditScreen
+    ├── AiCreditBalanceCard        ← 현재 잔액 + 광고 충전 버튼
+    ├── AiCreditPolicyCard         ← 크레딧 차감 기준
+    └── AiCreditLedgerRow          ← 최근 충전/사용 원장
+```
+
+| 함수 | 설명 | 참조 |
+|------|------|------|
+| AiCreditScreen | AI 크레딧 잔액/충전/원장 화면 | [AiCreditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/aicredit/ui/AiCreditScreen.kt) |
+| AiCreditBalanceCard | 현재 잔액과 광고 충전 액션 | [AiCreditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/aicredit/ui/AiCreditScreen.kt) |
+| AiCreditLedgerRow | 크레딧 충전/사용 원장 행 | [AiCreditScreenKt](../app/src/main/java/com/sanha/moneytalk/feature/aicredit/ui/AiCreditScreen.kt) |
+
+---
+
+## 10. 카테고리 설정 화면 (CategorySettingsScreen)
 
 ```
 CategorySettingsActivity               ← 카테고리 설정 (별도 Activity, SmsSettings 패턴)
@@ -395,7 +415,7 @@ CategorySettingsActivity               ← 카테고리 설정 (별도 Activity,
 
 ---
 
-## 9-1. 거래처 규칙 설정 화면 (StoreRuleSettingsScreen)
+## 11. 거래처 규칙 설정 화면 (StoreRuleSettingsScreen)
 
 ```
 StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Activity)
@@ -416,7 +436,7 @@ StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Acti
 
 ---
 
-## 10. 공통 컴포넌트
+## 12. 공통 컴포넌트
 
 | 함수 | 설명 | 사용 화면 | 참조 |
 |------|------|----------|------|

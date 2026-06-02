@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Cloud
@@ -86,6 +87,7 @@ import com.sanha.moneytalk.core.ui.component.settings.SettingsItemCompose
 import com.sanha.moneytalk.core.ui.component.settings.SettingsItemInfo
 import com.sanha.moneytalk.core.ui.component.settings.SettingsSectionCompose
 import com.sanha.moneytalk.core.util.DataBackupManager
+import com.sanha.moneytalk.feature.aicredit.ui.AiCreditActivity
 import com.sanha.moneytalk.feature.categorysettings.ui.CategorySettingsActivity
 import com.sanha.moneytalk.feature.settings.ui.coachmark.settingsCoachMarkSteps
 import com.sanha.moneytalk.feature.smssettings.ui.SmsSettingsActivity
@@ -280,140 +282,159 @@ fun SettingsScreen(
             // 기간/예산 설정
             item {
                 Box(modifier = Modifier.onboardingTarget("settings_period", coachMarkRegistry)) {
-                val numberFormat = java.text.NumberFormat.getNumberInstance(java.util.Locale.KOREA)
-                val categoryCount = uiState.categoryBudgets.size
-                val budgetText = when {
-                    uiState.monthlyBudget != null && categoryCount > 0 ->
-                        stringResource(
-                            R.string.budget_subtitle_total_and_category,
-                            numberFormat.format(uiState.monthlyBudget),
-                            categoryCount
-                        )
-                    uiState.monthlyBudget != null ->
-                        stringResource(
-                            R.string.settings_monthly_budget_subtitle_set,
-                            numberFormat.format(uiState.monthlyBudget)
-                        )
-                    categoryCount > 0 ->
-                        stringResource(R.string.budget_subtitle_category_only, categoryCount)
-                    else ->
-                        stringResource(R.string.settings_monthly_budget_subtitle_empty)
-                }
+                    val numberFormat = java.text.NumberFormat.getNumberInstance(java.util.Locale.KOREA)
+                    val categoryCount = uiState.categoryBudgets.size
+                    val budgetText = when {
+                        uiState.monthlyBudget != null && categoryCount > 0 ->
+                            stringResource(
+                                R.string.budget_subtitle_total_and_category,
+                                numberFormat.format(uiState.monthlyBudget),
+                                categoryCount
+                            )
+                        uiState.monthlyBudget != null ->
+                            stringResource(
+                                R.string.settings_monthly_budget_subtitle_set,
+                                numberFormat.format(uiState.monthlyBudget)
+                            )
+                        categoryCount > 0 ->
+                            stringResource(R.string.budget_subtitle_category_only, categoryCount)
+                        else ->
+                            stringResource(R.string.settings_monthly_budget_subtitle_empty)
+                    }
 
-                SettingsSectionCompose(title = stringResource(R.string.settings_section_budget)) {
+                    SettingsSectionCompose(title = stringResource(R.string.settings_section_budget)) {
+                        SettingsItemCompose(
+                            info = object : SettingsItemInfo {
+                                override val icon = Icons.Default.CalendarMonth
+                                override val title = stringResource(R.string.settings_month_start_title)
+                                override val subtitle = if (uiState.monthStartDay == 1) {
+                                    stringResource(R.string.settings_month_start_default)
+                                } else {
+                                    stringResource(
+                                        R.string.settings_month_start_custom,
+                                        uiState.monthStartDay
+                                    )
+                                }
+                            },
+                            onClick = { viewModel.onIntent(SettingsIntent.ShowMonthStartDayDialog) }
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        SettingsItemCompose(
+                            info = object : SettingsItemInfo {
+                                override val icon = Icons.Default.Savings
+                                override val title = stringResource(R.string.settings_monthly_budget_title)
+                                override val subtitle = budgetText
+                            },
+                            onClick = { viewModel.onIntent(SettingsIntent.ShowBudgetBottomSheet) }
+                        )
+                    }
+                } // Box (settings_period)
+            }
+
+            // AI 크레딧
+            item {
+                SettingsSectionCompose(title = stringResource(R.string.settings_section_ai)) {
                     SettingsItemCompose(
                         info = object : SettingsItemInfo {
-                            override val icon = Icons.Default.CalendarMonth
-                            override val title = stringResource(R.string.settings_month_start_title)
-                            override val subtitle = if (uiState.monthStartDay == 1) {
-                                stringResource(R.string.settings_month_start_default)
-                            } else {
-                                stringResource(
-                                    R.string.settings_month_start_custom,
-                                    uiState.monthStartDay
-                                )
-                            }
+                            override val icon = Icons.Default.AccountBalanceWallet
+                            override val title = stringResource(R.string.settings_ai_credit_title)
+                            override val subtitle = stringResource(
+                                R.string.settings_ai_credit_subtitle,
+                                uiState.aiCreditBalance
+                            )
                         },
-                        onClick = { viewModel.onIntent(SettingsIntent.ShowMonthStartDayDialog) }
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    SettingsItemCompose(
-                        info = object : SettingsItemInfo {
-                            override val icon = Icons.Default.Savings
-                            override val title = stringResource(R.string.settings_monthly_budget_title)
-                            override val subtitle = budgetText
-                        },
-                        onClick = { viewModel.onIntent(SettingsIntent.ShowBudgetBottomSheet) }
+                        onClick = {
+                            AiCreditActivity.open(context)
+                        }
                     )
                 }
-                } // Box (settings_period)
             }
 
             // 카테고리 관리
             item {
                 Box(modifier = Modifier.onboardingTarget("settings_category", coachMarkRegistry)) {
-                SettingsSectionCompose(title = stringResource(R.string.settings_section_category)) {
-                    // 카테고리 정리 (AI 분류)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.onIntent(SettingsIntent.ClassifyUnclassified) }
-                            .alpha(if (uiState.isBackgroundClassifying || uiState.isClassifying) 0.6f else 1f)
-                            .padding(vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    SettingsSectionCompose(title = stringResource(R.string.settings_section_category)) {
+                        // 카테고리 정리 (AI 분류)
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.onIntent(SettingsIntent.ClassifyUnclassified) }
+                                .alpha(if (uiState.isBackgroundClassifying || uiState.isClassifying) 0.6f else 1f)
+                                .padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = stringResource(R.string.settings_classify_title),
-                                    style = MaterialTheme.typography.bodyLarge
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    if (uiState.isBackgroundClassifying) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(12.dp),
-                                            strokeWidth = 2.dp,
-                                            color = MaterialTheme.colorScheme.primary
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = stringResource(R.string.settings_classify_title),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        if (uiState.isBackgroundClassifying) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(12.dp),
+                                                strokeWidth = 2.dp,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        Text(
+                                            text = when {
+                                                !uiState.hasApiKey -> stringResource(R.string.settings_classify_no_api_key)
+                                                uiState.isBackgroundClassifying -> stringResource(R.string.settings_classify_background)
+                                                uiState.unclassifiedCount > 0 -> stringResource(R.string.settings_classify_unclassified, uiState.unclassifiedCount)
+                                                else -> stringResource(R.string.settings_classify_done)
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                            maxLines = 1
                                         )
                                     }
-                                    Text(
-                                        text = when {
-                                            !uiState.hasApiKey -> stringResource(R.string.settings_classify_no_api_key)
-                                            uiState.isBackgroundClassifying -> stringResource(R.string.settings_classify_background)
-                                            uiState.unclassifiedCount > 0 -> stringResource(R.string.settings_classify_unclassified, uiState.unclassifiedCount)
-                                            else -> stringResource(R.string.settings_classify_done)
-                                        },
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                        maxLines = 1
-                                    )
                                 }
                             }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                            )
                         }
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        // 카테고리 설정
+                        SettingsItemCompose(
+                            info = object : SettingsItemInfo {
+                                override val icon = Icons.Default.Settings
+                                override val title = stringResource(R.string.category_settings_title)
+                                override val subtitle = stringResource(R.string.category_settings_subtitle)
+                            },
+                            onClick = {
+                                CategorySettingsActivity.open(context)
+                            }
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        // 거래처 규칙
+                        SettingsItemCompose(
+                            info = object : SettingsItemInfo {
+                                override val icon = Icons.Default.Settings
+                                override val title = stringResource(R.string.store_rule_settings_title)
+                                override val subtitle = stringResource(R.string.store_rule_settings_subtitle)
+                            },
+                            onClick = {
+                                StoreRuleSettingsActivity.open(context)
+                            }
                         )
                     }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    // 카테고리 설정
-                    SettingsItemCompose(
-                        info = object : SettingsItemInfo {
-                            override val icon = Icons.Default.Settings
-                            override val title = stringResource(R.string.category_settings_title)
-                            override val subtitle = stringResource(R.string.category_settings_subtitle)
-                        },
-                        onClick = {
-                            CategorySettingsActivity.open(context)
-                        }
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    // 거래처 규칙
-                    SettingsItemCompose(
-                        info = object : SettingsItemInfo {
-                            override val icon = Icons.Default.Settings
-                            override val title = stringResource(R.string.store_rule_settings_title)
-                            override val subtitle = stringResource(R.string.store_rule_settings_subtitle)
-                        },
-                        onClick = {
-                            StoreRuleSettingsActivity.open(context)
-                        }
-                    )
-                }
                 } // Box (settings_category)
             }
 

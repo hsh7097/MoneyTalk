@@ -15,10 +15,11 @@ com.sanha.moneytalk/
 │
 ├── core/                                  # 공통 모듈
 │   ├── database/                          # Room 데이터베이스
-│   │   ├── AppDatabase.kt                 # Room Database 정의 (v6, 15 entities)
+│   │   ├── AppDatabase.kt                 # Room Database 정의 (v8)
 │   │   ├── converter/
 │   │   │   └── FloatListConverter.kt      # Float 리스트 타입 컨버터
 │   │   ├── dao/                           # Data Access Objects
+│   │   │   ├── AiCreditDao.kt            # AI 크레딧 잔액/원장 DAO
 │   │   │   ├── BudgetDao.kt              # 예산 DAO
 │   │   │   ├── CategoryMappingDao.kt     # 카테고리 매핑 DAO
 │   │   │   ├── ChatDao.kt               # 채팅 DAO
@@ -30,6 +31,8 @@ com.sanha.moneytalk/
 │   │   │   ├── SmsRegexRuleDao.kt      # SMS regex 룰 DAO (Fast Path)
 │   │   │   └── StoreEmbeddingDao.kt     # 가게명 임베딩 DAO
 │   │   ├── entity/                       # Room Entities / extensions
+│   │   │   ├── AiCreditBalanceEntity.kt  # AI 크레딧 잔액 Entity
+│   │   │   ├── AiCreditLedgerEntity.kt   # AI 크레딧 원장 Entity
 │   │   │   ├── BudgetEntity.kt           # 예산 Entity
 │   │   │   ├── CategoryMappingEntity.kt  # 카테고리 매핑 Entity
 │   │   │   ├── ChatEntity.kt            # 채팅 메시지 Entity
@@ -41,6 +44,7 @@ com.sanha.moneytalk/
 │   │   │   ├── SmsPatternEntity.kt      # SMS 패턴 캐시 Entity
 │   │   │   ├── SmsRegexRuleEntity.kt   # SMS regex 룰 Entity (Fast Path)
 │   │   │   └── StoreEmbeddingEntity.kt  # 가게명 벡터 임베딩 Entity
+│   │   ├── AiCreditRepository.kt         # AI 크레딧 충전/차감/원장 관리
 │   │   ├── OwnedCardRepository.kt        # 카드 화이트리스트 + CardNameNormalizer 연동
 │   │   └── SmsExclusionRepository.kt     # SMS 제외 키워드 관리
 │   │
@@ -293,6 +297,7 @@ com.sanha.moneytalk/
 ### 4. 설정 (Settings)
 - 월 수입 / 월 시작일 설정
 - Gemini API 키 설정
+- AI 크레딧 잔액/원장 확인 및 광고 충전
 - SMS 동기화 / 카테고리 분류 (진행률 표시)
 - 소유 카드 관리 (화이트리스트)
 - SMS 제외 키워드 관리 (블랙리스트)

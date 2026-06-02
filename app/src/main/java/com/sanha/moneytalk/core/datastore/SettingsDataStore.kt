@@ -36,6 +36,7 @@ class SettingsDataStore @Inject constructor(
         private val THEME_MODE = stringPreferencesKey("theme_mode")
         private val SERVICE_TIER = stringPreferencesKey("service_tier")
         private val REWARD_CHAT_REMAINING = intPreferencesKey("reward_chat_remaining")
+        private val AI_CREDIT_LEGACY_MIGRATED = booleanPreferencesKey("ai_credit_legacy_migrated")
         private val FULL_SYNC_UNLOCKED = booleanPreferencesKey("full_sync_unlocked")
         private val SYNCED_MONTHS = stringSetPreferencesKey("synced_months")
         private val FREE_SYNC_USED_COUNT = intPreferencesKey("free_sync_used_count")
@@ -206,6 +207,16 @@ class SettingsDataStore @Inject constructor(
 
     suspend fun getRewardChatRemaining(): Int {
         return context.dataStore.data.first()[REWARD_CHAT_REMAINING] ?: 0
+    }
+
+    suspend fun isAiCreditLegacyMigrated(): Boolean {
+        return context.dataStore.data.first()[AI_CREDIT_LEGACY_MIGRATED] ?: false
+    }
+
+    suspend fun markAiCreditLegacyMigrated() {
+        context.dataStore.edit { preferences ->
+            preferences[AI_CREDIT_LEGACY_MIGRATED] = true
+        }
     }
 
     // ===== 월별 동기화 완료 기록 관리 =====

@@ -92,7 +92,7 @@ data class ChatUiState(
     val isInChatRoom: Boolean = false,
     /** 리워드 광고 다이얼로그 표시 여부 */
     val showRewardAdDialog: Boolean = false,
-    /** 리워드 채팅 잔여 횟수 */
+    /** AI 크레딧 잔액 */
     val rewardChatRemaining: Int = 0,
     /** 광고 시청 후 전송할 대기 메시지 */
     val pendingMessage: String? = null,
@@ -357,11 +357,14 @@ class ChatViewModel @Inject constructor(
 
     /**
      * 리워드 광고 관련 상태 감시
-     * - 잔여 횟수 Flow 수집
+     * - AI 크레딧 잔액 Flow 수집
      * - PremiumConfig의 rewardAdEnabled 변경 시 광고 프리로드
      */
     private fun observeRewardAdState() {
         viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                rewardAdManager.prepareCreditBalance()
+            }
             rewardAdManager.rewardChatRemainingFlow.collect { remaining ->
                 _uiState.update { it.copy(rewardChatRemaining = remaining) }
             }
@@ -385,7 +388,7 @@ class ChatViewModel @Inject constructor(
 
     /**
      * 리워드 광고 시청 완료 처리
-     * 보상 충전 후 대기 중인 메시지를 자동 전송합니다.
+     * AI 크레딧 충전 후 대기 중인 메시지를 자동 전송합니다.
      */
     fun onRewardAdWatched() {
         viewModelScope.launch {
@@ -412,14 +415,11 @@ class ChatViewModel @Inject constructor(
         rewardAdManager.showAd(
             activity = activity,
             onRewarded = { onRewardAdWatched() },
-            onFailed = {
-                // 광고 로드/표시 실패는 앱/광고 이슈 → 유저 책임 아님 → 보상 처리
-                onRewardAdWatched()
-            }
+            onFailed = { onRewardAdDismissed() }
         )
     }
 
-    /** 리워드 1회 시청 시 충전되는 횟수 */
+    /** 리워드 1회 시청 시 충전되는 AI 크레딧 */
     fun getRewardChatCount(): Int = rewardAdManager.getRewardChatCount()
 
     fun sendMessage(message: String) {
@@ -428,7 +428,7 @@ class ChatViewModel @Inject constructor(
 
         analyticsHelper.logClick(AnalyticsEvent.SCREEN_CHAT, AnalyticsEvent.CLICK_SEND_CHAT)
         viewModelScope.launch {
-            // 리워드 광고 체크: 활성 상태이고 잔여 횟수가 0이면 광고 다이얼로그 표시
+            // 리워드 광고 체크: 활성 상태이고 AI 크레딧이 부족하면 광고 다이얼로그 표시
             if (rewardAdManager.isAdRequired()) {
                 _uiState.update {
                     it.copy(showRewardAdDialog = true, pendingMessage = message)
@@ -436,7 +436,7 @@ class ChatViewModel @Inject constructor(
                 return@launch
             }
 
-            // 잔여 횟수 차감 (광고 기능 활성 시에만 차감)
+            // AI 크레딧 차감 (광고 기능 활성 시에만 차감)
             val consumed = withContext(Dispatchers.IO) {
                 rewardAdManager.consumeRewardChat()
             }

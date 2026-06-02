@@ -3,6 +3,7 @@ package com.sanha.moneytalk.core.di
 import android.content.Context
 import androidx.room.Room
 import com.sanha.moneytalk.core.database.AppDatabase
+import com.sanha.moneytalk.core.database.dao.AiCreditDao
 import com.sanha.moneytalk.core.database.dao.BudgetDao
 import com.sanha.moneytalk.core.database.dao.CategoryMappingDao
 import com.sanha.moneytalk.core.database.dao.ChatDao
@@ -60,6 +61,7 @@ object DatabaseModule {
             .addMigrations(AppDatabase.MIGRATION_4_5)
             .addMigrations(AppDatabase.MIGRATION_5_6)
             .addMigrations(AppDatabase.MIGRATION_6_7)
+            .addMigrations(AppDatabase.MIGRATION_7_8)
             .build()
     }
 
@@ -173,5 +175,12 @@ object DatabaseModule {
     @Singleton
     fun provideFinancialAppCandidateDao(database: AppDatabase): FinancialAppCandidateDao {
         return database.financialAppCandidateDao()
+    }
+
+    /** AI 크레딧 DAO 제공 */
+    @Provides
+    @Singleton
+    fun provideAiCreditDao(database: AppDatabase): AiCreditDao {
+        return database.aiCreditDao()
     }
 }

@@ -11,6 +11,7 @@ import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import com.sanha.moneytalk.BuildConfig
+import com.sanha.moneytalk.core.database.AiCreditRepository
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.PremiumManager
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -56,7 +57,8 @@ sealed class AdState {
 class RewardAdManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsDataStore: SettingsDataStore,
-    private val premiumManager: PremiumManager
+    private val premiumManager: PremiumManager,
+    private val aiCreditRepository: AiCreditRepository
 ) {
     companion object {
         private const val REWARD_AD_ID = "ca-app-pub-4707673176609005/2566523665"
@@ -69,8 +71,12 @@ class RewardAdManager @Inject constructor(
     private val _adState = MutableStateFlow<AdState>(AdState.Idle)
     val adState: StateFlow<AdState> = _adState.asStateFlow()
 
-    /** 리워드 채팅 잔여 횟수 Flow (UI에서 표시용) */
-    val rewardChatRemainingFlow: Flow<Int> = settingsDataStore.rewardChatRemainingFlow
+    /** AI 크레딧 잔액 Flow (UI에서 표시용) */
+    val rewardChatRemainingFlow: Flow<Int> = aiCreditRepository.balanceFlow
+
+    suspend fun prepareCreditBalance() {
+        aiCreditRepository.ensureLegacyRewardChatMigrated()
+    }
 
     /**
      * 리워드 광고 미리 로드
@@ -179,11 +185,7 @@ class RewardAdManager @Inject constructor(
             return true // 광고 비활성 시 항상 성공
         }
 
-        val remaining = settingsDataStore.getRewardChatRemaining()
-        if (remaining <= 0) return false
-
-        settingsDataStore.saveRewardChatRemaining(remaining - 1)
-        return true
+        return aiCreditRepository.spendForChat()
     }
 
     /**
@@ -192,9 +194,7 @@ class RewardAdManager @Inject constructor(
      */
     suspend fun addRewardChats() {
         val config = premiumManager.premiumConfig.value
-        val current = settingsDataStore.getRewardChatRemaining()
-        val newCount = current + config.rewardAdChatCount
-        settingsDataStore.saveRewardChatRemaining(newCount)
+        aiCreditRepository.grantRewardAdCredits(config.rewardAdChatCount)
     }
 
     /**
@@ -203,7 +203,7 @@ class RewardAdManager @Inject constructor(
      */
     suspend fun isAdRequired(): Boolean {
         if (!isAdFeatureEnabled()) return false
-        return settingsDataStore.getRewardChatRemaining() <= 0
+        return !aiCreditRepository.hasEnoughCredits(AiCreditRepository.CHAT_MESSAGE_COST)
     }
 
     /**
@@ -234,6 +234,10 @@ class RewardAdManager @Inject constructor(
     fun getRewardChatCount(): Int {
         return premiumManager.premiumConfig.value.rewardAdChatCount
     }
+
+    /** 리워드 1회 시청 시 충전되는 AI 크레딧 Flow */
+    val rewardCreditCountFlow: Flow<Int>
+        get() = premiumManager.premiumConfig.map { it.rewardAdChatCount }.distinctUntilChanged()
 
     /**
      * RTDB에서 설정된 무료 동기화 허용 횟수 (기본 3회)

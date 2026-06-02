@@ -7,7 +7,8 @@
 ## 1. 시스템 개요
 
 MoneyTalk의 채팅 시스템은 사용자의 자연어 질문을 분석하여 실제 지출 데이터를 조회하고,
-데이터 기반의 맞춤 재무 상담을 제공합니다.
+데이터 기반의 맞춤 재무 상담을 제공합니다. 광고가 활성화된 환경에서는 일반 질문 1회마다
+AI 크레딧 1개를 차감하고, 보상형 광고로 크레딧을 충전합니다.
 
 ```
 사용자 질문: "이번 달 식비 얼마야?"
@@ -302,32 +303,36 @@ chat_history 테이블
 │
 ├── 1. ChatEntity 저장 (isUser = true)
 │
-├── 2. ChatContextBuilder로 컨텍스트 구성
+├── 2. AI 크레딧 확인/차감
+│   ├── 부족: 보상형 광고 충전 다이얼로그 표시
+│   └── 충분: 1크레딧 차감 후 진행
+│
+├── 3. ChatContextBuilder로 컨텍스트 구성
 │   ├── Rolling Summary 조회
 │   ├── 최근 N개 메시지 조회 (ASC)
 │   └── 통합 프롬프트 생성
 │
-├── 3. Step 1: analyzeQueryNeeds()
+├── 4. Step 1: analyzeQueryNeeds()
 │   └── JSON 파싱 → DataQueryRequest (쿼리 + 액션 + clarification)
 │
-├── 3-1. Clarification 분기 (질문이 모호한 경우)
+├── 4-1. Clarification 분기 (질문이 모호한 경우)
 │   ├── isClarification = true → 확인 질문을 AI 응답으로 저장
-│   └── Step 4~6 건너뜀 → 사용자 추가 입력 대기
+│   └── Step 5~7 건너뜀 → 사용자 추가 입력 대기
 │
-├── 4. 데이터 조회 (DataQueryParser → ExpenseDao 등)
+├── 5. 데이터 조회 (DataQueryParser → ExpenseDao 등)
 │   └── QueryResult 목록 생성
 │   └── ANALYTICS 쿼리 시 executeAnalytics() (클라이언트 사이드)
 │
-├── 5. 액션 실행 (있는 경우)
+├── 6. 액션 실행 (있는 경우)
 │   └── ActionResult 목록 생성
 │   └── StoreAliasManager로 가게 별칭 포함 일괄 처리
 │
-├── 6. Step 3: generateFinalAnswerWithContext()
+├── 7. Step 3: generateFinalAnswerWithContext()
 │   └── [요약 + 최근 대화 + 데이터 + 질문] → Gemini
 │
-├── 7. AI 응답 ChatEntity 저장 (isUser = false)
+├── 8. AI 응답 ChatEntity 저장 (isUser = false)
 │
-└── 8. Rolling Summary 업데이트 (필요 시)
+└── 9. Rolling Summary 업데이트 (필요 시)
     └── 윈도우 밖 메시지가 있으면 요약 갱신
 ```
 
@@ -386,6 +391,8 @@ chat_history 테이블
 | [`core/database/dao/ChatDao.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/dao/ChatDao.kt) | 세션/메시지 DAO |
 | [`core/database/entity/ChatEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/ChatEntity.kt) | 메시지 엔티티 |
 | [`core/database/entity/ChatSessionEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/ChatSessionEntity.kt) | 세션 엔티티 |
+| [`core/database/AiCreditRepository.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/AiCreditRepository.kt) | AI 크레딧 충전/차감/원장 관리 |
+| [`core/database/dao/AiCreditDao.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/dao/AiCreditDao.kt) | AI 크레딧 잔액/원장 DAO |
 | [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml) | AI 시스템/유저 프롬프트 템플릿 |
 | [`res/values/strings.xml`](../app/src/main/res/values/strings.xml) | 프롬프트 조립용 `ai_*` 보조 문자열 |
 

@@ -70,6 +70,28 @@
     <string name="chat_start_new">Start Insight Question</string>
     <string name="chat_default_session_title">New Insight</string>
     <string name="chat_previous_session_title">Previous Insight</string>
+    <string name="ai_credit_title">AI Credits</string>
+    <string name="ai_credit_balance_label">Current balance</string>
+    <string name="ai_credit_balance_value">%d credits</string>
+    <string name="ai_credit_ad_charge_button">Watch ad for %d credits</string>
+    <string name="ai_credit_ad_charge_disabled">Ad charging unavailable</string>
+    <string name="ai_credit_policy_title">Credit rules</string>
+    <string name="ai_credit_policy_chat_cost">General question: 1 credit</string>
+    <string name="ai_credit_policy_deep_analysis">Deep analysis will use credits by analysis type</string>
+    <string name="ai_credit_recent_ledger_title">Recent activity</string>
+    <string name="ai_credit_empty_ledger">No credit activity yet</string>
+    <string name="ai_credit_ledger_amount_plus">+%d</string>
+    <string name="ai_credit_ledger_amount_minus">-%d</string>
+    <string name="ai_credit_ledger_type_ad_reward">Ad reward</string>
+    <string name="ai_credit_ledger_type_purchase">Purchase</string>
+    <string name="ai_credit_ledger_type_spend">Credit spend</string>
+    <string name="ai_credit_ledger_type_refund">Refund</string>
+    <string name="ai_credit_ledger_type_admin">Admin adjustment</string>
+    <string name="ai_credit_ledger_type_unknown">Credit change</string>
+    <string name="ai_credit_ledger_reason_reward_ad">Rewarded ad</string>
+    <string name="ai_credit_ledger_reason_chat_message">AI question sent</string>
+    <string name="ai_credit_ledger_reason_legacy_reward_chat">Migrated free chat balance</string>
+    <string name="ai_credit_ledger_reason_purchase">Credit purchase</string>
 
     <!-- Session Delete Dialog -->
     <string name="dialog_delete_session_title">Delete Insight Record</string>
@@ -174,6 +196,7 @@
     <!-- Settings Screen -->
     <string name="settings_title">Settings</string>
     <string name="settings_section_budget">Income/Budget</string>
+    <string name="settings_section_ai">AI Management</string>
     <string name="settings_income_title">Monthly Income</string>
     <string name="settings_income_subtitle_empty">Set your fixed income</string>
     <string name="settings_month_start_title">Month Start Date</string>
@@ -422,6 +445,8 @@
     <string name="settings_duplicate_deleted">%d duplicate items deleted</string>
     <string name="settings_duplicate_empty">No duplicate data</string>
     <string name="settings_duplicate_failed">Failed to delete duplicates: %s</string>
+    <string name="settings_ai_credit_title">AI Credits</string>
+    <string name="settings_ai_credit_subtitle">%d credits available</string>
     <string name="settings_reset_guide_done">Screen guides have been reset</string>
     <string name="settings_exclusion_default_section">Default Keywords (%d)</string>
     <string name="settings_exclusion_description">Messages containing these keywords are excluded from expense/income messages</string>
@@ -440,13 +465,13 @@
     <string name="settings_theme_title">Theme Settings</string>
 
     <!-- Reward Ad -->
-    <string name="reward_ad_dialog_title">Free chats used up</string>
-    <string name="reward_ad_dialog_message">You\'ve used all free chat turns.\nWatch an ad to get %d more chats.</string>
-    <string name="reward_ad_watch_button">Watch ad for %d chats</string>
+    <string name="reward_ad_dialog_title">Not enough AI credits</string>
+    <string name="reward_ad_dialog_message">You need AI credits to send this question.\nWatch an ad to add %d credits.</string>
+    <string name="reward_ad_watch_button">Watch ad for %d credits</string>
     <string name="reward_ad_later">Later</string>
-    <string name="reward_ad_remaining">Free chats remaining: %d</string>
+    <string name="reward_ad_remaining">AI credits: %d</string>
     <string name="reward_ad_load_failed">Failed to load ad. Please try again later.</string>
-    <string name="reward_ad_rewarded">%d free chats added!</string>
+    <string name="reward_ad_rewarded">%d credits added!</string>
 
     <!-- Force Update -->
     <string name="force_update_title">Update Required</string>

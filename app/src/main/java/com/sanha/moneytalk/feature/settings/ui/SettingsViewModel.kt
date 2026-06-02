@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.database.AiCreditRepository
 import com.sanha.moneytalk.core.database.AppDatabase
 import com.sanha.moneytalk.core.database.CustomCategoryRepository
 import com.sanha.moneytalk.core.database.SmsExclusionRepository
@@ -139,7 +140,9 @@ data class SettingsUiState(
     // 거래 알림 설정
     val notificationEnabled: Boolean = false,
     // 알림 접근 권한 상태
-    val notificationAccessEnabled: Boolean = false
+    val notificationAccessEnabled: Boolean = false,
+    // AI 크레딧
+    val aiCreditBalance: Int = 0
 )
 
 private data class RestoreCounts(
@@ -170,6 +173,7 @@ class SettingsViewModel @Inject constructor(
     private val syncCoverageRepository: SyncCoverageRepository,
     private val dataRefreshEvent: DataRefreshEvent,
     private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
+    private val aiCreditRepository: AiCreditRepository,
     private val snackbarBus: AppSnackbarBus,
     private val classificationState: ClassificationState,
     private val analyticsHelper: AnalyticsHelper
@@ -194,6 +198,7 @@ class SettingsViewModel @Inject constructor(
         loadThemeMode()
         loadMonthlyBudget()
         loadNotificationEnabled()
+        observeAiCreditBalance()
     }
 
     // ========== Intent 처리 ==========
@@ -289,6 +294,17 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsDataStore.notificationEnabledFlow.collect { enabled ->
                 _uiState.update { it.copy(notificationEnabled = enabled) }
+            }
+        }
+    }
+
+    private fun observeAiCreditBalance() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                aiCreditRepository.ensureLegacyRewardChatMigrated()
+            }
+            aiCreditRepository.balanceFlow.collect { balance ->
+                _uiState.update { it.copy(aiCreditBalance = balance) }
             }
         }
     }
