@@ -9,6 +9,7 @@ import kotlin.math.abs
 object RefundIncomeSemanticDedupe {
 
     const val DEFAULT_WINDOW_MS: Long = 3L * 24 * 60 * 60 * 1000
+    private const val CROSS_CHANNEL_WINDOW_MS: Long = 60L * 1000
 
     private val refundHintPattern = Regex(
         """(?:출금|승인|결제|사용|이용)\s*취소|취소\s*(?:승인|완료|처리|환불)?|환불"""
@@ -34,6 +35,8 @@ object RefundIncomeSemanticDedupe {
         val existingRefund = isRefundLike(existing)
         if (!candidateRefund && !existingRefund) return false
 
+        if (isCrossChannelRefundNotice(candidate, existing)) return true
+
         return areMerchantTokensRelated(candidate, existing)
     }
 
@@ -41,6 +44,13 @@ object RefundIncomeSemanticDedupe {
         candidate: IncomeEntity,
         duplicate: IncomeEntity
     ): Boolean {
+        if (!candidate.smsId.isNullOrBlank() && duplicate.smsId.isNullOrBlank()) return true
+        if (candidate.smsId.isNullOrBlank() && !duplicate.smsId.isNullOrBlank()) return false
+        if (!isAppNotification(candidate) && isAppNotification(duplicate) &&
+            isCrossChannelRefundNotice(candidate, duplicate)
+        ) {
+            return true
+        }
         return !isRefundNotice(candidate) && isRefundNotice(duplicate)
     }
 
@@ -50,6 +60,19 @@ object RefundIncomeSemanticDedupe {
 
     fun isRefundNotice(entity: IncomeEntity): Boolean {
         return refundHintPattern.containsMatchIn(entity.originalSms.orEmpty())
+    }
+
+    private fun isCrossChannelRefundNotice(
+        candidate: IncomeEntity,
+        existing: IncomeEntity
+    ): Boolean {
+        if (!isRefundNotice(candidate) || !isRefundNotice(existing)) return false
+        if (abs(candidate.dateTime - existing.dateTime) > CROSS_CHANNEL_WINDOW_MS) return false
+        return isAppNotification(candidate) != isAppNotification(existing)
+    }
+
+    private fun isAppNotification(entity: IncomeEntity): Boolean {
+        return entity.senderAddress.startsWith("app:", ignoreCase = true)
     }
 
     private fun areMerchantTokensRelated(

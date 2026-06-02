@@ -434,13 +434,14 @@ class SmsInstantProcessor @Inject constructor(
         smsId: String,
         needsReconciliation: Boolean
     ): Result {
+        val restoredDuplicate = findRestoredIncomeDuplicate(entity)
         val duplicate = findSemanticDuplicateRefundIncome(entity)
         val replacedRefundNotice = if (
             duplicate != null &&
             RefundIncomeSemanticDedupe.shouldPreferCandidate(entity, duplicate)
         ) {
             true
-        } else if (duplicate != null) {
+        } else if (duplicate != null && restoredDuplicate == null) {
             MoneyTalkLogger.i(
                 "[InstantSMS] 환불 수입 중복 스킵: " +
                     "${entity.amount}원 existing=${duplicate.id}"
@@ -450,23 +451,53 @@ class SmsInstantProcessor @Inject constructor(
             false
         }
 
-        incomeRepository.insert(entity)
+        val entityToInsert = restoredDuplicate?.let { existing ->
+            entity.copy(
+                id = existing.id,
+                memo = existing.memo,
+                recurringDay = existing.recurringDay,
+                createdAt = existing.createdAt
+            )
+        } ?: entity
+
+        incomeRepository.insert(entityToInsert)
         if (replacedRefundNotice && duplicate != null && duplicate.id > 0L) {
             incomeRepository.deleteById(duplicate.id)
         }
         markPendingReconciliation(smsId, needsReconciliation = needsReconciliation)
-        MoneyTalkLogger.i("[InstantSMS] 수입 저장: ${entity.source} ${entity.amount}원 [${entity.category}]")
+        MoneyTalkLogger.i(
+            "[InstantSMS] 수입 저장: " +
+                "${entityToInsert.source} ${entityToInsert.amount}원 [${entityToInsert.category}]"
+        )
 
         // 알림 (설정에서 활성화된 경우만)
-        if (!replacedRefundNotice && settingsDataStore.isNotificationEnabled()) {
+        if (
+            restoredDuplicate == null &&
+            !replacedRefundNotice &&
+            settingsDataStore.isNotificationEnabled()
+        ) {
             notificationManager.showIncomeNotification(
-                amount = entity.amount,
-                source = entity.source,
-                incomeType = entity.type
+                amount = entityToInsert.amount,
+                source = entityToInsert.source,
+                incomeType = entityToInsert.type
             )
         }
 
-        return Result.Income(entity)
+        return Result.Income(entityToInsert)
+    }
+
+    private suspend fun findRestoredIncomeDuplicate(entity: IncomeEntity): IncomeEntity? {
+        val originalSms = entity.originalSms?.takeIf { it.isNotBlank() } ?: return null
+        val senderAddress = SmsFilter.normalizeAddress(entity.senderAddress)
+            .takeIf { it.isNotBlank() } ?: return null
+        return incomeRepository.getIncomesByDateRangeOnce(entity.dateTime, entity.dateTime)
+            .firstOrNull { existing ->
+                existing.smsId.isNullOrBlank() &&
+                    existing.amount == entity.amount &&
+                    existing.dateTime == entity.dateTime &&
+                    SmsFilter.normalizeAddress(existing.senderAddress) == senderAddress &&
+                    existing.originalSms == originalSms
+            }
     }
 
     private suspend fun findSemanticDuplicateRefundIncome(entity: IncomeEntity): IncomeEntity? {

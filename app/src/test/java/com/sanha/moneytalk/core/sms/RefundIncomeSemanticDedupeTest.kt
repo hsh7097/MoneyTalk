@@ -79,15 +79,50 @@ class RefundIncomeSemanticDedupeTest {
         assertFalse(result)
     }
 
+    @Test
+    fun `bank refund sms replaces app cancel notification with same amount and time`() {
+        val bankRefund = income(
+            senderAddress = "16449999",
+            type = "환불",
+            description = "환불",
+            originalSms = """
+                [Web발신]
+                [KB]05/27 21:59
+                801302**775
+                체크카드출금
+                출금취소
+                19,800
+                잔액1,783,454
+            """.trimIndent(),
+            amount = 19_800
+        )
+        val appNotice = income(
+            id = 2L,
+            smsId = null,
+            senderAddress = "app:viva.republica.toss",
+            type = "환불",
+            description = "환불",
+            originalSms = "19,800원 결제 취소 / KB국민체크 | 쿠팡(쿠페이)(일시불)",
+            amount = 19_800
+        )
+
+        val result = RefundIncomeSemanticDedupe.isPotentialDuplicate(bankRefund, appNotice)
+
+        assertTrue(result)
+        assertTrue(RefundIncomeSemanticDedupe.shouldPreferCandidate(bankRefund, appNotice))
+        assertFalse(RefundIncomeSemanticDedupe.shouldPreferCandidate(appNotice, bankRefund))
+    }
+
     private fun income(
         id: Long = 1L,
-        smsId: String = "income1",
+        smsId: String? = "income1",
         amount: Int = 14_500,
         type: String = "입금",
         source: String = "",
         description: String = type,
         originalSms: String,
-        dateTime: Long = baseTime
+        dateTime: Long = baseTime,
+        senderAddress: String = "15889955"
     ): IncomeEntity {
         return IncomeEntity(
             id = id,
@@ -99,7 +134,7 @@ class RefundIncomeSemanticDedupeTest {
             isRecurring = false,
             dateTime = dateTime,
             originalSms = originalSms,
-            senderAddress = "15889955",
+            senderAddress = senderAddress,
             category = "미분류"
         )
     }

@@ -430,6 +430,7 @@ class MainViewModel @Inject constructor(
         val expensesBySmsId: Map<String, ExpenseEntity> = emptyMap(),
         val incomesBySmsId: Map<String, IncomeEntity> = emptyMap(),
         val incomes: List<IncomeEntity> = emptyList(),
+        val restoredIncomesByContentKey: Map<String, IncomeEntity> = emptyMap(),
         val contentIndex: Map<String, List<SmsMatchCandidate>> = emptyMap()
     )
 
@@ -1027,6 +1028,7 @@ class MainViewModel @Inject constructor(
                 .mapNotNull { income -> income.smsId?.let { it to income } }
                 .toMap(),
             incomes = existingIncomes,
+            restoredIncomesByContentKey = buildRestoredIncomeContentIndex(existingIncomes),
             contentIndex = buildExistingContentIndex(existingExpenses, existingIncomes)
         )
     }
@@ -1075,6 +1077,17 @@ class MainViewModel @Inject constructor(
         return entries.groupBy({ it.first }, { it.second })
     }
 
+    private fun buildRestoredIncomeContentIndex(
+        incomes: List<IncomeEntity>
+    ): Map<String, IncomeEntity> {
+        return incomes
+            .filter { it.smsId.isNullOrBlank() }
+            .mapNotNull { income ->
+                buildIncomeContentKey(income)?.let { key -> key to income }
+            }
+            .toMap()
+    }
+
     private fun parseSmsId(smsId: String): ParsedSmsId? {
         val lastSeparator = smsId.lastIndexOf('_')
         if (lastSeparator <= 0 || lastSeparator == smsId.lastIndex) return null
@@ -1097,6 +1110,13 @@ class MainViewModel @Inject constructor(
 
     private fun buildContentKey(address: String, body: String): String =
         "${SmsFilter.normalizeAddress(address)}_${body.hashCode()}"
+
+    private fun buildIncomeContentKey(income: IncomeEntity): String? {
+        val originalSms = income.originalSms?.takeIf { it.isNotBlank() } ?: return null
+        val senderAddress = SmsFilter.normalizeAddress(income.senderAddress)
+            .takeIf { it.isNotBlank() } ?: return null
+        return "${buildContentKey(senderAddress, originalSms)}_${income.dateTime}_${income.amount}"
+    }
 
     private fun findClosestCandidate(
         contentKey: String,
@@ -1463,7 +1483,11 @@ class MainViewModel @Inject constructor(
                 }
             }
 
-            val semanticDuplicateIncome = if (existingIncome == null && existingExpense == null) {
+            if (existingIncome == null && existingExpense == null) {
+                existingIncome = findRestoredIncomeDuplicate(entity, existingSnapshot)
+            }
+
+            val semanticDuplicateIncome = if (existingExpense == null) {
                 findSemanticDuplicateRefundIncome(entity, refundDuplicateCandidates)
             } else {
                 null
@@ -1484,14 +1508,22 @@ class MainViewModel @Inject constructor(
                 if (semanticDuplicateIncome.batchIndex == null && semanticDuplicateIncome.income.id > 0) {
                     duplicateIncomeIdsToDelete += semanticDuplicateIncome.income.id
                 }
-                isNewFlags[i] = true
-                newCount++
+                if (existingIncome != null) {
+                    reconciledCount++
+                } else {
+                    isNewFlags[i] = true
+                    newCount++
+                }
             } else if (semanticDuplicateIncome != null) {
-                reconciledCount++
-                skipInsertFlags[i] = true
-                MoneyTalkLogger.i(
-                    "수입 중복 알림 스킵: amount=${entity.amount}, existingId=${semanticDuplicateIncome.income.id}"
-                )
+                if (existingIncome != null) {
+                    reconciledCount++
+                } else {
+                    reconciledCount++
+                    skipInsertFlags[i] = true
+                    MoneyTalkLogger.i(
+                        "수입 중복 알림 스킵: amount=${entity.amount}, existingId=${semanticDuplicateIncome.income.id}"
+                    )
+                }
             } else if (existingIncome != null || existingExpense != null) {
                 reconciledCount++
             } else {
@@ -1549,6 +1581,14 @@ class MainViewModel @Inject constructor(
             val existing = candidate.income
             RefundIncomeSemanticDedupe.isPotentialDuplicate(entity, existing)
         }
+    }
+
+    private fun findRestoredIncomeDuplicate(
+        entity: IncomeEntity,
+        existingSnapshot: ExistingSmsSnapshot
+    ): IncomeEntity? {
+        val contentKey = buildIncomeContentKey(entity) ?: return null
+        return existingSnapshot.restoredIncomesByContentKey[contentKey]
     }
 
     private fun shouldPreferCurrentRefundIncome(

@@ -2,6 +2,7 @@ package com.sanha.moneytalk.feature.home.data
 
 import com.sanha.moneytalk.core.database.dao.IncomeDao
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.sms.RefundIncomeSemanticDedupe
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -67,6 +68,45 @@ class IncomeRepository @Inject constructor(
 
     // 모든 데이터 삭제
     suspend fun deleteAll() = incomeDao.deleteAll()
+
+    /** 동일 SMS 원문 또는 같은 환불 알림에서 복원/재동기화로 생긴 중복 수입 삭제 */
+    suspend fun deleteDuplicates(): Int {
+        val exactDeleted = incomeDao.deleteDuplicates()
+        val semanticDeleted = deleteSemanticRefundDuplicates()
+        return exactDeleted + semanticDeleted
+    }
+
+    private suspend fun deleteSemanticRefundDuplicates(): Int {
+        val kept = mutableListOf<IncomeEntity>()
+        val deleteIds = mutableSetOf<Long>()
+
+        incomeDao.getAllIncomesOnce()
+            .sortedBy { it.id }
+            .forEach { income ->
+                val duplicateIndex = kept.indexOfFirst { keptIncome ->
+                    RefundIncomeSemanticDedupe.isPotentialDuplicate(
+                        candidate = income,
+                        existing = keptIncome
+                    )
+                }
+
+                if (duplicateIndex < 0) {
+                    kept += income
+                    return@forEach
+                }
+
+                val duplicate = kept[duplicateIndex]
+                if (RefundIncomeSemanticDedupe.shouldPreferCandidate(income, duplicate)) {
+                    if (duplicate.id > 0L) deleteIds += duplicate.id
+                    kept[duplicateIndex] = income
+                } else if (income.id > 0L) {
+                    deleteIds += income.id
+                }
+            }
+
+        deleteIds.forEach { id -> incomeDao.deleteById(id) }
+        return deleteIds.size
+    }
 
     /** 메모 업데이트 */
     suspend fun updateMemo(incomeId: Long, memo: String?) =

@@ -107,6 +107,8 @@ data class ExpenseBackup(
 )
 
 data class IncomeBackup(
+    @SerializedName("smsId")
+    val smsId: String? = null,
     @SerializedName("amount")
     val amount: Int,
     @SerializedName("type")
@@ -317,6 +319,7 @@ object DataBackupManager {
             },
             incomes = incomes.map { income ->
                 IncomeBackup(
+                    smsId = income.smsId,
                     amount = income.amount,
                     type = income.type,
                     description = income.description,
@@ -567,6 +570,7 @@ object DataBackupManager {
         return backupIncomes.map { backup ->
             IncomeEntity(
                 id = 0, // Room이 자동 생성
+                smsId = backup.smsId,
                 amount = backup.amount,
                 type = backup.type,
                 description = backup.description,

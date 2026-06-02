@@ -98,6 +98,43 @@ interface IncomeDao {
     @Query("DELETE FROM incomes")
     suspend fun deleteAll()
 
+    // 중복 수입 삭제 (동일 SMS 원문 중 smsId가 있는 항목을 우선 남김)
+    @Query(
+        """
+        DELETE FROM incomes
+        WHERE COALESCE(originalSms, '') != ''
+          AND EXISTS (
+            SELECT 1 FROM incomes keep
+            WHERE keep.amount = incomes.amount
+              AND keep.dateTime = incomes.dateTime
+              AND replace(lower(keep.senderAddress), ' ', '') =
+                  replace(lower(incomes.senderAddress), ' ', '')
+              AND COALESCE(keep.originalSms, '') = COALESCE(incomes.originalSms, '')
+              AND (
+                  (keep.smsId IS NOT NULL AND incomes.smsId IS NULL)
+                  OR (
+                      (keep.smsId IS NOT NULL) = (incomes.smsId IS NOT NULL)
+                      AND keep.category != '미분류'
+                      AND incomes.category = '미분류'
+                  )
+                  OR (
+                      (keep.smsId IS NOT NULL) = (incomes.smsId IS NOT NULL)
+                      AND keep.category = incomes.category
+                      AND keep.memo IS NOT NULL
+                      AND incomes.memo IS NULL
+                  )
+                  OR (
+                      (keep.smsId IS NOT NULL) = (incomes.smsId IS NOT NULL)
+                      AND keep.category = incomes.category
+                      AND (keep.memo IS NOT NULL) = (incomes.memo IS NOT NULL)
+                      AND keep.id < incomes.id
+                  )
+              )
+          )
+    """
+    )
+    suspend fun deleteDuplicates(): Int
+
     /** 메모 업데이트 */
     @Query("UPDATE incomes SET memo = :memo WHERE id = :incomeId")
     suspend fun updateMemo(incomeId: Long, memo: String?)

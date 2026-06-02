@@ -741,6 +741,7 @@ class SettingsViewModel @Inject constructor(
                 )
                 smsExclusionRepository.restoreKeywords(smsExclusionKeywords)
                 expenseRepository.deleteDuplicates()
+                incomeRepository.deleteDuplicates()
 
                 RestoreCounts(
                     expenses = expenses.size,
@@ -1241,7 +1242,9 @@ class SettingsViewModel @Inject constructor(
             try {
                 val deletedCount = withContext(Dispatchers.IO) {
                     storeRuleSyncService.reapplyAllRules()
-                    expenseRepository.deleteDuplicates()
+                    val expenseDeleted = expenseRepository.deleteDuplicates()
+                    val incomeDeleted = incomeRepository.deleteDuplicates()
+                    expenseDeleted + incomeDeleted
                 }
                 snackbarBus.show(
                     if (deletedCount > 0) {

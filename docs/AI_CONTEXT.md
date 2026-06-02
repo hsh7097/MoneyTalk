@@ -95,7 +95,7 @@ app/src/main/java/com/sanha/moneytalk/
 | 카드 관리 | 카드 표시/숨김 설정 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
 | SMS 필터링 | 제외 키워드 블랙리스트 | [SmsExclusionRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/SmsExclusionRepository.kt) |
 | 거래처 규칙 (StoreRule) | 거래처 키워드→카테고리/고정지출/통계 제외 자동 적용 (Tier 0, 내부 공백 제거 후 contains + 잘린 접두어 매칭) | [StoreRuleRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreRuleRepository.kt), [StoreRuleSettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/storerulesettings/ui/StoreRuleSettingsViewModel.kt) |
-| 설정 백업/복원 | JSON 백업은 거래 내역과 카테고리/거래처 규칙/예산/내 카드/SMS 제외 키워드를 함께 병합 복원한다. 릴리즈 난독화 백업 필드명도 읽고, 복원 후 거래처 규칙 소급 적용과 중복 정리를 수행한다. | [DataBackupManager.kt](../app/src/main/java/com/sanha/moneytalk/core/util/DataBackupManager.kt), [SettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsViewModel.kt) |
+| 설정 백업/복원 | JSON 백업은 거래 내역과 카테고리/거래처 규칙/예산/내 카드/SMS 제외 키워드를 함께 병합 복원한다. 수입 `smsId`도 보존하며, 릴리즈 난독화 백업 필드명도 읽고, 복원 후 거래처 규칙 소급 적용과 지출/수입 중복 정리를 수행한다. | [DataBackupManager.kt](../app/src/main/java/com/sanha/moneytalk/core/util/DataBackupManager.kt), [SettingsViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsViewModel.kt) |
 
 #### Android App Functions 노출 범위
 
@@ -455,6 +455,7 @@ RCS/비즈메시지(프로세스 cold start) → NotificationTransactionService
 우리카드처럼 `누적` 금액 뒤에 실제 거래처가 붙는 앱 알림은 해당 뒤쪽 거래처를 우선 추출해 안내성 `내역`이 거래처로 저장되지 않게 한다.
 `결제 취소` 공백형 취소 문구는 환불성 수입으로 분류하고, 취소 알림과 실제 입금 알림은 금액/시간/가맹점 토큰이 맞을 때 환불 중복으로 정리한다.
 현대/삼성 등 카드사의 `취소` 단독 문구도 환불성 수입으로 분류한다. 같은 원문 SMS가 provider에서 서로 다른 id로 중복 노출되는 경우에는 본문/발신번호 기준 60초 이내 중복을 동기화 배치 안에서 한 번만 처리한다.
+백업 복원본처럼 `smsId`가 없는 수입은 동일 원문/발신/일시/금액 기준으로 기존 행을 찾아 새 `smsId`로 갱신한다.
 카카오뱅크/카카오톡 입금 알림의 `입금 100,000원` 금액 토큰은 송금인으로 쓰지 않고, `송금인 → 입출금통장(1234)` 구조에서는 화살표 왼쪽을 수입 출처로 사용한다.
 디버그 전체 문자 동기화는 기존 저장 SMS와 앱 알림 수입 레코드도 재분석하여 동일 `smsId` 레코드를 새 파서 결과로 업데이트한다.
 

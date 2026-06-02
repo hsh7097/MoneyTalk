@@ -417,7 +417,7 @@
     <string name="settings_classify_success">%d categories were cleaned up</string>
     <string name="settings_classify_no_result">No items were cleaned up. Please try again later.</string>
     <string name="settings_classify_failed">Category cleanup failed: %s</string>
-    <string name="settings_duplicate_subtitle">Remove duplicate items with same amount, store, and time</string>
+    <string name="settings_duplicate_subtitle">Remove duplicate transactions with the same amount and time</string>
     <string name="settings_duplicate_title">Delete Duplicates</string>
     <string name="settings_duplicate_deleted">%d duplicate items deleted</string>
     <string name="settings_duplicate_empty">No duplicate data</string>

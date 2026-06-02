@@ -582,7 +582,7 @@
 
     <!-- 설정 - 중복 삭제 -->
     <string name="settings_duplicate_title">중복 데이터 삭제</string>
-    <string name="settings_duplicate_subtitle">금액, 가게명, 시간이 같은 중복 항목 제거</string>
+    <string name="settings_duplicate_subtitle">금액과 시간이 같은 중복 거래 제거</string>
     <string name="settings_duplicate_deleted">중복 데이터 %d건이 삭제되었습니다</string>
     <string name="settings_duplicate_empty">중복 데이터가 없습니다</string>
     <string name="settings_duplicate_failed">중복 삭제 실패: %s</string>

@@ -5,6 +5,7 @@ import com.sanha.moneytalk.core.database.entity.BudgetEntity
 import com.sanha.moneytalk.core.database.entity.CategoryMappingEntity
 import com.sanha.moneytalk.core.database.entity.CustomCategoryEntity
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.database.entity.OwnedCardEntity
 import com.sanha.moneytalk.core.database.entity.SmsExclusionKeywordEntity
 import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
@@ -32,7 +33,18 @@ class DataBackupManagerTest {
                     transferDirection = "DEPOSIT"
                 )
             ),
-            incomes = emptyList(),
+            incomes = listOf(
+                IncomeEntity(
+                    smsId = "income-sms-1",
+                    amount = 8_200,
+                    type = "환불",
+                    description = "환불",
+                    isRecurring = false,
+                    dateTime = 1_700_000_001_000L,
+                    senderAddress = "16449999",
+                    originalSms = "출금취소 8200원"
+                )
+            ),
             monthlyIncome = 3_000_000,
             monthStartDay = 19,
             categoryMappings = listOf(
@@ -88,6 +100,7 @@ class DataBackupManagerTest {
         assertEquals("DEPOSIT", backupData.expenses.single().transferDirection)
         assertTrue(backupData.expenses.single().isFixed)
         assertTrue(backupData.expenses.single().isExcludedFromStats)
+        assertEquals("income-sms-1", backupData.incomes.single().smsId)
         assertEquals(1, backupData.categoryMappings.size)
         assertEquals(1, backupData.customCategories.size)
         assertEquals(1, backupData.storeRules.size)
@@ -118,15 +131,28 @@ class DataBackupManagerTest {
                   "isExcludedFromStats": false
                 }
               ],
-              "incomes": []
+              "incomes": [
+                {
+                  "amount": 8200,
+                  "type": "환불",
+                  "description": "환불",
+                  "isRecurring": false,
+                  "recurringDay": null,
+                  "dateTime": 1700000001000,
+                  "senderAddress": "16449999",
+                  "originalSms": "출금취소 8200원"
+                }
+              ]
             }
         """.trimIndent()
         val backupData = Gson().fromJson(legacyJson, BackupData::class.java)
 
         val expense = DataBackupManager.convertToExpenseEntities(backupData.expenses.orEmpty()).single()
+        val income = DataBackupManager.convertToIncomeEntities(backupData.incomes.orEmpty()).single()
 
         assertEquals("EXPENSE", expense.transactionType)
         assertEquals("", expense.transferDirection)
+        assertEquals(null, income.smsId)
     }
 
     @Test
