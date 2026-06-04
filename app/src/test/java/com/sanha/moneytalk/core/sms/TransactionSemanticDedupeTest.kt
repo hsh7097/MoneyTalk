@@ -89,6 +89,82 @@ class TransactionSemanticDedupeTest {
     }
 
     @Test
+    fun `same one character store name across app and sms is duplicate`() {
+        val sms = expense(
+            amount = 11_000,
+            storeName = "탄",
+            cardName = "우리",
+            senderAddress = "15889955",
+            body = """
+                ● 우리카드 이용안내
+                우리(1690)승인
+                하*현님
+                11,000원 일시불
+                06/04 12:35
+                탄
+                누적508,800원
+            """.trimIndent(),
+            smsId = "sms"
+        )
+        val app = expense(
+            amount = 11_000,
+            storeName = "탄",
+            cardName = "우리",
+            senderAddress = "app:com.wooricard.smartapp",
+            body = """
+                승인내역
+                [일시불.승인(1690)]06/04 12:35
+                11,000원 / 누적:508,800원
+                탄
+            """.trimIndent(),
+            dateTime = baseTime + 22_000L,
+            smsId = "app"
+        )
+
+        val result = TransactionSemanticDedupe.isPotentialCrossSourceDuplicate(app, sms)
+
+        assertTrue(result)
+    }
+
+    @Test
+    fun `legacy woori app fallback store is reparsed before duplicate comparison`() {
+        val sms = expense(
+            amount = 11_000,
+            storeName = "탄",
+            cardName = "우리",
+            senderAddress = "15889955",
+            body = """
+                ● 우리카드 이용안내
+                우리(1690)승인
+                하*현님
+                11,000원 일시불
+                06/04 12:35
+                탄
+                누적508,800원
+            """.trimIndent(),
+            smsId = "sms"
+        )
+        val legacyApp = expense(
+            amount = 11_000,
+            storeName = "우리카드",
+            cardName = "우리",
+            senderAddress = "app:com.wooricard.smartapp",
+            body = """
+                승인내역
+                [일시불.승인(1690)]06/04 12:35
+                11,000원 / 누적:508,800원
+                탄
+            """.trimIndent(),
+            dateTime = baseTime + 22_000L,
+            smsId = "app"
+        )
+
+        val result = TransactionSemanticDedupe.isPotentialCrossSourceDuplicate(legacyApp, sms)
+
+        assertTrue(result)
+    }
+
+    @Test
     fun `different amount is not duplicate`() {
         val sms = expense(
             senderAddress = "15889955",

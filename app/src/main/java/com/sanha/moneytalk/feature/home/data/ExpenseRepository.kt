@@ -5,6 +5,7 @@ import com.sanha.moneytalk.core.database.dao.DailySum
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
 import com.sanha.moneytalk.core.database.dao.MonthlySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.sms.TransactionSemanticDedupe
 import com.sanha.moneytalk.core.util.CardNameNormalizer
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
@@ -258,17 +259,65 @@ class ExpenseRepository @Inject constructor(
     // 중복 데이터 관리 메소드
     // ========================
 
-    /** 중복 데이터 조회 (금액, 가게명, 날짜시간이 동일한 항목) */
-    suspend fun getDuplicateExpenses(): List<ExpenseEntity> =
-        expenseDao.getDuplicateExpenses()
+    /** 중복 데이터 조회 (정확 중복 + SMS/앱 알림 교차 소스 중복) */
+    suspend fun getDuplicateExpenses(): List<ExpenseEntity> {
+        val exactDuplicates = expenseDao.getDuplicateExpenses()
+        val allExpenses = expenseDao.getAllExpensesOnce()
+        val crossSourceDuplicateIds = findCrossSourceDuplicateIds(allExpenses)
+        val crossSourceDuplicates = allExpenses.filter { it.id in crossSourceDuplicateIds }
+        return (exactDuplicates + crossSourceDuplicates).distinctBy { it.id }
+    }
 
     /**
      * 중복 데이터 삭제
-     * 금액, 가게명, 날짜시간이 동일한 항목 중 하나만 남기고 나머지 삭제
+     * 정확 중복은 보존 우선순위에 따라 삭제하고, SMS/앱 알림 교차 소스 중복은 앱 알림 행을 삭제
      * @return 삭제된 항목 수
      */
-    suspend fun deleteDuplicates(): Int =
-        expenseDao.deleteDuplicates()
+    suspend fun deleteDuplicates(): Int {
+        val exactDeleted = expenseDao.deleteDuplicates()
+        val crossSourceDuplicateIds = findCrossSourceDuplicateIds(expenseDao.getAllExpensesOnce())
+        crossSourceDuplicateIds.forEach { id -> expenseDao.deleteById(id) }
+        return exactDeleted + crossSourceDuplicateIds.size
+    }
+
+    private fun findCrossSourceDuplicateIds(expenses: List<ExpenseEntity>): Set<Long> {
+        val deleteIds = linkedSetOf<Long>()
+        val groupedExpenses = expenses
+            .filter { it.id > 0L }
+            .groupBy { expense ->
+                val normalizedCard = CardNameNormalizer.normalize(expense.cardName)
+                    .ifBlank { expense.cardName }
+                expense.amount to normalizedCard
+            }
+
+        groupedExpenses.values.forEach { group ->
+            val sortedGroup = group.sortedBy { it.dateTime }
+            sortedGroup.forEachIndexed { index, current ->
+                if (current.id in deleteIds) return@forEachIndexed
+
+                for (nextIndex in index + 1 until sortedGroup.size) {
+                    val next = sortedGroup[nextIndex]
+                    val timeDiff = next.dateTime - current.dateTime
+                    if (timeDiff > TransactionSemanticDedupe.CROSS_SOURCE_WINDOW_MS) {
+                        break
+                    }
+                    if (next.id in deleteIds) continue
+                    if (!TransactionSemanticDedupe.isPotentialCrossSourceDuplicate(current, next)) {
+                        continue
+                    }
+
+                    val appGeneratedDuplicate =
+                        if (TransactionSemanticDedupe.isAppGenerated(current)) {
+                            current
+                        } else {
+                            next
+                        }
+                    deleteIds += appGeneratedDuplicate.id
+                }
+            }
+        }
+        return deleteIds
+    }
 
     /**
      * 키워드 기반 일괄 삭제

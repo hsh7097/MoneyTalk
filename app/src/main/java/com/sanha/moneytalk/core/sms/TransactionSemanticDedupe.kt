@@ -86,13 +86,40 @@ object TransactionSemanticDedupe {
         candidate: ExpenseEntity,
         existing: ExpenseEntity
     ): Boolean {
-        val candidateStore = normalizeToken(candidate.storeName)
-        val existingStore = normalizeToken(existing.storeName)
-        return candidateStore.length >= 2 && candidateStore == existingStore
+        val candidateStore = normalizeStoreToken(candidate)
+        val existingStore = normalizeStoreToken(existing)
+        return candidateStore.isNotBlank() && candidateStore == existingStore
+    }
+
+    private fun normalizeStoreToken(entity: ExpenseEntity): String {
+        val parsedStoreName = if (
+            isAppGenerated(entity) &&
+            isLikelyAppLabelStore(entity.storeName)
+        ) {
+            AppNotificationTransactionParser.parseExpense(
+                body = entity.originalSms,
+                appLabel = entity.storeName,
+                packageName = entity.senderAddress.removePrefix(APP_ADDRESS_PREFIX)
+            )?.storeName
+        } else {
+            null
+        }
+        return normalizeToken(parsedStoreName?.takeIf { it.isNotBlank() } ?: entity.storeName)
+    }
+
+    private fun isLikelyAppLabelStore(storeName: String): Boolean {
+        val normalized = normalizeToken(storeName)
+        return appLabelStoreKeywords.any { normalized.contains(it) }
     }
 
     private fun normalizeToken(value: String): String {
         return value.lowercase()
             .replace(Regex("""[\s\p{Punct}]"""), "")
     }
+
+    private val appLabelStoreKeywords = listOf(
+        "카드",
+        "은행",
+        "뱅크"
+    )
 }

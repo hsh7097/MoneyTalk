@@ -102,6 +102,7 @@ object AppNotificationTransactionParser {
     ): String? {
         extractStoreFromAccountTargetLine(body, appLabel)?.let { return it }
         extractStoreAfterBalanceAmount(body, appLabel)?.let { return it }
+        extractStoreAfterBalanceLine(body, appLabel)?.let { return it }
         extractStoreFromAmountLine(body, amountRange, appLabel)?.let { return it }
 
         val lines = body.lines().map(::normalizeText).filter { it.isNotBlank() }
@@ -153,6 +154,27 @@ object AppNotificationTransactionParser {
                 )
             }
             .firstOrNull()
+    }
+
+    private fun extractStoreAfterBalanceLine(
+        body: String,
+        appLabel: String
+    ): String? {
+        val lines = body.lines().map(::normalizeText).filter { it.isNotBlank() }
+        lines.forEachIndexed { index, line ->
+            val hasBalanceAmount = balanceKeywords.any { line.contains(it) } &&
+                amountPattern.containsMatchIn(line)
+            if (!hasBalanceAmount) return@forEachIndexed
+
+            lines.drop(index + 1).take(1).firstNotNullOfOrNull { nextLine ->
+                sanitizeStoreCandidate(
+                    raw = nextLine,
+                    appLabel = appLabel,
+                    allowShort = true
+                )
+            }?.let { return it }
+        }
+        return null
     }
 
     private fun extractStoreFromAmountLine(
