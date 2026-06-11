@@ -803,7 +803,7 @@ Step 1 프롬프트에 포함:
 | 항목 | 스펙 |
 |------|------|
 | 저장 모델 | OwnedCardEntity.isOwned=false |
-| 동작 | 거래 데이터는 계속 저장하되 Home/History/CategoryDetail/일별 상세/AI 채팅 화면과 집계에서 제외 |
+| 동작 | 거래 데이터는 계속 저장하되 Home/History/CategoryDetail/일별 상세/AI 채팅 화면과 집계, 실시간 거래 알림 노출에서 제외 |
 | 추가 | 문자 설정에서 카드사명 직접 입력 → CardNameNormalizer 정규화 후 OwnedCard 수동 등록 |
 | 해제 | 스위치 OFF → isOwned=true로 변경, 저장된 기존 거래가 다시 노출 |
 | 이벤트 | 변경 시 OWNED_CARD_UPDATED 발행 |
@@ -1155,6 +1155,7 @@ SpendingTrendInfo (interface)
 | 처리 | `SmsInstantProcessor.processAndSave()` — goAsync() + IO 코루틴 |
 | 파이프라인 | 발신번호필터 → SmsPreFilter → 제외키워드 → 수입/지출분류 → Regex매칭 → StoreRule(카테고리/고정/통계 제외) → DB저장 |
 | 알림 | `SmsNotificationManager` — 채널 `sms_transaction`, IMPORTANCE_DEFAULT |
+| 제외 카드 알림 | OwnedCardEntity.isOwned=false 카드사는 지출을 저장하되 거래 알림은 표시하지 않음 |
 | 알림 형식 (지출) | "{이모지} {가맹점} {금액}원 ({카드}" |
 | 알림 형식 (수입) | "💰 {출처} {금액}원" |
 | Dedup | smsId 형식 `${address}_${date}_${body.hashCode()}` (SmsReaderV2 동일) |
@@ -1165,8 +1166,8 @@ SpendingTrendInfo (interface)
 
 | 단계 | 설명 |
 |------|------|
-| SmsPreFilter | 100자 이상 + 제외 키워드 필터 |
-| SmsIncomeFilter | 결제/수입/SKIP 3분류 (주요 카드/은행 키워드, 스마일카드 포함), 카드 취소완료 보조 알림은 SKIP |
+| SmsPreFilter | 길이/구조 + 제외 키워드 + 고신뢰 안내문 필터 |
+| SmsIncomeFilter | 결제/수입/SKIP 3분류 (주요 카드/은행 키워드, 스마일카드 포함), 카드 취소완료·캐시백 입금결과 안내는 SKIP |
 | SmsPipeline Step 1 | SmsTemplateEngine (템플릿 + Embedding 배치) |
 | SmsPipeline Step 2 | SmsPatternMatcher (벡터 코사인 유사도 ≥ 0.92) |
 | SmsPipeline Step 3 | SmsGroupClassifier (3레벨 그룹핑 → LLM 배치) |

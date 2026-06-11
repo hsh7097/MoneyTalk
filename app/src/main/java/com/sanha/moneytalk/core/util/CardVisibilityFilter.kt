@@ -35,6 +35,13 @@ object CardVisibilityFilter {
         return expenses.filter { expense -> isSelected(expense.cardName, selectedCardNames) }
     }
 
+    fun shouldShowExpenseNotification(
+        cardName: String,
+        excludedCardNames: Set<String>
+    ): Boolean {
+        return !isExcluded(cardName, excludedCardNames)
+    }
+
     private fun matchesCardName(cardName: String, targetCardNames: Set<String>): Boolean {
         val normalizedCardName = CardNameNormalizer.normalize(cardName)
         return targetCardNames.any { target ->

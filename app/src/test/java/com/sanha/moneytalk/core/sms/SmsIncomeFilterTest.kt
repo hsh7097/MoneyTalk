@@ -75,4 +75,43 @@ class SmsIncomeFilterTest {
         assertEquals(SmsType.INCOME, type)
         assertEquals("cancel", reason)
     }
+
+    @Test
+    fun `cashback deposit result notice is skipped`() {
+        val body = """
+            프렌즈 체크카드 캐시백 입금결과 안내
+            05월 프렌즈 체크카드(6383) 결제금액에 대한 캐시백 2,248원이 계좌로 입금되었습니다.
+            - 기본 캐시백 2,248원
+            - 프로모션 캐시백 0원
+        """.trimIndent()
+
+        val (type, reason) = filter.classify(body)
+
+        assertEquals(SmsType.SKIP, type)
+        assertEquals("nonTransactionNotice", reason)
+    }
+
+    @Test
+    fun `actual cashback deposit notification is classified as income`() {
+        val body = """
+            입금 2,248원
+            프렌즈 체크카드 캐시백 → 입출금통장(2193)
+            잔액 190,392원
+        """.trimIndent()
+
+        val (type, reason) = filter.classify(body)
+
+        assertEquals(SmsType.INCOME, type)
+        assertEquals("incomeKw[입금]", reason)
+    }
+
+    @Test
+    fun `polite bank deposit is classified as income`() {
+        val body = "카카오뱅크 홍길동님으로부터 50,000원 입금되었습니다"
+
+        val (type, reason) = filter.classify(body)
+
+        assertEquals(SmsType.INCOME, type)
+        assertEquals("incomeKw[입금]", reason)
+    }
 }

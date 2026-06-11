@@ -1,11 +1,13 @@
 package com.sanha.moneytalk.core.sms
 
+import com.sanha.moneytalk.core.database.OwnedCardRepository
 import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.notification.SmsNotificationManager
 import com.sanha.moneytalk.core.util.CardNameNormalizer
+import com.sanha.moneytalk.core.util.CardVisibilityFilter
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import com.sanha.moneytalk.core.util.StatsExclusionClassifier
@@ -43,6 +45,7 @@ class SmsInstantProcessor @Inject constructor(
     private val incomeRepository: IncomeRepository,
     private val storeRuleRepository: StoreRuleRepository,
     private val smsExclusionRepository: SmsExclusionRepository,
+    private val ownedCardRepository: OwnedCardRepository,
     private val notificationManager: SmsNotificationManager,
     private val settingsDataStore: SettingsDataStore
 ) {
@@ -290,7 +293,7 @@ class SmsInstantProcessor @Inject constructor(
         MoneyTalkLogger.i("[InstantSMS] 지출 저장: ${entity.storeName} ${entity.amount}원 [${entity.category}]")
 
         // 알림 (설정에서 활성화된 경우만)
-        if (!replacedAppNotificationDuplicate && settingsDataStore.isNotificationEnabled()) {
+        if (!replacedAppNotificationDuplicate && shouldShowExpenseNotification(entity)) {
             notificationManager.showExpenseNotification(
                 amount = entity.amount,
                 storeName = entity.storeName,
@@ -376,7 +379,7 @@ class SmsInstantProcessor @Inject constructor(
                 "${entity.storeName} ${entity.amount}원 [${entity.category}]"
         )
 
-        if (settingsDataStore.isNotificationEnabled()) {
+        if (shouldShowExpenseNotification(entity)) {
             notificationManager.showExpenseNotification(
                 amount = entity.amount,
                 storeName = entity.storeName,
@@ -385,6 +388,21 @@ class SmsInstantProcessor @Inject constructor(
         }
 
         return Result.Expense(entity)
+    }
+
+    private suspend fun shouldShowExpenseNotification(entity: ExpenseEntity): Boolean {
+        if (!settingsDataStore.isNotificationEnabled()) return false
+
+        val excludedCardNames = ownedCardRepository.getExcludedCardNames()
+        if (CardVisibilityFilter.shouldShowExpenseNotification(entity.cardName, excludedCardNames)) {
+            return true
+        }
+
+        MoneyTalkLogger.i(
+            "[InstantSMS] 제외 카드 지출 알림 스킵: " +
+                "${entity.cardName} ${entity.storeName} ${entity.amount}원"
+        )
+        return false
     }
 
     private suspend fun processIncome(

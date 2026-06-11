@@ -49,7 +49,8 @@ object AppNotificationTransactionParser {
     )
 
     internal fun isNonTransactionNotice(body: String): Boolean {
-        return nonTransactionNoticePatterns.any { it.containsMatchIn(body) }
+        return SmsNonTransactionNoticeFilter.isNonTransactionNotice(body) ||
+            nonTransactionNoticePatterns.any { it.containsMatchIn(body) }
     }
 
     fun parseExpense(

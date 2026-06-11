@@ -48,7 +48,7 @@ class SmsPreFilter @Inject constructor() {
             "프로모션", "할인쿠폰", "무료체험",
             // 안내
             "안내문", "점검", "정기점검", "공지사항",
-            "불편을 드려", "니다",
+            "불편을 드려",
             // 청구/안내 (결제 예고 ≠ 실제 결제)
             "결제내역", "명세서", "청구서", "이용대금", "결제예정", "결제일",
             "결제금액", "카드대금", "결제대금", "청구금액",
@@ -170,6 +170,7 @@ class SmsPreFilter @Inject constructor() {
      */
     internal fun isObviouslyNonPayment(body: String): Boolean {
         if (isHighConfidenceNonPayment(body)) return true
+        if (SmsNonTransactionNoticeFilter.isNonTransactionNotice(body)) return true
 
         val lowerBody = body.lowercase()
 

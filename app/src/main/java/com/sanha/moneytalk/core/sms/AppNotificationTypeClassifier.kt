@@ -21,6 +21,9 @@ object AppNotificationTypeClassifier {
     )
 
     fun classify(body: String): SmsType {
+        if (SmsNonTransactionNoticeFilter.isNonTransactionNotice(body)) {
+            return SmsType.SKIP
+        }
         if (cancelHintPattern.containsMatchIn(body)) {
             return SmsType.INCOME
         }

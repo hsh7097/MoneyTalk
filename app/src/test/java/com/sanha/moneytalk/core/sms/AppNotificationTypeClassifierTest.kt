@@ -49,4 +49,31 @@ class AppNotificationTypeClassifierTest {
 
         assertEquals(SmsType.INCOME, type)
     }
+
+    @Test
+    fun `cashback deposit result notice is skipped`() {
+        val body = """
+            프렌즈 체크카드 캐시백 입금결과 안내
+            05월 프렌즈 체크카드(6383) 결제금액에 대한 캐시백 2,248원이 계좌로 입금되었습니다.
+            - 기본 캐시백 2,248원
+            - 프로모션 캐시백 0원
+        """.trimIndent()
+
+        val type = AppNotificationTypeClassifier.classify(body)
+
+        assertEquals(SmsType.SKIP, type)
+    }
+
+    @Test
+    fun `actual cashback deposit notification remains income`() {
+        val body = """
+            입금 2,248원
+            프렌즈 체크카드 캐시백 → 입출금통장(2193)
+            잔액 190,392원
+        """.trimIndent()
+
+        val type = AppNotificationTypeClassifier.classify(body)
+
+        assertEquals(SmsType.INCOME, type)
+    }
 }

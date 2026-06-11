@@ -184,4 +184,22 @@ class AppNotificationTransactionParserTest {
 
         assertNull(result)
     }
+
+    @Test
+    fun `kakaobank cashback deposit result notice is skipped`() {
+        val body = """
+            프렌즈 체크카드 캐시백 입금결과 안내
+            05월 프렌즈 체크카드(6383) 결제금액에 대한 캐시백 2,248원이 계좌로 입금되었습니다.
+            - 기본 캐시백 2,248원
+            - 프로모션 캐시백 0원
+        """.trimIndent()
+
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = body,
+            appLabel = "카카오뱅크",
+            packageName = "com.kakaobank.channel"
+        )
+
+        assertNull(result)
+    }
 }

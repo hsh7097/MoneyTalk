@@ -864,7 +864,7 @@ processAndSave(address, body, timestampMillis) → Result
   ├── SmsIncomeFilter.classify(body) → SmsType
   │   ├── PAYMENT → processExpense() → regex 매칭 시도
   │   │   ├── 교차 소스 중복 감지 → 앱 알림 저장본이 있으면 SMS 저장본으로 대체
-  │   │   ├── 매칭 성공 → ExpenseEntity DB 저장 → Result.Expense
+  │   │   ├── 매칭 성공 → ExpenseEntity DB 저장 → 제외 카드가 아니면 MoneyTalk 거래 알림 → Result.Expense
   │   │   └── 미매칭 → Result.Skipped (후속 batch sync에서 Vector/LLM 폴백)
   │   ├── INCOME → processIncome() → IncomeEntity DB 저장 → Result.Income
   │   └── SKIP → Result.Skipped
@@ -904,12 +904,13 @@ provider 재조회가 불가능하므로 알림 본문 자체를 거래 후보�
   → SmsInstantProcessor.processAppNotificationAndSave()
   → 1차: app:{packageName} sender 기반 regex 룰 매칭
   → 2차: AppNotificationTransactionParser 휴리스틱 파싱
-  → 성공: 거래 저장 + MoneyTalk 거래 알림
+  → 성공: 거래 저장 + 제외 카드가 아니면 MoneyTalk 거래 알림
   → 스킵: provider/batch fallback 없음 (알림 본문 외 원본 없음)
 ```
 
 핵심 포인트:
 - 앱 알림은 `address = app:{packageName}` 형태로 저장하여 SMS 발신번호와 분리한다.
+- `입금결과 안내`, `결과 안내`, 캐시백 정산 안내처럼 금액/입금 키워드가 있어도 실제 계좌 입출금 이벤트가 아닌 문구는 `SmsNonTransactionNoticeFilter`에서 먼저 제외한다.
 - SMS와 앱 알림이 같은 카드 거래를 각각 보낼 수 있으므로, 저장 직전 1분 이내/동일 카드사/동일 가게명/동일 금액이 모두 맞을 때만 교차 소스 중복으로 검사한다.
 - 우리카드처럼 `누적` 금액 뒤나 다음 줄에 실제 거래처가 붙는 앱 알림은 해당 뒤쪽 거래처를 우선 추출하여 안내성 `내역`/앱명이 거래처로 저장되지 않게 한다. 한 글자 거래처도 양쪽 원문에서 동일하면 교차 소스 중복 후보로 인정한다.
 - 양쪽 본문에서 카드 suffix(마스킹된 카드번호 끝자리)가 모두 추출되면 suffix까지 같아야 중복으로 본다. 한쪽에 suffix가 없으면 기본 4조건만 적용한다.

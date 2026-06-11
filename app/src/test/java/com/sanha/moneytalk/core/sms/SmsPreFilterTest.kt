@@ -55,4 +55,36 @@ class SmsPreFilterTest {
 
         assertTrue(preFilter.isObviouslyNonPayment(body))
     }
+
+    @Test
+    fun `cashback deposit result notice is filtered even with income keyword`() {
+        val body = """
+            프렌즈 체크카드 캐시백 입금결과 안내
+            05월 프렌즈 체크카드(6383) 결제금액에 대한 캐시백 2,248원이 계좌로 입금되었습니다.
+            - 기본 캐시백 2,248원
+            - 프로모션 캐시백 0원
+        """.trimIndent()
+
+        assertTrue(preFilter.isObviouslyNonPayment(body))
+    }
+
+    @Test
+    fun `actual cashback deposit notification is not filtered`() {
+        val body = """
+            입금 2,248원
+            프렌즈 체크카드 캐시백 → 입출금통장(2193)
+            잔액 190,392원
+        """.trimIndent()
+
+        assertFalse(preFilter.isObviouslyNonPayment(body))
+        assertFalse(preFilter.lacksPaymentRequirements(body))
+    }
+
+    @Test
+    fun `polite card approval is not filtered only by sentence ending`() {
+        val body = "[현대카드] 스타벅스 5,000원 이용하셨습니다"
+
+        assertFalse(preFilter.isObviouslyNonPayment(body))
+        assertFalse(preFilter.lacksPaymentRequirements(body))
+    }
 }

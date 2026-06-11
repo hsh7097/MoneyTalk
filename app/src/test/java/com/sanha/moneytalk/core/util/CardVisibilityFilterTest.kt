@@ -3,6 +3,8 @@ package com.sanha.moneytalk.core.util
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.model.Category
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CardVisibilityFilterTest {
@@ -44,6 +46,26 @@ class CardVisibilityFilterTest {
         )
 
         assertEquals(listOf(1L), result.map { it.id })
+    }
+
+    @Test
+    fun shouldShowExpenseNotification_returnsFalseForExcludedCardByNormalizedName() {
+        val result = CardVisibilityFilter.shouldShowExpenseNotification(
+            cardName = "우리카드",
+            excludedCardNames = setOf("우리")
+        )
+
+        assertFalse(result)
+    }
+
+    @Test
+    fun shouldShowExpenseNotification_returnsTrueForVisibleCard() {
+        val result = CardVisibilityFilter.shouldShowExpenseNotification(
+            cardName = "신한카드",
+            excludedCardNames = setOf("우리")
+        )
+
+        assertTrue(result)
     }
 
     private fun baseExpense(

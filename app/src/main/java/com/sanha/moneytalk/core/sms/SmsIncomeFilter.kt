@@ -129,7 +129,7 @@ class SmsIncomeFilter @Inject constructor() {
         "광고", "홍보", "이벤트", "혜택안내", "포인트 적립",
         "명세서", "청구서", "이용대금",
         "결제금액", "카드대금", "결제대금", "청구금액",
-        "출금 예정", "출금예정", "퇴직", "니다"
+        "출금 예정", "출금예정", "퇴직"
     )
 
     /** 금액 패턴 (사전 컴파일) */
@@ -169,6 +169,10 @@ class SmsIncomeFilter @Inject constructor() {
 
         if (StatsExclusionClassifier.isCardBillDebitText(body, requireWonAmount = true)) {
             return SmsType.PAYMENT to "cardBillDebit"
+        }
+
+        if (SmsNonTransactionNoticeFilter.isNonTransactionNotice(body)) {
+            return SmsType.SKIP to "nonTransactionNotice"
         }
 
         // 제외 키워드 (광고, 안내 등)
