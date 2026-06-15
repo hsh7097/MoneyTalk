@@ -1,6 +1,6 @@
 package com.sanha.moneytalk.core.ad
 
-import com.sanha.moneytalk.BuildConfig
+import com.sanha.moneytalk.core.util.BuildVariantPolicy
 
 object BannerAdVisibilityPolicy {
     const val MIN_APP_ENTRY_COUNT = 5
@@ -8,8 +8,8 @@ object BannerAdVisibilityPolicy {
     fun canShowBanner(
         rewardAdEnabled: Boolean,
         appEntryCount: Int,
-        isDebugBuild: Boolean = BuildConfig.DEBUG
+        isReleaseBuild: Boolean = BuildVariantPolicy.isReleaseBuild
     ): Boolean {
-        return !isDebugBuild && rewardAdEnabled && appEntryCount >= MIN_APP_ENTRY_COUNT
+        return isReleaseBuild && rewardAdEnabled && appEntryCount >= MIN_APP_ENTRY_COUNT
     }
 }

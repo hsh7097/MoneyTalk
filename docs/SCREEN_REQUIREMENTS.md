@@ -123,6 +123,7 @@
 | 예산 표시 | 설정된 경우: "₩사용 / ₩예산" + 잔여/초과 |
 | 색상 | 1위=Primary, 나머지=카테고리별 색상, 예산초과=Error |
 | 클릭 | 카테고리 선택 → CategoryDetailActivity 진입 |
+| 집계 기준 | 실제 저장된 leaf 카테고리 기준 (`식비`와 `배달`은 분리 표시) |
 
 ### 2.6 AI 인사이트 카드
 
@@ -360,7 +361,7 @@ buildBudgetCumulativePoints(monthlyBudget, daysInMonth):
 카테고리 그룹핑:
   expenses.groupBy { expense →
     val cat = Category.fromDisplayName(expense.category)
-    cat.parentCategory?.displayName ?: cat.displayName  // 부모 있으면 부모로 통합
+    cat.displayName  // 카테고리별 화면은 leaf 카테고리 기준
   }
   → sortedByDescending(total)
 
@@ -734,7 +735,7 @@ DB 메시지 > 6개 → 초과분을 Gemini Flash로 요약
 
 ```
 Step 1 프롬프트에 포함:
-  현재 날짜, 현재 월, monthStartDay, 커스텀 기간 시작/끝
+  현재 날짜, 앱 기준 이번 달 기간, 앱 기준 지난달 기간
   → AI가 "이번 달", "지난 달" 등을 정확한 날짜로 변환
 ```
 
@@ -889,7 +890,7 @@ Step 1 프롬프트에 포함:
 | 항목 | 스펙 |
 |------|------|
 | 방식 | Intent (Home 화면 카테고리 행 클릭) |
-| 파라미터 | EXTRA_CATEGORY (displayName), EXTRA_YEAR, EXTRA_MONTH |
+| 파라미터 | EXTRA_CATEGORY (displayName), EXTRA_YEAR, EXTRA_MONTH, EXTRA_INCLUDE_SUBCATEGORIES |
 
 ### 6.2 레이아웃
 
@@ -904,7 +905,7 @@ Step 1 프롬프트에 포함:
 
 | 항목 | 스펙 |
 |------|------|
-| 필터 | Category.displayNamesIncludingSub (소 카테고리 포함) |
+| 필터 | 기본은 leaf 카테고리 단일 조회, EXTRA_INCLUDE_SUBCATEGORIES=true일 때만 소 카테고리 포함 |
 | 메인 라인 | 해당 카테고리 이번 달 일별 누적 |
 | 토글 라인 | 전월, 3개월 평균, 6개월 평균, 카테고리 예산 |
 | 제외 키워드 | SmsExclusionRepository로 동적 필터링 |
@@ -957,7 +958,7 @@ Step 1 프롬프트에 포함:
 
 | 항목 | Home | CategoryDetail |
 |------|------|----------------|
-| 필터 | 전체 지출 | `Category.displayNamesIncludingSub` (소카테고리 포함) |
+| 필터 | 전체 지출 | 기본 leaf 카테고리 단일 조회 |
 | 비교 텍스트 | "₩X 더/덜 썼어요" | 없음 (빈 문자열) |
 | 예산 라인 | 전체 월 예산 | 해당 카테고리 예산만 |
 | Mapper | HomeSpendingTrendInfo | CategorySpendingTrendInfo |
@@ -966,10 +967,15 @@ Step 1 프롬프트에 포함:
 #### 카테고리 필터 로직
 
 ```
-val categoryNames = Category.displayNamesIncludingSub(categoryDisplayName)
-→ 부모 카테고리 + 모든 하위 카테고리 displayName 리스트
+val categoryNames = if (includeSubcategories) {
+    Category.displayNamesIncludingSub(categoryDisplayName)
+} else {
+    listOf(Category.fromDisplayName(categoryDisplayName).displayName)
+}
+→ 홈 카테고리별 화면에서 진입하면 leaf 단일 조회, 명시적 하위 포함 진입이면 부모 + 하위 카테고리 조회
 
-예) "식비" → ["식비", "외식", "카페", "배달", "간식"]
+예) leaf 조회: "식비" → ["식비"]
+예) 하위 포함 조회: "식비" → ["식비", "배달"]
 DB 쿼리: WHERE category IN (categoryNames) AND dateTime BETWEEN start AND end
 ```
 
@@ -1155,6 +1161,7 @@ SpendingTrendInfo (interface)
 | 처리 | `SmsInstantProcessor.processAndSave()` — goAsync() + IO 코루틴 |
 | 파이프라인 | 발신번호필터 → SmsPreFilter → 제외키워드 → 수입/지출분류 → Regex매칭 → StoreRule(카테고리/고정/통계 제외) → DB저장 |
 | 알림 | `SmsNotificationManager` — 채널 `sms_transaction`, IMPORTANCE_DEFAULT |
+| 알림 재검사 조건 | 알림 리스너 재연결 후 활성 알림 재검사로 들어온 거래는 새 알림이 아니므로 저장만 하고 거래 알림은 다시 표시하지 않음 |
 | 제외 카드 알림 | OwnedCardEntity.isOwned=false 카드사는 지출을 저장하되 거래 알림은 표시하지 않음 |
 | 알림 형식 (지출) | "{이모지} {가맹점} {금액}원 ({카드}" |
 | 알림 형식 (수입) | "💰 {출처} {금액}원" |
@@ -1202,12 +1209,12 @@ SpendingTrendInfo (interface)
 | 항목 | 스펙 |
 |------|------|
 | 월별 SMS 동기화 | 과거 월 per-month: 처음 N회 무료 (RTDB `free_sync_count`) → 이후 광고 |
-| AI 채팅 | 크레딧 부족 시 광고 충전 다이얼로그 표시 |
-| AI 크레딧 | 단순 조회/앱 액션 0, 가벼운 상담 1, 소비 흐름/비교 분석 3, 명시적 심층 분석 10크레딧 |
-| 크레딧 확인 | 설정 → AI 크레딧에서 잔액, 광고 충전, 차감 기준/이용 가이드, 최근 원장 내역 표시 |
+| AI 채팅 | RTDB `credit_ad_enable=true`일 때만 크레딧 부족 시 광고 충전 다이얼로그 표시 |
+| AI 크레딧 | RTDB `credit_ad_enable=true`일 때 단순 조회/앱 액션 0, 가벼운 상담 1, 소비 흐름/비교 분석 3, 명시적 심층 분석 10크레딧 |
+| 크레딧 확인 | RTDB `credit_ad_enable=true`일 때 설정 → AI 크레딧에서 잔액, 광고 충전, 차감 기준/이용 가이드, 최근 원장 내역 표시 |
 | 환불 | 답변 생성 실패 또는 clarification 응답 시 차감 크레딧 환불 |
 | 배너 광고 | RTDB `reward_ad_enabled=true`이고 앱 진입 횟수 5회 이상일 때만 노출 |
-| 디버그 빌드 | 조건과 무관하게 AdMob 초기화/배너/보상 광고 미노출 |
+| 비릴리즈 빌드 | 조건과 무관하게 AdMob 초기화/배너/보상 광고 미노출, AI 크레딧 차감·충전·레거시 마이그레이션 쓰기 미수행 |
 | 실시간 수신 | 항상 무료 (BroadcastReceiver) |
 | 프리로드 | 자동 |
 | 실패 처리 | 광고 실패 시 크레딧 미지급 |

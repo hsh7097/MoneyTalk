@@ -4,6 +4,7 @@ import com.sanha.moneytalk.core.database.dao.AiCreditDao
 import com.sanha.moneytalk.core.database.entity.AiCreditLedgerEntity
 import com.sanha.moneytalk.core.database.entity.AiCreditLedgerType
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.util.BuildVariantPolicy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -41,10 +42,12 @@ class AiCreditRepository @Inject constructor(
 
     suspend fun hasEnoughCredits(cost: Int = LIGHT_CHAT_COST): Boolean {
         if (cost <= 0) return true
+        if (!BuildVariantPolicy.isMonetizationEnabled) return true
         return getBalance() >= cost
     }
 
     suspend fun spendForChat(cost: Int = LIGHT_CHAT_COST, relatedSessionId: Long? = null): Boolean {
+        if (!BuildVariantPolicy.isMonetizationEnabled) return true
         ensureLegacyRewardChatMigrated()
         return aiCreditDao.spendCredits(
             amount = cost,
@@ -54,6 +57,7 @@ class AiCreditRepository @Inject constructor(
     }
 
     suspend fun grantRewardAdCredits(amount: Int, relatedSessionId: Long? = null): Int {
+        if (!BuildVariantPolicy.isMonetizationEnabled) return getBalanceWithoutMigration()
         ensureLegacyRewardChatMigrated()
         return aiCreditDao.grantCredits(
             amount = amount,
@@ -69,6 +73,7 @@ class AiCreditRepository @Inject constructor(
         relatedSessionId: Long? = null,
         relatedMessageId: Long? = null
     ): Int {
+        if (!BuildVariantPolicy.isMonetizationEnabled) return getBalanceWithoutMigration()
         ensureLegacyRewardChatMigrated()
         return aiCreditDao.grantCredits(
             amount = amount,
@@ -83,6 +88,7 @@ class AiCreditRepository @Inject constructor(
         amount: Int,
         purchaseToken: String
     ): Int {
+        if (!BuildVariantPolicy.isMonetizationEnabled) return getBalanceWithoutMigration()
         ensureLegacyRewardChatMigrated()
         return aiCreditDao.grantCredits(
             amount = amount,
@@ -93,6 +99,7 @@ class AiCreditRepository @Inject constructor(
     }
 
     suspend fun ensureLegacyRewardChatMigrated() {
+        if (!BuildVariantPolicy.isMonetizationEnabled) return
         if (settingsDataStore.isAiCreditLegacyMigrated()) return
 
         legacyMigrationMutex.withLock {
@@ -108,5 +115,9 @@ class AiCreditRepository @Inject constructor(
             }
             settingsDataStore.markAiCreditLegacyMigrated()
         }
+    }
+
+    private suspend fun getBalanceWithoutMigration(): Int {
+        return aiCreditDao.getBalance() ?: 0
     }
 }

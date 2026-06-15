@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.receiver
 
+import android.content.ComponentName
 import android.net.Uri
 import android.provider.Telephony
 import android.service.notification.NotificationListenerService
@@ -77,6 +78,20 @@ class NotificationTransactionService : NotificationListenerService() {
         scope.launch { entryPoint.financialAppDiscoveryRepository().refreshRemoteAppsIfNeeded() }
     }
 
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        MoneyTalkLogger.w("[NotiService] 알림 리스너 연결 해제 → 재바인드 요청")
+        val componentName = ComponentName(
+            applicationContext,
+            NotificationTransactionService::class.java
+        )
+        runCatching {
+            requestRebind(componentName)
+        }.onFailure { e ->
+            MoneyTalkLogger.w("[NotiService] 알림 리스너 재바인드 요청 실패: ${e.message}")
+        }
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         sbn ?: return
 
@@ -100,14 +115,21 @@ class NotificationTransactionService : NotificationListenerService() {
         MoneyTalkLogger.i("[NotiService] 활성 알림 재검사: ${notifications.size}건")
         notifications.forEach { sbn ->
             runCatching {
-                processNotification(sbn)
+                // 리스너 재연결은 기존 알림을 다시 보여주는 경로이므로 저장만 보강한다.
+                processNotification(
+                    sbn = sbn,
+                    showUserNotification = false
+                )
             }.onFailure { e ->
                 MoneyTalkLogger.w("[NotiService] 활성 알림 처리 실패: ${e.message}")
             }
         }
     }
 
-    private suspend fun processNotification(sbn: StatusBarNotification) {
+    private suspend fun processNotification(
+        sbn: StatusBarNotification,
+        showUserNotification: Boolean = true
+    ) {
         val parsed = NotificationContentParser.parse(
             sbn = sbn,
             requireSupportedPackage = false
@@ -129,7 +151,10 @@ class NotificationTransactionService : NotificationListenerService() {
                 .isSupportedFinancialApp(parsed.packageName)
         }
         if (isKnownFinancialApp) {
-            processFinancialAppNotification(parsed)
+            processFinancialAppNotification(
+                parsed = parsed,
+                showUserNotification = showUserNotification
+            )
             return
         }
 
@@ -150,11 +175,15 @@ class NotificationTransactionService : NotificationListenerService() {
             return
         }
 
-        processProviderMessage(providerMessage)
+        processProviderMessage(
+            message = providerMessage,
+            showUserNotification = showUserNotification
+        )
     }
 
     private suspend fun processFinancialAppNotification(
-        parsed: NotificationContentParser.ParsedNotification
+        parsed: NotificationContentParser.ParsedNotification,
+        showUserNotification: Boolean
     ) {
         val instantProcessor = entryPoint.instantProcessor()
         val dataRefreshEvent = entryPoint.dataRefreshEvent()
@@ -164,7 +193,8 @@ class NotificationTransactionService : NotificationListenerService() {
             packageName = parsed.packageName,
             appLabel = appLabel,
             body = parsed.body,
-            timestampMillis = parsed.timestamp
+            timestampMillis = parsed.timestamp,
+            showUserNotification = showUserNotification
         )) {
             is SmsInstantProcessor.Result.Expense -> {
                 MoneyTalkLogger.i(
@@ -359,7 +389,10 @@ class NotificationTransactionService : NotificationListenerService() {
         }
     }
 
-    private suspend fun processProviderMessage(message: ProviderMessage) {
+    private suspend fun processProviderMessage(
+        message: ProviderMessage,
+        showUserNotification: Boolean
+    ) {
         val instantProcessor = entryPoint.instantProcessor()
         val dataRefreshEvent = entryPoint.dataRefreshEvent()
 
@@ -367,7 +400,8 @@ class NotificationTransactionService : NotificationListenerService() {
             when (val result = instantProcessor.processAndSave(
                 address = message.address,
                 body = message.body,
-                timestampMillis = message.timestamp
+                timestampMillis = message.timestamp,
+                showUserNotification = showUserNotification
             )) {
                 is SmsInstantProcessor.Result.Expense -> {
                     MoneyTalkLogger.i(

@@ -12,8 +12,9 @@ enum class Category(
     override val categoryType: CategoryType,
     val parentCategory: Category? = null
 ) : CategoryInfo {
-    // ===== 지출 (EXPENSE) — 22개 =====
+    // ===== 지출 (EXPENSE) — 23개 =====
     FOOD("\uD83C\uDF7D\uFE0F", "식비", CategoryType.EXPENSE),
+    DELIVERY("\uD83D\uDEF5\uFE0F", "배달", CategoryType.EXPENSE, FOOD),
     CAFE_SNACK("☕", "카페/간식", CategoryType.EXPENSE),
     DRINKING("\uD83C\uDF7A", "술/유흥", CategoryType.EXPENSE),
     LIVING("\uD83E\uDDFA", "생활", CategoryType.EXPENSE),
@@ -86,7 +87,7 @@ enum class Category(
             "주거" to HOUSING_TELECOM,
             "경조" to EVENTS_GIFT,
             "쇼핑" to ONLINE_SHOPPING,
-            "배달" to FOOD,
+            "배달앱" to DELIVERY,
             "계좌이체" to TRANSFER_GENERAL,
             "AI 분류 중" to UNCLASSIFIED
         )

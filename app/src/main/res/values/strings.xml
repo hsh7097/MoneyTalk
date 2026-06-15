@@ -40,8 +40,11 @@
     <!-- 채팅 화면 -->
     <string name="chat_title">AI 인사이트</string>
     <string name="chat_subtitle_with_api">자주 보는 소비 질문을 바로 확인하세요</string>
+    <string name="chat_subtitle_in_conversation">내 지출 데이터 기준으로 답변합니다</string>
+    <string name="chat_subtitle_loading">답변을 준비하고 있어요</string>
     <string name="chat_subtitle_no_api">AI 인사이트를 쓰려면 API 키를 설정해주세요</string>
     <string name="chat_input_placeholder">메시지를 입력하세요…</string>
+    <string name="chat_input_loading_placeholder">답변 생성 중…</string>
     <string name="chat_send">전송</string>
     <string name="chat_ai_disclaimer">AI는 실수할 수 있습니다. 중요한 정보는 직접 확인하세요.</string>
     <string name="chat_thinking">생각 중…</string>
@@ -143,7 +146,7 @@
     <!-- 가이드 질문 예시 -->
     <string name="guide_q_expense_coupang">이번 달 총 지출 얼마야?</string>
     <string name="guide_q_expense_starbucks">이번 달 카테고리별 지출 보여줘</string>
-    <string name="guide_q_expense_delivery">지난 3개월 식비 얼마야?</string>
+    <string name="guide_q_expense_delivery">지난 3개월 배달비 얼마야?</string>
     <string name="guide_q_expense_top_store">이번 달 가장 많이 쓴 가게 Top 5 보여줘</string>
     <string name="guide_q_analysis_food">식비가 수입 대비 적절해?</string>
     <string name="guide_q_analysis_compare">지난달 대비 이번 달 지출이 늘었어?</string>
@@ -201,7 +204,7 @@
     <string name="home_trend_avg_six_month">지난 6개월 평균</string>
     <string name="home_trend_budget">예산</string>
     <string name="home_trend_this_month">이번 달</string>
-    <string name="home_cumulative_spending">이번 달 누적 지출</string>
+    <string name="home_cumulative_spending">지출 누적 추이</string>
     <!-- 월간 결산 카드 -->
     <string name="home_settlement_title">%d월 결산</string>
     <string name="home_settlement_card_expense">카드별 지출</string>

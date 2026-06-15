@@ -49,6 +49,7 @@ import javax.inject.Inject
 private const val EXTRA_CATEGORY = "extra_category"
 private const val EXTRA_YEAR = "extra_year"
 private const val EXTRA_MONTH = "extra_month"
+private const val EXTRA_INCLUDE_SUBCATEGORIES = "extra_include_subcategories"
 
 /**
  * 카테고리 상세 정렬 방식
@@ -112,13 +113,19 @@ class CategoryDetailViewModel @Inject constructor(
         savedStateHandle[EXTRA_YEAR] ?: DateUtils.getCurrentYear()
     private val initialMonth: Int =
         savedStateHandle[EXTRA_MONTH] ?: DateUtils.getCurrentMonth()
+    private val includeSubcategories: Boolean =
+        savedStateHandle[EXTRA_INCLUDE_SUBCATEGORIES] ?: false
 
-    // Category enum → displayNamesIncludingSub (소 카테고리 포함 필터)
+    // 홈 카테고리별 화면에서 진입한 상세는 leaf 카테고리 기준으로 조회한다.
     private val category: Category = Category.fromDisplayName(categoryDisplayName)
     private val isCustomCategory: Boolean =
         category == Category.ETC && categoryDisplayName != Category.ETC.displayName
     private val categoryNames: List<String> =
-        if (isCustomCategory) listOf(categoryDisplayName) else category.displayNamesIncludingSub
+        when {
+            isCustomCategory -> listOf(categoryDisplayName)
+            includeSubcategories -> category.displayNamesIncludingSub
+            else -> listOf(category.displayName)
+        }
 
     private val _uiState = MutableStateFlow(
         CategoryDetailUiState(

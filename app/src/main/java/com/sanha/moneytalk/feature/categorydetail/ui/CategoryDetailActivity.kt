@@ -21,6 +21,7 @@ import javax.inject.Inject
  * - EXTRA_CATEGORY: 카테고리 displayName (예: "식비")
  * - EXTRA_YEAR: 선택된 연도
  * - EXTRA_MONTH: 선택된 월
+ * - EXTRA_INCLUDE_SUBCATEGORIES: 상위 카테고리 조회 시 하위 카테고리 포함 여부
  */
 @AndroidEntryPoint
 class CategoryDetailActivity : ComponentActivity() {
@@ -29,13 +30,21 @@ class CategoryDetailActivity : ComponentActivity() {
         private const val EXTRA_CATEGORY = "extra_category"
         private const val EXTRA_YEAR = "extra_year"
         private const val EXTRA_MONTH = "extra_month"
+        private const val EXTRA_INCLUDE_SUBCATEGORIES = "extra_include_subcategories"
 
-        fun open(context: Context, category: String, year: Int, month: Int) {
+        fun open(
+            context: Context,
+            category: String,
+            year: Int,
+            month: Int,
+            includeSubcategories: Boolean = false
+        ) {
             context.startActivity(
                 Intent(context, CategoryDetailActivity::class.java).apply {
                     putExtra(EXTRA_CATEGORY, category)
                     putExtra(EXTRA_YEAR, year)
                     putExtra(EXTRA_MONTH, month)
+                    putExtra(EXTRA_INCLUDE_SUBCATEGORIES, includeSubcategories)
                 }
             )
         }

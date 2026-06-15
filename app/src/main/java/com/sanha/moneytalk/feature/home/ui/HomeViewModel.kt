@@ -491,11 +491,11 @@ class HomeViewModel @Inject constructor(
                         val categories = statsExpenses
                             .groupBy { expense ->
                                 val cat = Category.fromDisplayName(expense.category)
-                                // 커스텀 카테고리는 원래 이름 유지 (기타로 합치지 않음)
+                                // 카테고리별 화면은 실제 저장된 leaf 카테고리 기준으로 분리한다.
                                 if (cat == Category.ETC && expense.category != Category.ETC.displayName) {
                                     expense.category
                                 } else {
-                                    cat.parentCategory?.displayName ?: cat.displayName
+                                    cat.displayName
                                 }
                             }
                             .map { (category, items) ->
@@ -523,7 +523,11 @@ class HomeViewModel @Inject constructor(
                             val lastMonthByCategory = statsLastMonthExpenses
                                 .groupBy { expense ->
                                     val cat = Category.fromDisplayName(expense.category)
-                                    cat.parentCategory?.displayName ?: cat.displayName
+                                    if (cat == Category.ETC && expense.category != Category.ETC.displayName) {
+                                        expense.category
+                                    } else {
+                                        cat.displayName
+                                    }
                                 }
                                 .mapValues { (_, items) -> items.sumOf { it.amount } }
                             val lastMonthTop3ForComparison = top3.map { c ->

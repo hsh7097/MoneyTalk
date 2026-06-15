@@ -288,6 +288,12 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             "마트" to "온라인쇼핑",
             "쇼핑" to "온라인쇼핑",
             "편의점" to "식비",
+            // 배달 관련
+            "배달앱" to "배달",
+            "배달음식" to "배달",
+            "배민" to "배달",
+            "요기요" to "배달",
+            "쿠팡이츠" to "배달",
             // 패션 관련
             "패션" to "패션/쇼핑",
             "의류" to "패션/쇼핑",

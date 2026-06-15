@@ -215,7 +215,7 @@ SettingsScreen                       ← 설정 탭 메인 화면
 │   ├── SettingsItemCompose          ← 월 시작일
 │   └── SettingsItemCompose          ← 월 예산
 ├── SettingsSectionCompose("AI 관리")
-│   └── SettingsItemCompose          ← AI 크레딧 화면 진입
+│   └── SettingsItemCompose          ← AI 크레딧 화면 진입 (credit_ad_enable=true일 때)
 ├── SettingsSectionCompose("카테고리 관리")
 │   ├── Row                          ← 카테고리 정리 (클릭 시 RTDB API 키/미분류 건수 재검증)
 │   ├── SettingsItemCompose          ← 카테고리 설정
@@ -375,6 +375,8 @@ SmsSettingsScreen                    ← 문자 설정 (Activity, 설정에서 "
 
 ## 9. AI 크레딧 화면 (AiCreditScreen)
 
+> 설정 진입점과 화면 데이터 노출은 RTDB `credit_ad_enable=true`일 때만 활성화된다.
+
 ```
 AiCreditActivity
 └── AiCreditScreen
@@ -458,7 +460,7 @@ StoreRuleSettingsActivity               ← 거래처 규칙 설정 (별도 Acti
 | CategoryPickerDialog | 카테고리 선택 (하위 호환) | legacy | [ExpenseItemCardKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/ExpenseItemCard.kt) |
 | SettingsSectionCompose | 설정 섹션 (타이틀 + Card) | 설정 | [SettingsSectionComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsSectionCompose.kt) |
 | SettingsItemCompose | 설정 아이템 (아이콘 + 텍스트) | 설정 | [SettingsItemComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/settings/SettingsItemCompose.kt) |
-| BannerAdCompose | 하단 고정 배너 광고 (AdMob, reward_ad_enabled + 앱 진입 5회 이상, 디버그 미노출) | 홈, 내역, 카테고리 상세 | [BannerAdComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/BannerAdCompose.kt) |
+| BannerAdCompose | 하단 고정 배너 광고 (AdMob, reward_ad_enabled + 앱 진입 5회 이상, 비릴리즈 미노출) | 홈, 내역, 카테고리 상세 | [BannerAdComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/BannerAdCompose.kt) |
 | MonthPagerUtils | HorizontalPager 페이지↔월 변환 유틸 | 홈, 내역 | [MonthPagerUtilsKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/MonthPagerUtils.kt) |
 | EmojiPickerCompose | 이모지 선택 5열 그리드 (80개 프리셋) | 카테고리 설정 | [EmojiPickerComposeKt](../app/src/main/java/com/sanha/moneytalk/core/ui/component/EmojiPickerCompose.kt) |
 | CoachMarkOverlay | 스포트라이트 + 툴팁 온보딩 오버레이 | 홈, 내역, 필터, 거래편집, 거래처규칙, 채팅, 설정 | [CoachMarkOverlayKt](../app/src/main/java/com/sanha/moneytalk/core/ui/coachmark/CoachMarkOverlay.kt) |

@@ -60,6 +60,7 @@ fun getCategoryChartColor(category: Category): Color {
     return when (category) {
         // 지출 (EXPENSE)
         Category.FOOD -> Color(0xFFEF4444)                       // Red 500
+        Category.DELIVERY -> Color(0xFFEA580C)                   // Orange 600
         Category.CAFE_SNACK -> Color(0xFFF59E0B)                 // Amber 500
         Category.DRINKING -> Color(0xFFF97316)                   // Orange 500
         Category.LIVING -> Color(0xFFF472B6)                     // Pink 400
@@ -181,6 +182,7 @@ private fun getCategoryBackgroundColor(category: Category): Color {
     return when (category) {
         // 지출 (EXPENSE)
         Category.FOOD -> Color(0xFFFEE2E2)                     // 연한 빨강
+        Category.DELIVERY -> Color(0xFFFFEDD5)                 // 연한 오렌지
         Category.CAFE_SNACK -> Color(0xFFFEFCE8)               // 연한 노랑
         Category.DRINKING -> Color(0xFFFFF7ED)                  // 연한 오렌지
         Category.LIVING -> Color(0xFFFCE7F3)                    // 연한 핑크

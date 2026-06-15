@@ -237,8 +237,12 @@ fun ChatRoomView(
                     Text(
                         text = if (!hasApiKey) {
                             stringResource(R.string.chat_subtitle_no_api)
+                        } else if (uiState.isLoading) {
+                            stringResource(R.string.chat_subtitle_loading)
                         } else if (uiState.isRewardAdEnabled) {
                             stringResource(R.string.reward_ad_remaining, uiState.rewardChatRemaining)
+                        } else if (uiState.messages.isNotEmpty()) {
+                            stringResource(R.string.chat_subtitle_in_conversation)
                         } else {
                             stringResource(R.string.chat_subtitle_with_api)
                         },
@@ -339,7 +343,15 @@ fun ChatRoomView(
                     value = messageText,
                     onValueChange = { messageText = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text(stringResource(R.string.chat_input_placeholder)) },
+                    placeholder = {
+                        Text(
+                            if (uiState.isLoading) {
+                                stringResource(R.string.chat_input_loading_placeholder)
+                            } else {
+                                stringResource(R.string.chat_input_placeholder)
+                            }
+                        )
+                    },
                     trailingIcon = {
                         if (messageText.isNotEmpty()) {
                             IconButton(onClick = { messageText = "" }) {

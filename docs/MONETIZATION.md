@@ -5,6 +5,8 @@
 
 > 후속 고도화 계획: JSON 기반 심층 재무 상담과 AI 크레딧/결제 구조는
 > [AI_CREDIT_DEEP_ANALYSIS_PLAN.md](AI_CREDIT_DEEP_ANALYSIS_PLAN.md)를 기준으로 검토한다.
+> 수익화 기능은 `release` 빌드에서만 활성화한다. 비릴리즈 빌드에서는 광고 로드/표시와 AI 크레딧 차감·충전·마이그레이션 쓰기를 수행하지 않는다.
+> AI 크레딧 기능은 RTDB `/config/credit_ad_enable=true`일 때만 노출/동작하며, 값이 없거나 `false`면 크레딧 UI와 차감/충전 로직을 비활성화한다.
 
 ---
 

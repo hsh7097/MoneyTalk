@@ -13,7 +13,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
-import com.sanha.moneytalk.BuildConfig
+import com.sanha.moneytalk.core.util.BuildVariantPolicy
 
 /**
  * AdMob 배너 광고 Composable.
@@ -28,7 +28,7 @@ fun BannerAdCompose(
     adUnitId: String,
     modifier: Modifier = Modifier
 ) {
-    if (BuildConfig.DEBUG) {
+    if (!BuildVariantPolicy.isMonetizationEnabled) {
         return
     }
 
@@ -64,12 +64,24 @@ fun BannerAdCompose(
     )
 }
 
-/** 배너 광고 단위 ID (디버그 빌드에서는 노출 정책에서 차단) */
+/** 배너 광고 단위 ID (비릴리즈 빌드에서는 노출 정책에서 차단) */
 object BannerAdIds {
     /** Google 공식 배너 테스트 광고 ID */
     private const val TEST_BANNER = "ca-app-pub-3940256099942544/6300978111"
 
-    val HOME = if (BuildConfig.DEBUG) TEST_BANNER else "ca-app-pub-4707673176609005/8344902874"
-    val HISTORY = if (BuildConfig.DEBUG) TEST_BANNER else "ca-app-pub-4707673176609005/5323629075"
-    val CATEGORY_DETAIL = if (BuildConfig.DEBUG) TEST_BANNER else "ca-app-pub-4707673176609005/9633933815"
+    val HOME = if (BuildVariantPolicy.isReleaseBuild) {
+        "ca-app-pub-4707673176609005/8344902874"
+    } else {
+        TEST_BANNER
+    }
+    val HISTORY = if (BuildVariantPolicy.isReleaseBuild) {
+        "ca-app-pub-4707673176609005/5323629075"
+    } else {
+        TEST_BANNER
+    }
+    val CATEGORY_DETAIL = if (BuildVariantPolicy.isReleaseBuild) {
+        "ca-app-pub-4707673176609005/9633933815"
+    } else {
+        TEST_BANNER
+    }
 }

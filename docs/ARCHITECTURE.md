@@ -14,6 +14,10 @@ com.sanha.moneytalk/
 ├── MoneyTalkApplication.kt                # Application 클래스 (Hilt)
 │
 ├── core/                                  # 공통 모듈
+│   ├── ad/                                # 광고/크레딧 노출 정책
+│   │   ├── BannerAdVisibilityPolicy.kt   # 배너 광고 노출 조건
+│   │   ├── CreditFeaturePolicy.kt        # AI 크레딧 RTDB 게이트 정책
+│   │   └── RewardAdManager.kt            # 리워드 광고 로드/표시/크레딧 충전 관리
 │   ├── database/                          # Room 데이터베이스
 │   │   ├── AppDatabase.kt                 # Room Database 정의 (v8)
 │   │   ├── converter/
@@ -59,6 +63,7 @@ com.sanha.moneytalk/
 │   │
 │   ├── firebase/                         # Firebase 관련
 │   ├── util/
+│   │   ├── BuildVariantPolicy.kt          # release 빌드 전용 수익화 정책
 │   │   ├── ChatCreditPolicy.kt           # 질문 문구 기반 AI 크레딧 비용 산정
 │   │   ├── AnalyticsEvent.kt             # 화면/클릭 이벤트 상수
 │   │   ├── AnalyticsHelper.kt            # Firebase Analytics 래퍼 (@Singleton)
@@ -128,7 +133,8 @@ com.sanha.moneytalk/
 │   │   ├── SyncCoveragePagePolicy.kt     # 월별 coverage/CTA 판정
 │   │   └── SyncCoverageRecorder.kt       # 성공한 동기화 구간 기록
 │   │
-│   └── util/                             # 유틸리티 (12개)
+│   └── util/                             # 유틸리티 (13개)
+│       ├── BuildVariantPolicy.kt         # release 빌드 전용 수익화 정책
 │       ├── CategoryReferenceProvider.kt  # 카테고리 참조 데이터 제공
 │       ├── StoreNameGrouper.kt           # 가게명 그룹화
 │       ├── StoreAliasManager.kt          # 가게명 별칭 관리
@@ -294,13 +300,13 @@ com.sanha.moneytalk/
 - 채팅방 관리 (생성, 삭제, 제목 편집)
 - DB 쿼리 자동 실행 (지출 조회, 분석)
 - 채팅 액션 지원 (삭제, 추가, 수정, SMS 제외 등 12종)
-- 질문 유형별 AI 크레딧 차감 (단순 조회 무료, 상담/분석 차등 차감)
+- RTDB `credit_ad_enable=true`일 때 질문 유형별 AI 크레딧 차감 (단순 조회 무료, 상담/분석 차등 차감)
 - 대화 요약 기능 (컨텍스트 유지)
 
 ### 4. 설정 (Settings)
 - 월 수입 / 월 시작일 설정
 - Gemini API 키 설정
-- AI 크레딧 잔액/원장 확인, 광고 충전, 차감 기준/가이드 표시
+- RTDB `credit_ad_enable=true`일 때 AI 크레딧 잔액/원장 확인, 광고 충전, 차감 기준/가이드 표시
 - SMS 동기화 / 카테고리 분류 (진행률 표시)
 - 소유 카드 관리 (화이트리스트)
 - SMS 제외 키워드 관리 (블랙리스트)
@@ -418,7 +424,7 @@ MainViewModel.syncSmsV2()
   → sender 필터 + PreFilter + IncomeFilter
   → 지출은 regex 매칭 성공 시 ExpenseEntity 저장
   → 수입은 SmsIncomeParser로 IncomeEntity 저장
-  → 거래 알림 표시
+  → 신규 실시간 이벤트는 거래 알림 표시, 알림 리스너 활성 알림 재검사는 저장만 수행
   → 미매칭/실패 시 DataRefreshEvent.SMS_RECEIVED
   → 이후 syncSmsV2에서 Vector/LLM 폴백
 ```

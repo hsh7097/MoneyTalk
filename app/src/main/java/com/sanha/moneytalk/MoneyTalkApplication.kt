@@ -1,7 +1,5 @@
 package com.sanha.moneytalk
 
-import com.sanha.moneytalk.core.util.MoneyTalkLogger
-
 import android.app.Application
 import androidx.appfunctions.service.AppFunctionConfiguration
 import com.google.android.gms.ads.MobileAds
@@ -9,10 +7,12 @@ import com.google.firebase.FirebaseApp
 import com.sanha.moneytalk.core.appfunctions.MoneyTalkAppFunctionEntryPoint
 import com.sanha.moneytalk.core.appfunctions.MoneyTalkChatAppFunctions
 import com.sanha.moneytalk.core.appfunctions.MoneyTalkFinanceAppFunctions
-import com.sanha.moneytalk.core.sms.DeletedSmsTracker
 import com.sanha.moneytalk.core.firebase.CrashlyticsHelper
 import com.sanha.moneytalk.core.firebase.PremiumManager
 import com.sanha.moneytalk.core.notification.SmsNotificationManager
+import com.sanha.moneytalk.core.sms.DeletedSmsTracker
+import com.sanha.moneytalk.core.util.BuildVariantPolicy
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import com.sanha.moneytalk.receiver.MmsContentObserver
 import com.sanha.moneytalk.receiver.RcsContentObserver
 import dagger.hilt.android.EntryPointAccessors
@@ -80,8 +80,8 @@ class MoneyTalkApplication : Application(), AppFunctionConfiguration.Provider {
             premiumManager.startObservingConfig()
         }
 
-        // Google AdMob 초기화 (디버그 빌드는 광고 미노출)
-        if (!BuildConfig.DEBUG) {
+        // Google AdMob 초기화 (release 빌드에서만 광고/크레딧 수익화 활성)
+        if (BuildVariantPolicy.isMonetizationEnabled) {
             MobileAds.initialize(this) {}
         }
     }

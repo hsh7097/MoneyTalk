@@ -51,6 +51,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -217,8 +219,11 @@ fun ChatBubble(message: ChatMessage) {
             modifier = Modifier.widthIn(max = 300.dp)
         ) {
             SelectionContainer {
+                val renderedContent = remember(message.content) {
+                    buildChatMessageAnnotatedString(message.content)
+                }
                 Text(
-                    text = message.content,
+                    text = renderedContent,
                     modifier = Modifier.padding(12.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (message.isUser) {
@@ -236,6 +241,34 @@ fun ChatBubble(message: ChatMessage) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp)
         )
+    }
+}
+
+private fun buildChatMessageAnnotatedString(content: String) = buildAnnotatedString {
+    var cursor = 0
+    while (cursor < content.length) {
+        val start = content.indexOf("**", startIndex = cursor)
+        if (start < 0) {
+            append(content.substring(cursor))
+            break
+        }
+
+        val end = content.indexOf("**", startIndex = start + 2)
+        if (end < 0) {
+            append(content.substring(cursor))
+            break
+        }
+
+        append(content.substring(cursor, start))
+        val boldText = content.substring(start + 2, end)
+        if (boldText.isEmpty()) {
+            append("****")
+        } else {
+            pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
+            append(boldText)
+            pop()
+        }
+        cursor = end + 2
     }
 }
 

@@ -332,21 +332,23 @@ fun SettingsScreen(
             }
 
             // AI 크레딧
-            item {
-                SettingsSectionCompose(title = stringResource(R.string.settings_section_ai)) {
-                    SettingsItemCompose(
-                        info = object : SettingsItemInfo {
-                            override val icon = Icons.Default.AccountBalanceWallet
-                            override val title = stringResource(R.string.settings_ai_credit_title)
-                            override val subtitle = stringResource(
-                                R.string.settings_ai_credit_subtitle,
-                                uiState.aiCreditBalance
-                            )
-                        },
-                        onClick = {
-                            AiCreditActivity.open(context)
-                        }
-                    )
+            if (uiState.isCreditFeatureEnabled) {
+                item {
+                    SettingsSectionCompose(title = stringResource(R.string.settings_section_ai)) {
+                        SettingsItemCompose(
+                            info = object : SettingsItemInfo {
+                                override val icon = Icons.Default.AccountBalanceWallet
+                                override val title = stringResource(R.string.settings_ai_credit_title)
+                                override val subtitle = stringResource(
+                                    R.string.settings_ai_credit_subtitle,
+                                    uiState.aiCreditBalance
+                                )
+                            },
+                            onClick = {
+                                AiCreditActivity.open(context)
+                            }
+                        )
+                    }
                 }
             }
 

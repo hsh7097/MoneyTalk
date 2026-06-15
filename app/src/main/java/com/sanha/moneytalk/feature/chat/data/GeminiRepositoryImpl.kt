@@ -7,15 +7,19 @@ import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
 import com.google.ai.client.generativeai.type.generationConfig
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
 import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.DataQueryParser
 import com.sanha.moneytalk.core.util.DataQueryRequest
+import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.util.QueryResult
 import kotlinx.coroutines.delay
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -35,7 +39,8 @@ import javax.inject.Singleton
 @Singleton
 class GeminiRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val apiKeyProvider: GeminiApiKeyProvider
+    private val apiKeyProvider: GeminiApiKeyProvider,
+    private val settingsDataStore: SettingsDataStore
 ) : GeminiRepository {
     companion object {
         /** Home 인사이트 생성 재시도 횟수 (최초 포함) */
@@ -333,15 +338,20 @@ class GeminiRepositoryImpl @Inject constructor(
                 return Result.failure(Exception("API 키가 설정되지 않았습니다."))
             }
 
-            // 오늘 날짜 정보 추가 (스키마는 System Instruction에 있음)
+            // 오늘 날짜와 사용자 설정 월 시작일 기준 기간 정보 추가
             val calendar = Calendar.getInstance()
             val today = "${calendar.get(Calendar.YEAR)}년 ${calendar.get(Calendar.MONTH) + 1}월 ${
                 calendar.get(Calendar.DAY_OF_MONTH)
             }일"
+            val monthStartDay = settingsDataStore.getMonthStartDay()
+            val currentPeriodText = formatCurrentAppMonthPeriod(monthStartDay)
+            val previousPeriodText = formatPreviousAppMonthPeriod(monthStartDay)
 
             val prompt = context.getString(
                 R.string.prompt_query_analyzer_user,
                 today,
+                currentPeriodText,
+                previousPeriodText,
                 contextualMessage
             )
 
@@ -358,6 +368,31 @@ class GeminiRepositoryImpl @Inject constructor(
             MoneyTalkLogger.e("에러 클래스: ${e.javaClass.simpleName}")
             Result.failure(Exception("쿼리 분석 실패: ${e.message}"))
         }
+    }
+
+    private fun formatCurrentAppMonthPeriod(monthStartDay: Int): String {
+        val now = System.currentTimeMillis()
+        val (start, rawEnd) = DateUtils.getCurrentCustomMonthPeriod(monthStartDay)
+        return formatPeriod(start, minOf(rawEnd, now), monthStartDay)
+    }
+
+    private fun formatPreviousAppMonthPeriod(monthStartDay: Int): String {
+        val (currentYear, currentMonth) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
+        val calendar = Calendar.getInstance().apply {
+            clear()
+            set(currentYear, currentMonth - 1, 1)
+            add(Calendar.MONTH, -1)
+        }
+        val previousYear = calendar.get(Calendar.YEAR)
+        val previousMonth = calendar.get(Calendar.MONTH) + 1
+        val (start, end) = DateUtils.getCustomMonthPeriod(previousYear, previousMonth, monthStartDay)
+        return formatPeriod(start, end, monthStartDay)
+    }
+
+    private fun formatPeriod(startTimestamp: Long, endTimestamp: Long, monthStartDay: Int): String {
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
+        val suffix = if (monthStartDay > 1) " (월 시작일 ${monthStartDay}일 기준)" else ""
+        return "${formatter.format(Date(startTimestamp))} ~ ${formatter.format(Date(endTimestamp))}$suffix"
     }
 
     override suspend fun generateFinalAnswer(

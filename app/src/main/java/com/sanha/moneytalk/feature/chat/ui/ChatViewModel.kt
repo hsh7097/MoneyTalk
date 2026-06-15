@@ -44,20 +44,23 @@ import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.compose.runtime.Stable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 @Stable
@@ -130,6 +133,20 @@ class ChatViewModel @Inject constructor(
     /** sendMessage 동시 호출 방지용 Mutex */
     private val sendMutex = Mutex()
 
+    private class CreditRefundGuard(val amount: Int) {
+        private val refunded = AtomicBoolean(false)
+
+        suspend fun refundOnce(
+            sessionId: Long?,
+            refund: suspend (amount: Int, sessionId: Long?) -> Unit
+        ) {
+            if (amount <= 0) return
+            if (refunded.compareAndSet(false, true)) {
+                refund(amount, sessionId)
+            }
+        }
+    }
+
     /** 재시도를 위한 마지막 사용자 메시지 저장 */
     private var lastUserMessage: String? = null
 
@@ -158,6 +175,13 @@ class ChatViewModel @Inject constructor(
             .groupBy { it.category }
             .map { (category, items) -> category to items.sumOf { expense -> expense.amount } }
             .sortedByDescending { it.second }
+    }
+
+    private fun formatCategoryTotals(expenses: List<ExpenseEntity>): String {
+        return categoryTotals(expenses).joinToString("\n") { (categoryName, total) ->
+            val category = Category.fromDisplayName(categoryName)
+            "${category.emoji} ${category.displayName}: ${numberFormat.format(total)}원"
+        }
     }
 
     init {
@@ -361,7 +385,7 @@ class ChatViewModel @Inject constructor(
     /**
      * 리워드 광고 관련 상태 감시
      * - AI 크레딧 잔액 Flow 수집
-     * - PremiumConfig의 rewardAdEnabled 변경 시 광고 프리로드
+     * - PremiumConfig의 credit_ad_enable/reward_ad_enabled 변경 시 광고 프리로드
      */
     private fun observeRewardAdState() {
         viewModelScope.launch {
@@ -375,7 +399,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             premiumManager.premiumConfig.collect {
                 val hasKey = withContext(Dispatchers.IO) { geminiRepository.hasApiKey() }
-                val isRewardAdEnabled = rewardAdManager.isRewardAdEnabled()
+                val isRewardAdEnabled = rewardAdManager.isCreditRewardAdEnabled()
                 _uiState.update {
                     it.copy(
                         isRewardAdEnabled = isRewardAdEnabled,
@@ -383,7 +407,7 @@ class ChatViewModel @Inject constructor(
                     )
                 }
                 if (isRewardAdEnabled) {
-                    rewardAdManager.preloadAd()
+                    rewardAdManager.preloadCreditAd()
                 }
             }
         }
@@ -427,7 +451,7 @@ class ChatViewModel @Inject constructor(
      * Activity에서 리워드 광고 표시
      */
     fun showRewardAd(activity: Activity) {
-        rewardAdManager.showAd(
+        rewardAdManager.showCreditAd(
             activity = activity,
             onRewarded = { onRewardAdWatched() },
             onFailed = { onRewardAdDismissed() }
@@ -439,42 +463,47 @@ class ChatViewModel @Inject constructor(
 
     fun sendMessage(message: String) {
         if (message.isBlank()) return
-        if (sendMutex.isLocked) return  // 이미 처리 중이면 무시
-
-        analyticsHelper.logClick(AnalyticsEvent.SCREEN_CHAT, AnalyticsEvent.CLICK_SEND_CHAT)
-        val creditDecision = ChatCreditPolicy.estimate(message)
         viewModelScope.launch {
-            // 리워드 광고 체크: 활성 상태이고 질문 유형별 필요 크레딧이 부족하면 광고 다이얼로그 표시
-            if (rewardAdManager.isAdRequired(creditDecision.cost)) {
-                showRewardAdDialog(message, creditDecision.cost)
-                return@launch
-            }
+            if (!sendMutex.tryLock()) return@launch
+            try {
+                analyticsHelper.logClick(AnalyticsEvent.SCREEN_CHAT, AnalyticsEvent.CLICK_SEND_CHAT)
+                val creditDecision = ChatCreditPolicy.estimate(message)
 
-            // AI 크레딧 차감 (광고 기능 활성 시에만 차감)
-            val consumed = withContext(Dispatchers.IO) {
-                rewardAdManager.consumeRewardChat(creditDecision.cost)
-            }
-            if (!consumed) {
-                // race condition 방어: 차감 실패 시 광고 다이얼로그 표시
-                showRewardAdDialog(message, creditDecision.cost)
-                return@launch
-            }
-            val chargedCredits =
-                if (rewardAdManager.isRewardAdEnabled()) creditDecision.cost else 0
-
-            lastUserMessage = message
-            _uiState.update { it.copy(canRetry = false) }
-
-            val acquired = withTimeoutOrNull(90_000L) {
-                sendMutex.withLock {
-                    processSendMessage(message, chargedCredits)
+                // 리워드 광고 체크: 활성 상태이고 질문 유형별 필요 크레딧이 부족하면 광고 다이얼로그 표시
+                if (rewardAdManager.isAdRequired(creditDecision.cost)) {
+                    showRewardAdDialog(message, creditDecision.cost)
+                    return@launch
                 }
-            }
-            if (acquired == null) {
-                refundChargedCredits(chargedCredits, _uiState.value.currentSessionId)
-                _uiState.update {
-                    it.copy(isLoading = false, loadingSessionId = null, canRetry = true)
+
+                // AI 크레딧 차감 (크레딧 광고 활성 시에만 차감)
+                val consumed = withContext(Dispatchers.IO) {
+                    rewardAdManager.consumeRewardChat(creditDecision.cost)
                 }
+                if (!consumed) {
+                    // race condition 방어: 차감 실패 시 광고 다이얼로그 표시
+                    showRewardAdDialog(message, creditDecision.cost)
+                    return@launch
+                }
+                val chargedCredits =
+                    if (rewardAdManager.isCreditRewardAdEnabled()) creditDecision.cost else 0
+                val refundGuard = CreditRefundGuard(chargedCredits)
+
+                lastUserMessage = message
+                _uiState.update { it.copy(canRetry = false) }
+
+                val acquired = withTimeoutOrNull(90_000L) {
+                    processSendMessage(message, refundGuard)
+                }
+                if (acquired == null) {
+                    refundGuard.refundOnce(_uiState.value.currentSessionId) { amount, sessionId ->
+                        refundChargedCredits(amount, sessionId)
+                    }
+                    _uiState.update {
+                        it.copy(isLoading = false, loadingSessionId = null, canRetry = true)
+                    }
+                }
+            } finally {
+                sendMutex.unlock()
             }
         }
     }
@@ -497,12 +526,10 @@ class ChatViewModel @Inject constructor(
     /**
      * sendMessage 내부 처리 로직 (Mutex 내부에서 실행)
      */
-    private suspend fun processSendMessage(message: String, chargedCredits: Int) {
-        var creditRefunded = false
+    private suspend fun processSendMessage(message: String, refundGuard: CreditRefundGuard) {
         suspend fun refundOnce(sessionId: Long?) {
-            if (!creditRefunded) {
-                refundChargedCredits(chargedCredits, sessionId)
-                creditRefunded = true
+            refundGuard.refundOnce(sessionId) { amount, refundSessionId ->
+                refundChargedCredits(amount, refundSessionId)
             }
         }
 
@@ -654,6 +681,11 @@ class ChatViewModel @Inject constructor(
             }
 
             _uiState.update { it.copy(isLoading = false, loadingSessionId = null) }
+        } catch (e: CancellationException) {
+            withContext(NonCancellable) {
+                refundOnce(sessionId)
+            }
+            throw e
         } catch (e: Exception) {
             refundOnce(sessionId)
             withContext(Dispatchers.IO) {
@@ -717,6 +749,8 @@ class ChatViewModel @Inject constructor(
             QueryType.MONTHLY_TOTALS, QueryType.CARD_LIST, QueryType.MONTHLY_INCOME,
             QueryType.DUPLICATE_LIST, QueryType.SMS_EXCLUSION_LIST
         )
+        val (defaultStartTimestamp, defaultEndTimestamp) =
+            getDefaultQueryDateRange(needsFullRange)
 
         // 날짜 파싱 (없으면 이번 달 기본값, 전체 기간 필요한 쿼리는 0L)
         val startTimestamp = query.startDate?.let {
@@ -725,7 +759,7 @@ class ChatViewModel @Inject constructor(
             } catch (e: Exception) {
                 0L
             }
-        } ?: if (needsFullRange) 0L else DateUtils.getMonthStartTimestamp()
+        } ?: defaultStartTimestamp
 
         val endTimestamp = query.endDate?.let {
             try {
@@ -735,7 +769,14 @@ class ChatViewModel @Inject constructor(
             } catch (e: Exception) {
                 System.currentTimeMillis()
             }
-        } ?: System.currentTimeMillis()
+        } ?: defaultEndTimestamp
+        val periodLabel = formatQueryPeriodLabel(
+            dateFormat = dateFormat,
+            startTimestamp = startTimestamp,
+            endTimestamp = endTimestamp,
+            query = query,
+            isFullRangeDefault = needsFullRange && query.startDate.isNullOrBlank()
+        )
 
         return when (query.type) {
             QueryType.TOTAL_EXPENSE -> {
@@ -747,10 +788,14 @@ class ChatViewModel @Inject constructor(
                 } else {
                     expenses.sumOf { it.amount }
                 }
-                val categoryLabel = query.category?.let { " ($it)" } ?: ""
+                val categoryLabel = query.category?.let {
+                    val cat = Category.fromDisplayName(it)
+                    val label = if (cat.subCategories.isNotEmpty()) "$it 하위 포함" else it
+                    " ($label)"
+                } ?: ""
                 QueryResult(
                     queryType = QueryType.TOTAL_EXPENSE,
-                    data = "총 지출$categoryLabel: ${numberFormat.format(total)}원 (${query.startDate ?: "전체"} ~ ${query.endDate ?: "현재"})"
+                    data = "총 지출$categoryLabel: ${numberFormat.format(total)}원 ($periodLabel)"
                 )
             }
 
@@ -758,28 +803,42 @@ class ChatViewModel @Inject constructor(
                 val total = incomeRepository.getTotalIncomeByDateRange(startTimestamp, endTimestamp)
                 QueryResult(
                     queryType = QueryType.TOTAL_INCOME,
-                    data = "총 수입: ${numberFormat.format(total)}원 (${query.startDate ?: "이번 달"} ~ ${query.endDate ?: "현재"})"
+                    data = "총 수입: ${numberFormat.format(total)}원 ($periodLabel)"
                 )
             }
 
             QueryType.EXPENSE_BY_CATEGORY -> {
                 val expenses = getVisibleStatsExpensesByDateRange(startTimestamp, endTimestamp)
-                val filteredExpenses = if (query.category != null) {
+                if (query.category != null) {
                     val cat = Category.fromDisplayName(query.category)
                     val categoryNames = cat.displayNamesIncludingSub
-                    expenses.filter { it.category in categoryNames }
+                    val filteredExpenses = expenses.filter { it.category in categoryNames }
+                    val total = filteredExpenses.sumOf { it.amount }
+                    val scopedLabel = if (cat.subCategories.isNotEmpty()) {
+                        "${cat.displayName} (하위 포함)"
+                    } else {
+                        cat.displayName
+                    }
+                    val details = formatCategoryTotals(filteredExpenses)
+                    val breakdown = if (details.isBlank()) {
+                        "해당 기간 지출 내역이 없습니다."
+                    } else if (categoryTotals(filteredExpenses).size > 1) {
+                        "${cat.emoji} $scopedLabel: ${numberFormat.format(total)}원\n세부:\n$details"
+                    } else {
+                        "${cat.emoji} $scopedLabel: ${numberFormat.format(total)}원"
+                    }
+                    QueryResult(
+                        queryType = QueryType.EXPENSE_BY_CATEGORY,
+                        data = "카테고리 지출 ($scopedLabel) ($periodLabel):\n$breakdown"
+                    )
                 } else {
-                    expenses
+                    val breakdown = formatCategoryTotals(expenses)
+                        .ifEmpty { "해당 기간 지출 내역이 없습니다." }
+                    QueryResult(
+                        queryType = QueryType.EXPENSE_BY_CATEGORY,
+                        data = "카테고리별 지출 ($periodLabel):\n$breakdown"
+                    )
                 }
-                val breakdown = categoryTotals(filteredExpenses).joinToString("\n") { (categoryName, total) ->
-                    val category = Category.fromDisplayName(categoryName)
-                    "${category.emoji} ${category.displayName}: ${numberFormat.format(total)}원"
-                }.ifEmpty { "해당 기간 지출 내역이 없습니다." }
-                val categoryLabel = query.category?.let { " ($it)" } ?: ""
-                QueryResult(
-                    queryType = QueryType.EXPENSE_BY_CATEGORY,
-                    data = "카테고리별 지출$categoryLabel (${query.startDate ?: "전체"} ~ ${query.endDate ?: "현재"}):\n$breakdown"
-                )
             }
 
             QueryType.EXPENSE_LIST -> {
@@ -810,7 +869,7 @@ class ChatViewModel @Inject constructor(
 
                 QueryResult(
                     queryType = QueryType.EXPENSE_LIST,
-                    data = "지출 내역 (${query.startDate ?: "이번 달"} ~ ${query.endDate ?: "현재"}):\n$expenseList"
+                    data = "지출 내역 ($periodLabel):\n$expenseList"
                 )
             }
 
@@ -826,7 +885,7 @@ class ChatViewModel @Inject constructor(
 
                 QueryResult(
                     queryType = QueryType.DAILY_TOTALS,
-                    data = "일별 지출 (${query.startDate ?: "이번 달"} ~ ${query.endDate ?: "현재"}):\n$totalsStr"
+                    data = "일별 지출 ($periodLabel):\n$totalsStr"
                 )
             }
 
@@ -878,7 +937,7 @@ class ChatViewModel @Inject constructor(
 
                 QueryResult(
                     queryType = QueryType.EXPENSE_BY_STORE,
-                    data = "'$storeName'$aliasInfo 지출 (${query.startDate ?: "이번 달"} ~ ${query.endDate ?: "현재"}):\n총 ${
+                    data = "'$storeName'$aliasInfo 지출 ($periodLabel):\n총 ${
                         numberFormat.format(
                             total
                         )
@@ -909,10 +968,11 @@ class ChatViewModel @Inject constructor(
             QueryType.CATEGORY_RATIO -> {
                 val monthlyIncome = settingsDataStore.getMonthlyIncome()
                 val allExpenses = getVisibleStatsExpensesByDateRange(startTimestamp, endTimestamp)
+                val selectedCategory = query.category?.let { Category.fromDisplayName(it) }
 
                 // category 필터가 있으면 해당 카테고리(+하위)만 필터링
-                val categoryExpenses = if (query.category != null) {
-                    val cat = Category.fromDisplayName(query.category)
+                val categoryExpenses = if (selectedCategory != null) {
+                    val cat = selectedCategory
                     val categoryNames = cat.displayNamesIncludingSub
                     allExpenses.filter { it.category in categoryNames }
                 } else {
@@ -921,21 +981,51 @@ class ChatViewModel @Inject constructor(
 
                 val totalExpense = allExpenses.sumOf { it.amount }  // 전체 지출 총액 (비율 계산용)
 
-                val ratioBreakdown = categoryTotals(categoryExpenses)
-                    .joinToString("\n") { (categoryName, total) ->
-                        val category = Category.fromDisplayName(categoryName)
-                        val incomeRatio =
-                            if (monthlyIncome > 0) (total * 100.0 / monthlyIncome) else 0.0
-                        val expenseRatio =
-                            if (totalExpense > 0) (total * 100.0 / totalExpense) else 0.0
-                        "${category.emoji} ${category.displayName}: ${numberFormat.format(total)}원 (수입의 ${
-                            String.format(
-                                Locale.KOREA,
-                                "%.1f",
-                                incomeRatio
-                            )
-                        }%, 지출의 ${String.format(Locale.KOREA, "%.1f", expenseRatio)}%)"
-                    }.ifEmpty { "해당 기간 지출 내역이 없습니다." }
+                val ratioBreakdown = if (selectedCategory != null) {
+                    val categoryTotal = categoryExpenses.sumOf { it.amount }
+                    val incomeRatio =
+                        if (monthlyIncome > 0) (categoryTotal * 100.0 / monthlyIncome) else 0.0
+                    val expenseRatio =
+                        if (totalExpense > 0) (categoryTotal * 100.0 / totalExpense) else 0.0
+                    val scopedLabel = if (selectedCategory.subCategories.isNotEmpty()) {
+                        "${selectedCategory.displayName} (하위 포함)"
+                    } else {
+                        selectedCategory.displayName
+                    }
+                    val details = categoryTotals(categoryExpenses)
+                        .joinToString("\n") { (categoryName, total) ->
+                            val category = Category.fromDisplayName(categoryName)
+                            "${category.emoji} ${category.displayName}: ${numberFormat.format(total)}원"
+                        }
+                    val summary = "${selectedCategory.emoji} $scopedLabel: ${
+                        numberFormat.format(categoryTotal)
+                    }원 (수입의 ${
+                        String.format(Locale.KOREA, "%.1f", incomeRatio)
+                    }%, 지출의 ${String.format(Locale.KOREA, "%.1f", expenseRatio)}%)"
+                    if (details.isBlank()) {
+                        "해당 기간 지출 내역이 없습니다."
+                    } else if (categoryTotals(categoryExpenses).size > 1) {
+                        "$summary\n세부:\n$details"
+                    } else {
+                        summary
+                    }
+                } else {
+                    categoryTotals(categoryExpenses)
+                        .joinToString("\n") { (categoryName, total) ->
+                            val category = Category.fromDisplayName(categoryName)
+                            val incomeRatio =
+                                if (monthlyIncome > 0) (total * 100.0 / monthlyIncome) else 0.0
+                            val expenseRatio =
+                                if (totalExpense > 0) (total * 100.0 / totalExpense) else 0.0
+                            "${category.emoji} ${category.displayName}: ${numberFormat.format(total)}원 (수입의 ${
+                                String.format(
+                                    Locale.KOREA,
+                                    "%.1f",
+                                    incomeRatio
+                                )
+                            }%, 지출의 ${String.format(Locale.KOREA, "%.1f", expenseRatio)}%)"
+                        }.ifEmpty { "해당 기간 지출 내역이 없습니다." }
+                }
 
                 val totalIncomeRatio =
                     if (monthlyIncome > 0) (totalExpense * 100.0 / monthlyIncome) else 0.0
@@ -943,7 +1033,7 @@ class ChatViewModel @Inject constructor(
 
                 QueryResult(
                     queryType = QueryType.CATEGORY_RATIO,
-                    data = "수입 대비 카테고리별 비율$categoryLabel (${query.startDate ?: "이번 달"} ~ ${query.endDate ?: "현재"}):\n월 수입: ${
+                    data = "수입 대비 카테고리별 비율$categoryLabel ($periodLabel):\n월 수입: ${
                         numberFormat.format(
                             monthlyIncome
                         )
@@ -976,7 +1066,7 @@ class ChatViewModel @Inject constructor(
 
                 QueryResult(
                     queryType = QueryType.EXPENSE_BY_CARD,
-                    data = "'$cardName' 카드 지출 (${query.startDate ?: "전체"} ~ ${query.endDate ?: "현재"}):\n총 ${
+                    data = "'$cardName' 카드 지출 ($periodLabel):\n총 ${
                         numberFormat.format(
                             total
                         )
@@ -1033,7 +1123,7 @@ class ChatViewModel @Inject constructor(
 
                 QueryResult(
                     queryType = QueryType.INCOME_LIST,
-                    data = "수입 내역 (${query.startDate ?: "전체"} ~ ${query.endDate ?: "현재"}):\n총 ${
+                    data = "수입 내역 ($periodLabel):\n총 ${
                         numberFormat.format(
                             total
                         )
@@ -1079,13 +1169,44 @@ class ChatViewModel @Inject constructor(
             }
 
             QueryType.ANALYTICS -> {
-                executeAnalytics(query, startTimestamp, endTimestamp)
+                executeAnalytics(query, startTimestamp, endTimestamp, periodLabel)
             }
 
             QueryType.BUDGET_STATUS -> {
                 executeBudgetStatusQuery(startTimestamp, endTimestamp)
             }
         }
+    }
+
+    private fun formatQueryPeriodLabel(
+        dateFormat: SimpleDateFormat,
+        startTimestamp: Long,
+        endTimestamp: Long,
+        query: DataQuery,
+        isFullRangeDefault: Boolean
+    ): String {
+        val startLabel = query.startDate ?: if (isFullRangeDefault) {
+            "전체"
+        } else {
+            dateFormat.format(Date(startTimestamp))
+        }
+        val endLabel = query.endDate ?: if (isFullRangeDefault) {
+            "현재"
+        } else {
+            dateFormat.format(Date(endTimestamp))
+        }
+        return "$startLabel ~ $endLabel"
+    }
+
+    private suspend fun getDefaultQueryDateRange(needsFullRange: Boolean): Pair<Long, Long> {
+        val now = System.currentTimeMillis()
+        if (needsFullRange) return 0L to now
+
+        val monthStartDay = withContext(Dispatchers.IO) {
+            settingsDataStore.getMonthStartDay()
+        }
+        val (start, rawEnd) = DateUtils.getCurrentCustomMonthPeriod(monthStartDay)
+        return start to minOf(rawEnd, now)
     }
 
     /**
@@ -1180,7 +1301,8 @@ class ChatViewModel @Inject constructor(
     private suspend fun executeAnalytics(
         query: DataQuery,
         startTimestamp: Long,
-        endTimestamp: Long
+        endTimestamp: Long,
+        periodLabel: String
     ): QueryResult {
         try {
 
@@ -1277,7 +1399,7 @@ class ChatViewModel @Inject constructor(
             }
 
             // 기간 정보
-            sb.appendLine("기간: ${query.startDate ?: "전체"} ~ ${query.endDate ?: "현재"}")
+            sb.appendLine("기간: $periodLabel")
             // 전체 건수
             sb.appendLine("필터 후 총 건수: ${expenses.size}건")
             // 필터 설명
@@ -1956,8 +2078,7 @@ class ChatViewModel @Inject constructor(
      */
     private suspend fun getDefaultQueryResults(): List<QueryResult> {
         val results = mutableListOf<QueryResult>()
-        val monthStart = DateUtils.getMonthStartTimestamp()
-        val monthEnd = DateUtils.getMonthEndTimestamp()
+        val (monthStart, monthEnd) = getDefaultQueryDateRange(needsFullRange = false)
         val visibleMonthExpenses = getVisibleStatsExpensesByDateRange(monthStart, monthEnd)
 
         // 이번 달 총 지출

@@ -84,49 +84,51 @@ fun AiCreditScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item {
-                AiCreditBalanceCard(
-                    balance = uiState.balance,
-                    rewardCreditCount = uiState.rewardCreditCount,
-                    isRewardAdEnabled = uiState.isRewardAdEnabled,
-                    onWatchAd = {
-                        val activity = context as? Activity
-                        if (activity != null) {
-                            viewModel.showRewardAd(activity)
-                        }
-                    }
-                )
-            }
-
-            item {
-                AiCreditPolicyCard()
-            }
-
-            item {
-                AiCreditGuideCard()
-            }
-
-            item {
-                Text(
-                    text = stringResource(R.string.ai_credit_recent_ledger_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-
-            if (uiState.recentLedger.isEmpty()) {
+            if (uiState.isCreditFeatureEnabled) {
                 item {
-                    Text(
-                        text = stringResource(R.string.ai_credit_empty_ledger),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 24.dp)
+                    AiCreditBalanceCard(
+                        balance = uiState.balance,
+                        rewardCreditCount = uiState.rewardCreditCount,
+                        isRewardAdEnabled = uiState.isRewardAdEnabled,
+                        onWatchAd = {
+                            val activity = context as? Activity
+                            if (activity != null) {
+                                viewModel.showRewardAd(activity)
+                            }
+                        }
                     )
                 }
-            } else {
-                items(uiState.recentLedger, key = { it.id }) { ledger ->
-                    AiCreditLedgerRow(ledger = ledger)
+
+                item {
+                    AiCreditPolicyCard()
+                }
+
+                item {
+                    AiCreditGuideCard()
+                }
+
+                item {
+                    Text(
+                        text = stringResource(R.string.ai_credit_recent_ledger_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
+                if (uiState.recentLedger.isEmpty()) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.ai_credit_empty_ledger),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 24.dp)
+                        )
+                    }
+                } else {
+                    items(uiState.recentLedger, key = { it.id }) { ledger ->
+                        AiCreditLedgerRow(ledger = ledger)
+                    }
                 }
             }
         }

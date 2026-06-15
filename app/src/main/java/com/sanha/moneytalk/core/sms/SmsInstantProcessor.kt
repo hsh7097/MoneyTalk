@@ -119,7 +119,8 @@ class SmsInstantProcessor @Inject constructor(
     suspend fun processAndSave(
         address: String,
         body: String,
-        timestampMillis: Long
+        timestampMillis: Long,
+        showUserNotification: Boolean = true
     ): Result {
         // 1. 발신번호 필터 (010/070 개인번호 차단)
         if (SmsFilter.shouldSkipBySender(address, body)) {
@@ -161,8 +162,20 @@ class SmsInstantProcessor @Inject constructor(
             val (smsType, _) = incomeFilter.classify(body)
 
             when (smsType) {
-                SmsType.PAYMENT -> processExpense(address, body, timestampMillis, smsId)
-                SmsType.INCOME -> processIncome(address, body, timestampMillis, smsId)
+                SmsType.PAYMENT -> processExpense(
+                    address = address,
+                    body = body,
+                    timestamp = timestampMillis,
+                    smsId = smsId,
+                    showUserNotification = showUserNotification
+                )
+                SmsType.INCOME -> processIncome(
+                    address = address,
+                    body = body,
+                    timestamp = timestampMillis,
+                    smsId = smsId,
+                    showUserNotification = showUserNotification
+                )
                 SmsType.SKIP -> Result.Skipped
             }
         } finally {
@@ -179,7 +192,8 @@ class SmsInstantProcessor @Inject constructor(
         packageName: String,
         appLabel: String,
         body: String,
-        timestampMillis: Long
+        timestampMillis: Long,
+        showUserNotification: Boolean = true
     ): Result {
         val address = buildAppNotificationAddress(packageName)
 
@@ -217,13 +231,15 @@ class SmsInstantProcessor @Inject constructor(
                     appLabel = appLabel,
                     body = body,
                     timestamp = timestampMillis,
-                    smsId = smsId
+                    smsId = smsId,
+                    showUserNotification = showUserNotification
                 )
                 SmsType.INCOME -> processIncome(
                     address = address,
                     body = body,
                     timestamp = timestampMillis,
                     smsId = smsId,
+                    showUserNotification = showUserNotification,
                     needsReconciliation = false
                 )
                 SmsType.SKIP -> Result.Skipped
@@ -237,7 +253,8 @@ class SmsInstantProcessor @Inject constructor(
         address: String,
         body: String,
         timestamp: Long,
-        smsId: String
+        smsId: String,
+        showUserNotification: Boolean
     ): Result {
         // Dedup 체크
         if (expenseRepository.existsBySmsId(smsId)) {
@@ -293,7 +310,11 @@ class SmsInstantProcessor @Inject constructor(
         MoneyTalkLogger.i("[InstantSMS] 지출 저장: ${entity.storeName} ${entity.amount}원 [${entity.category}]")
 
         // 알림 (설정에서 활성화된 경우만)
-        if (!replacedAppNotificationDuplicate && shouldShowExpenseNotification(entity)) {
+        if (
+            showUserNotification &&
+            !replacedAppNotificationDuplicate &&
+            shouldShowExpenseNotification(entity)
+        ) {
             notificationManager.showExpenseNotification(
                 amount = entity.amount,
                 storeName = entity.storeName,
@@ -310,7 +331,8 @@ class SmsInstantProcessor @Inject constructor(
         appLabel: String,
         body: String,
         timestamp: Long,
-        smsId: String
+        smsId: String,
+        showUserNotification: Boolean
     ): Result {
         if (expenseRepository.existsBySmsId(smsId)) {
             return Result.Skipped
@@ -379,7 +401,7 @@ class SmsInstantProcessor @Inject constructor(
                 "${entity.storeName} ${entity.amount}원 [${entity.category}]"
         )
 
-        if (shouldShowExpenseNotification(entity)) {
+        if (showUserNotification && shouldShowExpenseNotification(entity)) {
             notificationManager.showExpenseNotification(
                 amount = entity.amount,
                 storeName = entity.storeName,
@@ -410,6 +432,7 @@ class SmsInstantProcessor @Inject constructor(
         body: String,
         timestamp: Long,
         smsId: String,
+        showUserNotification: Boolean,
         needsReconciliation: Boolean = true
     ): Result {
         // Dedup 체크
@@ -442,6 +465,7 @@ class SmsInstantProcessor @Inject constructor(
             processIncomeEntity(
                 entity = entity,
                 smsId = smsId,
+                showUserNotification = showUserNotification,
                 needsReconciliation = needsReconciliation
             )
         }
@@ -450,6 +474,7 @@ class SmsInstantProcessor @Inject constructor(
     private suspend fun processIncomeEntity(
         entity: IncomeEntity,
         smsId: String,
+        showUserNotification: Boolean,
         needsReconciliation: Boolean
     ): Result {
         val restoredDuplicate = findRestoredIncomeDuplicate(entity)
@@ -490,6 +515,7 @@ class SmsInstantProcessor @Inject constructor(
 
         // 알림 (설정에서 활성화된 경우만)
         if (
+            showUserNotification &&
             restoredDuplicate == null &&
             !replacedRefundNotice &&
             settingsDataStore.isNotificationEnabled()

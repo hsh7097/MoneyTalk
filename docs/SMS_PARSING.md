@@ -866,7 +866,7 @@ processAndSave(address, body, timestampMillis) → Result
   │   │   ├── 교차 소스 중복 감지 → 앱 알림 저장본이 있으면 SMS 저장본으로 대체
   │   │   ├── 매칭 성공 → ExpenseEntity DB 저장 → 제외 카드가 아니면 MoneyTalk 거래 알림 → Result.Expense
   │   │   └── 미매칭 → Result.Skipped (후속 batch sync에서 Vector/LLM 폴백)
-  │   ├── INCOME → processIncome() → IncomeEntity DB 저장 → Result.Income
+  │   ├── INCOME → processIncome() → IncomeEntity DB 저장 → MoneyTalk 거래 알림 → Result.Income
   │   └── SKIP → Result.Skipped
 ```
 
@@ -890,6 +890,8 @@ RCS/비즈메시지는 앱 프로세스가 죽어 있을 때 `ContentObserver`�
 - 알림 본문을 직접 저장하지 않고, **실제 provider 원본**을 찾아 처리한다.
 - 따라서 `15889955` 같은 실제 발신번호 기반 regex 룰을 그대로 사용할 수 있다.
 - cold start 상태에서 늦게 등록되는 `RcsContentObserver`의 한계를 `NotificationListenerService`가 보완한다.
+- 알림 리스너 재연결 시 `activeNotifications` 재검사로 기존 알림을 다시 처리할 수 있으나, 이 경로는 새 알림이 아니므로 거래 데이터만 보강 저장하고 사용자 거래 알림은 다시 표시하지 않는다.
+- 알림 리스너 연결 해제 콜백이 오면 즉시 `requestRebind()`를 요청한다. 단, 실제 재연결 시각은 Android 시스템/OEM 정책이 결정하므로 앱에서 주기를 강제할 수는 없다.
 
 ### 금융 앱 알림 직접 처리 경로
 

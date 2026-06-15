@@ -298,6 +298,7 @@ class PremiumManager @Inject constructor(
             serviceEnabled = snapshot.child("service_enabled").getValue(Boolean::class.java) ?: true,
             maintenanceMessage = snapshot.child("maintenance_message").getValue(String::class.java) ?: "",
             rewardAdEnabled = snapshot.child("reward_ad_enabled").getValue(Boolean::class.java) ?: false,
+            creditAdEnabled = snapshot.child("credit_ad_enable").getValue(Boolean::class.java) ?: false,
             rewardAdChatCount = snapshot.child("reward_ad_chat_count").getValue(Int::class.java) ?: 5,
             sendOriginMessage = snapshot.child("send_origin_message").getValue(Boolean::class.java) ?: false,
             freeSyncCount = snapshot.child("free_sync_count").getValue(Int::class.java) ?: 3,

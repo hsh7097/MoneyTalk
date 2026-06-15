@@ -12,7 +12,7 @@ class BannerAdVisibilityPolicyTest {
             BannerAdVisibilityPolicy.canShowBanner(
                 rewardAdEnabled = false,
                 appEntryCount = BannerAdVisibilityPolicy.MIN_APP_ENTRY_COUNT,
-                isDebugBuild = false
+                isReleaseBuild = true
             )
         )
     }
@@ -23,25 +23,25 @@ class BannerAdVisibilityPolicyTest {
             BannerAdVisibilityPolicy.canShowBanner(
                 rewardAdEnabled = true,
                 appEntryCount = BannerAdVisibilityPolicy.MIN_APP_ENTRY_COUNT - 1,
-                isDebugBuild = false
+                isReleaseBuild = true
             )
         )
         assertTrue(
             BannerAdVisibilityPolicy.canShowBanner(
                 rewardAdEnabled = true,
                 appEntryCount = BannerAdVisibilityPolicy.MIN_APP_ENTRY_COUNT,
-                isDebugBuild = false
+                isReleaseBuild = true
             )
         )
     }
 
     @Test
-    fun canShowBanner_blocksDebugBuild() {
+    fun canShowBanner_blocksNonReleaseBuild() {
         assertFalse(
             BannerAdVisibilityPolicy.canShowBanner(
                 rewardAdEnabled = true,
                 appEntryCount = BannerAdVisibilityPolicy.MIN_APP_ENTRY_COUNT,
-                isDebugBuild = true
+                isReleaseBuild = false
             )
         )
     }

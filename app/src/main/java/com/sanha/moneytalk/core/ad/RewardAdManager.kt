@@ -1,7 +1,5 @@
 package com.sanha.moneytalk.core.ad
 
-import com.sanha.moneytalk.core.util.MoneyTalkLogger
-
 import android.app.Activity
 import android.content.Context
 import com.google.android.gms.ads.AdError
@@ -10,10 +8,12 @@ import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
-import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.core.database.AiCreditRepository
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.firebase.PremiumConfig
 import com.sanha.moneytalk.core.firebase.PremiumManager
+import com.sanha.moneytalk.core.util.BuildVariantPolicy
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,8 +45,9 @@ sealed class AdState {
  * 리워드 광고 관리자
  *
  * Google AdMob 리워드 광고의 로드, 표시, 보상 처리를 담당합니다.
- * Firebase RTDB의 reward_ad_enabled 설정에 따라 동작하며,
- * 디버그 빌드에서는 설정값과 무관하게 광고를 로드/표시하지 않습니다.
+ * Firebase RTDB의 reward_ad_enabled 설정은 공통 광고 노출을 제어하고,
+ * credit_ad_enable 설정은 AI 크레딧 표시/차감/충전 흐름을 제어합니다.
+ * release가 아닌 빌드에서는 설정값과 무관하게 광고와 크레딧 쓰기를 수행하지 않습니다.
  * 광고 시청 완료 시 reward_ad_chat_count만큼 AI 크레딧을 충전합니다.
  *
  * ## 광고 ID
@@ -75,6 +76,7 @@ class RewardAdManager @Inject constructor(
     val rewardChatRemainingFlow: Flow<Int> = aiCreditRepository.balanceFlow
 
     suspend fun prepareCreditBalance() {
+        if (!isCreditFeatureEnabled()) return
         aiCreditRepository.ensureLegacyRewardChatMigrated()
     }
 
@@ -186,10 +188,29 @@ class RewardAdManager @Inject constructor(
         }
     }
 
+    /** AI 크레딧 충전용 리워드 광고 미리 로드 */
+    fun preloadCreditAd() {
+        if (!isCreditRewardAdEnabled()) return
+        preloadAd()
+    }
+
+    /** AI 크레딧 충전용 리워드 광고 표시 */
+    fun showCreditAd(activity: Activity, onRewarded: () -> Unit, onFailed: () -> Unit) {
+        if (!isCreditRewardAdEnabled()) {
+            onFailed()
+            return
+        }
+        showAd(
+            activity = activity,
+            onRewarded = onRewarded,
+            onFailed = onFailed
+        )
+    }
+
     /** 질문 유형별 AI 크레딧 차감. true면 차감 성공, false면 잔여 크레딧 부족 */
     suspend fun consumeRewardChat(cost: Int = AiCreditRepository.LIGHT_CHAT_COST): Boolean {
-        if (!isAdFeatureEnabled()) {
-            return true // 광고 비활성 시 항상 성공
+        if (!isCreditRewardAdEnabled()) {
+            return true
         }
 
         return aiCreditRepository.spendForChat(cost = cost)
@@ -200,12 +221,14 @@ class RewardAdManager @Inject constructor(
      * PremiumConfig의 rewardAdChatCount만큼 추가
      */
     suspend fun addRewardChats() {
+        if (!isCreditRewardAdEnabled()) return
         val config = premiumManager.premiumConfig.value
         aiCreditRepository.grantRewardAdCredits(config.rewardAdChatCount)
     }
 
     suspend fun refundChatCredits(amount: Int, relatedSessionId: Long? = null) {
         if (amount <= 0) return
+        if (!isCreditFeatureEnabled()) return
         aiCreditRepository.refundCredits(
             amount = amount,
             reason = AiCreditRepository.REASON_CHAT_REFUND,
@@ -218,7 +241,7 @@ class RewardAdManager @Inject constructor(
      * @return true면 광고 시청 필요 (광고 활성 && AI 크레딧 부족)
      */
     suspend fun isAdRequired(cost: Int = AiCreditRepository.LIGHT_CHAT_COST): Boolean {
-        if (!isAdFeatureEnabled()) return false
+        if (!isCreditRewardAdEnabled()) return false
         return !aiCreditRepository.hasEnoughCredits(cost)
     }
 
@@ -229,9 +252,19 @@ class RewardAdManager @Inject constructor(
         return isAdFeatureEnabled()
     }
 
-    /** 리워드 광고 활성화 여부를 반응적으로 관찰하기 위한 Flow (RTDB 변경 시 자동 반영) */
+    /** 공통 리워드 광고 활성화 여부 Flow (월별 동기화 광고 등) */
     val isRewardAdEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
         .map { isAdFeatureEnabled(it.rewardAdEnabled) }
+        .distinctUntilChanged()
+
+    /** AI 크레딧 기능 표시 여부 Flow */
+    val isCreditFeatureEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
+        .map { isCreditFeatureEnabled(it) }
+        .distinctUntilChanged()
+
+    /** AI 크레딧 충전/차감용 리워드 광고 활성화 여부 Flow */
+    val isCreditRewardAdEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
+        .map { isCreditRewardAdEnabled(it) }
         .distinctUntilChanged()
 
     /** 배너 광고 노출 여부 Flow (RTDB 활성 + 앱 진입 5회 이상) */
@@ -246,12 +279,21 @@ class RewardAdManager @Inject constructor(
 
     /** 리워드 1회 시청 시 충전되는 AI 크레딧 */
     fun getRewardChatCount(): Int {
+        if (!isCreditRewardAdEnabled()) return 0
         return premiumManager.premiumConfig.value.rewardAdChatCount
     }
 
     /** 리워드 1회 시청 시 충전되는 AI 크레딧 Flow */
     val rewardCreditCountFlow: Flow<Int>
-        get() = premiumManager.premiumConfig.map { it.rewardAdChatCount }.distinctUntilChanged()
+        get() = premiumManager.premiumConfig
+            .map { config ->
+                if (isCreditRewardAdEnabled(config)) {
+                    config.rewardAdChatCount
+                } else {
+                    0
+                }
+            }
+            .distinctUntilChanged()
 
     /**
      * RTDB에서 설정된 무료 동기화 허용 횟수 (기본 3회)
@@ -269,6 +311,29 @@ class RewardAdManager @Inject constructor(
     }
 
     private fun isAdFeatureEnabled(rewardAdEnabled: Boolean): Boolean {
-        return !BuildConfig.DEBUG && rewardAdEnabled
+        return BuildVariantPolicy.isMonetizationEnabled && rewardAdEnabled
+    }
+
+    private fun isCreditFeatureEnabled(): Boolean {
+        return isCreditFeatureEnabled(premiumManager.premiumConfig.value)
+    }
+
+    private fun isCreditFeatureEnabled(config: PremiumConfig): Boolean {
+        return CreditFeaturePolicy.canShowCreditFeature(
+            isReleaseBuild = BuildVariantPolicy.isReleaseBuild,
+            creditAdEnabled = config.creditAdEnabled
+        )
+    }
+
+    fun isCreditRewardAdEnabled(): Boolean {
+        return isCreditRewardAdEnabled(premiumManager.premiumConfig.value)
+    }
+
+    private fun isCreditRewardAdEnabled(config: PremiumConfig): Boolean {
+        return CreditFeaturePolicy.canUseCreditRewardAd(
+            isReleaseBuild = BuildVariantPolicy.isReleaseBuild,
+            creditAdEnabled = config.creditAdEnabled,
+            rewardAdEnabled = config.rewardAdEnabled
+        )
     }
 }

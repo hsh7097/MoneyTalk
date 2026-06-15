@@ -599,9 +599,15 @@ class HistoryViewModel @Inject constructor(
         if (state.selectedExpenseCategories.isNotEmpty()) {
             return state.selectedExpenseCategories
         }
-        return state.selectedCategory?.let {
-            Category.fromDisplayName(it).displayNamesIncludingSub.toSet()
+        return state.selectedCategory?.let { resolveExactExpenseCategorySet(it) }
+    }
+
+    private fun resolveExactExpenseCategorySet(categoryName: String): Set<String> {
+        val category = Category.fromDisplayName(categoryName)
+        if (category == Category.ETC && categoryName != Category.ETC.displayName) {
+            return setOf(categoryName)
         }
+        return setOf(category.displayName)
     }
 
     private fun updateAvailableCardNamesIfCurrent(
@@ -685,9 +691,7 @@ class HistoryViewModel @Inject constructor(
     /** 카테고리 필터 적용 (null이면 전체) */
     fun filterByCategory(category: String?) {
         analyticsHelper.logClick(AnalyticsEvent.SCREEN_HISTORY, AnalyticsEvent.CLICK_CATEGORY_FILTER)
-        val selectedExpenseCategories = category?.let {
-            Category.fromDisplayName(it).displayNamesIncludingSub.toSet()
-        } ?: emptySet()
+        val selectedExpenseCategories = category?.let { resolveExactExpenseCategorySet(it) } ?: emptySet()
         _uiState.update {
             it.copy(
                 selectedCategory = category,
@@ -925,9 +929,7 @@ class HistoryViewModel @Inject constructor(
         category: String?,
         fixedExpenseFilter: FixedExpenseFilter = FixedExpenseFilter.ALL
     ) {
-        val selectedExpenseCategories = category?.let {
-            Category.fromDisplayName(it).displayNamesIncludingSub.toSet()
-        } ?: emptySet()
+        val selectedExpenseCategories = category?.let { resolveExactExpenseCategorySet(it) } ?: emptySet()
         _uiState.update {
             it.copy(
                 sortOrder = sortOrder,

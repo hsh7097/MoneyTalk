@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.ad.RewardAdManager
 import com.sanha.moneytalk.core.database.AiCreditRepository
 import com.sanha.moneytalk.core.database.AppDatabase
 import com.sanha.moneytalk.core.database.CustomCategoryRepository
@@ -43,6 +44,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -142,6 +144,7 @@ data class SettingsUiState(
     // 알림 접근 권한 상태
     val notificationAccessEnabled: Boolean = false,
     // AI 크레딧
+    val isCreditFeatureEnabled: Boolean = false,
     val aiCreditBalance: Int = 0
 )
 
@@ -174,6 +177,7 @@ class SettingsViewModel @Inject constructor(
     private val dataRefreshEvent: DataRefreshEvent,
     private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
     private val aiCreditRepository: AiCreditRepository,
+    private val rewardAdManager: RewardAdManager,
     private val snackbarBus: AppSnackbarBus,
     private val classificationState: ClassificationState,
     private val analyticsHelper: AnalyticsHelper
@@ -300,12 +304,27 @@ class SettingsViewModel @Inject constructor(
 
     private fun observeAiCreditBalance() {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                aiCreditRepository.ensureLegacyRewardChatMigrated()
+            rewardAdManager.isCreditFeatureEnabledFlow.collect { enabled ->
+                if (enabled) {
+                    withContext(Dispatchers.IO) {
+                        rewardAdManager.prepareCreditBalance()
+                    }
+                }
             }
-            aiCreditRepository.balanceFlow.collect { balance ->
-                _uiState.update { it.copy(aiCreditBalance = balance) }
-            }
+        }
+        viewModelScope.launch {
+            aiCreditRepository.balanceFlow
+                .combine(rewardAdManager.isCreditFeatureEnabledFlow) { balance, enabled ->
+                    balance to enabled
+                }
+                .collect { (balance, enabled) ->
+                    _uiState.update {
+                        it.copy(
+                            isCreditFeatureEnabled = enabled,
+                            aiCreditBalance = if (enabled) balance else 0
+                        )
+                    }
+                }
         }
     }
 

@@ -23,6 +23,7 @@ data class AiCreditUiState(
     val balance: Int = 0,
     val recentLedger: List<AiCreditLedgerEntity> = emptyList(),
     val rewardCreditCount: Int = 0,
+    val isCreditFeatureEnabled: Boolean = false,
     val isRewardAdEnabled: Boolean = false
 )
 
@@ -42,19 +43,37 @@ class AiCreditViewModel @Inject constructor(
 
     private fun observeCreditState() {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                aiCreditRepository.ensureLegacyRewardChatMigrated()
+            rewardAdManager.isCreditFeatureEnabledFlow.collect { enabled ->
+                if (enabled) {
+                    withContext(Dispatchers.IO) {
+                        rewardAdManager.prepareCreditBalance()
+                    }
+                }
             }
+        }
+        viewModelScope.launch {
             aiCreditRepository.balanceFlow
                 .combine(aiCreditRepository.observeRecentLedger()) { balance, ledger ->
                     balance to ledger
                 }
-                .collect { (balance, ledger) ->
+                .combine(rewardAdManager.isCreditFeatureEnabledFlow) { creditState, enabled ->
+                    Triple(creditState.first, creditState.second, enabled)
+                }
+                .collect { (balance, ledger, enabled) ->
                     _uiState.update {
-                        it.copy(
-                            balance = balance,
-                            recentLedger = ledger
-                        )
+                        if (enabled) {
+                            it.copy(
+                                balance = balance,
+                                recentLedger = ledger,
+                                isCreditFeatureEnabled = true
+                            )
+                        } else {
+                            it.copy(
+                                balance = 0,
+                                recentLedger = emptyList(),
+                                isCreditFeatureEnabled = false
+                            )
+                        }
                     }
                 }
         }
@@ -62,7 +81,7 @@ class AiCreditViewModel @Inject constructor(
 
     private fun observeRewardAdState() {
         viewModelScope.launch {
-            rewardAdManager.isRewardAdEnabledFlow
+            rewardAdManager.isCreditRewardAdEnabledFlow
                 .combine(rewardAdManager.rewardCreditCountFlow) { enabled, rewardCount ->
                     enabled to rewardCount
                 }
@@ -74,14 +93,14 @@ class AiCreditViewModel @Inject constructor(
                         )
                     }
                     if (enabled) {
-                        rewardAdManager.preloadAd()
+                        rewardAdManager.preloadCreditAd()
                     }
                 }
         }
     }
 
     fun showRewardAd(activity: Activity) {
-        rewardAdManager.showAd(
+        rewardAdManager.showCreditAd(
             activity = activity,
             onRewarded = { grantRewardCredits() },
             onFailed = {}
