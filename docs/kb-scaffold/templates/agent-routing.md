@@ -16,7 +16,7 @@ status: draft
 ## 1. 기본 원칙
 
 1. 변경 파일 경로를 먼저 확인한다.
-2. 이 문서에서 영향 도메인 또는 서브모듈을 고른다.
+2. 이 문서에서 영향 도메인, 기능 또는 서브모듈을 고른다.
 3. 해당 패키지의 `README.md`와 필요한 `package-reference/`만 읽는다.
 4. 실제 파일 위치 확인이 필요하면 해당 패키지의 `00-structure-map.md`를 읽는다.
 5. 공통 영향이 있으면 공통 문서를 추가로 읽는다.
@@ -34,6 +34,7 @@ status: draft
 | 변경 파일 경로 또는 키워드 | 우선 참조 문서 | 비고 |
 |---|---|---|
 | `<domain-path>/**` | `<domain>/README.md`, `<domain>/00-structure-map.md`, `<domain>/package-reference/README.md` | 도메인 화면/업무 흐름 |
+| `<feature-path>/**`, `<feature-keyword>` | `<feature>/README.md`, `<feature>/01-feature-flow.md`, `<feature>/04-files-checklist.md` | 여러 화면/모듈을 가로지르는 기능 흐름 |
 | `<module-path>/**` | `<module>/README.md`, `<module>/00-structure-map.md` | 공통 서브모듈 |
 | `<analytics-path>/**`, analytics keyword | `<analytics-module>/README.md`, 영향 도메인의 `package-reference/03-rendering-action.md` | 공통 구현과 도메인 예외를 분리 |
 | `<data-path>/**`, Repository, DataSource, Service, DAO | `<data-module>/README.md`, 영향 도메인의 `package-reference/02-data-viewmodel.md` | 데이터 흐름 |

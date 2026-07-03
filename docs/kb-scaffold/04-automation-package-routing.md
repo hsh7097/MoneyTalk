@@ -16,7 +16,7 @@ status: draft
 ## 1. 자동화의 역할
 
 예약 자동화는 매일 또는 정해진 주기로 원격 기준 브랜치의 변경사항을 확인한다.
-변경 파일 경로를 기준으로 영향 도메인/서브모듈을 분류하고, 필요한 KB 문서만 읽고 갱신한다.
+변경 파일 경로를 기준으로 영향 도메인/기능/서브모듈을 분류하고, 필요한 KB 문서만 읽고 갱신한다.
 
 자동화가 해야 하는 일:
 
@@ -60,6 +60,15 @@ docs/<kb-name>/
 │       ├── 02-data-viewmodel.md
 │       ├── 03-rendering-action.md
 │       └── 04-files-checklist.md
+├── <feature>/
+│   ├── README.md
+│   ├── 00-structure-map.md
+│   ├── 01-feature-flow.md
+│   ├── 02-data-contract.md
+│   ├── 03-extension-points.md
+│   ├── 04-files-checklist.md
+│   ├── 05-file-inventory.md
+│   └── change-log.md
 └── <module>/
     ├── README.md
     ├── 00-structure-map.md
@@ -75,7 +84,7 @@ docs/<kb-name>/
 
 | 파일 | 자동화에서 쓰는 용도 |
 |---|---|
-| `README.md` | KB 전체 인덱스와 도메인/서브모듈 목록 확인 |
+| `README.md` | KB 전체 인덱스와 도메인/기능/서브모듈 목록 확인 |
 | `00-agent-routing.md` | 변경 파일 경로를 읽을 문서로 변환 |
 | `00-change-index.md` | 반영 이력과 skip 사유 기록 |
 | `01-structure-map.md` | 루트 기준 폴더/패키지/파일 구조 확인 |
@@ -88,6 +97,14 @@ docs/<kb-name>/
 | `<domain>/package-reference/02-data-viewmodel.md` | ViewModel/Repository/DataSource/API 변경 확인 |
 | `<domain>/package-reference/03-rendering-action.md` | rendering/action/analytics 변경 확인 |
 | `<domain>/package-reference/04-files-checklist.md` | 도메인 수정 전후 검증 질문 확인 |
+| `<feature>/README.md` | 기능 end-to-end 흐름 진입점 |
+| `<feature>/00-structure-map.md` | 기능 관련 화면/모듈/DB/App Function 파일 지도 |
+| `<feature>/01-feature-flow.md` | trigger부터 결과 반영까지 기능 흐름 확인 |
+| `<feature>/02-data-contract.md` | input/output model, DB/API/App Function contract 확인 |
+| `<feature>/03-extension-points.md` | 기능 확장 지점 확인 |
+| `<feature>/04-files-checklist.md` | 기능 수정 전후 검증 질문 확인 |
+| `<feature>/05-file-inventory.md` | 기능 관련 파일 인덱스와 수정 후보 확인 |
+| `<feature>/change-log.md` | 기능 상세 변경 이력 |
 | `<module>/README.md` | 서브모듈 진입점 |
 | `<module>/00-structure-map.md` | 서브모듈 폴더/패키지/파일 역할 확인 |
 | `<module>/01-purpose-architecture.md` | 서브모듈 목적, 책임, 의존성 방향 확인 |
@@ -111,7 +128,7 @@ docs/<kb-name>/
 ## 1. 기본 원칙
 
 1. 작업 파일 경로를 먼저 확인한다.
-2. 이 문서에서 영향 도메인 또는 서브모듈을 고른다.
+2. 이 문서에서 영향 도메인, 기능 또는 서브모듈을 고른다.
 3. 해당 패키지의 README와 필요한 package-reference만 읽는다.
 4. 실제 판단은 현재 코드와 diff가 기준이다.
 
@@ -125,19 +142,20 @@ docs/<kb-name>/
 | 변경 파일 경로 또는 키워드 | 우선 참조 문서 |
 |---|---|
 | `<path>/**` | `<domain>/README.md`, `<domain>/package-reference/README.md` |
+| `<feature-path>/**`, `<feature-keyword>` | `<feature>/README.md`, `<feature>/01-feature-flow.md` |
 ```
 
 라우팅 표 작성 기준:
 
 - 경로는 가능한 실제 repository path를 쓴다.
 - 클래스명 키워드는 path만으로 분류하기 어려울 때 보조로 쓴다.
-- 도메인 문서와 서브모듈 문서를 같이 읽어야 하면 둘 다 적는다.
+- 도메인, 기능, 서브모듈 문서를 같이 읽어야 하면 모두 적는다.
 - 공통 영향 경로는 도메인 문서와 공통 문서를 함께 적는다.
 - 오래된 경로는 남겨두지 않는다. 이동이 확인되면 새 경로로 갱신한다.
 
 ## 4. 패키지 이동 감지 시 처리
 
-패키지 이동, 신규 패키지, 클래스 이동, 도메인 경계 변경은 자동화 계약 변경이다.
+패키지 이동, 신규 패키지, 클래스 이동, 도메인/기능 경계 변경은 자동화 계약 변경이다.
 
 예시:
 
@@ -150,8 +168,8 @@ new: <app-module>/src/main/java/<package>/new/domain/**
 
 1. `00-agent-routing.md`
 2. 루트 또는 관련 패키지 `00-structure-map.md`
-3. 관련 도메인/서브모듈 `README.md`
-4. 관련 `package-reference/04-files-checklist.md` 또는 서브모듈 `04-files-checklist.md`
+3. 관련 도메인/기능/서브모듈 `README.md`
+4. 관련 `package-reference/04-files-checklist.md`, 기능 `04-files-checklist.md` 또는 서브모듈 `04-files-checklist.md`
 5. `00-change-index.md`
 6. 관련 패키지 `change-log.md`
 7. 예약 자동화 프롬프트의 `갱신 대상 분류`
@@ -160,7 +178,7 @@ new: <app-module>/src/main/java/<package>/new/domain/**
 
 - 프롬프트에 old path가 하드코딩되어 있다.
 - old path 때문에 다음 실행에서 잘못된 도메인을 고를 수 있다.
-- 신규 도메인/서브모듈 패키지가 생겨 자동화가 읽을 문서를 알아야 한다.
+- 신규 도메인/기능/서브모듈 패키지가 생겨 자동화가 읽을 문서를 알아야 한다.
 - 경로 이동이 단기 브랜치 실험이 아니라 기준 브랜치에 반영된 구조 변경이다.
 
 자동화 프롬프트를 갱신하지 않는 기준:
@@ -189,9 +207,9 @@ new: <app-module>/src/main/java/<package>/new/domain/**
 패키지/경로 라우팅 갱신 문구 예시:
 
 ```text
-원격 diff에서 패키지 이동, 신규 패키지, 클래스 이동, 도메인 경계 변경이 확인되면
+원격 diff에서 패키지 이동, 신규 패키지, 클래스 이동, 도메인/기능 경계 변경이 확인되면
 실제 코드 경로와 diff 근거를 기준으로 관련 KB 라우팅 문서
-(`00-agent-routing.md`, 해당 도메인 `README.md`, 필요한 `package-reference/`)를 갱신한다.
+(`00-agent-routing.md`, 해당 도메인/기능 `README.md`, 필요한 `package-reference/` 또는 `01-feature-flow.md`)를 갱신한다.
 변경된 패키지/경로가 다음 자동화 실행의 분류 기준에도 영향을 주면,
 자동화 프롬프트의 `갱신 대상 분류`도 변경된 패키지/경로 기준으로 함께 갱신한다.
 ```
@@ -206,7 +224,7 @@ new: <app-module>/src/main/java/<package>/new/domain/**
 - 확인한 원격 후보 브랜치 목록
 - 직전 SHA와 현재 SHA
 - 변경 파일 요약
-- 영향 도메인/서브모듈 분류
+- 영향 도메인/기능/서브모듈 분류
 - 읽은 KB 문서 목록
 - 업데이트한 KB 문서 목록
 - 자동화 프롬프트 갱신 여부
@@ -226,7 +244,7 @@ new: <app-module>/src/main/java/<package>/new/domain/**
 | YYYY-MM-DD | `<ref>` / `<sha>` | `<domain>` 패키지 이동 | `00-agent-routing.md`, `<domain>/README.md` 반영 |
 ```
 
-상세 내용은 해당 도메인/서브모듈 문서에 적고, `00-change-index.md`에는 찾을 수 있을 정도만 남긴다.
+상세 내용은 해당 도메인/기능/서브모듈 문서에 적고, `00-change-index.md`에는 찾을 수 있을 정도만 남긴다.
 
 패키지별 `change-log.md`에는 상세 변경 이력을 남긴다.
 
@@ -247,7 +265,7 @@ new: <app-module>/src/main/java/<package>/new/domain/**
 - 루트 `00-change-index.md`
 - 변경된 패키지의 `change-log.md`
 
-도메인/서브모듈 의미가 바뀐 변경이면 둘 다 갱신한다.
+도메인/기능/서브모듈 의미가 바뀐 변경이면 둘 다 갱신한다.
 
 서브모듈 KB를 갱신할 때는 도메인 의존 정보를 넣지 않는다.
 도메인별 특수 동작은 해당 도메인 `change-log.md`와 도메인 문서에 기록하고, 서브모듈에는 필요한 경우 링크만 남긴다.

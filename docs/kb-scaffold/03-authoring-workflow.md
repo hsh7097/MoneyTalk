@@ -14,7 +14,7 @@ status: draft
 
 새 KB를 만들기 전에 아래를 확인한다.
 
-1. 대상이 도메인인지 서브모듈인지 정한다.
+1. 대상이 도메인인지, 기능인지, 서브모듈인지 정한다.
 2. 코드 기준 root path를 확인한다.
 3. 팀 공유 KB인지 로컬 전용 KB인지 정한다.
 4. 팀 공유 KB라면 `.claude/docs/kb/` 아래에 둘지 확인한다.
@@ -30,6 +30,8 @@ status: draft
 
 - 신규 Compose 화면 추가 시 필요한 Activity/NavGraph/ViewModel 확장 지점 찾기
 - SMS 파이프라인의 reader/filter/Fast Path/extraction 책임 구분
+- 문자 파싱 기능의 trigger부터 DB 저장, 화면 refresh까지 end-to-end 흐름 정리
+- 카테고리 분류 기능의 자동/수동 분류, repository, Gemini, custom category 연결 정리
 - App Functions 노출 함수와 Repository/DAO 사용 위치 구분
 - Home/History/Chat 화면 진입과 Compose state 흐름 정리
 
@@ -83,7 +85,7 @@ KB가 자동화와 함께 쓰일 수 있다면 `00-agent-routing.md`를 초기�
 권장 작성 순서:
 
 1. 대표 코드 경로를 모은다.
-2. 경로를 도메인/서브모듈 패키지로 분류한다.
+2. 경로를 도메인/기능/서브모듈 패키지로 분류한다.
 3. 각 분류가 읽어야 할 README와 package-reference를 지정한다.
 4. 공통 영향 경로를 별도로 분리한다.
 5. 패키지 이동 시 갱신할 문서를 명시한다.
@@ -96,8 +98,17 @@ KB가 자동화와 함께 쓰일 수 있다면 `00-agent-routing.md`를 초기�
 → <domain>/package-reference/README.md
 
 <app-module>/src/main/java/<package>/core/sms/**
+→ sms-parsing/README.md
 → sms-pipeline/README.md
 → 관련 도메인의 package-reference/02-data-viewmodel.md
+
+<app-module>/src/main/java/<package>/feature/home/data/*Category*
+→ category-classification/README.md
+→ finance-data/README.md
+
+<app-module>/src/main/java/<package>/core/appfunctions/**
+→ app-functions/README.md
+→ finance-data/README.md
 ```
 
 라우팅 문서는 상세 설명을 담는 곳이 아니다.
@@ -128,6 +139,17 @@ KB가 자동화와 함께 쓰일 수 있다면 `00-agent-routing.md`를 초기�
 7. `<module>/04-files-checklist.md`
 8. `<module>/05-file-inventory.md`
 
+기능 KB는 아래 순서로 만든다.
+
+1. `<feature>/README.md`
+2. `<feature>/00-structure-map.md`
+3. `<feature>/change-log.md`
+4. `<feature>/01-feature-flow.md`
+5. `<feature>/02-data-contract.md`
+6. `<feature>/03-extension-points.md`
+7. `<feature>/04-files-checklist.md`
+8. `<feature>/05-file-inventory.md`
+
 서브모듈 내부가 책임별 패키지로 나뉘면 하위 패키지도 만든다.
 
 1. `<module>/<sub-package>/README.md`
@@ -142,7 +164,7 @@ KB가 자동화와 함께 쓰일 수 있다면 `00-agent-routing.md`를 초기�
 예: `sms-pipeline`의 실제 책임 단위가 reader, filter, fast-path, extraction이라면 `sms-pipeline/reader`, `sms-pipeline/filter`, `sms-pipeline/fast-path`, `sms-pipeline/extraction`을 만든다.
 상위 `<module>/README.md`와 `<module>/00-structure-map.md`에는 하위 패키지로 내려가는 라우팅과 요약만 둔다.
 
-도메인과 서브모듈 모두 `README.md`와 `change-log.md`는 필수다.
+도메인, 기능, 서브모듈 모두 `README.md`와 `change-log.md`는 필수다.
 README는 인덱스, change-log는 변경 의도 추적 장치다.
 
 README를 만들 때는 필수 파일을 생성한 뒤 각 문서의 역할을 README에 다시 기록한다.
@@ -164,7 +186,7 @@ README의 `먼저 볼 파일` 섹션은 단순 링크 목록이 아니라 아래
 
 ## 2.4 파일 인벤토리 작성 기준
 
-모든 도메인/서브모듈/하위 책임 패키지는 `05-file-inventory.md`를 만든다.
+모든 도메인/기능/서브모듈/하위 책임 패키지는 `05-file-inventory.md`를 만든다.
 목표는 모든 파일을 길게 설명하는 것이 아니라, AI가 수정 위치를 빠르게 좁히도록 전체 파일을 짧게 인덱싱하는 것이다.
 작은 패키지는 “파일이 적음”을 명시하고 핵심 파일만 짧게 적는다.
 
@@ -232,12 +254,12 @@ KB 본문은 `@import`로 항상 로드하지 않고, `00-agent-routing.md`를 �
 2. package 구조와 책임 분리
 3. 파일 인벤토리에서 전체 파일 역할 확인
 4. entry point
-5. ViewModel 또는 receiver
-6. Repository/DataSource/API
-7. list 생성 위치
+5. 기능 trigger 또는 ViewModel/receiver/App Function
+6. Repository/DataSource/API/DAO
+7. data contract와 저장 위치
 8. UI state mapping
-9. Composable/dialog/card
-10. navigation/action/analytics
+9. Composable/dialog/card 또는 외부 노출 함수
+10. navigation/action/analytics/refresh side effect
 11. 테스트/빌드/검증 명령
 
 Android 화면 작업에서는 Compose + MVVM 흐름을 우선 본다.
@@ -261,6 +283,9 @@ KB는 문서 자체로는 품질을 증명하기 어렵다.
 
 - 신규 History 필터 조건 추가 위치 찾기
 - 신규 SMS sender regex Fast Path 룰 연결 위치 찾기
+- 문자 파싱 결과가 DB와 화면에 반영되는 전체 경로 찾기
+- 카테고리 자동 분류 실패 시 확인할 파일 순서 찾기
+- agent가 월간 지출 요약을 읽는 App Function 경로 찾기
 - Chat App Function을 추가할 때 function/reader/repository 중 어디를 수정하는지 확인
 - Analytics 로그 추가 시 공통 helper와 도메인 문서를 각각 어디까지 읽는지 확인
 - 공통 Compose 컴포넌트 사용법을 잘못 추론하지 않는지 확인

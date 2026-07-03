@@ -24,6 +24,9 @@ status: draft
 | [01-structure-map.md](01-structure-map.md) | 앱 전체 패키지 구조와 핵심 파일 위치를 정리한다. | 변경 파일이 어느 책임에 속하는지 판단할 때 본다. |
 | [00-change-index.md](00-change-index.md) | KB 변경 이력 색인이다. | KB가 왜 바뀌었는지 확인할 때 본다. |
 | [history/README.md](history/README.md) | 내역 화면 도메인 KB 진입점이다. | `feature/history/**` 또는 거래 목록/필터/달력/상세 작업 시 본다. |
+| [sms-parsing/README.md](sms-parsing/README.md) | 문자 파싱 기능 KB 진입점이다. | 문자 읽기, 거래 추출, DB 저장, 화면 refresh 흐름을 볼 때 본다. |
+| [category-classification/README.md](category-classification/README.md) | 카테고리 분류 기능 KB 진입점이다. | 자동/수동 카테고리 분류, Gemini, 벡터 캐시, 거래처 규칙을 볼 때 본다. |
+| [app-functions/README.md](app-functions/README.md) | App Functions 기능 KB 진입점이다. | agent가 앱 데이터를 읽거나 일부 설정/거래를 수정하는 경로를 볼 때 본다. |
 | [sms-pipeline/README.md](sms-pipeline/README.md) | SMS 파싱 파이프라인 서브모듈 KB 진입점이다. | `core/sms/**`, `core/sync/**`, `receiver/**` 변경 시 본다. |
 | [finance-data/README.md](finance-data/README.md) | Room DB, DAO, Repository, 금융 데이터 서브모듈 KB 진입점이다. | `core/database/**`, `feature/home/data/**` 변경 시 본다. |
 
@@ -32,6 +35,9 @@ status: draft
 | 패키지 | 기준 코드 경로 | 상태 | 설명 |
 |---|---|---|---|
 | `history` | `app/src/main/java/com/sanha/moneytalk/feature/history/` | draft | 내역 화면, 월별 pager, 필터, 달력, 거래 상세/수정 진입 |
+| `sms-parsing` | `MainViewModel.kt`, `core/sms/**`, `core/sync/**`, `core/database/**` | draft | 문자 읽기, 파싱, 카테고리 선분류, 지출/수입 저장, refresh |
+| `category-classification` | `feature/home/data/*Category*`, `StoreEmbedding*`, `StoreRule*` | draft | 4-tier 카테고리 분류, 수동 수정 학습, 수입 분류 |
+| `app-functions` | `core/appfunctions/**` | draft | agent용 App Function 읽기/수정 함수, reader/model contract |
 | `sms-pipeline` | `app/src/main/java/com/sanha/moneytalk/core/sms/` | draft | SMS/MMS/RCS 읽기, 사전 필터, 수입 분류, sender regex Fast Path, Vector/LLM 파싱 |
 | `finance-data` | `app/src/main/java/com/sanha/moneytalk/core/database/`, `feature/home/data/` | draft | Room DB, DAO, Repository, 카테고리/거래처/크레딧 데이터 흐름 |
 
@@ -42,7 +48,6 @@ status: draft
 - `home`: `feature/home/**`
 - `chat`: `feature/chat/**`, `core/appfunctions/MoneyTalkChat*`
 - `settings`: `feature/settings/**`, `feature/*settings/**`
-- `app-functions`: `core/appfunctions/**`
 - `notification`: `core/notification/**`, `receiver/**`
 
 ## 작성 원칙

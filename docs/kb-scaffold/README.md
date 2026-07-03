@@ -26,6 +26,8 @@ docs/kb-scaffold/
 ├── 05-team-rollout.md
 └── templates/
     ├── domain-readme.md
+    ├── feature-readme.md
+    ├── feature-flow.md
     ├── module-readme.md
     ├── agent-routing.md
     ├── file-inventory.md
@@ -45,7 +47,7 @@ docs/kb-scaffold/
 1. KB는 현재 코드 구현 상태를 설명한다.
 2. PRD, 개발 스펙, 미래 마이그레이션 목표는 KB와 분리한다.
 3. 루트 문서는 상세 구현 설명이 아니라 읽을 문서를 고르는 라우팅 역할을 한다.
-4. 상세 지식은 도메인 또는 서브모듈 단위 문서로 나눈다.
+4. 상세 지식은 도메인, 기능, 서브모듈 단위 문서로 나눈다.
 5. 모든 KB 묶음은 변경 로그를 가진다.
 6. 각 KB 패키지는 현재 코드의 폴더 구조, 패키지 구조, 핵심 파일 위치를 가진다.
 7. 핵심 파일 목록에는 각 파일의 책임과 변경 시 확인할 주변 파일을 함께 적는다.
@@ -116,6 +118,8 @@ docs/<kb-name>/
 ├── history/
 ├── chat/
 ├── settings/
+├── sms-parsing/
+├── category-classification/
 ├── sms-pipeline/
 ├── finance-data/
 └── app-functions/
@@ -125,8 +129,21 @@ docs/<kb-name>/
 기존 로컬 KB나 자동화 전용 KB처럼 Git에 올리지 않는 문서는 `docs/...` 또는 절대 경로 기반 로컬 KB로 둘 수 있다.
 두 위치가 함께 존재하면 `CLAUDE.md`와 `.claude/docs/kb/README.md`가 공식 진입점이고, 로컬 KB는 보조 자료다.
 
-이 방식의 핵심은 루트가 전체 설명을 모두 들고 있지 않고, 작업 성격에 따라 도메인 패키지로 내려가게 만드는 것이다.
+이 방식의 핵심은 루트가 전체 설명을 모두 들고 있지 않고, 작업 성격에 따라 도메인, 기능, 서브모듈 패키지로 내려가게 만드는 것이다.
 예를 들어 History 작업이면 `history/README.md`와 `history/package-reference/`만 읽고, Chat이나 Settings 문서는 읽지 않게 한다.
+
+기능 KB가 필요하면 화면 또는 모듈 경계가 아니라 사용자 기능 흐름을 기준으로 별도 패키지를 둔다.
+
+```text
+docs/<kb-name>/
+├── sms-parsing/
+├── category-classification/
+├── app-functions/
+└── backup-restore/
+```
+
+기능 패키지는 여러 화면/모듈을 가로지르는 end-to-end 흐름을 설명한다.
+예를 들어 문자 파싱 기능은 `MainViewModel`, `core/sms`, `core/sync`, `core/database`, 화면 refresh까지 함께 다루고, 세부 구현 원리는 `sms-pipeline` 같은 서브모듈 KB로 연결한다.
 
 서브모듈 KB가 필요하면 같은 원칙으로 별도 패키지를 추가한다.
 
@@ -138,7 +155,8 @@ docs/<kb-name>/
 └── finance-data/
 ```
 
-도메인 패키지는 화면/업무 흐름을 설명하고, 서브모듈 패키지는 여러 도메인에서 공통으로 쓰는 구현체의 목적과 사용법을 설명한다.
+도메인 패키지는 화면/업무 흐름을 설명하고, 기능 패키지는 여러 화면/모듈을 가로지르는 사용자 기능 흐름을 설명한다.
+서브모듈 패키지는 여러 도메인/기능에서 공통으로 쓰는 구현체의 목적과 사용법을 설명한다.
 
 ## 파일 구성과 역할
 
@@ -160,6 +178,8 @@ docs/<kb-name>/
 | [templates/agent-routing.md](templates/agent-routing.md) | 변경 파일 경로를 기준으로 어떤 KB 문서를 읽을지 결정하는 라우팅 문서 템플릿 |
 | [templates/change-log.md](templates/change-log.md) | 도메인/서브모듈/패키지별 변경 로그 템플릿 |
 | [templates/domain-readme.md](templates/domain-readme.md) | Home, History, Chat 같은 화면/도메인 KB의 README 템플릿 |
+| [templates/feature-readme.md](templates/feature-readme.md) | 문자 파싱, 카테고리 분류, 기능 읽어오기 같은 end-to-end 기능 KB의 README 템플릿 |
+| [templates/feature-flow.md](templates/feature-flow.md) | 기능 흐름의 trigger, orchestrator, data, UI refresh, 검증 지점을 정리하는 템플릿 |
 | [templates/file-inventory.md](templates/file-inventory.md) | 파일별 역할, 확인 시점, 함께 볼 파일을 정리하는 인벤토리 템플릿 |
 | [templates/module-readme.md](templates/module-readme.md) | SMS pipeline, App Functions, notification 같은 독립 모듈 또는 서브모듈 KB의 README 템플릿 |
 | [templates/package-reference/README.md](templates/package-reference/README.md) | 도메인 내부의 entry/data/rendering/checklist 문서 묶음 인덱스 템플릿 |
@@ -182,7 +202,7 @@ docs/<kb-name>/
 - 도메인 내부: `README.md` + 화면별 번호 문서 + `package-reference/`
 
 다만 이 가이드는 특정 서비스의 화면 KB에만 한정하지 않는다.
-SMS pipeline, App Functions, notification, finance data 같은 서브모듈 KB에도 같은 원칙을 적용한다.
+ 문자 파싱, 카테고리 분류, 기능 읽어오기 같은 기능 KB와 SMS pipeline, App Functions, notification, finance data 같은 서브모듈 KB에도 같은 원칙을 적용한다.
 
 ## 자동화와의 관계
 
@@ -195,9 +215,9 @@ SMS pipeline, App Functions, notification, finance data 같은 서브모듈 KB�
 - `00-agent-routing.md`: 변경 파일 경로를 도메인/서브모듈 문서로 연결한다.
 - `00-change-index.md`: 기준 ref, SHA, 영향 영역, 갱신 문서를 짧게 기록한다.
 - `01-structure-map.md` 또는 패키지별 구조 문서: 현재 코드의 폴더/패키지/핵심 파일 구조를 제공한다.
-- 각 도메인/서브모듈의 `README.md`: 해당 패키지 진입점이다.
+- 각 도메인/기능/서브모듈의 `README.md`: 해당 패키지 진입점이다.
 - 도메인 KB의 `package-reference/`: entry/data/rendering/checklist를 나눠 세부 수정 위치를 안내한다.
-- 각 도메인/서브모듈의 `05-file-inventory.md`: 전체 파일 역할과 수정 후보를 빠르게 좁히는 필수 인덱스다.
+- 각 도메인/기능/서브모듈의 `05-file-inventory.md`: 전체 파일 역할과 수정 후보를 빠르게 좁히는 필수 인덱스다.
 
 패키지 이동이나 클래스 이동이 발생하면 KB 라우팅 문서만 바꾸는 것으로 끝내지 않는다.
 그 변경이 다음 자동화 실행의 분류 기준에도 영향을 주면 자동화 프롬프트의 경로 분류 규칙도 같이 갱신해야 한다.

@@ -1,6 +1,6 @@
 ---
 type: structure-map
-title: "<도메인명 또는 서브모듈명> 구조 지도"
+title: "<도메인명, 기능명 또는 서브모듈명> 구조 지도"
 description: "폴더, 패키지, 핵심 파일, AI 참조 순서를 정리한다."
 tags: [structure-map, kb, android, "<domain-or-module>"]
 resource: "<target-source-root>"
@@ -8,14 +8,14 @@ timestamp: "<YYYY-MM-DDTHH:mm:ss+09:00>"
 status: draft
 ---
 
-# <도메인명 또는 서브모듈명> 구조 지도
+# <도메인명, 기능명 또는 서브모듈명> 구조 지도
 
 > 상태: draft
 > 기준: `<YYYY-MM-DD 현재 코드 확인>`
 
 이 문서는 AI가 작업 중 실제 파일을 찾을 때 기준으로 삼는 구조 지도다.
 설명보다 위치와 참조 순서를 우선한다.
-도메인 구조 지도는 도메인 내부 구현을 설명하고, 서브모듈 구조 지도는 모듈 자체 구조만 설명한다.
+도메인 구조 지도는 도메인 내부 구현을 설명하고, 기능 구조 지도는 end-to-end 흐름 참여 파일을 설명하며, 서브모듈 구조 지도는 모듈 자체 구조만 설명한다.
 서브모듈 구조 지도에 특정 상위 도메인의 비즈니스 예외를 넣지 않는다.
 
 ## Root
@@ -51,6 +51,7 @@ status: draft
 | `<package.rendering>` | Composable, UI state, dialog, card | `<Screen.kt>` |
 | `<package.action>` | callback, navigation, side effect | `<Screen.kt>` |
 | `<package.analytics>` | analytics helper, screen/click event | `<Analytics.kt>` |
+| `<feature.orchestrator>` | 기능 trigger와 orchestration | `<Orchestrator.kt>` |
 
 ## Sub-Packages
 

@@ -16,3 +16,4 @@ status: draft
 | 날짜 | 기준 | 영향 영역 | 갱신 문서 | 요약 |
 |---|---|---|---|---|
 | 2026-07-03 | 현재 소스와 기존 `docs/ARCHITECTURE.md`, `docs/SMS_PARSING.md`, `docs/APP_FUNCTIONS.md` 확인 | 초기 KB 생성 | `README.md`, `00-agent-routing.md`, `01-structure-map.md`, `history/**`, `sms-pipeline/**`, `finance-data/**` | 스카폴드 기준으로 MoneyTalk 초기 KB를 생성하고 핵심 라우팅, History 도메인, SMS pipeline, finance data 문서를 작성. |
+| 2026-07-03 | 기능 단위 KB 요구 반영 | 기능 KB 추가 | `README.md`, `00-agent-routing.md`, `01-structure-map.md`, `sms-parsing/**`, `category-classification/**`, `app-functions/**` | 문자 파싱, 카테고리 분류, App Functions 기능을 도메인/서브모듈과 별도 end-to-end 기능 KB로 추가. |

@@ -33,12 +33,14 @@ status: draft
 |---|---|---|
 | `app/src/main/java/com/sanha/moneytalk/MainActivity.kt`, `MainViewModel.kt`, `navigation/**` | [01-structure-map.md](01-structure-map.md), 영향 도메인 README | 앱 진입, 탭, Activity-scoped sync 상태 |
 | `app/src/main/java/com/sanha/moneytalk/feature/history/**` | [history/README.md](history/README.md), [history/00-structure-map.md](history/00-structure-map.md), [history/package-reference/README.md](history/package-reference/README.md) | 내역 화면, 필터, 달력, 상세/수정 진입 |
-| `app/src/main/java/com/sanha/moneytalk/core/sms/**` | [sms-pipeline/README.md](sms-pipeline/README.md), [sms-pipeline/00-structure-map.md](sms-pipeline/00-structure-map.md) | SMS 파싱, Fast Path, Vector/LLM extraction |
-| `app/src/main/java/com/sanha/moneytalk/core/sync/**` | [sms-pipeline/README.md](sms-pipeline/README.md), [sms-pipeline/04-files-checklist.md](sms-pipeline/04-files-checklist.md) | 동기화 범위, coverage, 월별 CTA |
+| `syncSmsV2`, `SMS_RECEIVED`, 문자 파싱 결과 저장 | [sms-parsing/README.md](sms-parsing/README.md), [sms-parsing/01-feature-flow.md](sms-parsing/01-feature-flow.md) | 문자 파싱 기능 end-to-end |
+| `app/src/main/java/com/sanha/moneytalk/core/sms/**` | [sms-parsing/README.md](sms-parsing/README.md), [sms-pipeline/README.md](sms-pipeline/README.md), [sms-pipeline/00-structure-map.md](sms-pipeline/00-structure-map.md) | SMS 파싱 기능과 pipeline 내부 구현 |
+| `app/src/main/java/com/sanha/moneytalk/core/sync/**` | [sms-parsing/README.md](sms-parsing/README.md), [sms-pipeline/README.md](sms-pipeline/README.md), [sms-pipeline/04-files-checklist.md](sms-pipeline/04-files-checklist.md) | 동기화 범위, coverage, 월별 CTA |
 | `app/src/main/java/com/sanha/moneytalk/receiver/**` | [sms-pipeline/README.md](sms-pipeline/README.md), [sms-pipeline/05-file-inventory.md](sms-pipeline/05-file-inventory.md) | SMS/MMS/RCS/알림 실시간 수신 보조 |
 | `app/src/main/java/com/sanha/moneytalk/core/database/**` | [finance-data/README.md](finance-data/README.md), [finance-data/00-structure-map.md](finance-data/00-structure-map.md) | Room DB, DAO, migration, entity |
-| `app/src/main/java/com/sanha/moneytalk/feature/home/data/**` | [finance-data/README.md](finance-data/README.md), 영향 도메인 README | Expense/Income/Category/StoreRule repository |
-| `app/src/main/java/com/sanha/moneytalk/core/appfunctions/**` | [01-structure-map.md](01-structure-map.md), `docs/APP_FUNCTIONS.md` | 별도 `app-functions` KB 후보 |
+| `CategoryClassifierService`, `GeminiCategoryRepository`, `StoreEmbedding`, `StoreRule` | [category-classification/README.md](category-classification/README.md), [category-classification/01-feature-flow.md](category-classification/01-feature-flow.md) | 카테고리 분류 기능 |
+| `app/src/main/java/com/sanha/moneytalk/feature/home/data/**` | [finance-data/README.md](finance-data/README.md), [category-classification/README.md](category-classification/README.md), 영향 도메인 README | Expense/Income/Category/StoreRule repository |
+| `app/src/main/java/com/sanha/moneytalk/core/appfunctions/**` | [app-functions/README.md](app-functions/README.md), [app-functions/01-feature-flow.md](app-functions/01-feature-flow.md), `docs/APP_FUNCTIONS.md` | agent 기능 읽기/수정 노출 |
 | `app/src/main/java/com/sanha/moneytalk/feature/chat/**` | [01-structure-map.md](01-structure-map.md), `docs/CHAT_SYSTEM.md` | 별도 `chat` KB 후보 |
 | `app/src/main/java/com/sanha/moneytalk/feature/settings/**`, `feature/*settings/**` | [01-structure-map.md](01-structure-map.md), `docs/ARCHITECTURE.md` | 별도 `settings` KB 후보 |
 | `app/src/main/java/com/sanha/moneytalk/core/ui/**`, `core/theme/**` | [01-structure-map.md](01-structure-map.md), 영향 도메인의 rendering/action 문서 | 공통 Compose UI |

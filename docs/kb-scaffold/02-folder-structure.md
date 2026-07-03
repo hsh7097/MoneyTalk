@@ -28,6 +28,8 @@ status: draft
 ├── chat/
 ├── settings/
 ├── transaction-edit/
+├── sms-parsing/
+├── category-classification/
 ├── sms-pipeline/
 ├── app-functions/
 ├── notification/
@@ -49,6 +51,10 @@ docs/<kb-name>/
 │   ├── home/
 │   ├── history/
 │   └── chat/
+├── features/
+│   ├── sms-parsing/
+│   ├── category-classification/
+│   └── app-functions/
 └── modules/
     ├── sms-pipeline/
     ├── app-functions/
@@ -275,7 +281,77 @@ AI reference:
 - Room Database/DAO 전체 설명
 - 다른 도메인에만 적용되는 예외
 
-## 5. 서브모듈 KB
+## 5. 기능 KB
+
+기능 KB는 화면 하나나 모듈 하나로 끝나지 않는 사용자 기능 흐름을 설명한다.
+예를 들어 문자 파싱은 `MainViewModel`, `core/sms`, `core/sync`, `core/database`, 화면 refresh까지 이어지고, 카테고리 분류는 Home/History/Settings, Repository, Gemini, StoreEmbedding, custom category까지 이어질 수 있다.
+
+후보:
+
+- `sms-parsing`
+- `category-classification`
+- `app-functions`
+- `backup-restore`
+- `reward-credit`
+- `store-rule-sync`
+
+권장 구조:
+
+```text
+<feature>/
+├── README.md
+├── 00-structure-map.md
+├── 01-feature-flow.md
+├── 02-data-contract.md
+├── 03-extension-points.md
+├── 04-files-checklist.md
+├── 05-file-inventory.md
+└── change-log.md
+```
+
+기능 KB에 들어갈 내용:
+
+- 기능 trigger
+- orchestration entry point
+- 관련 화면/도메인
+- 관련 서브모듈
+- data read/write 흐름
+- DB/API/App Function contract
+- UI refresh 또는 side effect
+- 실패/권한/비용 정책
+- 검증할 샘플 시나리오
+
+기능 KB 필수 파일:
+
+| 파일 | 역할 |
+|---|---|
+| `README.md` | 기능 인덱스. 어떤 화면/모듈을 가로지르는지와 먼저 볼 문서를 제공한다 |
+| `00-structure-map.md` | 기능에 참여하는 화면, ViewModel, Repository, 서브모듈, DB 파일 지도 |
+| `01-feature-flow.md` | trigger부터 결과 반영까지 end-to-end 흐름 |
+| `02-data-contract.md` | 주요 input/output model, DB/API/App Function contract |
+| `03-extension-points.md` | 기능 확장 시 수정 지점과 책임 경계 |
+| `04-files-checklist.md` | 기능 수정 전후 확인 파일과 검증 질문 |
+| `05-file-inventory.md` | 기능 관련 전체 파일의 한 줄 역할 인덱스 |
+| `change-log.md` | 기능 KB 변경 상세 로그 |
+
+기능 KB와 서브모듈 KB의 경계:
+
+- 기능 KB는 “사용자 기능이 어떻게 끝까지 흐르는가”를 설명한다.
+- 서브모듈 KB는 “공통 구현체가 어떤 API와 내부 구조를 갖는가”를 설명한다.
+- 기능 KB에는 필요한 서브모듈 링크를 두되, 서브모듈 내부 구현 전체를 복사하지 않는다.
+- 서브모듈 KB에는 특정 기능의 비즈니스 조건을 복사하지 않는다.
+
+예시:
+
+| 질문 | 먼저 볼 KB |
+|---|---|
+| 문자를 읽어 거래로 저장하기까지 어디를 보나? | `sms-parsing/README.md` |
+| SMS parser 내부 단계가 어떻게 나뉘나? | `sms-pipeline/README.md` |
+| 카테고리 자동 분류가 어디서 결정되나? | `category-classification/README.md` |
+| 가게명 임베딩 repository 내부 파일은 어디인가? | `finance-data/README.md` |
+| agent가 앱 데이터를 읽는 함수는 어디인가? | `app-functions/README.md` |
+
+## 6. 서브모듈 KB
 
 서브모듈은 여러 도메인 또는 앱에서 공통으로 쓰는 코드 단위다.
 
@@ -451,7 +527,7 @@ sms-pipeline/
 서브모듈 KB는 상위 도메인에 의존하는 내용을 소유하지 않는다.
 도메인별 특수 사용법이 필요하면 서브모듈 문서에는 링크만 두고, 실제 설명은 해당 도메인 KB에 둔다.
 
-## 6. 로그 파일
+## 7. 로그 파일
 
 각 KB 묶음은 변경 로그를 가진다.
 변경사항이 생기면 해당 변경을 반드시 로그에 남긴다.
@@ -461,7 +537,7 @@ sms-pipeline/
 | 로그 | 위치 | 역할 |
 |---|---|---|
 | 전체 변경 색인 | `00-change-index.md` | 전체 KB에서 어떤 영역이 바뀌었는지 빠르게 찾는 색인 |
-| 패키지 변경 로그 | `<domain>/change-log.md` 또는 `<module>/change-log.md` | 해당 도메인/서브모듈의 상세 변경 이력 |
+| 패키지 변경 로그 | `<domain>/change-log.md`, `<feature>/change-log.md`, `<module>/change-log.md` | 해당 도메인/기능/서브모듈의 상세 변경 이력 |
 
 `00-change-index.md`는 기존 화면 KB처럼 짧은 색인 역할만 한다.
 긴 설명은 패키지별 `change-log.md` 또는 실제 갱신 문서에 둔다.
@@ -474,7 +550,7 @@ sms-pipeline/
 - 갱신하지 않은 항목은 왜 제외했는가
 - 다음에 검증할 지점은 무엇인가
 
-## 7. 로그 작성 규칙
+## 8. 로그 작성 규칙
 
 변경이 발생하면 아래 순서로 기록한다.
 

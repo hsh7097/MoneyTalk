@@ -15,7 +15,7 @@ status: draft
 
 ## 1. 작업 단위
 
-KB 작업은 도메인 또는 서브모듈 단위로 나눈다.
+KB 작업은 도메인, 기능, 서브모듈 단위로 나눈다.
 
 도메인 예시:
 
@@ -37,8 +37,17 @@ KB 작업은 도메인 또는 서브모듈 단위로 나눈다.
 - Core UI
 - Core Util
 
+기능 예시:
+
+- 문자 파싱
+- 카테고리 자동/수동 분류
+- App Functions를 통한 기능 읽어오기
+- 백업/복원
+- 리워드 광고와 AI 크레딧
+- 거래처 규칙 소급 적용
+
 작업자는 하나의 단위를 맡아도 되고, 작은 모듈은 두세 개를 묶어도 된다.
-단, 한 문서 안에서 도메인 지식과 서브모듈 코어 지식을 섞지 않는다.
+단, 한 문서 안에서 도메인 지식, 기능 흐름, 서브모듈 코어 지식을 구분한다.
 
 ## 2. 담당자 산출물
 
@@ -67,6 +76,17 @@ KB 작업은 도메인 또는 서브모듈 단위로 나눈다.
 - `<module>/05-file-inventory.md`
 - `<module>/change-log.md`
 
+기능 KB 담당자:
+
+- `<feature>/README.md`
+- `<feature>/00-structure-map.md`
+- `<feature>/01-feature-flow.md`
+- `<feature>/02-data-contract.md`
+- `<feature>/03-extension-points.md`
+- `<feature>/04-files-checklist.md`
+- `<feature>/05-file-inventory.md`
+- `<feature>/change-log.md`
+
 작은 모듈도 `README.md`, `00-structure-map.md`, `05-file-inventory.md`, `change-log.md`는 최소로 가진다.
 세부 목적/사용법/확장 지점 문서는 한 파일 안에 합쳐 시작할 수 있지만, 자동화 라우팅 대상이 되거나 두 개 이상 도메인에서 사용되면 위 구조로 분리한다.
 
@@ -74,10 +94,11 @@ KB 작업은 도메인 또는 서브모듈 단위로 나눈다.
 
 작업 전에 아래를 확인한다.
 
-- [ ] 이 작업은 도메인 KB인가, 서브모듈 KB인가?
+- [ ] 이 작업은 도메인 KB인가, 기능 KB인가, 서브모듈 KB인가?
 - [ ] 팀 공유 KB인가, 로컬 전용 KB인가?
 - [ ] 팀 공유라면 `.claude/docs/kb/`에 둘 것인가?
 - [ ] 대표 코드 경로는 어디인가?
+- [ ] 여러 화면/모듈을 가로지르는 end-to-end 기능인가?
 - [ ] 다른 도메인에서 재사용하는 공통 구현인가?
 - [ ] 기존 화면 KB에 유사 구조가 있는가?
 - [ ] 자동화 라우팅 대상 경로인가?
@@ -87,6 +108,9 @@ KB 작업은 도메인 또는 서브모듈 단위로 나눈다.
 
 - History 신규 필터를 추가한다면 어떤 파일을 찾아야 하는가?
 - SMS 신규 sender regex Fast Path 룰이 내려오면 어디를 수정해야 하는가?
+- 문자 파싱 결과가 저장되고 화면에 반영되는 전체 경로는 어디인가?
+- 카테고리 자동 분류가 실패하면 어떤 service/repository/model을 봐야 하는가?
+- agent가 앱 데이터를 읽어오는 기능은 어떤 App Function과 reader를 통하는가?
 - Chat App Function을 추가하려면 어떤 function/reader/repository를 봐야 하는가?
 - Analytics 로그를 추가할 때 core 문서와 도메인 문서 중 무엇을 먼저 읽어야 하는가?
 - 공통 Compose 컴포넌트를 추가하려면 어떤 UI component와 호출 도메인을 봐야 하는가?
@@ -103,6 +127,7 @@ KB 작업은 도메인 또는 서브모듈 단위로 나눈다.
 - 데이터 흐름
 - 렌더링 흐름
 - action/receiver 흐름
+- 기능 trigger, orchestrator, data contract, UI refresh 흐름
 - analytics/navigation side effect 위치
 - 신규 확장 시 수정할 파일 순서
 - 반복 실수
@@ -115,7 +140,7 @@ KB 작업은 도메인 또는 서브모듈 단위로 나눈다.
 - PRD 요구사항
 - 작업별 구현 계획
 - 코드 확인 없이 회의에서 나온 추정
-- 서브모듈 문서 안의 특정 도메인 비즈니스 예외
+- 서브모듈 문서 안의 특정 도메인/기능 비즈니스 예외
 
 좋은 깊이:
 
@@ -148,6 +173,7 @@ History는 HistoryScreen을 보면 된다.
 - [ ] 문서 상태가 `stub`, `draft`, `verified`, `stale` 중 하나로 표시되어 있는가?
 - [ ] 대표 코드 경로가 실제 존재하는가?
 - [ ] 도메인 지식과 서브모듈 지식이 섞이지 않았는가?
+- [ ] 기능 KB가 end-to-end 흐름을 설명하되 서브모듈 내부 구현을 복사하지 않았는가?
 - [ ] 서브모듈 KB에 상위 도메인 의존 정보가 들어가지 않았는가?
 - [ ] PRD/스펙/미래 계획이 현재 구현처럼 적히지 않았는가?
 - [ ] 신규 작업자가 어떤 파일부터 열지 알 수 있는가?
@@ -166,6 +192,7 @@ History는 HistoryScreen을 보면 된다.
 
 - 두 초안이 고른 대표 entry point가 같은가?
 - 데이터 흐름이 같은가?
+- 기능 trigger와 결과 반영 지점이 같은가?
 - Composable/state 생성 위치가 같은가?
 - action/analytics/navigation 책임 위치가 같은가?
 - 한쪽에만 있는 중요한 실수 방지 규칙이 있는가?

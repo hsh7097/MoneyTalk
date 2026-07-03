@@ -17,6 +17,7 @@ KB는 AI가 코드를 수정하거나 리뷰할 때 필요한 현재 구현 지�
 좋은 KB는 아래 질문에 답한다.
 
 - 이 작업은 어느 도메인 또는 서브모듈에 속하는가?
+- 이 작업이 여러 도메인/서브모듈을 가로지르는 기능 흐름인가?
 - 먼저 읽어야 할 문서는 무엇인가?
 - 현재 구현은 어떤 Activity, NavGraph, ViewModel, Repository, Room DAO, Composable로 이어지는가?
 - 신규 작업 시 어떤 확장 지점을 건드려야 하는가?
@@ -96,6 +97,7 @@ KB에는 확인된 사실만 쓴다.
 - 루트는 얇고 명확하다.
 - 도메인 문서는 해당 도메인 작업에 필요한 내용만 가진다.
 - 서브모듈 문서는 여러 앱/도메인에서 공통으로 쓰는 규칙을 가진다.
+- 기능 문서는 trigger부터 결과 반영까지 여러 화면/모듈을 가로지르는 흐름을 가진다.
 - 도메인별 예외는 도메인 문서에 둔다.
 - 공통 구현체의 의도와 사용법은 서브모듈 문서에 둔다.
 - 변경 이력은 상세 설명보다 “왜 바뀌었는지”와 “어느 문서가 바뀌었는지”를 남긴다.
@@ -140,6 +142,17 @@ KB는 AI가 매번 같은 방식으로 진입할 수 있어야 한다.
 - `05-file-inventory.md`: 서브모듈 전체 파일 역할 인덱스
 - `change-log.md`
 
+기능 KB 필수 파일:
+
+- `README.md`: 기능 인덱스와 작업 시작점
+- `00-structure-map.md`: 기능에 참여하는 화면/모듈/DB/App Function 파일 지도
+- `01-feature-flow.md`: trigger부터 결과 반영까지 end-to-end 흐름
+- `02-data-contract.md`: input/output model, DB/API/App Function contract
+- `03-extension-points.md`: 기능 확장 지점과 책임 경계
+- `04-files-checklist.md`: 기능 수정 전후 검증 질문
+- `05-file-inventory.md`: 기능 관련 파일 역할 인덱스
+- `change-log.md`: 기능 KB 변경 상세 로그
+
 작은 패키지도 `README.md`, `00-structure-map.md`, `05-file-inventory.md`, `change-log.md`는 최소로 가진다.
 세부 목적/사용법/확장 지점 문서는 한 파일 안에 합쳐 시작할 수 있지만, 자동화 라우팅 대상이 되거나 두 개 이상 도메인에서 사용되면 위 필수 파일 구조로 분리한다.
 
@@ -152,8 +165,9 @@ KB를 수정하면 로그를 남긴다.
 |---|---|
 | KB 전체 라우팅, 구조, 패키지 경계 변경 | 루트 `00-change-index.md` |
 | 특정 도메인 KB 변경 | 해당 도메인 `change-log.md` |
+| 특정 기능 KB 변경 | 해당 기능 `change-log.md` |
 | 특정 서브모듈 KB 변경 | 해당 서브모듈 `change-log.md` |
-| 도메인/서브모듈 의미가 바뀌는 변경 | 루트 `00-change-index.md`와 패키지 `change-log.md` 둘 다 |
+| 도메인/기능/서브모듈 의미가 바뀌는 변경 | 루트 `00-change-index.md`와 패키지 `change-log.md` 둘 다 |
 | 단순 오타/링크 수정 | 의미가 바뀌지 않으면 로그 생략 가능 |
 
 `00-change-index.md`는 전체 색인이고, `change-log.md`는 패키지 상세 로그다.
@@ -180,6 +194,31 @@ KB를 수정하면 로그를 남긴다.
 
 서브모듈에서 도메인 예외를 안내해야 한다면 내용을 복사하지 말고 “도메인 예외 위치” 링크만 둔다.
 실제 예외 설명은 상위 도메인 KB에 둔다.
+
+## 9.1 기능 KB 경계
+
+기능 KB는 특정 화면 하나나 서브모듈 하나가 아니라 end-to-end 사용자 기능을 설명한다.
+
+기능 KB에 넣을 수 있는 것:
+
+- 기능 trigger
+- orchestration entry point
+- 참여하는 화면/도메인과 서브모듈
+- data read/write 흐름
+- DB/API/App Function contract
+- UI refresh 또는 side effect
+- 실패/권한/비용 정책
+- 기능 단위 검증 시나리오
+
+기능 KB에 넣지 않는 것:
+
+- 서브모듈 내부 구현 전체
+- 특정 화면의 UI 상세 전체
+- 미래 기능 목표
+- 코드로 확인되지 않은 사용자 시나리오
+
+서브모듈 내부 구조는 서브모듈 KB에 링크하고, 화면 상세는 도메인 KB에 링크한다.
+기능 KB는 두 문서를 연결해 “어디부터 어디까지 봐야 하는지”를 알려주는 역할이다.
 
 ## 10. 운영 문서와 코드 KB 경계
 
