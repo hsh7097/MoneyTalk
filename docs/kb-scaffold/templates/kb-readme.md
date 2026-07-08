@@ -58,7 +58,6 @@ status: draft
 
 ## 변경 이력
 
-- [00-change-index.md](00-change-index.md)
+- `00-change-index.md`
 
 KB 루트 라우팅, 구조, 패키지 경계, 도메인/기능/서브모듈 의미가 바뀌면 `00-change-index.md`에 색인을 남긴다.
-

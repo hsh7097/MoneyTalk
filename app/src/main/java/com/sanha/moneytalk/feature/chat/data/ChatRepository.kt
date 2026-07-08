@@ -27,6 +27,12 @@ interface ChatRepository {
     suspend fun saveLocalExchange(sessionId: Long, userMessage: String, localResponse: String)
 
     /**
+     * 로컬 조회 처리 중 사용자 메시지만 먼저 저장.
+     * 조회 실패 시에도 사용자의 질문이 대화 기록에서 사라지지 않게 한다.
+     */
+    suspend fun saveLocalUserMessage(sessionId: Long, userMessage: String)
+
+    /**
      * 현재 세션의 컨텍스트 조회
      */
     suspend fun buildCurrentContext(sessionId: Long): ChatContext

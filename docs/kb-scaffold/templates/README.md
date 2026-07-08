@@ -46,4 +46,3 @@ status: draft
 - README가 되는 템플릿은 `*-readme.md`로 구분하고, 복사할 때 `README.md`로 이름을 바꾼다.
 - MoneyTalk 기존 KB는 루트 색인을 `00-change-index.md`, 구조 지도를 `01-structure-map.md`로 둔다.
 - 다른 KB 루트에서 `01-change-index.md`, `02-structure-map.md`를 채택하더라도 한 KB 안에서 명명을 섞지 않는다.
-

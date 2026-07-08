@@ -64,18 +64,23 @@ class ChatRepositoryImpl @Inject constructor(
         userMessage: String,
         localResponse: String
     ) {
-        chatDao.insert(
-            ChatEntity(
-                sessionId = sessionId,
-                message = userMessage,
-                isUser = true
-            )
-        )
+        saveLocalUserMessage(sessionId, userMessage)
         chatDao.insert(
             ChatEntity(
                 sessionId = sessionId,
                 message = localResponse,
                 isUser = false
+            )
+        )
+        chatDao.updateSessionTimestamp(sessionId)
+    }
+
+    override suspend fun saveLocalUserMessage(sessionId: Long, userMessage: String) {
+        chatDao.insert(
+            ChatEntity(
+                sessionId = sessionId,
+                message = userMessage,
+                isUser = true
             )
         )
         chatDao.updateSessionTimestamp(sessionId)

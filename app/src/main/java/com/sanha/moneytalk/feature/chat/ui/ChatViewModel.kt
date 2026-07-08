@@ -710,7 +710,13 @@ class ChatViewModel @Inject constructor(
 
     private suspend fun processLocalSimpleLookup(sessionId: Long, message: String): Boolean {
         val route = LocalChatQueryRouter.tryRoute(message) ?: return false
-        val queryResults = route.queries.mapNotNull { query -> executeQuery(query) }
+        val queryResults = try {
+            route.queries.mapNotNull { query -> executeQuery(query) }
+        } catch (e: Exception) {
+            chatRepository.saveLocalUserMessage(sessionId, message)
+            MoneyTalkLogger.e("로컬 단순 조회 실패: ${route.type}", e)
+            throw e
+        }
         if (queryResults.isEmpty()) return false
 
         val response = buildLocalLookupResponse(queryResults)
