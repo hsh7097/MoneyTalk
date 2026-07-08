@@ -5,12 +5,12 @@ description: 2026-07-08 MoneyTalk KB 확장 작업의 분석 결과, 생성 범�
 tags: [moneytalk, kb, plan, screens, features]
 resource: docs/moneytalk-kb/
 timestamp: 2026-07-08T00:00:00+09:00
-status: draft
+status: completed
 ---
 
 # MoneyTalk 화면별/기능별 KB 생성 계획표
 
-> 상태: 진행 중
+> 상태: 완료
 > 기준: `docs/kb-scaffold/README.md`, `docs/kb-scaffold/03-authoring-workflow.md`, 현재 `app/src/main/java/com/sanha/moneytalk` 소스 확인
 > 제거: 작업 완료 후 사용자가 계획표 제거를 지시하면 삭제한다.
 
@@ -18,9 +18,9 @@ status: draft
 
 | 항목 | 상태 | 근거 |
 |---|---|---|
-| 현재 작업 커밋 | 완료 | `105805e docs: MoneyTalk KB 스카폴드 기준 보강`, `6cacfc6 feat: Gemini 비용 방어와 로컬 단순 조회 추가` |
+| 현재 작업 커밋 | 완료 | `105805e docs: MoneyTalk KB 스카폴드 기준 보강`, `6cacfc6 feat: Gemini 비용 방어와 로컬 단순 조회 추가`, `55676d1 docs: 화면별 기능별 MoneyTalk KB 확장`, `ab2e9a2 docs: Chat 화면 KB 구조 보강` |
 | 현재 작업 푸시 | 완료 | `codex/moneytalk-kb-scaffold` -> `origin/codex/moneytalk-kb-scaffold` |
-| 검증 | 완료 | `./gradlew testDebugUnitTest assembleDebug` 성공, `git diff --check` 성공 |
+| 검증 | 완료 | `./gradlew testDebugUnitTest assembleDebug` 성공, `git diff --check` 성공, `docs/moneytalk-kb` 링크 검증 성공, 계획 패키지별 `README.md`/`change-log.md` 존재 확인 |
 
 ## 1. 작성 원칙
 
@@ -84,4 +84,4 @@ status: draft
 | 화면 KB 생성 | 완료 | app-shell/home/settings/transaction-edit 상세 KB + 보조 화면 README/change-log |
 | 기능 KB 생성 | 완료 | embedding/coachmark/filtering/transaction-mutation/budget-credit-monetization/backup-restore/notification-ingestion/data-refresh |
 | 루트 라우팅 연결 | 완료 | README, agent-routing, structure-map, change-index 갱신 |
-| 검증/커밋/푸시 | 진행 중 | 문서 경로/링크 검증 후 별도 커밋/푸시 |
+| 검증/커밋/푸시 | 완료 | `git diff --check`, `docs/moneytalk-kb` 링크 검증, 패키지 필수 파일 점검 완료 후 최신 `codex/moneytalk-kb-scaffold` 브랜치를 `origin/codex/moneytalk-kb-scaffold`에 푸시 |
