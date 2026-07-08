@@ -13,7 +13,7 @@ status: draft
 > 상태: draft
 > 기준: 2026-07-08 현재 `MainActivity.kt`, `MainViewModel.kt`, `navigation/**`, `MainUiState.kt` 확인
 
-App Shell은 앱이 실행된 뒤 Compose root, 하단 탭 4개, `NavGraph`, 전역 snackbar, SMS 동기화/광고/업데이트 다이얼로그를 묶는 진입 도메인이다.
+App Shell은 앱이 실행된 뒤 Compose root, 하단 탭 4개, `NavGraph`, 전역 snackbar, SMS 동기화/크레딧 충전/업데이트 다이얼로그를 묶는 진입 도메인이다.
 
 ## 먼저 볼 파일
 
@@ -47,5 +47,5 @@ App Shell은 앱이 실행된 뒤 Compose root, 하단 탭 4개, `NavGraph`, 전
 
 - 하단 탭 추가/삭제/라벨/아이콘 변경은 `BottomNavItem.kt`, `Screen.kt`, `NavGraph.kt`, `MainActivity.kt`를 같이 본다.
 - 탭 재클릭 refresh는 `MainActivity.kt`의 `homeTabReClickEvent`, `historyTabReClickEvent`와 각 화면 ViewModel 수집부를 같이 본다.
-- SMS 동기화/월별 전체 동기화 광고/성과 요약 다이얼로그는 `MainActivity.kt`, `MainViewModel.kt`, `MainUiState.kt`를 같이 본다.
+- SMS 동기화/이전 월 문자 가져오기 크레딧 충전/성과 요약 다이얼로그는 `MainActivity.kt`, `MainViewModel.kt`, `MainUiState.kt`, `RewardAdManager`를 같이 본다.
 - 화면별 세부 UI 수정은 이 문서에서 해당 화면 KB로 내려간다.

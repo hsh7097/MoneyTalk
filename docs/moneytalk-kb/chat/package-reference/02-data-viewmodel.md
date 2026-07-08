@@ -33,7 +33,7 @@ sendMessage()
 | `ChatRepositoryImpl.kt` | 메시지/세션 저장, rolling summary, local exchange 저장 |
 | `GeminiRepositoryImpl.kt` | Gemini query analyzer/final answer/title/summary 호출 |
 | `DataQueryParser.kt` | query/action JSON contract |
-| `ChatCreditPolicy.kt` | 사용자 질문별 크레딧 비용 산정 |
+| `ChatCreditPolicy.kt` | 채팅 전송 1회 1크레딧 비용 산정 |
 
 ## 함께 볼 문서
 

@@ -33,9 +33,9 @@ MainActivity.onCreate()
 
 | 파일 | 분류 | 역할 | 함께 볼 파일 |
 |---|---|---|---|
-| `MainActivity.kt` | entry/rendering/action | root Compose, 권한 요청, 전역 snackbar, 하단 탭, sync/ad/update dialog, back press | `MainViewModel.kt`, `navigation/NavGraph.kt` |
-| `MainViewModel.kt` | data/action | SMS sync orchestration, permission gate, full sync ad unlock, `DataRefreshEvent` 발행 | `MainUiState.kt`, `core/sms/**`, `feature/home/data/**` |
-| `MainUiState.kt` | state | sync progress, dialog flags, engine summary, full sync ad dialog state | `MainViewModel.kt`, `MainActivity.kt` |
+| `MainActivity.kt` | entry/rendering/action | root Compose, 권한 요청, 전역 snackbar, 하단 탭, sync/credit/update dialog, back press | `MainViewModel.kt`, `navigation/NavGraph.kt`, `core/ad/RewardAdManager.kt` |
+| `MainViewModel.kt` | data/action | SMS sync orchestration, permission gate, previous-month credit gate, `DataRefreshEvent` 발행 | `MainUiState.kt`, `core/ad/RewardAdManager.kt`, `core/sms/**`, `feature/home/data/**` |
+| `MainUiState.kt` | state | sync progress, dialog flags, engine summary, full sync credit dialog state | `MainViewModel.kt`, `MainActivity.kt` |
 | `navigation/Screen.kt` | routing | route 문자열과 History category argument 생성 | `NavGraph.kt`, `BottomNavItem.kt` |
 | `navigation/BottomNavItem.kt` | routing/rendering | 4개 bottom tab label/icon 정의 | `strings.xml`, `MainActivity.kt` |
 | `navigation/NavGraph.kt` | routing | route별 screen Composable 연결과 Home/History tab event 전달 | 각 screen KB |
@@ -46,7 +46,7 @@ MainActivity.onCreate()
 |---|---|
 | 하단 탭 추가/변경 | `app-shell/README.md` -> `Screen.kt` -> `BottomNavItem.kt` -> `NavGraph.kt` -> `MainActivity.kt` |
 | 앱 시작/권한/강제 업데이트 | `MainActivity.kt` -> `ForceUpdateChecker`/`ForceUpdateDialog` -> `MainViewModel.kt` |
-| 월별 전체 동기화 광고 | `MainActivity.kt` -> `MainViewModel.showFullSyncAdDialog()` -> `RewardAdManager` -> `sms-parsing` KB |
+| 이전 월 문자 가져오기 크레딧 충전 | `MainActivity.kt` -> `MainViewModel.requestMonthSync()` -> `RewardAdManager.consumeMonthSyncCredit()` -> `sms-parsing` KB |
 | 탭별 화면 세부 수정 | `app-shell/README.md` -> 해당 화면 KB (`home`, `history`, `chat`, `settings`) |
 
 ## 주의 경계

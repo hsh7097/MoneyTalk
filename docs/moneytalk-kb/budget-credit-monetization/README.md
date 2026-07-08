@@ -23,6 +23,7 @@ status: draft
 | [change-log.md](change-log.md) | 기능 KB 변경 로그다. | 문서 변경 이유 확인 |
 | [../settings/README.md](../settings/README.md) | 설정 탭 KB다. | 예산 설정, AI 크레딧 화면 진입 |
 | [../chat/README.md](../chat/README.md) | 채팅/크레딧 비용 KB다. | 채팅 1회 1크레딧, 로컬 조회 Gemini 우회 처리 |
+| ../../AI_CREDIT_USAGE_PLAN.md | 현재 AI 크레딧 사용 정책 계획이다. | 채팅/월별 가져오기 크레딧 단가, 광고 보상, 유료 플랜 후속 범위 확인 |
 | ../../MONETIZATION.md | 수익화 문서다. | 비용/수익 구조와 release 정책 확인 |
 
 ## 핵심 파일
