@@ -52,6 +52,8 @@ cmd.exe /c "cd /d C:\Users\hsh70\project\android\MoneyTalk && .\gradlew.bat asse
 | [docs/CHAT_SYSTEM.md](docs/CHAT_SYSTEM.md) | AI 채팅 시스템 상세 | 채팅 관련 작업 시 |
 | [docs/APP_FUNCTIONS.md](docs/APP_FUNCTIONS.md) | App Functions 조회/수정 함수 목록, DB 확인 플레이북 | 앱 함수/DB 조회 작업 시 |
 | [docs/AI_CREDIT_DEEP_ANALYSIS_PLAN.md](docs/AI_CREDIT_DEEP_ANALYSIS_PLAN.md) | JSON 기반 심층 상담 + AI 크레딧/결제 후속 계획 | AI 상담/수익화 고도화 작업 시 |
+| [docs/moneytalk-kb/README.md](docs/moneytalk-kb/README.md) | AI 작업용 코드 분석 KB 루트. 변경 파일 경로를 도메인/기능/서브모듈 문서로 라우팅 | 개발 작업 시작 시, 특히 파일 위치/책임 경계가 애매할 때 |
+| [docs/kb-scaffold/README.md](docs/kb-scaffold/README.md) | MoneyTalk KB 생성/갱신 스카폴드. 새 KB 패키지 작성 기준과 템플릿 | KB를 새로 만들거나 갱신할 때 |
 | [docs/COMPOSABLE_MAP.md](docs/COMPOSABLE_MAP.md) | 화면별 Composable 계층 구조 + IDE 점프 링크 | UI 작업 시 |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | 버전별 변경 이력 | 변경 히스토리 확인 시 |
 | [docs/GIT_CONVENTION.md](docs/GIT_CONVENTION.md) | Git 컨벤션 | 커밋/브랜치/푸시/PR 규칙 확인 시 |
@@ -76,6 +78,8 @@ cmd.exe /c "cd /d C:\Users\hsh70\project\android\MoneyTalk && .\gradlew.bat asse
 ## 핵심 규칙
 
 1. **문서 먼저**: 코드 변경 전에 관련 문서를 읽고, 변경 후에 문서 갱신
+   - 변경 파일 경로가 정해졌으면 `docs/moneytalk-kb/00-agent-routing.md`로 관련 KB를 먼저 고른다.
+   - 새 KB를 만들거나 기존 KB 구조를 바꿀 때는 `docs/kb-scaffold/README.md`와 `docs/kb-scaffold/03-authoring-workflow.md`를 따른다.
 2. **빌드 확인**: 모든 코드 변경 후 `assembleDebug` 빌드 성공 확인
 3. **임계값 SSOT**: 임계값 수치는 `AI_CONTEXT.md`의 레지스트리가 기준 (SimilarityPolicy 구현체)
 4. **DB 스키마 불변**: Room entity 변경 시 마이그레이션 필수 (가급적 하지 않기)

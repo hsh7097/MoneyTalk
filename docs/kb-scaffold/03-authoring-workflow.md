@@ -1,18 +1,27 @@
 ---
 type: guide
 title: KB 작성 워크플로우
-description: 새 KB를 만들고 검증하고 갱신할 때 따를 단계별 절차를 설명한다.
+description: 새 코드 분석 KB를 만들고 검증하고 갱신할 때 따를 단계별 절차를 설명한다.
 tags: [kb-scaffold, workflow, authoring, validation, android]
 resource: docs/kb-scaffold/03-authoring-workflow.md
-timestamp: 2026-07-03T15:51:26+09:00
+timestamp: 2026-07-08T00:00:00+09:00
 status: draft
 ---
 
 # KB 작성 워크플로우
 
+> 역할:
+> - KB 생성, 검증, 갱신 절차를 단계별 실행 순서로 정리한다.
+> - 실제 KB를 작성하는 AI나 사람이 작업 전에 따라야 할 체크리스트로 사용한다.
+> - 검증 방식, 샘플 작업, 갱신 기준이 바뀌면 이 파일과 change-log 템플릿을 함께 확인한다.
+
 ## 1. 작성 전 확인
 
 새 KB를 만들기 전에 아래를 확인한다.
+
+가능하면 새 세션 또는 하위 에이전트처럼 이전 대화 맥락이 없는 깨끗한 컨텍스트에서 시작한다.
+기존 세션에서 이어서 작업하더라도 개인 설정이나 이전 대화의 추정 지식보다 `docs/kb-scaffold/`, `AGENTS.md`, 현재 코드에서 확인한 사실을 우선한다.
+문장 스타일은 달라질 수 있으므로, 리뷰 기준은 문체가 아니라 최소 파일 계약, 코드 근거, 검증 가능성이다.
 
 1. 대상이 도메인인지, 기능인지, 서브모듈인지 정한다.
 2. 코드 기준 root path를 확인한다.
@@ -26,6 +35,9 @@ status: draft
 10. 이번 문서의 목표 수준을 정한다.
 11. 검증할 샘플 작업을 정한다.
 
+대표 코드 경로가 실제로 존재하지 않으면 KB를 만들지 않는다.
+AI는 없는 source root를 기준으로 문서를 추정 생성하지 말고, 확인한 경로와 중단 사유를 보고한다.
+
 목표 수준 예시:
 
 - 신규 Compose 화면 추가 시 필요한 Activity/NavGraph/ViewModel 확장 지점 찾기
@@ -37,18 +49,42 @@ status: draft
 
 ## 2. 1차 생성 절차
 
-1. `README.md`를 먼저 만든다.
-2. 문서 상단에 상태와 기준을 적는다.
-3. YAML frontmatter에 `type`, `title`, `description`, `tags`, `resource`, `timestamp`, `status`를 적는다.
-4. `00-structure-map.md`를 만들어 폴더/패키지/핵심 파일 지도를 만든다.
-5. `change-log.md`를 만들어 이후 수정 이력을 남길 위치를 먼저 확보한다.
-6. 파일 경로 기준으로 라우팅 표를 만든다.
-7. 주요 코드 흐름을 얇게 정리한다.
-8. 세부 구현은 별도 문서로 분리한다.
-9. 샘플 작업으로 검증한다.
+새 KB 루트를 만들 때는 루트 문서를 먼저 만든다.
+
+1. `templates/kb-readme.md` 또는 기존 루트 README 형식을 기준으로 `README.md`를 만들고, KB 목적, 도메인/기능/서브모듈 목록, 먼저 볼 문서를 채운다.
+2. `templates/agent-routing.md` 또는 기존 라우팅 형식을 기준으로 `00-agent-routing.md`를 만든다.
+3. `templates/change-index.md` 또는 기존 change-index 형식을 기준으로 루트 변경 색인을 만든다. MoneyTalk 기존 KB는 `00-change-index.md`를 사용한다.
+4. 필요하면 `templates/structure-map.md`를 기준으로 루트 구조 지도를 만든다. MoneyTalk 기존 KB는 `01-structure-map.md`를 사용한다.
+5. 템플릿을 복사한 문서는 frontmatter의 `type`을 실제 문서 타입으로 바꾸고 템플릿 전용 필드는 제거한다.
+6. 실제 repository path와 source set을 확인해 루트 구조와 라우팅 표를 채운다.
+7. 아직 확인하지 못한 도메인/기능/서브모듈은 문서 링크를 미리 만들지 않고 미분류 또는 후보로 남긴다.
+
+도메인, 기능, 서브모듈 패키지는 작게 시작한다.
+
+1. 패키지 `README.md`를 만든다.
+2. 패키지 `change-log.md`를 만든다.
+3. README에 기준 코드 경로, 핵심 파일, 먼저 볼 문서, 현재 생략한 확장 문서를 적는다.
+4. 루트 `00-agent-routing.md`에 이 패키지로 들어오는 파일 경로 기준 라우팅을 추가한다.
+5. 루트 `00-change-index.md`에 패키지 경계 또는 라우팅 변경 색인을 남긴다.
+6. 샘플 작업으로 AI가 필요한 문서를 찾는지 검증한다.
 
 처음부터 모든 파일을 완벽히 채우지 않는다.
 AI가 필요한 문서를 찾을 수 있는 구조를 먼저 만든다.
+
+## 2.0 확장 파일을 만드는 기준
+
+아래 조건이 확인되면 확장 파일을 만든다.
+
+| 조건 | 추가 문서 |
+|---|---|
+| 폴더/source set/package 구조가 복잡하다 | `00-structure-map.md` 또는 `01-structure-map.md` |
+| 파일 이름만으로 수정 위치를 좁히기 어렵다 | `05-file-inventory.md` |
+| 화면 진입, 데이터, 렌더링/액션을 반복해서 나눠 봐야 한다 | `package-reference/` |
+| 기능 trigger, data contract, extension point가 커졌다 | `01-feature-flow.md`, `02-data-contract.md`, `03-extension-points.md` |
+| 리뷰 전 반복 체크가 필요하다 | `04-files-checklist.md` 또는 `package-reference/04-files-checklist.md` |
+
+확장 파일을 만들면 README의 `먼저 볼 파일` 표에 역할과 참조 시점을 추가한다.
+아직 만들지 않은 확장 파일 링크는 README에 쓰지 않는다.
 
 ## 2.1 구조 맵 작성 순서
 
@@ -114,41 +150,35 @@ KB가 자동화와 함께 쓰일 수 있다면 `00-agent-routing.md`를 초기�
 라우팅 문서는 상세 설명을 담는 곳이 아니다.
 어떤 작업에서 어떤 문서를 읽을지 결정하는 표가 중심이다.
 
-## 2.3 필수 파일 생성 순서
+## 2.3 확장 파일 생성 순서
 
-도메인 KB는 아래 순서로 만든다.
+도메인 KB가 README와 change-log만으로 부족하면 아래 순서로 확장한다.
 
-1. `<domain>/README.md`
-2. `<domain>/00-structure-map.md`
-3. `<domain>/change-log.md`
-4. `<domain>/05-file-inventory.md`
-5. `<domain>/package-reference/README.md`
-6. `<domain>/package-reference/01-entry-screen.md`
-7. `<domain>/package-reference/02-data-viewmodel.md`
-8. `<domain>/package-reference/03-rendering-action.md`
-9. `<domain>/package-reference/04-files-checklist.md`
+1. `<domain>/00-structure-map.md` 또는 기존 KB 관례에 맞는 구조 지도
+2. `<domain>/05-file-inventory.md`
+3. `<domain>/package-reference/README.md`
+4. `<domain>/package-reference/01-entry-screen.md`
+5. `<domain>/package-reference/02-data-viewmodel.md`
+6. `<domain>/package-reference/03-rendering-action.md`
+7. `<domain>/package-reference/04-files-checklist.md`
 
-서브모듈 KB는 아래 순서로 만든다.
+서브모듈 KB가 README와 change-log만으로 부족하면 아래 순서로 확장한다.
 
-1. `<module>/README.md`
-2. `<module>/00-structure-map.md`
-3. `<module>/change-log.md`
-4. `<module>/01-purpose-architecture.md`
-5. `<module>/02-how-to-use.md`
-6. `<module>/03-extension-points.md`
-7. `<module>/04-files-checklist.md`
-8. `<module>/05-file-inventory.md`
+1. `<module>/00-structure-map.md` 또는 기존 KB 관례에 맞는 구조 지도
+2. `<module>/01-purpose-architecture.md`
+3. `<module>/02-how-to-use.md`
+4. `<module>/03-extension-points.md`
+5. `<module>/04-files-checklist.md`
+6. `<module>/05-file-inventory.md`
 
-기능 KB는 아래 순서로 만든다.
+기능 KB가 README와 change-log만으로 부족하면 아래 순서로 확장한다.
 
-1. `<feature>/README.md`
-2. `<feature>/00-structure-map.md`
-3. `<feature>/change-log.md`
-4. `<feature>/01-feature-flow.md`
-5. `<feature>/02-data-contract.md`
-6. `<feature>/03-extension-points.md`
-7. `<feature>/04-files-checklist.md`
-8. `<feature>/05-file-inventory.md`
+1. `<feature>/00-structure-map.md` 또는 기존 KB 관례에 맞는 구조 지도
+2. `<feature>/01-feature-flow.md`
+3. `<feature>/02-data-contract.md`
+4. `<feature>/03-extension-points.md`
+5. `<feature>/04-files-checklist.md`
+6. `<feature>/05-file-inventory.md`
 
 서브모듈 내부가 책임별 패키지로 나뉘면 하위 패키지도 만든다.
 
@@ -164,10 +194,11 @@ KB가 자동화와 함께 쓰일 수 있다면 `00-agent-routing.md`를 초기�
 예: `sms-pipeline`의 실제 책임 단위가 reader, filter, fast-path, extraction이라면 `sms-pipeline/reader`, `sms-pipeline/filter`, `sms-pipeline/fast-path`, `sms-pipeline/extraction`을 만든다.
 상위 `<module>/README.md`와 `<module>/00-structure-map.md`에는 하위 패키지로 내려가는 라우팅과 요약만 둔다.
 
-도메인, 기능, 서브모듈 모두 `README.md`와 `change-log.md`는 필수다.
+도메인, 기능, 서브모듈 모두 `README.md`와 `change-log.md`는 시작 파일이다.
 README는 인덱스, change-log는 변경 의도 추적 장치다.
+그 외 문서는 패키지 복잡도와 검증 결과에 따라 확장한다.
 
-README를 만들 때는 필수 파일을 생성한 뒤 각 문서의 역할을 README에 다시 기록한다.
+README를 만들거나 확장 파일을 추가할 때는 각 문서의 역할을 README에 다시 기록한다.
 README의 `먼저 볼 파일` 섹션은 단순 링크 목록이 아니라 아래 표를 사용한다.
 
 ```markdown
@@ -180,13 +211,13 @@ README의 `먼저 볼 파일` 섹션은 단순 링크 목록이 아니라 아래
 
 1. `역할`에는 문서의 주제를 쓴다. 예: 구조 지도, 데이터 흐름, 렌더링/액션, 파일 인벤토리.
 2. `언제 보는가`에는 AI의 작업 판단 기준을 쓴다. 예: 진입 흐름 변경, API 필드 추가, Composable 추가, analytics 수정.
-3. 모든 필수 파일은 README의 표에 한 번 이상 등장해야 한다.
+3. 실제 존재하는 모든 패키지 문서는 README의 표에 한 번 이상 등장해야 한다.
 4. 하위 책임 패키지가 있으면 상위 README에는 하위 README 역할을 쓰고, 세부 파일 역할은 하위 README에 둔다.
 5. README와 실제 파일 목록이 다르면 README를 갱신한다.
 
 ## 2.4 파일 인벤토리 작성 기준
 
-모든 도메인/기능/서브모듈/하위 책임 패키지는 `05-file-inventory.md`를 만든다.
+파일 수가 많거나 수정 위치를 자주 놓치는 도메인/기능/서브모듈/하위 책임 패키지는 `05-file-inventory.md`를 만든다.
 목표는 모든 파일을 길게 설명하는 것이 아니라, AI가 수정 위치를 빠르게 좁히도록 전체 파일을 짧게 인덱싱하는 것이다.
 작은 패키지는 “파일이 적음”을 명시하고 핵심 파일만 짧게 적는다.
 

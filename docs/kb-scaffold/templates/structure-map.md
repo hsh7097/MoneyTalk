@@ -10,6 +10,11 @@ status: draft
 
 # <도메인명, 기능명 또는 서브모듈명> 구조 지도
 
+> 역할:
+> - `<kb-root>/01-structure-map.md` 또는 `<package>/00-structure-map.md`를 만들기 위한 템플릿이다.
+> - 폴더, 패키지, 핵심 파일, AI 참조 순서를 위치 중심으로 정리한다.
+> - 루트 인스턴스와 패키지 인스턴스에서 사용할 섹션을 구분해 작성한다.
+
 > 상태: draft
 > 기준: `<YYYY-MM-DD 현재 코드 확인>`
 
@@ -17,6 +22,13 @@ status: draft
 설명보다 위치와 참조 순서를 우선한다.
 도메인 구조 지도는 도메인 내부 구현을 설명하고, 기능 구조 지도는 end-to-end 흐름 참여 파일을 설명하며, 서브모듈 구조 지도는 모듈 자체 구조만 설명한다.
 서브모듈 구조 지도에 특정 상위 도메인의 비즈니스 예외를 넣지 않는다.
+
+사용 기준:
+
+- 도메인/기능/서브모듈 인스턴스: 아래 섹션을 그대로 쓰되, 해당 없는 섹션은 제거한다.
+- 루트 인스턴스: Root 표의 repository root, 도메인/기능/서브모듈 배치, AI Reference Order 중심으로 쓰고 단일 패키지를 전제하는 항목은 줄인다.
+- 확인하지 못한 항목은 행을 지우지 말고 `미확인`으로 표기해 “확인 안 됨”과 “존재하지 않음”을 구분한다.
+- 해당 없음이 확인된 항목은 행을 제거한다.
 
 ## Root
 
@@ -52,6 +64,7 @@ status: draft
 | `<package.action>` | callback, navigation, side effect | `<Screen.kt>` |
 | `<package.analytics>` | analytics helper, screen/click event | `<Analytics.kt>` |
 | `<feature.orchestrator>` | 기능 trigger와 orchestration | `<Orchestrator.kt>` |
+| `res/layout` 또는 `res/values` | layout, string, prompt, resource contract | `<resource file>` |
 
 ## Sub-Packages
 
@@ -87,6 +100,8 @@ status: draft
 
 파일 역할은 “무엇을 하는 파일인지”보다 “작업 중 왜 이 파일을 봐야 하는지”가 드러나야 한다.
 역할이 모호하면 AI가 잘못된 파일을 기준으로 코드를 생성하기 쉽다.
+Core Files와 AI Reference Order에는 `데이터 모델/응답 매핑 파일`, `mapper`, `Composable`, `ViewModel`, `DAO`, `resource`의 실제 파일명을 채운다.
+확인하지 못한 단계는 생략하지 말고 `미확인`으로 남겨 다음 검증 항목에 연결한다.
 
 ## File Inventory
 
@@ -103,7 +118,7 @@ status: draft
 |---|---|
 | 신규 화면/모듈 추가 | `00-agent-routing.md` -> `README.md` -> `00-structure-map.md` -> `package-reference/01-entry-screen.md` |
 | API 필드 추가 | `00-agent-routing.md` -> `00-structure-map.md` -> `package-reference/02-data-viewmodel.md` |
-| 신규 Composable/card/dialog 추가 | `00-agent-routing.md` -> `00-structure-map.md` -> `package-reference/03-rendering-action.md` |
+| 신규 Composable/card/dialog 추가 | `00-agent-routing.md` -> `00-structure-map.md` -> 데이터/상태 파일(Core Files 데이터 행의 실제 파일명) -> Composable 파일(Core Files 렌더링 행의 실제 파일명) -> 실제 존재하면 `package-reference/03-rendering-action.md` |
 | action/navigation 변경 | `00-agent-routing.md` -> `00-structure-map.md` -> `package-reference/03-rendering-action.md` |
 | analytics 변경 | `00-agent-routing.md` -> `00-structure-map.md` -> analytics 문서 -> 도메인 rendering/action 문서 |
 | package 이동 | `00-agent-routing.md` -> `00-structure-map.md` -> `04-files-checklist.md` -> `change-log.md` |

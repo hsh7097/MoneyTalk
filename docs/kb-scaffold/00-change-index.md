@@ -4,7 +4,7 @@ title: KB Scaffold Change Index
 description: docs/kb-scaffold 가이드 변경 이력을 짧게 기록하는 루트 변경 색인이다.
 tags: [kb-scaffold, changelog, log, android, moneytalk]
 resource: docs/kb-scaffold/
-timestamp: 2026-07-03T15:51:26+09:00
+timestamp: 2026-07-08T00:00:00+09:00
 status: draft
 ---
 
@@ -27,3 +27,4 @@ status: draft
 | 2026-07-03 | 공유 전 재검토 반영 | 필수 파일 계약 정합성 | `README.md`, `04-automation-package-routing.md`, `05-team-rollout.md` | 작은 모듈 예외를 필수 인벤토리 계약과 맞추고, 자동화 필수 파일 표를 전체 필수 파일로 확장. README 결정 범위에서 이미 확정한 필수 문서 수 항목 제거. |
 | 2026-07-03 | MoneyTalk 적용 전 정리 | 서비스별 예시 정합성 | `README.md`, `01-principles.md`, `02-folder-structure.md`, `03-authoring-workflow.md`, `04-automation-package-routing.md`, `05-team-rollout.md`, `templates/*` | 특정 서비스 전용 예시와 legacy UI 용어를 제거하고 MoneyTalk의 Compose, SMS pipeline, App Functions, finance data 기준 예시로 교체. |
 | 2026-07-03 | 기능 단위 KB 요구 반영 | feature slice KB | `README.md`, `01-principles.md`, `02-folder-structure.md`, `03-authoring-workflow.md`, `04-automation-package-routing.md`, `05-team-rollout.md`, `templates/feature-readme.md`, `templates/feature-flow.md` | 문자 파싱, 카테고리 분류, App Functions처럼 여러 화면/모듈을 가로지르는 end-to-end 기능 KB 작성 기준과 템플릿 추가. |
+| 2026-07-08 | Gmarket `.claude/docs/kb-scaffold` 최신 기준 반영 | 최소/확장 계약, 샘플 검증, 템플릿 인덱스 | `README.md`, `01-principles.md`, `03-authoring-workflow.md`, `04-team-share-summary.md`, `templates/README.md`, `templates/kb-readme.md`, `templates/change-index.md`, `templates/structure-map.md`, `templates/agent-routing.md` | MoneyTalk 기존 KB 명명은 유지하면서, `README.md + change-log.md`로 작게 시작하고 필요 시 구조 지도/파일 인벤토리/package-reference를 확장하는 최신 scaffold 기준을 반영. |

@@ -1,17 +1,30 @@
 ---
 type: guide
 title: KB 스카폴드 가이드
-description: Android 서비스 팀이 AI 작업용 KB를 만들 때 따를 구조, 작성 원칙, 템플릿 사용법을 설명한다.
-tags: [kb-scaffold, guide, android, moneytalk, okf]
+description: MoneyTalk Android에서 AI 작업용 KB를 만들 때 따를 최소 구조, 작성 원칙, 템플릿 사용법을 설명한다.
+tags: [kb-scaffold, guide, android, moneytalk]
 resource: docs/kb-scaffold/
-timestamp: 2026-07-03T15:51:26+09:00
+timestamp: 2026-07-08T00:00:00+09:00
 status: draft
 ---
 
 # KB 스카폴드 가이드 초안
 
-이 문서는 Android 서비스 팀이 AI 작업용 KB를 만들 때 공통으로 따를 기본 구조와 작성 원칙을 정리한다.
+> 역할:
+> - MoneyTalk KB 스카폴드의 진입점으로 전체 목적, 최소 합의 기준, 정본 문서와 템플릿 목록을 안내한다.
+> - 새 KB 작업을 시작할 때 가장 먼저 읽고, 세부 원칙/구조/워크플로우 문서로 내려간다.
+> - 파일 계약이나 템플릿 목록이 바뀌면 이 파일과 `00-change-index.md`를 함께 갱신한다.
+
+이 문서는 MoneyTalk Android에서 AI 작업용 KB를 만들 때 공통으로 따를 최소 구조와 작성 원칙을 정리한다.
 목표는 사람이 모든 문서를 읽기 좋게 만드는 것이 아니라, AI가 작업 범위에 맞는 문서만 찾아 읽고 코드 작업의 맥락을 빠르게 복원하게 만드는 것이다.
+
+## MoneyTalk 등록 기준
+
+- MoneyTalk에서 사용하는 KB 스카폴드 공식 위치는 `docs/kb-scaffold/`다.
+- 이 스카폴드로 생성한 MoneyTalk 코드 분석 KB는 `docs/moneytalk-kb/`에 둔다.
+- `AGENTS.md`는 `docs/moneytalk-kb/README.md`와 이 스카폴드를 문서 가이드에 등록한다.
+- Gmarket의 최신 `.claude/docs/kb-scaffold/` 기준을 2026-07-08에 MoneyTalk 문서 구조에 맞춰 반영했다.
+- MoneyTalk 기존 KB가 `00-change-index.md`, `01-structure-map.md` 명명을 사용하므로, 이번 반영에서는 기존 명명을 유지한다.
 
 ## 이 가이드의 위치
 
@@ -22,14 +35,18 @@ docs/kb-scaffold/
 ├── 01-principles.md
 ├── 02-folder-structure.md
 ├── 03-authoring-workflow.md
+├── 04-team-share-summary.md
 ├── 04-automation-package-routing.md
 ├── 05-team-rollout.md
 └── templates/
+    ├── README.md
+    ├── kb-readme.md
     ├── domain-readme.md
     ├── feature-readme.md
     ├── feature-flow.md
     ├── module-readme.md
     ├── agent-routing.md
+    ├── change-index.md
     ├── file-inventory.md
     ├── structure-map.md
     ├── change-log.md
@@ -44,20 +61,26 @@ docs/kb-scaffold/
 
 ## 먼저 합의할 기준
 
+모든 도메인/기능/서브모듈에 같은 깊이의 문서를 강제하지 않는다.
+작은 패키지는 `README.md`와 `change-log.md`로 시작하고, 파일 수가 많거나 AI가 수정 위치를 반복해서 놓칠 때 구조 지도, 파일 인벤토리, package-reference를 확장한다.
+
 1. KB는 현재 코드 구현 상태를 설명한다.
 2. PRD, 개발 스펙, 미래 마이그레이션 목표는 KB와 분리한다.
 3. 루트 문서는 상세 구현 설명이 아니라 읽을 문서를 고르는 라우팅 역할을 한다.
 4. 상세 지식은 도메인, 기능, 서브모듈 단위 문서로 나눈다.
-5. 모든 KB 묶음은 변경 로그를 가진다.
-6. 각 KB 패키지는 현재 코드의 폴더 구조, 패키지 구조, 핵심 파일 위치를 가진다.
-7. 핵심 파일 목록에는 각 파일의 책임과 변경 시 확인할 주변 파일을 함께 적는다.
-8. 작업 유형별로 AI가 어떤 구조 정보와 세부 문서를 어떤 순서로 참조할지 명시한다.
-9. 확인되지 않은 내용을 추정해서 쓰지 않는다.
-10. 운영 문서와 코드 분석 KB를 분리한다.
-11. 항상 로드할 문서와 필요할 때 읽을 문서를 구분한다.
-12. 각 README에는 생성되는 KB 파일이 어떤 파일인지, 언제 읽어야 하는지 표로 명시한다.
-13. 처음 목표는 AI가 Compose 화면, ViewModel, Repository, 공통 파이프라인의 확장 지점을 찾고 최소 변경을 시작할 수 있게 하는 수준이다.
-14. 각 Markdown 문서 상단에는 YAML frontmatter를 두고 `type`, `title`, `description`, `tags`, `resource`, `timestamp`, `status`를 기본 메타데이터로 기록한다.
+5. 상위 문서는 “어느 문서를 읽고 어떤 판단을 할지”를 정하고, 도메인/기능/서브모듈 문서는 “어떻게 수정할지”에 필요한 현재 구현 상세를 가진다.
+6. 모든 KB 묶음은 변경 로그를 가진다.
+7. 작은 도메인/기능/모듈은 `README.md`와 `change-log.md`에서 시작할 수 있다.
+8. 코드 경로가 복잡하거나 AI가 수정 위치를 자주 놓치면 구조 지도, 파일 인벤토리, package-reference를 확장한다.
+9. 핵심 파일 목록에는 각 파일의 책임과 변경 시 확인할 주변 파일을 함께 적는다.
+10. 작업 유형별로 AI가 어떤 구조 정보와 세부 문서를 어떤 순서로 참조할지 명시한다.
+11. 확인되지 않은 내용을 추정해서 쓰지 않는다.
+12. 운영 문서와 코드 분석 KB를 분리한다.
+13. 항상 로드할 문서와 필요할 때 읽을 문서를 구분한다.
+14. 각 README에는 생성되는 KB 파일이 어떤 파일인지, 언제 읽어야 하는지 표로 명시한다.
+15. 처음 목표는 AI가 Compose 화면, ViewModel, Repository, 공통 파이프라인의 확장 지점을 찾고 최소 변경을 시작할 수 있게 하는 수준이다.
+16. 각 Markdown 문서 상단에는 YAML frontmatter를 권장하고 `type`, `title`, `description`, `tags`, `resource`, `timestamp`, `status`를 기본 메타데이터로 기록한다.
+17. 샘플 작업 검증 전 문서는 `verified`가 아니라 `draft`로 둔다.
 
 ## Claude Code 문서 구조와의 관계
 
@@ -167,6 +190,7 @@ docs/<kb-name>/
 | [01-principles.md](01-principles.md) | KB 작성 철학, 금지사항, PRD/스펙/KB 경계 |
 | [02-folder-structure.md](02-folder-structure.md) | 루트, 도메인, 서브모듈, 로그 문서 구조 |
 | [03-authoring-workflow.md](03-authoring-workflow.md) | 실제 작성/검증/갱신 절차 |
+| [04-team-share-summary.md](04-team-share-summary.md) | 팀 공유/온보딩 때 먼저 설명할 1페이지 요약 |
 | [04-automation-package-routing.md](04-automation-package-routing.md) | 자동화에서 패키지/경로 라우팅을 갱신하는 규칙 |
 | [05-team-rollout.md](05-team-rollout.md) | 팀원이 KB를 나눠 만들고 리뷰하는 진행 방식 |
 | [templates/](templates/) | 도메인/서브모듈/패키지 레퍼런스 템플릿 묶음 |
@@ -175,7 +199,10 @@ docs/<kb-name>/
 
 | 템플릿 | 역할 |
 |---|---|
+| [templates/README.md](templates/README.md) | 템플릿 폴더 인덱스. 복사 대상, 역할, 사용 시점을 안내한다. |
+| [templates/kb-readme.md](templates/kb-readme.md) | KB 루트 `README.md` 템플릿 |
 | [templates/agent-routing.md](templates/agent-routing.md) | 변경 파일 경로를 기준으로 어떤 KB 문서를 읽을지 결정하는 라우팅 문서 템플릿 |
+| [templates/change-index.md](templates/change-index.md) | KB 루트 변경 색인 템플릿 |
 | [templates/change-log.md](templates/change-log.md) | 도메인/서브모듈/패키지별 변경 로그 템플릿 |
 | [templates/domain-readme.md](templates/domain-readme.md) | Home, History, Chat 같은 화면/도메인 KB의 README 템플릿 |
 | [templates/feature-readme.md](templates/feature-readme.md) | 문자 파싱, 카테고리 분류, 기능 읽어오기 같은 end-to-end 기능 KB의 README 템플릿 |
@@ -217,7 +244,7 @@ docs/<kb-name>/
 - `01-structure-map.md` 또는 패키지별 구조 문서: 현재 코드의 폴더/패키지/핵심 파일 구조를 제공한다.
 - 각 도메인/기능/서브모듈의 `README.md`: 해당 패키지 진입점이다.
 - 도메인 KB의 `package-reference/`: entry/data/rendering/checklist를 나눠 세부 수정 위치를 안내한다.
-- 각 도메인/기능/서브모듈의 `05-file-inventory.md`: 전체 파일 역할과 수정 후보를 빠르게 좁히는 필수 인덱스다.
+- 각 도메인/기능/서브모듈의 `05-file-inventory.md`: 파일 수가 많거나 역할이 애매할 때 전체 파일 역할과 수정 후보를 빠르게 좁히는 확장 인덱스다.
 
 패키지 이동이나 클래스 이동이 발생하면 KB 라우팅 문서만 바꾸는 것으로 끝내지 않는다.
 그 변경이 다음 자동화 실행의 분류 기준에도 영향을 주면 자동화 프롬프트의 경로 분류 규칙도 같이 갱신해야 한다.

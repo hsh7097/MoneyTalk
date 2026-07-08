@@ -4,7 +4,7 @@ title: KB 폴더 구조
 description: 루트, 도메인, 서브모듈, 하위 책임 패키지, 로그 문서의 권장 배치를 정의한다.
 tags: [kb-scaffold, folder-structure, domain, module, android]
 resource: docs/kb-scaffold/02-folder-structure.md
-timestamp: 2026-07-03T15:51:26+09:00
+timestamp: 2026-07-08T00:00:00+09:00
 status: draft
 ---
 
@@ -260,19 +260,19 @@ AI reference:
 - Compose state/action/navigation/analytics 흐름
 - 반복 실수와 수정 전 체크리스트
 
-도메인 KB 필수 파일:
+도메인 KB 시작 파일과 확장 파일:
 
 | 파일 | 역할 |
 |---|---|
 | `README.md` | 도메인 인덱스. 작업자가 이 도메인에서 먼저 볼 문서와 기준 패키지를 찾는다 |
-| `00-structure-map.md` | 도메인 폴더/패키지/파일 역할 지도. AI가 실제 파일을 찾는 기준이다 |
 | `change-log.md` | 도메인 KB 변경 상세 로그 |
+| `00-structure-map.md` | 확장 파일. 도메인 폴더/패키지/파일 역할 지도. AI가 실제 파일을 찾는 기준이다 |
 | `package-reference/README.md` | 세부 개발 문서 인덱스 |
 | `package-reference/01-entry-screen.md` | Activity, NavGraph, lifecycle, permission, screen 진입 |
 | `package-reference/02-data-viewmodel.md` | ViewModel, Repository, DataSource, API, model, cache/paging |
 | `package-reference/03-rendering-action.md` | Composable, state, dialog, action, navigation, analytics |
 | `package-reference/04-files-checklist.md` | 신규/수정 작업 전 빠른 파일 찾기와 검증 질문 |
-| `05-file-inventory.md` | 도메인 전체 파일의 한 줄 역할과 참조 시점 인덱스 |
+| `05-file-inventory.md` | 확장 파일. 도메인 전체 파일의 한 줄 역할과 참조 시점 인덱스 |
 
 도메인 KB에 넣지 않을 내용:
 
@@ -321,18 +321,18 @@ AI reference:
 - 실패/권한/비용 정책
 - 검증할 샘플 시나리오
 
-기능 KB 필수 파일:
+기능 KB 시작 파일과 확장 파일:
 
 | 파일 | 역할 |
 |---|---|
 | `README.md` | 기능 인덱스. 어떤 화면/모듈을 가로지르는지와 먼저 볼 문서를 제공한다 |
-| `00-structure-map.md` | 기능에 참여하는 화면, ViewModel, Repository, 서브모듈, DB 파일 지도 |
+| `change-log.md` | 기능 KB 변경 상세 로그 |
+| `00-structure-map.md` | 확장 파일. 기능에 참여하는 화면, ViewModel, Repository, 서브모듈, DB 파일 지도 |
 | `01-feature-flow.md` | trigger부터 결과 반영까지 end-to-end 흐름 |
 | `02-data-contract.md` | 주요 input/output model, DB/API/App Function contract |
 | `03-extension-points.md` | 기능 확장 시 수정 지점과 책임 경계 |
 | `04-files-checklist.md` | 기능 수정 전후 확인 파일과 검증 질문 |
 | `05-file-inventory.md` | 기능 관련 전체 파일의 한 줄 역할 인덱스 |
-| `change-log.md` | 기능 KB 변경 상세 로그 |
 
 기능 KB와 서브모듈 KB의 경계:
 
@@ -430,7 +430,8 @@ sms-pipeline/
 ```
 
 상위 `sms-pipeline/`은 전체 모듈 인덱스와 하위 패키지 라우팅을 담당하고, `reader/`, `filter/`, `fast-path/`, `extraction/`은 각 책임 패키지의 상세 구조와 파일 역할을 담당한다.
-하위 패키지가 생기면 각 하위 패키지도 `README.md`, `00-structure-map.md`, `01-purpose-architecture.md`, `02-how-to-use.md`, `03-extension-points.md`, `04-files-checklist.md`, `05-file-inventory.md`, `change-log.md`를 필수로 가진다.
+하위 패키지가 생기면 각 하위 패키지도 `README.md`와 `change-log.md`로 시작한다.
+구조가 복잡하거나 AI가 수정 위치를 놓치면 `00-structure-map.md`, 목적/사용법/확장 지점, 파일 체크리스트, 파일 인벤토리를 확장한다.
 
 서브모듈 KB에 들어갈 내용:
 
@@ -449,26 +450,26 @@ sms-pipeline/
 - 하면 안 되는 사용 방식
 - 대표 파일 체크리스트
 
-서브모듈 KB 필수 파일:
+서브모듈 KB 시작 파일과 확장 파일:
 
 | 파일 | 역할 |
 |---|---|
 | `README.md` | 서브모듈 인덱스. 모듈 목적, 주요 패키지, 읽을 문서를 제공한다 |
-| `00-structure-map.md` | 모듈 폴더/Gradle/source set/package/파일 역할 지도 |
+| `change-log.md` | 서브모듈 KB 변경 상세 로그 |
+| `00-structure-map.md` | 확장 파일. 모듈 폴더/Gradle/source set/package/파일 역할 지도 |
 | `01-purpose-architecture.md` | 모듈의 목적, 책임, 내부 구조, 의존성 방향 |
 | `02-how-to-use.md` | 도메인 또는 consumer가 모듈을 사용하는 일반 방법 |
 | `03-extension-points.md` | public API, extension point, 확장 시 지켜야 할 계약 |
 | `04-files-checklist.md` | 모듈 수정 전 확인할 파일과 검증 질문 |
 | `05-file-inventory.md` | 서브모듈 전체 파일을 한 줄 역할로 인덱싱 |
-| `change-log.md` | 서브모듈 KB 변경 상세 로그 |
 
-서브모듈 내부 책임 패키지 필수 파일:
+서브모듈 내부 책임 패키지 시작 파일과 확장 파일:
 
 | 파일 | 역할 |
 |---|---|
 | `<module>/<sub-package>/README.md` | 하위 책임 패키지 인덱스. 예: `sms-pipeline/reader`, `sms-pipeline/fast-path` |
-| `<module>/<sub-package>/00-structure-map.md` | 하위 패키지 folder/package/source/file role 지도 |
 | `<module>/<sub-package>/change-log.md` | 하위 패키지 KB 변경 상세 로그 |
+| `<module>/<sub-package>/00-structure-map.md` | 확장 파일. 하위 패키지 folder/package/source/file role 지도 |
 | `<module>/<sub-package>/01-purpose-architecture.md` | 하위 패키지 목적과 내부 흐름 |
 | `<module>/<sub-package>/02-how-to-use.md` | 하위 패키지 사용 방법 |
 | `<module>/<sub-package>/03-extension-points.md` | 하위 패키지 확장 지점 |
@@ -484,8 +485,8 @@ sms-pipeline/
 | 전체 파일 | 한 줄 역할과 “언제 보는가”만 인덱싱 | `05-file-inventory.md` |
 | 복잡하거나 자주 수정되는 파일 | 필요하면 별도 상세 문서로 승격 | 하위 패키지 내부 추가 문서 |
 
-`05-file-inventory.md`는 모든 도메인/서브모듈/하위 책임 패키지에 필수로 둔다.
-작은 패키지라도 “파일이 적음”을 명시한 최소 인덱스를 둔다.
+`05-file-inventory.md`는 파일 수가 많거나 책임이 애매한 도메인/기능/서브모듈/하위 책임 패키지에 둔다.
+작은 패키지는 README의 핵심 파일 표로 시작할 수 있다.
 
 특히 아래 경우에는 파일 인벤토리의 정확도가 더 중요하다.
 

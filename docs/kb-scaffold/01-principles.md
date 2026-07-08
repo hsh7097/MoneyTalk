@@ -1,10 +1,10 @@
 ---
 type: guide
 title: KB 작성 원칙
-description: AI 작업용 KB의 목적, 금지사항, 필수 파일, 로그, 서브모듈 경계를 정의한다.
+description: AI 작업용 KB의 목적, 금지사항, 최소 계약, 로그, 기능/서브모듈 경계를 정의한다.
 tags: [kb-scaffold, principles, authoring, android, moneytalk]
 resource: docs/kb-scaffold/01-principles.md
-timestamp: 2026-07-03T15:51:26+09:00
+timestamp: 2026-07-08T00:00:00+09:00
 status: draft
 ---
 
@@ -102,12 +102,16 @@ KB에는 확인된 사실만 쓴다.
 - 공통 구현체의 의도와 사용법은 서브모듈 문서에 둔다.
 - 변경 이력은 상세 설명보다 “왜 바뀌었는지”와 “어느 문서가 바뀌었는지”를 남긴다.
 
-## 7. 필수 파일 계약
+## 7. 최소 파일 계약과 확장 기준
 
 KB는 AI가 매번 같은 방식으로 진입할 수 있어야 한다.
-따라서 도메인과 서브모듈은 최소 필수 파일을 가진다.
+다만 모든 도메인, 기능, 서브모듈에 같은 깊이의 문서 세트를 강제하지 않는다.
+작은 패키지는 아래 두 파일로 시작할 수 있다.
 
-각 KB 패키지의 `README.md`는 단순 파일 링크 목록이 아니라 파일 사용 설명을 포함해야 한다.
+- `README.md`: 패키지 인덱스, 기준 코드 경로, 먼저 볼 문서, 핵심 파일, 현재 생략한 확장 문서
+- `change-log.md`: 패키지 KB 변경 상세 로그
+
+각 KB 패키지의 `README.md`는 단순 링크 목록이 아니라 파일 사용 설명을 포함해야 한다.
 최소한 아래 항목을 표로 명시한다.
 
 | 항목 | 설명 |
@@ -118,43 +122,31 @@ KB는 AI가 매번 같은 방식으로 진입할 수 있어야 한다.
 
 이 표는 AI가 첫 진입에서 읽을 문서를 고르는 라우팅 장치다.
 문서 이름만 나열하면 AI가 각 파일을 다시 열어 역할을 추론해야 하므로, README 단계에서 문서의 정체와 참조 시점을 명시한다.
+아직 만들지 않은 확장 파일 링크는 미리 쓰지 않는다.
+생략한 확장 파일이 있으면 README에 “현재는 README 내부 요약으로 대체한다”처럼 명시한다.
 
-도메인 KB 필수 파일:
+아래 상황이면 확장 파일을 분리한다.
 
-- `README.md`: 도메인 인덱스와 작업 시작점
-- `00-structure-map.md`: 폴더, 패키지, 핵심 파일, 파일별 역할, AI 참조 순서
-- `change-log.md`: 도메인 KB 변경 상세 로그
-- `package-reference/README.md`: 세부 개발 문서 인덱스
-- `package-reference/01-entry-screen.md`
-- `package-reference/02-data-viewmodel.md`
-- `package-reference/03-rendering-action.md`
-- `package-reference/04-files-checklist.md`
-- `05-file-inventory.md`: 도메인 전체 파일 역할 인덱스
+- 파일 수가 많아 README만으로 수정 위치를 좁히기 어렵다.
+- AI가 반복해서 잘못된 파일을 먼저 연다.
+- package/source set 구조가 복잡하다.
+- 신규 Composable, state holder, DAO, Repository, action, analytics처럼 세부 수정 위치 안내가 반복된다.
+- 여러 도메인에서 같은 기능/서브모듈을 재사용한다.
+- 자동화가 기준 diff를 보고 라우팅 또는 파일 인벤토리를 갱신해야 한다.
 
-서브모듈 KB 필수 파일:
+확장 파일 예시:
 
-- `README.md`: 서브모듈 인덱스와 작업 시작점
-- `00-structure-map.md`: 모듈 구조, 패키지, 핵심 파일, 파일별 역할, AI 참조 순서
-- `01-purpose-architecture.md`
-- `02-how-to-use.md`
-- `03-extension-points.md`
-- `04-files-checklist.md`
-- `05-file-inventory.md`: 서브모듈 전체 파일 역할 인덱스
-- `change-log.md`
+| 파일 | 역할 |
+|---|---|
+| `00-structure-map.md` 또는 `01-structure-map.md` | 폴더, 패키지, 핵심 파일, AI 참조 순서 |
+| `05-file-inventory.md` | 파일별 한 줄 역할, 언제 보는가, 함께 볼 파일 |
+| `package-reference/` | entry/data/rendering/checklist처럼 개발 작업의 세부 위치를 나눈 문서 |
+| `01-feature-flow.md`, `02-data-contract.md`, `03-extension-points.md` | end-to-end 기능 흐름이 커졌을 때의 기능 KB 확장 문서 |
+| `01-purpose-architecture.md`, `02-how-to-use.md`, `03-extension-points.md` | 서브모듈 목적, 사용법, 확장 지점이 커졌을 때의 서브모듈 확장 문서 |
 
-기능 KB 필수 파일:
-
-- `README.md`: 기능 인덱스와 작업 시작점
-- `00-structure-map.md`: 기능에 참여하는 화면/모듈/DB/App Function 파일 지도
-- `01-feature-flow.md`: trigger부터 결과 반영까지 end-to-end 흐름
-- `02-data-contract.md`: input/output model, DB/API/App Function contract
-- `03-extension-points.md`: 기능 확장 지점과 책임 경계
-- `04-files-checklist.md`: 기능 수정 전후 검증 질문
-- `05-file-inventory.md`: 기능 관련 파일 역할 인덱스
-- `change-log.md`: 기능 KB 변경 상세 로그
-
-작은 패키지도 `README.md`, `00-structure-map.md`, `05-file-inventory.md`, `change-log.md`는 최소로 가진다.
-세부 목적/사용법/확장 지점 문서는 한 파일 안에 합쳐 시작할 수 있지만, 자동화 라우팅 대상이 되거나 두 개 이상 도메인에서 사용되면 위 필수 파일 구조로 분리한다.
+MoneyTalk 기존 KB는 `00-change-index.md`, `01-structure-map.md` 명명을 사용한다.
+새 KB는 기존 루트 명명과 충돌하지 않게 같은 KB 안의 관례를 우선한다.
+Gmarket 최신 스카폴드처럼 `01-change-index.md`, `02-structure-map.md`를 쓰는 새 루트를 만들 경우에도 한 KB 안에서 명명을 섞지 않는다.
 
 ## 8. 로그 작성 계약
 

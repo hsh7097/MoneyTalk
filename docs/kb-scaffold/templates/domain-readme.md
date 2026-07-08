@@ -1,7 +1,7 @@
 ---
 type: domain
 title: "<도메인명> 도메인"
-description: "<도메인명> 작업의 진입점, 필수 문서, 기준 패키지를 안내한다."
+description: "<도메인명> 작업의 진입점, 시작 문서, 기준 패키지를 안내한다."
 tags: [domain, android, "<domain-name>"]
 resource: "<domain-source-root>"
 timestamp: "<YYYY-MM-DDTHH:mm:ss+09:00>"
@@ -14,19 +14,20 @@ status: draft
 > 기준: `<YYYY-MM-DD 현재 코드 확인>`
 
 이 문서는 `<도메인명>` 작업을 시작할 때 보는 인덱스 문서다.
-도메인 KB는 `README.md`, `00-structure-map.md`, `05-file-inventory.md`, `change-log.md`, `package-reference/` 문서를 필수로 가진다.
+작은 도메인 KB는 이 README와 `change-log.md`로 시작할 수 있다.
+구조가 복잡하거나 AI가 수정 위치를 자주 놓치면 `00-structure-map.md`, `05-file-inventory.md`, `package-reference/`를 확장한다.
 
 ## 먼저 볼 파일
 
 | 문서 | 역할 | 언제 보는가 |
 |---|---|---|
-| `00-structure-map.md` | 도메인의 folder tree, package group, 핵심 파일, AI 참조 순서를 정리한다. | 변경 파일이 어느 화면/패키지 책임에 속하는지 먼저 판단할 때 본다. |
-| `package-reference/README.md` | 도메인 세부 개발 문서의 인덱스와 읽는 순서를 정리한다. | entry/data/rendering/checklist 중 어떤 문서로 내려갈지 고를 때 본다. |
-| `package-reference/01-entry-screen.md` | Activity, NavGraph, permission 같은 화면 진입 흐름을 설명한다. | 화면 진입, routing, lifecycle, navigation 문제를 볼 때 본다. |
-| `package-reference/02-data-viewmodel.md` | ViewModel, Repository, DataSource, API, state 생성 흐름을 설명한다. | 데이터 로딩, state, paging, API field mapping 문제를 볼 때 본다. |
-| `package-reference/03-rendering-action.md` | Composable, UI state, dialog, action, navigation, analytics 연결을 설명한다. | 렌더링, 클릭/액션, analytics, 접근성 문제를 볼 때 본다. |
-| `package-reference/04-files-checklist.md` | 도메인 수정 전후 확인할 파일과 검증 관점을 정리한다. | 리뷰 전 누락된 주변 파일이나 side effect를 점검할 때 본다. |
-| `05-file-inventory.md` | 도메인 전체 파일의 한 줄 역할과 함께 볼 파일을 인덱싱한다. | 파일 이름만으로 수정 후보가 애매하거나 영향 파일을 좁힐 때 본다. |
+| `00-structure-map.md` | 도메인의 folder tree, package group, 핵심 파일, AI 참조 순서를 정리한다. | 실제 존재하고, 변경 파일이 어느 화면/패키지 책임에 속하는지 먼저 판단할 때 본다. |
+| `package-reference/README.md` | 도메인 세부 개발 문서의 인덱스와 읽는 순서를 정리한다. | 실제 존재하고, entry/data/rendering/checklist 중 어떤 문서로 내려갈지 고를 때 본다. |
+| `package-reference/01-entry-screen.md` | Activity, NavGraph, permission 같은 화면 진입 흐름을 설명한다. | 실제 존재하고, 화면 진입, routing, lifecycle, navigation 문제를 볼 때 본다. |
+| `package-reference/02-data-viewmodel.md` | ViewModel, Repository, DataSource, API, state 생성 흐름을 설명한다. | 실제 존재하고, 데이터 로딩, state, paging, API field mapping 문제를 볼 때 본다. |
+| `package-reference/03-rendering-action.md` | Composable, UI state, dialog, action, navigation, analytics 연결을 설명한다. | 실제 존재하고, 렌더링, 클릭/액션, analytics, 접근성 문제를 볼 때 본다. |
+| `package-reference/04-files-checklist.md` | 도메인 수정 전후 확인할 파일과 검증 관점을 정리한다. | 실제 존재하고, 리뷰 전 누락된 주변 파일이나 side effect를 점검할 때 본다. |
+| `05-file-inventory.md` | 도메인 전체 파일의 한 줄 역할과 함께 볼 파일을 인덱싱한다. | 실제 존재하고, 파일 이름만으로 수정 후보가 애매하거나 영향 파일을 좁힐 때 본다. |
 | `change-log.md` | 도메인 KB 변경 근거와 갱신 이력을 기록한다. | 문서가 왜 바뀌었는지, 어떤 문서를 함께 봐야 하는지 확인할 때 본다. |
 
 ## 핵심 요약

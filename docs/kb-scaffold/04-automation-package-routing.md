@@ -4,7 +4,7 @@ title: 자동화 패키지 라우팅 가이드
 description: 예약 자동화가 원격 diff를 KB 패키지와 문서로 라우팅하고 변경 로그를 남기는 기준을 정의한다.
 tags: [kb-scaffold, automation, routing, package, android]
 resource: docs/kb-scaffold/04-automation-package-routing.md
-timestamp: 2026-07-03T15:51:26+09:00
+timestamp: 2026-07-08T00:00:00+09:00
 status: draft
 ---
 
@@ -80,7 +80,10 @@ docs/<kb-name>/
     └── change-log.md
 ```
 
-필수 파일:
+자동화 참조 파일:
+
+아래 표는 자동화가 사용할 수 있는 문서 목록이다.
+패키지 내부 확장 파일은 실제 존재할 때만 읽고, 없는 문서는 추정 생성하지 않는다.
 
 | 파일 | 자동화에서 쓰는 용도 |
 |---|---|
@@ -129,7 +132,7 @@ docs/<kb-name>/
 
 1. 작업 파일 경로를 먼저 확인한다.
 2. 이 문서에서 영향 도메인, 기능 또는 서브모듈을 고른다.
-3. 해당 패키지의 README와 필요한 package-reference만 읽는다.
+3. 해당 패키지의 README와 실제 존재하는 확장 문서만 읽는다.
 4. 실제 판단은 현재 코드와 diff가 기준이다.
 
 ## 2. 항상 먼저 보는 문서
