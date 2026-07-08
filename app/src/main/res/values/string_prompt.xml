@@ -24,7 +24,7 @@
 - 요약본만 반환 (다른 텍스트 없이)
 - 마크다운이나 특수 포맷 사용 금지</string>
 
-    <!-- ChatPrompts: 재무 상담사 시스템 명령어 (gemini-2.5-pro) -->
+    <!-- ChatPrompts: 재무 상담사 시스템 명령어 (gemini-2.5-flash-lite) -->
     <string name="prompt_financial_advisor_system" translatable="false">당신은 \'머니톡\'이라는 친근한 개인 재무 상담 AI입니다.
 
 [역할]
@@ -167,7 +167,7 @@
 [새로운 대화 내용]
 %2$s</string>
 
-    <!-- ChatPrompts: 쿼리/액션 분석 시스템 명령어 (gemini-2.5-pro) -->
+    <!-- ChatPrompts: 쿼리/액션 분석 시스템 명령어 (gemini-2.5-flash-lite) -->
     <string name="prompt_query_analyzer_system" translatable="false">당신은 사용자의 재무 관련 질문을 분석하여 필요한 데이터베이스 쿼리와 액션을 결정하는 AI입니다.
 
 [사용 가능한 쿼리 타입]

@@ -4,7 +4,7 @@ title: MoneyTalk Agent Routing
 description: 변경 파일 경로와 작업 키워드를 기준으로 AI가 읽을 KB 문서를 결정한다.
 tags: [moneytalk, kb, routing, android]
 resource: app/src/main/java/com/sanha/moneytalk/
-timestamp: 2026-07-03T16:30:00+09:00
+timestamp: 2026-07-08T00:00:00+09:00
 status: draft
 ---
 
@@ -41,7 +41,8 @@ status: draft
 | `CategoryClassifierService`, `GeminiCategoryRepository`, `StoreEmbedding`, `StoreRule` | [category-classification/README.md](category-classification/README.md), [category-classification/01-feature-flow.md](category-classification/01-feature-flow.md) | 카테고리 분류 기능 |
 | `app/src/main/java/com/sanha/moneytalk/feature/home/data/**` | [finance-data/README.md](finance-data/README.md), [category-classification/README.md](category-classification/README.md), 영향 도메인 README | Expense/Income/Category/StoreRule repository |
 | `app/src/main/java/com/sanha/moneytalk/core/appfunctions/**` | [app-functions/README.md](app-functions/README.md), [app-functions/01-feature-flow.md](app-functions/01-feature-flow.md), `docs/APP_FUNCTIONS.md` | agent 기능 읽기/수정 노출 |
-| `app/src/main/java/com/sanha/moneytalk/feature/chat/**` | [01-structure-map.md](01-structure-map.md), `docs/CHAT_SYSTEM.md` | 별도 `chat` KB 후보 |
+| `app/src/main/java/com/sanha/moneytalk/feature/chat/**` | [chat/README.md](chat/README.md), `docs/CHAT_SYSTEM.md` | AI 채팅 UI, Gemini Repository, 채팅 세션/요약 |
+| `LocalChatQueryRouter`, `ChatCreditPolicy`, `DataQueryParser`, `ChatContextBuilder`, `analyzeQueryNeeds`, `generateFinalAnswerWithContext`, 토큰 비용 | [chat/README.md](chat/README.md), `docs/AI_CREDIT_DEEP_ANALYSIS_PLAN.md`, `docs/MONETIZATION.md` | 단순 조회 로컬 처리, 앱 내부 계산, Gemini 입력 축소 |
 | `app/src/main/java/com/sanha/moneytalk/feature/settings/**`, `feature/*settings/**` | [01-structure-map.md](01-structure-map.md), `docs/ARCHITECTURE.md` | 별도 `settings` KB 후보 |
 | `app/src/main/java/com/sanha/moneytalk/core/ui/**`, `core/theme/**` | [01-structure-map.md](01-structure-map.md), 영향 도메인의 rendering/action 문서 | 공통 Compose UI |
 

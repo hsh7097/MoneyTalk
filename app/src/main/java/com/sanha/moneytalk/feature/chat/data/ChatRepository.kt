@@ -16,9 +16,15 @@ interface ChatRepository {
     suspend fun sendMessageAndBuildContext(sessionId: Long, userMessage: String): ChatContext
 
     /**
-     * AI 응답 저장 + 필요 시 요약 갱신
+     * AI 응답 저장
      */
     suspend fun saveAiResponseAndUpdateSummary(sessionId: Long, aiResponse: String)
+
+    /**
+     * 로컬 정형 조회 결과 저장.
+     * Gemini 호출 없는 단순 조회는 Rolling Summary 갱신도 생략한다.
+     */
+    suspend fun saveLocalExchange(sessionId: Long, userMessage: String, localResponse: String)
 
     /**
      * 현재 세션의 컨텍스트 조회

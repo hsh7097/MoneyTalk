@@ -57,6 +57,7 @@
     <string name="chat_retry">다시 요청</string>
     <string name="chat_default_session_title">새 인사이트</string>
     <string name="chat_previous_session_title">이전 인사이트</string>
+    <string name="chat_local_lookup_answer">확인한 결과예요.\n\n%1$s</string>
 
     <!-- AI 크레딧 -->
     <string name="ai_credit_title">AI 크레딧</string>

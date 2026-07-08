@@ -90,7 +90,7 @@ app/src/main/java/com/sanha/moneytalk/
 | SMS 필터링 (발신자) | 010/070 조건부 제외 + 금융 힌트 보존 | [SmsFilter.kt](../app/src/main/java/com/sanha/moneytalk/core/sms/SmsFilter.kt) |
 | SMS 동기화 검증 | 월별 읽기 순서 독립성 + 실기기 Provider/UI 이동 회귀 검증 | [MonthlySmsSyncOrderRegressionTest.kt](../app/src/test/java/com/sanha/moneytalk/core/sync/MonthlySmsSyncOrderRegressionTest.kt), [RealDeviceMonthlySmsSyncOrderInstrumentedTest.kt](../app/src/androidTest/java/com/sanha/moneytalk/core/sync/RealDeviceMonthlySmsSyncOrderInstrumentedTest.kt), [RealDeviceMonthlyPageNavigationInstrumentedTest.kt](../app/src/androidTest/java/com/sanha/moneytalk/core/sync/RealDeviceMonthlyPageNavigationInstrumentedTest.kt) |
 | 카테고리 분류 (4-tier) | Room → Vector → Keyword → Gemini Batch | [CategoryClassifierService.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/CategoryClassifierService.kt), [StoreEmbeddingRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/home/data/StoreEmbeddingRepository.kt) |
-| AI 채팅 (3-step) | 쿼리분석 → DB조회/액션 → 답변생성 | [ChatViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt), [GeminiRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) |
+| AI 채팅 (Local Fast Path + 3-step) | 단순조회 로컬처리 → 쿼리분석 → DB조회/액션 → 답변생성 | [LocalChatQueryRouter.kt](../app/src/main/java/com/sanha/moneytalk/core/util/LocalChatQueryRouter.kt), [ChatViewModel.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt), [GeminiRepository.kt](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) |
 | Android App Functions | Assistant/agent가 앱 내부 DB 조회/수정 기능과 월간 가계 요약을 호출 | [APP_FUNCTIONS.md](APP_FUNCTIONS.md), [MoneyTalkFinanceAppFunctions.kt](../app/src/main/java/com/sanha/moneytalk/core/appfunctions/MoneyTalkFinanceAppFunctions.kt), [MoneyTalkChatAppFunctions.kt](../app/src/main/java/com/sanha/moneytalk/core/appfunctions/MoneyTalkChatAppFunctions.kt), [MoneyTalkChatAppFunctionReader.kt](../app/src/main/java/com/sanha/moneytalk/core/appfunctions/MoneyTalkChatAppFunctionReader.kt), [MoneyTalkApplication.kt](../app/src/main/java/com/sanha/moneytalk/MoneyTalkApplication.kt) |
 | 카드 관리 | 카드 표시/숨김 설정 + 카드명 정규화 | [OwnedCardRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/OwnedCardRepository.kt), [CardNameNormalizer.kt](../app/src/main/java/com/sanha/moneytalk/core/util/CardNameNormalizer.kt) |
 | SMS 필터링 | 제외 키워드 블랙리스트 | [SmsExclusionRepository.kt](../app/src/main/java/com/sanha/moneytalk/core/database/SmsExclusionRepository.kt) |
@@ -354,26 +354,35 @@ ANALYTICS 쿼리는 ChatViewModel에서 클라이언트 사이드로 실행되�
 - Gemini 최종 답변은 `[조회된 데이터]`와 `[ANALYTICS 계산 결과]` 값을 인용하고, 거래 리스트를 직접 재계산하지 않음
 - 데이터가 없거나 표본이 적으면 금융 판단을 추정하지 않고 추가 데이터 요청 또는 판단 불가를 안내
 
-### 4-4. Gemini 모델 구성
+### 4-4. Local Fast Path
+
+`LocalChatQueryRouter`는 안전한 단순 조회를 Gemini 호출 없이 `DataQuery`로 변환한다.
+`ChatViewModel.processLocalSimpleLookup()`은 라우팅 성공 시 기존 `executeQuery()`를 실행하고 `chat_local_lookup_answer` 템플릿 응답을 저장한다.
+이 경로는 `analyzeQueryNeeds()`, `generateFinalAnswerWithContext()`, Rolling Summary 요약 모델을 호출하지 않는다.
+
+1차 처리 범위는 이번 달 총 지출, 카테고리 지출/내역, 카테고리별 지출, 최근 지출 N건, 예산 현황, 미분류 항목, 올해 월별 지출, 일별 지출, 카드 목록, 중복 지출 조회, 이번 달 수입 합계다.
+분석/비교/조언/DB 수정/미지원 기간 표현은 기존 Gemini 경로로 넘긴다.
+
+### 4-5. Gemini 모델 구성
 
 | 모델 | 역할 | Gemini 모델 | temperature | topK | topP | maxTokens |
 |------|------|-----------|-------------|------|------|-----------|
-| queryAnalyzerModel | 쿼리/액션 분석 | gemini-2.5-pro | 0.3 | 20 | 0.9 | 10000 |
-| financialAdvisorModel | 재무 상담 답변 | gemini-2.5-pro | 0.7 | 40 | 0.95 | 10000 |
+| queryAnalyzerModel | 쿼리/액션 분석 | gemini-2.5-flash-lite | 0.3 | 20 | 0.9 | 10000 |
+| financialAdvisorModel | 재무 상담 답변 | gemini-2.5-flash-lite | 0.7 | 40 | 0.95 | 10000 |
 | summaryModel | Rolling Summary | gemini-2.5-flash | 0.3 | 20 | 0.9 | 10000 |
 
-> 출시 기본값은 안정판 2.5 계열이다. 최신 preview 모델 검증은 Firebase RTDB `/config/models`에서 역할별 모델명을 오버라이드해 진행한다.
+> 운영 비용 방어를 위해 앱 배포 기본값은 `gemini-2.5-flash-lite`를 유지한다. Pro/preview 계열 검증은 Firebase RTDB `/config/models`에서 역할별 모델명을 오버라이드해 내부 테스트에서만 진행한다.
 
-### 4-5. 프롬프트 위치
+### 4-6. 프롬프트 위치
 
 > AI 요청 프롬프트 템플릿은 [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml)에서 관리한다.
 > 프롬프트 본문이 아닌 섹션 라벨/방향값/상태값 같은 보조 문자열은 [`res/values/strings.xml`](../app/src/main/res/values/strings.xml)의 `ai_*` key로 관리한다.
 
 | 프롬프트 그룹 | XML key | 모델 |
 |-------------|---------|------|
-| 쿼리 분석기 | `prompt_query_analyzer_system`, `prompt_query_analyzer_user` | gemini-2.5-pro |
-| 재무 상담사 | `prompt_financial_advisor_system`, `prompt_final_answer_*` | gemini-2.5-pro |
-| 홈 한줄 인사이트 | `prompt_home_insight_*` | gemini-2.5-pro |
+| 쿼리 분석기 | `prompt_query_analyzer_system`, `prompt_query_analyzer_user` | gemini-2.5-flash-lite |
+| 재무 상담사 | `prompt_financial_advisor_system`, `prompt_final_answer_*` | gemini-2.5-flash-lite |
+| 홈 한줄 인사이트 | `prompt_home_insight_*` | gemini-2.5-flash-lite |
 | 대화 요약/제목 | `prompt_summary_system`, `prompt_rolling_summary_*`, `prompt_chat_title_user` | gemini-2.5-flash |
 | SMS 추출 | `prompt_sms_extract_*`, `prompt_sms_context_*`, `prompt_sms_batch_*` | gemini-2.5-flash-lite |
 | SMS Regex 생성/수선 | `prompt_sms_regex_*` | gemini-2.5-flash-lite |
@@ -496,6 +505,9 @@ CategoryClassifierService.getCategory(storeName)
 ### 5-4. AI 채팅 흐름
 ```
 ChatViewModel.sendMessage(message)
+   → LocalChatQueryRouter.tryRoute()
+      → Match: executeQuery() → ChatRepository.saveLocalExchange() [Gemini 호출 없음]
+      → No match: 기존 경로 진행
    → ChatRepository.sendMessageAndBuildContext() [Rolling Summary + 윈도우]
    → GeminiRepository.analyzeQueryNeeds() [쿼리/액션/clarification JSON 파싱]
    → [분기] isClarification?

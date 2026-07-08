@@ -43,8 +43,8 @@ import javax.inject.Singleton
  * /config
  *   /gemini_api_key: "단일 키 (하위호환)"
  *   /gemini_api_keys: ["key1", "key2", ...]
- *   /models/query_analyzer: "gemini-2.5-pro"
- *   /models/financial_advisor: "gemini-2.5-pro"
+ *   /models/query_analyzer: "gemini-2.5-flash-lite"
+ *   /models/financial_advisor: "gemini-2.5-flash-lite"
  *   /models/summary: "gemini-2.5-flash"
  *   /models/... (기타 모델)
  *   /free_tier_enabled: true|false

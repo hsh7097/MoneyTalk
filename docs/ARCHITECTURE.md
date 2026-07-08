@@ -133,7 +133,7 @@ com.sanha.moneytalk/
 │   │   ├── SyncCoveragePagePolicy.kt     # 월별 coverage/CTA 판정
 │   │   └── SyncCoverageRecorder.kt       # 성공한 동기화 구간 기록
 │   │
-│   └── util/                             # 유틸리티 (13개)
+│   └── util/                             # 유틸리티 (14개)
 │       ├── BuildVariantPolicy.kt         # release 빌드 전용 수익화 정책
 │       ├── CategoryReferenceProvider.kt  # 카테고리 참조 데이터 제공
 │       ├── StoreNameGrouper.kt           # 가게명 그룹화
@@ -141,6 +141,7 @@ com.sanha.moneytalk/
 │       ├── CardNameNormalizer.kt         # 카드사 명칭 정규화 (25+)
 │       ├── ChatContextBuilder.kt         # 채팅 컨텍스트 빌더
 │       ├── DataQueryParser.kt            # 데이터 쿼리 파서 (18 쿼리 + 13 액션)
+│       ├── LocalChatQueryRouter.kt       # 단순 조회 질문 로컬 DataQuery 라우터
 │       ├── DateParser.kt                 # 날짜 파서
 │       ├── DateUtils.kt                  # 날짜/시간 유틸리티
 │       ├── DpTextUnit.kt                 # fontScale 무관 고정 텍스트 크기
@@ -297,6 +298,7 @@ com.sanha.moneytalk/
 
 ### 3. AI 상담 (Chat)
 - Gemini AI 기반 재무 상담 (3-step pipeline)
+- 단순 조회 로컬 처리 (`LocalChatQueryRouter` → `executeQuery()` → 템플릿 응답)
 - 채팅방 관리 (생성, 삭제, 제목 편집)
 - DB 쿼리 자동 실행 (지출 조회, 분석)
 - 채팅 액션 지원 (삭제, 추가, 수정, SMS 제외 등 12종)
@@ -357,17 +359,18 @@ RCS/비즈메시지(cold start) → NotificationTransactionService → 최근 pr
 | 2 | 로컬 키워드 | SmsParser.inferCategory 키워드 매칭 |
 | 3 | Gemini 배치 호출 | GeminiCategoryRepository 배치 분류 |
 
-### AI 채팅 (3-step pipeline)
+### AI 채팅 (Local Fast Path + 3-step pipeline)
 
 ```
-사용자 질문 → Step 1: QUERY_ANALYZER → Step 2: DB 조회/액션 실행 → Step 3: FINANCIAL_ADVISOR → 답변
+사용자 질문 → LocalChatQueryRouter(단순 조회면 Gemini 생략) → Step 1: QUERY_ANALYZER → Step 2: DB 조회/액션 실행 → Step 3: FINANCIAL_ADVISOR → 답변
 ```
 
 | Step | 모델 | 프롬프트 위치 | 역할 |
 |------|------|-------------|------|
-| 1 | gemini-2.5-pro | string_prompt.xml (QUERY_ANALYZER) | 질문 → 쿼리/액션 JSON 변환 (18 쿼리 + 13 액션) |
+| Local | - | strings.xml (chat_local_lookup_answer) | 총 지출/카테고리 지출/최근 지출/예산 등 안전한 단순 조회를 앱 내부에서 처리 |
+| 1 | gemini-2.5-flash-lite | string_prompt.xml (QUERY_ANALYZER) | 질문 → 쿼리/액션 JSON 변환 (18 쿼리 + 13 액션) |
 | 2 | - | ChatViewModel.kt | DB 조회, 액션 실행, ANALYTICS 분석 |
-| 3 | gemini-2.5-pro | string_prompt.xml (FINANCIAL_ADVISOR) | 데이터 기반 최종 답변 생성 |
+| 3 | gemini-2.5-flash-lite | string_prompt.xml (FINANCIAL_ADVISOR) | 데이터 기반 최종 답변 생성 |
 
 ## AI 프롬프트 위치
 
@@ -376,9 +379,9 @@ RCS/비즈메시지(cold start) → NotificationTransactionService → 최근 pr
 
 | 프롬프트 그룹 | XML key | 모델 | 목적 |
 |-------------|---------|------|------|
-| 쿼리 분석기 | `prompt_query_analyzer_system`, `prompt_query_analyzer_user` | gemini-2.5-pro | 사용자 질문 → 쿼리/액션 JSON |
-| 재무 상담사 | `prompt_financial_advisor_system`, `prompt_final_answer_*` | gemini-2.5-pro | 데이터 기반 최종 답변 생성 |
-| 홈 한줄 인사이트 | `prompt_home_insight_*` | gemini-2.5-pro | 홈 화면 소비 코멘트 생성 |
+| 쿼리 분석기 | `prompt_query_analyzer_system`, `prompt_query_analyzer_user` | gemini-2.5-flash-lite | 사용자 질문 → 쿼리/액션 JSON |
+| 재무 상담사 | `prompt_financial_advisor_system`, `prompt_final_answer_*` | gemini-2.5-flash-lite | 데이터 기반 최종 답변 생성 |
+| 홈 한줄 인사이트 | `prompt_home_insight_*` | gemini-2.5-flash-lite | 홈 화면 소비 코멘트 생성 |
 | 대화 요약/제목 | `prompt_summary_system`, `prompt_rolling_summary_*`, `prompt_chat_title_user` | gemini-2.5-flash | Rolling Summary 및 채팅방 제목 생성 |
 | SMS 추출 | `prompt_sms_extract_*`, `prompt_sms_context_*`, `prompt_sms_batch_*` | gemini-2.5-flash-lite | SMS → 결제 정보 추출 |
 | SMS Regex 생성/수선 | `prompt_sms_regex_*` | gemini-2.5-flash-lite | 발신번호별 SMS regex 룰 생성/수선 |

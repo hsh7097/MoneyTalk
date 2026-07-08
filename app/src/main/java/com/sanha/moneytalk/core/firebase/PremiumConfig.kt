@@ -20,8 +20,8 @@ package com.sanha.moneytalk.core.firebase
  *   "min_version_name": "1.0.0",
  *   "force_update_message": "",
  *   "models": {
- *     "query_analyzer": "gemini-2.5-pro",
- *     "financial_advisor": "gemini-2.5-pro",
+ *     "query_analyzer": "gemini-2.5-flash-lite",
+ *     "financial_advisor": "gemini-2.5-flash-lite",
  *     "summary": "gemini-2.5-flash",
  *     "home_insight": "gemini-2.5-flash-lite",
  *     "category_classifier": "gemini-2.5-flash-lite",
@@ -93,10 +93,10 @@ data class GeminiModelConfig(
     val embedding: String = DEFAULT_EMBEDDING
 ) {
     companion object {
-        // 앱 배포 기본값은 안정판 2.5 계열을 유지하고,
+        // 앱 배포 기본값은 운영 비용 방어를 위해 2.5 Flash-Lite 계열을 유지하고,
         // 최신 preview 계열은 RTDB /config/models에서 내부 테스트로만 오버라이드한다.
-        const val DEFAULT_QUERY_ANALYZER = "gemini-2.5-pro"
-        const val DEFAULT_FINANCIAL_ADVISOR = "gemini-2.5-pro"
+        const val DEFAULT_QUERY_ANALYZER = "gemini-2.5-flash-lite"
+        const val DEFAULT_FINANCIAL_ADVISOR = "gemini-2.5-flash-lite"
         const val DEFAULT_SUMMARY = "gemini-2.5-flash"
         const val DEFAULT_HOME_INSIGHT = "gemini-2.5-flash-lite"
         const val DEFAULT_CATEGORY_CLASSIFIER = "gemini-2.5-flash-lite"

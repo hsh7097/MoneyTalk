@@ -59,6 +59,28 @@ class ChatRepositoryImpl @Inject constructor(
         chatDao.updateSessionTimestamp(sessionId)
     }
 
+    override suspend fun saveLocalExchange(
+        sessionId: Long,
+        userMessage: String,
+        localResponse: String
+    ) {
+        chatDao.insert(
+            ChatEntity(
+                sessionId = sessionId,
+                message = userMessage,
+                isUser = true
+            )
+        )
+        chatDao.insert(
+            ChatEntity(
+                sessionId = sessionId,
+                message = localResponse,
+                isUser = false
+            )
+        )
+        chatDao.updateSessionTimestamp(sessionId)
+    }
+
     override suspend fun buildCurrentContext(sessionId: Long): ChatContext {
         val summary = chatDao.getSessionSummary(sessionId)
         val recentMessages = chatDao.getRecentChatsBySessionAsc(sessionId, WINDOW_SIZE_MESSAGES)

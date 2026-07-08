@@ -1,6 +1,6 @@
 # AI 채팅 상담 시스템
 
-> Gemini 기반 재무 상담 AI: 3-Step 쿼리 분석 + Rolling Summary 대화 맥락 관리
+> Gemini 기반 재무 상담 AI: 로컬 단순 조회 Fast Path + 3-Step 쿼리 분석 + Rolling Summary 대화 맥락 관리
 
 ---
 
@@ -13,42 +13,73 @@ AI 해석이 필요한 상담/분석 질문만 크레딧을 차감합니다.
 AI 크레딧 표시/차감/충전은 RTDB `/config/credit_ad_enable=true`일 때만 활성화합니다.
 `release`가 아닌 빌드에서는 광고와 AI 크레딧 차감/충전이 모두 비활성화되어 채팅 사용에 영향을 주지 않습니다.
 
+단순 조회 중 `LocalChatQueryRouter`가 안전하게 해석할 수 있는 질문은 Gemini를 호출하지 않고
+앱 내부 `DataQuery` 실행과 템플릿 응답으로 처리합니다. 이 경로는 query analyzer,
+financial advisor, Rolling Summary 요약 모델을 모두 건너뜁니다.
+
 ```
 사용자 질문: "이번 달 식비 얼마야?"
   │
   ▼
 ┌────────────────────────────────────────────┐
-│ Step 1: 쿼리 분석 (queryAnalyzerModel)      │
-│  └ "식비 카테고리의 이번 달 합계가 필요하군"    │
-│  └ JSON: {type: "expense_by_category",     │
-│           category: "식비", ...}            │
+│ Local Fast Path: LocalChatQueryRouter       │
+│  └ DataQuery(type=total_expense,            │
+│               category="식비")              │
 └────────────┬───────────────────────────────┘
              │
              ▼
 ┌────────────────────────────────────────────┐
-│ Step 2: 데이터 조회/액션 실행 (Room DB)        │
-│  └ ExpenseDao.getExpenseSumByCategory()    │
-│  └ 또는 executeAnalytics() (클라이언트 집계)   │
+│ Step 2: 데이터 조회 (Room DB)               │
+│  └ ChatViewModel.executeQuery()             │
 │  └ 결과: 식비 350,000원                     │
 └────────────┬───────────────────────────────┘
              │
              ▼
 ┌────────────────────────────────────────────┐
-│ Step 3: 답변 생성 (financialAdvisorModel)   │
-│  └ [Rolling Summary + 최근 대화 + 데이터]    │
-│  └ "이번 달 식비는 35만원이야! 수입 대비      │
-│     15%로 적정 수준이네 👍"                  │
+│ 템플릿 응답 저장                            │
+│  └ Gemini analyze/final/summary 호출 없음   │
 └────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. 3-Step 처리 아키텍처
+## 2. 처리 아키텍처
+
+### Local Fast Path: 단순 조회 로컬 처리
+
+**파일**: [`core/util/LocalChatQueryRouter.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/LocalChatQueryRouter.kt), [`feature/chat/ui/ChatViewModel.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt) — `processLocalSimpleLookup()`
+**모델**: 없음
+
+`ChatCreditPolicy`와 광고/크레딧 게이트 이후, Gemini 3-step 진입 전에 `LocalChatQueryRouter.tryRoute()`를 먼저 실행합니다.
+매칭 성공 시 라우터가 `DataQuery`를 만들고, `ChatViewModel.executeQuery()`가 기존 DB 조회 로직을 그대로 실행합니다.
+응답은 `strings.xml`의 `chat_local_lookup_answer` 템플릿으로 저장하며, `ChatRepository.saveLocalExchange()`를 사용해 Rolling Summary 갱신을 생략합니다.
+
+1차 로컬 처리 범위:
+
+- 이번 달 총 지출
+- 특정 카테고리 지출/내역
+- 카테고리별 지출
+- 최근 지출 N건
+- 예산 현황
+- 미분류 항목
+- 올해 월별 지출
+- 이번 달 일별 지출
+- 사용 카드 목록
+- 중복 지출 조회
+- 이번 달 수입 합계
+
+아래 질문은 기존 Gemini 경로로 넘깁니다.
+
+- 분석, 비교, 추세, 패턴, 원인 질문
+- 절약, 추천, 조언, 평가, “많은 편인지” 같은 상담 질문
+- 설정, 변경, 수정, 삭제, 추가 등 DB 수정 액션
+- 지난달, 오늘, 어제, 지난 3개월처럼 로컬 라우터가 아직 안전하게 기간을 해석하지 않는 질문
+- `쇼핑 얼마야`처럼 카테고리가 모호한 질문
 
 ### Step 1: 쿼리/액션 분석
 
 **파일**: [`feature/chat/data/GeminiRepository.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/data/GeminiRepository.kt) — `analyzeQueryNeeds()`
-**모델**: `gemini-2.5-pro` (temperature: 0.3)
+**모델**: `gemini-2.5-flash-lite` (temperature: 0.3)
 **프롬프트**: [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml) — `prompt_query_analyzer_system`
 
 사용자의 자연어 질문을 분석하여 필요한 DB 쿼리와 액션을 JSON으로 결정합니다.
@@ -142,7 +173,7 @@ ChatViewModel에서 인메모리로 실행되는 복합 분석 기능:
 
 ### Step 3: 답변 생성
 
-**모델**: `gemini-2.5-pro` (temperature: 0.7)
+**모델**: `gemini-2.5-flash-lite` (temperature: 0.7)
 **프롬프트**: [`res/values/string_prompt.xml`](../app/src/main/res/values/string_prompt.xml) — `prompt_financial_advisor_system`
 
 System Instruction에 재무 상담사 역할이 정의되어 있으며, 다음 데이터를 바탕으로 답변합니다:
@@ -237,11 +268,11 @@ AI에 전달되는 내용:
 
 | 모델 | 역할 | Gemini 모델 | temperature | topK | topP | maxTokens |
 |------|------|-----------|-------------|------|------|-----------|
-| queryAnalyzerModel | 쿼리/액션 분석 | gemini-2.5-pro | 0.3 | 20 | 0.9 | 10000 |
-| financialAdvisorModel | 재무 상담 답변 | gemini-2.5-pro | 0.7 | 40 | 0.95 | 10000 |
+| queryAnalyzerModel | 쿼리/액션 분석 | gemini-2.5-flash-lite | 0.3 | 20 | 0.9 | 10000 |
+| financialAdvisorModel | 재무 상담 답변 | gemini-2.5-flash-lite | 0.7 | 40 | 0.95 | 10000 |
 | summaryModel | Rolling Summary | gemini-2.5-flash | 0.3 | 20 | 0.9 | 10000 |
 
-> 모델 운영 기준(2026-04): Gemini 3.1/3 계열 preview가 최신 계열이지만, 앱 배포 기본값은 안정판 2.5 계열을 유지한다. 내부 테스트는 Firebase RTDB `/config/models` override로 진행한다.
+> 모델 운영 기준(2026-07): 운영 비용 방어를 위해 앱 배포 기본값은 `gemini-2.5-flash-lite`를 유지한다. Pro/preview 계열 검증은 Firebase RTDB `/config/models` override로 내부 테스트에서만 진행한다.
 
 ### 프롬프트 위치 (XML 리소스)
 
@@ -312,34 +343,38 @@ chat_history 테이블
 │   ├── 부족: 보상형 광고 충전 다이얼로그 표시
 │   └── 충분: 질문 유형별 크레딧 차감 후 진행
 │
-├── 3. ChatEntity 저장 (isUser = true)
+├── 3. LocalChatQueryRouter.tryRoute()
+│   ├── 매칭 성공: executeQuery() → 템플릿 응답 → saveLocalExchange()
+│   └── 매칭 실패: 기존 Gemini 3-step 진행
 │
-├── 4. ChatContextBuilder로 컨텍스트 구성
+├── 4. ChatEntity 저장 (isUser = true)
+│
+├── 5. ChatContextBuilder로 컨텍스트 구성
 │   ├── Rolling Summary 조회
 │   ├── 최근 N개 메시지 조회 (ASC)
 │   └── 통합 프롬프트 생성
 │
-├── 4. Step 1: analyzeQueryNeeds()
+├── 6. Step 1: analyzeQueryNeeds()
 │   └── JSON 파싱 → DataQueryRequest (쿼리 + 액션 + clarification)
 │
-├── 4-1. Clarification 분기 (질문이 모호한 경우)
+├── 6-1. Clarification 분기 (질문이 모호한 경우)
 │   ├── isClarification = true → 확인 질문을 AI 응답으로 저장
-│   └── Step 5~7 건너뜀 → 사용자 추가 입력 대기
+│   └── Step 7~9 건너뜀 → 사용자 추가 입력 대기
 │
-├── 5. 데이터 조회 (DataQueryParser → ExpenseDao 등)
+├── 7. 데이터 조회 (DataQueryParser → ExpenseDao 등)
 │   └── QueryResult 목록 생성
 │   └── ANALYTICS 쿼리 시 executeAnalytics() (클라이언트 사이드)
 │
-├── 6. 액션 실행 (있는 경우)
+├── 8. 액션 실행 (있는 경우)
 │   └── ActionResult 목록 생성
 │   └── StoreAliasManager로 가게 별칭 포함 일괄 처리
 │
-├── 7. Step 3: generateFinalAnswerWithContext()
+├── 9. Step 3: generateFinalAnswerWithContext()
 │   └── [요약 + 최근 대화 + 데이터 + 질문] → Gemini
 │
-├── 8. AI 응답 ChatEntity 저장 (isUser = false)
+├── 10. AI 응답 ChatEntity 저장 (isUser = false)
 │
-└── 9. Rolling Summary 업데이트 (필요 시)
+└── 11. Rolling Summary 업데이트 (필요 시)
     └── 윈도우 밖 메시지가 있으면 요약 갱신
 ```
 
@@ -364,6 +399,8 @@ chat_history 테이블
 | "주말에 가장 많이 쓴 카테고리는?" | `analytics` (dayOfWeek 필터 + category 그룹핑) |
 | "예산 얼마 남았어?" | `budget_status` |
 | "이번 달 예산 현황" | `budget_status` |
+
+위 표 중 로컬 라우터가 지원하는 단순 조회는 Gemini 없이 처리됩니다. 가게명 조회처럼 현재 로컬 라우터가 안전하게 문구를 해석하지 않는 질문은 기존 query analyzer 경로를 사용합니다.
 
 ### 액션 요청
 | 질문 | 액션 타입 |
@@ -394,6 +431,7 @@ chat_history 테이블
 | [`feature/chat/ui/ChatViewModel.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatViewModel.kt) | 채팅 UI 상태 + 쿼리/액션/분석 실행 |
 | [`feature/chat/ui/ChatScreen.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatScreen.kt) | 채팅 UI (Compose) |
 | [`core/util/DataQueryParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/DataQueryParser.kt) | JSON → 쿼리/액션/clarification 파싱 + QueryType/ActionType enum |
+| [`core/util/LocalChatQueryRouter.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/LocalChatQueryRouter.kt) | 단순 조회 질문을 Gemini 없이 실행 가능한 `DataQuery`로 변환 |
 | [`core/util/ChatCreditPolicy.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/ChatCreditPolicy.kt) | 질문 문구 기반 크레딧 비용 산정 |
 | [`core/util/StoreAliasManager.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/StoreAliasManager.kt) | 가게명 별칭 관리 (일괄 처리 지원) |
 | [`core/database/dao/ChatDao.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/dao/ChatDao.kt) | 세션/메시지 DAO |

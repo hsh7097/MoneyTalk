@@ -6,6 +6,7 @@ import android.app.Activity
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.ad.RewardAdManager
 import com.sanha.moneytalk.core.database.OwnedCardRepository
 import com.sanha.moneytalk.core.database.dao.BudgetDao
@@ -32,6 +33,7 @@ import com.sanha.moneytalk.core.util.ChatCreditPolicy
 import com.sanha.moneytalk.core.util.DataAction
 import com.sanha.moneytalk.core.util.DataQuery
 import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.core.util.LocalChatQueryRouter
 import com.sanha.moneytalk.core.util.QueryResult
 import com.sanha.moneytalk.core.util.QueryType
 import com.sanha.moneytalk.core.util.StoreAliasManager
@@ -562,6 +564,8 @@ class ChatViewModel @Inject constructor(
             // ===== Rolling Summary + Windowed Context 전략 적용 =====
             // 모든 DB/API 작업을 IO 스레드에서 실행
             withContext(Dispatchers.IO) {
+                if (processLocalSimpleLookup(sessionId, message)) return@withContext
+
                 // 1단계: 메시지 저장 + 요약 갱신 + 컨텍스트 구성
                 val chatContext = chatRepository.sendMessageAndBuildContext(
                     sessionId = sessionId,
@@ -664,7 +668,7 @@ class ChatViewModel @Inject constructor(
                         geminiRepository.generateFinalAnswerWithContext(finalPrompt)
 
                     finalResult.onSuccess { response ->
-                        // AI 응답 저장 + 요약 갱신
+                        // AI 응답 저장
                         chatRepository.saveAiResponseAndUpdateSummary(
                             sessionId,
                             response
@@ -702,6 +706,26 @@ class ChatViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    private suspend fun processLocalSimpleLookup(sessionId: Long, message: String): Boolean {
+        val route = LocalChatQueryRouter.tryRoute(message) ?: return false
+        val queryResults = route.queries.mapNotNull { query -> executeQuery(query) }
+        if (queryResults.isEmpty()) return false
+
+        val response = buildLocalLookupResponse(queryResults)
+        chatRepository.saveLocalExchange(
+            sessionId = sessionId,
+            userMessage = message,
+            localResponse = response
+        )
+        MoneyTalkLogger.d("로컬 단순 조회 처리: ${route.type}")
+        return true
+    }
+
+    private fun buildLocalLookupResponse(queryResults: List<QueryResult>): String {
+        val resultText = queryResults.joinToString("\n\n") { result -> result.data }
+        return appContext.getString(R.string.chat_local_lookup_answer, resultText)
     }
 
     /**

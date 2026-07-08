@@ -4,14 +4,14 @@ title: MoneyTalk 구조 지도
 description: MoneyTalk 앱의 루트, 패키지 구조, 핵심 파일, AI 참조 순서를 정리한다.
 tags: [moneytalk, kb, structure-map, android]
 resource: app/src/main/java/com/sanha/moneytalk/
-timestamp: 2026-07-03T16:30:00+09:00
+timestamp: 2026-07-08T00:00:00+09:00
 status: draft
 ---
 
 # MoneyTalk 구조 지도
 
 > 상태: draft
-> 기준: 2026-07-03 현재 코드 확인
+> 기준: 2026-07-08 현재 코드 확인
 
 ## Root
 
@@ -48,6 +48,7 @@ status: draft
 |---|---|---|
 | 문자 파싱 | [sms-parsing/README.md](sms-parsing/README.md) | `MainViewModel.kt`, `core/sms/**`, `core/sync/**` |
 | 카테고리 분류 | [category-classification/README.md](category-classification/README.md) | `CategoryClassifierServiceImpl.kt`, `GeminiCategoryRepositoryImpl.kt`, `StoreEmbeddingRepositoryImpl.kt` |
+| AI 채팅 | [chat/README.md](chat/README.md) | `feature/chat/**`, `core/util/LocalChatQueryRouter.kt`, `core/util/DataQueryParser.kt`, `core/util/ChatCreditPolicy.kt`, `core/util/ChatContextBuilder.kt` |
 | App Functions | [app-functions/README.md](app-functions/README.md) | `core/appfunctions/**`, `app_functions_app_metadata.xml` |
 
 ## 핵심 파일 역할
@@ -70,6 +71,7 @@ status: draft
 | SMS 파싱 변경 | `sms-pipeline/README.md` -> `sms-pipeline/00-structure-map.md` -> `sms-pipeline/04-files-checklist.md` |
 | 문자 파싱 기능 변경 | `sms-parsing/README.md` -> `sms-parsing/01-feature-flow.md` -> `sms-pipeline/README.md` |
 | 카테고리 분류 변경 | `category-classification/README.md` -> `category-classification/01-feature-flow.md` -> `finance-data/README.md` |
+| AI 채팅/토큰 비용 변경 | `chat/README.md` -> `docs/CHAT_SYSTEM.md` -> `docs/AI_CREDIT_DEEP_ANALYSIS_PLAN.md` |
 | DB schema/DAO 변경 | `finance-data/README.md` -> `finance-data/00-structure-map.md` -> `finance-data/04-files-checklist.md` |
 | App Functions 변경 | `app-functions/README.md` -> `app-functions/01-feature-flow.md` -> `docs/APP_FUNCTIONS.md` |
 

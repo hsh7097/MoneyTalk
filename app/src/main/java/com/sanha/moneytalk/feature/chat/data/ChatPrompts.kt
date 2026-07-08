@@ -14,8 +14,8 @@ import com.sanha.moneytalk.feature.chat.data.ChatPrompts.getSummarySystemInstruc
  *
  * 각 프롬프트는 Gemini 모델의 System Instruction으로 사용됩니다:
  * - [getSummarySystemInstruction]: 대화 요약 모델 (gemini-2.5-flash)
- * - [getQueryAnalyzerSystemInstruction]: 쿼리/액션 분석 모델 (gemini-2.5-pro)
- * - [getFinancialAdvisorSystemInstruction]: 재무 상담 답변 모델 (gemini-2.5-pro)
+ * - [getQueryAnalyzerSystemInstruction]: 쿼리/액션 분석 모델 (gemini-2.5-flash-lite)
+ * - [getFinancialAdvisorSystemInstruction]: 재무 상담 답변 모델 (gemini-2.5-flash-lite)
  * - [getHomeInsightSystemInstruction]: 홈 한줄 인사이트 모델
  */
 object ChatPrompts {

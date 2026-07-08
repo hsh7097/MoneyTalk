@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### Added (2026-07-08)
+- **채팅 단순 조회 로컬 처리**: `LocalChatQueryRouter`를 추가해 이번 달 총 지출, 카테고리 지출, 최근 지출, 예산 현황, 미분류/중복 조회 등 안전한 단순 조회는 Gemini query analyzer/final answer/Rolling Summary를 호출하지 않고 앱 내부 `DataQuery` 실행과 템플릿 응답으로 처리
+
+### Changed (2026-07-08)
+- **Gemini 운영 기본 모델 비용 방어**: 쿼리 분석, 재무 상담 답변, 홈 한줄 인사이트의 기본 모델 기준을 `gemini-2.5-flash-lite`로 맞춰 RTDB 설정 부재 또는 캐시 fallback 시 Pro 계열 비용으로 되돌아가지 않도록 보정
+
 ### Added (2026-06-15)
 - **배달 카테고리 분리**: `배달`을 `식비` 하위 leaf 카테고리로 추가하고, 배달의민족/배민/요기요/쿠팡이츠/땡겨요 등 배달앱 결제가 신규 저장 시 `배달`로 분류되도록 보정
 
