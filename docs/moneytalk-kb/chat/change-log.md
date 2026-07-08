@@ -10,6 +10,12 @@ status: draft
 
 # Chat KB Change Log
 
+## 2026-07-08 - Chat 화면 KB 보강
+
+- 기준: `ChatScreen.kt`, `ChatComponents.kt`, `ChatRoomListView.kt`, `ChatViewModel.kt`, `ChatRepositoryImpl.kt`, `GeminiRepositoryImpl.kt`, `LocalChatQueryRouter.kt` 확인
+- 변경 근거: 하단 탭 4개를 모두 화면별 KB로 탐색할 수 있게 Chat 탭도 UI/data/rendering/checklist 문서로 분리했다.
+- 갱신한 문서: `00-structure-map.md`, `package-reference/**`, `README.md`, 루트 `../00-agent-routing.md`, `../01-structure-map.md`, `../00-change-index.md`
+
 ## 2026-07-08
 
 - 기준: `core/util/LocalChatQueryRouter.kt`, `feature/chat/ui/ChatViewModel.kt`, `feature/chat/data/ChatRepository.kt`, `feature/chat/data/ChatRepositoryImpl.kt`, `app/src/test/java/com/sanha/moneytalk/core/util/LocalChatQueryRouterTest.kt`

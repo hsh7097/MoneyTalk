@@ -39,7 +39,7 @@ status: draft
 | 1 | `app-shell` | 앱 진입, 하단 탭 4개, NavGraph, Activity 전역 다이얼로그, 뒤로가기 | `MainActivity.kt`, `MainViewModel.kt`, `navigation/**`, `MainUiState.kt` | README, change-log, structure-map, file-inventory | 완료 |
 | 2 | `home` | 홈 탭, 월별 현황, 카테고리 지출, AI 인사이트, 미분류 분류 CTA, 홈 코치마크 | `feature/home/ui/**`, `feature/home/data/**` | README, change-log, structure-map, package-reference, file-inventory | 완료 |
 | 3 | `history` | 내역 탭, 검색, 달력, 필터, 거래 상세/추가 다이얼로그 | 기존 `history/**`, `HistoryFilter.kt`, `HistoryDialogs.kt` | 기존 KB + `filtering` 기능 KB 연결 | 완료 |
-| 4 | `chat-screen` 또는 `chat` 보강 | 채팅 탭 UI, 채팅방 목록/방 내부, 가이드 질문, 광고 다이얼로그, 채팅 코치마크 | `feature/chat/ui/**`, 기존 `chat/**` KB | 기존 `chat` KB 유지 + `coachmark`/`budget-credit-monetization` 기능 KB 연결 | 완료 |
+| 4 | `chat` 보강 | 채팅 탭 UI, 채팅방 목록/방 내부, 가이드 질문, 광고 다이얼로그, 채팅 코치마크 | `feature/chat/ui/**`, 기존 `chat/**` KB | `00-structure-map.md`, `package-reference/**` 추가 + `coachmark`/`budget-credit-monetization` 기능 KB 연결 | 완료 |
 | 5 | `settings` | 설정 탭, 예산, API 키, 테마, 백업/복원, 카드 보유, Google Drive, 설정 코치마크 | `feature/settings/ui/**`, `SettingsViewModel.kt` | README, change-log, structure-map, package-reference, file-inventory | 완료 |
 | 6 | `transaction-edit` | 지출/수입 추가·수정, 카테고리 picker, 아이템 변경, 일괄 적용, 삭제, 수정 코치마크 | `feature/transactionedit/ui/**` | README, change-log, structure-map, package-reference, file-inventory | 완료 |
 | 7 | `transaction-list` | 카테고리/조건 기반 거래 목록 상세 화면 | `feature/transactionlist/ui/**` | README, change-log | 완료 |

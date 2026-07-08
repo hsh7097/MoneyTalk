@@ -21,6 +21,8 @@ status: draft
 | 문서 | 역할 | 언제 보는가 |
 |---|---|---|
 | 이 문서 | AI 채팅의 현재 3-step 구조, 비용 경계, 로컬 정형 조회 우회 구현 | `feature/chat/**`, `LocalChatQueryRouter`, `ChatCreditPolicy`, `DataQueryParser`, 토큰 비용 절감 작업 |
+| [00-structure-map.md](00-structure-map.md) | Chat 탭 UI/data/prompt/router 파일 구조를 정리한다. | 변경 파일이 Chat 내부 어느 책임인지 판단할 때 |
+| [package-reference/README.md](package-reference/README.md) | Chat 화면 세부 개발 문서 인덱스다. | entry/data/rendering/checklist 중 어떤 문서로 내려갈지 고를 때 |
 | [change-log.md](change-log.md) | chat KB 변경 상세 로그 | chat KB가 왜 바뀌었는지 확인할 때 |
 | ../../CHAT_SYSTEM.md | 현재 AI 채팅 시스템 상세 | 쿼리/액션/ANALYTICS/답변 생성 규칙 확인 |
 | ../../AI_CREDIT_DEEP_ANALYSIS_PLAN.md | 심층 분석과 AI 크레딧 후속 계획 | 구조화 JSON, 크레딧, 결제/광고 후속 작업 |
@@ -142,6 +144,15 @@ status: draft
 | `core/util/DataQueryParser.kt` | `DataQueryRequest`, `DataQuery`, `QueryType`, `ActionType` | 로컬 라우터가 만들 수 있는 쿼리 계약 변경 |
 | `core/util/ChatCreditPolicy.kt` | 질문 유형별 크레딧 산정 | 무료 조회/상담/분석 경계 변경 |
 | `core/util/ChatContextBuilder.kt` | Step 1/Step 3 프롬프트 컨텍스트 구성 | Gemini 입력 축소 또는 구조화 JSON 전환 |
+
+## 화면 UI 작업
+
+채팅 탭 화면 자체를 수정할 때는 아래 순서로 본다.
+
+1. [00-structure-map.md](00-structure-map.md)
+2. [package-reference/01-entry-screen.md](package-reference/01-entry-screen.md)
+3. [package-reference/03-rendering-action.md](package-reference/03-rendering-action.md)
+4. [package-reference/02-data-viewmodel.md](package-reference/02-data-viewmodel.md)
 
 ## 검증 질문
 

@@ -57,7 +57,7 @@ status: draft
 | 거래 아이템 변경 | [transaction-edit/README.md](transaction-edit/README.md), [transaction-mutation/README.md](transaction-mutation/README.md) | `TransactionEditViewModel.kt`, `ExpenseRepository.kt`, `IncomeRepository.kt` |
 | 문자 파싱 | [sms-parsing/README.md](sms-parsing/README.md) | `MainViewModel.kt`, `core/sms/**`, `core/sync/**` |
 | 카테고리 분류 | [category-classification/README.md](category-classification/README.md) | `CategoryClassifierServiceImpl.kt`, `GeminiCategoryRepositoryImpl.kt`, `StoreEmbeddingRepositoryImpl.kt` |
-| AI 채팅 | [chat/README.md](chat/README.md) | `feature/chat/**`, `core/util/LocalChatQueryRouter.kt`, `core/util/DataQueryParser.kt`, `core/util/ChatCreditPolicy.kt`, `core/util/ChatContextBuilder.kt` |
+| AI 채팅 | [chat/README.md](chat/README.md), [chat/00-structure-map.md](chat/00-structure-map.md) | `feature/chat/**`, `core/util/LocalChatQueryRouter.kt`, `core/util/DataQueryParser.kt`, `core/util/ChatCreditPolicy.kt`, `core/util/ChatContextBuilder.kt` |
 | 임베딩/유사도 | [embedding/README.md](embedding/README.md) | `SmsEmbeddingService.kt`, `VectorSearchEngine.kt`, `core/similarity/**` |
 | 코치마크 | [coachmark/README.md](coachmark/README.md) | `core/ui/coachmark/**`, `feature/**/coachmark/**` |
 | 필터링 | [filtering/README.md](filtering/README.md) | `HistoryFilter.kt`, `CardVisibilityFilter.kt`, `StatsExclusionClassifier.kt` |
@@ -91,6 +91,7 @@ status: draft
 | SMS 파싱 변경 | `sms-pipeline/README.md` -> `sms-pipeline/00-structure-map.md` -> `sms-pipeline/04-files-checklist.md` |
 | 문자 파싱 기능 변경 | `sms-parsing/README.md` -> `sms-parsing/01-feature-flow.md` -> `sms-pipeline/README.md` |
 | 카테고리 분류 변경 | `category-classification/README.md` -> `category-classification/01-feature-flow.md` -> `embedding/README.md` -> `finance-data/README.md` |
+| Chat 화면 변경 | `chat/README.md` -> `chat/00-structure-map.md` -> `chat/package-reference/README.md` |
 | AI 채팅/토큰 비용 변경 | `chat/README.md` -> `docs/CHAT_SYSTEM.md` -> `docs/AI_CREDIT_DEEP_ANALYSIS_PLAN.md` |
 | DB schema/DAO 변경 | `finance-data/README.md` -> `finance-data/00-structure-map.md` -> `finance-data/04-files-checklist.md` |
 | App Functions 변경 | `app-functions/README.md` -> `app-functions/01-feature-flow.md` -> `docs/APP_FUNCTIONS.md` |
