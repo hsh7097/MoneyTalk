@@ -10,6 +10,12 @@ status: draft
 
 # Chat KB Change Log
 
+## 2026-07-08 - 채팅 크레딧 정책 단순화
+
+- 기준: `core/util/ChatCreditPolicy.kt`, `feature/chat/ui/ChatViewModel.kt`, `RewardAdManager`, `docs/AI_CREDIT_USAGE_PLAN.md`
+- 변경 근거: 사용자가 이해하기 쉬운 수익화 정책을 위해 채팅 질문 유형별 차등 비용을 제거하고, 채팅 전송 1회 1크레딧으로 통일했다.
+- 갱신한 문서: `README.md`, `docs/CHAT_SYSTEM.md`, `docs/ARCHITECTURE.md`, `docs/AI_CONTEXT.md`, `docs/SCREEN_REQUIREMENTS.md`
+
 ## 2026-07-08 - Chat 화면 KB 보강
 
 - 기준: `ChatScreen.kt`, `ChatComponents.kt`, `ChatRoomListView.kt`, `ChatViewModel.kt`, `ChatRepositoryImpl.kt`, `GeminiRepositoryImpl.kt`, `LocalChatQueryRouter.kt` 확인

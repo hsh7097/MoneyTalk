@@ -66,6 +66,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.ad.RewardAdManager
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.firebase.ForceUpdateChecker
@@ -360,7 +361,7 @@ fun MoneyTalkApp(
         )
     }
 
-    // 월별 SMS 동기화 광고 다이얼로그
+    // 월별 SMS 동기화 크레딧 충전 다이얼로그
     if (dialogUiState.showFullSyncAdDialog) {
         val context = LocalContext.current
         val activity = context as? android.app.Activity
@@ -375,32 +376,41 @@ fun MoneyTalkApp(
         } else {
             String.format(syncMonthLabelFormat, adMonth)
         }
+        val requiredCreditCost = RewardAdManager.MONTH_SYNC_CREDIT_COST
+        val rewardCreditCount = mainViewModel.adManager.getRewardChatCount()
         AlertDialog(
             onDismissRequest = { mainViewModel.dismissFullSyncAdDialog() },
             title = { Text(stringResource(R.string.full_sync_ad_dialog_title, monthLabel)) },
-            text = { Text(stringResource(R.string.full_sync_ad_dialog_message, monthLabel)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.full_sync_ad_dialog_message,
+                        monthLabel,
+                        requiredCreditCost,
+                        rewardCreditCount
+                    )
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
                         if (activity != null) {
                             mainViewModel.dismissFullSyncAdDialog()
-                            mainViewModel.adManager.showAd(
+                            mainViewModel.adManager.showCreditAd(
                                 activity = activity,
                                 onRewarded = {
                                     onRequestSmsPermission {
-                                        mainViewModel.unlockFullSync(adYear, adMonth)
+                                        mainViewModel.onFullSyncRewardAdWatched(adYear, adMonth)
                                     }
                                 },
                                 onFailed = {
-                                    onRequestSmsPermission {
-                                        mainViewModel.unlockFullSync(adYear, adMonth)
-                                    }
+                                    mainViewModel.dismissFullSyncAdDialog()
                                 }
                             )
                         }
                     }
                 ) {
-                    Text(stringResource(R.string.full_sync_ad_watch_button, monthLabel))
+                    Text(stringResource(R.string.full_sync_ad_watch_button, rewardCreditCount))
                 }
             },
             dismissButton = {

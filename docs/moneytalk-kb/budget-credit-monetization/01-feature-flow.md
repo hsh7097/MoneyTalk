@@ -31,11 +31,21 @@ ChatViewModel.sendMessage()
 -> AiCreditLedger
 ```
 
+```text
+HomeScreen/HistoryScreen past month CTA
+-> MainViewModel.requestMonthSync()
+-> RewardAdManager.consumeMonthSyncCredit()
+-> insufficient: FullSync credit dialog -> rewarded ad -> +2 credits -> retry
+-> success: unlockFullSync()
+```
+
 ## 광고 정책
 
 - release/debug 차이는 `BuildVariantPolicy`, `CreditFeaturePolicy`, `BannerAdVisibilityPolicy`를 같이 확인한다.
 - RTDB 설정은 `PremiumConfig`/`PremiumManager`에서 내려온다.
-- 로컬 단순 조회는 `ChatCreditPolicy` 비용 0이며 `LocalChatQueryRouter`가 매칭하면 Gemini 호출도 생략한다.
+- 채팅은 질문 유형과 무관하게 1회 1크레딧이다.
+- 이전 문자 기록 월 데이터 가져오기는 월 1개당 1크레딧이다.
+- `ServiceTier.PREMIUM`은 크레딧 UI와 차감 흐름을 비활성으로 취급한다.
 
 ## 검증 질문
 

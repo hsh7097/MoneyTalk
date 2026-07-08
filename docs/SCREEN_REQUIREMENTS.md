@@ -162,7 +162,7 @@
 | IncomeDetailDialog | 수입 상세 (메모, 삭제) |
 | SMS Sync Progress | 증분/월별 동기화 진행 (취소 불가) |
 | Category Classification | 미분류 항목 분류 진행 |
-| Full Sync Ad Dialog | 광고 시청 → 과거 월 동기화 잠금 해제 |
+| Full Sync Ad Dialog | 크레딧 부족 시 광고 충전 → 과거 월 동기화 재시도 |
 
 ### 2.10 SMS 동기화
 
@@ -170,7 +170,7 @@
 |------|------|
 | 증분 동기화 | 대상 범위는 lastSyncTime - 5분 ~ 현재, RCS는 마지막 provider 성공 scan 시각부터 별도 재읽기해 provider 누락 복구 |
 | 초기 동기화 | 전월 1일 ~ 현재 (monthStartDay > 1이면 2개월 전부터) |
-| 월별 CTA 동기화 | 과거 월 per-month: 처음 N회 무료 (RTDB `free_sync_count`, 기본 3) → 이후 광고 시청 필요 |
+| 월별 CTA 동기화 | 과거 월 per-month: 1크레딧 차감, 부족 시 보상형 광고로 2크레딧 충전 |
 | 실시간 수신 | SMS는 SmsReceiver + SmsInstantProcessor, MMS/RCS는 ContentObserver로 보완 (BroadcastReceiver/Observer, 항상 무료) |
 | Auto Backup 감지 | lastSyncTime > 0 but DB 비어있음 → 초기로 리셋 |
 | 최대 범위 | 현재일 - 60일 |
@@ -1113,8 +1113,8 @@ SpendingTrendInfo (interface)
 | 항목 | 스펙 |
 |------|------|
 | 위치 | History 화면 전용 (Home에서 제거됨) |
-| 내용 | 무료 잔여 시 "X월 데이터 가져오기" / 소진 후 "광고 보고 X월 데이터 가져오기" |
-| 동작 | 무료 잔여(N회) → 바로 동기화 / 소진 후 → 광고 시청 → 동기화 |
+| 내용 | "1크레딧으로 X월 데이터 가져오기" / 크레딧 비활성 시 "X월 데이터 가져오기" |
+| 동작 | 크레딧 충분 → 1크레딧 차감 후 동기화 / 부족 → 광고 충전 후 재시도 |
 
 ### 7.8 SettingsItemCompose / SettingsSectionCompose
 
@@ -1208,9 +1208,9 @@ SpendingTrendInfo (interface)
 
 | 항목 | 스펙 |
 |------|------|
-| 월별 SMS 동기화 | 과거 월 per-month: 처음 N회 무료 (RTDB `free_sync_count`) → 이후 광고 |
-| AI 채팅 | RTDB `credit_ad_enable=true`일 때만 크레딧 부족 시 광고 충전 다이얼로그 표시 |
-| AI 크레딧 | RTDB `credit_ad_enable=true`일 때 단순 조회/앱 액션 0, 가벼운 상담 1, 소비 흐름/비교 분석 3, 명시적 심층 분석 10크레딧 |
+| 월별 SMS 동기화 | 과거 월 per-month: 1크레딧 차감, 부족 시 보상형 광고 충전 다이얼로그 표시 |
+| AI 채팅 | RTDB `credit_ad_enable=true`일 때 채팅 1회 1크레딧 차감, 부족 시 광고 충전 다이얼로그 표시 |
+| AI 크레딧 | 광고 1회 시청 시 기본 2크레딧 충전, `ServiceTier.PREMIUM`은 크레딧 미노출/미차감 |
 | 크레딧 확인 | RTDB `credit_ad_enable=true`일 때 설정 → AI 크레딧에서 잔액, 광고 충전, 차감 기준/이용 가이드, 최근 원장 내역 표시 |
 | 환불 | 답변 생성 실패 또는 clarification 응답 시 차감 크레딧 환불 |
 | 배너 광고 | RTDB `reward_ad_enabled=true`이고 앱 진입 횟수 5회 이상일 때만 노출 |

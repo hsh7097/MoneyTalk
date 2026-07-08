@@ -351,6 +351,7 @@ private fun ledgerReasonLabel(reason: String): String {
     return when (reason) {
         AiCreditRepository.REASON_REWARD_AD -> stringResource(R.string.ai_credit_ledger_reason_reward_ad)
         AiCreditRepository.REASON_CHAT_MESSAGE -> stringResource(R.string.ai_credit_ledger_reason_chat_message)
+        AiCreditRepository.REASON_MONTH_SYNC -> stringResource(R.string.ai_credit_ledger_reason_month_sync)
         AiCreditRepository.REASON_CHAT_REFUND -> stringResource(R.string.ai_credit_ledger_reason_chat_refund)
         AiCreditRepository.REASON_LEGACY_REWARD_CHAT -> stringResource(R.string.ai_credit_ledger_reason_legacy_reward_chat)
         AiCreditRepository.REASON_PURCHASE -> stringResource(R.string.ai_credit_ledger_reason_purchase)

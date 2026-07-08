@@ -162,7 +162,7 @@ fun HomeScreen(
 
     val isBannerAdEnabled by mainViewModel.adManager.isBannerAdEnabledFlow
         .collectAsStateWithLifecycle(initialValue = false)
-    val isRewardAdEnabled by mainViewModel.adManager.isRewardAdEnabledFlow
+    val isCreditRewardAdEnabled by mainViewModel.adManager.isCreditRewardAdEnabledFlow
         .collectAsStateWithLifecycle(initialValue = false)
 
     // ===== 코치마크 (화면별 온보딩) =====
@@ -220,7 +220,7 @@ fun HomeScreen(
                 hasSmsPermission = mainScreenUiState.hasSmsPermission,
                 selectedCategory = uiState.selectedCategory,
                 isSyncing = mainScreenUiState.isSyncing,
-                isAdEnabled = isRewardAdEnabled && !mainScreenUiState.hasFreeSyncRemaining,
+                isAdEnabled = isCreditRewardAdEnabled,
                 onPreviousMonth = {
                     coroutineScope.launch {
                         pagerState.animateScrollToPage(pagerState.currentPage - 1)
@@ -253,19 +253,10 @@ fun HomeScreen(
                         onRequestSmsPermission {
                             mainViewModel.syncMonthData(pageYear, pageMonth)
                         }
-                    } else if (!isRewardAdEnabled) {
-                        // 광고 비활성 → 광고 없이 바로 월별 동기화
-                        onRequestSmsPermission {
-                            mainViewModel.unlockFullSync(pageYear, pageMonth)
-                        }
-                    } else if (mainScreenUiState.hasFreeSyncRemaining) {
-                        // 무료 동기화 잔여 횟수 있음 → 광고 없이 동기화
-                        onRequestSmsPermission {
-                            mainViewModel.unlockFullSync(pageYear, pageMonth, isFreeSyncUsed = true)
-                        }
                     } else {
-                        mainViewModel.preloadFullSyncAd()
-                        mainViewModel.showFullSyncAdDialog(pageYear, pageMonth)
+                        onRequestSmsPermission {
+                            mainViewModel.requestMonthSync(pageYear, pageMonth)
+                        }
                     }
                 },
                 onCategorySelected = { category ->

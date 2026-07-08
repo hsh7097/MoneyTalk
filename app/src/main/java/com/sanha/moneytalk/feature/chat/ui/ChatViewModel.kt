@@ -41,7 +41,6 @@ import com.sanha.moneytalk.core.util.StoreNameNormalizer
 import com.sanha.moneytalk.feature.chat.data.ChatRepository
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
-import com.sanha.moneytalk.core.firebase.PremiumManager
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -121,7 +120,6 @@ class ChatViewModel @Inject constructor(
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
     private val categoryReferenceProvider: CategoryReferenceProvider,
     private val rewardAdManager: RewardAdManager,
-    private val premiumManager: PremiumManager,
     private val analyticsHelper: AnalyticsHelper,
     private val dataRefreshEvent: DataRefreshEvent,
     private val budgetDao: BudgetDao
@@ -399,9 +397,8 @@ class ChatViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            premiumManager.premiumConfig.collect {
+            rewardAdManager.isCreditRewardAdEnabledFlow.collect { isRewardAdEnabled ->
                 val hasKey = withContext(Dispatchers.IO) { geminiRepository.hasApiKey() }
-                val isRewardAdEnabled = rewardAdManager.isCreditRewardAdEnabled()
                 _uiState.update {
                     it.copy(
                         isRewardAdEnabled = isRewardAdEnabled,
@@ -471,7 +468,7 @@ class ChatViewModel @Inject constructor(
                 analyticsHelper.logClick(AnalyticsEvent.SCREEN_CHAT, AnalyticsEvent.CLICK_SEND_CHAT)
                 val creditDecision = ChatCreditPolicy.estimate(message)
 
-                // 리워드 광고 체크: 활성 상태이고 질문 유형별 필요 크레딧이 부족하면 광고 다이얼로그 표시
+                // 리워드 광고 체크: 채팅 1회분 크레딧이 부족하면 광고 다이얼로그 표시
                 if (rewardAdManager.isAdRequired(creditDecision.cost)) {
                     showRewardAdDialog(message, creditDecision.cost)
                     return@launch

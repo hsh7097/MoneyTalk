@@ -7,9 +7,8 @@
 ## 1. 시스템 개요
 
 MoneyTalk의 채팅 시스템은 사용자의 자연어 질문을 분석하여 실제 지출 데이터를 조회하고,
-데이터 기반의 맞춤 재무 상담을 제공합니다. 광고가 활성화된 환경에서는 질문 문구를
-`ChatCreditPolicy`로 먼저 분류하여 단순 조회/앱 액션은 무료로 처리하고,
-AI 해석이 필요한 상담/분석 질문만 크레딧을 차감합니다.
+데이터 기반의 맞춤 재무 상담을 제공합니다. 광고가 활성화된 FREE 환경에서는
+`ChatCreditPolicy`로 채팅 전송 1회당 1크레딧을 산정하고 차감합니다.
 AI 크레딧 표시/차감/충전은 RTDB `/config/credit_ad_enable=true`일 때만 활성화합니다.
 `release`가 아닌 빌드에서는 광고와 AI 크레딧 차감/충전이 모두 비활성화되어 채팅 사용에 영향을 주지 않습니다.
 
@@ -341,7 +340,7 @@ chat_history 테이블
 │
 ├── 2. AI 크레딧 확인/차감 (credit_ad_enable=true일 때만)
 │   ├── 부족: 보상형 광고 충전 다이얼로그 표시
-│   └── 충분: 질문 유형별 크레딧 차감 후 진행
+│   └── 충분: 채팅 1회 1크레딧 차감 후 진행
 │
 ├── 3. LocalChatQueryRouter.tryRoute()
 │   ├── 매칭 성공: executeQuery() → 템플릿 응답 → saveLocalExchange()
@@ -432,7 +431,7 @@ chat_history 테이블
 | [`feature/chat/ui/ChatScreen.kt`](../app/src/main/java/com/sanha/moneytalk/feature/chat/ui/ChatScreen.kt) | 채팅 UI (Compose) |
 | [`core/util/DataQueryParser.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/DataQueryParser.kt) | JSON → 쿼리/액션/clarification 파싱 + QueryType/ActionType enum |
 | [`core/util/LocalChatQueryRouter.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/LocalChatQueryRouter.kt) | 단순 조회 질문을 Gemini 없이 실행 가능한 `DataQuery`로 변환 |
-| [`core/util/ChatCreditPolicy.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/ChatCreditPolicy.kt) | 질문 문구 기반 크레딧 비용 산정 |
+| [`core/util/ChatCreditPolicy.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/ChatCreditPolicy.kt) | 채팅 1회 1크레딧 비용 산정 |
 | [`core/util/StoreAliasManager.kt`](../app/src/main/java/com/sanha/moneytalk/core/util/StoreAliasManager.kt) | 가게명 별칭 관리 (일괄 처리 지원) |
 | [`core/database/dao/ChatDao.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/dao/ChatDao.kt) | 세션/메시지 DAO |
 | [`core/database/entity/ChatEntity.kt`](../app/src/main/java/com/sanha/moneytalk/core/database/entity/ChatEntity.kt) | 메시지 엔티티 |

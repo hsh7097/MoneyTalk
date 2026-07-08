@@ -1764,16 +1764,16 @@ class MainViewModel @Inject constructor(
         dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
     }
 
-    // ========== 월별 SMS 동기화 CTA (리워드 광고) ==========
+    // ========== 월별 SMS 동기화 CTA (AI 크레딧/리워드 광고) ==========
 
     /**
-     * 월별 SMS 동기화 광고 다이얼로그 표시 (광고 미로드 시 프리로드도 함께 실행)
+     * 월별 SMS 동기화 크레딧 충전 다이얼로그 표시 (광고 미로드 시 프리로드도 함께 실행)
      *
      * @param year 대상 연도 (Activity 레벨 다이얼로그에서 월 라벨 표시에 사용)
      * @param month 대상 월
      */
     fun showFullSyncAdDialog(year: Int, month: Int) {
-        rewardAdManager.preloadAd()
+        rewardAdManager.preloadCreditAd()
         _uiState.update {
             it.copy(showFullSyncAdDialog = true, fullSyncAdYear = year, fullSyncAdMonth = month)
         }
@@ -1785,7 +1785,46 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * 월별 SMS 동기화 실행 (광고 시청 완료 후 호출)
+     * 이전 월 문자 기록 가져오기 요청.
+     * 크레딧 기능이 활성화되어 있으면 월 1개당 1크레딧을 차감하고,
+     * 부족하면 보상형 광고 충전 다이얼로그를 표시한다.
+     */
+    fun requestMonthSync(year: Int, month: Int) {
+        viewModelScope.launch {
+            requestMonthSyncInternal(year, month)
+        }
+    }
+
+    fun onFullSyncRewardAdWatched(year: Int, month: Int) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                rewardAdManager.addRewardChats()
+            }
+            requestMonthSyncInternal(year, month)
+        }
+    }
+
+    private suspend fun requestMonthSyncInternal(year: Int, month: Int) {
+        val needsCredit = withContext(Dispatchers.IO) {
+            rewardAdManager.isMonthSyncCreditRequired()
+        }
+        if (needsCredit) {
+            showFullSyncAdDialog(year, month)
+            return
+        }
+
+        val consumed = withContext(Dispatchers.IO) {
+            rewardAdManager.consumeMonthSyncCredit()
+        }
+        if (consumed) {
+            unlockFullSync(year, month)
+        } else {
+            showFullSyncAdDialog(year, month)
+        }
+    }
+
+    /**
+     * 월별 SMS 동기화 실행 (크레딧 차감 또는 비활성 정책 통과 후 호출)
      *
      * 지정된 월의 실제 커스텀 기간만 가져오고, 성공 시 해당 구간을 coverage로 저장한다.
      * syncedMonths 기록은 기존 사용자 상태와의 호환을 위한 보조 정보만 유지한다.
@@ -1898,7 +1937,7 @@ class MainViewModel @Inject constructor(
 
     /** 월별 SMS 동기화용 광고 준비 */
     fun preloadFullSyncAd() {
-        rewardAdManager.preloadAd()
+        rewardAdManager.preloadCreditAd()
     }
 
     private fun buildSyncMonthLabel(year: Int, month: Int): String {

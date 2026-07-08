@@ -517,7 +517,7 @@ ChatViewModel.sendMessage(message)
    → ChatRepository.saveAiResponseAndUpdateSummary() [요약 갱신]
 ```
 
-AI 크레딧/광고 수익화는 `release` 빌드에서만 활성화한다. 비릴리즈 빌드에서는 광고 로드/표시와 AI 크레딧 차감·충전·레거시 마이그레이션 쓰기를 수행하지 않는다. AI 크레딧 표시/차감/충전은 RTDB `/config/credit_ad_enable=true`일 때만 활성화하며, 값이 없거나 `false`면 크레딧 관련 UI와 로직을 숨긴다.
+AI 크레딧/광고 수익화는 `release` 빌드에서만 활성화한다. 비릴리즈 빌드에서는 광고 로드/표시와 AI 크레딧 차감·충전·레거시 마이그레이션 쓰기를 수행하지 않는다. AI 크레딧 표시/차감/충전은 RTDB `/config/credit_ad_enable=true`일 때만 활성화하며, 값이 없거나 `false`면 크레딧 관련 UI와 로직을 숨긴다. FREE 사용자는 채팅 1회 1크레딧, 이전 문자 기록 월 데이터 가져오기 1회 1크레딧을 사용하고, 보상형 광고 1회 시청 시 기본 2크레딧을 충전한다. `ServiceTier.PREMIUM` 사용자는 크레딧 UI와 차감 흐름을 비활성으로 취급한다.
 
 ---
 

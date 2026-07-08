@@ -62,8 +62,8 @@ status: draft
 | Step 3 final answer | 월수입, 조회 결과 문자열, 액션 결과, 최근 대화, 현재 질문 | 로컬 라우터 미매칭 조회 또는 상담/분석 질문에서 호출된다. |
 | Rolling Summary | 윈도우 밖 대화 메시지 | 로컬 조회는 `saveLocalExchange()`로 사용자/응답을 저장해 summary 갱신을 건너뛴다. 기존 Gemini 경로는 사용자 메시지 저장 시 summary 갱신 경로를 탄다. |
 
-`ChatCreditPolicy`의 `FREE_LOOKUP`은 사용자 크레딧 차감 비용이 0이라는 뜻이다.
-현재 구현에서 Gemini API 호출 비용이 0이라는 뜻은 아니다.
+`ChatCreditPolicy`의 `CHAT_MESSAGE`는 사용자 채팅 전송 1회가 1크레딧이라는 뜻이다.
+로컬 단순 조회가 Gemini API 호출을 생략하더라도 사용자 크레딧 정책은 채팅 1회 기준으로 동일하게 적용된다.
 
 ## 이미 구현된 비용 절감 장치
 
@@ -72,7 +72,7 @@ status: draft
 | `DataQueryRequest` | 구현됨 | Gemini 응답을 쿼리/액션 JSON으로 제한한다. |
 | `ANALYTICS` 쿼리 | 구현됨 | 복합 필터, 그룹핑, 집계는 앱에서 결정론적으로 계산한다. |
 | 수치 직접 계산 금지 프롬프트 | 구현됨 | 최종 답변 모델은 앱 계산 결과만 인용해야 한다. |
-| 질문 유형별 크레딧 | 구현됨 | 단순 조회/상담/분석을 사용자 크레딧 기준으로 구분한다. |
+| 채팅 1회 1크레딧 | 구현됨 | 질문 유형과 무관하게 사용자 채팅 전송을 1크레딧으로 본다. |
 | 운영 기본 모델 Flash-Lite | 구현됨 | RTDB와 앱 fallback에서 Pro/preview 계열 비용을 피한다. |
 | `LocalChatQueryRouter` | 구현됨 | 안전한 단순 조회를 Gemini analyze/final/summary 밖에서 처리한다. |
 
@@ -142,7 +142,7 @@ status: draft
 | `feature/chat/data/GeminiRepositoryImpl.kt` | Gemini 모델 호출 | analyze/final answer 호출 조건 변경 |
 | `feature/chat/data/ChatRepositoryImpl.kt` | 사용자/AI 메시지 저장, Rolling Summary | 로컬 응답에서 summary 호출을 피할 때 |
 | `core/util/DataQueryParser.kt` | `DataQueryRequest`, `DataQuery`, `QueryType`, `ActionType` | 로컬 라우터가 만들 수 있는 쿼리 계약 변경 |
-| `core/util/ChatCreditPolicy.kt` | 질문 유형별 크레딧 산정 | 무료 조회/상담/분석 경계 변경 |
+| `core/util/ChatCreditPolicy.kt` | 채팅 1회 1크레딧 산정 | 크레딧 단가 변경 |
 | `core/util/ChatContextBuilder.kt` | Step 1/Step 3 프롬프트 컨텍스트 구성 | Gemini 입력 축소 또는 구조화 JSON 전환 |
 
 ## 화면 UI 작업

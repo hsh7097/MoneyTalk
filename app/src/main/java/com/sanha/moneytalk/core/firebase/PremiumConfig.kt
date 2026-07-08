@@ -13,7 +13,7 @@ package com.sanha.moneytalk.core.firebase
  *   "maintenance_message": "",
  *   "reward_ad_enabled": false,
  *   "credit_ad_enable": false,
- *   "reward_ad_chat_count": 5,
+ *   "reward_ad_chat_count": 2,
  *   "send_origin_message": true,
  *   "free_sync_count": 3,
  *   "min_version_code": 1,
@@ -48,8 +48,8 @@ data class PremiumConfig(
     val rewardAdEnabled: Boolean = false,
     /** AI 크레딧 광고/차감 기능 활성화 여부 */
     val creditAdEnabled: Boolean = false,
-    /** 리워드 광고 1회 시청 시 충전되는 채팅 횟수 */
-    val rewardAdChatCount: Int = 5,
+    /** 리워드 광고 1회 시청 시 충전되는 AI 크레딧 */
+    val rewardAdChatCount: Int = 2,
     /** sms_origin 업로드 시 originBody 포함 여부 */
     val sendOriginMessage: Boolean = false,
     /** 광고 없이 허용되는 과거 월 동기화 무료 횟수 (기본 3회) */

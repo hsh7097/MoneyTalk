@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.core.ad
 
+import com.sanha.moneytalk.core.firebase.ServiceTier
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -37,6 +38,17 @@ class CreditFeaturePolicyTest {
     }
 
     @Test
+    fun canShowCreditFeature_blocksPremiumTier() {
+        assertFalse(
+            CreditFeaturePolicy.canShowCreditFeature(
+                isReleaseBuild = true,
+                creditAdEnabled = true,
+                serviceTier = ServiceTier.PREMIUM
+            )
+        )
+    }
+
+    @Test
     fun canUseCreditRewardAd_requiresCreditFeatureAndRewardAd() {
         assertFalse(
             CreditFeaturePolicy.canUseCreditRewardAd(
@@ -57,6 +69,18 @@ class CreditFeaturePolicyTest {
                 isReleaseBuild = true,
                 creditAdEnabled = true,
                 rewardAdEnabled = true
+            )
+        )
+    }
+
+    @Test
+    fun canUseCreditRewardAd_blocksPremiumTier() {
+        assertFalse(
+            CreditFeaturePolicy.canUseCreditRewardAd(
+                isReleaseBuild = true,
+                creditAdEnabled = true,
+                rewardAdEnabled = true,
+                serviceTier = ServiceTier.PREMIUM
             )
         )
     }

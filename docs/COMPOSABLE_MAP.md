@@ -37,7 +37,7 @@ MoneyTalkApp                         ← 앱 최상위 Scaffold + BottomNav + �
 ├── [AlertDialog: SMS 동기화]        ← SMS 동기화 진행 (Stepper UI + dismiss 가능)
 │   └── SyncStepIndicator            ← 5단계 파이프라인 진행 인디케이터
 ├── [AlertDialog: AI 성과 요약]      ← 초기 동기화 완료 후 엔진 부트스트랩 결과 표시
-├── [AlertDialog: 월별 데이터 가져오기] ← 광고 시청 후 월별 SMS 동기화
+├── [AlertDialog: 월별 데이터 가져오기] ← 크레딧 부족 시 광고 충전 후 월별 SMS 동기화
 ├── NavGraph                         ← 화면 라우팅 (홈/내역/채팅/설정)
 ├── BackPressHandler                 ← 채팅방 뒤로가기 처리
 └── MoneyTalkTheme                   ← 라이트/다크 테마 적용

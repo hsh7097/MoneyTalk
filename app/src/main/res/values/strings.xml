@@ -66,13 +66,13 @@
     <string name="ai_credit_ad_charge_button">광고 보고 %d크레딧 충전</string>
     <string name="ai_credit_ad_charge_disabled">광고 충전 불가</string>
     <string name="ai_credit_policy_title">크레딧 기준</string>
-    <string name="ai_credit_policy_lookup_free">내역 조회/앱 기능 실행: 0크레딧</string>
-    <string name="ai_credit_policy_light_advice">가벼운 상담/절약 조언: 1크레딧</string>
-    <string name="ai_credit_policy_standard_analysis">소비 흐름/비교 분석: 3크레딧</string>
-    <string name="ai_credit_policy_deep_analysis">명시적 심층 리포트/전체 데이터 분석: 10크레딧</string>
+    <string name="ai_credit_policy_lookup_free">AI 채팅: 1회 1크레딧</string>
+    <string name="ai_credit_policy_light_advice">이전 문자 기록 가져오기: 월 1개당 1크레딧</string>
+    <string name="ai_credit_policy_standard_analysis">광고 1회 시청: 2크레딧 충전</string>
+    <string name="ai_credit_policy_deep_analysis">유료 플랜: 크레딧 노출/차감 없음</string>
     <string name="ai_credit_guide_title">이용 가이드</string>
-    <string name="ai_credit_guide_lookup">금액, 내역, 카드 목록, 중복 확인처럼 앱 데이터만 조회하는 질문은 무료입니다.</string>
-    <string name="ai_credit_guide_charge">크레딧은 조언이나 분석처럼 AI가 해석을 더하는 질문에만 사용됩니다.</string>
+    <string name="ai_credit_guide_lookup">채팅은 질문 유형과 무관하게 전송 1회 기준으로 차감됩니다.</string>
+    <string name="ai_credit_guide_charge">이전 월 문자 데이터를 가져올 때는 월 단위로 1크레딧이 필요합니다.</string>
     <string name="ai_credit_guide_refund">답변 생성 실패나 추가 확인 질문은 사용한 크레딧을 돌려받습니다.</string>
     <string name="ai_credit_recent_ledger_title">최근 내역</string>
     <string name="ai_credit_empty_ledger">아직 크레딧 내역이 없습니다</string>
@@ -86,6 +86,7 @@
     <string name="ai_credit_ledger_type_unknown">크레딧 변경</string>
     <string name="ai_credit_ledger_reason_reward_ad">보상형 광고</string>
     <string name="ai_credit_ledger_reason_chat_message">AI 질문 전송</string>
+    <string name="ai_credit_ledger_reason_month_sync">이전 문자 기록 가져오기</string>
     <string name="ai_credit_ledger_reason_legacy_reward_chat">기존 무료 상담 잔여분 이관</string>
     <string name="ai_credit_ledger_reason_purchase">크레딧 구매</string>
     <string name="ai_credit_ledger_reason_chat_refund">AI 질문 환불</string>
@@ -636,17 +637,17 @@
 
     <!-- 월별 SMS 동기화 CTA (리워드 광고) -->
     <string name="full_sync_ad_dialog_title">%1$s 문자 동기화</string>
-    <string name="full_sync_ad_dialog_message">%1$s 문자 데이터를 가져옵니다.\n광고를 시청하면 해당 기간의 문자를 동기화할 수 있습니다.</string>
-    <string name="full_sync_ad_watch_button">광고 보고 %1$s 데이터 가져오기</string>
+    <string name="full_sync_ad_dialog_message">%1$s 문자 데이터 가져오기는 %2$d크레딧이 필요합니다.\n광고를 시청하면 %3$d크레딧이 충전됩니다.</string>
+    <string name="full_sync_ad_watch_button">광고 보고 %d크레딧 충전</string>
     <string name="full_sync_ad_later">나중에</string>
     <string name="full_sync_unlocked_message">%1$s 데이터를 가져옵니다.</string>
     <string name="full_sync_cta_title">이전 데이터가 없어요</string>
-    <string name="full_sync_cta_subtitle">광고 시청 후 %1$s 데이터를 가져와요</string>
+    <string name="full_sync_cta_subtitle">1크레딧으로 %1$s 데이터를 가져와요</string>
     <string name="full_sync_cta_subtitle_no_ad">탭하면 %1$s 데이터를 가져와요</string>
-    <string name="full_sync_cta_button">광고 보고 %1$s 데이터 가져오기</string>
+    <string name="full_sync_cta_button">1크레딧으로 %1$s 데이터 가져오기</string>
     <string name="full_sync_cta_button_no_ad">%1$s 데이터 가져오기</string>
     <string name="partial_sync_cta_title">일부 데이터만 표시되고 있어요</string>
-    <string name="partial_sync_cta_subtitle">광고 시청 후 %1$s 누락 데이터를 가져와요</string>
+    <string name="partial_sync_cta_subtitle">1크레딧으로 %1$s 누락 데이터를 가져와요</string>
     <string name="partial_sync_cta_subtitle_no_ad">탭하면 %1$s 누락 데이터를 가져와요</string>
 
     <!-- 강제 업데이트 -->

@@ -264,7 +264,7 @@ fun HistoryScreen(
 
         val isBannerAdEnabled by mainViewModel.adManager.isBannerAdEnabledFlow
             .collectAsStateWithLifecycle(initialValue = false)
-        val isRewardAdEnabled by mainViewModel.adManager.isRewardAdEnabledFlow
+        val isCreditRewardAdEnabled by mainViewModel.adManager.isCreditRewardAdEnabledFlow
             .collectAsStateWithLifecycle(initialValue = false)
 
         // 콘텐츠 — HorizontalPager로 월별 페이징
@@ -308,7 +308,7 @@ fun HistoryScreen(
                         isPartiallyCovered = mainViewModel.isPagePartiallyCovered(pageYear, pageMonth),
                         hasSmsPermission = mainScreenUiState.hasSmsPermission,
                         monthLabel = pageMonthLabel,
-                        isAdEnabled = isRewardAdEnabled && !mainScreenUiState.hasFreeSyncRemaining,
+                        isAdEnabled = isCreditRewardAdEnabled,
                         onImportData = {
                             onRequestSmsPermission {
                                 mainViewModel.syncMonthData(pageYear, pageMonth)
@@ -320,18 +320,10 @@ fun HistoryScreen(
                                 onRequestSmsPermission {
                                     mainViewModel.syncMonthData(pageYear, pageMonth)
                                 }
-                            } else if (!isRewardAdEnabled) {
-                                // 광고 비활성 → 광고 없이 바로 월별 동기화
-                                onRequestSmsPermission {
-                                    mainViewModel.unlockFullSync(pageYear, pageMonth)
-                                }
-                            } else if (mainScreenUiState.hasFreeSyncRemaining) {
-                                // 무료 동기화 잔여 횟수 있음 → 광고 없이 동기화
-                                onRequestSmsPermission {
-                                    mainViewModel.unlockFullSync(pageYear, pageMonth, isFreeSyncUsed = true)
-                                }
                             } else {
-                                mainViewModel.showFullSyncAdDialog(pageYear, pageMonth)
+                                onRequestSmsPermission {
+                                    mainViewModel.requestMonthSync(pageYear, pageMonth)
+                                }
                             }
                         },
                         scrollResetKey = Triple(

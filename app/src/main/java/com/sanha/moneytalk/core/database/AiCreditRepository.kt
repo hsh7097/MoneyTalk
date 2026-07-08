@@ -23,6 +23,7 @@ class AiCreditRepository @Inject constructor(
         const val LIGHT_CHAT_COST = 1
         const val REASON_CHAT_MESSAGE = "chat_message"
         const val REASON_CHAT_REFUND = "chat_refund"
+        const val REASON_MONTH_SYNC = "month_sync"
         const val REASON_REWARD_AD = "reward_ad"
         const val REASON_LEGACY_REWARD_CHAT = "legacy_reward_chat"
         const val REASON_PURCHASE = "purchase"
@@ -53,6 +54,15 @@ class AiCreditRepository @Inject constructor(
             amount = cost,
             reason = REASON_CHAT_MESSAGE,
             relatedSessionId = relatedSessionId
+        )
+    }
+
+    suspend fun spendForMonthSync(cost: Int = LIGHT_CHAT_COST): Boolean {
+        if (!BuildVariantPolicy.isMonetizationEnabled) return true
+        ensureLegacyRewardChatMigrated()
+        return aiCreditDao.spendCredits(
+            amount = cost,
+            reason = REASON_MONTH_SYNC
         )
     }
 

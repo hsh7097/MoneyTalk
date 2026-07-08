@@ -302,7 +302,7 @@ com.sanha.moneytalk/
 - 채팅방 관리 (생성, 삭제, 제목 편집)
 - DB 쿼리 자동 실행 (지출 조회, 분석)
 - 채팅 액션 지원 (삭제, 추가, 수정, SMS 제외 등 12종)
-- RTDB `credit_ad_enable=true`일 때 질문 유형별 AI 크레딧 차감 (단순 조회 무료, 상담/분석 차등 차감)
+- RTDB `credit_ad_enable=true`일 때 AI 채팅 1회 1크레딧 차감
 - 대화 요약 기능 (컨텍스트 유지)
 
 ### 4. 설정 (Settings)

@@ -12,9 +12,13 @@ import com.sanha.moneytalk.core.database.AiCreditRepository
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.PremiumConfig
 import com.sanha.moneytalk.core.firebase.PremiumManager
+import com.sanha.moneytalk.core.firebase.ServiceTier
 import com.sanha.moneytalk.core.util.BuildVariantPolicy
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -64,10 +69,14 @@ class RewardAdManager @Inject constructor(
     companion object {
         private const val REWARD_AD_ID = "ca-app-pub-4707673176609005/2566523665"
         private const val MAX_RETRY_COUNT = 3
+        const val MONTH_SYNC_CREDIT_COST = 1
     }
 
     private var rewardedAd: RewardedAd? = null
     private var retryCount = 0
+    @Volatile
+    private var currentServiceTier = ServiceTier.FREE
+    private val managerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val _adState = MutableStateFlow<AdState>(AdState.Idle)
     val adState: StateFlow<AdState> = _adState.asStateFlow()
@@ -75,8 +84,16 @@ class RewardAdManager @Inject constructor(
     /** AI 크레딧 잔액 Flow (UI에서 표시용) */
     val rewardChatRemainingFlow: Flow<Int> = aiCreditRepository.balanceFlow
 
+    init {
+        managerScope.launch {
+            settingsDataStore.serviceTierFlow.collect { tier ->
+                currentServiceTier = tier
+            }
+        }
+    }
+
     suspend fun prepareCreditBalance() {
-        if (!isCreditFeatureEnabled()) return
+        if (!isCreditFeatureEnabledNow()) return
         aiCreditRepository.ensureLegacyRewardChatMigrated()
     }
 
@@ -207,13 +224,22 @@ class RewardAdManager @Inject constructor(
         )
     }
 
-    /** 질문 유형별 AI 크레딧 차감. true면 차감 성공, false면 잔여 크레딧 부족 */
+    /** 채팅 1회분 AI 크레딧 차감. true면 차감 성공, false면 잔여 크레딧 부족 */
     suspend fun consumeRewardChat(cost: Int = AiCreditRepository.LIGHT_CHAT_COST): Boolean {
-        if (!isCreditRewardAdEnabled()) {
+        if (!isCreditRewardAdEnabledNow()) {
             return true
         }
 
         return aiCreditRepository.spendForChat(cost = cost)
+    }
+
+    /** 이전 월 문자 기록 가져오기 1회분 크레딧 차감. */
+    suspend fun consumeMonthSyncCredit(cost: Int = MONTH_SYNC_CREDIT_COST): Boolean {
+        if (!isCreditRewardAdEnabledNow()) {
+            return true
+        }
+
+        return aiCreditRepository.spendForMonthSync(cost = cost)
     }
 
     /**
@@ -221,14 +247,14 @@ class RewardAdManager @Inject constructor(
      * PremiumConfig의 rewardAdChatCount만큼 추가
      */
     suspend fun addRewardChats() {
-        if (!isCreditRewardAdEnabled()) return
+        if (!isCreditRewardAdEnabledNow()) return
         val config = premiumManager.premiumConfig.value
         aiCreditRepository.grantRewardAdCredits(config.rewardAdChatCount)
     }
 
     suspend fun refundChatCredits(amount: Int, relatedSessionId: Long? = null) {
         if (amount <= 0) return
-        if (!isCreditFeatureEnabled()) return
+        if (!isCreditFeatureEnabledNow()) return
         aiCreditRepository.refundCredits(
             amount = amount,
             reason = AiCreditRepository.REASON_CHAT_REFUND,
@@ -241,7 +267,13 @@ class RewardAdManager @Inject constructor(
      * @return true면 광고 시청 필요 (광고 활성 && AI 크레딧 부족)
      */
     suspend fun isAdRequired(cost: Int = AiCreditRepository.LIGHT_CHAT_COST): Boolean {
-        if (!isCreditRewardAdEnabled()) return false
+        if (!isCreditRewardAdEnabledNow()) return false
+        return !aiCreditRepository.hasEnoughCredits(cost)
+    }
+
+    /** 이전 월 문자 기록 가져오기에 충전이 필요한지 확인. */
+    suspend fun isMonthSyncCreditRequired(cost: Int = MONTH_SYNC_CREDIT_COST): Boolean {
+        if (!isCreditRewardAdEnabledNow()) return false
         return !aiCreditRepository.hasEnoughCredits(cost)
     }
 
@@ -259,12 +291,16 @@ class RewardAdManager @Inject constructor(
 
     /** AI 크레딧 기능 표시 여부 Flow */
     val isCreditFeatureEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
-        .map { isCreditFeatureEnabled(it) }
+        .combine(settingsDataStore.serviceTierFlow) { config, tier ->
+            isCreditFeatureEnabled(config, tier)
+        }
         .distinctUntilChanged()
 
     /** AI 크레딧 충전/차감용 리워드 광고 활성화 여부 Flow */
     val isCreditRewardAdEnabledFlow: Flow<Boolean> = premiumManager.premiumConfig
-        .map { isCreditRewardAdEnabled(it) }
+        .combine(settingsDataStore.serviceTierFlow) { config, tier ->
+            isCreditRewardAdEnabled(config, tier)
+        }
         .distinctUntilChanged()
 
     /** 배너 광고 노출 여부 Flow (RTDB 활성 + 앱 진입 5회 이상) */
@@ -286,8 +322,8 @@ class RewardAdManager @Inject constructor(
     /** 리워드 1회 시청 시 충전되는 AI 크레딧 Flow */
     val rewardCreditCountFlow: Flow<Int>
         get() = premiumManager.premiumConfig
-            .map { config ->
-                if (isCreditRewardAdEnabled(config)) {
+            .combine(settingsDataStore.serviceTierFlow) { config, tier ->
+                if (isCreditRewardAdEnabled(config, tier)) {
                     config.rewardAdChatCount
                 } else {
                     0
@@ -314,26 +350,42 @@ class RewardAdManager @Inject constructor(
         return BuildVariantPolicy.isMonetizationEnabled && rewardAdEnabled
     }
 
-    private fun isCreditFeatureEnabled(): Boolean {
-        return isCreditFeatureEnabled(premiumManager.premiumConfig.value)
+    private suspend fun isCreditFeatureEnabledNow(): Boolean {
+        return isCreditFeatureEnabled(
+            config = premiumManager.premiumConfig.value,
+            tier = settingsDataStore.getServiceTier()
+        )
     }
 
     private fun isCreditFeatureEnabled(config: PremiumConfig): Boolean {
+        return isCreditFeatureEnabled(config, currentServiceTier)
+    }
+
+    private fun isCreditFeatureEnabled(config: PremiumConfig, tier: ServiceTier): Boolean {
         return CreditFeaturePolicy.canShowCreditFeature(
             isReleaseBuild = BuildVariantPolicy.isReleaseBuild,
-            creditAdEnabled = config.creditAdEnabled
+            creditAdEnabled = config.creditAdEnabled,
+            serviceTier = tier
         )
     }
 
     fun isCreditRewardAdEnabled(): Boolean {
-        return isCreditRewardAdEnabled(premiumManager.premiumConfig.value)
+        return isCreditRewardAdEnabled(premiumManager.premiumConfig.value, currentServiceTier)
     }
 
-    private fun isCreditRewardAdEnabled(config: PremiumConfig): Boolean {
+    private suspend fun isCreditRewardAdEnabledNow(): Boolean {
+        return isCreditRewardAdEnabled(
+            config = premiumManager.premiumConfig.value,
+            tier = settingsDataStore.getServiceTier()
+        )
+    }
+
+    private fun isCreditRewardAdEnabled(config: PremiumConfig, tier: ServiceTier): Boolean {
         return CreditFeaturePolicy.canUseCreditRewardAd(
             isReleaseBuild = BuildVariantPolicy.isReleaseBuild,
             creditAdEnabled = config.creditAdEnabled,
-            rewardAdEnabled = config.rewardAdEnabled
+            rewardAdEnabled = config.rewardAdEnabled,
+            serviceTier = tier
         )
     }
 }
