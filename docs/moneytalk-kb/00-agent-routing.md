@@ -26,6 +26,7 @@ status: draft
 - [README.md](README.md)
 - [00-change-index.md](00-change-index.md)
 - [01-structure-map.md](01-structure-map.md)
+- 화면 진입/실기기 QA/route 확인 작업이면 [02-screen-entry-paths.md](02-screen-entry-paths.md)
 
 ## 경로별 문서 라우팅
 

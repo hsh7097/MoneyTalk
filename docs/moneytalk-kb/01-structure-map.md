@@ -83,6 +83,7 @@ status: draft
 | 작업 유형 | 참조 순서 |
 |---|---|
 | 변경 파일 분류 | `00-agent-routing.md` -> 이 문서 -> 해당 패키지 README |
+| 화면 진입 경로/실기기 QA | `02-screen-entry-paths.md` -> 영향 화면 README -> 실제 `*Activity.kt`/`*Screen.kt` |
 | 앱 진입/하단 탭 변경 | `app-shell/README.md` -> `app-shell/00-structure-map.md` -> `MainActivity.kt`/`navigation/**` |
 | Home 화면 변경 | `home/README.md` -> `home/00-structure-map.md` -> `home/package-reference/README.md` |
 | History 화면 변경 | `history/README.md` -> `history/00-structure-map.md` -> `history/package-reference/README.md` |

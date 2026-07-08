@@ -22,6 +22,7 @@ status: draft
 |---|---|---|
 | [00-agent-routing.md](00-agent-routing.md) | 변경 파일 경로를 KB 문서로 연결한다. | 작업 시작 또는 자동화 실행 시 가장 먼저 본다. |
 | [01-structure-map.md](01-structure-map.md) | 앱 전체 패키지 구조와 핵심 파일 위치를 정리한다. | 변경 파일이 어느 책임에 속하는지 판단할 때 본다. |
+| [02-screen-entry-paths.md](02-screen-entry-paths.md) | 화면별 사용자 진입 경로, 코드 route, Activity entry를 정리한다. | 실기기 QA, 화면 이동, route/intent 변경 시 본다. |
 | [00-change-index.md](00-change-index.md) | KB 변경 이력 색인이다. | KB가 왜 바뀌었는지 확인할 때 본다. |
 | [app-shell/README.md](app-shell/README.md) | 앱 진입, 하단 탭 4개, NavGraph, Activity 전역 다이얼로그 KB다. | `MainActivity`, `MainViewModel`, `navigation/**` 작업 시 본다. |
 | [home/README.md](home/README.md) | 홈 탭 도메인 KB 진입점이다. | `feature/home/ui/**` 또는 홈 월별 현황/카테고리/AI 인사이트 작업 시 본다. |
