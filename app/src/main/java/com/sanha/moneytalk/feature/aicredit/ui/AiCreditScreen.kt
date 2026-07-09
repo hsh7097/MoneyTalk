@@ -224,6 +224,11 @@ private fun AiCreditPolicyCard() {
                 )
             }
             Text(
+                text = stringResource(R.string.ai_credit_policy_initial_reward),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
                 text = stringResource(R.string.ai_credit_policy_lookup_free),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -341,6 +346,7 @@ private fun ledgerTypeLabel(type: String): String {
         AiCreditLedgerType.PURCHASE -> stringResource(R.string.ai_credit_ledger_type_purchase)
         AiCreditLedgerType.SPEND -> stringResource(R.string.ai_credit_ledger_type_spend)
         AiCreditLedgerType.REFUND -> stringResource(R.string.ai_credit_ledger_type_refund)
+        AiCreditLedgerType.BONUS -> stringResource(R.string.ai_credit_ledger_type_bonus)
         AiCreditLedgerType.ADMIN -> stringResource(R.string.ai_credit_ledger_type_admin)
         else -> stringResource(R.string.ai_credit_ledger_type_unknown)
     }
@@ -353,6 +359,7 @@ private fun ledgerReasonLabel(reason: String): String {
         AiCreditRepository.REASON_CHAT_MESSAGE -> stringResource(R.string.ai_credit_ledger_reason_chat_message)
         AiCreditRepository.REASON_MONTH_SYNC -> stringResource(R.string.ai_credit_ledger_reason_month_sync)
         AiCreditRepository.REASON_CHAT_REFUND -> stringResource(R.string.ai_credit_ledger_reason_chat_refund)
+        AiCreditRepository.REASON_INITIAL_APP_LAUNCH_REWARD -> stringResource(R.string.ai_credit_ledger_reason_initial_app_launch_reward)
         AiCreditRepository.REASON_LEGACY_REWARD_CHAT -> stringResource(R.string.ai_credit_ledger_reason_legacy_reward_chat)
         AiCreditRepository.REASON_PURCHASE -> stringResource(R.string.ai_credit_ledger_reason_purchase)
         else -> reason

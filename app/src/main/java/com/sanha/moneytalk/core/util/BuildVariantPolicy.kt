@@ -9,9 +9,19 @@ object BuildVariantPolicy {
         get() = isReleaseBuild(BuildConfig.BUILD_TYPE)
 
     val isMonetizationEnabled: Boolean
-        get() = isReleaseBuild
+        get() = isMonetizationEnabled(
+            buildType = BuildConfig.BUILD_TYPE,
+            testOverride = BuildConfig.MONETIZATION_TEST_OVERRIDE
+        )
+
+    val isMonetizationTestOverride: Boolean
+        get() = BuildConfig.MONETIZATION_TEST_OVERRIDE
 
     fun isReleaseBuild(buildType: String): Boolean {
         return buildType == RELEASE_BUILD_TYPE
+    }
+
+    fun isMonetizationEnabled(buildType: String, testOverride: Boolean = false): Boolean {
+        return isReleaseBuild(buildType) || testOverride
     }
 }

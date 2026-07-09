@@ -68,8 +68,10 @@ class RewardAdManager @Inject constructor(
 ) {
     companion object {
         private const val REWARD_AD_ID = "ca-app-pub-4707673176609005/2566523665"
+        private const val TEST_REWARD_AD_ID = "ca-app-pub-3940256099942544/5224354917"
         private const val MAX_RETRY_COUNT = 3
         const val MONTH_SYNC_CREDIT_COST = 1
+        const val REWARD_AD_CREDIT_AMOUNT = 2
     }
 
     private var rewardedAd: RewardedAd? = null
@@ -95,6 +97,7 @@ class RewardAdManager @Inject constructor(
     suspend fun prepareCreditBalance() {
         if (!isCreditFeatureEnabledNow()) return
         aiCreditRepository.ensureLegacyRewardChatMigrated()
+        aiCreditRepository.grantInitialAppLaunchRewardIfNeeded()
     }
 
     /**
@@ -116,7 +119,7 @@ class RewardAdManager @Inject constructor(
         _adState.value = AdState.Loading
 
         val adRequest = AdRequest.Builder().build()
-        RewardedAd.load(context, REWARD_AD_ID, adRequest,
+        RewardedAd.load(context, rewardAdId(), adRequest,
             object : RewardedAdLoadCallback() {
                 override fun onAdLoaded(ad: RewardedAd) {
                     rewardedAd = ad
@@ -244,12 +247,11 @@ class RewardAdManager @Inject constructor(
 
     /**
      * AI 크레딧 충전 (광고 시청 보상)
-     * PremiumConfig의 rewardAdChatCount만큼 추가
+     * Rewarded ad 1회당 2크레딧을 충전한다.
      */
     suspend fun addRewardChats() {
         if (!isCreditRewardAdEnabledNow()) return
-        val config = premiumManager.premiumConfig.value
-        aiCreditRepository.grantRewardAdCredits(config.rewardAdChatCount)
+        aiCreditRepository.grantRewardAdCredits(REWARD_AD_CREDIT_AMOUNT)
     }
 
     suspend fun refundChatCredits(amount: Int, relatedSessionId: Long? = null) {
@@ -316,7 +318,7 @@ class RewardAdManager @Inject constructor(
     /** 리워드 1회 시청 시 충전되는 AI 크레딧 */
     fun getRewardChatCount(): Int {
         if (!isCreditRewardAdEnabled()) return 0
-        return premiumManager.premiumConfig.value.rewardAdChatCount
+        return REWARD_AD_CREDIT_AMOUNT
     }
 
     /** 리워드 1회 시청 시 충전되는 AI 크레딧 Flow */
@@ -324,7 +326,7 @@ class RewardAdManager @Inject constructor(
         get() = premiumManager.premiumConfig
             .combine(settingsDataStore.serviceTierFlow) { config, tier ->
                 if (isCreditRewardAdEnabled(config, tier)) {
-                    config.rewardAdChatCount
+                    REWARD_AD_CREDIT_AMOUNT
                 } else {
                     0
                 }
@@ -347,7 +349,8 @@ class RewardAdManager @Inject constructor(
     }
 
     private fun isAdFeatureEnabled(rewardAdEnabled: Boolean): Boolean {
-        return BuildVariantPolicy.isMonetizationEnabled && rewardAdEnabled
+        return BuildVariantPolicy.isMonetizationEnabled &&
+            (rewardAdEnabled || BuildVariantPolicy.isMonetizationTestOverride)
     }
 
     private suspend fun isCreditFeatureEnabledNow(): Boolean {
@@ -362,9 +365,10 @@ class RewardAdManager @Inject constructor(
     }
 
     private fun isCreditFeatureEnabled(config: PremiumConfig, tier: ServiceTier): Boolean {
+        val testOverride = BuildVariantPolicy.isMonetizationTestOverride
         return CreditFeaturePolicy.canShowCreditFeature(
-            isReleaseBuild = BuildVariantPolicy.isReleaseBuild,
-            creditAdEnabled = config.creditAdEnabled,
+            isMonetizationEnabled = BuildVariantPolicy.isMonetizationEnabled,
+            creditAdEnabled = config.creditAdEnabled || testOverride,
             serviceTier = tier
         )
     }
@@ -381,11 +385,16 @@ class RewardAdManager @Inject constructor(
     }
 
     private fun isCreditRewardAdEnabled(config: PremiumConfig, tier: ServiceTier): Boolean {
+        val testOverride = BuildVariantPolicy.isMonetizationTestOverride
         return CreditFeaturePolicy.canUseCreditRewardAd(
-            isReleaseBuild = BuildVariantPolicy.isReleaseBuild,
-            creditAdEnabled = config.creditAdEnabled,
-            rewardAdEnabled = config.rewardAdEnabled,
+            isMonetizationEnabled = BuildVariantPolicy.isMonetizationEnabled,
+            creditAdEnabled = config.creditAdEnabled || testOverride,
+            rewardAdEnabled = config.rewardAdEnabled || testOverride,
             serviceTier = tier
         )
+    }
+
+    private fun rewardAdId(): String {
+        return if (BuildVariantPolicy.isReleaseBuild) REWARD_AD_ID else TEST_REWARD_AD_ID
     }
 }

@@ -1,21 +1,26 @@
 package com.sanha.moneytalk.core.sync
 
+import android.Manifest
 import android.content.Context
 import android.os.Build
-import android.util.Log
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onFirst
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.sanha.moneytalk.MainActivity
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.core.util.MoneyTalkLogger
+import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
@@ -29,59 +34,62 @@ import kotlin.random.Random
 class RealDeviceMonthlyPageNavigationInstrumentedTest {
 
     @get:Rule
-    val composeRule = createAndroidComposeRule<MainActivity>()
+    val composeRule = createEmptyComposeRule()
 
     private val context: Context = InstrumentationRegistry.getInstrumentation().targetContext
+    private var monthStartDay: Int = 1
 
     @Test
     fun navigateHomeAndHistoryMonthlyPagesInTenDifferentOrders() {
         assumeSupportedRealDevice()
-        dismissBlockingDialogs()
+        prepareStableAppState()
 
-        val months = monthsFrom2025JanuaryToCurrent()
-        val orders = buildOrders(months)
-        check(orders.size == 10)
+        ActivityScenario.launch(MainActivity::class.java).use {
+            dismissBlockingDialogs()
 
-        tapBottomNavigation(
-            label = context.getString(R.string.nav_home),
-            tapPoint = HOME_NAV_TAP
-        )
-        var current = currentYearMonth()
-        waitForHomeMonth(current)
-        val homeVisitCount = visitOrders(
-            navigation = MonthNavigation(
-                screenName = "home",
-                previousTap = HOME_PREVIOUS_MONTH_TAP,
-                nextTap = HOME_NEXT_MONTH_TAP,
-                waitForMonth = ::waitForHomeMonth
-            ),
-            orders = orders,
-            current = current
-        )
+            val months = monthsFrom2025JanuaryToCurrent()
+            val orders = buildOrders(months)
+            check(orders.size == 10)
 
-        tapBottomNavigation(
-            label = context.getString(R.string.nav_history),
-            tapPoint = HISTORY_NAV_TAP
-        )
-        current = currentYearMonth()
-        waitForHistoryMonth(current)
-        val historyVisitCount = visitOrders(
-            navigation = MonthNavigation(
-                screenName = "history",
-                previousTap = HISTORY_PREVIOUS_MONTH_TAP,
-                nextTap = HISTORY_NEXT_MONTH_TAP,
-                waitForMonth = ::waitForHistoryMonth
-            ),
-            orders = orders,
-            current = current
-        )
+            tapBottomNavigation(
+                label = context.getString(R.string.nav_home)
+            )
+            var current = currentYearMonth()
+            waitForHomeMonth(current)
+            val homeVisitCount = visitOrders(
+                navigation = MonthNavigation(
+                    screenName = "home",
+                    previousContentDescription = context.getString(R.string.home_previous_month),
+                    nextContentDescription = context.getString(R.string.home_next_month),
+                    waitForMonth = ::waitForHomeMonth
+                ),
+                orders = orders,
+                current = current
+            )
 
-        writeReport(
-            months = months,
-            orderRuns = orders.size,
-            homeVisitCount = homeVisitCount,
-            historyVisitCount = historyVisitCount
-        )
+            tapBottomNavigation(
+                label = context.getString(R.string.nav_history)
+            )
+            current = currentYearMonth()
+            waitForHistoryMonth(current)
+            val historyVisitCount = visitOrders(
+                navigation = MonthNavigation(
+                    screenName = "history",
+                    previousContentDescription = context.getString(R.string.home_previous_month),
+                    nextContentDescription = context.getString(R.string.home_next_month),
+                    waitForMonth = ::waitForHistoryMonth
+                ),
+                orders = orders,
+                current = current
+            )
+
+            writeReport(
+                months = months,
+                orderRuns = orders.size,
+                homeVisitCount = homeVisitCount,
+                historyVisitCount = historyVisitCount
+            )
+        }
     }
 
     private fun assumeSupportedRealDevice() {
@@ -89,6 +97,38 @@ class RealDeviceMonthlyPageNavigationInstrumentedTest {
             "SM-F966N 실기기 화면 좌표 기반 검증에서만 실행",
             Build.MODEL == "SM-F966N"
         )
+    }
+
+    private fun prepareStableAppState() = runBlocking {
+        grantRuntimePermissions()
+        val settingsDataStore = SettingsDataStore(context)
+        settingsDataStore.setOnboardingCompleted(true)
+        settingsDataStore.setScreenOnboardingSeen("home")
+        settingsDataStore.setScreenOnboardingSeen("history")
+        settingsDataStore.setScreenOnboardingSeen("history_filter")
+        monthStartDay = settingsDataStore.getMonthStartDay()
+    }
+
+    private fun grantRuntimePermissions() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val permissions = buildList {
+            add(Manifest.permission.READ_SMS)
+            add(Manifest.permission.RECEIVE_SMS)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
+        permissions.forEach { permission ->
+            try {
+                instrumentation.uiAutomation.grantRuntimePermission(context.packageName, permission)
+            } catch (exception: SecurityException) {
+                MoneyTalkLogger.w(
+                    "RealDevicePageNav[grantRuntimePermissions] : grantRuntimePermission failed: $permission",
+                    exception
+                )
+            }
+        }
     }
 
     private fun visitOrders(
@@ -104,7 +144,10 @@ class RealDeviceMonthlyPageNavigationInstrumentedTest {
                 currentMonth = navigateByMonthButtons(currentMonth, target, navigation)
                 visitCount++
             }
-            Log.i(TAG, "${navigation.screenName} order=${orderIndex + 1} visited=${order.size}")
+            MoneyTalkLogger.i(
+                "RealDevicePageNav[visitOrders] : " +
+                    "${navigation.screenName} order=${orderIndex + 1} visited=${order.size}"
+            )
         }
 
         return visitCount
@@ -123,10 +166,14 @@ class RealDeviceMonthlyPageNavigationInstrumentedTest {
 
         var cursor = current
         val isMovingForward = diff > 0
-        val tapPoint = if (isMovingForward) navigation.nextTap else navigation.previousTap
+        val contentDescription = if (isMovingForward) {
+            navigation.nextContentDescription
+        } else {
+            navigation.previousContentDescription
+        }
         repeat(abs(diff)) {
             val expectedMonth = if (isMovingForward) cursor.next() else cursor.previous()
-            tapAt(tapPoint)
+            clickContentDescription(contentDescription)
             composeRule.waitForIdle()
             dismissBlockingDialogs()
             navigation.waitForMonth(expectedMonth)
@@ -136,7 +183,7 @@ class RealDeviceMonthlyPageNavigationInstrumentedTest {
     }
 
     private fun waitForHomeMonth(month: YearMonth) {
-        val title = DateUtils.formatCustomYearMonth(month.year, month.month, monthStartDay = 1)
+        val title = DateUtils.formatCustomYearMonth(month.year, month.month, monthStartDay)
         composeRule.waitUntil(timeoutMillis = 10_000) {
             composeRule.onAllNodesWithText(title, useUnmergedTree = true)
                 .fetchSemanticsNodes()
@@ -145,7 +192,7 @@ class RealDeviceMonthlyPageNavigationInstrumentedTest {
     }
 
     private fun waitForHistoryMonth(month: YearMonth) {
-        val (start, end) = DateUtils.getCustomMonthPeriod(month.year, month.month, monthStartDay = 1)
+        val (start, end) = DateUtils.getCustomMonthPeriod(month.year, month.month, monthStartDay)
         val startText = formatShortDate(start)
         val endText = formatShortDate(end)
         composeRule.waitUntil(timeoutMillis = 10_000) {
@@ -158,37 +205,85 @@ class RealDeviceMonthlyPageNavigationInstrumentedTest {
         }
     }
 
-    private fun tapBottomNavigation(label: String, tapPoint: Offset) {
+    private fun tapBottomNavigation(label: String) {
         composeRule.waitUntil(timeoutMillis = 10_000) {
             composeRule.onAllNodesWithText(label, useUnmergedTree = true)
                 .fetchSemanticsNodes()
                 .isNotEmpty()
         }
-        tapAt(tapPoint)
+        dismissBlockingDialogs()
+        composeRule.onAllNodesWithText(label, useUnmergedTree = true)
+            .onFirst()
+            .performClick()
         composeRule.waitForIdle()
         dismissBlockingDialogs()
     }
 
     private fun dismissBlockingDialogs() {
-        clickTextIfPresent(context.getString(R.string.coach_mark_skip))
-        clickTextIfPresent(context.getString(R.string.classify_dialog_later))
-        clickTextIfPresent(context.getString(R.string.common_confirm))
-        clickTextIfPresent(context.getString(R.string.common_close))
-    }
+        val dismissTexts = listOf(
+            context.getString(R.string.coach_mark_skip),
+            context.getString(R.string.coach_mark_finish),
+            context.getString(R.string.classify_dialog_later),
+            context.getString(R.string.sync_dialog_dismiss),
+            context.getString(R.string.full_sync_ad_later),
+            context.getString(R.string.common_confirm),
+            context.getString(R.string.common_close)
+        )
 
-    private fun clickTextIfPresent(text: String) {
-        val nodes = composeRule.onAllNodesWithText(text, useUnmergedTree = true)
-            .fetchSemanticsNodes()
-        if (nodes.isNotEmpty()) {
-            composeRule.onAllNodesWithText(text, useUnmergedTree = true)
-                .onFirst()
-                .performClick()
+        repeat(MAX_DIALOG_DISMISS_ATTEMPTS) {
+            var clicked = false
+            dismissTexts.forEach { text ->
+                clicked = clickTextIfPresent(text) || clicked
+            }
+            if (!clicked) return
             composeRule.waitForIdle()
         }
     }
 
+    private fun clickTextIfPresent(text: String): Boolean {
+        val nodes = composeRule.onAllNodesWithText(text, useUnmergedTree = true)
+            .fetchSemanticsNodes()
+        if (nodes.isEmpty()) {
+            return false
+        }
+        composeRule.onAllNodesWithText(text, useUnmergedTree = true)
+            .onFirst()
+            .performClick()
+        composeRule.waitForIdle()
+        return true
+    }
+
+    private fun clickContentDescription(contentDescription: String) {
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithContentDescription(contentDescription, useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+
+        val visibleCenter = composeRule.onAllNodesWithContentDescription(contentDescription, useUnmergedTree = true)
+            .fetchSemanticsNodes()
+            .map { it.boundsInRoot }
+            .firstOrNull { bounds ->
+                bounds.left >= 0f &&
+                    bounds.top >= 0f &&
+                    bounds.width > 0f &&
+                    bounds.height > 0f
+            }
+            ?.center
+
+        if (visibleCenter != null) {
+            tapAt(visibleCenter)
+            return
+        }
+
+        composeRule.onAllNodesWithContentDescription(contentDescription, useUnmergedTree = true)
+            .onFirst()
+            .performClick()
+    }
+
     private fun tapAt(point: Offset) {
-        composeRule.onRoot(useUnmergedTree = true)
+        composeRule.onAllNodes(isRoot(), useUnmergedTree = true)
+            .onFirst()
             .performTouchInput {
                 click(point)
             }
@@ -211,7 +306,7 @@ class RealDeviceMonthlyPageNavigationInstrumentedTest {
         context.openFileOutput(REPORT_FILE, Context.MODE_PRIVATE).use { output ->
             output.write(report.toByteArray())
         }
-        Log.i(TAG, report.replace("\n", " | "))
+        MoneyTalkLogger.i("RealDevicePageNav[writeReport] : ${report.replace("\n", " | ")}")
     }
 
     private fun buildOrders(months: List<YearMonth>): List<List<YearMonth>> {
@@ -265,10 +360,10 @@ class RealDeviceMonthlyPageNavigationInstrumentedTest {
     }
 
     private fun currentYearMonth(): YearMonth {
-        val calendar = Calendar.getInstance()
+        val (year, month) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
         return YearMonth(
-            year = calendar.get(Calendar.YEAR),
-            month = calendar.get(Calendar.MONTH) + 1
+            year = year,
+            month = month
         )
     }
 
@@ -285,8 +380,8 @@ class RealDeviceMonthlyPageNavigationInstrumentedTest {
 
     private data class MonthNavigation(
         val screenName: String,
-        val previousTap: Offset,
-        val nextTap: Offset,
+        val previousContentDescription: String,
+        val nextContentDescription: String,
         val waitForMonth: (YearMonth) -> Unit
     )
 
@@ -311,15 +406,7 @@ class RealDeviceMonthlyPageNavigationInstrumentedTest {
     }
 
     private companion object {
-        private const val TAG = "RealDevicePageNav"
         private const val REPORT_FILE = "real_device_monthly_page_navigation_report.txt"
-
-        private val HOME_NAV_TAP = Offset(128f, 2397f)
-        private val HISTORY_NAV_TAP = Offset(403f, 2397f)
-
-        private val HOME_PREVIOUS_MONTH_TAP = Offset(309f, 215f)
-        private val HOME_NEXT_MONTH_TAP = Offset(772f, 215f)
-        private val HISTORY_PREVIOUS_MONTH_TAP = Offset(79f, 338f)
-        private val HISTORY_NEXT_MONTH_TAP = Offset(352f, 338f)
+        private const val MAX_DIALOG_DISMISS_ATTEMPTS = 5
     }
 }

@@ -58,8 +58,11 @@
     <!-- Chat Screen -->
     <string name="chat_title">AI Insights</string>
     <string name="chat_subtitle_with_api">Check common spending questions quickly</string>
+    <string name="chat_subtitle_in_conversation">Answers are based on your spending data</string>
+    <string name="chat_subtitle_loading">Preparing your answer</string>
     <string name="chat_subtitle_no_api">Set up an API key to use AI insights</string>
     <string name="chat_input_placeholder">Type a message…</string>
+    <string name="chat_input_loading_placeholder">Generating answer...</string>
     <string name="chat_send">Send</string>
     <string name="chat_thinking">Thinking…</string>
     <string name="chat_session_list">Conversations</string>
@@ -70,12 +73,14 @@
     <string name="chat_start_new">Start Insight Question</string>
     <string name="chat_default_session_title">New Insight</string>
     <string name="chat_previous_session_title">Previous Insight</string>
+    <string name="chat_local_lookup_answer">Here is what I found.\n\n%1$s</string>
     <string name="ai_credit_title">AI Credits</string>
     <string name="ai_credit_balance_label">Current balance</string>
     <string name="ai_credit_balance_value">%d credits</string>
     <string name="ai_credit_ad_charge_button">Watch ad for %d credits</string>
     <string name="ai_credit_ad_charge_disabled">Ad charging unavailable</string>
     <string name="ai_credit_policy_title">Credit rules</string>
+    <string name="ai_credit_policy_initial_reward">First app launch reward: 5 credits</string>
     <string name="ai_credit_policy_lookup_free">AI chat: 1 credit per message</string>
     <string name="ai_credit_policy_light_advice">Import earlier messages: 1 credit per month</string>
     <string name="ai_credit_policy_standard_analysis">Rewarded ad: adds 2 credits</string>
@@ -92,11 +97,13 @@
     <string name="ai_credit_ledger_type_purchase">Purchase</string>
     <string name="ai_credit_ledger_type_spend">Credit spend</string>
     <string name="ai_credit_ledger_type_refund">Refund</string>
+    <string name="ai_credit_ledger_type_bonus">Bonus</string>
     <string name="ai_credit_ledger_type_admin">Admin adjustment</string>
     <string name="ai_credit_ledger_type_unknown">Credit change</string>
     <string name="ai_credit_ledger_reason_reward_ad">Rewarded ad</string>
     <string name="ai_credit_ledger_reason_chat_message">AI question sent</string>
     <string name="ai_credit_ledger_reason_month_sync">Earlier message import</string>
+    <string name="ai_credit_ledger_reason_initial_app_launch_reward">Initial app launch reward</string>
     <string name="ai_credit_ledger_reason_legacy_reward_chat">Migrated free chat balance</string>
     <string name="ai_credit_ledger_reason_purchase">Credit purchase</string>
     <string name="ai_credit_ledger_reason_chat_refund">AI question refund</string>
@@ -260,16 +267,16 @@
     <string name="privacy_title">Privacy Policy</string>
     <string name="privacy_intro">척척 가계부 values and protects your privacy.</string>
     <string name="privacy_section_collect">1. Information Collected</string>
-    <string name="privacy_collect_detail">\u0020\u0020• SMS messages (for payment parsing)\n\u0020\u0020• Monthly income and budget settings\n\u0020\u0020• Google account email (when using Drive backup)\n\u0020\u0020• Device and app usage data for ads, analytics, and crash diagnostics</string>
+    <string name="privacy_collect_detail">\u0020\u0020• Financial SMS and message app notification/RCS/web message content, sender number or app name, and received time for transaction parsing\n\u0020\u0020• Monthly income and budget settings\n\u0020\u0020• Google account email (when using Drive backup)\n\u0020\u0020• Device and app usage data for ads, analytics, and crash diagnostics</string>
     <string name="privacy_section_usage">2. Purpose of Use</string>
-    <string name="privacy_usage_detail">\u0020\u0020• Automatic expense/income tracking\n\u0020\u0020• AI-based category classification (Gemini API)\n\u0020\u0020• Cloud backup and restore\n\u0020\u0020• Ad delivery and app quality improvement</string>
+    <string name="privacy_usage_detail">\u0020\u0020• Automatic expense/income tracking and classification from SMS and notification access\n\u0020\u0020• AI-based category classification and financial advice (Gemini API)\n\u0020\u0020• Cloud backup and restore\n\u0020\u0020• Ad delivery and app quality improvement</string>
     <string name="privacy_section_storage">3. Data Storage</string>
     <string name="privacy_storage_detail">\u0020\u0020• Transaction data is stored locally on your device\n\u0020\u0020• Google Drive backups are stored in your own Drive\n\u0020\u0020• We do not store personal data on our servers</string>
     <string name="privacy_section_thirdparty">4. Third-Party Sharing</string>
-    <string name="privacy_thirdparty_detail">\u0020\u0020• Store names, amounts, transaction context, or masked message snippets may be sent to Google Gemini API for AI classification and advice\n\u0020\u0020• Direct identifiers such as phone numbers are removed or minimized where possible\n\u0020\u0020• Google AdMob and Firebase SDKs may process device and app usage data for ads, analytics, and crash diagnostics\n\u0020\u0020• We do not sell personal data or share it beyond the disclosed purposes</string>
+    <string name="privacy_thirdparty_detail">\u0020\u0020• Store names, amounts, transaction context, or masked message snippets may be sent to Google Gemini API for AI classification and advice\n\u0020\u0020• Google Drive backups are stored in the Google Drive account selected by the user\n\u0020\u0020• Direct identifiers such as phone numbers are removed or minimized where possible\n\u0020\u0020• Google AdMob and Firebase SDKs may process device and app usage data for ads, analytics, and crash diagnostics\n\u0020\u0020• We do not sell personal data or share it beyond the disclosed purposes</string>
     <string name="privacy_section_rights">5. Your Rights</string>
-    <string name="privacy_rights_detail">\u0020\u0020• You can delete all data at any time from Settings\n\u0020\u0020• Uninstalling the app removes all local data</string>
-    <string name="privacy_last_updated">Last updated: May 19, 2026</string>
+    <string name="privacy_rights_detail">\u0020\u0020• You can delete all data at any time from Settings\n\u0020\u0020• Uninstalling the app removes all local data\n\u0020\u0020• SMS and notification access permissions can be revoked at any time from system settings</string>
+    <string name="privacy_last_updated">Last updated: July 9, 2026</string>
 
     <!-- Delete All Dialog -->
     <string name="dialog_delete_all_title">Delete All Data</string>

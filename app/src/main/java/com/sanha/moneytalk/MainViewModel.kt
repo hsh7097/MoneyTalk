@@ -189,6 +189,7 @@ class MainViewModel @Inject constructor(
 
     init {
         recordAppEntry()
+        observeAppLaunchCreditReward()
         loadSettings()
         normalizeStoredCardNames()
         observeSyncCoverage()
@@ -201,6 +202,18 @@ class MainViewModel @Inject constructor(
     private fun recordAppEntry() {
         viewModelScope.launch(Dispatchers.IO) {
             settingsDataStore.incrementAppEntryCount()
+        }
+    }
+
+    private fun observeAppLaunchCreditReward() {
+        viewModelScope.launch {
+            rewardAdManager.isCreditFeatureEnabledFlow.collect { enabled ->
+                if (enabled) {
+                    withContext(Dispatchers.IO) {
+                        rewardAdManager.prepareCreditBalance()
+                    }
+                }
+            }
         }
     }
 

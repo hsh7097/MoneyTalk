@@ -5,7 +5,6 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import com.google.gson.Gson
-import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import kotlinx.coroutines.CoroutineScope
@@ -33,10 +32,9 @@ import javax.inject.Singleton
  *
  * ## API 키 결정 로직
  * 1. 서비스 비활성화 → 빈 문자열
- * 2. BuildConfig.GEMINI_API_KEYS 로컬 키 배열 (즉시 사용 가능, RTDB 로드 불필요)
- * 3. RTDB gemini_api_keys 배열 (추가 키, 중복 제거)
- * 4. RTDB gemini_api_key 단일 키 (하위호환, 중복 제거)
- * 5. 키가 없으면 → 빈 문자열 (서비스 불가)
+ * 2. RTDB gemini_api_keys 배열 (추가 키, 중복 제거)
+ * 3. RTDB gemini_api_key 단일 키 (하위호환, 중복 제거)
+ * 4. 키가 없으면 → 빈 문자열 (서비스 불가)
  *
  * ## Firebase Realtime Database 구조
  * ```
@@ -310,34 +308,23 @@ class PremiumManager @Inject constructor(
     }
 
     /**
-     * 사용 가능한 키 목록 반환 (로컬 키 기본 + RTDB 키 추가)
+     * 사용 가능한 키 목록 반환 (RTDB 키)
      *
      * 우선순위:
-     * 1. BuildConfig.GEMINI_API_KEYS 로컬 키 배열 (즉시 사용 가능)
-     * 2. RTDB gemini_api_keys 배열 (추가 키, 중복 제거)
-     * 3. RTDB gemini_api_key 단일 키 (하위호환, 중복 제거)
-     *
-     * 로컬 키와 RTDB 키를 합쳐서 라운드로빈 풀을 구성합니다.
-     * RTDB 로드 전에도 로컬 키가 있으면 즉시 동작합니다.
+     * 1. RTDB gemini_api_keys 배열 (추가 키, 중복 제거)
+     * 2. RTDB gemini_api_key 단일 키 (하위호환, 중복 제거)
      */
     private fun getAvailableKeys(config: PremiumConfig): List<String> {
         val keys = mutableListOf<String>()
 
-        // 1. 로컬 키 배열 (BuildConfig, 즉시 사용 가능)
-        for (localKey in BuildConfig.GEMINI_API_KEYS) {
-            if (localKey.isNotBlank() && localKey !in keys) {
-                keys.add(localKey)
-            }
-        }
-
-        // 2. RTDB 키 풀 (추가 키, 중복 제거)
+        // 1. RTDB 키 풀 (추가 키, 중복 제거)
         for (rtdbKey in config.geminiApiKeys) {
             if (rtdbKey.isNotBlank() && rtdbKey !in keys) {
                 keys.add(rtdbKey)
             }
         }
 
-        // 3. RTDB 단일 키 (하위호환, 중복 제거)
+        // 2. RTDB 단일 키 (하위호환, 중복 제거)
         if (config.geminiApiKey.isNotBlank() && config.geminiApiKey !in keys) {
             keys.add(config.geminiApiKey)
         }

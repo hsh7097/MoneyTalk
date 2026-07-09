@@ -5,5 +5,6 @@ object AiCreditLedgerType {
     const val PURCHASE = "PURCHASE"
     const val SPEND = "SPEND"
     const val REFUND = "REFUND"
+    const val BONUS = "BONUS"
     const val ADMIN = "ADMIN"
 }

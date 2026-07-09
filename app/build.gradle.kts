@@ -16,22 +16,16 @@ if (file("google-services.json").exists()) {
     apply(plugin = "com.google.firebase.crashlytics")
 }
 
-// local.properties에서 API 키 읽기
+// local.properties에서 release signing 등 로컬 설정 읽기
 val localProperties = Properties()
 val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
     localProperties.load(localPropertiesFile.inputStream())
 }
 
-// Gemini API key pool (local default key + 4 fallbacks)
-val geminiKeys = listOf(
-    localProperties.getProperty("GEMINI_API_KEY", ""),
-    localProperties.getProperty("GEMINI_API_KEY_1", ""),
-    localProperties.getProperty("GEMINI_API_KEY_2", ""),
-    localProperties.getProperty("GEMINI_API_KEY_3", ""),
-    localProperties.getProperty("GEMINI_API_KEY_4", "")
-).filter { key -> key.isNotBlank() }
-val geminiKeysBuildConfigValue = "{${geminiKeys.joinToString(", ") { key -> "\"$key\"" }}}"
+val monetizationTestOverride = providers.gradleProperty("moneytalk.monetizationTestOverride")
+    .map(String::toBoolean)
+    .getOrElse(false)
 
 android {
     namespace = "com.sanha.moneytalk"
@@ -58,23 +52,16 @@ android {
             useSupportLibrary = true
         }
 
-        // BuildConfig에 API 키 추가 (local.properties에서 읽음)
+        // Public release clients must not embed local API keys.
         buildConfigField(
             "String",
             "CLAUDE_API_KEY",
-            "\"${localProperties.getProperty("CLAUDE_API_KEY", "")}\""
+            "\"\""
         )
         buildConfigField(
-            "String",
-            "GEMINI_API_KEY",
-            "\"${localProperties.getProperty("GEMINI_API_KEY", "")}\""
-        )
-
-        // Gemini API 키 풀 (로컬 기본 키 5개)
-        buildConfigField(
-            "String[]",
-            "GEMINI_API_KEYS",
-            geminiKeysBuildConfigValue
+            "Boolean",
+            "MONETIZATION_TEST_OVERRIDE",
+            monetizationTestOverride.toString()
         )
     }
 

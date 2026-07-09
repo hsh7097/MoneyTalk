@@ -48,7 +48,7 @@ data class PremiumConfig(
     val rewardAdEnabled: Boolean = false,
     /** AI 크레딧 광고/차감 기능 활성화 여부 */
     val creditAdEnabled: Boolean = false,
-    /** 리워드 광고 1회 시청 시 충전되는 AI 크레딧 */
+    /** 기존 RTDB 보상 수량 필드. 현재 AI 크레딧 광고 보상은 RewardAdManager에서 2로 고정한다. */
     val rewardAdChatCount: Int = 2,
     /** sms_origin 업로드 시 originBody 포함 여부 */
     val sendOriginMessage: Boolean = false,

@@ -37,6 +37,7 @@ class SettingsDataStore @Inject constructor(
         private val SERVICE_TIER = stringPreferencesKey("service_tier")
         private val REWARD_CHAT_REMAINING = intPreferencesKey("reward_chat_remaining")
         private val AI_CREDIT_LEGACY_MIGRATED = booleanPreferencesKey("ai_credit_legacy_migrated")
+        private val INITIAL_AI_CREDIT_GRANTED = booleanPreferencesKey("initial_ai_credit_granted")
         private val FULL_SYNC_UNLOCKED = booleanPreferencesKey("full_sync_unlocked")
         private val SYNCED_MONTHS = stringSetPreferencesKey("synced_months")
         private val FREE_SYNC_USED_COUNT = intPreferencesKey("free_sync_used_count")
@@ -86,21 +87,16 @@ class SettingsDataStore @Inject constructor(
         // RTDB 기반 키 관리로 전환 — 로컬 키 저장 제거
     }
 
-    // Gemini API 키 가져오기 (DataStore에 없으면 BuildConfig에서 가져옴)
+    // Gemini API 키 가져오기 (legacy DataStore 값만 반환, 기본 키는 RTDB에서 관리)
     @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
     val geminiApiKeyFlow: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[GEMINI_API_KEY] ?: BuildConfig.GEMINI_API_KEY
+        preferences[GEMINI_API_KEY].orEmpty()
     }
 
     // Gemini API 키 즉시 가져오기
     @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
     suspend fun getGeminiApiKey(): String {
-        val storedKey = context.dataStore.data.first()[GEMINI_API_KEY]
-        return if (storedKey.isNullOrBlank()) {
-            BuildConfig.GEMINI_API_KEY
-        } else {
-            storedKey
-        }
+        return context.dataStore.data.first()[GEMINI_API_KEY].orEmpty()
     }
 
     // 월 수입 저장
@@ -216,6 +212,16 @@ class SettingsDataStore @Inject constructor(
     suspend fun markAiCreditLegacyMigrated() {
         context.dataStore.edit { preferences ->
             preferences[AI_CREDIT_LEGACY_MIGRATED] = true
+        }
+    }
+
+    suspend fun isInitialAiCreditGranted(): Boolean {
+        return context.dataStore.data.first()[INITIAL_AI_CREDIT_GRANTED] ?: false
+    }
+
+    suspend fun markInitialAiCreditGranted() {
+        context.dataStore.edit { preferences ->
+            preferences[INITIAL_AI_CREDIT_GRANTED] = true
         }
     }
 

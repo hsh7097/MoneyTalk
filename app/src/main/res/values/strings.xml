@@ -66,6 +66,7 @@
     <string name="ai_credit_ad_charge_button">광고 보고 %d크레딧 충전</string>
     <string name="ai_credit_ad_charge_disabled">광고 충전 불가</string>
     <string name="ai_credit_policy_title">크레딧 기준</string>
+    <string name="ai_credit_policy_initial_reward">앱 첫 실행 보상: 5크레딧 지급</string>
     <string name="ai_credit_policy_lookup_free">AI 채팅: 1회 1크레딧</string>
     <string name="ai_credit_policy_light_advice">이전 문자 기록 가져오기: 월 1개당 1크레딧</string>
     <string name="ai_credit_policy_standard_analysis">광고 1회 시청: 2크레딧 충전</string>
@@ -82,11 +83,13 @@
     <string name="ai_credit_ledger_type_purchase">구매 충전</string>
     <string name="ai_credit_ledger_type_spend">크레딧 사용</string>
     <string name="ai_credit_ledger_type_refund">환불</string>
+    <string name="ai_credit_ledger_type_bonus">보너스</string>
     <string name="ai_credit_ledger_type_admin">관리자 조정</string>
     <string name="ai_credit_ledger_type_unknown">크레딧 변경</string>
     <string name="ai_credit_ledger_reason_reward_ad">보상형 광고</string>
     <string name="ai_credit_ledger_reason_chat_message">AI 질문 전송</string>
     <string name="ai_credit_ledger_reason_month_sync">이전 문자 기록 가져오기</string>
+    <string name="ai_credit_ledger_reason_initial_app_launch_reward">초기 실행 보상</string>
     <string name="ai_credit_ledger_reason_legacy_reward_chat">기존 무료 상담 잔여분 이관</string>
     <string name="ai_credit_ledger_reason_purchase">크레딧 구매</string>
     <string name="ai_credit_ledger_reason_chat_refund">AI 질문 환불</string>
@@ -436,16 +439,16 @@
     <string name="privacy_title">개인정보 처리방침</string>
     <string name="privacy_intro">척척 가계부는 사용자의 개인정보를 소중히 보호합니다.</string>
     <string name="privacy_section_collect">1. 수집하는 정보</string>
-    <string name="privacy_collect_detail">\u0020\u0020• SMS 문자 메시지 (결제 내역 파싱 목적)\n\u0020\u0020• 설정한 월 수입 및 예산 정보\n\u0020\u0020• 구글 드라이브 연동 시 계정 이메일\n\u0020\u0020• 광고, 분석, 오류 진단을 위한 기기 및 앱 사용 정보</string>
+    <string name="privacy_collect_detail">\u0020\u0020• 금융 SMS 및 메시지 앱 알림/RCS·웹발신 내용, 발신번호 또는 앱 이름, 수신시간 (거래 파싱 목적)\n\u0020\u0020• 설정한 월 수입 및 예산 정보\n\u0020\u0020• 구글 드라이브 연동 시 계정 이메일\n\u0020\u0020• 광고, 분석, 오류 진단을 위한 기기 및 앱 사용 정보</string>
     <string name="privacy_section_usage">2. 정보 이용 목적</string>
-    <string name="privacy_usage_detail">\u0020\u0020• 지출/수입 자동 기록 및 분류\n\u0020\u0020• AI 기반 카테고리 분류 (Gemini API)\n\u0020\u0020• 클라우드 백업 및 복원\n\u0020\u0020• 광고 제공 및 앱 품질 개선</string>
+    <string name="privacy_usage_detail">\u0020\u0020• SMS 및 알림 접근 기반 지출/수입 자동 기록 및 분류\n\u0020\u0020• AI 기반 카테고리 분류 및 재무 상담 (Gemini API)\n\u0020\u0020• 클라우드 백업 및 복원\n\u0020\u0020• 광고 제공 및 앱 품질 개선</string>
     <string name="privacy_section_storage">3. 정보 저장</string>
     <string name="privacy_storage_detail">\u0020\u0020• 거래 데이터는 기기 내부에 저장됩니다\n\u0020\u0020• 구글 드라이브 백업은 본인의 드라이브에 저장됩니다\n\u0020\u0020• 당사 서버에는 개인정보를 저장하지 않습니다</string>
     <string name="privacy_section_thirdparty">4. 제3자 제공</string>
-    <string name="privacy_thirdparty_detail">\u0020\u0020• AI 분류/상담을 위해 가게명, 금액, 거래 맥락 또는 마스킹된 문자 일부가 Google Gemini API로 전송될 수 있습니다\n\u0020\u0020• 전화번호 등 직접 식별정보는 가능한 한 제거하거나 축소해 처리합니다\n\u0020\u0020• 광고/분석/오류 진단을 위해 Google AdMob 및 Firebase SDK가 기기·앱 사용 정보를 처리할 수 있습니다\n\u0020\u0020• 개인정보를 판매하지 않으며, 고지한 목적 외로 공유하지 않습니다</string>
+    <string name="privacy_thirdparty_detail">\u0020\u0020• AI 분류/상담을 위해 가게명, 금액, 거래 맥락 또는 마스킹된 문자 일부가 Google Gemini API로 전송될 수 있습니다\n\u0020\u0020• 구글 드라이브 백업은 사용자가 선택한 본인 Google Drive에 저장됩니다\n\u0020\u0020• 전화번호 등 직접 식별정보는 가능한 한 제거하거나 축소해 처리합니다\n\u0020\u0020• 광고/분석/오류 진단을 위해 Google AdMob 및 Firebase SDK가 기기·앱 사용 정보를 처리할 수 있습니다\n\u0020\u0020• 개인정보를 판매하지 않으며, 고지한 목적 외로 공유하지 않습니다</string>
     <string name="privacy_section_rights">5. 사용자 권리</string>
-    <string name="privacy_rights_detail">\u0020\u0020• 설정에서 언제든 모든 데이터를 삭제할 수 있습니다\n\u0020\u0020• 앱 삭제 시 모든 로컬 데이터가 함께 삭제됩니다</string>
-    <string name="privacy_last_updated">최종 수정: 2026년 5월 19일</string>
+    <string name="privacy_rights_detail">\u0020\u0020• 설정에서 언제든 모든 데이터를 삭제할 수 있습니다\n\u0020\u0020• 앱 삭제 시 모든 로컬 데이터가 함께 삭제됩니다\n\u0020\u0020• SMS 및 알림 접근 권한은 시스템 설정에서 언제든 철회할 수 있습니다</string>
+    <string name="privacy_last_updated">최종 수정: 2026년 7월 9일</string>
 
     <!-- 전체 삭제 다이얼로그 -->
     <string name="dialog_delete_all_title">전체 데이터 삭제</string>

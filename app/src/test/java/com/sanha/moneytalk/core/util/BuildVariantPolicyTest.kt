@@ -17,4 +17,11 @@ class BuildVariantPolicyTest {
         assertFalse(BuildVariantPolicy.isReleaseBuild("staging"))
         assertFalse(BuildVariantPolicy.isReleaseBuild("qa"))
     }
+
+    @Test
+    fun `monetization is enabled only for release or test override`() {
+        assertTrue(BuildVariantPolicy.isMonetizationEnabled("release"))
+        assertFalse(BuildVariantPolicy.isMonetizationEnabled("debug"))
+        assertTrue(BuildVariantPolicy.isMonetizationEnabled("debug", testOverride = true))
+    }
 }

@@ -4,6 +4,7 @@ import com.sanha.moneytalk.core.database.dao.AiCreditDao
 import com.sanha.moneytalk.core.database.entity.AiCreditLedgerEntity
 import com.sanha.moneytalk.core.database.entity.AiCreditLedgerType
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.util.AiCreditInitialRewardPolicy
 import com.sanha.moneytalk.core.util.BuildVariantPolicy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -18,6 +19,7 @@ class AiCreditRepository @Inject constructor(
     private val settingsDataStore: SettingsDataStore
 ) {
     private val legacyMigrationMutex = Mutex()
+    private val initialRewardMutex = Mutex()
 
     companion object {
         const val LIGHT_CHAT_COST = 1
@@ -25,6 +27,7 @@ class AiCreditRepository @Inject constructor(
         const val REASON_CHAT_REFUND = "chat_refund"
         const val REASON_MONTH_SYNC = "month_sync"
         const val REASON_REWARD_AD = "reward_ad"
+        const val REASON_INITIAL_APP_LAUNCH_REWARD = "initial_app_launch_reward"
         const val REASON_LEGACY_REWARD_CHAT = "legacy_reward_chat"
         const val REASON_PURCHASE = "purchase"
     }
@@ -106,6 +109,35 @@ class AiCreditRepository @Inject constructor(
             reason = REASON_PURCHASE,
             purchaseToken = purchaseToken
         )
+    }
+
+    suspend fun grantInitialAppLaunchRewardIfNeeded(): Boolean {
+        if (!AiCreditInitialRewardPolicy.shouldGrantInitialAppLaunchReward(
+                isMonetizationEnabled = BuildVariantPolicy.isMonetizationEnabled,
+                alreadyGranted = settingsDataStore.isInitialAiCreditGranted()
+            )
+        ) {
+            return false
+        }
+
+        return initialRewardMutex.withLock {
+            if (!AiCreditInitialRewardPolicy.shouldGrantInitialAppLaunchReward(
+                    isMonetizationEnabled = BuildVariantPolicy.isMonetizationEnabled,
+                    alreadyGranted = settingsDataStore.isInitialAiCreditGranted()
+                )
+            ) {
+                return@withLock false
+            }
+
+            ensureLegacyRewardChatMigrated()
+            aiCreditDao.grantCredits(
+                amount = AiCreditInitialRewardPolicy.INITIAL_APP_LAUNCH_REWARD_AMOUNT,
+                type = AiCreditLedgerType.BONUS,
+                reason = REASON_INITIAL_APP_LAUNCH_REWARD
+            )
+            settingsDataStore.markInitialAiCreditGranted()
+            true
+        }
     }
 
     suspend fun ensureLegacyRewardChatMigrated() {

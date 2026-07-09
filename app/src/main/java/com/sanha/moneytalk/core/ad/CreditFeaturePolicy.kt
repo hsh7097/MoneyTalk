@@ -4,21 +4,21 @@ import com.sanha.moneytalk.core.firebase.ServiceTier
 
 object CreditFeaturePolicy {
     fun canShowCreditFeature(
-        isReleaseBuild: Boolean,
+        isMonetizationEnabled: Boolean,
         creditAdEnabled: Boolean,
         serviceTier: ServiceTier = ServiceTier.FREE
     ): Boolean {
-        return isReleaseBuild && creditAdEnabled && serviceTier == ServiceTier.FREE
+        return isMonetizationEnabled && creditAdEnabled && serviceTier == ServiceTier.FREE
     }
 
     fun canUseCreditRewardAd(
-        isReleaseBuild: Boolean,
+        isMonetizationEnabled: Boolean,
         creditAdEnabled: Boolean,
         rewardAdEnabled: Boolean,
         serviceTier: ServiceTier = ServiceTier.FREE
     ): Boolean {
         return canShowCreditFeature(
-            isReleaseBuild = isReleaseBuild,
+            isMonetizationEnabled = isMonetizationEnabled,
             creditAdEnabled = creditAdEnabled,
             serviceTier = serviceTier
         ) && rewardAdEnabled
