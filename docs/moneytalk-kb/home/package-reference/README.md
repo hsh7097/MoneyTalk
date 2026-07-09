@@ -16,3 +16,4 @@ status: draft
 | [02-data-viewmodel.md](02-data-viewmodel.md) | HomeViewModel state, page cache, repositories, AI insight | 데이터, 월별 cache, 인사이트 문제 |
 | [03-rendering-action.md](03-rendering-action.md) | HomeScreen 섹션, dialog, 클릭 action, 코치마크 | Compose 렌더링과 사용자 액션 |
 | [04-files-checklist.md](04-files-checklist.md) | 수정 전후 파일 점검과 검증 질문 | 리뷰 전 누락 점검 |
+| [05-surface-map.md](05-surface-map.md) | 화면 블록별 표시 조건, 데이터 출처, 보조 화면 연결 | 홈 섹션/CTA/카테고리/오늘 거래 영향 점검 |

@@ -8,7 +8,7 @@
 
 **MoneyTalk** = SMS 파싱 기반 자동 지출 추적 + Gemini AI 재무 상담 Android 앱
 
-- Kotlin / Jetpack Compose / MVVM / Hilt DI / Room DB (v6, 15 entities)
+- Kotlin / Jetpack Compose / MVVM / Hilt DI / Room DB (v8, 19 entities)
 - 3-tier SMS 분류 (Regex → Vector → Gemini LLM)
 - 4-tier 카테고리 분류 (Room → Vector → Keyword → Gemini Batch)
 - 3-step AI 채팅 (쿼리분석 → DB조회/액션/분석 → 답변생성) — 18 쿼리 + 13 액션
@@ -20,7 +20,7 @@
 
 | 구분 | 경로 |
 |------|------|
-| **Windows** | `C:\Users\hsh70\AndroidStudioProjects\MoneyTalk` |
+| **Windows** | `C:\Users\hsh70\project\android\MoneyTalk` |
 | **macOS** | `/Users/sanha/Documents/Android/MoneyTalk/MoneyTalk` |
 
 > 코드 수정, git, 빌드 모두 해당 OS의 프로젝트 경로에서 수행
@@ -31,7 +31,7 @@
 
 **Windows**
 ```bash
-cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.bat assembleDebug"
+cmd.exe /c "cd /d C:\Users\hsh70\project\android\MoneyTalk && .\gradlew.bat assembleDebug"
 ```
 
 **macOS**
@@ -45,22 +45,23 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 | 문서 | 내용 | 언제 읽나 |
 |------|------|----------|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 패키지 구조, 파일 트리, 기술 스택, 데이터 흐름 | 구조 파악 시 |
-| [docs/AI_CONTEXT.md](docs/AI_CONTEXT.md) | 아키텍처, 임계값 레지스트리, 리팩토링 범위, Golden Flows | 프로젝트 이해 시 |
-| [docs/SMS_PARSING.md](docs/SMS_PARSING.md) | SMS 파싱 시스템 상세 | SMS 관련 작업 시 |
-| [docs/CATEGORY_CLASSIFICATION.md](docs/CATEGORY_CLASSIFICATION.md) | 카테고리 분류 시스템 상세 | 분류 관련 작업 시 |
-| [docs/CHAT_SYSTEM.md](docs/CHAT_SYSTEM.md) | AI 채팅 시스템 상세 | 채팅 관련 작업 시 |
-| [docs/COMPOSABLE_MAP.md](docs/COMPOSABLE_MAP.md) | 화면별 Composable 계층 구조 + IDE 점프 링크 | UI 작업 시 |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | 버전별 변경 이력 | 변경 히스토리 확인 시 |
-| [docs/GIT_CONVENTION.md](docs/GIT_CONVENTION.md) | Git 컨벤션 | 커밋/브랜치/푸시/PR 규칙 확인 시 |
-| [docs/MONETIZATION.md](docs/MONETIZATION.md) | 과금 전략, 요금제, 광고, API 비용 구조 | 과금/수익화 관련 작업 시 |
-| [docs/SCREEN_REQUIREMENTS.md](docs/SCREEN_REQUIREMENTS.md) | 화면별 요구사항 명세 (기능+구현 상세) | **모든 UI 작업 전 필수** |
+| [docs/moneytalk-kb/project-context/01-system-overview.md](docs/moneytalk-kb/project-context/01-system-overview.md) | 패키지 구조, 핵심 시스템, DB/AI 운영 경계 | 구조 파악 시 |
+| [docs/moneytalk-kb/project-context/02-threshold-registry.md](docs/moneytalk-kb/project-context/02-threshold-registry.md) | SMS/분류 유사도 임계값 레지스트리 | 임계값/정확도 조정 시 |
+| [docs/moneytalk-kb/sms-parsing/06-ingestion-contract.md](docs/moneytalk-kb/sms-parsing/06-ingestion-contract.md) | SMS/MMS/RCS 읽기, 저장, 실시간 보완 계약 | SMS 관련 작업 시 |
+| [docs/moneytalk-kb/category-classification/06-classification-tiers.md](docs/moneytalk-kb/category-classification/06-classification-tiers.md) | 카테고리 분류 티어와 학습/전파 기준 | 분류 관련 작업 시 |
+| [docs/moneytalk-kb/chat/05-system-contract.md](docs/moneytalk-kb/chat/05-system-contract.md) | AI 채팅 Local Fast Path, 3-step, Query/Action/ANALYTICS 계약 | 채팅 관련 작업 시 |
+| [docs/moneytalk-kb/app-functions/README.md](docs/moneytalk-kb/app-functions/README.md) | App Functions 조회/수정 함수 목록, DB 확인 플레이북 | 앱 함수/DB 조회 작업 시 |
+| [docs/moneytalk-kb/ui-map/01-screen-composable-index.md](docs/moneytalk-kb/ui-map/01-screen-composable-index.md) | 화면별 Composable 계층과 담당 KB | UI 작업 시 |
+| [docs/moneytalk-kb/release-history/01-release-timeline.md](docs/moneytalk-kb/release-history/01-release-timeline.md) | 구조 판단에 필요한 변경 이력 요약 | 변경 히스토리 확인 시 |
+| [docs/moneytalk-kb/project-operations/01-git-workflow.md](docs/moneytalk-kb/project-operations/01-git-workflow.md) | Git 컨벤션 | 커밋/브랜치/푸시/PR 규칙 확인 시 |
+| [docs/moneytalk-kb/budget-credit-monetization/02-policy-and-plans.md](docs/moneytalk-kb/budget-credit-monetization/02-policy-and-plans.md) | 과금 전략, 광고, API 비용 방어, 후속 결제 계획 | 과금/수익화 관련 작업 시 |
+| [docs/moneytalk-kb/screen-requirements/01-screen-requirements-index.md](docs/moneytalk-kb/screen-requirements/01-screen-requirements-index.md) | 화면별 요구사항과 담당 KB | **모든 UI 작업 전 필수** |
 
 ---
 
 ## Git
 
-- **커밋/푸시/PR/브랜치 규칙 SSOT**: [docs/GIT_CONVENTION.md](docs/GIT_CONVENTION.md)
+- **커밋/푸시/PR/브랜치 규칙 SSOT**: [docs/moneytalk-kb/project-operations/01-git-workflow.md](docs/moneytalk-kb/project-operations/01-git-workflow.md)
 - **원칙**: `CLAUDE.md`에는 Git 상세 규칙을 중복 정의하지 않고, 항상 위 문서를 참조한다.
 - **GitHub**: https://github.com/hsh7097/MoneyTalk.git
 
@@ -75,11 +76,11 @@ cmd.exe /c "cd /d C:\Users\hsh70\AndroidStudioProjects\MoneyTalk && .\gradlew.ba
 
 1. **문서 먼저**: 코드 변경 전에 관련 문서를 읽고, 변경 후에 문서 갱신
 2. **빌드 확인**: 모든 코드 변경 후 `assembleDebug` 빌드 성공 확인
-3. **임계값 SSOT**: 임계값 수치는 `AI_CONTEXT.md`의 레지스트리가 기준 (SimilarityPolicy 구현체)
+3. **임계값 SSOT**: 임계값 수치는 `docs/moneytalk-kb/project-context/02-threshold-registry.md`와 `core/similarity/**` 구현체가 기준
 4. **DB 스키마 불변**: Room entity 변경 시 마이그레이션 필수 (가급적 하지 않기)
-5. **경로 주의**: OneDrive 경로가 아닌 AndroidStudioProjects 경로에서 작업
+5. **경로 주의**: OneDrive 경로가 아닌 `C:\Users\hsh70\project\android\MoneyTalk` 경로에서 작업
 6. **셀프 리뷰 필수**: 모든 작업 완료 후 변경된 코드를 다시 읽고 셀프 리뷰 수행. 문제 발견 시 즉시 수정한 뒤 작업 완료 보고
-7. **Composable 맵 동기화**: 커밋/푸시 시 Composable 함수의 추가·삭제·변경이 있으면 반드시 `docs/COMPOSABLE_MAP.md`를 갱신한다
+7. **Composable 맵 동기화**: 커밋/푸시 시 Composable 함수의 추가·삭제·변경이 있으면 반드시 `docs/moneytalk-kb/ui-map/01-screen-composable-index.md`를 갱신한다
 8. **Composable 분리 원칙**: Composable은 기능 단위로 분리한다. 하나의 Composable이 서로 다른 기능(예: 오늘 지출 카드 + 전월 비교 카드)을 포함하면 각각 독립 Composable로 분리하여 관리한다
 9. **기능 단위 파일 분리**: 새로운 기능은 새로운 파일에서 작업한다. 기능 단위를 최대한 분리하여 데이터에 종속되지 않도록 한다. (예: 차트 컴포넌트는 차트 렌더링만 담당하고 도메인 데이터에 의존하지 않음)
 10. **로깅**: 로그는 `MoneyTalkLogger`를 사용한다. `android.util.Log` 직접 사용 금지. `MoneyTalkLogger.i()`, `.w()`, `.e()` 사용

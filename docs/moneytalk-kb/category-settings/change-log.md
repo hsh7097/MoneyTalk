@@ -12,4 +12,5 @@ status: draft
 
 | 날짜 | 근거 | 변경 | 영향 문서 | 메모 |
 |---|---|---|---|---|
+| 2026-07-09 | `CategorySettingsActivity`, `CategorySettingsViewModel`, `CategorySettingsScreen`, `CustomCategoryRepository` 재확인 | Category Settings package-reference 추가 | `package-reference/**`, `README.md` | custom category CRUD, CategoryProvider cache 무효화, tab/list/dialog action을 세부 문서로 분리. |
 | 2026-07-08 | `feature/categorysettings/ui/**`, `CustomCategoryRepository` 확인 | Category Settings 화면 KB 생성 | `README.md` | 사용자 카테고리 관리 화면과 분류 기능 영향 경계를 기록. |

@@ -25,6 +25,7 @@ status: draft
 | [03-extension-points.md](03-extension-points.md) | 새 분류 룰, Gemini prompt, custom category 확장 지점을 정리한다. | 분류 로직을 확장할 때 본다. |
 | [04-files-checklist.md](04-files-checklist.md) | 수정 전후 확인 파일과 검증 질문이다. | 리뷰 전 side effect 점검 |
 | [05-file-inventory.md](05-file-inventory.md) | 관련 파일 역할 인덱스다. | 수정 후보가 애매할 때 본다. |
+| [06-classification-tiers.md](06-classification-tiers.md) | StoreRule, Room, Vector, Keyword, Gemini Batch 분류 티어 계약을 설명한다. | 자동 분류 순서, 임계값, 사용자 수정 학습, Gemini batch 경계 확인 |
 | [change-log.md](change-log.md) | 기능 KB 변경 로그다. | 변경 이유 확인 |
 
 ## 기능 요약
@@ -32,7 +33,7 @@ status: draft
 ```text
 storeName/source
 → CategoryClassifierService
-→ StoreRule / Room mapping / vector embedding / local keyword / Gemini
+→ StoreRule / Room mapping / vector embedding / local keyword / Gemini batch
 → CategoryMappingEntity, StoreEmbeddingEntity, ExpenseEntity 또는 IncomeEntity 반영
 → DataRefreshEvent.CATEGORY_UPDATED
 ```

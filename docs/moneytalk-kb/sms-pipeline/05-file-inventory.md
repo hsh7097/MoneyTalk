@@ -4,7 +4,7 @@ title: SMS Pipeline File Inventory
 description: SMS Pipeline 파일별 역할과 참조 시점을 인덱싱한다.
 tags: [moneytalk, sms, file-inventory]
 resource: app/src/main/java/com/sanha/moneytalk/core/sms/
-timestamp: 2026-07-03T16:30:00+09:00
+timestamp: 2026-07-09T03:25:00+09:00
 status: draft
 ---
 
@@ -28,3 +28,10 @@ status: draft
 | `SmsRegexRuleSyncService.kt` | Asset seed + RTDB overlay 병합 | 룰 동기화 | 핵심 후보 |
 | `VectorSearchEngine.kt` | 벡터 유사도 계산 | similarity 계산 | 보조 |
 | `DeletedSmsTracker.kt` | 삭제 SMS 재삽입 방지 | 삭제 후 재등장 문제 | 핵심 후보 |
+
+## 운영 문서
+
+| 파일 | 역할 |
+|---|---|
+| `06-rule-json-guide.md` | `sms_rules_v1.json`, RTDB overlay, ruleKey, priority, 검증 절차 |
+| `../source-docs/01-consolidation-map.md` | 삭제된 레거시 루트 가이드와 현재 KB 목적지 매핑 |

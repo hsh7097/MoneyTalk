@@ -4,16 +4,18 @@ title: AI Credit Screen 도메인
 description: AI 크레딧 잔액/원장 화면과 보상형 광고/크레딧 정책 연결을 설명한다.
 tags: [moneytalk, ai-credit, screen, monetization]
 resource: app/src/main/java/com/sanha/moneytalk/feature/aicredit/
-timestamp: 2026-07-08T00:00:00+09:00
+timestamp: 2026-07-09T01:55:05+09:00
 status: draft
 ---
 
 # AI Credit Screen 도메인
 
 > 상태: draft
-> 기준: 2026-07-08 현재 `feature/aicredit/ui/**`, `AiCreditRepository`, `core/ad/**` 확인
+> 기준: 2026-07-09 현재 `feature/aicredit/ui/**`, `AiCreditRepository`, `core/ad/**`, debug build 실기기 Settings 노출 조건 확인
 
 AI Credit Screen은 AI 크레딧 잔액과 사용/충전 원장을 보여주는 보조 화면이다.
+설정 탭의 AI 크레딧 row는 `CreditFeaturePolicy`가 허용할 때만 노출된다.
+debug build에서는 release gate가 false라 실기기 smoke에서 row가 숨겨질 수 있다.
 
 ## 먼저 볼 파일
 

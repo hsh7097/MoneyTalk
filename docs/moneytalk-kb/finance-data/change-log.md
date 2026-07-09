@@ -1,4 +1,4 @@
----
+﻿---
 type: log
 title: Finance Data KB Change Log
 description: Finance Data KB 변경 상세 이력을 기록한다.
@@ -12,7 +12,7 @@ status: draft
 
 ## 2026-07-03
 
-- 기준: `core/database`, `feature/home/data`, `docs/ARCHITECTURE.md` 확인
+- 기준: `core/database`, `feature/home/data`, `docs/moneytalk-kb/project-context/01-system-overview.md` 확인
 - 변경 근거: MoneyTalk KB 초기 생성
 - 갱신한 KB:
   - `README.md`

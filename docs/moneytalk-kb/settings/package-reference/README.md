@@ -16,3 +16,4 @@ status: draft
 | [02-data-viewmodel.md](02-data-viewmodel.md) | SettingsViewModel state, intent, 저장소, backup/drive | 설정 값 저장, 백업/복원, 카드 보유 |
 | [03-rendering-action.md](03-rendering-action.md) | SettingsScreen, dialog, bottom sheet, action 연결 | Compose UI와 사용자 액션 |
 | [04-files-checklist.md](04-files-checklist.md) | 수정 전후 파일 점검과 검증 질문 | 리뷰 전 누락 점검 |
+| [05-menu-map.md](05-menu-map.md) | 설정 섹션별 메뉴, 하위 Activity/Dialog, 저장소 영향 | 설정 row 추가/정렬, 하위 메뉴 영향 점검 |

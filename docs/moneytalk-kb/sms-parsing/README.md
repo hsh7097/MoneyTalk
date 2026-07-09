@@ -1,4 +1,4 @@
----
+﻿---
 type: feature
 title: 문자 파싱 기능
 description: SMS/MMS/RCS 원본을 읽어 지출/수입 거래로 저장하고 화면에 반영하는 end-to-end 기능 KB다.
@@ -11,7 +11,7 @@ status: draft
 # 문자 파싱 기능
 
 > 상태: draft
-> 기준: 2026-07-03 현재 `MainViewModel`, `core/sms`, `core/sync`, `docs/SMS_PARSING.md` 확인
+> 기준: 2026-07-09 현재 `MainViewModel`, `core/sms`, `core/sync`, 루트 SMS 파싱 문서 내용을 KB 기준으로 재작성
 
 문자 파싱 기능은 SMS/MMS/RCS 원본을 읽고, 파싱 결과를 지출/수입 DB에 저장한 뒤 화면 refresh까지 연결하는 end-to-end 기능이다.
 파서 내부 단계는 [sms-pipeline](../sms-pipeline/README.md)이 담당하고, 저장 모델/DAO는 [finance-data](../finance-data/README.md)가 담당한다.
@@ -26,6 +26,7 @@ status: draft
 | [03-extension-points.md](03-extension-points.md) | 기능 확장 지점과 주의할 책임 경계를 정리한다. | 새 reader, parser, dedupe, save 정책을 추가할 때 본다. |
 | [04-files-checklist.md](04-files-checklist.md) | 수정 전후 확인할 파일과 검증 질문이다. | 리뷰 전 side effect를 점검할 때 본다. |
 | [05-file-inventory.md](05-file-inventory.md) | 기능 관련 파일 역할 인덱스다. | 수정 후보 파일이 애매할 때 본다. |
+| [06-ingestion-contract.md](06-ingestion-contract.md) | SMS/MMS/RCS 읽기, 중복 제거, 수입/지출 저장, 실시간 보완 경계를 설명한다. | 문자 수집/저장/coverage/notification 보완 경계 확인 |
 | [change-log.md](change-log.md) | 기능 KB 변경 로그다. | 문서 변경 이유를 확인할 때 본다. |
 
 ## 기능 요약

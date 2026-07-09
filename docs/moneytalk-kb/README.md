@@ -4,7 +4,7 @@ title: MoneyTalk KB
 description: MoneyTalk Android 코드 작업을 위한 AI용 라우팅 및 구조 지식 베이스다.
 tags: [moneytalk, kb, android, compose, room]
 resource: app/src/main/java/com/sanha/moneytalk/
-timestamp: 2026-07-08T00:00:00+09:00
+timestamp: 2026-07-09T03:20:00+09:00
 status: draft
 ---
 
@@ -23,7 +23,9 @@ status: draft
 | [00-agent-routing.md](00-agent-routing.md) | 변경 파일 경로를 KB 문서로 연결한다. | 작업 시작 또는 자동화 실행 시 가장 먼저 본다. |
 | [01-structure-map.md](01-structure-map.md) | 앱 전체 패키지 구조와 핵심 파일 위치를 정리한다. | 변경 파일이 어느 책임에 속하는지 판단할 때 본다. |
 | [02-screen-entry-paths.md](02-screen-entry-paths.md) | 화면별 사용자 진입 경로, 코드 route, Activity entry를 정리한다. | 실기기 QA, 화면 이동, route/intent 변경 시 본다. |
+| [screen-requirements/README.md](screen-requirements/README.md) | 화면별 요구사항, 작업 계획서, 개발 가능성 감사표를 정리한다. | 특정 화면을 KB만 보고 수정할 수 있는지 판단할 때 본다. |
 | [00-change-index.md](00-change-index.md) | KB 변경 이력 색인이다. | KB가 왜 바뀌었는지 확인할 때 본다. |
+| [source-docs/README.md](source-docs/README.md) | 기존 `docs/*.md`의 KB 흡수/참조 기준을 정리한다. | 루트 문서 내용이 어느 KB로 흡수됐는지 판단할 때 본다. |
 | [app-shell/README.md](app-shell/README.md) | 앱 진입, 하단 탭 4개, NavGraph, Activity 전역 다이얼로그 KB다. | `MainActivity`, `MainViewModel`, `navigation/**` 작업 시 본다. |
 | [home/README.md](home/README.md) | 홈 탭 도메인 KB 진입점이다. | `feature/home/ui/**` 또는 홈 월별 현황/카테고리/AI 인사이트 작업 시 본다. |
 | [history/README.md](history/README.md) | 내역 화면 도메인 KB 진입점이다. | `feature/history/**` 또는 거래 목록/필터/달력/상세 작업 시 본다. |
@@ -46,6 +48,7 @@ status: draft
 | [budget-credit-monetization/README.md](budget-credit-monetization/README.md) | 예산, AI 크레딧, 광고 정책 기능 KB다. | 크레딧/광고/예산 작업 시 본다. |
 | [backup-restore/README.md](backup-restore/README.md) | 로컬/Google Drive 백업 복원 기능 KB다. | export/import/Drive/전체 삭제 작업 시 본다. |
 | [notification-ingestion/README.md](notification-ingestion/README.md) | 금융앱 알림/RCS/비즈메시지 거래 수신 기능 KB다. | `core/notification/**`, 앱 알림 파싱 작업 시 본다. |
+| [notification-display/README.md](notification-display/README.md) | 거래 저장 후 MoneyTalk 자체 앱 알림 표시 기능 KB다. | `SmsNotificationManager`, 거래 알림 toggle, 노티 표시/정리 작업 시 본다. |
 | [data-refresh/README.md](data-refresh/README.md) | ViewModel 간 refresh event와 cache 갱신 기능 KB다. | `DataRefreshEvent` 또는 화면 stale data 작업 시 본다. |
 | [app-functions/README.md](app-functions/README.md) | App Functions 기능 KB 진입점이다. | agent가 앱 데이터를 읽거나 일부 설정/거래를 수정하는 경로를 볼 때 본다. |
 | [sms-pipeline/README.md](sms-pipeline/README.md) | SMS 파싱 파이프라인 서브모듈 KB 진입점이다. | `core/sms/**`, `core/sync/**`, `receiver/**` 변경 시 본다. |
@@ -77,10 +80,12 @@ status: draft
 | `budget-credit-monetization` | `core/ad/**`, `AiCreditRepository`, `BudgetDao`, `ChatCreditPolicy` | draft | 예산, AI 크레딧, 보상형 광고, 배너 정책 |
 | `backup-restore` | `DataBackupManager.kt`, `SettingsDataDialogs.kt`, `GoogleDriveHelper.kt` | draft | 로컬/Google Drive 백업 복원 |
 | `notification-ingestion` | `core/notification/**`, `AppNotificationTransactionParser.kt`, `receiver/**` | draft | 금융앱 알림/RCS/비즈메시지 거래 수신 |
+| `notification-display` | `SmsNotificationManager.kt`, `SmsInstantProcessor.kt`, `SettingsScreen.kt` | draft | 거래 저장 후 MoneyTalk 자체 알림 표시/정리 |
 | `data-refresh` | `DataRefreshEvent.kt`, 주요 화면 ViewModel | draft | 화면 간 변경 통지와 page cache refresh |
 | `app-functions` | `core/appfunctions/**` | draft | agent용 App Function 읽기/수정 함수, reader/model contract |
 | `sms-pipeline` | `app/src/main/java/com/sanha/moneytalk/core/sms/` | draft | SMS/MMS/RCS 읽기, 사전 필터, 수입 분류, sender regex Fast Path, Vector/LLM 파싱 |
 | `finance-data` | `app/src/main/java/com/sanha/moneytalk/core/database/`, `feature/home/data/` | draft | Room DB, DAO, Repository, 카테고리/거래처/크레딧 데이터 흐름 |
+| `source-docs` | `docs/*.md` | draft | 기존 루트 문서의 KB 흡수/참조 위치와 계획/이력 문서 분리 기준 |
 
 ## 작성 원칙
 

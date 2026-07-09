@@ -1,4 +1,4 @@
----
+﻿---
 type: domain
 title: MoneyTalk Chat KB
 description: AI 채팅의 Gemini 호출, DataQuery 실행, 토큰 비용 경계, 로컬 정형 조회 우회 구현을 정리한다.
@@ -11,7 +11,7 @@ status: draft
 # Chat KB
 
 > 상태: draft
-> 기준: 2026-07-08 현재 `feature/chat/**`, `core/util/LocalChatQueryRouter.kt`, `core/util/DataQueryParser.kt`, `core/util/ChatCreditPolicy.kt`, `core/util/ChatContextBuilder.kt`, `docs/CHAT_SYSTEM.md`, `docs/AI_CREDIT_DEEP_ANALYSIS_PLAN.md` 확인
+> 기준: 2026-07-09 현재 `feature/chat/**`, `core/util/LocalChatQueryRouter.kt`, `core/util/DataQueryParser.kt`, `core/util/ChatCreditPolicy.kt`, `core/util/ChatContextBuilder.kt`, 루트 채팅/AI 문서 내용을 KB 기준으로 재작성
 
 이 문서는 MoneyTalk AI 채팅 작업에서 Gemini 호출 경계와 앱 내부 계산 경계를 빠르게 찾기 위한 KB다.
 로컬 정형 조회 우회는 1차 구현됐지만, 기간 해석 범위는 보수적으로 제한되어 있다.
@@ -22,10 +22,10 @@ status: draft
 |---|---|---|
 | 이 문서 | AI 채팅의 현재 3-step 구조, 비용 경계, 로컬 정형 조회 우회 구현 | `feature/chat/**`, `LocalChatQueryRouter`, `ChatCreditPolicy`, `DataQueryParser`, 토큰 비용 절감 작업 |
 | [00-structure-map.md](00-structure-map.md) | Chat 탭 UI/data/prompt/router 파일 구조를 정리한다. | 변경 파일이 Chat 내부 어느 책임인지 판단할 때 |
+| [05-system-contract.md](05-system-contract.md) | Local Fast Path, Gemini 3-step, Query/Action/ANALYTICS, 모델/프롬프트 계약을 설명한다. | 채팅 실행 흐름, 비용/수치 안전 경계, query/action 타입 확인 |
 | [package-reference/README.md](package-reference/README.md) | Chat 화면 세부 개발 문서 인덱스다. | entry/data/rendering/checklist 중 어떤 문서로 내려갈지 고를 때 |
 | [change-log.md](change-log.md) | chat KB 변경 상세 로그 | chat KB가 왜 바뀌었는지 확인할 때 |
-| ../../CHAT_SYSTEM.md | 현재 AI 채팅 시스템 상세 | 쿼리/액션/ANALYTICS/답변 생성 규칙 확인 |
-| ../../AI_CREDIT_DEEP_ANALYSIS_PLAN.md | 심층 분석과 AI 크레딧 후속 계획 | 구조화 JSON, 크레딧, 결제/광고 후속 작업 |
+| [../budget-credit-monetization/02-policy-and-plans.md](../budget-credit-monetization/02-policy-and-plans.md) | AI 크레딧/광고/심층 분석 후속 계획 | 채팅 비용, 크레딧, 결제/광고 후속 작업 |
 | ../finance-data/README.md | Room DB/DAO/Repository 라우팅 | 채팅 쿼리가 실제 금융 데이터를 읽는 위치 확인 |
 
 ## 현재 구현 요약

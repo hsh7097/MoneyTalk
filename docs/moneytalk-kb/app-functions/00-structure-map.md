@@ -4,7 +4,7 @@ title: App Functions 구조 지도
 description: App Functions 기능에 참여하는 함수, reader, model, metadata 파일을 정리한다.
 tags: [moneytalk, app-functions, structure-map]
 resource: app/src/main/java/com/sanha/moneytalk/core/appfunctions/
-timestamp: 2026-07-03T17:10:00+09:00
+timestamp: 2026-07-09T03:25:00+09:00
 status: draft
 ---
 
@@ -19,6 +19,17 @@ status: draft
 | chat operation reader | `MoneyTalkChatAppFunctionReader.kt` | Repository/DAO/DataStore 접근과 business validation |
 | response models | `MoneyTalkFinanceSummaryModels.kt`, `MoneyTalkChatAppFunctionModels.kt` | `@AppFunctionSerializable` 응답 contract |
 | metadata | `app/src/main/res/xml/app_functions_app_metadata.xml` | 앱 함수 metadata 등록 |
+| generated metadata | `app/build/generated/ksp/debug/resources/assets/app_functions.xml` | 실제 등록 함수 수와 기본 enabled 상태 확인 |
+
+## 현재 등록 상태
+
+| 항목 | 값 |
+|---|---|
+| 총 등록 함수 | 50 |
+| 기본 활성 함수 | 46 |
+| 기본 비활성 함수 | 4 |
+| 상세 목록 | [06-function-catalog.md](06-function-catalog.md) |
+| 운영 점검 순서 | [07-operational-playbook.md](07-operational-playbook.md) |
 
 ## 관련 KB
 

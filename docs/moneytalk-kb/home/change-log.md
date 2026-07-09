@@ -13,3 +13,4 @@ status: draft
 | 날짜 | 근거 | 변경 | 영향 문서 | 메모 |
 |---|---|---|---|---|
 | 2026-07-08 | `feature/home/ui/**`, `feature/home/data/**`, `core/ui/coachmark/**` 확인 | Home 화면 KB 생성 | `README.md`, `00-structure-map.md`, `package-reference/**`, `05-file-inventory.md` | 홈 탭의 월별 현황, 카테고리 지출, AI 인사이트, 미분류 분류 CTA, 코치마크 작업 시작점을 분리. |
+| 2026-07-09 | `HomeScreen.HomePageContent`, `HomeViewModel.loadPageData`, `CategoryDetailActivity`, `TransactionEditActivity` 확인 | 홈 화면 블록 상세화 | `README.md`, `package-reference/README.md`, `package-reference/05-surface-map.md` | CTA, 월간 현황, 추이, AI 인사이트, 카테고리, 오늘 내역의 표시 조건과 보조 화면 연결을 정리. |

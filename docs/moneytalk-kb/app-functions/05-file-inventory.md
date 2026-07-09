@@ -4,7 +4,7 @@ title: App Functions File Inventory
 description: App Functions 관련 파일 역할과 참조 시점을 인덱싱한다.
 tags: [moneytalk, app-functions, file-inventory]
 resource: app/src/main/java/com/sanha/moneytalk/core/appfunctions/
-timestamp: 2026-07-03T17:10:00+09:00
+timestamp: 2026-07-09T02:45:00+09:00
 status: draft
 ---
 
@@ -20,3 +20,12 @@ status: draft
 | `MoneyTalkChatAppFunctionReader.kt` | 실제 DB/DataStore/Repository 작업 | business logic 변경 | 핵심 |
 | `MoneyTalkChatAppFunctionModels.kt` | chat operation response model | 응답 모델 변경 | 핵심 후보 |
 | `app_functions_app_metadata.xml` | App Functions metadata 등록 | generated metadata 문제 | 핵심 후보 |
+| `app/build/generated/ksp/debug/resources/assets/app_functions.xml` | KSP가 생성한 실제 등록 함수 metadata | 함수 수/disabled 수 확인 | 생성 산출물 |
+
+## 문서
+
+| 파일 | 용도 |
+|---|---|
+| `06-function-catalog.md` | 등록 함수 50개, 활성/비활성 정책, 그룹별 호출 범위 |
+| `07-operational-playbook.md` | DB 점검/복원 검증에서 App Functions를 쓰는 순서 |
+| `../source-docs/01-consolidation-map.md` | 삭제된 레거시 루트 문서와 현재 KB 목적지 매핑 |

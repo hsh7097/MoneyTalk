@@ -1,4 +1,4 @@
----
+﻿---
 type: extension-points
 title: SMS Pipeline Extension Points
 description: SMS Pipeline의 확장 지점과 책임 경계를 정리한다.
@@ -18,4 +18,4 @@ status: draft
 | 날짜/시간 해석 | `SmsTransactionDateResolver.kt` | 지출/수입 파서가 함께 사용한다. |
 | LLM 추출/regex 생성 | `GeminiSmsExtractor.kt`, `SmsGroupClassifier.kt` | 비용과 batch 처리 단위를 함께 확인한다. |
 
-확장 후에는 `docs/SMS_PARSING.md`와 이 KB의 파일 인벤토리를 같이 갱신한다.
+확장 후에는 `docs/moneytalk-kb/sms-parsing/06-ingestion-contract.md`와 이 KB의 파일 인벤토리를 같이 갱신한다.

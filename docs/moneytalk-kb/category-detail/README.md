@@ -21,6 +21,7 @@ Category Detail은 홈의 카테고리 지출 영역에서 특정 카테고리�
 | 문서 | 역할 | 언제 보는가 |
 |---|---|---|
 | [00-structure-map.md](00-structure-map.md) | Category Detail 파일 구조와 핵심 흐름을 정리한다. | 화면 진입, 월 이동, 정렬, 거래 목록 변경 |
+| [package-reference/README.md](package-reference/README.md) | entry/data/rendering/checklist로 나눈 세부 개발 문서 인덱스다. | Category Detail을 실제 수정하기 전 |
 | [change-log.md](change-log.md) | Category Detail KB 변경 로그다. | 문서 변경 이유 확인 |
 | [../transaction-edit/README.md](../transaction-edit/README.md) | 거래 수정 화면 KB다. | 상세 화면에서 거래 수정/삭제로 이어질 때 |
 | [../finance-data/README.md](../finance-data/README.md) | DAO/Repository 데이터 KB다. | 카테고리별 합계/목록 조회 변경 |

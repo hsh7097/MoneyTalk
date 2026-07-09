@@ -20,6 +20,7 @@ Category Settings는 사용자가 지출/수입 custom category를 관리하는 
 | 문서 | 역할 | 언제 보는가 |
 |---|---|---|
 | 이 문서 | 화면 entry, 핵심 파일, 수정 시 주의점을 정리한다. | 카테고리 설정 화면 작업 |
+| [package-reference/README.md](package-reference/README.md) | entry/data/rendering/checklist로 나눈 세부 개발 문서 인덱스다. | Category Settings를 실제 수정하기 전 |
 | [change-log.md](change-log.md) | KB 변경 로그다. | 문서 변경 이유 확인 |
 | [../category-classification/README.md](../category-classification/README.md) | 카테고리 분류 기능 KB다. | custom category가 자동 분류/수동 수정에 미치는 영향 확인 |
 

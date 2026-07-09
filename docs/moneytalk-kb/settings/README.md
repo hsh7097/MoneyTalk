@@ -25,6 +25,7 @@ Settings는 네 번째 하단 탭이며 앱 환경, 예산, AI/API, 데이터 �
 | [package-reference/02-data-viewmodel.md](package-reference/02-data-viewmodel.md) | SettingsViewModel intent, repository, backup/drive/credit 흐름을 설명한다. | 설정 값 저장, 백업, 예산, 카드 보유 |
 | [package-reference/03-rendering-action.md](package-reference/03-rendering-action.md) | SettingsScreen, dialog, bottom sheet, action 연결을 설명한다. | Compose UI, dialog, 버튼 액션 |
 | [package-reference/04-files-checklist.md](package-reference/04-files-checklist.md) | 수정 전후 확인 파일과 검증 질문이다. | 리뷰 전 누락 점검 |
+| [package-reference/05-menu-map.md](package-reference/05-menu-map.md) | 설정 섹션별 메뉴, 하위 Activity/Dialog, 저장소 영향 범위를 설명한다. | 설정 row 추가/정렬, 하위 메뉴 영향 점검 |
 | [05-file-inventory.md](05-file-inventory.md) | Settings 전체 파일 역할 인덱스다. | 파일 후보가 애매할 때 |
 | [change-log.md](change-log.md) | Settings KB 변경 로그다. | 문서 변경 이유 확인 |
 
@@ -45,6 +46,7 @@ NavGraph -> SettingsScreen
 ## 작업 판단
 
 - 설정 row 추가/정렬/UI는 `package-reference/03-rendering-action.md`를 본다.
+- 각 설정 메뉴와 하위 화면/저장소 영향은 `package-reference/05-menu-map.md`를 본다.
 - API key, 테마, 월 시작일, 예산, 카드 보유는 `package-reference/02-data-viewmodel.md`를 본다.
 - 백업/복원/Google Drive는 [backup-restore/README.md](../backup-restore/README.md)를 같이 본다.
 - AI 크레딧/광고 정책은 [budget-credit-monetization/README.md](../budget-credit-monetization/README.md)를 같이 본다.

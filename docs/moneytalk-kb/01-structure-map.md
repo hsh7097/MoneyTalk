@@ -1,10 +1,10 @@
----
+﻿---
 type: structure-map
 title: MoneyTalk 구조 지도
 description: MoneyTalk 앱의 루트, 패키지 구조, 핵심 파일, AI 참조 순서를 정리한다.
 tags: [moneytalk, kb, structure-map, android]
 resource: app/src/main/java/com/sanha/moneytalk/
-timestamp: 2026-07-08T00:00:00+09:00
+timestamp: 2026-07-09T03:20:00+09:00
 status: draft
 ---
 
@@ -18,6 +18,7 @@ status: draft
 | 항목 | 경로 |
 |---|---|
 | repository root | `/Users/sanha/Documents/Android/MoneyTalk/MoneyTalk` |
+| Windows repository root | `C:\Users\hsh70\project\android\MoneyTalk` |
 | app module | `app/` |
 | main source set | `app/src/main/java/com/sanha/moneytalk/` |
 | resource metadata | `app/src/main/res/xml/app_functions_app_metadata.xml` |
@@ -43,7 +44,7 @@ status: draft
 | `core/sync` | 동기화 범위와 coverage 정책 | `SmsSyncRangeCalculator.kt`, `SyncCoverageRecorder.kt` |
 | `core/appfunctions` | Android App Functions 노출 함수 | `MoneyTalkFinanceAppFunctions.kt`, `MoneyTalkChatAppFunctions.kt` |
 | `core/ui` | 공통 Compose UI와 snackbar/coachmark | `AppSnackbarBus.kt`, `TransactionCardCompose.kt` |
-| `core/notification` | 금융앱 알림 접근/후보 분석/원격 목록 | `NotificationAccessHelper.kt`, `FinancialAppCandidateAnalyzer.kt` |
+| `core/notification` | 금융앱 알림 접근/후보 분석/원격 목록, 거래 알림 표시 | `NotificationAccessHelper.kt`, `FinancialAppCandidateAnalyzer.kt`, `SmsNotificationManager.kt` |
 | `core/firebase` | Analytics, Crashlytics, Premium config | `AnalyticsHelper.kt`, `PremiumManager.kt` |
 | `receiver` | SMS/MMS/RCS/notification 실시간 수신 보조 | `SmsReceiver.kt`, `MmsContentObserver.kt`, `NotificationTransactionService.kt` |
 
@@ -64,8 +65,10 @@ status: draft
 | 크레딧/광고/예산 | [budget-credit-monetization/README.md](budget-credit-monetization/README.md) | `core/ad/**`, `AiCreditRepository.kt`, `BudgetDao.kt` |
 | 백업/복원 | [backup-restore/README.md](backup-restore/README.md) | `DataBackupManager.kt`, `GoogleDriveHelper.kt`, `SettingsViewModel.kt` |
 | 알림 거래 수신 | [notification-ingestion/README.md](notification-ingestion/README.md) | `core/notification/**`, `AppNotificationTransactionParser.kt` |
+| 거래 알림 표시 | [notification-display/README.md](notification-display/README.md) | `SmsNotificationManager.kt`, `SmsInstantProcessor.kt`, `SettingsScreen.kt` |
 | 데이터 refresh | [data-refresh/README.md](data-refresh/README.md) | `DataRefreshEvent.kt`, 주요 화면 ViewModel |
-| App Functions | [app-functions/README.md](app-functions/README.md) | `core/appfunctions/**`, `app_functions_app_metadata.xml` |
+| App Functions | [app-functions/README.md](app-functions/README.md) | `core/appfunctions/**`, `app_functions_app_metadata.xml`, KSP `app_functions.xml` |
+| 루트 문서 흡수/정리 | [source-docs/README.md](source-docs/README.md) | `docs/*.md` |
 
 ## 핵심 파일 역할
 
@@ -90,12 +93,15 @@ status: draft
 | Settings 화면 변경 | `settings/README.md` -> `settings/00-structure-map.md` -> `settings/package-reference/README.md` |
 | 거래 아이템 변경 | `transaction-edit/README.md` -> `transaction-edit/package-reference/README.md` -> `transaction-mutation/README.md` |
 | SMS 파싱 변경 | `sms-pipeline/README.md` -> `sms-pipeline/00-structure-map.md` -> `sms-pipeline/04-files-checklist.md` |
+| SMS Fast Path 룰 변경 | `sms-pipeline/06-rule-json-guide.md` -> `sms-pipeline/04-files-checklist.md` |
 | 문자 파싱 기능 변경 | `sms-parsing/README.md` -> `sms-parsing/01-feature-flow.md` -> `sms-pipeline/README.md` |
 | 카테고리 분류 변경 | `category-classification/README.md` -> `category-classification/01-feature-flow.md` -> `embedding/README.md` -> `finance-data/README.md` |
 | Chat 화면 변경 | `chat/README.md` -> `chat/00-structure-map.md` -> `chat/package-reference/README.md` |
-| AI 채팅/토큰 비용 변경 | `chat/README.md` -> `docs/CHAT_SYSTEM.md` -> `docs/AI_CREDIT_DEEP_ANALYSIS_PLAN.md` |
+| AI 채팅/토큰 비용 변경 | `chat/README.md` -> `chat/05-system-contract.md` -> `budget-credit-monetization/02-policy-and-plans.md` |
 | DB schema/DAO 변경 | `finance-data/README.md` -> `finance-data/00-structure-map.md` -> `finance-data/04-files-checklist.md` |
-| App Functions 변경 | `app-functions/README.md` -> `app-functions/01-feature-flow.md` -> `docs/APP_FUNCTIONS.md` |
+| App Functions 변경 | `app-functions/README.md` -> `app-functions/06-function-catalog.md` -> `app-functions/07-operational-playbook.md` |
+| 거래 알림 표시 변경 | `notification-display/README.md` -> `notification-display/01-feature-flow.md` -> `filtering/README.md` |
+| 기존 루트 문서 정리 | `source-docs/README.md` -> `source-docs/01-consolidation-map.md` -> 관련 기능 KB |
 
 ## 갱신 규칙
 

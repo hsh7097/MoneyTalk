@@ -13,3 +13,4 @@ status: draft
 | 날짜 | 근거 | 변경 | 영향 문서 | 메모 |
 |---|---|---|---|---|
 | 2026-07-08 | `SmsEmbeddingService`, `VectorSearchEngine`, `StoreEmbeddingRepository`, `core/similarity/**` 확인 | Embedding 기능 KB 생성 | `README.md`, `00-structure-map.md`, `01-feature-flow.md` | 임베딩 생성/API 비용/cache/vector search와 카테고리 분류 연결을 별도 기능 KB로 분리. |
+| 2026-07-09 | `SmsEmbeddingService`, `StoreEmbeddingEntity`, `StoreEmbeddingDao`, `StoreEmbeddingRepositoryImpl`, `core/similarity/**` 확인 | 임베딩 contract/checklist 상세화 | `README.md`, `02-data-contract.md`, `03-extension-points.md`, `04-files-checklist.md`, `05-file-inventory.md` | API 출력 차원, batch 실패 처리, 유사도 threshold, source=user 보호, 변경 전후 점검 기준을 보강. |

@@ -20,6 +20,7 @@ Store Rule Settings는 거래처명/키워드 기반 규칙을 관리해 카테�
 | 문서 | 역할 | 언제 보는가 |
 |---|---|---|
 | 이 문서 | 화면 entry, 핵심 파일, 분류/일괄 적용 영향 범위를 정리한다. | 거래처 규칙 설정 화면 작업 |
+| [package-reference/README.md](package-reference/README.md) | entry/data/rendering/checklist로 나눈 세부 개발 문서 인덱스다. | Store Rule Settings를 실제 수정하기 전 |
 | [change-log.md](change-log.md) | KB 변경 로그다. | 문서 변경 이유 확인 |
 | [../category-classification/README.md](../category-classification/README.md) | 카테고리 분류 기능 KB다. | 규칙이 자동 분류에 미치는 영향 |
 | [../transaction-mutation/README.md](../transaction-mutation/README.md) | 거래 일괄 변경 기능 KB다. | 같은 거래처 일괄 적용 확인 |

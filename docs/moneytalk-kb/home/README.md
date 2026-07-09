@@ -25,6 +25,7 @@ Home은 첫 번째 하단 탭이며 월별 지출/수입/예산 현황, 카테�
 | [package-reference/02-data-viewmodel.md](package-reference/02-data-viewmodel.md) | HomeViewModel, repositories, page cache, AI insight 흐름을 설명한다. | 데이터 로딩, 월별 cache, 카테고리 선택, 인사이트 |
 | [package-reference/03-rendering-action.md](package-reference/03-rendering-action.md) | HomeScreen 구성, 섹션, 클릭 액션, dialog를 설명한다. | Compose UI, 카테고리 클릭, 미분류 분류, 오늘 거래 |
 | [package-reference/04-files-checklist.md](package-reference/04-files-checklist.md) | 수정 전후 확인 파일과 검증 질문이다. | 리뷰 전 누락 점검 |
+| [package-reference/05-surface-map.md](package-reference/05-surface-map.md) | Home 화면 블록별 표시 조건, 데이터 출처, 보조 화면 연결을 설명한다. | 홈 섹션 추가/삭제, CTA/필터 영향 점검 |
 | [05-file-inventory.md](05-file-inventory.md) | Home 전체 파일 역할 인덱스다. | 파일 후보가 애매할 때 |
 | [change-log.md](change-log.md) | Home KB 변경 로그다. | 문서 변경 이유 확인 |
 
@@ -53,4 +54,5 @@ NavGraph -> HomeScreen
 - 홈 탭 진입/월 이동/탭 재클릭은 `package-reference/01-entry-screen.md`를 본다.
 - 지출/수입/예산/카테고리 합계, page cache, AI 인사이트는 `package-reference/02-data-viewmodel.md`를 본다.
 - 카테고리 지출 섹션, 오늘 거래 카드, 미분류 분류 dialog, 홈 코치마크는 `package-reference/03-rendering-action.md`를 본다.
+- 홈 내부 화면 블록과 보조 화면 연결을 한 번에 확인하려면 `package-reference/05-surface-map.md`를 본다.
 - 카테고리 분류 원리 자체는 [category-classification/README.md](../category-classification/README.md)를 같이 본다.

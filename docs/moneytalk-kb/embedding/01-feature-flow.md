@@ -31,6 +31,6 @@ SMS 패턴 유사도는 SMS pipeline 쪽 책임과 연결된다.
 
 1. embedding API 호출 전에 cache hit를 먼저 확인하는가?
 2. batch embedding 실패 시 null 항목이 안전하게 처리되는가?
-3. threshold 수치는 `AI_CONTEXT.md`의 registry와 정책 구현체가 일치하는가?
+3. threshold 수치는 [../project-context/02-threshold-registry.md](../project-context/02-threshold-registry.md)와 정책 구현체가 일치하는가?
 4. 수동 수정 category가 자동 embedding update로 덮이지 않는가?
 5. 429 rate limit과 quota 초과를 구분하는가?

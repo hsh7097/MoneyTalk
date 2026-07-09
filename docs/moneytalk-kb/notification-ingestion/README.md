@@ -20,8 +20,10 @@ Notification Ingestion은 SMS 외에 금융앱 알림/RCS/비즈메시지 경로
 | 문서 | 역할 | 언제 보는가 |
 |---|---|---|
 | [00-structure-map.md](00-structure-map.md) | notification 관련 파일과 책임을 정리한다. | 알림 접근/후보 탐색/앱 알림 파싱 작업 |
+| [01-feature-flow.md](01-feature-flow.md) | 외부 알림 접근, provider 재조회, 금융앱 후보 탐색, 저장 흐름을 설명한다. | 알림 수신/저장 경로 또는 RCS/금융앱 알림 문제 |
 | [change-log.md](change-log.md) | Notification Ingestion KB 변경 로그다. | 문서 변경 이유 확인 |
 | [../sms-pipeline/README.md](../sms-pipeline/README.md) | SMS pipeline KB다. | 거래 파싱/저장 흐름과 연결 |
+| [../notification-display/README.md](../notification-display/README.md) | MoneyTalk 자체 거래 알림 표시 KB다. | 저장 후 사용자 노티 표시 조건 확인 |
 
 ## 핵심 파일
 
@@ -35,3 +37,8 @@ Notification Ingestion은 SMS 외에 금융앱 알림/RCS/비즈메시지 경로
 | `core/sms/AppNotificationTransactionParser.kt` | 앱 알림 텍스트 거래 파싱 |
 | `core/sms/AppNotificationTypeClassifier.kt` | 앱 알림 타입 분류 |
 | `receiver/**` | SMS/MMS/RCS/알림 수신 receiver |
+
+## 작업 판단
+
+- 외부 알림을 읽어 거래 후보를 만드는 작업은 이 KB를 본다.
+- 거래 저장 후 MoneyTalk이 사용자에게 알림을 띄우는 조건은 [notification-display/README.md](../notification-display/README.md)를 본다.

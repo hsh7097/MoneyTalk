@@ -4,7 +4,7 @@ title: Settings entry/screen
 description: Settings 탭 진입, 보조 설정 Activity 이동, screen onboarding 진입을 설명한다.
 tags: [moneytalk, settings, entry]
 resource: app/src/main/java/com/sanha/moneytalk/feature/settings/ui/SettingsScreen.kt
-timestamp: 2026-07-08T00:00:00+09:00
+timestamp: 2026-07-09T01:55:05+09:00
 status: draft
 ---
 
@@ -28,6 +28,9 @@ Settings 탭은 여러 Activity의 허브 역할을 한다.
 | SMS 설정 | [sms-settings/README.md](../../sms-settings/README.md) |
 | 거래처 규칙 설정 | [store-rule-settings/README.md](../../store-rule-settings/README.md) |
 | AI 크레딧 | [ai-credit-screen/README.md](../../ai-credit-screen/README.md) |
+
+AI 크레딧 row는 `uiState.isCreditFeatureEnabled`가 true일 때만 노출된다.
+현재 정책은 `CreditFeaturePolicy` 기준 release build + `credit_ad_enable` + FREE tier 조건이므로 debug build 실기기 smoke에서는 row가 숨겨질 수 있다.
 
 ## 코치마크
 
