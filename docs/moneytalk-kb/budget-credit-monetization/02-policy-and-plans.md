@@ -18,7 +18,8 @@ status: draft
 |---|---:|---|
 | AI 채팅 1회 전송 | 1크레딧 차감 | 질문 유형별 차등 과금 없이 사용자 이해가 쉬운 단일 단가 |
 | 이전 문자 기록 월 데이터 가져오기 | 월 1개당 1크레딧 차감 | 월별 coverage가 부족한 과거 월을 사용자가 요청할 때 |
-| 보상형 광고 1회 시청 | 기본 2크레딧 지급 | RTDB `reward_ad_chat_count`가 override 가능 |
+| 보상형 광고 1회 시청 | 2크레딧 고정 지급 | RTDB `reward_ad_chat_count` 값과 무관하게 현재 앱 정책은 2크레딧으로 고정 |
+| 앱 첫 실행 보상 | 5크레딧 1회 지급 | `initial_ai_credit_granted` flag 기준으로 1회만 지급 |
 | 유료 플랜 사용자 | 크레딧 UI/차감 미노출 | `ServiceTier.PREMIUM` 기반으로 비활성 취급 |
 
 ## Gate 조건
@@ -26,6 +27,7 @@ status: draft
 | Gate | 의미 |
 |---|---|
 | release 빌드 | 비릴리즈 빌드에서는 광고 로드/표시, 크레딧 차감/충전, 레거시 마이그레이션 쓰기를 수행하지 않는다. |
+| test override 빌드 | `-Pmoneytalk.monetizationTestOverride=true`로 빌드한 실기기 검증 APK에서만 debug/develop release gate를 우회한다. |
 | RTDB `/config/credit_ad_enable=true` | AI 크레딧 UI와 차감/충전 기능 활성화 조건이다. 값이 없거나 false면 숨긴다. |
 | RTDB `/config/reward_ad_enabled=true` | 보상형 광고와 광고 기반 충전 흐름 활성 조건이다. |
 | FREE tier | FREE 사용자만 크레딧 차감/광고 충전 흐름을 탄다. PREMIUM은 차감하지 않는다. |
@@ -39,6 +41,8 @@ status: draft
   "reward_ad_chat_count": 2
 }
 ```
+
+> `reward_ad_chat_count`는 기존 RTDB 필드로 남아 있을 수 있으나, 현재 앱의 AI 크레딧 보상 금액은 2크레딧 고정이다.
 
 ## 월별 SMS 동기화 CTA
 

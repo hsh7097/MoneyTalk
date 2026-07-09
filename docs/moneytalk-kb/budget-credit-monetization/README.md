@@ -42,4 +42,11 @@ status: draft
 
 ## 현재 정책 한 줄 요약
 
-release 빌드이고 RTDB gate가 켜진 FREE 사용자에게만 크레딧 UI/차감/충전/광고가 노출된다. 채팅 1회 전송은 1크레딧, 과거 월 문자 가져오기는 월 1개당 1크레딧, 보상형 광고 1회는 기본 2크레딧을 지급한다.
+release 빌드이고 RTDB gate가 켜진 FREE 사용자에게만 크레딧 UI/차감/충전/광고가 노출된다. 채팅 1회 전송은 1크레딧, 과거 월 문자 가져오기는 월 1개당 1크레딧, 보상형 광고 1회는 2크레딧을 고정 지급한다.
+
+## 2026-07-10 추가 정책
+
+- AI 크레딧 기능이 활성화된 FREE 사용자는 앱 첫 실행 보상으로 5크레딧을 1회 지급받는다.
+- 일반 debug/develop 빌드에서는 수익화/크레딧 gate가 닫힌다.
+- 실기기 검증 전용 APK는 `-Pmoneytalk.monetizationTestOverride=true`로 빌드한다. 이때만 debug 빌드에서도 크레딧 UI와 차감/충전 흐름이 노출된다.
+- 테스트 override 빌드는 release 광고 ID 대신 Google rewarded test ad unit을 사용한다.

@@ -12,5 +12,6 @@ status: draft
 
 | 날짜 | 근거 | 변경 | 영향 문서 | 메모 |
 |---|---|---|---|---|
+| 2026-07-10 | `BuildVariantPolicy`, `RewardAdManager`, `AiCreditRepository`, `AiCreditScreen` 확인 | 테스트 override와 초기 보상 표시 기준 반영 | `README.md`, `../budget-credit-monetization/02-policy-and-plans.md` | 검증 APK에서 AI 크레딧 화면을 직접 확인할 수 있고, 초기 5크레딧은 원장에 초기 실행 보상으로 표시된다. |
 | 2026-07-09 | debug build 실기기 Settings smoke 및 `CreditFeaturePolicy` 확인 | AI 크레딧 row 조건부 노출 설명 보강 | `README.md`, `settings/package-reference/01-entry-screen.md` | debug build에서는 release gate가 false라 Settings row가 숨겨질 수 있음을 기록. |
 | 2026-07-08 | `feature/aicredit/ui/**`, `AiCreditRepository`, `core/ad/**` 확인 | AI Credit Screen KB 생성 | `README.md` | AI 크레딧 화면과 수익화 정책 기능 KB 연결을 기록. |

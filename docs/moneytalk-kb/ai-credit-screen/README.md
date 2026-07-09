@@ -15,7 +15,9 @@ status: draft
 
 AI Credit Screen은 AI 크레딧 잔액과 사용/충전 원장을 보여주는 보조 화면이다.
 설정 탭의 AI 크레딧 row는 `CreditFeaturePolicy`가 허용할 때만 노출된다.
-debug build에서는 release gate가 false라 실기기 smoke에서 row가 숨겨질 수 있다.
+일반 debug build에서는 release gate가 false라 실기기 smoke에서 row가 숨겨질 수 있다.
+실기기 검증 전용 APK는 `-Pmoneytalk.monetizationTestOverride=true`로 빌드하면 debug/develop release gate를 우회해 AI 크레딧 화면을 직접 확인할 수 있다.
+AI 크레딧 기능이 활성화되면 앱 첫 실행 보상 5크레딧이 1회 지급되고 원장에는 초기 실행 보상으로 표시된다.
 
 ## 먼저 볼 파일
 

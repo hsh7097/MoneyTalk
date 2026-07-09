@@ -13,3 +13,7 @@ status: draft
 ## 2026-07-09
 
 - 루트 `AI_EXPERIENCE_AGENT_WORKLOG.md`, `SEARCH_OPTIMIZATION_AGENT_WORKLOG.md`를 그대로 옮기지 않고 현재 유효한 결정과 보류 사유만 `01-agent-worklog-decisions.md`로 정리했다.
+
+## 2026-07-10
+
+- 릴리즈 준비 보완 작업계획 문서 `02-release-readiness-remediation-plan.md`를 worklogs 진입점에 연결했다.
