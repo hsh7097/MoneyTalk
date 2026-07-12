@@ -25,7 +25,7 @@ data class SmsPatternEntity(
     /** 발신 번호 (패턴 그룹핑용) */
     val senderAddress: String = "",
 
-    /** 임베딩 벡터 (Gemini Embedding API로 생성) */
+    /** SMS template의 결정적 로컬 임베딩 벡터 (현재 768차원) */
     val embedding: List<Float>,
 
     /** 결제 문자 여부 (true: 결제, false: 비결제) */

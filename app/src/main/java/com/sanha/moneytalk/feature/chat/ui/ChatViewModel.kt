@@ -39,6 +39,7 @@ import com.sanha.moneytalk.core.util.QueryType
 import com.sanha.moneytalk.core.util.StoreAliasManager
 import com.sanha.moneytalk.core.util.StoreNameNormalizer
 import com.sanha.moneytalk.feature.chat.data.ChatRepository
+import com.sanha.moneytalk.feature.chat.data.ChatIncomeContextPolicy
 import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
@@ -592,7 +593,11 @@ class ChatViewModel @Inject constructor(
                     } else if (queryRequest != null) {
                         // 3단계: 요청된 쿼리 실행
                         if (queryRequest.queries.isNotEmpty()) {
-                            for (query in queryRequest.queries) {
+                            val scopedQueries = ChatIncomeContextPolicy.filterQueries(
+                                userMessage = message,
+                                queries = queryRequest.queries
+                            )
+                            for (query in scopedQueries) {
                                 val result = executeQuery(query)
                                 if (result != null) {
                                     queryResults.add(result)
@@ -641,7 +646,10 @@ class ChatViewModel @Inject constructor(
                     // 5단계: 대화 맥락 + 쿼리 결과로 최종 답변 생성
                     val hasFinancialContext =
                         queryResults.isNotEmpty() || actionResults.isNotEmpty()
-                    val monthlyIncome = if (hasFinancialContext) {
+                    val monthlyIncome = if (
+                        hasFinancialContext &&
+                        ChatIncomeContextPolicy.requiresIncomeContext(message)
+                    ) {
                         settingsDataStore.getMonthlyIncome()
                     } else {
                         null
@@ -2151,12 +2159,6 @@ class ChatViewModel @Inject constructor(
         )
 
         return results
-    }
-
-    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
-    @Suppress("UNUSED_PARAMETER")
-    fun setApiKey(key: String) {
-        // RTDB 기반 키 관리로 전환 — 로컬 키 저장 제거
     }
 
     fun clearCurrentSessionHistory() {

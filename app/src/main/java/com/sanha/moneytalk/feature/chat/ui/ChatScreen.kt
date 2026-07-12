@@ -65,7 +65,7 @@ fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var showApiKeyDialog by remember { mutableStateOf(false) }
+    var showAiUnavailableDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf<Long?>(null) }
 
     // ===== 코치마크 (화면별 온보딩) =====
@@ -107,7 +107,7 @@ fun ChatScreen(
                 onSendMessage = { viewModel.sendMessage(it) },
                 onRetry = { viewModel.retryLastMessage() },
                 hasApiKey = uiState.hasApiKey,
-                onApiKeyClick = { showApiKeyDialog = true },
+                onApiKeyClick = { showAiUnavailableDialog = true },
                 onShowRewardAd = { activity -> viewModel.showRewardAd(activity) },
                 onDismissRewardAdDialog = { viewModel.onRewardAdDismissed() },
                 rewardChatCount = viewModel.getRewardChatCount()
@@ -119,7 +119,7 @@ fun ChatScreen(
                 onSessionSelect = { viewModel.enterChatRoom(it) },
                 onSessionDelete = { showDeleteConfirm = it },
                 onNewSession = { viewModel.createNewSession() },
-                onApiKeyClick = { showApiKeyDialog = true },
+                onApiKeyClick = { showAiUnavailableDialog = true },
                 coachMarkRegistry = coachMarkRegistry
             )
         }
@@ -133,14 +133,9 @@ fun ChatScreen(
     )
     } // Box
 
-    // API 키 설정 다이얼로그
-    if (showApiKeyDialog) {
-        ApiKeyDialog(
-            onDismiss = { showApiKeyDialog = false },
-            onConfirm = { key ->
-                viewModel.setApiKey(key)
-                showApiKeyDialog = false
-            }
+    if (showAiUnavailableDialog) {
+        AiServiceUnavailableDialog(
+            onDismiss = { showAiUnavailableDialog = false }
         )
     }
 
@@ -253,7 +248,7 @@ fun ChatRoomView(
 
                 if (!hasApiKey) {
                     TextButton(onClick = onApiKeyClick) {
-                        Text(stringResource(R.string.api_key_setting))
+                        Text(stringResource(R.string.ai_service_status_check))
                     }
                 }
             }

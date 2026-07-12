@@ -3,12 +3,13 @@ package com.sanha.moneytalk.feature.chat.data
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
 import android.content.Context
-import com.google.ai.client.generativeai.GenerativeModel
-import com.google.ai.client.generativeai.type.content
-import com.google.ai.client.generativeai.type.generationConfig
+import com.google.firebase.ai.GenerativeModel
+import com.google.firebase.ai.type.content
+import com.google.firebase.ai.type.generationConfig
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
-import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
+import com.sanha.moneytalk.core.firebase.FirebaseAiModelFactory
+import com.sanha.moneytalk.core.firebase.GeminiConfigProvider
 import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.DataQueryParser
@@ -27,7 +28,7 @@ import javax.inject.Singleton
 /**
  * Gemini AI Repository 구현체
  *
- * 3개의 GenerativeModel을 내부적으로 관리하며, API 키 또는 모델 설정 변경 시 자동으로 재생성합니다.
+ * 3개의 GenerativeModel을 내부적으로 관리하며 모델 설정 변경 시 자동으로 재생성합니다.
  * - queryAnalyzerModel: 쿼리/액션 분석용
  * - financialAdvisorModel: 재무 상담 답변용
  * - summaryModel: 대화 요약용
@@ -39,7 +40,8 @@ import javax.inject.Singleton
 @Singleton
 class GeminiRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val apiKeyProvider: GeminiApiKeyProvider,
+    private val configProvider: GeminiConfigProvider,
+    private val firebaseAiModelFactory: FirebaseAiModelFactory,
     private val settingsDataStore: SettingsDataStore
 ) : GeminiRepository {
     companion object {
@@ -49,7 +51,6 @@ class GeminiRepositoryImpl @Inject constructor(
         private const val HOME_INSIGHT_RETRY_BASE_DELAY_MS = 1200L
     }
 
-    private var cachedApiKey: String? = null
     private var cachedModelConfig: GeminiModelConfig? = null
 
     // 쿼리 분석용 모델
@@ -61,30 +62,28 @@ class GeminiRepositoryImpl @Inject constructor(
     // 요약 전용 모델
     private var summaryModel: GenerativeModel? = null
 
-    // API 키 또는 모델 설정 변경 감지 → 모델 재생성
-    private suspend fun getApiKey(): String {
-        val key = apiKeyProvider.getApiKey()
-        val currentModelConfig = apiKeyProvider.modelConfig
-        if (key != cachedApiKey || currentModelConfig != cachedModelConfig) {
-            cachedApiKey = key
+    // 모델 설정 변경 감지 → 모델 재생성
+    private suspend fun refreshModelConfig(): Boolean {
+        if (!configProvider.isServiceAvailable()) return false
+
+        val currentModelConfig = configProvider.modelConfig
+        if (currentModelConfig != cachedModelConfig) {
             cachedModelConfig = currentModelConfig
             // 키 또는 모델 설정 변경 시 모델 재생성
             queryAnalyzerModel = null
             financialAdvisorModel = null
             summaryModel = null
         }
-        return cachedApiKey ?: ""
+        return true
     }
 
     // 쿼리 분석용 모델 가져오기 (System Instruction 포함)
     private suspend fun getQueryAnalyzerModel(): GenerativeModel? {
-        val apiKey = getApiKey()
-        if (apiKey.isBlank()) return null
+        if (!refreshModelConfig()) return null
 
         if (queryAnalyzerModel == null) {
-            queryAnalyzerModel = GenerativeModel(
-                modelName = apiKeyProvider.modelConfig.queryAnalyzer,
-                apiKey = apiKey,
+            queryAnalyzerModel = firebaseAiModelFactory.create(
+                modelName = configProvider.modelConfig.queryAnalyzer,
                 generationConfig = generationConfig {
                     temperature = 0.3f  // 쿼리 분석은 정확도가 중요
                     topK = 20
@@ -105,13 +104,11 @@ class GeminiRepositoryImpl @Inject constructor(
 
     // 재무 상담용 모델 가져오기 (System Instruction 포함)
     private suspend fun getFinancialAdvisorModel(): GenerativeModel? {
-        val apiKey = getApiKey()
-        if (apiKey.isBlank()) return null
+        if (!refreshModelConfig()) return null
 
         if (financialAdvisorModel == null) {
-            financialAdvisorModel = GenerativeModel(
-                modelName = apiKeyProvider.modelConfig.financialAdvisor,
-                apiKey = apiKey,
+            financialAdvisorModel = firebaseAiModelFactory.create(
+                modelName = configProvider.modelConfig.financialAdvisor,
                 generationConfig = generationConfig {
                     temperature = 0.7f
                     topK = 40
@@ -132,13 +129,11 @@ class GeminiRepositoryImpl @Inject constructor(
 
     // 요약 전용 모델 가져오기 (System Instruction 포함)
     private suspend fun getSummaryModel(): GenerativeModel? {
-        val apiKey = getApiKey()
-        if (apiKey.isBlank()) return null
+        if (!refreshModelConfig()) return null
 
         if (summaryModel == null) {
-            summaryModel = GenerativeModel(
-                modelName = apiKeyProvider.modelConfig.summary,
-                apiKey = apiKey,
+            summaryModel = firebaseAiModelFactory.create(
+                modelName = configProvider.modelConfig.summary,
                 generationConfig = generationConfig {
                     temperature = 0.3f  // 요약은 정확도가 중요
                     topK = 20
@@ -159,14 +154,12 @@ class GeminiRepositoryImpl @Inject constructor(
         lastMonthTopCategories: List<Pair<String, Int>>,
         monthlyBudget: Int?
     ): String? {
-        val apiKey = getApiKey()
-        if (apiKey.isBlank()) return null
+        if (!refreshModelConfig()) return null
 
-        val model = GenerativeModel(
-            modelName = apiKeyProvider.modelConfig.homeInsight,
-            apiKey = apiKey,
+        val model = firebaseAiModelFactory.create(
+            modelName = configProvider.modelConfig.homeInsight,
             generationConfig = generationConfig {
-                temperature = 0.7f
+                temperature = 0.3f
                 maxOutputTokens = 100
             },
             systemInstruction = content {
@@ -271,12 +264,27 @@ class GeminiRepositoryImpl @Inject constructor(
             monthComparisonText,
             noExpenseHint
         )
+        val deterministicInsight = buildDeterministicHomeInsight(
+            monthlyExpense = monthlyExpense,
+            lastMonthExpense = lastMonthExpense,
+            topCategories = topCategories
+        )
 
         for (attempt in 1..HOME_INSIGHT_MAX_ATTEMPTS) {
             try {
                 val response = model.generateContent(prompt)
                 val insight = sanitizeHomeInsight(response.text)
-                if (!insight.isNullOrBlank()) return insight
+                if (!insight.isNullOrBlank()) {
+                    if (HomeInsightNumberGuard.matchesDeterministicClaims(
+                            insight = insight,
+                            deterministicInsight = deterministicInsight
+                        )
+                    ) {
+                        return insight
+                    }
+                    MoneyTalkLogger.w("인사이트가 확정 계산과 다른 숫자 또는 방향을 포함해 대체")
+                    return deterministicInsight
+                }
                 throw IllegalStateException("인사이트 응답이 비어있습니다")
             } catch (e: Exception) {
                 val message = e.message.orEmpty()
@@ -302,6 +310,36 @@ class GeminiRepositoryImpl @Inject constructor(
         return null
     }
 
+    private fun buildDeterministicHomeInsight(
+        monthlyExpense: Int,
+        lastMonthExpense: Int,
+        topCategories: List<Pair<String, Int>>
+    ): String? {
+        if (lastMonthExpense > 0) {
+            val difference = monthlyExpense - lastMonthExpense
+            val absoluteDifference = kotlin.math.abs(difference)
+            val percent = absoluteDifference.toLong() * 100 / lastMonthExpense
+            val messageRes = when {
+                difference > 0 -> R.string.ai_home_insight_fallback_month_increase
+                difference < 0 -> R.string.ai_home_insight_fallback_month_decrease
+                else -> R.string.ai_home_insight_fallback_month_same
+            }
+            return if (difference == 0) {
+                context.getString(messageRes)
+            } else {
+                context.getString(messageRes, absoluteDifference.formatWon(), percent)
+            }
+        }
+
+        return topCategories.firstOrNull()?.let { (category, amount) ->
+            context.getString(
+                R.string.ai_home_insight_fallback_top_category,
+                category,
+                amount.formatWon()
+            )
+        }
+    }
+
     private fun sanitizeHomeInsight(raw: String?): String? {
         val line = raw
             ?.lineSequence()
@@ -320,13 +358,8 @@ class GeminiRepositoryImpl @Inject constructor(
         }
     }
 
-    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
-    override suspend fun setApiKey(key: String) {
-        // RTDB 기반 키 관리로 전환 — 로컬 키 저장 제거
-    }
-
     override suspend fun hasApiKey(): Boolean {
-        return apiKeyProvider.hasValidApiKey()
+        return configProvider.isServiceAvailable()
     }
 
     override suspend fun analyzeQueryNeeds(contextualMessage: String): Result<DataQueryRequest?> {
@@ -334,8 +367,8 @@ class GeminiRepositoryImpl @Inject constructor(
 
             val model = getQueryAnalyzerModel()
             if (model == null) {
-                MoneyTalkLogger.e("API 키가 설정되지 않음")
-                return Result.failure(Exception("API 키가 설정되지 않았습니다."))
+                MoneyTalkLogger.e("Firebase AI Logic 서비스를 사용할 수 없음")
+                return Result.failure(Exception("AI 서비스를 일시적으로 사용할 수 없습니다."))
             }
 
             // 오늘 날짜와 사용자 설정 월 시작일 기준 기간 정보 추가
@@ -405,8 +438,8 @@ class GeminiRepositoryImpl @Inject constructor(
 
             val model = getFinancialAdvisorModel()
             if (model == null) {
-                MoneyTalkLogger.e("API 키가 설정되지 않음")
-                return Result.failure(Exception("API 키가 설정되지 않았습니다."))
+                MoneyTalkLogger.e("Firebase AI Logic 서비스를 사용할 수 없음")
+                return Result.failure(Exception("AI 서비스를 일시적으로 사용할 수 없습니다."))
             }
 
             // 데이터만 전송 (역할/규칙은 System Instruction에 있음)
@@ -423,13 +456,17 @@ class GeminiRepositoryImpl @Inject constructor(
                     "- ${result.message}"
                 }
             } else ""
-            val incomeContext = if (monthlyIncome > 0) {
-                context.getString(
-                    R.string.ai_chat_section_monthly_income,
-                    String.format(Locale.KOREA, "%,d", monthlyIncome)
-                ) + "\n\n"
+            val incomeContext = if (ChatIncomeContextPolicy.requiresIncomeContext(userMessage)) {
+                if (monthlyIncome > 0) {
+                    context.getString(
+                        R.string.ai_chat_section_monthly_income,
+                        String.format(Locale.KOREA, "%,d", monthlyIncome)
+                    ) + "\n\n"
+                } else {
+                    context.getString(R.string.ai_chat_section_monthly_income_unset) + "\n\n"
+                }
             } else {
-                context.getString(R.string.ai_chat_section_monthly_income_unset) + "\n\n"
+                ""
             }
 
             val prompt = context.getString(
@@ -459,7 +496,7 @@ class GeminiRepositoryImpl @Inject constructor(
 
             val model = getFinancialAdvisorModel()
             if (model == null) {
-                return Result.failure(Exception("API 키가 설정되지 않았습니다."))
+                return Result.failure(Exception("AI 서비스를 일시적으로 사용할 수 없습니다."))
             }
 
             val response = model.generateContent(contextPrompt)
@@ -477,8 +514,8 @@ class GeminiRepositoryImpl @Inject constructor(
 
             val model = getFinancialAdvisorModel()
             if (model == null) {
-                MoneyTalkLogger.e("API 키가 설정되지 않음")
-                return Result.failure(Exception("API 키가 설정되지 않았습니다. 설정에서 Gemini API 키를 입력해주세요."))
+                MoneyTalkLogger.e("Firebase AI Logic 서비스를 사용할 수 없음")
+                return Result.failure(Exception("AI 서비스를 일시적으로 사용할 수 없습니다."))
             }
 
             val response = model.generateContent(userMessage)
@@ -517,7 +554,7 @@ class GeminiRepositoryImpl @Inject constructor(
 
             val model = getSummaryModel()
             if (model == null) {
-                return Result.failure(Exception("API 키가 설정되지 않았습니다."))
+                return Result.failure(Exception("AI 서비스를 일시적으로 사용할 수 없습니다."))
             }
 
             val prompt = if (existingSummary.isNullOrBlank()) {

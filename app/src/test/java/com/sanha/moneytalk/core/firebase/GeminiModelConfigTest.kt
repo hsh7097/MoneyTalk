@@ -9,8 +9,8 @@ class GeminiModelConfigTest {
     fun defaultChatModelsUseCostGuardedFlashLite() {
         val config = GeminiModelConfig()
 
-        assertEquals("gemini-2.5-flash-lite", config.queryAnalyzer)
-        assertEquals("gemini-2.5-flash-lite", config.financialAdvisor)
-        assertEquals("gemini-2.5-flash-lite", config.homeInsight)
+        assertEquals("gemini-3.1-flash-lite", config.queryAnalyzer)
+        assertEquals("gemini-3.1-flash-lite", config.financialAdvisor)
+        assertEquals("gemini-3.1-flash-lite", config.homeInsight)
     }
 }

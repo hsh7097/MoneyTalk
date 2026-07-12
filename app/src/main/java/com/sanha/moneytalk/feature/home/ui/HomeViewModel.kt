@@ -390,10 +390,14 @@ class HomeViewModel @Inject constructor(
                 val elapsedDays = ((referencePoint - monthStart) / (24L * 60 * 60 * 1000)).toInt()
                 val prevYear = if (month == 1) year - 1 else year
                 val prevMonth = if (month == 1) 12 else month - 1
-                val (lastMonthStart, _) = DateUtils.getCustomMonthPeriod(
+                val (lastMonthStart, lastMonthEnd) = DateUtils.getCustomMonthPeriod(
                     prevYear, prevMonth, state.monthStartDay
                 )
-                val lastMonthSamePoint = lastMonthStart + (elapsedDays.toLong() * 24 * 60 * 60 * 1000)
+                val lastMonthSamePoint = HomeComparisonPeriod.endOfElapsedDay(
+                    periodStart = lastMonthStart,
+                    periodEnd = lastMonthEnd,
+                    elapsedDays = elapsedDays
+                )
                 val lastMonthExpenses = withContext(Dispatchers.IO) {
                     expenseRepository.getExpensesByDateRangeOnce(lastMonthStart, lastMonthSamePoint)
                 }

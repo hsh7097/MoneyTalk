@@ -21,7 +21,7 @@ gson = "2.10.1"
 datastore = "1.0.0"
 ksp = "2.1.20-1.0.32"
 lottie = "6.3.0"
-firebaseBom = "33.7.0"
+firebaseBom = "34.15.0"
 googleServices = "4.4.2"
 firebaseCrashlytics = "3.0.3"
 vico = "2.0.0-alpha.28"
@@ -87,18 +87,18 @@ play-services-auth = { group = "com.google.android.gms", name = "play-services-a
 google-api-client-android = { group = "com.google.api-client", name = "google-api-client-android", version = "2.2.0" }
 google-api-services-drive = { group = "com.google.apis", name = "google-api-services-drive", version = "v3-rev20231128-2.0.0" }
 
-# Google Generative AI (Gemini)
-generative-ai = { group = "com.google.ai.client.generativeai", name = "generativeai", version = "0.9.0" }
-
 # Google AdMob
 play-services-ads = { group = "com.google.android.gms", name = "play-services-ads", version = "23.6.0" }
 
 # Firebase
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
-firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics-ktx" }
-firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics-ktx" }
-firebase-database = { group = "com.google.firebase", name = "firebase-database-ktx" }
-firebase-config = { group = "com.google.firebase", name = "firebase-config-ktx" }
+firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics" }
+firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
+firebase-database = { group = "com.google.firebase", name = "firebase-database" }
+firebase-config = { group = "com.google.firebase", name = "firebase-config" }
+firebase-ai = { group = "com.google.firebase", name = "firebase-ai" }
+firebase-appcheck-playintegrity = { group = "com.google.firebase", name = "firebase-appcheck-playintegrity" }
+firebase-appcheck-debug = { group = "com.google.firebase", name = "firebase-appcheck-debug" }
 
 # Vico Chart
 vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vico" }

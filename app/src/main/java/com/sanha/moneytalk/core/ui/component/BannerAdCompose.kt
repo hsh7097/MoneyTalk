@@ -69,17 +69,17 @@ object BannerAdIds {
     /** Google 공식 배너 테스트 광고 ID */
     private const val TEST_BANNER = "ca-app-pub-3940256099942544/6300978111"
 
-    val HOME = if (BuildVariantPolicy.isReleaseBuild) {
+    val HOME = if (BuildVariantPolicy.shouldUseProductionAdUnits) {
         "ca-app-pub-4707673176609005/8344902874"
     } else {
         TEST_BANNER
     }
-    val HISTORY = if (BuildVariantPolicy.isReleaseBuild) {
+    val HISTORY = if (BuildVariantPolicy.shouldUseProductionAdUnits) {
         "ca-app-pub-4707673176609005/5323629075"
     } else {
         TEST_BANNER
     }
-    val CATEGORY_DETAIL = if (BuildVariantPolicy.isReleaseBuild) {
+    val CATEGORY_DETAIL = if (BuildVariantPolicy.shouldUseProductionAdUnits) {
         "ca-app-pub-4707673176609005/9633933815"
     } else {
         TEST_BANNER

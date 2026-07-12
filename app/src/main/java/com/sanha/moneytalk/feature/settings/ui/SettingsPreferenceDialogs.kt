@@ -109,66 +109,6 @@ fun ThemeModeDialog(
     )
 }
 
-/** Gemini API 키 설정 다이얼로그. API 키 입력 및 저장 */
-@Composable
-fun ApiKeySettingDialog(
-    currentKeyHint: String = "",
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
-) {
-    var apiKey by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.dialog_api_key_title)) },
-        text = {
-            Column {
-                Text(
-                    text = stringResource(R.string.dialog_api_key_message_settings),
-                    style = MaterialTheme.typography.bodySmall
-                )
-                if (currentKeyHint.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = currentKeyHint,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = apiKey,
-                    onValueChange = { apiKey = it },
-                    label = { Text(stringResource(R.string.dialog_api_key_label)) },
-                    placeholder = { Text(stringResource(R.string.dialog_api_key_placeholder)) },
-                    trailingIcon = {
-                        if (apiKey.isNotEmpty()) {
-                            IconButton(onClick = { apiKey = "" }) {
-                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(apiKey) },
-                enabled = apiKey.isNotBlank()
-            ) {
-                Text(stringResource(R.string.common_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_cancel))
-            }
-        }
-    )
-}
-
 /** 월 시작일 설정 다이얼로그. 1~31일 중 정산 시작일 선택 */
 @Composable
 fun MonthStartDayDialog(

@@ -54,6 +54,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -410,6 +411,7 @@ fun CategorySelectDialog(
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.58f).dp
+    val usesLargeFontLayout = LocalDensity.current.fontScale >= 1.5f
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -449,7 +451,7 @@ fun CategorySelectDialog(
                     .fillMaxWidth()
             ) {
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(4),
+                    columns = GridCells.Fixed(if (usesLargeFontLayout) 3 else 4),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
@@ -463,6 +465,7 @@ fun CategorySelectDialog(
                                 emoji = "\uD83D\uDCCB",
                                 label = stringResource(R.string.common_all),
                                 isSelected = currentCategory == null,
+                                allowTwoLineLabel = usesLargeFontLayout,
                                 onClick = { onCategorySelected(null) }
                             )
                         }
@@ -472,6 +475,7 @@ fun CategorySelectDialog(
                             emoji = category.emoji,
                             label = category.displayName,
                             isSelected = category.displayName == currentCategory,
+                            allowTwoLineLabel = usesLargeFontLayout,
                             onClick = { onCategorySelected(category.displayName) }
                         )
                     }
@@ -585,6 +589,7 @@ private fun CategoryGridItem(
     emoji: String,
     label: String,
     isSelected: Boolean,
+    allowTwoLineLabel: Boolean,
     onClick: () -> Unit
 ) {
     Column(
@@ -610,7 +615,7 @@ private fun CategoryGridItem(
             color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
             else MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
-            maxLines = 1,
+            maxLines = if (allowTwoLineLabel) 2 else 1,
             overflow = TextOverflow.Ellipsis
         )
     }

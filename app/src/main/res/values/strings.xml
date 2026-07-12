@@ -42,7 +42,7 @@
     <string name="chat_subtitle_with_api">자주 보는 소비 질문을 바로 확인하세요</string>
     <string name="chat_subtitle_in_conversation">내 지출 데이터 기준으로 답변합니다</string>
     <string name="chat_subtitle_loading">답변을 준비하고 있어요</string>
-    <string name="chat_subtitle_no_api">AI 인사이트를 쓰려면 API 키를 설정해주세요</string>
+    <string name="chat_subtitle_no_api">AI 서비스를 일시적으로 사용할 수 없습니다</string>
     <string name="chat_input_placeholder">메시지를 입력하세요…</string>
     <string name="chat_input_loading_placeholder">답변 생성 중…</string>
     <string name="chat_send">전송</string>
@@ -109,6 +109,10 @@
     <string name="ai_home_insight_month_comparison_no_previous" translatable="false">\n전월 대비 계산 결과: 전월 지출 0원/데이터 부족으로 비율 판단 불가</string>
     <string name="ai_home_insight_month_comparison_insufficient" translatable="false">\n전월 대비 계산 결과: 비교 데이터 부족</string>
     <string name="ai_home_insight_no_expense_hint" translatable="false">\n데이터 상태: 이번 달 지출 0원. 소비가 없다고 단정하지 말고 데이터 부족 가능성을 고려.</string>
+    <string name="ai_home_insight_fallback_month_increase" translatable="false">📈 지난달 대비 지출이 %1$s원(%2$d%%) 증가했습니다.</string>
+    <string name="ai_home_insight_fallback_month_decrease" translatable="false">📉 지난달 대비 지출이 %1$s원(%2$d%%) 감소했습니다.</string>
+    <string name="ai_home_insight_fallback_month_same" translatable="false">➖ 지난달과 지출이 같습니다.</string>
+    <string name="ai_home_insight_fallback_top_category" translatable="false">📊 이번 달 가장 큰 지출은 %1$s %2$s원입니다.</string>
     <string name="ai_chat_section_previous_summary" translatable="false">[이전 대화 요약]</string>
     <string name="ai_chat_section_recent_messages" translatable="false">[최근 대화]</string>
     <string name="ai_chat_section_current_question" translatable="false">[현재 질문]</string>
@@ -131,17 +135,14 @@
     <string name="dialog_confirm">확인</string>
     <string name="dialog_cancel">취소</string>
 
-    <!-- API 키 설정 다이얼로그 -->
-    <string name="dialog_api_key_title">Gemini API 키 설정</string>
-    <string name="dialog_api_key_message">Google AI Studio에서 발급받은 API 키를 입력해주세요.</string>
-    <string name="dialog_api_key_label">API Key</string>
-    <string name="dialog_api_key_placeholder">AIza…</string>
-    <string name="api_key_setting">API 키 설정</string>
+    <string name="dialog_ai_service_unavailable_title">AI 서비스 연결 불가</string>
+    <string name="dialog_ai_service_unavailable_message">잠시 후 다시 시도해주세요. 서비스 상태는 서버에서 자동으로 복구됩니다.</string>
+    <string name="ai_service_status_check">상태 확인</string>
 
     <!-- 가이드 질문 -->
     <string name="guide_welcome">확인할 인사이트를 골라보세요</string>
     <string name="guide_intro">자주 보는 소비 점검을 바로 실행할 수 있어요.\n질문을 고르면 내 지출 데이터로 답변합니다.</string>
-    <string name="guide_api_key_required">* API 키를 먼저 설정해주세요</string>
+    <string name="guide_ai_service_unavailable">* AI 서비스를 일시적으로 사용할 수 없습니다</string>
 
     <!-- 가이드 질문 카테고리 -->
     <string name="guide_category_expense_search">빠른 조회</string>
@@ -406,10 +407,6 @@
     <string name="budget_subtitle_category_only">%d개 카테고리 예산 설정</string>
 
     <string name="settings_section_category">카테고리 관리</string>
-    <string name="settings_api_key_title">Gemini API 키</string>
-    <string name="settings_api_key_set">설정됨: %s</string>
-    <string name="settings_api_key_not_set">AI 상담을 위한 API 키 설정 (무료)</string>
-
     <string name="settings_section_data">데이터 관리</string>
     <string name="settings_export_title">데이터 내보내기</string>
     <string name="settings_export_subtitle">필터 적용 후 JSON 또는 엑셀로 내보내기</string>
@@ -490,10 +487,6 @@
     <string name="dialog_month_start_label">시작일</string>
     <string name="dialog_month_start_hint">1~31 사이의 숫자를 입력하세요</string>
 
-    <!-- API 키 다이얼로그 (설정 화면용) -->
-    <string name="dialog_api_key_message_settings">Google AI Studio(aistudio.google.com)에서\n무료로 API 키를 발급받을 수 있습니다.</string>
-    <string name="dialog_api_key_current">현재 설정됨</string>
-
     <!-- 카테고리 분류 다이얼로그 (설정에서 수동 실행 시 사용) -->
     <string name="classify_dialog_title">지출 카테고리 정리</string>
     <string name="classify_dialog_message">%d건의 미정리 항목이 있습니다.\n\n카테고리를 자동으로 정리합니다.\n처음 실행 시 잠시 시간이 소요될 수 있습니다.</string>
@@ -534,7 +527,7 @@
 
     <!-- 설정 - 카테고리 정리 -->
     <string name="settings_classify_title">카테고리 정리</string>
-    <string name="settings_classify_no_api_key">API 키를 먼저 설정해주세요</string>
+    <string name="settings_classify_no_api_key">AI 서비스를 일시적으로 사용할 수 없습니다</string>
     <string name="settings_classify_background">백그라운드에서 분류 진행 중…</string>
     <string name="settings_classify_unclassified">미정리 %d건</string>
     <string name="settings_classify_done">정리할 항목 없음</string>

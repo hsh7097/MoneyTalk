@@ -395,6 +395,10 @@ class RewardAdManager @Inject constructor(
     }
 
     private fun rewardAdId(): String {
-        return if (BuildVariantPolicy.isReleaseBuild) REWARD_AD_ID else TEST_REWARD_AD_ID
+        return if (BuildVariantPolicy.shouldUseProductionAdUnits) {
+            REWARD_AD_ID
+        } else {
+            TEST_REWARD_AD_ID
+        }
     }
 }

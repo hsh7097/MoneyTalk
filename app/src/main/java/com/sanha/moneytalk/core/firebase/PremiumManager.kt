@@ -20,7 +20,6 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,22 +27,14 @@ import javax.inject.Singleton
  * 프리미엄 서비스 상태 관리자
  *
  * Firebase Realtime Database에서 서버 설정(PremiumConfig)을 실시간으로 감시하고,
- * API 키 풀링(라운드로빈) 및 모델명 원격 관리를 제공합니다.
- *
- * ## API 키 결정 로직
- * 1. 서비스 비활성화 → 빈 문자열
- * 2. RTDB gemini_api_keys 배열 (추가 키, 중복 제거)
- * 3. RTDB gemini_api_key 단일 키 (하위호환, 중복 제거)
- * 4. 키가 없으면 → 빈 문자열 (서비스 불가)
+ * 서비스 상태와 모델명 원격 관리를 제공합니다.
  *
  * ## Firebase Realtime Database 구조
  * ```
  * /config
- *   /gemini_api_key: "단일 키 (하위호환)"
- *   /gemini_api_keys: ["key1", "key2", ...]
- *   /models/query_analyzer: "gemini-2.5-flash-lite"
- *   /models/financial_advisor: "gemini-2.5-flash-lite"
- *   /models/summary: "gemini-2.5-flash"
+ *   /models/query_analyzer: "gemini-3.1-flash-lite"
+ *   /models/financial_advisor: "gemini-3.1-flash-lite"
+ *   /models/summary: "gemini-3.5-flash"
  *   /models/... (기타 모델)
  *   /free_tier_enabled: true|false
  *   /service_enabled: true|false
@@ -60,6 +51,11 @@ class PremiumManager @Inject constructor(
     companion object {
         private const val CONFIG_PATH = "config"
         private const val CONFIG_FETCH_TIMEOUT_MS = 3000L
+
+        internal fun canUseAi(config: PremiumConfig, tier: ServiceTier): Boolean {
+            return config.serviceEnabled &&
+                (tier != ServiceTier.FREE || config.freeTierEnabled)
+        }
     }
 
     private val _premiumConfig = MutableStateFlow(PremiumConfig())
@@ -70,11 +66,11 @@ class PremiumManager @Inject constructor(
     private val configLock = Any()
     private val remoteConfigLoaded = AtomicBoolean(false)
 
-    /** 라운드로빈 키 인덱스 (thread-safe) */
-    private val keyIndex = AtomicInteger(0)
-
     init {
         loadCachedConfig()
+        managerScope.launch {
+            settingsDataStore.clearLegacyAiApiKeys()
+        }
     }
 
     /**
@@ -135,40 +131,21 @@ class PremiumManager @Inject constructor(
         when {
             !config.serviceEnabled -> ServiceStatus.Maintenance(config.maintenanceMessage)
             tier == ServiceTier.FREE && !config.freeTierEnabled -> ServiceStatus.FreeTierBlocked
-            !hasAvailableKeys(config) -> ServiceStatus.PremiumKeyUnavailable
             else -> ServiceStatus.Active(tier)
         }
     }
 
-    /**
-     * RTDB 키 풀에서 라운드로빈으로 API 키 반환
-     *
-     * 우선순위:
-     * 1. gemini_api_keys 배열 (라운드로빈)
-     * 2. gemini_api_key 단일 키 (하위호환)
-     * 3. 빈 문자열 (키 없음)
-     */
-    suspend fun getEffectiveApiKey(): String {
+    suspend fun isAiServiceEnabled(): Boolean {
         var config = _premiumConfig.value
-        if (!config.serviceEnabled) return ""
-
-        var keys = getAvailableKeys(config)
-        if (keys.isEmpty()) {
+        if (!remoteConfigLoaded.get()) {
             val refreshedConfig = withTimeoutOrNull(CONFIG_FETCH_TIMEOUT_MS) {
                 fetchConfigSnapshot()
             }
             if (refreshedConfig != null) {
                 config = refreshedConfig
-                if (!config.serviceEnabled) return ""
-                keys = getAvailableKeys(config)
             }
         }
-
-        return if (keys.isNotEmpty()) {
-            keys[keyIndex.getAndIncrement().mod(keys.size)]
-        } else {
-            ""
-        }
+        return canUseAi(config, settingsDataStore.getServiceTier())
     }
 
     /**
@@ -198,7 +175,7 @@ class PremiumManager @Inject constructor(
 
     /**
      * RTDB 리스너가 아직 값을 받기 전 사용자가 AI 기능을 누를 수 있어,
-     * 키 풀이 비어 있을 때만 단발 조회로 최신 설정을 보강한다.
+     * 설정 수신 전에는 단발 조회로 최신 서비스 상태를 보강한다.
      */
     private suspend fun fetchConfigSnapshot(): PremiumConfig? {
         val db = database ?: return null
@@ -228,7 +205,9 @@ class PremiumManager @Inject constructor(
         return try {
             val cachedJson = settingsDataStore.getPremiumConfigJson()
             if (cachedJson.isBlank()) return null
-            gson.fromJson(cachedJson, PremiumConfig::class.java)
+            gson.fromJson(cachedJson, PremiumConfig::class.java)?.also { sanitizedConfig ->
+                settingsDataStore.savePremiumConfigJson(gson.toJson(sanitizedConfig))
+            }
         } catch (e: Exception) {
             MoneyTalkLogger.w("저장된 서버 설정 복원 실패: ${e.message}")
             null
@@ -261,11 +240,6 @@ class PremiumManager @Inject constructor(
      * DataSnapshot에서 PremiumConfig 파싱 (중복 제거용 헬퍼)
      */
     private fun parseConfig(snapshot: DataSnapshot): PremiumConfig {
-        // API 키 풀 파싱
-        val apiKeys = snapshot.child("gemini_api_keys").children
-            .mapNotNull { it.getValue(String::class.java) }
-            .filter { it.isNotBlank() }
-
         // 모델 설정 파싱
         val modelsSnapshot = snapshot.child("models")
         val modelConfig = GeminiModelConfig(
@@ -284,14 +258,10 @@ class PremiumManager @Inject constructor(
             smsRegexExtractor = modelsSnapshot.child("sms_regex_extractor")
                 .getValue(String::class.java) ?: GeminiModelConfig.DEFAULT_SMS_REGEX_EXTRACTOR,
             smsBatchExtractor = modelsSnapshot.child("sms_batch_extractor")
-                .getValue(String::class.java) ?: GeminiModelConfig.DEFAULT_SMS_BATCH_EXTRACTOR,
-            embedding = modelsSnapshot.child("embedding")
-                .getValue(String::class.java) ?: GeminiModelConfig.DEFAULT_EMBEDDING
+                .getValue(String::class.java) ?: GeminiModelConfig.DEFAULT_SMS_BATCH_EXTRACTOR
         )
 
         return PremiumConfig(
-            geminiApiKey = snapshot.child("gemini_api_key").getValue(String::class.java) ?: "",
-            geminiApiKeys = apiKeys,
             freeTierEnabled = snapshot.child("free_tier_enabled").getValue(Boolean::class.java) ?: true,
             serviceEnabled = snapshot.child("service_enabled").getValue(Boolean::class.java) ?: true,
             maintenanceMessage = snapshot.child("maintenance_message").getValue(String::class.java) ?: "",
@@ -307,35 +277,6 @@ class PremiumManager @Inject constructor(
         )
     }
 
-    /**
-     * 사용 가능한 키 목록 반환 (RTDB 키)
-     *
-     * 우선순위:
-     * 1. RTDB gemini_api_keys 배열 (추가 키, 중복 제거)
-     * 2. RTDB gemini_api_key 단일 키 (하위호환, 중복 제거)
-     */
-    private fun getAvailableKeys(config: PremiumConfig): List<String> {
-        val keys = mutableListOf<String>()
-
-        // 1. RTDB 키 풀 (추가 키, 중복 제거)
-        for (rtdbKey in config.geminiApiKeys) {
-            if (rtdbKey.isNotBlank() && rtdbKey !in keys) {
-                keys.add(rtdbKey)
-            }
-        }
-
-        // 2. RTDB 단일 키 (하위호환, 중복 제거)
-        if (config.geminiApiKey.isNotBlank() && config.geminiApiKey !in keys) {
-            keys.add(config.geminiApiKey)
-        }
-
-        return keys
-    }
-
-    /** 사용 가능한 키가 있는지 확인 */
-    private fun hasAvailableKeys(config: PremiumConfig): Boolean {
-        return getAvailableKeys(config).isNotEmpty()
-    }
 }
 
 /**
@@ -348,6 +289,4 @@ sealed class ServiceStatus {
     data class Maintenance(val message: String) : ServiceStatus()
     /** 무료 티어 차단됨 (프리미엄 전환 필요) */
     data object FreeTierBlocked : ServiceStatus()
-    /** API 키가 서버에 아직 설정되지 않음 */
-    data object PremiumKeyUnavailable : ServiceStatus()
 }

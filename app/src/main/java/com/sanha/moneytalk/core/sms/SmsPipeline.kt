@@ -65,10 +65,10 @@ class SmsPipeline @Inject constructor(
 ) {
 
     companion object {
-        /** 배치 임베딩 크기 (batchEmbedContents API 최대 100) */
+        /** 한 코루틴에서 처리할 로컬 임베딩 묶음 크기 */
         private const val EMBEDDING_BATCH_SIZE = 100
 
-        /** 임베딩 병렬 동시 실행 수 (API 키 5개 × 키당 2) */
+        /** 로컬 임베딩 병렬 동시 실행 수 */
         private const val EMBEDDING_CONCURRENCY = 10
 
         // ===== 파이프라인 단계 인덱스 (Stepper UI용) =====
@@ -186,8 +186,8 @@ class SmsPipeline @Inject constructor(
             )
             unresolvedFromUnmatched.take(5).forEachIndexed { index, embeddedSms ->
                 MoneyTalkLogger.w(
-                    "[Step5-A unresolved] #${index + 1} id=${embeddedSms.input.id}, addr=${embeddedSms.input.address}, " +
-                        "body=${embeddedSms.input.body.replace("\n", "↵").take(120)} (비결제 판정 또는 추출 실패 가능)"
+                    "[Step5-A unresolved] #${index + 1} id=${embeddedSms.input.id}, " +
+                        "bodyLength=${embeddedSms.input.body.length} (비결제 판정 또는 추출 실패 가능)"
                 )
             }
         }
@@ -219,8 +219,8 @@ class SmsPipeline @Inject constructor(
             )
             unresolvedFromRegexFallback.take(5).forEachIndexed { index, embeddedSms ->
                 MoneyTalkLogger.w(
-                    "[Step5-B unresolved] #${index + 1} id=${embeddedSms.input.id}, addr=${embeddedSms.input.address}, " +
-                        "body=${embeddedSms.input.body.replace("\n", "↵").take(120)} (비결제 판정 또는 추출 실패 가능)"
+                    "[Step5-B unresolved] #${index + 1} id=${embeddedSms.input.id}, " +
+                        "bodyLength=${embeddedSms.input.body.length} (비결제 판정 또는 추출 실패 가능)"
                 )
             }
         }
@@ -248,7 +248,7 @@ class SmsPipeline @Inject constructor(
                 }
                 MoneyTalkLogger.w(
                     "[pipelineDrop] #${index + 1} reason=$reason, id=${item.input.id}, " +
-                        "addr=${item.input.address}, body=${item.input.body.replace("\n", "↵")}"
+                        "bodyLength=${item.input.body.length}"
                 )
             }
         }
@@ -271,7 +271,7 @@ class SmsPipeline @Inject constructor(
      *    예: "[KB]02/05 스타벅스 11,940원" → "[KB]{DATE} {STORE} {AMOUNT}원"
      *
      * 2. 100건씩 묶어서 SmsTemplateEngine.batchEmbed()로 배치 임베딩
-     *    Semaphore(10)으로 병렬 제한 (API 키 5개 × 키당 2)
+     *    Semaphore(10)으로 CPU 작업 병렬 수 제한
      *
      * 3. 임베딩 성공한 SMS만 EmbeddedSms로 변환하여 반환
      *    (임베딩 실패 = API 오류 → 해당 SMS는 처리에서 제외)
@@ -308,7 +308,9 @@ class SmsPipeline @Inject constructor(
                                     embedding = embedding
                                 )
                             } else {
-                                MoneyTalkLogger.w("임베딩 실패 (null): ${sms.body.take(30)}")
+                                MoneyTalkLogger.w(
+                                    "임베딩 실패 (null): id=${sms.id}, bodyLength=${sms.body.length}"
+                                )
                                 null
                             }
                         }

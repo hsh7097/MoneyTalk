@@ -170,7 +170,7 @@ class NotificationTransactionService : NotificationListenerService() {
         if (providerMessage == null) {
             MoneyTalkLogger.w(
                 "[NotiService] 최근 provider row 미발견: " +
-                    "pkg=${parsed.packageName}, body=${parsed.body.take(80)}"
+                    "pkg=${parsed.packageName}, bodyLength=${parsed.body.length}"
             )
             return
         }

@@ -1,204 +1,106 @@
 package com.sanha.moneytalk.core.sms
 
-import com.sanha.moneytalk.core.util.MoneyTalkLogger
-
-import com.google.gson.Gson
-import com.google.gson.JsonObject
-import com.google.gson.JsonParser
-import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
+import com.sanha.moneytalk.core.util.StoreAliasManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import java.util.concurrent.TimeUnit
+import java.text.Normalizer
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.sqrt
 
 /**
- * SMS 텍스트 임베딩 생성 서비스
+ * Creates deterministic local text vectors for SMS templates and store names.
  *
- * Gemini Embedding API를 사용하여 SMS 본문의 임베딩 벡터를 생성합니다.
- * 임베딩 모델명은 Firebase RTDB에서 원격 관리됩니다 (GeminiModelConfig).
- *
- * REST API를 직접 호출 (SDK에 embedding 메서드가 없으므로)
+ * The 768-dimensional contract is retained so the existing vector pipeline can keep its data
+ * shape without exposing a Gemini API key. Character n-grams favor structural similarity, which
+ * is the signal needed after SMS amounts, dates, and store values have been templateized.
  */
 @Singleton
-class SmsEmbeddingService @Inject constructor(
-    private val apiKeyProvider: GeminiApiKeyProvider
-) {
+class SmsEmbeddingService @Inject constructor() {
+
     companion object {
-        private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
-
-        /** 429 Rate Limit 재시도 최대 횟수 */
-        private const val MAX_RETRIES = 3
-
-        /** 초기 재시도 대기 시간 (ms) - 지수 백오프: 2s, 4s */
-        private const val INITIAL_RETRY_DELAY_MS = 2000L
-
-        /** 임베딩 출력 차원 수 (Matryoshka: 3072 → 768 축소, 품질 손실 0.26%) */
         const val EMBEDDING_DIMENSION = 768
+
+        private const val FNV_OFFSET_BASIS = 2166136261L
+        private const val FNV_PRIME = 16777619L
+        private const val UINT_MASK = 0xffffffffL
+        private val WHITESPACE = Regex("\\s+")
     }
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build()
-
-    private val gson = Gson()
-
-    /**
-     * 단일 텍스트의 임베딩 벡터 생성
-     *
-     * @param text 임베딩할 텍스트
-     * @return 임베딩 벡터 (768차원, outputDimensionality 지정), 실패 시 null
-     */
-    suspend fun generateEmbedding(text: String): List<Float>? = withContext(Dispatchers.IO) {
-        try {
-            val apiKey = apiKeyProvider.getApiKey()
-            if (apiKey.isBlank()) {
-                MoneyTalkLogger.e("API 키가 설정되지 않음")
-                return@withContext null
-            }
-
-            val embeddingModel = apiKeyProvider.modelConfig.embedding
-            val url = "$BASE_URL/$embeddingModel:embedContent?key=$apiKey"
-
-            val requestBody = JsonObject().apply {
-                add("model", gson.toJsonTree("models/$embeddingModel"))
-                add("content", JsonObject().apply {
-                    add("parts", gson.toJsonTree(listOf(mapOf("text" to text))))
-                })
-                addProperty("outputDimensionality", EMBEDDING_DIMENSION)
-            }
-
-            val request = Request.Builder()
-                .url(url)
-                .post(requestBody.toString().toRequestBody("application/json".toMediaType()))
-                .build()
-
-
-            val response = client.newCall(request).execute()
-            val responseBody = response.body?.string()
-
-            if (!response.isSuccessful) {
-                MoneyTalkLogger.e("임베딩 API 실패: ${response.code} - ${responseBody?.take(200)}")
-                return@withContext null
-            }
-
-            if (responseBody == null) {
-                MoneyTalkLogger.e("응답 본문이 비어 있음")
-                return@withContext null
-            }
-
-            // JSON 파싱: { "embedding": { "values": [0.1, 0.2, ...] } }
-            val json = JsonParser.parseString(responseBody).asJsonObject
-            val embeddingObj = json.getAsJsonObject("embedding")
-            val values = embeddingObj.getAsJsonArray("values")
-
-            val embedding = values.map { it.asFloat }
-
-            embedding
-        } catch (e: Exception) {
-            MoneyTalkLogger.e("임베딩 생성 실패: ${e.message}", e)
-            null
-        }
+    suspend fun generateEmbedding(text: String): List<Float>? = withContext(Dispatchers.Default) {
+        createEmbedding(text)
     }
 
-    /**
-     * 배치 임베딩 생성 (여러 텍스트를 한번에)
-     * 429 Rate Limit 발생 시 지수 백오프로 최대 3회 재시도합니다.
-     *
-     * @param texts 임베딩할 텍스트 목록
-     * @return 각 텍스트의 임베딩 벡터 목록, 실패한 항목은 null
-     */
     suspend fun generateEmbeddings(texts: List<String>): List<List<Float>?> =
-        withContext(Dispatchers.IO) {
-            try {
-                val apiKey = apiKeyProvider.getApiKey()
-                if (apiKey.isBlank()) {
-                    MoneyTalkLogger.e("API 키가 설정되지 않음")
-                    return@withContext texts.map { null }
-                }
+        withContext(Dispatchers.Default) {
+            texts.map(::createEmbedding)
+        }
 
-                val embeddingModel = apiKeyProvider.modelConfig.embedding
-                val url = "$BASE_URL/$embeddingModel:batchEmbedContents?key=$apiKey"
+    suspend fun generateStoreEmbedding(storeName: String): List<Float>? =
+        withContext(Dispatchers.Default) {
+            createStoreEmbedding(storeName)
+        }
 
-                val requests = texts.map { text ->
-                    mapOf(
-                        "model" to "models/$embeddingModel",
-                        "content" to mapOf(
-                            "parts" to listOf(mapOf("text" to text))
-                        ),
-                        "outputDimensionality" to EMBEDDING_DIMENSION
-                    )
-                }
+    suspend fun generateStoreEmbeddings(storeNames: List<String>): List<List<Float>?> =
+        withContext(Dispatchers.Default) {
+            storeNames.map(::createStoreEmbedding)
+        }
 
-                val requestBody = mapOf("requests" to requests)
-                val jsonBody = gson.toJson(requestBody)
+    internal fun createEmbedding(text: String): List<Float>? {
+        val normalized = normalize(text) ?: return null
 
-                // 429 Rate Limit 재시도 (지수 백오프)
-                // Quota 초과("exceeded your current quota")는 재시도 불가 → 즉시 실패
-                var lastError: String? = null
-                for (attempt in 0 until MAX_RETRIES) {
-                    if (attempt > 0) {
-                        val delayMs = INITIAL_RETRY_DELAY_MS * (1L shl (attempt - 1)) // 2s, 4s
-                        MoneyTalkLogger.w("[batchEmbed] ⚠️ 429 재시도 ${attempt}/${MAX_RETRIES - 1}, ${delayMs}ms 대기... (SmsEmbeddingService.generateEmbeddings)"
-                        )
-                        kotlinx.coroutines.delay(delayMs)
-                    }
+        val vector = FloatArray(EMBEDDING_DIMENSION)
+        addFeature(vector, "full:$normalized", 3f)
 
-                    val request = Request.Builder()
-                        .url(url)
-                        .post(jsonBody.toRequestBody("application/json".toMediaType()))
-                        .build()
-
-                    val response = client.newCall(request).execute()
-                    val responseBody = response.body?.string()
-
-                    if (response.code == 429) {
-                        lastError = responseBody?.take(300)
-                        // Quota 초과 vs Rate Limit 구분
-                        val isQuotaExceeded =
-                            responseBody?.contains("exceeded your current quota") == true
-                        if (isQuotaExceeded) {
-                            MoneyTalkLogger.e("[batchEmbed] ❌ 임베딩 일일 할당량(Quota) 초과 - 재시도 불가")
-                            return@withContext texts.map { null }
-                        }
-                        MoneyTalkLogger.w("[batchEmbed] ⚠️ 429 Rate Limit 발생! (SmsEmbeddingService.generateEmbeddings, 시도 ${attempt + 1}/$MAX_RETRIES, ${texts.size}건)"
-                        )
-                        continue // Rate Limit은 재시도
-                    }
-
-                    if (!response.isSuccessful) {
-                        MoneyTalkLogger.e("배치 임베딩 API 실패: ${response.code} - ${responseBody?.take(200)}")
-                        return@withContext texts.map { null }
-                    }
-
-                    if (responseBody == null) {
-                        return@withContext texts.map { null }
-                    }
-
-                    // JSON 파싱: { "embeddings": [{ "values": [...] }, ...] }
-                    val json = JsonParser.parseString(responseBody).asJsonObject
-                    val embeddings = json.getAsJsonArray("embeddings")
-
-                    val result = embeddings.map { embeddingElement ->
-                        val embeddingObj = embeddingElement.asJsonObject
-                        val values = embeddingObj.getAsJsonArray("values")
-                        values.map { it.asFloat }
-                    }
-
-                    return@withContext result
-                }
-
-                // 모든 재시도 실패
-                MoneyTalkLogger.e("배치 임베딩 최종 실패 (${MAX_RETRIES}회 시도): $lastError")
-                texts.map { null }
-            } catch (e: Exception) {
-                MoneyTalkLogger.e("배치 임베딩 실패: ${e.message}", e)
-                texts.map { null }
+        val bounded = "^$normalized$"
+        for (size in 1..3) {
+            val weight = when (size) {
+                1 -> 0.5f
+                2 -> 1.0f
+                else -> 1.5f
+            }
+            for (index in 0..bounded.length - size) {
+                addFeature(
+                    vector = vector,
+                    feature = "$size:${bounded.substring(index, index + size)}",
+                    weight = weight
+                )
             }
         }
+
+        var squaredNorm = 0f
+        vector.forEach { value -> squaredNorm += value * value }
+        if (squaredNorm == 0f) return null
+
+        val norm = sqrt(squaredNorm)
+        return vector.map { it / norm }
+    }
+
+    internal fun createStoreEmbedding(storeName: String): List<Float>? {
+        val canonicalName = StoreAliasManager.normalizeStoreName(storeName) ?: storeName
+        return createEmbedding(canonicalName)
+    }
+
+    private fun normalize(text: String): String? {
+        val tokens = Normalizer.normalize(text, Normalizer.Form.NFKC)
+            .lowercase(Locale.KOREA)
+            .trim()
+            .split(WHITESPACE)
+            .filter { it.isNotEmpty() }
+        if (tokens.isEmpty()) return null
+
+        return tokens.joinToString(separator = "")
+    }
+
+    private fun addFeature(vector: FloatArray, feature: String, weight: Float) {
+        var hash = FNV_OFFSET_BASIS
+        feature.forEach { char ->
+            hash = (hash xor char.code.toLong()) * FNV_PRIME and UINT_MASK
+        }
+        val index = (hash and Int.MAX_VALUE.toLong()).rem(EMBEDDING_DIMENSION).toInt()
+        val sign = if (hash and 0x80000000L == 0L) 1f else -1f
+        vector[index] += sign * weight
+    }
+
 }

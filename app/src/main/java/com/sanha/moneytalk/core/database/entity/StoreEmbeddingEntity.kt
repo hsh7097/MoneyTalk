@@ -37,7 +37,7 @@ data class StoreEmbeddingEntity(
     /** 분류된 카테고리 (식비, 카페, 교통 등) */
     val category: String,
 
-    /** 가게명의 임베딩 벡터 (Gemini Embedding API, 차원 수는 모델 의존) */
+    /** 가게명의 결정적 로컬 임베딩 벡터 (현재 768차원) */
     val embedding: List<Float>,
 
     /** 분류 출처: "gemini" / "user" / "local" / "propagated" */

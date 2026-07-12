@@ -42,6 +42,47 @@ class SmsPreFilterTest {
     }
 
     @Test
+    fun `approved card usage with usage amount label is not filtered`() {
+        val body = "[롯데카드] 04/24 13:45 스타벅스 이용금액 15,000원 승인"
+
+        assertFalse(preFilter.isObviouslyNonPayment(body))
+        assertFalse(preFilter.lacksPaymentRequirements(body))
+    }
+
+    @Test
+    fun `completed structured card bill debits are kept for transaction record`() {
+        val samples = listOf(
+            "[Web발신]\n[롯데카드] 홍길동님, 4월 결제대금 120,000원 중 100,000원 04/24 출금되었습니다.",
+            listOf(
+                "[Web발신]",
+                "[신한카드] 결제대금 인출 안내",
+                "- 홍길동님 결제대금(1234)",
+                "- 120,000원 중 100,000원",
+                "  04/24일 인출 되었습니다."
+            ).joinToString("\n"),
+            "[Web발신]\n이용금액이 기업은행에서 출금됐어요.\n- 출금액: 100,000원\n- 출금일: 04/24\n- 롯데법인(1234)"
+        )
+
+        samples.forEach { body ->
+            assertFalse("completed card bill debit must be kept: $body", preFilter.isObviouslyNonPayment(body))
+            assertFalse("completed card bill debit must meet payment requirements: $body", preFilter.lacksPaymentRequirements(body))
+        }
+    }
+
+    @Test
+    fun `aggregate transaction summaries are filtered before parsing`() {
+        val samples = listOf(
+            "[Web발신]\n교통카드 후불교통 4월 이용내역 18건 45,000원 안내",
+            "[Web발신]\nKSNET 마이장부 신용카드승인 12건 340,000원 매출접수 집계",
+            "[Web발신]\n매출접수 8건 125,000원 교통카드 기준 집계"
+        )
+
+        samples.forEach { body ->
+            assertTrue("aggregate summary must be filtered: $body", preFilter.isObviouslyNonPayment(body))
+        }
+    }
+
+    @Test
     fun `standalone card cancel is kept for income classification`() {
         val body = "[Web발신]\n현대카드 MX Black 취소 하*현\n27,000원 일시불\n06/28 11:51\n주식회사위대"
 
@@ -51,9 +92,14 @@ class SmsPreFilterTest {
 
     @Test
     fun `card bill notice is filtered`() {
-        val body = "[Web발신]\n이번 달 카드대금 결제예정 금액은 120,000원입니다"
+        val samples = listOf(
+            "[Web발신]\n이번 달 카드대금 결제예정 금액은 120,000원입니다",
+            "[Web발신]\n이번 달 이용금액 120,000원 출금예정 안내입니다"
+        )
 
-        assertTrue(preFilter.isObviouslyNonPayment(body))
+        samples.forEach { body ->
+            assertTrue(preFilter.isObviouslyNonPayment(body))
+        }
     }
 
     @Test
@@ -66,6 +112,25 @@ class SmsPreFilterTest {
         """.trimIndent()
 
         assertTrue(preFilter.isObviouslyNonPayment(body))
+    }
+
+    @Test
+    fun `free trial gift promotion is filtered even with payout keyword`() {
+        val body = "[상품권 5만원 도착] 서비스 신청 시 상품권 전원 지급, 0원 무료체험 가입 혜택"
+
+        assertTrue(preFilter.isObviouslyNonPayment(body))
+    }
+
+    @Test
+    fun `zero approval and incomplete deposit instruction are filtered`() {
+        val samples = listOf(
+            "가맹점\n0원 승인\n고객 롯데법인1234\n일시불 05/09 19:58\n누적250,000원",
+            "[Web발신]\n[롯데홈쇼핑] 49,000원/ 농협 123456-12-123456"
+        )
+
+        samples.forEach { body ->
+            assertTrue(preFilter.isObviouslyNonPayment(body))
+        }
     }
 
     @Test

@@ -818,7 +818,7 @@ private fun DetailRowFrame(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             color = TransactionEditDesignColors.textPrimary,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )

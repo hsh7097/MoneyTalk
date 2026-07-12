@@ -53,7 +53,6 @@ import javax.inject.Inject
 /** Settings 화면의 모든 사용자 인터랙션을 Intent로 정의 */
 sealed interface SettingsIntent {
     // 다이얼로그 열기
-    data object ShowApiKeyDialog : SettingsIntent
     data object ShowMonthStartDayDialog : SettingsIntent
     data object ShowDeleteConfirmDialog : SettingsIntent
     data object ShowExportDialog : SettingsIntent
@@ -68,7 +67,6 @@ sealed interface SettingsIntent {
     data object DismissDialog : SettingsIntent
 
     // 액션
-    data class SaveApiKey(val key: String) : SettingsIntent
     data class SaveMonthStartDay(val day: Int) : SettingsIntent
     data class SaveMonthlyBudget(val amount: Int) : SettingsIntent
     data class SaveBudgets(
@@ -89,7 +87,6 @@ sealed interface SettingsIntent {
 
 /** 다이얼로그 종류 (하나의 필드로 관리) */
 enum class SettingsDialog {
-    API_KEY,
     MONTH_START_DAY,
     DELETE_CONFIRM,
     RESTORE_CONFIRM,
@@ -104,7 +101,6 @@ enum class SettingsDialog {
 
 @Stable
 data class SettingsUiState(
-    val apiKey: String = "",
     val hasApiKey: Boolean = false,
     val monthStartDay: Int = 1,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -210,7 +206,6 @@ class SettingsViewModel @Inject constructor(
     /** 모든 사용자 인터랙션을 Intent로 처리 */
     fun onIntent(intent: SettingsIntent) {
         when (intent) {
-            is SettingsIntent.ShowApiKeyDialog -> showDialog(SettingsDialog.API_KEY)
             is SettingsIntent.ShowMonthStartDayDialog -> showDialog(SettingsDialog.MONTH_START_DAY)
             is SettingsIntent.ShowDeleteConfirmDialog -> showDialog(SettingsDialog.DELETE_CONFIRM)
             is SettingsIntent.ShowExportDialog -> showDialog(SettingsDialog.EXPORT)
@@ -221,11 +216,6 @@ class SettingsViewModel @Inject constructor(
             is SettingsIntent.ShowMonthlyBudgetDialog -> showDialog(SettingsDialog.MONTHLY_BUDGET)
             is SettingsIntent.ShowBudgetBottomSheet -> showDialog(SettingsDialog.BUDGET_BOTTOM_SHEET)
             is SettingsIntent.DismissDialog -> dismissDialog()
-
-            is SettingsIntent.SaveApiKey -> {
-                dismissDialog()
-                saveApiKey(intent.key)
-            }
 
             is SettingsIntent.SaveMonthStartDay -> {
                 dismissDialog()
@@ -419,22 +409,6 @@ class SettingsViewModel @Inject constructor(
                 // 무시
             }
         }
-    }
-
-    // API 키 마스킹 (보안)
-    private fun maskApiKey(key: String): String {
-        return if (key.length > 20) {
-            "${key.take(10)}...${key.takeLast(4)}"
-        } else if (key.isNotBlank()) {
-            "${key.take(5)}..."
-        } else {
-            ""
-        }
-    }
-
-    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
-    fun saveApiKey(key: String) {
-        // RTDB 기반 키 관리로 전환 — 로컬 키 저장 제거
     }
 
     fun saveMonthStartDay(day: Int) {
@@ -898,9 +872,7 @@ class SettingsViewModel @Inject constructor(
         val isSignedIn = account != null
 
         // 이전 세션에서 로그인된 계정이 있으면 Drive 서비스 재초기화
-        if (isSignedIn && account != null) {
-            googleDriveHelper.initializeDriveService(context, account)
-        }
+        account?.let { googleDriveHelper.initializeDriveService(context, it) }
 
         _uiState.update {
             it.copy(
@@ -1262,7 +1234,9 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Gemini API 키 존재 여부 확인
+     * Firebase AI Logic 서비스 사용 가능 여부 확인
+     *
+     * 메서드명과 UiState 필드명은 기존 UI 호출부 호환을 위해 유지한다.
      */
     fun hasGeminiApiKey(): Boolean {
         return _uiState.value.hasApiKey

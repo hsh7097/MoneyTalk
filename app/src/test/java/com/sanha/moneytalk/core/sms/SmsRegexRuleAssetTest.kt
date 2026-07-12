@@ -13,15 +13,17 @@ import java.util.regex.Pattern
 
 class SmsRegexRuleAssetTest {
 
-    private val allowedFastPathTypes = setOf("expense", "cancel", "overseas", "payment", "debit")
+    private val knownAssetTypes = setOf("expense", "cancel", "overseas", "payment", "debit")
+    private val runtimeFastPathTypes = setOf("expense", "overseas", "payment", "debit")
 
     @Test
-    fun `asset rules use only supported Fast Path types`() {
+    fun `asset rules use only known types while cancellation stays outside Fast Path`() {
         val rules = loadRules()
-        val unsupported = rules.filter { it.type !in allowedFastPathTypes }
+        val unsupported = rules.filter { it.type !in knownAssetTypes }
 
         assertTrue("unsupported rule types: ${unsupported.map { it.type }.distinct()}", unsupported.isEmpty())
         assertFalse("income rules must stay on SmsIncomeParser path", rules.any { it.type == "income" })
+        assertFalse("cancellation must stay on the income path", "cancel" in runtimeFastPathTypes)
     }
 
     @Test
@@ -111,7 +113,7 @@ class SmsRegexRuleAssetTest {
                 issuer = "삼성",
                 sender = "15888900",
                 type = "expense",
-                body = "삼성1234승인 홍길동\n12,300원 일시불\n04/24 13:45 스타벅스\n누적100,000원",
+                body = "삼성1234승인 홍길동\n12,300원 3개월\n04/24 13:45 스타벅스\n누적100,000원",
                 amount = "12,300",
                 store = "스타벅스",
                 card = "삼성",
@@ -170,7 +172,7 @@ class SmsRegexRuleAssetTest {
                 type = "expense",
                 body = listOf(
                     "[Web발신]",
-                    "농협04/24 13:45 352-****-6488-03 자동출금33,980원(신한카드) 잔액11,024,387원"
+                    "농협04/24 13:45 352-****-6488-03 자동출금33,980원(신한카드) 잔액-11,024,387원"
                 ).joinToString("\n"),
                 amount = "33,980",
                 store = "신한카드",
@@ -201,6 +203,247 @@ class SmsRegexRuleAssetTest {
                 amount = "12,300",
                 store = "스타벅스",
                 card = "스마일카드",
+                date = "04/24 13:45"
+            ),
+            Sample(
+                issuer = "하나카드 멀티라인",
+                sender = "18001111",
+                type = "expense",
+                body = listOf(
+                    "[Web발신]",
+                    "금액",
+                    "12,300원",
+                    "카드",
+                    "하나카드*",
+                    "손님명",
+                    "홍길동",
+                    "거래종류",
+                    "승인",
+                    "거래구분",
+                    "일시불",
+                    "사용처",
+                    "스타벅스",
+                    "거래시간",
+                    "04/24 13:45"
+                ).joinToString("\n"),
+                amount = "12,300",
+                store = "스타벅스",
+                card = "하나카드*",
+                date = "04/24 13:45"
+            ),
+            Sample(
+                issuer = "롯데법인",
+                sender = "15998800",
+                type = "expense",
+                body = listOf(
+                    "[Web발신]",
+                    "스타벅스",
+                    "12,300원 승인",
+                    "홍길동 롯데법인카드 1234",
+                    "일시불 04/24 13:45",
+                    "누적100,000원"
+                ).joinToString("\n"),
+                amount = "12,300",
+                store = "스타벅스",
+                card = "롯데법인카드",
+                date = "04/24 13:45"
+            ),
+            Sample(
+                issuer = "롯데법인 이용금액 출금",
+                sender = "15998800",
+                type = "expense",
+                body = listOf(
+                    "[Web발신]",
+                    "이용금액이 기업은행에서 출금됐어요.",
+                    "",
+                    "- 출금액: 100,000원",
+                    "- 출금일: 04/24",
+                    "- 롯데법인(1234)"
+                ).joinToString("\n"),
+                amount = "100,000",
+                store = "롯데법인",
+                card = "롯데법인",
+                date = "04/24"
+            ),
+            Sample(
+                issuer = "롯데법인 원화 해외승인",
+                sender = "15998800",
+                type = "overseas",
+                body = listOf(
+                    "ADOBE",
+                    "KRW 39,050 해외승인",
+                    "홍길동 롯데법인1234",
+                    "일시불 04/24 13:45",
+                    "누적100,000원"
+                ).joinToString("\n"),
+                amount = "39,050",
+                store = "ADOBE",
+                card = "롯데법인",
+                date = "04/24 13:45"
+            ),
+            Sample(
+                issuer = "카카오뱅크 카드결제",
+                sender = "15993333",
+                type = "expense",
+                body = listOf(
+                    "[Web발신]",
+                    "[카카오뱅크] 카드결제",
+                    "홍길동(1234)",
+                    "04/24 13:45",
+                    "12,300원",
+                    "스타벅스",
+                    "잔액 100,000원"
+                ).joinToString("\n"),
+                amount = "12,300",
+                store = "스타벅스",
+                card = "카카오뱅크",
+                date = "04/24 13:45"
+            ),
+            Sample(
+                issuer = "부산BC",
+                sender = "15884000",
+                type = "expense",
+                body = listOf(
+                    "부산BC(1234)",
+                    "12,300원 사용",
+                    "개인",
+                    "홍길동님",
+                    "일시불 04/24 13:45",
+                    "총누적",
+                    "100,000원",
+                    "스타벅스"
+                ).joinToString("\n"),
+                amount = "12,300",
+                store = "스타벅스",
+                card = "부산BC",
+                date = "04/24 13:45"
+            ),
+            Sample(
+                issuer = "계좌 메모 출금",
+                sender = "15446200",
+                type = "expense",
+                body = listOf(
+                    "출금",
+                    "04/24 13:45",
+                    "12,300",
+                    "계좌",
+                    "1234****5678",
+                    "내용",
+                    "메모",
+                    "스타벅스",
+                    "잔액",
+                    "100,000"
+                ).joinToString("\n"),
+                amount = "12,300",
+                store = "스타벅스",
+                card = "1234****5678",
+                date = "04/24 13:45"
+            ),
+            Sample(
+                issuer = "농협 출금",
+                sender = "15882100",
+                type = "expense",
+                body = listOf(
+                    "[Web발신]",
+                    "농협 출금12,300원",
+                    "04/24 13:45 352-****-6488-03 스타벅스 잔액100,000원"
+                ).joinToString("\n"),
+                amount = "12,300",
+                store = "스타벅스",
+                card = "농협",
+                date = "04/24 13:45"
+            ),
+            Sample(
+                issuer = "KB국민카드 앱",
+                sender = "15881688",
+                type = "expense",
+                body = listOf(
+                    "[Web발신]",
+                    "KB국민카드1234",
+                    "승인",
+                    "12,300원 (일시불)",
+                    "스타벅스",
+                    "고객명",
+                    "홍길동님",
+                    "승인시각",
+                    "04/24 13:45",
+                    "누적",
+                    "100,000원"
+                ).joinToString("\n"),
+                amount = "12,300",
+                store = "스타벅스",
+                card = "KB국민카드",
+                date = "04/24 13:45"
+            ),
+            Sample(
+                issuer = "롯데카드 결제대금 출금",
+                sender = "15888100",
+                type = "expense",
+                body = "[Web발신]\n[롯데카드] 홍길동님, 4월 결제대금 120,000원 중 100,000원 04/24 출금되었습니다.",
+                amount = "100,000",
+                store = "롯데",
+                card = "롯데",
+                date = "04/24"
+            ),
+            Sample(
+                issuer = "신한카드 결제대금 인출",
+                sender = "15447000",
+                type = "expense",
+                body = listOf(
+                    "[Web발신]",
+                    "[신한카드] 결제대금 인출 안내",
+                    "- 홍길동님 결제대금(1234)",
+                    "- 120,000원 중 100,000원",
+                    "  04/24일 인출 되었습니다."
+                ).joinToString("\n"),
+                amount = "100,000",
+                store = "신한",
+                card = "신한",
+                date = "04/24"
+            ),
+            Sample(
+                issuer = "씨티카드",
+                sender = "15661000",
+                type = "expense",
+                body = listOf(
+                    "[Web발신]",
+                    "씨티카드(1234*56*)",
+                    "홍길동님",
+                    "04/24 13:45",
+                    "일시불 12,300원",
+                    "스타벅스"
+                ).joinToString("\n"),
+                amount = "12,300",
+                store = "스타벅스",
+                card = "씨티카드",
+                date = "04/24 13:45"
+            ),
+            Sample(
+                issuer = "NH농협 신용승인",
+                sender = "15881600",
+                type = "expense",
+                body = listOf(
+                    "[Web발신]",
+                    "NH카드1*2*신용승인",
+                    "홍길동",
+                    "12,300원",
+                    "04/24 13:45",
+                    "스타벅스",
+                    "총누적100,000원"
+                ).joinToString("\n"),
+                amount = "12,300",
+                store = "스타벅스",
+                card = "NH카드",
+                date = "04/24 13:45"
+            ),
+            Sample(
+                issuer = "새마을금고 수수료",
+                sender = "15999000",
+                type = "expense",
+                body = "[Web발신]\n[새마을금고] 1234*5678 입출금알림수수료 500원 출금 1234*5678 04/24 13:45 잔액100,000원",
+                amount = "500",
+                store = "입출금알림수수료",
+                card = "1234*5678",
                 date = "04/24 13:45"
             )
         )

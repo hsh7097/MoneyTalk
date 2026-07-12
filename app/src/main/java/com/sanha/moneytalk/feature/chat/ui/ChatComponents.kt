@@ -28,25 +28,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -143,7 +138,7 @@ fun GuideQuestionsOverlay(
                     if (!hasApiKey) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = stringResource(R.string.guide_api_key_required),
+                            text = stringResource(R.string.guide_ai_service_unavailable),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -400,52 +395,18 @@ fun RetryButton(
     }
 }
 
-/** API 키 입력 다이얼로그. 채팅 시작 시 Gemini API 키가 없으면 표시 */
+/** AI 서비스가 비활성화되었거나 연결되지 않을 때 표시 */
 @Composable
-fun ApiKeyDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
+fun AiServiceUnavailableDialog(
+    onDismiss: () -> Unit
 ) {
-    var apiKey by remember { mutableStateOf("") }
-
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.dialog_api_key_title)) },
-        text = {
-            Column {
-                Text(
-                    text = stringResource(R.string.dialog_api_key_message),
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = apiKey,
-                    onValueChange = { apiKey = it },
-                    label = { Text(stringResource(R.string.dialog_api_key_label)) },
-                    placeholder = { Text(stringResource(R.string.dialog_api_key_placeholder)) },
-                    trailingIcon = {
-                        if (apiKey.isNotEmpty()) {
-                            IconButton(onClick = { apiKey = "" }) {
-                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear_input))
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
+        title = { Text(stringResource(R.string.dialog_ai_service_unavailable_title)) },
+        text = { Text(stringResource(R.string.dialog_ai_service_unavailable_message)) },
         confirmButton = {
-            TextButton(
-                onClick = { onConfirm(apiKey) },
-                enabled = apiKey.isNotBlank()
-            ) {
-                Text(stringResource(R.string.dialog_confirm))
-            }
-        },
-        dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.dialog_cancel))
+                Text(stringResource(R.string.common_confirm))
             }
         }
     )

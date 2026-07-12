@@ -17,11 +17,21 @@ object BuildVariantPolicy {
     val isMonetizationTestOverride: Boolean
         get() = BuildConfig.MONETIZATION_TEST_OVERRIDE
 
+    val shouldUseProductionAdUnits: Boolean
+        get() = shouldUseProductionAdUnits(
+            buildType = BuildConfig.BUILD_TYPE,
+            testOverride = BuildConfig.MONETIZATION_TEST_OVERRIDE
+        )
+
     fun isReleaseBuild(buildType: String): Boolean {
         return buildType == RELEASE_BUILD_TYPE
     }
 
     fun isMonetizationEnabled(buildType: String, testOverride: Boolean = false): Boolean {
         return isReleaseBuild(buildType) || testOverride
+    }
+
+    fun shouldUseProductionAdUnits(buildType: String, testOverride: Boolean): Boolean {
+        return isReleaseBuild(buildType) && !testOverride
     }
 }

@@ -31,32 +31,6 @@ private fun ThemeModeDialogDarkPreview() {
     }
 }
 
-// ========== ApiKeySettingDialog Preview ==========
-
-@Preview(showBackground = true, name = "API 키 설정 - 미설정")
-@Composable
-private fun ApiKeySettingDialogNoKeyPreview() {
-    MaterialTheme {
-        ApiKeySettingDialog(
-            currentKeyHint = "",
-            onDismiss = {},
-            onConfirm = {}
-        )
-    }
-}
-
-@Preview(showBackground = true, name = "API 키 설정 - 설정됨")
-@Composable
-private fun ApiKeySettingDialogWithKeyPreview() {
-    MaterialTheme {
-        ApiKeySettingDialog(
-            currentKeyHint = "현재 설정됨",
-            onDismiss = {},
-            onConfirm = {}
-        )
-    }
-}
-
 // ========== MonthStartDayDialog Preview ==========
 
 @Preview(showBackground = true, name = "월 시작일 - 기본값 (1일)")

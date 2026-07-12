@@ -24,4 +24,26 @@ class BuildVariantPolicyTest {
         assertFalse(BuildVariantPolicy.isMonetizationEnabled("debug"))
         assertTrue(BuildVariantPolicy.isMonetizationEnabled("debug", testOverride = true))
     }
+
+    @Test
+    fun `test override always selects test ad units`() {
+        assertTrue(
+            BuildVariantPolicy.shouldUseProductionAdUnits(
+                buildType = "release",
+                testOverride = false
+            )
+        )
+        assertFalse(
+            BuildVariantPolicy.shouldUseProductionAdUnits(
+                buildType = "release",
+                testOverride = true
+            )
+        )
+        assertFalse(
+            BuildVariantPolicy.shouldUseProductionAdUnits(
+                buildType = "debug",
+                testOverride = true
+            )
+        )
+    }
 }

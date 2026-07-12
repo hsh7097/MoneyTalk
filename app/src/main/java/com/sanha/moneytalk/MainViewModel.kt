@@ -1281,15 +1281,15 @@ class MainViewModel @Inject constructor(
             }
         }
 
-        // Phase 2: "미분류" 가게명을 사전 분류 (로컬 규칙은 API 키 없이도 수행)
+        // Phase 2: "미분류" 가게명을 사전 분류 (로컬 규칙은 AI 서비스와 무관하게 수행)
         val unclassifiedStores = entities
             .filter { it.category == "미분류" }
             .map { it.storeName }
             .distinct()
 
         if (unclassifiedStores.isNotEmpty()) {
-            val hasGeminiApiKey = geminiRepository.hasApiKey()
-            if (hasGeminiApiKey) {
+            val isAiServiceAvailable = geminiRepository.hasApiKey()
+            if (isAiServiceAvailable) {
                 _uiState.update {
                     it.copy(syncProgress = "AI가 카테고리 분류 중...")
                 }
@@ -1297,7 +1297,7 @@ class MainViewModel @Inject constructor(
             try {
                 val classificationResults = categoryClassifierService.classifyStoreNamesInMemory(
                     storeNames = unclassifiedStores,
-                    onStepProgress = if (hasGeminiApiKey) {
+                    onStepProgress = if (isAiServiceAvailable) {
                         { step, current, total ->
                             _uiState.update {
                                 it.copy(
@@ -1967,7 +1967,7 @@ class MainViewModel @Inject constructor(
 
     /**
      * resume 시 미분류 항목 자동 분류 시도
-     * 조건: (1) 동기화 미진행 (2) 분류 미진행 (3) Gemini API 키 존재 (4) 미분류 항목 존재
+     * 조건: (1) 동기화 미진행 (2) 분류 미진행 (3) AI 서비스 사용 가능 (4) 미분류 항목 존재
      *
      * 동기화 중에는 postSyncCleanup에서 분류를 실행하므로, 여기서 중복 시작하면
      * API 429 에러 + 지수 백오프로 양쪽 모두 느려지는 문제가 발생한다.
@@ -1979,8 +1979,8 @@ class MainViewModel @Inject constructor(
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val hasApiKey = geminiRepository.hasApiKey()
-                if (!hasApiKey) return@launch
+                val isAiServiceAvailable = geminiRepository.hasApiKey()
+                if (!isAiServiceAvailable) return@launch
 
                 val unclassifiedCount = categoryClassifierService.getUnclassifiedCount()
                 if (unclassifiedCount == 0) return@launch

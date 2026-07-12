@@ -110,7 +110,7 @@ fun ChatRoomListView(
 
                 if (!hasApiKey) {
                     TextButton(onClick = onApiKeyClick) {
-                        Text(stringResource(R.string.api_key_setting))
+                        Text(stringResource(R.string.ai_service_status_check))
                     }
                 }
             }

@@ -92,16 +92,13 @@ private fun RetryButtonPreview() {
     }
 }
 
-// ========== ApiKeyDialog Preview ==========
+// ========== AiServiceUnavailableDialog Preview ==========
 
-@Preview(showBackground = true, name = "API 키 다이얼로그")
+@Preview(showBackground = true, name = "AI 서비스 연결 불가")
 @Composable
-private fun ApiKeyDialogPreview() {
+private fun AiServiceUnavailableDialogPreview() {
     MaterialTheme {
-        ApiKeyDialog(
-            onDismiss = {},
-            onConfirm = {}
-        )
+        AiServiceUnavailableDialog(onDismiss = {})
     }
 }
 

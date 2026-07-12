@@ -50,7 +50,6 @@ class SmsRegexRuleMatcher @Inject constructor(
 
         private val ELIGIBLE_TYPES = setOf(
             "expense",
-            "cancel",
             "overseas",
             "payment",
             "debit"
@@ -65,6 +64,9 @@ class SmsRegexRuleMatcher @Inject constructor(
         )
         private val CASHBACK_PREFIX_PATTERN = Regex("""^\*?\d+원(?:캐쉬백|캐시백)\s*""")
         private val STORE_SUFFIX_TRIM_PATTERN = Regex("""\s*(?:누적.*|잔액.*)$""")
+        private val STORE_VALID_SERVICE_LABELS = setOf(
+            "입출금알림수수료"
+        )
         private val STORE_INVALID_KEYWORDS = setOf(
             "출금",
             "입금",
@@ -292,7 +294,6 @@ class SmsRegexRuleMatcher @Inject constructor(
     private fun defaultPriorityByType(type: String): Int {
         return when (type.lowercase(Locale.ROOT)) {
             "expense", "payment", "debit" -> 700
-            "cancel" -> 650
             "overseas" -> 620
             else -> 600
         }
@@ -646,6 +647,7 @@ class SmsRegexRuleMatcher @Inject constructor(
         if (value.length > 30) return false
         if (value.contains("{")) return false
         if (STORE_NUMBER_ONLY_PATTERN.matches(value)) return false
+        if (value in STORE_VALID_SERVICE_LABELS) return true
         if (STORE_INVALID_KEYWORDS.any { value.contains(it) }) return false
         return true
     }

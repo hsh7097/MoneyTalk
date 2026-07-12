@@ -60,7 +60,7 @@
     <string name="chat_subtitle_with_api">Check common spending questions quickly</string>
     <string name="chat_subtitle_in_conversation">Answers are based on your spending data</string>
     <string name="chat_subtitle_loading">Preparing your answer</string>
-    <string name="chat_subtitle_no_api">Set up an API key to use AI insights</string>
+    <string name="chat_subtitle_no_api">AI service is temporarily unavailable</string>
     <string name="chat_input_placeholder">Type a message…</string>
     <string name="chat_input_loading_placeholder">Generating answer...</string>
     <string name="chat_send">Send</string>
@@ -114,17 +114,14 @@
     <string name="dialog_confirm">Confirm</string>
     <string name="dialog_cancel">Cancel</string>
 
-    <!-- API Key Dialog -->
-    <string name="dialog_api_key_title">Gemini API Key Setup</string>
-    <string name="dialog_api_key_message">Enter your API key from Google AI Studio.</string>
-    <string name="dialog_api_key_label">API Key</string>
-    <string name="dialog_api_key_placeholder">AIza…</string>
-    <string name="api_key_setting">API Key Settings</string>
+    <string name="ai_service_status_check">Check status</string>
+    <string name="dialog_ai_service_unavailable_title">AI service unavailable</string>
+    <string name="dialog_ai_service_unavailable_message">Please try again later. Service availability is restored automatically from the server.</string>
 
     <!-- Guide Questions -->
     <string name="guide_welcome">Pick an insight to check</string>
     <string name="guide_intro">Run common spending checks quickly.\nChoose a question and MoneyTalk will answer from your data.</string>
-    <string name="guide_api_key_required">* Please set up API key first</string>
+    <string name="guide_ai_service_unavailable">* AI service is temporarily unavailable</string>
 
     <!-- Guide Question Categories -->
     <string name="guide_category_expense_search">Quick Checks</string>
@@ -228,10 +225,6 @@
     <string name="dialog_monthly_budget_hint">Enter 0 to remove the budget</string>
 
     <string name="settings_section_category">Category Management</string>
-    <string name="settings_api_key_title">Gemini API Key</string>
-    <string name="settings_api_key_set">Set: %s</string>
-    <string name="settings_api_key_not_set">Set up API key for AI chat (free)</string>
-
     <string name="settings_section_data">Data Management</string>
     <string name="settings_notification_title">Transaction Alerts</string>
     <string name="settings_notification_subtitle">Receive alerts for payments and deposits</string>
@@ -317,10 +310,6 @@
     <string name="dialog_month_start_message">Set the start date for your monthly budget.\nE.g., setting 21 means 21st to 20th of next month.</string>
     <string name="dialog_month_start_label">Start Day</string>
     <string name="dialog_month_start_hint">Enter a number between 1–31</string>
-
-    <!-- API Key Dialog (Settings) -->
-    <string name="dialog_api_key_message_settings">Get a free API key from\nGoogle AI Studio (aistudio.google.com)</string>
-    <string name="dialog_api_key_current">Currently set</string>
 
     <!-- Category Classification Dialog -->
     <string name="classify_dialog_title">Auto-Classify Categories</string>
@@ -444,7 +433,7 @@
     <string name="permission_sms_granted">SMS permission granted</string>
     <string name="settings_classify_background">Classification in progress in background…</string>
     <string name="settings_classify_done">No items to classify</string>
-    <string name="settings_classify_no_api_key">Please set your API key first</string>
+    <string name="settings_classify_no_api_key">AI service is temporarily unavailable</string>
     <string name="settings_classify_progress">%1$d / %2$d items</string>
     <string name="settings_classify_title">Category Classification</string>
     <string name="settings_classify_unclassified">%d unclassified</string>

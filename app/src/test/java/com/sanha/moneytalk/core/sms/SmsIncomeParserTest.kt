@@ -65,6 +65,29 @@ class SmsIncomeParserTest {
     }
 
     @Test
+    fun `RTDB 취소 구조는 환불 금액을 추출한다`() {
+        val samples = listOf(
+            "[Web발신]\n스마일카드 취소\n홍*길\n26,800원 일시불\n12/16 14:29\n온라인몰\n누적100,000원" to 26_800,
+            "[Web발신]\n[삼성카드]취소\n10/29거래 2건\n가맹점\n-2,219,800원\n6개월" to 2_219_800,
+            "[Web발신]\n복리후생관[취소]20230107/롯데 리조트/1박/1실/215000원" to 215_000
+        )
+
+        samples.forEach { (body, amount) ->
+            assertEquals(amount, SmsIncomeParser.extractIncomeAmount(body))
+            assertEquals("환불", SmsIncomeParser.extractIncomeType(body))
+        }
+    }
+
+    @Test
+    fun `KB 숫자 단독 입금은 금액과 출처를 추출한다`() {
+        val body = "[Web발신]\n[KB]07/14 13:08\n123456**789\nNICE(티켓결제)\n입금\n150,000\n잔액1,144,990"
+
+        assertEquals(150_000, SmsIncomeParser.extractIncomeAmount(body))
+        assertEquals("입금", SmsIncomeParser.extractIncomeType(body))
+        assertEquals("NICE(티켓결제)", SmsIncomeParser.extractIncomeSource(body))
+    }
+
+    @Test
     fun `카카오뱅크 입금 알림은 금액이 아니라 송금인을 출처로 파싱한다`() {
         val body = "입금 100,000원\n하상현 → 입출금통장(9103)\n잔액 4,514,631원"
 

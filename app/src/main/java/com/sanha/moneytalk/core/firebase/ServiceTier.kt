@@ -3,8 +3,10 @@ package com.sanha.moneytalk.core.firebase
 /**
  * 서비스 등급
  *
- * - FREE: 사용자가 직접 입력한 Gemini API 키를 사용
- * - PREMIUM: Firebase에서 관리하는 서버 API 키를 사용 (광고/유료 결제)
+ * - FREE: 무료 정책과 AI 크레딧/광고 정책을 적용
+ * - PREMIUM: 프리미엄 정책을 적용
+ *
+ * 두 등급 모두 Gemini 호출은 Firebase AI Logic과 App Check를 사용한다.
  */
 enum class ServiceTier {
     FREE,

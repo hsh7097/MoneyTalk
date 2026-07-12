@@ -34,7 +34,7 @@ interface StoreEmbeddingRepository {
     /**
      * 가게명으로 카테고리 벡터 검색
      *
-     * 1. 가게명의 임베딩 벡터 생성 (Gemini Embedding API 1회)
+     * 1. 가게명의 결정적 로컬 임베딩 벡터 생성
      * 2. 인메모리 캐시에서 코사인 유사도 검색
      * 3. 유사도 ≥ 0.92이면 해당 카테고리 반환
      *
@@ -91,7 +91,7 @@ interface StoreEmbeddingRepository {
      *
      * @param storeCategories 가게명→카테고리 매핑 목록
      * @param source 분류 출처
-     * @param embeddingsByStoreName 이미 생성된 임베딩. 제공된 가게명은 API 재호출 없이 저장합니다.
+     * @param embeddingsByStoreName 이미 생성된 임베딩. 제공된 가게명은 로컬 재계산 없이 저장합니다.
      */
     suspend fun saveStoreEmbeddings(
         storeCategories: Map<String, String>,
@@ -136,7 +136,7 @@ interface StoreEmbeddingRepository {
     /**
      * 카테고리 UPSERT (존재하면 카테고리만 업데이트, 없으면 임베딩 생성+저장)
      * hasEmbedding() + updateCategory()/saveStoreEmbedding() 2~3회 DB 접근을
-     * 1회 DB 접근 + 필요시 임베딩 API 1회로 줄입니다.
+     * 1회 DB 접근 + 필요시 로컬 임베딩 1회로 줄입니다.
      */
     suspend fun upsertCategory(storeName: String, newCategory: String, source: String = "user")
 

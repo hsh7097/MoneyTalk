@@ -6,7 +6,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Key
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -20,9 +19,9 @@ import androidx.compose.ui.unit.dp
 // ========== Preview용 테스트 데이터 ==========
 
 private val basicInfo = object : SettingsItemInfo {
-    override val icon = Icons.Default.Key
-    override val title = "Gemini API 키"
-    override val subtitle = "AIzaSy...Xk4s"
+    override val icon = Icons.Default.Cloud
+    override val title = "AI 서비스"
+    override val subtitle = "Firebase AI Logic 연결됨"
 }
 
 private val noSubtitleInfo = object : SettingsItemInfo {

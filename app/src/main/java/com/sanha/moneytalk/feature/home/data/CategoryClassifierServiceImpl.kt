@@ -780,7 +780,7 @@ class CategoryClassifierServiceImpl @Inject constructor(
     }
 
     /**
-     * Gemini API 키 설정 여부 확인
+     * Firebase AI Logic 서비스 사용 가능 여부 확인
      */
     override suspend fun hasGeminiApiKey(): Boolean {
         return geminiRepository.hasApiKey()

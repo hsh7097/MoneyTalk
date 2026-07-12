@@ -90,10 +90,11 @@ fun ExportDialog(
                     stringResource(R.string.export_format),
                     style = MaterialTheme.typography.labelLarge
                 )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilterChip(
+                        modifier = Modifier.fillMaxWidth(),
                         selected = selectedFormat == ExportFormat.JSON,
                         onClick = {
                             selectedFormat = ExportFormat.JSON
@@ -111,6 +112,7 @@ fun ExportDialog(
                         } else null
                     )
                     FilterChip(
+                        modifier = Modifier.fillMaxWidth(),
                         selected = selectedFormat == ExportFormat.CSV,
                         onClick = {
                             selectedFormat = ExportFormat.CSV

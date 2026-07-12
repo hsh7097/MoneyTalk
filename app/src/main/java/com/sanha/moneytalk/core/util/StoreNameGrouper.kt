@@ -37,10 +37,10 @@ class StoreNameGrouper @Inject constructor(
     private val embeddingService: SmsEmbeddingService
 ) {
     companion object {
-        /** 배치 임베딩 한 번에 처리할 최대 개수 (batchEmbedContents 최대 100) */
+        /** 한 코루틴에서 처리할 로컬 임베딩 묶음 크기 */
         private const val EMBEDDING_BATCH_SIZE = 100
 
-        /** 임베딩 배치 병렬 동시 실행 수 (API 키 5개 × 키당 2 = 10) */
+        /** 로컬 임베딩 배치 병렬 동시 실행 수 */
         private const val EMBEDDING_CONCURRENCY = 10
     }
 
@@ -136,7 +136,7 @@ class StoreNameGrouper @Inject constructor(
             batches.map { batch ->
                 async {
                     semaphore.withPermit {
-                        embeddingService.generateEmbeddings(batch)
+                        embeddingService.generateStoreEmbeddings(batch)
                     }
                 }
             }.awaitAll()

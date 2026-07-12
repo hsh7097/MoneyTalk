@@ -31,6 +31,35 @@ class StatsExclusionClassifierTest {
     }
 
     @Test
+    fun completedStructuredCardBillDebit_isExcludedFromStats() {
+        val expense = baseExpense(
+            storeName = "롯데",
+            category = Category.ETC.displayName,
+            originalSms = "[롯데카드] 홍길동님, 4월 결제대금 120,000원 중 100,000원 04/24 출금되었습니다."
+        )
+
+        assertTrue(StatsExclusionClassifier.shouldExcludeExpense(expense))
+    }
+
+    @Test
+    fun completedUsageAmountDebit_isExcludedFromStats() {
+        val expense = baseExpense(
+            storeName = "롯데법인",
+            category = Category.ETC.displayName,
+            originalSms = "이용금액이 기업은행에서 출금됐어요. 출금액: 100,000원"
+        )
+
+        assertTrue(StatsExclusionClassifier.shouldExcludeExpense(expense))
+    }
+
+    @Test
+    fun scheduledCardBillNotice_isNotCompletedDebit() {
+        val body = "[롯데카드] 4월 결제대금 120,000원 출금예정 안내입니다."
+
+        assertFalse(StatsExclusionClassifier.isCardBillDebitText(body, requireWonAmount = true))
+    }
+
+    @Test
     fun cardApproval_isNotExcludedFromStats() {
         val expense = baseExpense(
             storeName = "스타벅스",

@@ -5,7 +5,7 @@
     <!-- ChatPrompts / GeminiSmsExtractor / GeminiCategoryRepository -->
     <!-- ================================================= -->
 
-    <!-- ChatPrompts: 대화 요약 시스템 명령어 (gemini-2.5-flash) -->
+    <!-- ChatPrompts: 대화 요약 시스템 명령어 (gemini-3.5-flash) -->
     <string name="prompt_summary_system" translatable="false">당신은 대화 요약 전문가입니다.
 
 [역할]
@@ -24,7 +24,7 @@
 - 요약본만 반환 (다른 텍스트 없이)
 - 마크다운이나 특수 포맷 사용 금지</string>
 
-    <!-- ChatPrompts: 재무 상담사 시스템 명령어 (gemini-2.5-flash-lite) -->
+    <!-- ChatPrompts: 재무 상담사 시스템 명령어 (gemini-3.1-flash-lite) -->
     <string name="prompt_financial_advisor_system" translatable="false">당신은 \'머니톡\'이라는 친근한 개인 재무 상담 AI입니다.
 
 [역할]
@@ -167,7 +167,7 @@
 [새로운 대화 내용]
 %2$s</string>
 
-    <!-- ChatPrompts: 쿼리/액션 분석 시스템 명령어 (gemini-2.5-flash-lite) -->
+    <!-- ChatPrompts: 쿼리/액션 분석 시스템 명령어 (gemini-3.1-flash-lite) -->
     <string name="prompt_query_analyzer_system" translatable="false">당신은 사용자의 재무 관련 질문을 분석하여 필요한 데이터베이스 쿼리와 액션을 결정하는 AI입니다.
 
 [사용 가능한 쿼리 타입]
@@ -382,7 +382,7 @@ clarification 예시:
 - \"정리해줘\" (맥락 없음) → {\"clarification\": \"어떤 정리를 원하시나요? 미분류 항목 정리, 중복 삭제, 카테고리 변경 중 어떤 것이 필요한가요?\"}
 - \"그거 삭제해줘\" (맥락에 여러 대상) → {\"clarification\": \"삭제할 대상을 확인해주세요. 스타벅스 내역과 편의점 내역 중 어떤 것을 삭제할까요?\"}</string>
 
-    <!-- GeminiSmsExtractor: SMS 단일 추출 시스템 명령어 (gemini-2.5-flash-lite) -->
+    <!-- GeminiSmsExtractor: SMS 단일 추출 시스템 명령어 (gemini-3.1-flash-lite) -->
     <string name="prompt_sms_extract_system" translatable="false">당신은 한국 카드 결제 SMS에서 정보를 추출하는 전문가입니다.
 
 [역할]
@@ -401,9 +401,16 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 - 계좌이체는 별도 이체 시스템으로 관리 (지출 카테고리로 분류하지 않음)
 - 보험회사(삼성화재, 현대해상, 메리츠 등) 결제는 \"보험\"으로 분류
 
+[카드대금 완료 출금 규칙]
+- 카드대금/결제대금/이용대금/이용금액의 실제 출금·인출 완료이며 원화 금액이 명확하면 반드시 isPayment: true
+- 총 청구액과 실제 출금액이 함께 있으면 \"중\" 뒤의 실제 출금액을 amount로 사용하고, storeName/cardName은 카드사 식별자로 설정
+
 [비결제 문자 판별 규칙 - 다음에 해당하면 반드시 isPayment: false]
-- 명세서/청구서 안내: \"명세서\", \"청구서\", \"이용대금\" 포함
+- 명세서/청구서/이용대금 예정 안내 (실제 출금/인출 완료 제외)
+- 교통카드/후불하이패스 N건 합산, KSNET 마이장부, 매출접수/매출집계처럼 실제 가맹점 1건이 없는 요약 문자
 - 광고/홍보/이벤트/혜택안내/포인트 적립 문자
+- 승인/결제/사용 금액이 0원인 문자
+- 금액과 입금계좌만 있고 승인/출금/사용 완료 근거가 없는 결제 안내
 
 [근거 부족 문자 처리 - 다음에 해당하면 반드시 isPayment: false]
 - 금액 근거가 본문에 없거나(예: 801302 같은 코드만 존재), 금액을 추정해야만 하는 경우
@@ -411,7 +418,7 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 - [Web발신] 형식의 축약 문자처럼 핵심 정보(금액/가게)가 누락된 경우
 
 [근거 부족 예외 규칙 - 아래는 isPayment: true 가능]
-- 해외 결제처럼 통화 근거가 명확한 경우 (예: USD/EUR/JPY/$ + 금액)
+- 해외 결제는 KRW 원화 금액이 명시된 경우만 true. USD/EUR/JPY/GBP 등 외화 금액만 있으면 현재 통화 모델에서 표현할 수 없으므로 false
 - 링크가 포함되어 있어도, 본문에 금액/가게명/승인·결제 키워드 근거가 함께 있는 경우
 - \"카드대금\", \"카드결제\" 자동이체 문자에서 출금 금액 근거가 명확한 경우
 
@@ -435,7 +442,7 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 [응답 형식]
 {\"isPayment\": true, \"amount\": 15000, \"storeName\": \"스타벅스\", \"cardName\": \"KB국민\", \"dateTime\": \"2025-01-15 14:30\", \"category\": \"카페/간식\"}</string>
 
-    <!-- GeminiSmsExtractor: SMS 배치 추출 시스템 명령어 (gemini-2.5-flash-lite) -->
+    <!-- GeminiSmsExtractor: SMS 배치 추출 시스템 명령어 (gemini-3.1-flash-lite) -->
     <string name="prompt_sms_batch_extract_system" translatable="false">당신은 한국 카드 결제 SMS에서 정보를 추출하는 전문가입니다.
 
 [역할]
@@ -455,9 +462,16 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 - 계좌이체는 별도 이체 시스템으로 관리 (지출 카테고리로 분류하지 않음)
 - 보험회사(삼성화재, 현대해상, 메리츠 등) 결제는 \"보험\"으로 분류
 
+[카드대금 완료 출금 규칙]
+- 카드대금/결제대금/이용대금/이용금액의 실제 출금·인출 완료이며 원화 금액이 명확하면 반드시 isPayment: true
+- 총 청구액과 실제 출금액이 함께 있으면 \"중\" 뒤의 실제 출금액을 amount로 사용하고, storeName/cardName은 카드사 식별자로 설정
+
 [비결제 문자 판별 규칙 - 다음에 해당하면 반드시 isPayment: false]
-- 명세서/청구서 안내: \"명세서\", \"청구서\", \"이용대금\" 포함
+- 명세서/청구서/이용대금 예정 안내 (실제 출금/인출 완료 제외)
+- 교통카드/후불하이패스 N건 합산, KSNET 마이장부, 매출접수/매출집계처럼 실제 가맹점 1건이 없는 요약 문자
 - 광고/홍보/이벤트/혜택안내/포인트 적립 문자
+- 승인/결제/사용 금액이 0원인 문자
+- 금액과 입금계좌만 있고 승인/출금/사용 완료 근거가 없는 결제 안내
 
 [근거 부족 문자 처리 - 다음에 해당하면 반드시 isPayment: false]
 - 금액 근거가 본문에 없거나(예: 801302 같은 코드만 존재), 금액을 추정해야만 하는 경우
@@ -465,7 +479,7 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 - [Web발신] 형식의 축약 문자처럼 핵심 정보(금액/가게)가 누락된 경우
 
 [근거 부족 예외 규칙 - 아래는 isPayment: true 가능]
-- 해외 결제처럼 통화 근거가 명확한 경우 (예: USD/EUR/JPY/$ + 금액)
+- 해외 결제는 KRW 원화 금액이 명시된 경우만 true. USD/EUR/JPY/GBP 등 외화 금액만 있으면 현재 통화 모델에서 표현할 수 없으므로 false
 - 링크가 포함되어 있어도, 본문에 금액/가게명/승인·결제 키워드 근거가 함께 있는 경우
 - \"카드대금\", \"카드결제\" 자동이체 문자에서 출금 금액 근거가 명확한 경우
 
@@ -519,9 +533,16 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 5. dateTime: 결제 날짜와 시간 (\"yyyy-MM-dd HH:mm\" 형식). 본문에 연도가 있으면 그 연도를 사용하고, MM/DD처럼 연도가 없으면 SMS 수신 날짜와 가장 가까운 연도를 사용할 것.
 6. category: 추정 카테고리 (식비, 배달, 카페/간식, 술/유흥, 생활, 온라인쇼핑, 패션/쇼핑, 뷰티/미용, 교통, 자동차, 주거/통신, 의료/건강, 금융, 문화/여가, 여행/숙박, 교육/학습, 자녀/육아, 반려동물, 경조/선물, 구독, 운동, 보험, 기타 중 하나. 배달앱은 \"배달\"로 분류)
 
+[카드대금 완료 출금 규칙]
+- 카드대금/결제대금/이용대금/이용금액의 실제 출금·인출 완료이며 원화 금액이 명확하면 반드시 isPayment: true
+- 총 청구액과 실제 출금액이 함께 있으면 \"중\" 뒤의 실제 출금액을 amount로 사용하고, storeName/cardName은 카드사 식별자로 설정
+
 [비결제 문자 판별 규칙 - 다음에 해당하면 반드시 isPayment: false]
-- 명세서/청구서 안내: \"명세서\", \"청구서\", \"이용대금\" 포함
+- 명세서/청구서/이용대금 예정 안내 (실제 출금/인출 완료 제외)
+- 교통카드/후불하이패스 N건 합산, KSNET 마이장부, 매출접수/매출집계처럼 실제 가맹점 1건이 없는 요약 문자
 - 광고/홍보/이벤트/혜택안내/포인트 적립 문자
+- 승인/결제/사용 금액이 0원인 문자
+- 금액과 입금계좌만 있고 승인/출금/사용 완료 근거가 없는 결제 안내
 
 [근거 부족 문자 처리 - 다음에 해당하면 반드시 isPayment: false]
 - 금액 근거가 본문에 없거나(예: 801302 같은 코드만 존재), 금액을 추정해야만 하는 경우
@@ -529,7 +550,7 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 - [Web발신] 형식의 축약 문자처럼 핵심 정보(금액/가게)가 누락된 경우
 
 [근거 부족 예외 규칙 - 아래는 isPayment: true 가능]
-- 해외 결제처럼 통화 근거가 명확한 경우 (예: USD/EUR/JPY/$ + 금액)
+- 해외 결제는 KRW 원화 금액이 명시된 경우만 true. USD/EUR/JPY/GBP 등 외화 금액만 있으면 현재 통화 모델에서 표현할 수 없으므로 false
 - 링크가 포함되어 있어도, 본문에 금액/가게명/승인·결제 키워드 근거가 함께 있는 경우
 - \"카드대금\", \"카드결제\" 자동이체 문자에서 출금 금액 근거가 명확한 경우
 
@@ -571,9 +592,17 @@ SMS 본문에서 결제 정보를 정확히 추출하여 JSON으로 반환합니
 6. dateTime: 결제 날짜와 시간 (\"yyyy-MM-dd HH:mm\" 형식). 본문에 연도가 있으면 그 연도를 사용하고, MM/DD처럼 연도가 없으면 각 SMS 수신 날짜와 가장 가까운 연도를 사용할 것.
 7. category: 추정 카테고리 (식비, 배달, 카페/간식, 술/유흥, 생활, 온라인쇼핑, 패션/쇼핑, 뷰티/미용, 교통, 자동차, 주거/통신, 의료/건강, 금융, 문화/여가, 여행/숙박, 교육/학습, 자녀/육아, 반려동물, 경조/선물, 구독, 운동, 보험, 기타 중 하나. 배달앱은 \"배달\"로 분류)
 
+[카드대금 완료 출금 규칙]
+- 카드대금/결제대금/이용대금/이용금액의 실제 출금·인출 완료이며 원화 금액이 명확하면 반드시 isPayment: true
+- 총 청구액과 실제 출금액이 함께 있으면 \"중\" 뒤의 실제 출금액을 amount로 사용하고, storeName/cardName은 카드사 식별자로 설정
+
 [비결제 문자 판별 규칙 - 다음에 해당하면 반드시 isPayment: false]
-- 명세서/청구서 안내: \"명세서\", \"청구서\", \"이용대금\" 포함
+- 명세서/청구서/이용대금 예정 안내 (실제 출금/인출 완료 제외)
+- 교통카드/후불하이패스 N건 합산, KSNET 마이장부, 매출접수/매출집계처럼 실제 가맹점 1건이 없는 요약 문자
 - 광고/홍보/이벤트/혜택안내/포인트 적립 문자
+- 승인/결제/사용 금액이 0원인 문자
+- 금액과 입금계좌만 있고 승인/출금/사용 완료 근거가 없는 결제 안내
+- 해외 결제는 KRW 원화 금액이 명시된 경우만 true. USD/EUR/JPY/GBP 등 외화 금액만 있으면 false
 
 [응답 규칙]
 1. 반드시 JSON 배열만 반환 (다른 텍스트 없이)
@@ -612,6 +641,11 @@ JSON만 반환:
 11. storeRegex group 1이 운영 키워드(출금/입금/승인/취소/결제/잔액/누적/일시불/할부/카드/이용)만 포함하면 실패입니다. 상호명이 되도록 좁혀서 캡처하세요.
 12. 출금형 멀티라인([카드번호] 다음 줄이 상호, 그 다음 줄이 출금)에서는 상호 줄만 캡처하세요. 흐름문구(예: \"KB카드출금\", \"해외승인대금출금\")만 있는 경우에도 불필요 토큰을 최소화해 캡처하세요.
 13. 과도하게 넓은 패턴(.+ 단독, 라인 경계 없는 탐욕 매칭)을 피하고, 줄 경계(\\\\n)와 고정 키워드를 함께 사용해 샘플 공통 형식만 매칭하세요.
+14. 교통카드/후불하이패스 N건 합산, 결제 예정, 매출접수/매출집계, KSNET 마이장부처럼 실제 가맹점 1건이 없는 요약 알림은 isPayment=false로 반환하세요. 카드대금/이용대금은 실제 출금·인출 완료와 출금액이 명확하면 isPayment=true이며 storeRegex는 카드사를 캡처하세요.
+15. 마스킹된 사용자명(예: 홍*동, 홍＊동님), 계좌번호, 카드번호, 특정 사용자 이름을 regex에 literal로 고정하지 말고 \\\\S+ 또는 숫자/마스킹 패턴으로 일반화하세요.
+16. storeRegex group 1이 한 글자이거나 \"출\", \"결제대금\", \"이용대금\", \"교통카드\", \"매출접수\" 같은 흐름/집계 토큰이면 실패입니다.
+
+17. 샘플의 {USER_NAME}, {ACCOUNT_OR_CARD}는 비식별화 토큰입니다. 토큰 문자열을 regex에 넣지 말고 실제 위치의 이름, 숫자, 마스킹 계좌/카드 형식을 \\\\S+ 또는 숫자/마스킹 패턴으로 일반화하세요.
 
 [예시1: 단일라인]
 입력: \"[KB] 02/12 12:38 스타벅스 15,000원 승인\"
@@ -633,7 +667,7 @@ JSON만 반환:
 
 같은 형식의 결제 SMS 샘플입니다. 공통 정규식을 JSON으로만 반환하세요.
 필드: isPayment, amountRegex, storeRegex, cardRegex
-조건: amountRegex/storeRegex는 group1 캡처 필수.
+조건: amountRegex/storeRegex는 group1 캡처 필수. 교통/매출 집계 요약은 false, 카드대금 실제 출금 완료는 true. 마스킹 이름/계좌번호 literal 고정 금지.
 샘플:
 %5$s</string>
 
@@ -641,7 +675,7 @@ JSON만 반환:
     <!-- %1$s = 샘플 텍스트 -->
     <string name="prompt_sms_regex_generate" translatable="false">같은 형식의 결제 SMS 샘플입니다. 공통 정규식을 JSON으로만 반환하세요.
 필드: isPayment, amountRegex, storeRegex, cardRegex
-조건: amountRegex/storeRegex는 group1 캡처 필수.
+조건: amountRegex/storeRegex는 group1 캡처 필수. 교통/매출 집계 요약은 false, 카드대금 실제 출금 완료는 true. 마스킹 이름/계좌번호 literal 고정 금지.
 샘플:
 %1$s</string>
 
@@ -650,7 +684,7 @@ JSON만 반환:
     <string name="prompt_sms_regex_compact_with_main_ref" translatable="false">메인 amountRegex: %1$s, storeRegex: %2$s, cardRegex: %3$s
 결제 SMS 샘플 공통 정규식 JSON만 반환.
 필드: isPayment, amountRegex, storeRegex, cardRegex
-제약: amountRegex/storeRegex는 group1 필수.
+제약: amountRegex/storeRegex는 group1 필수. 교통/매출 집계 요약은 false, 카드대금 실제 출금 완료는 true. 마스킹 이름/계좌번호 literal 고정 금지.
 샘플:
 %4$s</string>
 
@@ -658,7 +692,7 @@ JSON만 반환:
     <!-- %1$s = 샘플 텍스트 -->
     <string name="prompt_sms_regex_compact" translatable="false">결제 SMS 샘플 공통 정규식 JSON만 반환.
 필드: isPayment, amountRegex, storeRegex, cardRegex
-제약: amountRegex/storeRegex는 group1 필수.
+제약: amountRegex/storeRegex는 group1 필수. 교통/매출 집계 요약은 false, 카드대금 실제 출금 완료는 true. 마스킹 이름/계좌번호 literal 고정 금지.
 샘플:
 %1$s</string>
 
@@ -666,7 +700,7 @@ JSON만 반환:
     <!-- %1$s = 최단 샘플 1건 -->
     <string name="prompt_sms_regex_ultra_compact" translatable="false">JSON만:
 {\"isPayment\":true/false,\"amountRegex\":\"\",\"storeRegex\":\"\",\"cardRegex\":\"\"}
-규칙: 결제면 amountRegex/storeRegex group1 필수.
+규칙: 결제면 amountRegex/storeRegex group1 필수. 교통/매출 집계는 false, 카드대금 실제 출금 완료는 true. 이름/계좌 literal 금지.
 샘플: %1$s</string>
 
     <!-- GeminiSmsExtractor: 정규식 수선(repair) 프롬프트 -->
@@ -678,6 +712,8 @@ JSON만 반환:
 
 주의:
 - storeRegex 캡처값은 운영 키워드(출금/입금/승인/취소/결제/잔액/누적/일시불/할부/카드/이용) 중심이 되면 안 됩니다.
+- 교통/매출 집계, 0원 승인, 미완료 입금계좌 안내, 외화 금액만 있는 해외승인은 isPayment=false로 바꾸세요. 카드대금 실제 출금 완료와 KRW 해외승인은 isPayment=true를 유지하세요.
+- 마스킹 사용자명, 계좌번호, 카드번호를 literal로 고정하지 말고 일반화하세요.
 - 과도한 이중 이스케이프(\\\\\\\\d, \\\\\\\\s, \\\\\\\\n) 금지. JSON 문자열 기준 \\\\d, \\\\s, \\\\n만 사용.
 
 반드시 JSON만 반환하세요.</string>
@@ -688,6 +724,7 @@ JSON만 반환:
 실패 이유: %1$s
 이전 regex: %2$s
 기존에 맞던 부분은 유지하고 샘플 전체를 만족하도록 최소 수정.
+교통/매출 집계, 0원 승인, 미완료 입금계좌 안내, 외화 단독 금액은 false. 카드대금 실제 출금 완료와 KRW 해외승인은 true. 마스킹 개인정보 literal 고정 금지.
 샘플:
 %3$s</string>
 
@@ -697,6 +734,7 @@ JSON만 반환:
 {\"isPayment\":true/false,\"amountRegex\":\"\",\"storeRegex\":\"\",\"cardRegex\":\"\"}
 수선 이유: %1$s
 이전 regex: %2$s
+교통/매출 집계, 0원 승인, 미완료 입금계좌 안내, 외화 단독 금액은 false. 카드대금 실제 출금 완료와 KRW 해외승인은 true. 개인정보 literal 금지.
 샘플: %3$s</string>
 
     <!-- GeminiSmsExtractor: SMS 단일 추출 유저 프롬프트 -->
@@ -753,7 +791,7 @@ JSON만 반환:
 
 반드시 JSON 배열만 반환하고, 각 항목의 no를 유지하며 null은 사용하지 마세요.</string>
 
-    <!-- GeminiCategoryRepository: 카테고리 분류 프롬프트 (gemini-2.5-flash-lite) -->
+    <!-- GeminiCategoryRepository: 카테고리 분류 프롬프트 (gemini-3.1-flash-lite) -->
     <string name="prompt_category_classification" translatable="false">당신은 가계부 앱의 카테고리 분류 전문가입니다.
 아래 가게명들을 반드시 주어진 카테고리 목록 중 하나로만 분류해주세요.
 

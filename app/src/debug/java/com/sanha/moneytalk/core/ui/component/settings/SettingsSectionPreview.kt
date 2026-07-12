@@ -9,7 +9,6 @@ import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -21,10 +20,10 @@ import androidx.compose.ui.unit.dp
 
 // ========== Preview용 테스트 데이터 ==========
 
-private val apiKeyInfo = object : SettingsItemInfo {
-    override val icon = Icons.Default.Key
-    override val title = "Gemini API 키"
-    override val subtitle = "AIzaSy...Xk4s"
+private val aiServiceInfo = object : SettingsItemInfo {
+    override val icon = Icons.Default.AutoAwesome
+    override val title = "AI 서비스"
+    override val subtitle = "Firebase AI Logic 연결됨"
 }
 
 private val classifyInfo = object : SettingsItemInfo {
@@ -71,7 +70,7 @@ private fun SingleSectionPreview() {
     MaterialTheme {
         Surface(modifier = Modifier.padding(16.dp)) {
             SettingsSectionCompose(title = "AI 설정") {
-                SettingsItemCompose(info = apiKeyInfo, onClick = {})
+                SettingsItemCompose(info = aiServiceInfo, onClick = {})
                 HorizontalDivider()
                 SettingsItemCompose(info = classifyInfo, onClick = {})
             }
@@ -102,7 +101,7 @@ private fun FullSettingsPreview() {
         Surface(modifier = Modifier.padding(16.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 SettingsSectionCompose(title = "AI 설정") {
-                    SettingsItemCompose(info = apiKeyInfo, onClick = {})
+                    SettingsItemCompose(info = aiServiceInfo, onClick = {})
                     HorizontalDivider()
                     SettingsItemCompose(info = classifyInfo, onClick = {})
                 }

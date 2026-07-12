@@ -78,7 +78,7 @@ object SmsIncomeParser {
     // ========== 가게명 정리용 ==========
 
     private val CLEAN_CORP_PATTERN = Regex("""\(주\)|\(유\)|\(사\)|\(재\)""")
-    private val CLEAN_SPECIAL_CHAR_PATTERN = Regex("""^[^\w가-힣]+|[^\w가-힣]+$""")
+    private val CLEAN_SPECIAL_CHAR_PATTERN = Regex("""^[^\w가-힣(]+|[^\w가-힣)]+$""")
 
     // ========== 공개 메소드 ==========
 

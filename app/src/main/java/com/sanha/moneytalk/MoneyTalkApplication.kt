@@ -7,6 +7,7 @@ import com.google.firebase.FirebaseApp
 import com.sanha.moneytalk.core.appfunctions.MoneyTalkAppFunctionEntryPoint
 import com.sanha.moneytalk.core.appfunctions.MoneyTalkChatAppFunctions
 import com.sanha.moneytalk.core.appfunctions.MoneyTalkFinanceAppFunctions
+import com.sanha.moneytalk.core.firebase.AppCheckInstaller
 import com.sanha.moneytalk.core.firebase.CrashlyticsHelper
 import com.sanha.moneytalk.core.firebase.PremiumManager
 import com.sanha.moneytalk.core.notification.SmsNotificationManager
@@ -72,6 +73,8 @@ class MoneyTalkApplication : Application(), AppFunctionConfiguration.Provider {
         val firebaseAvailable = initializeFirebase()
 
         if (firebaseAvailable) {
+            AppCheckInstaller.install()
+
             // Crashlytics 설정
             CrashlyticsHelper.setCrashlyticsCollectionEnabled(!BuildConfig.DEBUG)
             CrashlyticsHelper.setCustomKey("app_version", BuildConfig.VERSION_NAME)

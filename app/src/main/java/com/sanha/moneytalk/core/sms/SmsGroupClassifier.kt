@@ -75,7 +75,7 @@ class SmsGroupClassifier @Inject constructor(
 
     companion object {
 
-        /** LLM 병렬 동시 실행 수 (API 키 5개 × 키당 1) */
+        /** Firebase AI Logic LLM 병렬 동시 실행 상한 */
         private const val LLM_CONCURRENCY = 5
 
         /** regex 생성 샘플 수 (그룹 대표 포함 최대 5건) */
@@ -538,12 +538,12 @@ class SmsGroupClassifier @Inject constructor(
 
         chunk.items.forEachIndexed { index, embedded ->
             val llm = primary.getOrNull(index)
-            val accepted = llm != null &&
+            if (
+                llm != null &&
                 llm.isPayment &&
                 llm.amount > 0 &&
                 isGroundedRegexFailedRecovery(embedded.input.body, llm)
-
-            if (accepted && llm != null) {
+            ) {
                 clearRegexFailedRecoveryFailure(embedded)
                 recovered.add(
                     SmsParseResult(
@@ -1193,6 +1193,29 @@ class SmsGroupClassifier @Inject constructor(
         var outcome = ""  // G: reason code (REGEX_ACCEPTED, REGEX_REPAIRED, TEMPLATE_FALLBACK, DIRECT_LLM, NON_PAYMENT, LLM_FAILED, GROUP_BUDGET_SKIP_REGEX, STEP5_BUDGET_DIRECT_LLM, REGEX_FAILED_FALLBACK_DIRECT_LLM, REGEX_FAILED_HEURISTIC_KB, UNSTABLE_DIRECT_LLM, REGEX_ABORT_LOW_PASS)
 
         MoneyTalkLogger.i("[processGroup] 시작: addr=*$addr, members=${group.members.size}, isMain=$isMainGroup")
+
+        if (SmsNonTransactionNoticeFilter.isNonTransactionNotice(representative.input.body)) {
+            if (!skipLearning) {
+                registerNonPaymentPattern(representative)
+            } else {
+                enqueueDeferredLearning(
+                    DeferredLearningTask.NonPayment(
+                        embedded = representative,
+                        reasonCode = "DETERMINISTIC_NON_PAYMENT",
+                        dedupKey = "NON:${representative.input.id}"
+                    )
+                )
+            }
+            val deterministicOutcome = "DETERMINISTIC_NON_PAYMENT"
+            onGroupOutcome?.invoke(deterministicOutcome)
+            MoneyTalkLogger.i(
+                "[processGroup] 결정적 비거래 요약 스킵: addr=*$addr, members=${group.members.size}"
+            )
+            return GroupProcessResult(
+                results = emptyList(),
+                outcomeCode = deterministicOutcome
+            )
+        }
 
         // --- [5-2] LLM 배치 추출 ---
         // 대표 SMS는 실제 분석 대상으로 분리하고, 같은 형식 샘플/메인 케이스는 참고 컨텍스트로만 전달
@@ -2319,10 +2342,13 @@ class SmsGroupClassifier @Inject constructor(
 
         if (!passed) {
             MoneyTalkLogger.w("[validateRegex] 실패: passRatio=${(passRatio * 100).toInt()}% (${passCount}/${samples.size}), threshold=${(REGEX_VALIDATION_MIN_PASS_RATIO * 100).toInt()}%")
-            MoneyTalkLogger.w("[validateRegex] amountRegex=[$amountRegex]")
-            MoneyTalkLogger.w("[validateRegex] storeRegex=[$storeRegex]")
+            MoneyTalkLogger.i("[validateRegex] amountRegex=[$amountRegex]")
+            MoneyTalkLogger.i("[validateRegex] storeRegex=[$storeRegex]")
             failedIndices.forEachIndexed { idx, sampleIdx ->
-                MoneyTalkLogger.w("[validateRegex] 실패 sample[$sampleIdx]: ${failedDiagnostics[idx]} | body=${samples[sampleIdx].replace("\n", "↵").take(100)}")
+                MoneyTalkLogger.w(
+                    "[validateRegex] 실패 sample[$sampleIdx]: ${failedDiagnostics[idx]} | " +
+                        "bodyLength=${samples[sampleIdx].length}"
+                )
             }
         }
 
@@ -2393,6 +2419,7 @@ class SmsGroupClassifier @Inject constructor(
      * 실패하는 패턴에 대해 반복 LLM 호출 방지.
      */
     private fun shouldSkipRegexGeneration(template: String): Boolean {
+        if (SmsNonTransactionNoticeFilter.isNonTransactionNotice(template)) return true
         val state = regexFailureStates[template] ?: return false
         if (state.failCount < REGEX_FAILURE_THRESHOLD) return false
         val elapsed = System.currentTimeMillis() - state.lastFailedAt
@@ -2432,6 +2459,7 @@ class SmsGroupClassifier @Inject constructor(
     private fun buildTemplateFallbackRegex(
         template: String
     ): FallbackRegex? {
+        if (SmsNonTransactionNoticeFilter.isNonTransactionNotice(template)) return null
         if (!template.contains("{AMOUNT}") || !template.contains("{STORE}")) return null
 
         val amountRegex = when {

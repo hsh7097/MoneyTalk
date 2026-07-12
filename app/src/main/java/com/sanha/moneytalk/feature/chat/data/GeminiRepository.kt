@@ -21,11 +21,7 @@ import com.sanha.moneytalk.core.util.QueryResult
  */
 interface GeminiRepository {
 
-    /** API 키 설정 — RTDB 기반으로 전환됨, 사용 중단 */
-    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
-    suspend fun setApiKey(key: String)
-
-    /** API 키 존재 여부 확인 */
+    /** Firebase AI Logic 서비스 사용 가능 여부 확인 */
     suspend fun hasApiKey(): Boolean
 
     /**

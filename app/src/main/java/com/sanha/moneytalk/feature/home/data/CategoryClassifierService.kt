@@ -94,7 +94,9 @@ interface CategoryClassifierService {
     suspend fun updateCategoryForAllSameStore(storeName: String, newCategory: String)
 
     /**
-     * Gemini API 키 설정 여부 확인
+     * Firebase AI Logic 서비스 사용 가능 여부 확인
+     *
+     * 메서드명은 기존 호출부 호환을 위해 유지한다.
      */
     suspend fun hasGeminiApiKey(): Boolean
 

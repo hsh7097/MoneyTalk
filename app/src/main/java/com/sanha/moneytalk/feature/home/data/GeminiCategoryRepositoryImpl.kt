@@ -3,10 +3,13 @@ package com.sanha.moneytalk.feature.home.data
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
 import android.content.Context
-import com.google.ai.client.generativeai.GenerativeModel
-import com.google.ai.client.generativeai.type.generationConfig
+import android.os.SystemClock
+import com.google.firebase.ai.GenerativeModel
+import com.google.firebase.ai.type.generationConfig
 import com.sanha.moneytalk.R
-import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
+import com.sanha.moneytalk.core.firebase.FirebaseAiModelFactory
+import com.sanha.moneytalk.core.firebase.FirebaseAiRateLimitPolicy
+import com.sanha.moneytalk.core.firebase.GeminiConfigProvider
 import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryProvider
@@ -18,7 +21,9 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -36,48 +41,34 @@ import kotlin.random.Random
 class GeminiCategoryRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val categoryReferenceProvider: com.sanha.moneytalk.core.util.CategoryReferenceProvider,
-    private val apiKeyProvider: GeminiApiKeyProvider,
+    private val configProvider: GeminiConfigProvider,
+    private val firebaseAiModelFactory: FirebaseAiModelFactory,
     private val categoryProvider: CategoryProvider
 ) : GeminiCategoryRepository {
     companion object {
         private const val CATEGORY_BATCH_SIZE = 13
         private const val INCOME_BATCH_SIZE = 50
         private const val MAX_RETRIES = 3
-        /** LLM 배치 병렬 동시 실행 수 (API 키 5개 × 키당 1 = 5, LLM은 임베딩보다 무거움) */
+        /** LLM 배치 병렬 동시 실행 수 */
         private const val LLM_CONCURRENCY = 5
         private const val RETRY_BASE_DELAY_MS = 1000L  // 재시도 기본 딜레이 (1초)
-        private const val MAX_RETRY_DELAY_MS = 30000L  // 최대 30초 딜레이
+        private const val MAX_RETRY_DELAY_MS = 65000L
+        /** 무료 티어 분당 15회 한도와 홈/채팅 호출 여유를 고려한 시작 간격 */
+        private const val MIN_REQUEST_INTERVAL_MS = 4200L
     }
 
     private var generativeModel: GenerativeModel? = null
-    private var cachedApiKey: String? = null
     private var cachedModelConfig: GeminiModelConfig? = null
+    private val requestThrottleMutex = Mutex()
+    private var nextRequestAtElapsedRealtime = 0L
 
-    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
-    override suspend fun setApiKey(apiKey: String) {
-        // RTDB 기반 키 관리로 전환 — 로컬 키 저장 제거
-    }
-
-    /**
-     * API 키 존재 여부 확인
-     */
     override suspend fun hasApiKey(): Boolean {
-        return apiKeyProvider.hasValidApiKey()
+        return configProvider.isServiceAvailable()
     }
 
-    /**
-     * API 키 가져오기 (서비스 티어 반영)
-     */
-    override suspend fun getApiKey(): String {
-        return apiKeyProvider.getApiKey()
-    }
-
-    private fun initModel(apiKey: String, modelName: String) {
-        if (apiKey.isBlank()) return
-
-        generativeModel = GenerativeModel(
+    private fun initModel(modelName: String) {
+        generativeModel = firebaseAiModelFactory.create(
             modelName = modelName,
-            apiKey = apiKey,
             generationConfig = generationConfig {
                 temperature = 0.1f  // 낮은 온도로 일관된 분류
                 maxOutputTokens = 4096
@@ -94,17 +85,15 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
      */
     override suspend fun classifyStoreNames(storeNames: List<String>): Map<String, String> =
         withContext(Dispatchers.IO) {
-            val apiKey = apiKeyProvider.getApiKey()
-            if (apiKey.isBlank()) {
-                MoneyTalkLogger.e("API 키가 설정되지 않음")
+            if (!configProvider.isServiceAvailable()) {
+                MoneyTalkLogger.w("Firebase AI Logic 서비스가 비활성화됨")
                 return@withContext emptyMap()
             }
 
-            val currentModelConfig = apiKeyProvider.modelConfig
-            if (generativeModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
-                cachedApiKey = apiKey
+            val currentModelConfig = configProvider.modelConfig
+            if (generativeModel == null || currentModelConfig != cachedModelConfig) {
                 cachedModelConfig = currentModelConfig
-                initModel(apiKey, currentModelConfig.categoryClassifier)
+                initModel(currentModelConfig.categoryClassifier)
             }
 
             val model = generativeModel
@@ -185,6 +174,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             try {
                 val prompt = buildClassificationPrompt(batch, categories, referenceText)
 
+                awaitRequestSlot()
                 val response = model.generateContent(prompt)
 
                 val text = response.text
@@ -202,9 +192,10 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 MoneyTalkLogger.e("에러 메시지: $errorMessage")
 
                 // Rate Limit 에러인지 확인
-                val isRateLimitError = errorMessage.contains("429") ||
-                        errorMessage.contains("RESOURCE_EXHAUSTED") ||
-                        errorMessage.contains("rate limit", ignoreCase = true)
+                val isRateLimitError = FirebaseAiRateLimitPolicy.isRateLimitError(
+                    errorClassName = e.javaClass.name,
+                    errorMessage = errorMessage
+                )
 
                 if (isRateLimitError) {
                     hitRateLimit = true
@@ -212,7 +203,12 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                     if (attempt < MAX_RETRIES) {
                         // 지수 백오프 + jitter (1초 → 2초 → 4초, max 30초)
                         val jitter = Random.nextLong(0, 500)
-                        val actualDelay = min(currentDelay + jitter, MAX_RETRY_DELAY_MS)
+                        val retryAfterMs = FirebaseAiRateLimitPolicy.retryAfterMillis(errorMessage)
+                        val actualDelay = min(
+                            (retryAfterMs ?: currentDelay) + jitter,
+                            MAX_RETRY_DELAY_MS
+                        )
+                        deferRequests(actualDelay)
                         MoneyTalkLogger.w("⚠️ 429 Rate Limit 발생! (GeminiCategoryRepository.classifyStoreNames 배치 ${batchIndex + 1}/$totalBatches) ${actualDelay}ms 후 재시도 ($attempt/$MAX_RETRIES)"
                         )
                         delay(actualDelay)
@@ -421,17 +417,15 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
     override suspend fun classifyIncomeSources(
         incomeDescriptions: Map<String, String>
     ): Map<String, String> = withContext(Dispatchers.IO) {
-        val apiKey = apiKeyProvider.getApiKey()
-        if (apiKey.isBlank()) {
-            MoneyTalkLogger.e("API 키가 설정되지 않음 (수입 분류)")
+        if (!configProvider.isServiceAvailable()) {
+            MoneyTalkLogger.w("Firebase AI Logic 서비스가 비활성화됨 (수입 분류)")
             return@withContext emptyMap()
         }
 
-        val currentModelConfig = apiKeyProvider.modelConfig
-        if (generativeModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
-            cachedApiKey = apiKey
+        val currentModelConfig = configProvider.modelConfig
+        if (generativeModel == null || currentModelConfig != cachedModelConfig) {
             cachedModelConfig = currentModelConfig
-            initModel(apiKey, currentModelConfig.categoryClassifier)
+            initModel(currentModelConfig.categoryClassifier)
         }
 
         val model = generativeModel ?: return@withContext emptyMap()
@@ -475,6 +469,7 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
         for (attempt in 1..MAX_RETRIES) {
             try {
                 val prompt = buildIncomeClassificationPrompt(batch, categories)
+                awaitRequestSlot()
                 val response = model.generateContent(prompt)
                 val text = response.text
 
@@ -485,15 +480,21 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             } catch (e: Exception) {
                 lastException = e
                 val errorMessage = e.message ?: ""
-                val isRateLimitError = errorMessage.contains("429") ||
-                        errorMessage.contains("RESOURCE_EXHAUSTED") ||
-                        errorMessage.contains("rate limit", ignoreCase = true)
+                val isRateLimitError = FirebaseAiRateLimitPolicy.isRateLimitError(
+                    errorClassName = e.javaClass.name,
+                    errorMessage = errorMessage
+                )
 
                 if (isRateLimitError) {
                     hitRateLimit = true
                     if (attempt < MAX_RETRIES) {
                         val jitter = Random.nextLong(0, 500)
-                        val actualDelay = min(currentDelay + jitter, MAX_RETRY_DELAY_MS)
+                        val retryAfterMs = FirebaseAiRateLimitPolicy.retryAfterMillis(errorMessage)
+                        val actualDelay = min(
+                            (retryAfterMs ?: currentDelay) + jitter,
+                            MAX_RETRY_DELAY_MS
+                        )
+                        deferRequests(actualDelay)
                         MoneyTalkLogger.w("429 Rate Limit (수입분류 배치 ${batchIndex + 1}/$totalBatches) ${actualDelay}ms 후 재시도")
                         delay(actualDelay)
                         currentDelay *= 2
@@ -506,6 +507,22 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
 
         MoneyTalkLogger.e("수입 분류 배치 ${batchIndex + 1} 최종 실패: ${lastException?.message}")
         return null to hitRateLimit
+    }
+
+    private suspend fun awaitRequestSlot() {
+        requestThrottleMutex.withLock {
+            val now = SystemClock.elapsedRealtime()
+            val waitMs = nextRequestAtElapsedRealtime - now
+            if (waitMs > 0) delay(waitMs)
+            nextRequestAtElapsedRealtime = SystemClock.elapsedRealtime() + MIN_REQUEST_INTERVAL_MS
+        }
+    }
+
+    private suspend fun deferRequests(delayMs: Long) {
+        requestThrottleMutex.withLock {
+            val deferredUntil = SystemClock.elapsedRealtime() + delayMs
+            nextRequestAtElapsedRealtime = maxOf(nextRequestAtElapsedRealtime, deferredUntil)
+        }
     }
 
     private fun buildIncomeClassificationPrompt(

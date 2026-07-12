@@ -44,20 +44,14 @@ android {
         applicationId = "com.sanha.moneytalk"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18
-        versionName = "1.0.2"
+        versionCode = 19
+        versionName = "1.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
 
-        // Public release clients must not embed local API keys.
-        buildConfigField(
-            "String",
-            "CLAUDE_API_KEY",
-            "\"\""
-        )
         buildConfigField(
             "Boolean",
             "MONETIZATION_TEST_OVERRIDE",
@@ -163,9 +157,6 @@ dependencies {
         exclude(group = "org.apache.httpcomponents")
     }
 
-    // Google Generative AI (Gemini)
-    implementation(libs.generative.ai)
-
     // Google AdMob
     implementation(libs.play.services.ads)
 
@@ -175,6 +166,9 @@ dependencies {
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.database)
     implementation(libs.firebase.config)
+    implementation(libs.firebase.ai)
+    implementation(libs.firebase.appcheck.playintegrity)
+    debugImplementation(libs.firebase.appcheck.debug)
 
     // Test
     testImplementation(libs.junit)

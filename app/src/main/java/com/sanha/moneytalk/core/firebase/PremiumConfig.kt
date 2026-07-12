@@ -6,8 +6,6 @@ package com.sanha.moneytalk.core.firebase
  * DB 경로: /config
  * ```
  * {
- *   "gemini_api_key": "서버 관리 API 키 (단일, 하위호환)",
- *   "gemini_api_keys": ["key1", "key2", ...],
  *   "free_tier_enabled": true,
  *   "service_enabled": true,
  *   "maintenance_message": "",
@@ -20,24 +18,19 @@ package com.sanha.moneytalk.core.firebase
  *   "min_version_name": "1.0.0",
  *   "force_update_message": "",
  *   "models": {
- *     "query_analyzer": "gemini-2.5-flash-lite",
- *     "financial_advisor": "gemini-2.5-flash-lite",
- *     "summary": "gemini-2.5-flash",
- *     "home_insight": "gemini-2.5-flash-lite",
- *     "category_classifier": "gemini-2.5-flash-lite",
- *     "sms_extractor": "gemini-2.5-flash-lite",
- *     "sms_regex_extractor": "gemini-2.5-flash",
- *     "sms_batch_extractor": "gemini-2.5-flash-lite",
- *     "embedding": "gemini-embedding-001"
+ *     "query_analyzer": "gemini-3.1-flash-lite",
+ *     "financial_advisor": "gemini-3.1-flash-lite",
+ *     "summary": "gemini-3.5-flash",
+ *     "home_insight": "gemini-3.1-flash-lite",
+ *     "category_classifier": "gemini-3.1-flash-lite",
+ *     "sms_extractor": "gemini-3.1-flash-lite",
+ *     "sms_regex_extractor": "gemini-3.5-flash",
+ *     "sms_batch_extractor": "gemini-3.1-flash-lite"
  *   }
  * }
  * ```
  */
 data class PremiumConfig(
-    /** 서버에서 관리하는 Gemini API 키 (단일 키, 하위호환용) */
-    val geminiApiKey: String = "",
-    /** API 키 풀 (라운드로빈 분산용). 비어있으면 geminiApiKey 단일 키 사용 */
-    val geminiApiKeys: List<String> = emptyList(),
     /** 무료 티어 허용 여부 — false면 무료 차단 */
     val freeTierEnabled: Boolean = true,
     /** 서비스 전체 활성화 여부 (점검 시 false) */
@@ -88,21 +81,18 @@ data class GeminiModelConfig(
     /** SMS 정규식 생성 모델 (그룹 샘플 기반 regex 생성) */
     val smsRegexExtractor: String = DEFAULT_SMS_REGEX_EXTRACTOR,
     /** SMS 배치 추출 모델 (다건 SMS → 결제 데이터) */
-    val smsBatchExtractor: String = DEFAULT_SMS_BATCH_EXTRACTOR,
-    /** 임베딩 모델 (SMS/가게명 벡터 생성, REST API) */
-    val embedding: String = DEFAULT_EMBEDDING
+    val smsBatchExtractor: String = DEFAULT_SMS_BATCH_EXTRACTOR
 ) {
     companion object {
-        // 앱 배포 기본값은 운영 비용 방어를 위해 2.5 Flash-Lite 계열을 유지하고,
+        // 앱 배포 기본값은 운영 비용 방어를 위해 안정 Flash-Lite 계열을 유지하고,
         // 최신 preview 계열은 RTDB /config/models에서 내부 테스트로만 오버라이드한다.
-        const val DEFAULT_QUERY_ANALYZER = "gemini-2.5-flash-lite"
-        const val DEFAULT_FINANCIAL_ADVISOR = "gemini-2.5-flash-lite"
-        const val DEFAULT_SUMMARY = "gemini-2.5-flash"
-        const val DEFAULT_HOME_INSIGHT = "gemini-2.5-flash-lite"
-        const val DEFAULT_CATEGORY_CLASSIFIER = "gemini-2.5-flash-lite"
-        const val DEFAULT_SMS_EXTRACTOR = "gemini-2.5-flash-lite"
-        const val DEFAULT_SMS_REGEX_EXTRACTOR = "gemini-2.5-flash"
-        const val DEFAULT_SMS_BATCH_EXTRACTOR = "gemini-2.5-flash-lite"
-        const val DEFAULT_EMBEDDING = "gemini-embedding-001"
+        const val DEFAULT_QUERY_ANALYZER = "gemini-3.1-flash-lite"
+        const val DEFAULT_FINANCIAL_ADVISOR = "gemini-3.1-flash-lite"
+        const val DEFAULT_SUMMARY = "gemini-3.5-flash"
+        const val DEFAULT_HOME_INSIGHT = "gemini-3.1-flash-lite"
+        const val DEFAULT_CATEGORY_CLASSIFIER = "gemini-3.1-flash-lite"
+        const val DEFAULT_SMS_EXTRACTOR = "gemini-3.1-flash-lite"
+        const val DEFAULT_SMS_REGEX_EXTRACTOR = "gemini-3.5-flash"
+        const val DEFAULT_SMS_BATCH_EXTRACTOR = "gemini-3.1-flash-lite"
     }
 }

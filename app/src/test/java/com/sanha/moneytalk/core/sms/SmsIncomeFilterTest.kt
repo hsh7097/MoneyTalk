@@ -18,6 +18,47 @@ class SmsIncomeFilterTest {
     }
 
     @Test
+    fun `completed structured card bill debit is classified as payment`() {
+        val body = "[Web발신]\n[롯데카드] 홍길동님, 4월 결제대금 120,000원 중 100,000원 04/24 출금되었습니다."
+
+        val (type, reason) = filter.classify(body)
+
+        assertEquals(SmsType.PAYMENT, type)
+        assertEquals("cardBillDebit", reason)
+    }
+
+    @Test
+    fun `aggregate transaction summaries are skipped`() {
+        val samples = listOf(
+            "[Web발신]\n교통카드 후불교통 4월 이용내역 18건 45,000원 안내",
+            "[Web발신]\nKSNET 마이장부 신용카드승인 12건 340,000원 매출접수 집계",
+            "[Web발신]\n매출접수 8건 125,000원 교통카드 기준 집계"
+        )
+
+        samples.forEach { body ->
+            val (type, reason) = filter.classify(body)
+
+            assertEquals("aggregate summary type: $body", SmsType.SKIP, type)
+            assertEquals("aggregate summary reason: $body", "nonTransactionNotice", reason)
+        }
+    }
+
+    @Test
+    fun `zero approval and incomplete deposit instruction are skipped`() {
+        val samples = listOf(
+            "가맹점\n0원 승인\n고객 롯데법인1234\n일시불 05/09 19:58\n누적250,000원",
+            "[Web발신]\n[롯데홈쇼핑] 49,000원/ 농협 123456-12-123456"
+        )
+
+        samples.forEach { body ->
+            val (type, reason) = filter.classify(body)
+
+            assertEquals(SmsType.SKIP, type)
+            assertEquals("nonTransactionNotice", reason)
+        }
+    }
+
+    @Test
     fun `smile card approval is classified as payment`() {
         val body = "스마일카드승인 하*현 491,770원 일시불 05/06 01:16 G마켓_스마일카드 누적527,270원"
 
@@ -74,6 +115,32 @@ class SmsIncomeFilterTest {
 
         assertEquals(SmsType.INCOME, type)
         assertEquals("cancel", reason)
+    }
+
+    @Test
+    fun `rtdb cancellation structures are classified as income`() {
+        val samples = listOf(
+            "[Web발신]\n스마일카드 취소\n홍*길\n26,800원 일시불\n12/16 14:29\n온라인몰\n누적100,000원",
+            "[Web발신]\n[삼성카드]취소\n10/29거래 2건\n가맹점\n-2,219,800원\n6개월",
+            "[Web발신]\n복리후생관[취소]20230107/롯데 리조트/1박/1실/215000원"
+        )
+
+        samples.forEach { body ->
+            val (type, reason) = filter.classify(body)
+
+            assertEquals("cancellation type: $body", SmsType.INCOME, type)
+            assertEquals("cancellation reason: $body", "cancel", reason)
+        }
+    }
+
+    @Test
+    fun `number only kb deposit is classified as income`() {
+        val body = "[Web발신]\n[KB]07/14 13:08\n123456**789\nNICE(티켓결제)\n입금\n150,000\n잔액1,144,990"
+
+        val (type, reason) = filter.classify(body)
+
+        assertEquals(SmsType.INCOME, type)
+        assertEquals("incomeKw[입금]", reason)
     }
 
     @Test

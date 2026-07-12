@@ -74,7 +74,7 @@ data class BackupSettings(
     val monthlyIncome: Int = 0,
     @SerializedName("monthStartDay")
     val monthStartDay: Int = 1
-    // API 키는 보안상 백업에 포함하지 않음
+    // AI credential은 앱에 저장하지 않으며 백업 contract에도 포함하지 않는다.
 )
 
 data class ExpenseBackup(

@@ -10,7 +10,6 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.sanha.moneytalk.BuildConfig
 import com.sanha.moneytalk.core.firebase.ServiceTier
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -27,8 +26,8 @@ class SettingsDataStore @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     companion object {
-        private val CLAUDE_API_KEY = stringPreferencesKey("claude_api_key")
-        private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
+        private val LEGACY_GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
+        private val LEGACY_CLAUDE_API_KEY = stringPreferencesKey("claude_api_key")
         private val MONTHLY_INCOME = intPreferencesKey("monthly_income")
         private val LAST_SYNC_TIME = longPreferencesKey("last_sync_time")
         private val LAST_RCS_PROVIDER_SCAN_TIME = longPreferencesKey("last_rcs_provider_scan_time")
@@ -59,44 +58,11 @@ class SettingsDataStore @Inject constructor(
         )
     }
 
-    // API 키 저장
-    suspend fun saveApiKey(apiKey: String) {
+    suspend fun clearLegacyAiApiKeys() {
         context.dataStore.edit { preferences ->
-            preferences[CLAUDE_API_KEY] = apiKey
+            preferences.remove(LEGACY_GEMINI_API_KEY)
+            preferences.remove(LEGACY_CLAUDE_API_KEY)
         }
-    }
-
-    // API 키 가져오기 (DataStore에 없으면 BuildConfig에서 가져옴)
-    val apiKeyFlow: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[CLAUDE_API_KEY] ?: BuildConfig.CLAUDE_API_KEY
-    }
-
-    // API 키 즉시 가져오기
-    suspend fun getApiKey(): String {
-        val storedKey = context.dataStore.data.first()[CLAUDE_API_KEY]
-        return if (storedKey.isNullOrBlank()) {
-            BuildConfig.CLAUDE_API_KEY
-        } else {
-            storedKey
-        }
-    }
-
-    // Gemini API 키 저장
-    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
-    suspend fun saveGeminiApiKey(apiKey: String) {
-        // RTDB 기반 키 관리로 전환 — 로컬 키 저장 제거
-    }
-
-    // Gemini API 키 가져오기 (legacy DataStore 값만 반환, 기본 키는 RTDB에서 관리)
-    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
-    val geminiApiKeyFlow: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[GEMINI_API_KEY].orEmpty()
-    }
-
-    // Gemini API 키 즉시 가져오기
-    @Deprecated("API 키는 Firebase RTDB에서 관리됩니다")
-    suspend fun getGeminiApiKey(): String {
-        return context.dataStore.data.first()[GEMINI_API_KEY].orEmpty()
     }
 
     // 월 수입 저장

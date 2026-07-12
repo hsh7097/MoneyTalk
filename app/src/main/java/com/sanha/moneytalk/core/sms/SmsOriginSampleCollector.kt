@@ -14,9 +14,10 @@ import javax.inject.Singleton
  * sms_origin 표본 수집기
  *
  * 정책:
- * - 성공(outcome=success): sender+type당 fingerprint 단위 upsert + count/lastSeen 누적
+ * - 성공(outcome=success): sender+type당 고유 fingerprint 최대 3개를 세션 단위로 upsert
  * - 실패(outcome=fail): fingerprint 단위 upsert + count/lastSeen 누적
  * - 동일 fingerprint는 새 row를 만들지 않고 count/lastSeenAt만 갱신
+ * - originBody는 RTDB send_origin_message가 true인 동안만 포함
  */
 @Singleton
 class SmsOriginSampleCollector @Inject constructor(
@@ -25,7 +26,9 @@ class SmsOriginSampleCollector @Inject constructor(
 ) {
     companion object {
         private const val SMS_ORIGIN_PATH = "sms_origin"
+        private const val MAX_SUCCESS_FINGERPRINTS_PER_BUCKET = 3
         private const val SUCCESS_CACHE_MAX = 500
+        private val FAST_PATH_RULE_TYPES = setOf("expense", "overseas", "payment", "debit")
     }
 
     data class SuccessSample(
@@ -61,6 +64,10 @@ class SmsOriginSampleCollector @Inject constructor(
         if (sample.normalizedSenderAddress.isBlank()) return
         if (sample.type.isBlank()) return
         val shouldSendOriginMessage = shouldSendOriginMessage()
+        val sanitizedTemplate = SmsSensitiveDataSanitizer
+            .sanitizeForExternalProcessing(sample.template)
+        val sanitizedMaskedBody = SmsSensitiveDataSanitizer
+            .sanitizeForExternalProcessing(sample.maskedBody)
 
         val fingerprint = sha256Hex(
             buildString {
@@ -68,7 +75,7 @@ class SmsOriginSampleCollector @Inject constructor(
                 append('|')
                 append(sample.type)
                 append('|')
-                append(sample.template.trim())
+                append(sanitizedTemplate.trim())
             }
         )
         val bucketKey = "${sample.normalizedSenderAddress}|${sample.type.lowercase(Locale.ROOT)}"
@@ -76,6 +83,9 @@ class SmsOriginSampleCollector @Inject constructor(
         val isNewInSession = synchronized(successFingerprintsByBucket) {
             val bucket = successFingerprintsByBucket.getOrPut(bucketKey) { linkedSetOf() }
             val alreadyExists = bucket.contains(fingerprint)
+            if (!alreadyExists && bucket.size >= MAX_SUCCESS_FINGERPRINTS_PER_BUCKET) {
+                return
+            }
             bucket.add(fingerprint)
             trimSuccessCacheIfNeeded()
             !alreadyExists
@@ -87,14 +97,14 @@ class SmsOriginSampleCollector @Inject constructor(
             .child(sample.type.lowercase(Locale.ROOT))
             .child(fingerprint)
 
-        val payload = mutableMapOf<String, Any>(
+        val payload = mutableMapOf<String, Any?>(
             "schemaVersion" to 2,
             "fingerprint" to fingerprint,
             "outcome" to "success",
             "normalizedSenderAddress" to sample.normalizedSenderAddress,
             "type" to sample.type.lowercase(Locale.ROOT),
-            "template" to sample.template,
-            "maskedBody" to sample.maskedBody,
+            "template" to sanitizedTemplate,
+            "maskedBody" to sanitizedMaskedBody,
             "parseSource" to sample.parseSource,
             "cardName" to sample.cardName.ifBlank { "UNKNOWN" },
             "groupMemberCount" to sample.groupMemberCount,
@@ -114,7 +124,7 @@ class SmsOriginSampleCollector @Inject constructor(
             normalizedType = normalizeRuleType(sample.type),
             parseSource = sample.parseSource,
             groupMemberCount = sample.groupMemberCount,
-            template = sample.template,
+            template = sanitizedTemplate,
             cardName = sample.cardName,
             status = "ACTIVE"
         )
@@ -161,7 +171,7 @@ class SmsOriginSampleCollector @Inject constructor(
             .child(normalizedType)
             .child(fingerprint)
 
-        val payload = mutableMapOf<String, Any>(
+        val payload = mutableMapOf<String, Any?>(
             "schemaVersion" to 2,
             "fingerprint" to fingerprint,
             "outcome" to "fail",
@@ -238,7 +248,7 @@ class SmsOriginSampleCollector @Inject constructor(
     }
 
     private fun appendRuleShapeFields(
-        payload: MutableMap<String, Any>,
+        payload: MutableMap<String, Any?>,
         normalizedType: String,
         parseSource: String,
         groupMemberCount: Int,
@@ -257,11 +267,24 @@ class SmsOriginSampleCollector @Inject constructor(
         payload["status"] = status
         payload["source"] = "sms_origin"
         payload["version"] = 1
+        payload["bodyRegex"] = null
+        payload["ruleKey"] = null
+        if (
+            normalizedType !in FAST_PATH_RULE_TYPES ||
+            SmsNonTransactionNoticeFilter.isNonTransactionNotice(template)
+        ) {
+            payload["amountGroup"] = ""
+            payload["storeGroup"] = ""
+            payload["cardGroup"] = ""
+            payload["dateGroup"] = ""
+            return
+        }
+
         payload["amountGroup"] = amountGroup
         payload["storeGroup"] = storeGroup
         payload["cardGroup"] = cardGroup
         payload["dateGroup"] = dateGroup
-        if (!bodyRegex.isNullOrBlank()) {
+        if (!bodyRegex.isNullOrBlank() && amountGroup.isNotBlank() && storeGroup.isNotBlank()) {
             payload["bodyRegex"] = bodyRegex
 
             // sms_rules 호환 ruleKey 생성
@@ -462,9 +485,10 @@ class SmsOriginSampleCollector @Inject constructor(
     }
 
     private fun normalizeFailureTemplate(body: String): String {
-        return body
+        return SmsSensitiveDataSanitizer.sanitizeForExternalProcessing(body)
             .replace("\r\n", "\n")
             .replace('\r', '\n')
+            .replace(Regex("""[가-힣A-Za-z]{1,3}\s*[*＊]\s*[가-힣A-Za-z]{1,3}(?:님|회원님)?"""), "{USER_NAME}")
             .replace(Regex("""\d{1,3}(,\d{3})+"""), "{AMOUNT}")
             .replace(Regex("""\d{2}/\d{2}"""), "{DATE}")
             .replace(Regex("""\d{2}:\d{2}"""), "{TIME}")
@@ -474,7 +498,7 @@ class SmsOriginSampleCollector @Inject constructor(
     }
 
     private fun maskBody(body: String): String {
-        return body
+        return SmsSensitiveDataSanitizer.sanitizeForExternalProcessing(body)
             .replace("\r\n", "\n")
             .replace('\r', '\n')
             .replace(Regex("""\d"""), "*")

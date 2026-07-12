@@ -12,6 +12,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -48,15 +50,16 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
 ) : StoreEmbeddingRepository {
 
     companion object {
-        /** 임베딩 배치 병렬 동시 실행 수 (API 키 5개 × 키당 2 = 10) */
+        /** 로컬 임베딩 배치 병렬 동시 실행 수 */
         private const val EMBEDDING_CONCURRENCY = 10
 
-        /** 배치 임베딩 처리 크기 (batchEmbedContents 최대값) */
+        /** 한 코루틴에서 처리할 로컬 임베딩 묶음 크기 */
         private const val EMBEDDING_BATCH_SIZE = 100
     }
 
     /** 인메모리 캐시 (전체 임베딩) */
     private var cachedEmbeddings: List<StoreEmbeddingEntity>? = null
+    private val cacheLoadMutex = Mutex()
 
     /** 현재 임베딩 생성 중인 가게명 (동시 중복 요청 방지) */
     private val inFlightStoreNames: MutableSet<String> =
@@ -69,8 +72,34 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
     private suspend fun getEmbeddings(): List<StoreEmbeddingEntity> {
         cachedEmbeddings?.let { return it }
 
-        return storeEmbeddingDao.getAllEmbeddings().also {
-            cachedEmbeddings = it
+        return cacheLoadMutex.withLock {
+            cachedEmbeddings?.let { return@withLock it }
+
+            val stored = storeEmbeddingDao.getAllEmbeddings()
+            if (stored.isEmpty()) {
+                cachedEmbeddings = emptyList()
+                return@withLock emptyList()
+            }
+
+            val currentVectors = embeddingService.generateStoreEmbeddings(
+                stored.map { it.storeName }
+            )
+            val now = System.currentTimeMillis()
+            val refreshed = stored.mapIndexed { index, entity ->
+                val current = currentVectors.getOrNull(index)
+                if (current != null && current != entity.embedding) {
+                    entity.copy(embedding = current, updatedAt = now)
+                } else {
+                    entity
+                }
+            }
+            val changed = refreshed.filterIndexed { index, entity -> entity !== stored[index] }
+            if (changed.isNotEmpty()) {
+                storeEmbeddingDao.insertAll(changed)
+                MoneyTalkLogger.i("로컬 거래처 벡터 계약으로 ${changed.size}건 갱신")
+            }
+
+            refreshed.also { cachedEmbeddings = it }
         }
     }
 
@@ -81,7 +110,7 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
 
     override suspend fun generateEmbeddingVector(storeName: String): List<Float>? {
         return try {
-            embeddingService.generateEmbedding(storeName)
+            embeddingService.generateStoreEmbedding(storeName)
         } catch (e: Exception) {
             MoneyTalkLogger.e("임베딩 생성 실패: ${e.message}", e)
             null
@@ -99,7 +128,7 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
             }
 
             // 가게명 임베딩: 외부 제공 또는 내부 생성
-            val vector = queryVector ?: embeddingService.generateEmbedding(storeName)
+            val vector = queryVector ?: embeddingService.generateStoreEmbedding(storeName)
             if (vector == null) {
                 MoneyTalkLogger.w("임베딩 생성 실패: $storeName")
                 return null
@@ -133,7 +162,7 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
             if (embeddings.isEmpty()) return null
 
             // 가게명 임베딩: 외부 제공 또는 내부 생성
-            val vector = queryVector ?: embeddingService.generateEmbedding(storeName) ?: return null
+            val vector = queryVector ?: embeddingService.generateStoreEmbedding(storeName) ?: return null
 
             // 그룹핑 임계값 이상인 모든 유사 가게 검색
             val similarStores = VectorSearchEngine.findSimilarStores(
@@ -177,7 +206,7 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
         }
 
         try {
-            val embedding = embeddingService.generateEmbedding(storeName)
+            val embedding = embeddingService.generateStoreEmbedding(storeName)
             if (embedding == null) {
                 MoneyTalkLogger.w("임베딩 생성 실패, 저장 건너뜀: $storeName")
                 return
@@ -237,7 +266,7 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
                         chunks.map { chunk ->
                             async {
                                 semaphore.withPermit {
-                                    embeddingService.generateEmbeddings(chunk)
+                                    embeddingService.generateStoreEmbeddings(chunk)
                                 }
                             }
                         }.awaitAll()
@@ -290,7 +319,7 @@ class StoreEmbeddingRepositoryImpl @Inject constructor(
         }
 
         try {
-            val queryVector = embeddingService.generateEmbedding(storeName)
+            val queryVector = embeddingService.generateStoreEmbedding(storeName)
             if (queryVector == null) {
                 MoneyTalkLogger.w("전파 실패 (임베딩 생성 실패): $storeName")
                 return 0

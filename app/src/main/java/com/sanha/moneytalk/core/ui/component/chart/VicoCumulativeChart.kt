@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberAxisGuidelineComponent
@@ -112,11 +113,18 @@ fun VicoCumulativeChart(
 
     val lineProvider = LineCartesianLayer.LineProvider.series(allVicoLines)
 
+    val density = LocalDensity.current
+    val bottomAxisLabelTextSize = with(density) { 12.dp.toSp() }
+
     // X축 라벨 포매터
     val bottomValueFormatter = remember(daysInMonth) {
         CartesianValueFormatter { x, _, _ ->
             val day = x.toInt() + 1
-            "$day"
+            if (day == 1 || day == daysInMonth) {
+                ""
+            } else {
+                "$day"
+            }
         }
     }
 
@@ -165,6 +173,7 @@ fun VicoCumulativeChart(
             bottomAxis = rememberBottomAxis(
                 label = rememberAxisLabelComponent(
                     color = labelColor,
+                    textSize = bottomAxisLabelTextSize,
                 ),
                 tick = null,
                 guideline = null,
@@ -173,7 +182,7 @@ fun VicoCumulativeChart(
                 itemPlacer = remember {
                     HorizontalAxis.ItemPlacer.default(
                         spacing = 5,
-                        addExtremeLabelPadding = true,
+                        addExtremeLabelPadding = false,
                     )
                 },
             ),

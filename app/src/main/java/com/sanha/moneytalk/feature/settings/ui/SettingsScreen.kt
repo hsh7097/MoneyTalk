@@ -95,7 +95,7 @@ import com.sanha.moneytalk.feature.storerulesettings.ui.StoreRuleSettingsActivit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** 설정 탭 메인 화면. API 키, 월 시작일, 카드 관리, 데이터 관리 등 앱 설정 항목을 표시 */
+/** 설정 탭 메인 화면. 월 시작일, 예산, 카드 관리, 데이터 관리 등 앱 설정 항목을 표시 */
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
@@ -728,11 +728,6 @@ fun SettingsScreen(
     // ========== 다이얼로그 (activeDialog 기반) ==========
 
     when (uiState.activeDialog) {
-        SettingsDialog.API_KEY -> {
-            // API 키 직접 설정 UI 제거됨 (서버 키 사용)
-            viewModel.onIntent(SettingsIntent.DismissDialog)
-        }
-
         SettingsDialog.MONTH_START_DAY -> {
             MonthStartDayDialog(
                 initialValue = uiState.monthStartDay,

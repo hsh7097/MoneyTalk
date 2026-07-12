@@ -3,14 +3,15 @@ package com.sanha.moneytalk.core.sms
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 
 import android.content.Context
-import com.google.ai.client.generativeai.GenerativeModel
-import com.google.ai.client.generativeai.type.RequestOptions
-import com.google.ai.client.generativeai.type.content
-import com.google.ai.client.generativeai.type.generationConfig
+import com.google.firebase.ai.GenerativeModel
+import com.google.firebase.ai.type.RequestOptions
+import com.google.firebase.ai.type.content
+import com.google.firebase.ai.type.generationConfig
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.sanha.moneytalk.R
-import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
+import com.sanha.moneytalk.core.firebase.FirebaseAiModelFactory
+import com.sanha.moneytalk.core.firebase.GeminiConfigProvider
 import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.util.CategoryReferenceProvider
@@ -39,7 +40,8 @@ import javax.inject.Singleton
 class GeminiSmsExtractor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val categoryReferenceProvider: CategoryReferenceProvider,
-    private val apiKeyProvider: GeminiApiKeyProvider
+    private val configProvider: GeminiConfigProvider,
+    private val firebaseAiModelFactory: FirebaseAiModelFactory
 ) {
     companion object {
 
@@ -166,7 +168,6 @@ class GeminiSmsExtractor @Inject constructor(
     private var contextualExtractorModel: GenerativeModel? = null
     private var contextualBatchExtractorModel: GenerativeModel? = null
     private var regexExtractorModel: GenerativeModel? = null
-    private var cachedApiKey: String? = null
     private var cachedModelConfig: GeminiModelConfig? = null
 
     private fun invalidateModelCache() {
@@ -178,23 +179,22 @@ class GeminiSmsExtractor @Inject constructor(
     }
 
     private suspend fun getModel(): GenerativeModel? {
-        val apiKey = apiKeyProvider.getApiKey()
-        if (apiKey.isBlank()) return null
+        if (!configProvider.isServiceAvailable()) return null
 
-        val currentModelConfig = apiKeyProvider.modelConfig
-        if (extractorModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
-            cachedApiKey = apiKey
+        val currentModelConfig = configProvider.modelConfig
+        if (extractorModel == null || currentModelConfig != cachedModelConfig) {
             cachedModelConfig = currentModelConfig
             invalidateModelCache()
-            extractorModel = GenerativeModel(
+            extractorModel = firebaseAiModelFactory.create(
                 modelName = currentModelConfig.smsExtractor,
-                apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.1f  // 정확한 추출을 위해 낮은 온도
                     // 단건 추출은 응답 길이가 짧아 1024면 충분
                     maxOutputTokens = 1024
                 },
-                requestOptions = RequestOptions(timeout = LLM_REQUEST_TIMEOUT_SECONDS * 1000),
+                requestOptions = RequestOptions(
+                    timeoutInMillis = LLM_REQUEST_TIMEOUT_SECONDS * 1000
+                ),
                 systemInstruction = content { text(context.getString(R.string.prompt_sms_extract_system)) }
             )
         }
@@ -203,22 +203,21 @@ class GeminiSmsExtractor @Inject constructor(
 
     /** 배치 추출용 모델 (maxOutputTokens가 더 큼) */
     private suspend fun getBatchModel(): GenerativeModel? {
-        val apiKey = apiKeyProvider.getApiKey()
-        if (apiKey.isBlank()) return null
+        if (!configProvider.isServiceAvailable()) return null
 
-        val currentModelConfig = apiKeyProvider.modelConfig
-        if (batchExtractorModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
-            cachedApiKey = apiKey
+        val currentModelConfig = configProvider.modelConfig
+        if (batchExtractorModel == null || currentModelConfig != cachedModelConfig) {
             cachedModelConfig = currentModelConfig
             invalidateModelCache()
-            batchExtractorModel = GenerativeModel(
+            batchExtractorModel = firebaseAiModelFactory.create(
                 modelName = currentModelConfig.smsBatchExtractor,
-                apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.1f
                     maxOutputTokens = 4096  // 배치 응답용 확장
                 },
-                requestOptions = RequestOptions(timeout = LLM_REQUEST_TIMEOUT_SECONDS * 1000),
+                requestOptions = RequestOptions(
+                    timeoutInMillis = LLM_REQUEST_TIMEOUT_SECONDS * 1000
+                ),
                 systemInstruction = content { text(context.getString(R.string.prompt_sms_batch_extract_system)) }
             )
         }
@@ -227,22 +226,21 @@ class GeminiSmsExtractor @Inject constructor(
 
     /** 컨텍스트 포함 단건 추출용 모델 */
     private suspend fun getContextModel(): GenerativeModel? {
-        val apiKey = apiKeyProvider.getApiKey()
-        if (apiKey.isBlank()) return null
+        if (!configProvider.isServiceAvailable()) return null
 
-        val currentModelConfig = apiKeyProvider.modelConfig
-        if (contextualExtractorModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
-            cachedApiKey = apiKey
+        val currentModelConfig = configProvider.modelConfig
+        if (contextualExtractorModel == null || currentModelConfig != cachedModelConfig) {
             cachedModelConfig = currentModelConfig
             invalidateModelCache()
-            contextualExtractorModel = GenerativeModel(
+            contextualExtractorModel = firebaseAiModelFactory.create(
                 modelName = currentModelConfig.smsExtractor,
-                apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.1f
                     maxOutputTokens = 1024
                 },
-                requestOptions = RequestOptions(timeout = LLM_REQUEST_TIMEOUT_SECONDS * 1000),
+                requestOptions = RequestOptions(
+                    timeoutInMillis = LLM_REQUEST_TIMEOUT_SECONDS * 1000
+                ),
                 systemInstruction = content {
                     text(context.getString(R.string.prompt_sms_context_extract_system))
                 }
@@ -253,22 +251,21 @@ class GeminiSmsExtractor @Inject constructor(
 
     /** 컨텍스트 포함 배치 추출용 모델 */
     private suspend fun getContextBatchModel(): GenerativeModel? {
-        val apiKey = apiKeyProvider.getApiKey()
-        if (apiKey.isBlank()) return null
+        if (!configProvider.isServiceAvailable()) return null
 
-        val currentModelConfig = apiKeyProvider.modelConfig
-        if (contextualBatchExtractorModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
-            cachedApiKey = apiKey
+        val currentModelConfig = configProvider.modelConfig
+        if (contextualBatchExtractorModel == null || currentModelConfig != cachedModelConfig) {
             cachedModelConfig = currentModelConfig
             invalidateModelCache()
-            contextualBatchExtractorModel = GenerativeModel(
+            contextualBatchExtractorModel = firebaseAiModelFactory.create(
                 modelName = currentModelConfig.smsBatchExtractor,
-                apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.1f
                     maxOutputTokens = 4096
                 },
-                requestOptions = RequestOptions(timeout = LLM_REQUEST_TIMEOUT_SECONDS * 1000),
+                requestOptions = RequestOptions(
+                    timeoutInMillis = LLM_REQUEST_TIMEOUT_SECONDS * 1000
+                ),
                 systemInstruction = content {
                     text(context.getString(R.string.prompt_sms_context_batch_extract_system))
                 }
@@ -279,17 +276,14 @@ class GeminiSmsExtractor @Inject constructor(
 
     /** 정규식 생성용 모델 */
     private suspend fun getRegexModel(): GenerativeModel? {
-        val apiKey = apiKeyProvider.getApiKey()
-        if (apiKey.isBlank()) return null
+        if (!configProvider.isServiceAvailable()) return null
 
-        val currentModelConfig = apiKeyProvider.modelConfig
-        if (regexExtractorModel == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
-            cachedApiKey = apiKey
+        val currentModelConfig = configProvider.modelConfig
+        if (regexExtractorModel == null || currentModelConfig != cachedModelConfig) {
             cachedModelConfig = currentModelConfig
             invalidateModelCache()
-            regexExtractorModel = GenerativeModel(
+            regexExtractorModel = firebaseAiModelFactory.create(
                 modelName = currentModelConfig.smsRegexExtractor,
-                apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.0f
                     // responseSchema 제거: constrained decoding + 정규식 이스케이프 조합이
@@ -297,7 +291,9 @@ class GeminiSmsExtractor @Inject constructor(
                     responseMimeType = "application/json"
                     maxOutputTokens = 8192
                 },
-                requestOptions = RequestOptions(timeout = LLM_REQUEST_TIMEOUT_SECONDS * 1000),
+                requestOptions = RequestOptions(
+                    timeoutInMillis = LLM_REQUEST_TIMEOUT_SECONDS * 1000
+                ),
                 systemInstruction = content { text(context.getString(R.string.prompt_sms_regex_extract_system)) }
             )
         }
@@ -379,7 +375,12 @@ class GeminiSmsExtractor @Inject constructor(
                     ""
                 }
             } ?: ""
-            context.getString(R.string.ai_sms_batch_item, idx + 1, dateInfo, body)
+            context.getString(
+                R.string.ai_sms_batch_item,
+                idx + 1,
+                dateInfo,
+                SmsSensitiveDataSanitizer.sanitizeForExternalProcessing(body)
+            )
         }.joinToString("\n\n")
     }
 
@@ -403,18 +404,20 @@ class GeminiSmsExtractor @Inject constructor(
             try {
                 val model = getModel()
                 if (model == null) {
-                    MoneyTalkLogger.e("API 키가 설정되지 않음")
+                    MoneyTalkLogger.e("Firebase AI Logic 서비스를 사용할 수 없음")
                     return@withContext null
                 }
 
                 val dateInfo = buildDateInfo(smsTimestamp)
                 val referenceText = getReferenceText()
+                val sanitizedSmsBody = SmsSensitiveDataSanitizer
+                    .sanitizeForExternalProcessing(smsBody)
 
                 val prompt = context.getString(
                     R.string.prompt_sms_extract_user,
                     dateInfo,
                     referenceText,
-                    smsBody
+                    sanitizedSmsBody
                 )
 
                 val response = model.generateContent(prompt)
@@ -451,7 +454,7 @@ class GeminiSmsExtractor @Inject constructor(
         try {
             val model = getContextModel()
             if (model == null) {
-                MoneyTalkLogger.e("API 키가 설정되지 않음")
+                MoneyTalkLogger.e("Firebase AI Logic 서비스를 사용할 수 없음")
                 return@withContext null
             }
 
@@ -459,8 +462,8 @@ class GeminiSmsExtractor @Inject constructor(
                 R.string.prompt_sms_context_extract_user,
                 buildDateInfo(smsTimestamp),
                 getReferenceText(),
-                referenceContext,
-                smsBody
+                SmsSensitiveDataSanitizer.sanitizeForExternalProcessing(referenceContext),
+                SmsSensitiveDataSanitizer.sanitizeForExternalProcessing(smsBody)
             )
 
             val responseText = model.generateContent(prompt).text ?: run {
@@ -515,7 +518,7 @@ class GeminiSmsExtractor @Inject constructor(
         try {
             val model = getRegexModel()
             if (model == null) {
-                MoneyTalkLogger.e("API 키가 설정되지 않음")
+                MoneyTalkLogger.e("Firebase AI Logic 서비스를 사용할 수 없음")
                 return@withContext null
             }
 
@@ -552,9 +555,9 @@ class GeminiSmsExtractor @Inject constructor(
 
             // 검증 실패 시 상세 로깅
             MoneyTalkLogger.w("[generateRegex] 검증 실패 (${elapsed}ms): reason=${validation.reason}")
-            MoneyTalkLogger.w("[generateRegex] LLM 응답: ${responseText.take(500)}")
+            MoneyTalkLogger.i("[generateRegex] LLM 응답: ${responseText.take(500)}")
             if (candidate != null) {
-                MoneyTalkLogger.w("[generateRegex] 파싱된 regex: amount=[${candidate.amountRegex}], store=[${candidate.storeRegex}], card=[${candidate.cardRegex}], isPayment=${candidate.isPayment}")
+                MoneyTalkLogger.i("[generateRegex] 파싱된 regex: amount=[${candidate.amountRegex}], store=[${candidate.storeRegex}], card=[${candidate.cardRegex}], isPayment=${candidate.isPayment}")
             }
 
             // isPayment_false는 LLM이 "비결제"로 판단한 것 → repair로 뒤집기 어려우므로 스킵
@@ -922,7 +925,9 @@ class GeminiSmsExtractor @Inject constructor(
             "${index + 1}) ${toCompactRegexSample(body, 180)}"
         }.joinToString("\n")
         val previousShort = previousResponse.replace("\n", " ").take(240)
-        val humanReason = toHumanFriendlyReason(failureReason)
+        val humanReason = SmsSensitiveDataSanitizer.sanitizeForExternalProcessing(
+            toHumanFriendlyReason(failureReason)
+        )
 
         return context.getString(
             R.string.prompt_sms_regex_repair,
@@ -942,7 +947,9 @@ class GeminiSmsExtractor @Inject constructor(
         }.joinToString("\n")
         return context.getString(
             R.string.prompt_sms_regex_repair_compact,
-            toHumanFriendlyReason(failureReason),
+            SmsSensitiveDataSanitizer.sanitizeForExternalProcessing(
+                toHumanFriendlyReason(failureReason)
+            ),
             previousResponse.replace("\n", " ").take(180),
             sampleText
         )
@@ -959,7 +966,9 @@ class GeminiSmsExtractor @Inject constructor(
             .orEmpty()
         return context.getString(
             R.string.prompt_sms_regex_repair_ultra_compact,
-            toHumanFriendlyReason(failureReason),
+            SmsSensitiveDataSanitizer.sanitizeForExternalProcessing(
+                toHumanFriendlyReason(failureReason)
+            ),
             previousResponse.replace("\n", " ").take(120),
             shortest
         )
@@ -1097,7 +1106,9 @@ class GeminiSmsExtractor @Inject constructor(
      * 검증은 원본 SMS로 수행되므로 일치해야 함.
      */
     private fun toCompactRegexSample(text: String, maxLen: Int): String {
-        val oneLine = text.replace("\n", "\\n")
+        val oneLine = SmsSensitiveDataSanitizer
+            .sanitizeForExternalProcessing(text)
+            .replace("\n", "\\n")
         return if (oneLine.length > maxLen) oneLine.take(maxLen) else oneLine
     }
 
@@ -1219,7 +1230,7 @@ class GeminiSmsExtractor @Inject constructor(
         try {
             val model = getBatchModel()
             if (model == null) {
-                MoneyTalkLogger.e("API 키가 설정되지 않음")
+                MoneyTalkLogger.e("Firebase AI Logic 서비스를 사용할 수 없음")
                 return@withContext smsMessages.map { null }
             }
             val smsListText = buildBatchSmsListText(smsMessages, smsTimestamps)
@@ -1322,7 +1333,7 @@ class GeminiSmsExtractor @Inject constructor(
         try {
             val model = getContextBatchModel()
             if (model == null) {
-                MoneyTalkLogger.e("API 키가 설정되지 않음")
+                MoneyTalkLogger.e("Firebase AI Logic 서비스를 사용할 수 없음")
                 return@withContext smsMessages.map { null }
             }
 
@@ -1330,7 +1341,7 @@ class GeminiSmsExtractor @Inject constructor(
                 R.string.prompt_sms_context_batch_extract_user,
                 smsMessages.size.toString(),
                 getReferenceText(),
-                referenceContext,
+                SmsSensitiveDataSanitizer.sanitizeForExternalProcessing(referenceContext),
                 buildBatchSmsListText(smsMessages, smsTimestamps)
             )
 
@@ -1461,7 +1472,7 @@ class GeminiSmsExtractor @Inject constructor(
     }
 
     /**
-     * API 키 변경 시 모델 초기화
+     * 모델 설정 변경 시 모델 초기화
      */
     fun resetModel() {
         extractorModel = null

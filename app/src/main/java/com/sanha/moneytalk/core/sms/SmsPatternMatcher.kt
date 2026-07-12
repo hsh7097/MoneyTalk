@@ -7,6 +7,8 @@ import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -40,8 +42,13 @@ import kotlin.math.sqrt
 @Singleton
 class SmsPatternMatcher @Inject constructor(
     private val smsPatternDao: SmsPatternDao,
-    private val remoteSmsRuleRepository: RemoteSmsRuleRepository
+    private val remoteSmsRuleRepository: RemoteSmsRuleRepository,
+    private val embeddingService: SmsEmbeddingService
 ) {
+
+    @Volatile
+    private var storedEmbeddingsRefreshed = false
+    private val storedEmbeddingRefreshMutex = Mutex()
 
     /**
      * matchPatterns()의 반환 타입
@@ -166,6 +173,8 @@ class SmsPatternMatcher @Inject constructor(
         val regexFailed = mutableListOf<EmbeddedSms>()
         val unmatched = mutableListOf<EmbeddedSms>()
 
+        refreshStoredEmbeddingsIfNeeded()
+
         // DB에서 패턴 1회 로드 (매 SMS마다 쿼리하지 않음)
         val nonPaymentPatterns = smsPatternDao.getAllNonPaymentPatterns()
         val paymentPatterns = smsPatternDao.getAllPaymentPatterns()
@@ -239,7 +248,10 @@ class SmsPatternMatcher @Inject constructor(
                     )
                     matchCountMap.merge(pattern.id, 1, Int::plus)
                 } else {
-                    MoneyTalkLogger.w("벡터매칭 OK ($similarity) but regex 파싱 실패 → Step4.5: ${embedded.input.body.take(30)}")
+                    MoneyTalkLogger.w(
+                        "벡터매칭 OK ($similarity) but regex 파싱 실패 → " +
+                            "Step4.5: id=${embedded.input.id}"
+                    )
                     regexFailed.add(embedded)
                 }
             } else {
@@ -269,6 +281,36 @@ class SmsPatternMatcher @Inject constructor(
         }
 
         return@coroutineScope MatchResult(matched, regexFailed, unmatched)
+    }
+
+    private suspend fun refreshStoredEmbeddingsIfNeeded() {
+        if (storedEmbeddingsRefreshed) return
+
+        storedEmbeddingRefreshMutex.withLock {
+            if (storedEmbeddingsRefreshed) return@withLock
+
+            try {
+                val patterns = smsPatternDao.getAllPatterns()
+                if (patterns.isNotEmpty()) {
+                    val currentVectors = embeddingService.generateEmbeddings(
+                        patterns.map { it.smsTemplate }
+                    )
+                    val changed = patterns.mapIndexedNotNull { index, pattern ->
+                        val current = currentVectors.getOrNull(index)
+                            ?: return@mapIndexedNotNull null
+                        pattern.takeIf { it.embedding != current }?.copy(embedding = current)
+                    }
+                    if (changed.isNotEmpty()) {
+                        smsPatternDao.insertAll(changed)
+                        MoneyTalkLogger.i("로컬 SMS 벡터 계약으로 ${changed.size}건 갱신")
+                    }
+                }
+            } catch (e: Exception) {
+                MoneyTalkLogger.w("저장 SMS 벡터 갱신 실패, 기존 pattern으로 계속: ${e.message}")
+            } finally {
+                storedEmbeddingsRefreshed = true
+            }
+        }
     }
 
     // ===== 원격 룰 매칭 =====
@@ -545,7 +587,7 @@ class SmsPatternMatcher @Inject constructor(
             regexCache[pattern] = compiled
             compiled
         } catch (e: Exception) {
-            MoneyTalkLogger.w("정규식 컴파일 실패: ${pattern.take(80)} (${e.message})")
+            MoneyTalkLogger.w("정규식 컴파일 실패: ${e.message}")
             null
         }
     }

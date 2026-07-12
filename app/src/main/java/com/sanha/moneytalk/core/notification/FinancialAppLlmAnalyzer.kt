@@ -1,14 +1,15 @@
 package com.sanha.moneytalk.core.notification
 
 import android.content.Context
-import com.google.ai.client.generativeai.GenerativeModel
-import com.google.ai.client.generativeai.type.RequestOptions
-import com.google.ai.client.generativeai.type.content
-import com.google.ai.client.generativeai.type.generationConfig
+import com.google.firebase.ai.GenerativeModel
+import com.google.firebase.ai.type.RequestOptions
+import com.google.firebase.ai.type.content
+import com.google.firebase.ai.type.generationConfig
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.sanha.moneytalk.R
-import com.sanha.moneytalk.core.firebase.GeminiApiKeyProvider
+import com.sanha.moneytalk.core.firebase.FirebaseAiModelFactory
+import com.sanha.moneytalk.core.firebase.GeminiConfigProvider
 import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -21,7 +22,8 @@ import javax.inject.Singleton
 @Singleton
 class FinancialAppLlmAnalyzer @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val apiKeyProvider: GeminiApiKeyProvider
+    private val configProvider: GeminiConfigProvider,
+    private val firebaseAiModelFactory: FirebaseAiModelFactory
 ) : FinancialAppCandidateAnalyzer {
     companion object {
         private const val REQUEST_TIMEOUT_SECONDS = 30L
@@ -30,7 +32,6 @@ class FinancialAppLlmAnalyzer @Inject constructor(
     }
 
     private var model: GenerativeModel? = null
-    private var cachedApiKey: String? = null
     private var cachedModelConfig: GeminiModelConfig? = null
 
     override suspend fun analyze(
@@ -56,22 +57,21 @@ class FinancialAppLlmAnalyzer @Inject constructor(
     }
 
     private suspend fun getModel(): GenerativeModel? {
-        val apiKey = apiKeyProvider.getApiKey()
-        if (apiKey.isBlank()) return null
+        if (!configProvider.isServiceAvailable()) return null
 
-        val currentModelConfig = apiKeyProvider.modelConfig
-        if (model == null || apiKey != cachedApiKey || currentModelConfig != cachedModelConfig) {
-            cachedApiKey = apiKey
+        val currentModelConfig = configProvider.modelConfig
+        if (model == null || currentModelConfig != cachedModelConfig) {
             cachedModelConfig = currentModelConfig
-            model = GenerativeModel(
+            model = firebaseAiModelFactory.create(
                 modelName = currentModelConfig.queryAnalyzer,
-                apiKey = apiKey,
                 generationConfig = generationConfig {
                     temperature = 0.0f
                     responseMimeType = "application/json"
                     maxOutputTokens = 512
                 },
-                requestOptions = RequestOptions(timeout = REQUEST_TIMEOUT_SECONDS * 1000),
+                requestOptions = RequestOptions(
+                    timeoutInMillis = REQUEST_TIMEOUT_SECONDS * 1000
+                ),
                 systemInstruction = content {
                     text(context.getString(R.string.prompt_financial_app_classifier_system))
                 }
