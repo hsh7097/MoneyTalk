@@ -395,18 +395,18 @@ fun MoneyTalkApp(
                 TextButton(
                     onClick = {
                         if (activity != null) {
-                            mainViewModel.dismissFullSyncAdDialog()
-                            mainViewModel.adManager.showCreditAd(
-                                activity = activity,
-                                onRewarded = {
-                                    onRequestSmsPermission {
+                            onRequestSmsPermission {
+                                mainViewModel.hideFullSyncAdDialogForRewardAd()
+                                mainViewModel.adManager.showCreditAd(
+                                    activity = activity,
+                                    onRewarded = {
                                         mainViewModel.onFullSyncRewardAdWatched(adYear, adMonth)
+                                    },
+                                    onFailed = {
+                                        mainViewModel.dismissFullSyncAdDialog()
                                     }
-                                },
-                                onFailed = {
-                                    mainViewModel.dismissFullSyncAdDialog()
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 ) {

@@ -10,6 +10,9 @@ interface GeminiCategoryRepository {
     /** Firebase AI Logic 서비스 사용 가능 여부 확인. 메서드명은 기존 호출부 호환을 위해 유지한다. */
     suspend fun hasApiKey(): Boolean
 
+    /** 운영 설정과 일시적인 App Check 차단을 모두 반영한 원격 분류 시도 가능 여부. */
+    suspend fun canAttemptClassification(): Boolean
+
     /**
      * 가게명 목록을 카테고리로 분류
      * Rate Limit (429) 에러 발생 시 지수 백오프로 재시도

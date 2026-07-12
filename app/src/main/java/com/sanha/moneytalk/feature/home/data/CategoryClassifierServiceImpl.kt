@@ -386,6 +386,12 @@ class CategoryClassifierServiceImpl @Inject constructor(
 
         val remaining = storeNames.filter { it !in result }
         if (remaining.isEmpty()) {
+            saveMappingsIfNeeded(
+                classifications = result,
+                originalStoreNames = storeNames,
+                source = "local",
+                saveEmbeddings = false
+            )
             logInMemoryClassificationSummary(
                 inputCount = inputCount,
                 transferCount = transferNames.size,
@@ -403,10 +409,11 @@ class CategoryClassifierServiceImpl @Inject constructor(
         onStepProgress?.invoke("기본 규칙으로 분류 중...", 0, remaining.size)
         val (ruleClassified, storeNamesForGemini) = preClassifyByRules(remaining)
         result.putAll(ruleClassified)
+        val localClassifications = result.toMap()
 
         if (storeNamesForGemini.isEmpty()) {
             saveMappingsIfNeeded(
-                classifications = result,
+                classifications = localClassifications,
                 originalStoreNames = storeNames,
                 source = "local",
                 saveEmbeddings = false
@@ -424,9 +431,9 @@ class CategoryClassifierServiceImpl @Inject constructor(
             return result
         }
 
-        if (!geminiRepository.hasApiKey()) {
+        if (!geminiRepository.canAttemptClassification()) {
             saveMappingsIfNeeded(
-                classifications = result,
+                classifications = localClassifications,
                 originalStoreNames = storeNames,
                 source = "local",
                 saveEmbeddings = false
@@ -468,7 +475,10 @@ class CategoryClassifierServiceImpl @Inject constructor(
         // 4. Gemini 배치 분류
         val representatives = groups.map { it.representative }
         var geminiResultCount = 0
-        if (representatives.isNotEmpty()) {
+        val geminiClassifications = mutableMapOf<String, String>()
+        val canAttemptRemote = representatives.isNotEmpty() &&
+            geminiRepository.canAttemptClassification()
+        if (canAttemptRemote) {
             onStepProgress?.invoke("AI가 분류하는 중...", 0, representatives.size)
             val classifications = geminiRepository.classifyStoreNames(representatives)
             geminiResultCount = classifications.size
@@ -476,6 +486,7 @@ class CategoryClassifierServiceImpl @Inject constructor(
             for (group in groups) {
                 val category = classifications[group.representative] ?: continue
                 for (member in group.members) {
+                    geminiClassifications[member] = category
                     result[member] = category
                 }
             }
@@ -483,9 +494,16 @@ class CategoryClassifierServiceImpl @Inject constructor(
 
         // 5. Room 매핑 + 벡터 DB 저장 (다음 분류 시 재사용)
         saveMappingsIfNeeded(
-            classifications = result,
+            classifications = localClassifications,
+            originalStoreNames = storeNames,
+            source = "local",
+            saveEmbeddings = false
+        )
+        saveMappingsIfNeeded(
+            classifications = geminiClassifications,
             originalStoreNames = storeNames,
             embeddingsByStoreName = groupingResult.embeddingsByStoreName,
+            source = "gemini",
             saveEmbeddings = shouldUseSemanticGrouping && groupingResult.embeddingsByStoreName.isNotEmpty()
         )
 
@@ -496,7 +514,7 @@ class CategoryClassifierServiceImpl @Inject constructor(
             geminiCandidateCount = storeNamesForGemini.size,
             groupCount = groups.size,
             geminiResultCount = geminiResultCount,
-            apiKeySkipped = false,
+            apiKeySkipped = representatives.isNotEmpty() && !canAttemptRemote,
             resultCount = result.size
         )
 
@@ -656,7 +674,7 @@ class CategoryClassifierServiceImpl @Inject constructor(
 
         // ===== [4/6] Gemini LLM 분류 =====
         val classifications: Map<String, String>
-        if (representatives.isNotEmpty()) {
+        if (representatives.isNotEmpty() && geminiRepository.canAttemptClassification()) {
             onStepProgress?.invoke("AI가 분류하는 중...", 0, representatives.size)
             classifications = geminiRepository.classifyStoreNames(representatives)
         } else {
@@ -670,26 +688,38 @@ class CategoryClassifierServiceImpl @Inject constructor(
         // ===== [5/6] 결과 전파 + Room 저장 + 벡터 DB 캐싱 =====
         val allClassifications = mutableMapOf<String, String>()
         allClassifications.putAll(ruleClassified)
+        val geminiClassifications = mutableMapOf<String, String>()
 
         for (group in groups) {
             val category = classifications[group.representative] ?: continue
-            allClassifications[group.representative] = category
+            geminiClassifications[group.representative] = category
             for (member in group.members) {
                 if (member != group.representative) {
-                    allClassifications[member] = category
+                    geminiClassifications[member] = category
                 }
             }
         }
+        allClassifications.putAll(geminiClassifications)
 
         // Room 매핑 저장
         onStepProgress?.invoke("결과 저장 중...", classifications.size, representatives.size)
-        val mappings = allClassifications.map { (store, category) -> store to category }
-        categoryRepository.saveMappings(mappings, "gemini")
+        if (ruleClassified.isNotEmpty()) {
+            categoryRepository.saveMappings(
+                ruleClassified.map { (store, category) -> store to category },
+                "local"
+            )
+        }
+        if (geminiClassifications.isNotEmpty()) {
+            categoryRepository.saveMappings(
+                geminiClassifications.map { (store, category) -> store to category },
+                "gemini"
+            )
+        }
 
         // 벡터 DB 캐싱
         try {
             if (shouldUseSemanticGrouping && groupingResult.embeddingsByStoreName.isNotEmpty()) {
-                val embeddingTargets = allClassifications.filterKeys {
+                val embeddingTargets = geminiClassifications.filterKeys {
                     groupingResult.embeddingsByStoreName.containsKey(it)
                 }
                 storeEmbeddingRepository.saveStoreEmbeddings(
@@ -784,6 +814,10 @@ class CategoryClassifierServiceImpl @Inject constructor(
      */
     override suspend fun hasGeminiApiKey(): Boolean {
         return geminiRepository.hasApiKey()
+    }
+
+    override suspend fun canAttemptGeminiClassification(): Boolean {
+        return geminiRepository.canAttemptClassification()
     }
 
     /**

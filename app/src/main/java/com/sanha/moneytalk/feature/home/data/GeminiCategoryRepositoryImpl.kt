@@ -9,12 +9,14 @@ import com.google.firebase.ai.type.generationConfig
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.firebase.FirebaseAiModelFactory
 import com.sanha.moneytalk.core.firebase.FirebaseAiRateLimitPolicy
+import com.sanha.moneytalk.core.firebase.FirebaseAiRequestCircuit
 import com.sanha.moneytalk.core.firebase.GeminiConfigProvider
 import com.sanha.moneytalk.core.firebase.GeminiModelConfig
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.util.StoreNameNormalizer
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -49,21 +51,28 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
         private const val CATEGORY_BATCH_SIZE = 13
         private const val INCOME_BATCH_SIZE = 50
         private const val MAX_RETRIES = 3
-        /** LLM 배치 병렬 동시 실행 수 */
-        private const val LLM_CONCURRENCY = 5
+        /** 첫 인증 실패가 대기 batch의 추가 호출을 막도록 카테고리 LLM 요청을 직렬화한다. */
+        private const val LLM_CONCURRENCY = 1
         private const val RETRY_BASE_DELAY_MS = 1000L  // 재시도 기본 딜레이 (1초)
         private const val MAX_RETRY_DELAY_MS = 65000L
         /** 무료 티어 분당 15회 한도와 홈/채팅 호출 여유를 고려한 시작 간격 */
         private const val MIN_REQUEST_INTERVAL_MS = 4200L
+        private const val APP_CHECK_FAILURE_COOLDOWN_MS = 15 * 60 * 1000L
     }
 
     private var generativeModel: GenerativeModel? = null
     private var cachedModelConfig: GeminiModelConfig? = null
+    private val llmSemaphore = Semaphore(LLM_CONCURRENCY)
     private val requestThrottleMutex = Mutex()
     private var nextRequestAtElapsedRealtime = 0L
+    private val appCheckCircuit = FirebaseAiRequestCircuit()
 
     override suspend fun hasApiKey(): Boolean {
         return configProvider.isServiceAvailable()
+    }
+
+    override suspend fun canAttemptClassification(): Boolean {
+        return configProvider.isServiceAvailable() && !isAppCheckTemporarilyBlocked()
     }
 
     private fun initModel(modelName: String) {
@@ -87,6 +96,10 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
         withContext(Dispatchers.IO) {
             if (!configProvider.isServiceAvailable()) {
                 MoneyTalkLogger.w("Firebase AI Logic 서비스가 비활성화됨")
+                return@withContext emptyMap()
+            }
+            if (isAppCheckTemporarilyBlocked()) {
+                MoneyTalkLogger.w("App Check 인증 실패 쿨다운 중이라 카테고리 AI 호출을 생략함")
                 return@withContext emptyMap()
             }
 
@@ -115,7 +128,6 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             val results = mutableMapOf<String, String>()
             val batches = storeNames.chunked(CATEGORY_BATCH_SIZE)
 
-            val llmSemaphore = Semaphore(LLM_CONCURRENCY)
             val batchResults = coroutineScope {
                 batches.mapIndexed { index, batch ->
                     async {
@@ -172,9 +184,10 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
 
         for (attempt in 1..MAX_RETRIES) {
             try {
+                if (isAppCheckTemporarilyBlocked()) return null to hitRateLimit
                 val prompt = buildClassificationPrompt(batch, categories, referenceText)
 
-                awaitRequestSlot()
+                if (!awaitRequestSlot()) return null to hitRateLimit
                 val response = model.generateContent(prompt)
 
                 val text = response.text
@@ -183,6 +196,8 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                     val parsed = parseClassificationResponse(text, batch, categories.toSet())
                     return parsed to hitRateLimit
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 lastException = e
                 val errorMessage = e.message ?: ""
@@ -190,6 +205,16 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                 MoneyTalkLogger.e("=== ERROR [배치 ${batchIndex + 1}/$totalBatches, 시도 $attempt] ===")
                 MoneyTalkLogger.e("에러 클래스: ${e.javaClass.name}")
                 MoneyTalkLogger.e("에러 메시지: $errorMessage")
+
+                val isAppCheckFailure = FirebaseAiRateLimitPolicy.isAppCheckFailure(
+                    errorClassName = e.javaClass.name,
+                    errorMessage = errorMessage
+                )
+                if (isAppCheckFailure) {
+                    blockAppCheckRequests()
+                    MoneyTalkLogger.e("App Check 인증 실패로 즉시 실패 처리")
+                    break
+                }
 
                 // Rate Limit 에러인지 확인
                 val isRateLimitError = FirebaseAiRateLimitPolicy.isRateLimitError(
@@ -421,6 +446,10 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             MoneyTalkLogger.w("Firebase AI Logic 서비스가 비활성화됨 (수입 분류)")
             return@withContext emptyMap()
         }
+        if (isAppCheckTemporarilyBlocked()) {
+            MoneyTalkLogger.w("App Check 인증 실패 쿨다운 중이라 수입 카테고리 AI 호출을 생략함")
+            return@withContext emptyMap()
+        }
 
         val currentModelConfig = configProvider.modelConfig
         if (generativeModel == null || currentModelConfig != cachedModelConfig) {
@@ -435,7 +464,6 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
         val results = mutableMapOf<String, String>()
         val batches = items.chunked(INCOME_BATCH_SIZE)
 
-        val llmSemaphore = Semaphore(LLM_CONCURRENCY)
         val batchResults = coroutineScope {
             batches.mapIndexed { index, batch ->
                 async {
@@ -468,8 +496,9 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
 
         for (attempt in 1..MAX_RETRIES) {
             try {
+                if (isAppCheckTemporarilyBlocked()) return null to hitRateLimit
                 val prompt = buildIncomeClassificationPrompt(batch, categories)
-                awaitRequestSlot()
+                if (!awaitRequestSlot()) return null to hitRateLimit
                 val response = model.generateContent(prompt)
                 val text = response.text
 
@@ -477,9 +506,20 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
                     val parsed = parseIncomeClassificationResponse(text, batch.map { it.key }, categories.toSet())
                     return parsed to hitRateLimit
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 lastException = e
                 val errorMessage = e.message ?: ""
+                val isAppCheckFailure = FirebaseAiRateLimitPolicy.isAppCheckFailure(
+                    errorClassName = e.javaClass.name,
+                    errorMessage = errorMessage
+                )
+                if (isAppCheckFailure) {
+                    blockAppCheckRequests()
+                    break
+                }
+
                 val isRateLimitError = FirebaseAiRateLimitPolicy.isRateLimitError(
                     errorClassName = e.javaClass.name,
                     errorMessage = errorMessage
@@ -509,12 +549,15 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
         return null to hitRateLimit
     }
 
-    private suspend fun awaitRequestSlot() {
+    private suspend fun awaitRequestSlot(): Boolean {
         requestThrottleMutex.withLock {
+            if (isAppCheckTemporarilyBlocked()) return false
             val now = SystemClock.elapsedRealtime()
             val waitMs = nextRequestAtElapsedRealtime - now
             if (waitMs > 0) delay(waitMs)
+            if (isAppCheckTemporarilyBlocked()) return false
             nextRequestAtElapsedRealtime = SystemClock.elapsedRealtime() + MIN_REQUEST_INTERVAL_MS
+            return true
         }
     }
 
@@ -523,6 +566,15 @@ class GeminiCategoryRepositoryImpl @Inject constructor(
             val deferredUntil = SystemClock.elapsedRealtime() + delayMs
             nextRequestAtElapsedRealtime = maxOf(nextRequestAtElapsedRealtime, deferredUntil)
         }
+    }
+
+    private fun isAppCheckTemporarilyBlocked(): Boolean {
+        return appCheckCircuit.isBlocked()
+    }
+
+    private fun blockAppCheckRequests() {
+        appCheckCircuit.blockFor(APP_CHECK_FAILURE_COOLDOWN_MS)
+        MoneyTalkLogger.w("App Check 인증 실패로 카테고리 AI 호출을 15분간 중단함")
     }
 
     private fun buildIncomeClassificationPrompt(

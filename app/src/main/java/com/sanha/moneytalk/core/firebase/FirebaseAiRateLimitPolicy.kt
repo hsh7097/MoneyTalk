@@ -20,6 +20,13 @@ internal object FirebaseAiRateLimitPolicy {
             errorMessage.contains("exceeded your current quota", ignoreCase = true)
     }
 
+    fun isAppCheckFailure(errorClassName: String, errorMessage: String): Boolean {
+        val normalized = "$errorClassName $errorMessage".lowercase()
+        val mentionsAppCheck = normalized.contains("app check") || normalized.contains("appcheck")
+        return mentionsAppCheck && listOf("invalid", "token", "attestation", "integrity")
+            .any(normalized::contains)
+    }
+
     fun retryAfterMillis(errorMessage: String): Long? {
         val seconds = retryAfterRegex.find(errorMessage)
             ?.groupValues

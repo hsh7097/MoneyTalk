@@ -46,6 +46,11 @@ sealed class AdState {
     data class Error(val message: String) : AdState()
 }
 
+data class MonthSyncCreditConsumption(
+    val canSync: Boolean,
+    val charged: Boolean
+)
+
 /**
  * 리워드 광고 관리자
  *
@@ -237,12 +242,23 @@ class RewardAdManager @Inject constructor(
     }
 
     /** 이전 월 문자 기록 가져오기 1회분 크레딧 차감. */
-    suspend fun consumeMonthSyncCredit(cost: Int = MONTH_SYNC_CREDIT_COST): Boolean {
+    suspend fun consumeMonthSyncCredit(
+        cost: Int = MONTH_SYNC_CREDIT_COST
+    ): MonthSyncCreditConsumption {
         if (!isCreditRewardAdEnabledNow()) {
-            return true
+            return MonthSyncCreditConsumption(canSync = true, charged = false)
         }
 
-        return aiCreditRepository.spendForMonthSync(cost = cost)
+        val consumed = aiCreditRepository.spendForMonthSync(cost = cost)
+        return MonthSyncCreditConsumption(canSync = consumed, charged = consumed)
+    }
+
+    suspend fun refundMonthSyncCredit(amount: Int = MONTH_SYNC_CREDIT_COST) {
+        if (amount <= 0) return
+        aiCreditRepository.refundCredits(
+            amount = amount,
+            reason = AiCreditRepository.REASON_MONTH_SYNC_REFUND
+        )
     }
 
     /**

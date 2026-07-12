@@ -40,6 +40,8 @@ import com.sanha.moneytalk.feature.home.data.StoreRuleSyncService
 import com.sanha.moneytalk.receiver.NotificationTransactionService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -810,30 +812,35 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                // 진행 중인 백그라운드 분류 작업 즉시 취소
-                classificationState.cancelIfRunning()
+                classificationState.withRegistrationsPaused {
+                    withContext(Dispatchers.IO) {
+                        // 선택적 테이블 삭제 (벡터 데이터 보존)
+                        // SmsPatternEntity, StoreEmbeddingEntity는 학습 데이터이므로 유지
+                        expenseRepository.deleteAll()
+                        incomeRepository.deleteAll()
+                        chatDao.deleteAll()          // chat_history 삭제
+                        chatDao.deleteAllSessions()  // chat_sessions 삭제
+                        budgetDao.deleteAll()
+                        categoryRepository.deleteAllMappings()
+                        ownedCardRepository.deleteAll()
 
-                withContext(Dispatchers.IO) {
-                    // 선택적 테이블 삭제 (벡터 데이터 보존)
-                    // SmsPatternEntity, StoreEmbeddingEntity는 학습 데이터이므로 유지
-                    expenseRepository.deleteAll()
-                    incomeRepository.deleteAll()
-                    chatDao.deleteAll()          // chat_history 삭제
-                    chatDao.deleteAllSessions()  // chat_sessions 삭제
-                    budgetDao.deleteAll()
-                    categoryRepository.deleteAllMappings()
-                    ownedCardRepository.deleteAll()
+                        // 설정 초기화
+                        settingsDataStore.saveMonthlyIncome(0)
+                        settingsDataStore.saveMonthStartDay(1)
+                        // 마지막 동기화 시간 초기화 (다음 동기화 시 전체 동기화 되도록)
+                        settingsDataStore.saveLastSyncTime(0L)
+                        settingsDataStore.saveLastRcsProviderScanTime(0L)
+                        // 실제 동기화 구간 기록도 함께 제거
+                        syncCoverageRepository.clearAll()
+                        // 광고 시청 기록 초기화 (월별 전체 동기화 다시 가능하도록)
+                        settingsDataStore.clearSyncedMonths()
+                    }
 
-                    // 설정 초기화
-                    settingsDataStore.saveMonthlyIncome(0)
-                    settingsDataStore.saveMonthStartDay(1)
-                    // 마지막 동기화 시간 초기화 (다음 동기화 시 전체 동기화 되도록)
-                    settingsDataStore.saveLastSyncTime(0L)
-                    settingsDataStore.saveLastRcsProviderScanTime(0L)
-                    // 실제 동기화 구간 기록도 함께 제거
-                    syncCoverageRepository.clearAll()
-                    // 광고 시청 기록 초기화 (월별 전체 동기화 다시 가능하도록)
-                    settingsDataStore.clearSyncedMonths()
+                    // 전체 삭제 시 삭제 추적 목록도 초기화 (새 동기화에서 재수집 가능하도록)
+                    DeletedSmsTracker.clear()
+
+                    // gate가 열린 뒤 새 작업이 들어오기 전에 삭제 이벤트를 전달한다.
+                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.ALL_DATA_DELETED)
                 }
 
                 _uiState.update {
@@ -845,11 +852,8 @@ class SettingsViewModel @Inject constructor(
                 }
                 snackbarBus.show("모든 데이터가 삭제되었습니다 (학습 데이터는 보존됨)")
 
-                // 전체 삭제 시 삭제 추적 목록도 초기화 (새 동기화에서 재수집 가능하도록)
-                DeletedSmsTracker.clear()
-
-                // 다른 ViewModel에게 데이터 삭제 이벤트 전달
-                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.ALL_DATA_DELETED)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 snackbarBus.show("삭제 실패: ${e.message}")
                 _uiState.update {
@@ -1152,17 +1156,15 @@ class SettingsViewModel @Inject constructor(
      * 미분류 항목 Gemini로 자동 분류
      */
     fun classifyUnclassifiedExpenses() {
-        viewModelScope.launch {
-            if (_uiState.value.isClassifying || _uiState.value.isBackgroundClassifying) {
+        if (_uiState.value.isClassifying || classificationState.isRunning.value) {
+            viewModelScope.launch {
                 snackbarBus.show(message(R.string.settings_classify_already_running))
-                return@launch
             }
+            return
+        }
 
-            val hasApiKey = refreshApiKeyState()
-            if (!hasApiKey) {
-                snackbarBus.show(message(R.string.settings_classify_no_api_key))
-                return@launch
-            }
+        val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
+            refreshApiKeyState()
 
             val initialCount = withContext(Dispatchers.IO) {
                 categoryClassifierService.getUnclassifiedCount()
@@ -1199,21 +1201,19 @@ class SettingsViewModel @Inject constructor(
                     })
                 }
                 loadUnclassifiedCount()
+                refreshApiKeyState()
+                val canAttemptRemote = withContext(Dispatchers.IO) {
+                    categoryClassifierService.canAttemptGeminiClassification()
+                }
                 snackbarBus.show(
-                    if (count > 0) {
-                        message(R.string.settings_classify_success, count)
-                    } else {
-                        message(R.string.settings_classify_no_result)
+                    when {
+                        count > 0 -> message(R.string.settings_classify_success, count)
+                        !canAttemptRemote -> message(R.string.settings_classify_no_api_key)
+                        else -> message(R.string.settings_classify_no_result)
                     }
                 )
-                _uiState.update {
-                    it.copy(
-                        isClassifying = false,
-                        classifyProgress = "",
-                        classifyProgressCurrent = 0,
-                        classifyProgressTotal = 0
-                    )
-                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 snackbarBus.show(
                     message(
@@ -1221,6 +1221,7 @@ class SettingsViewModel @Inject constructor(
                         e.message ?: message(R.string.common_unknown_error)
                     )
                 )
+            } finally {
                 _uiState.update {
                     it.copy(
                         isClassifying = false,
@@ -1229,6 +1230,14 @@ class SettingsViewModel @Inject constructor(
                         classifyProgressTotal = 0
                     )
                 }
+            }
+        }
+        if (classificationState.tryRegisterJob(job)) {
+            job.start()
+        } else {
+            job.cancel()
+            viewModelScope.launch {
+                snackbarBus.show(message(R.string.settings_classify_already_running))
             }
         }
     }

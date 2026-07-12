@@ -4,11 +4,15 @@ title: UI Map KB Change Log
 description: UI Map KB 변경 이력
 tags: [moneytalk, kb, ui, changelog]
 resource: docs/moneytalk-kb/ui-map/
-timestamp: 2026-07-09T06:00:00+09:00
+timestamp: 2026-07-12T23:14:00+09:00
 status: draft
 ---
 
 # Change Log
+
+## 2026-07-12
+
+- `MoneyTalkApp`의 월별 sync 보상형 광고/전역 다이얼로그 책임과 app-shell·monetization KB 라우팅을 앱 진입 항목에 추가했다.
 
 ## 2026-07-09
 

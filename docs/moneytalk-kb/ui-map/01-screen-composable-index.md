@@ -4,7 +4,7 @@ title: Screen Composable Index
 description: MoneyTalk 화면별 Composable 계층과 관련 KB 라우팅을 요약한다.
 tags: [moneytalk, ui, compose, screen]
 resource: app/src/main/java/com/sanha/moneytalk/
-timestamp: 2026-07-12T00:00:00+09:00
+timestamp: 2026-07-12T23:14:00+09:00
 status: draft
 ---
 
@@ -17,7 +17,7 @@ status: draft
 | 화면 | 주요 파일 | KB |
 |---|---|---|
 | Splash/Intro | `feature/splash/ui/SplashScreen.kt`, `feature/intro/ui/IntroActivity.kt`, `OnboardingScreen.kt`, `PermissionScreen.kt` | [onboarding](../onboarding/README.md) |
-| App root | `MainActivity.kt`, `navigation/NavGraph.kt`, `navigation/BottomNavItem.kt` | [app-shell](../app-shell/README.md) |
+| App root | `MainActivity.kt`, `MoneyTalkApp`, 월별 sync 보상형 광고/전역 다이얼로그, `navigation/NavGraph.kt`, `navigation/BottomNavItem.kt` | [app-shell](../app-shell/README.md), [budget-credit-monetization](../budget-credit-monetization/02-policy-and-plans.md) |
 
 ## 하단 탭 4개
 

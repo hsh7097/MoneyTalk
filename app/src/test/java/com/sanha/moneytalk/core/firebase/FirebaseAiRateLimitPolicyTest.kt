@@ -38,6 +38,26 @@ class FirebaseAiRateLimitPolicyTest {
     }
 
     @Test
+    fun recognizesInvalidAppCheckToken() {
+        assertTrue(
+            FirebaseAiRateLimitPolicy.isAppCheckFailure(
+                errorClassName = "com.google.firebase.ai.type.ServerException",
+                errorMessage = "Firebase App Check token is invalid."
+            )
+        )
+    }
+
+    @Test
+    fun ignoresUnrelatedFirebaseServerErrorForAppCheckPolicy() {
+        assertFalse(
+            FirebaseAiRateLimitPolicy.isAppCheckFailure(
+                errorClassName = "com.google.firebase.ai.type.ServerException",
+                errorMessage = "Model is unavailable"
+            )
+        )
+    }
+
+    @Test
     fun parsesRetryAfterWithSafetyBuffer() {
         assertEquals(
             12_424L,

@@ -26,6 +26,7 @@ class AiCreditRepository @Inject constructor(
         const val REASON_CHAT_MESSAGE = "chat_message"
         const val REASON_CHAT_REFUND = "chat_refund"
         const val REASON_MONTH_SYNC = "month_sync"
+        const val REASON_MONTH_SYNC_REFUND = "month_sync_refund"
         const val REASON_REWARD_AD = "reward_ad"
         const val REASON_INITIAL_APP_LAUNCH_REWARD = "initial_app_launch_reward"
         const val REASON_LEGACY_REWARD_CHAT = "legacy_reward_chat"

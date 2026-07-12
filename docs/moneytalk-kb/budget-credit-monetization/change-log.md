@@ -4,7 +4,7 @@ title: Budget Credit Monetization KB 변경 로그
 description: 예산/크레딧/광고 KB 변경 이유와 영향 문서를 기록한다.
 tags: [moneytalk, monetization, changelog]
 resource: docs/moneytalk-kb/budget-credit-monetization/
-timestamp: 2026-07-11T00:00:00+09:00
+timestamp: 2026-07-12T23:14:00+09:00
 status: draft
 ---
 
@@ -12,6 +12,8 @@ status: draft
 
 | 날짜 | 근거 | 변경 | 영향 문서 | 메모 |
 |---|---|---|---|---|
+| 2026-07-12 | `MoneyTalkApp`, `pendingFullSyncRegistrationEpoch`, 광고 보상 콜백 교차 리뷰 | SMS 권한 확인을 광고보다 앞에 두고, 광고 표시용 UI 숨김과 pending 월별 요청 취소를 분리하며 프로세스 종료 정산 리스크 문서화 | `MainActivity.kt`, `MainViewModel.kt`, `02-policy-and-plans.md` | 권한 거부 시 광고를 소비하지 않고, 광고 시작 시 epoch를 유지해 보상 후 sync가 이어진다. 유료 크레딧 전에는 영속 request ID 기반 정산이 필요하다. |
+| 2026-07-12 | `ClassificationState.registrationEpoch`, `MonthSyncCreditConsumption`, release 삭제 race 리뷰 | 삭제 전에 시작된 월별 요청을 광고·크레딧·sync까지 같은 epoch로 검증하고 실제 차감된 요청만 취소/실패 시 환불 | `MainViewModel.kt`, `RewardAdManager.kt`, `AiCreditRepository.kt`, `02-policy-and-plans.md` | `canSync`와 `charged`를 단일 결과로 반환해 RTDB/tier 재조회 경쟁을 제거하고 `month_sync_refund` 원장을 추가했다. |
 | 2026-07-11 | `BuildVariantPolicy.shouldUseProductionAdUnits`, release override/normal APK DEX, Codex_Fold_API_36와 SM-F966N 확인 | release 서명을 유지하는 테스트 override에서도 Google 테스트 광고 단위만 선택하도록 보강하고 AVD/실기기 보상 흐름 검증 | `RewardAdManager.kt`, `BannerAdCompose.kt`, `BuildVariantPolicyTest.kt` | override APK에는 Google rewarded/banner 테스트 ID만, 최종 normal release APK/AAB에는 운영 광고 ID만 남는 것을 확인했다. AVD는 잔액 `4 -> 6`, SM-F966N은 `5 -> 7`과 원장 `보상형 광고 +2`를 확인했다. 실기기 광고에는 `테스트 광고`, 완료 후 `리워드 지급됨`이 표시됐고 crash는 없었다. 최종 normal release에서 override는 `false`이며 RTDB `credit_ad_enable=false` 기준 AI Credit 진입점도 숨겨진다. |
 | 2026-07-10 | `BuildVariantPolicy`, `RewardAdManager`, `AiCreditRepository`, `AiCreditScreen` 확인 | 초기 5크레딧 지급과 테스트 전용 monetization override 반영 | `README.md`, `02-policy-and-plans.md`, `../ai-credit-screen/README.md` | 앱 첫 실행 보상은 1회만 지급하고, 광고 보상은 RTDB 값과 무관하게 2크레딧 고정이다. 실기기 검증 APK에서만 debug/develop gate를 우회한다. |
 | 2026-07-09 | `AI_CREDIT_USAGE_PLAN.md`, `AI_CREDIT_DEEP_ANALYSIS_PLAN.md`, `MONETIZATION.md` 내용 재검토 | 원문 링크 대신 구현 정책/후속 계획 KB화 | `README.md`, `02-policy-and-plans.md` | 채팅 1크레딧, 과거 월 동기화 1크레딧, 광고 2크레딧, release/RTDB/PREMIUM gate를 현재 정책으로 정리하고 Play Billing/심층 분석은 후속으로 분리. |

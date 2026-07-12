@@ -4,14 +4,14 @@ title: App Shell 도메인
 description: MoneyTalk 앱 진입, 하단 탭 4개, NavGraph, Activity 전역 상태와 다이얼로그를 설명한다.
 tags: [moneytalk, app-shell, navigation, bottom-tab, compose]
 resource: app/src/main/java/com/sanha/moneytalk/
-timestamp: 2026-07-08T00:00:00+09:00
+timestamp: 2026-07-12T23:14:00+09:00
 status: draft
 ---
 
 # App Shell 도메인
 
 > 상태: draft
-> 기준: 2026-07-08 현재 `MainActivity.kt`, `MainViewModel.kt`, `navigation/**`, `MainUiState.kt` 확인
+> 기준: 2026-07-12 현재 `MainActivity.kt`, `MainViewModel.kt`, `navigation/**`, `MainUiState.kt` 확인
 
 App Shell은 앱이 실행된 뒤 Compose root, 하단 탭 4개, `NavGraph`, 전역 snackbar, SMS 동기화/크레딧 충전/업데이트 다이얼로그를 묶는 진입 도메인이다.
 
@@ -48,4 +48,5 @@ App Shell은 앱이 실행된 뒤 Compose root, 하단 탭 4개, `NavGraph`, 전
 - 하단 탭 추가/삭제/라벨/아이콘 변경은 `BottomNavItem.kt`, `Screen.kt`, `NavGraph.kt`, `MainActivity.kt`를 같이 본다.
 - 탭 재클릭 refresh는 `MainActivity.kt`의 `homeTabReClickEvent`, `historyTabReClickEvent`와 각 화면 ViewModel 수집부를 같이 본다.
 - SMS 동기화/이전 월 문자 가져오기 크레딧 충전/성과 요약 다이얼로그는 `MainActivity.kt`, `MainViewModel.kt`, `MainUiState.kt`, `RewardAdManager`를 같이 본다.
+- 이전 월 보상형 광고는 SMS 권한을 먼저 확인한다. 권한이 거부되면 광고와 sync를 시작하지 않고 다이얼로그를 유지한다. 광고를 실제로 띄울 때만 `MoneyTalkApp`이 다이얼로그 UI를 숨기고 `MainViewModel`의 pending sync epoch를 보존하며, 명시적 취소·광고 실패만 요청을 제거하고 보상 성공은 같은 epoch로 월별 sync를 계속한다.
 - 화면별 세부 UI 수정은 이 문서에서 해당 화면 KB로 내려간다.

@@ -100,6 +100,9 @@ interface CategoryClassifierService {
      */
     suspend fun hasGeminiApiKey(): Boolean
 
+    /** 일시적인 App Check 쿨다운까지 반영한 원격 분류 시도 가능 여부. */
+    suspend fun canAttemptGeminiClassification(): Boolean
+
     /**
      * 저신뢰도 임베딩 항목 Gemini 재분류
      */

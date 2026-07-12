@@ -4,7 +4,7 @@ title: Release Readiness Remediation Plan
 description: 2026-07-11 release readiness review에서 발견된 배포 보류 이슈를 처리하기 위한 작업 계획과 검증 기록.
 tags: [moneytalk, release, lint, privacy, gemini, verification]
 resource: app/
-timestamp: 2026-07-12T00:00:00+09:00
+timestamp: 2026-07-12T23:14:00+09:00
 status: draft
 ---
 
@@ -99,9 +99,41 @@ status: draft
 - 시스템 화면은 Notification Access, Google 계정 선택, 로컬 복원 파일 picker까지 진입한 뒤 값을 변경하지 않고 복귀했다.
 - `중복 데이터 삭제` row는 확인 dialog 없이 즉시 실행되는 동작이었다. 순회 중 동일 금액·시간 중복 2건이 정리됐으며, 각 중복 그룹의 원본 1건은 유지되는 DAO 계약이다. `전체 삭제`와 `가이드 초기화`는 실행하지 않았다.
 
+## 2026-07-12 실기기 초기화 재동기화와 App Check 실패 격리
+
+### 데이터 재생성 결과
+
+- SM-F966N의 앱 데이터를 삭제하고 `1.0.3(19)` release를 다시 설치한 뒤 SMS/알림 권한과 온보딩을 처음부터 진행했다.
+- 초기 범위 계약인 최근 2개월 원본 메시지 492건에서 지출 299건, 수입 16건을 생성했다.
+- 초기화 전·후 2026년 7월 홈 결과가 지출 `1,385,433원`, 수입 `451,165원`, 전월 대비 `798,376원(37%) 적게`, TOP 4 `식비 229,460 / 온라인쇼핑 148,770 / 카페·간식 101,730 / 의료·건강 83,200`으로 정확히 일치했다.
+- JSON export 기준 지출 `smsId` 중복 0, 금액·시간·가게 중복 그룹 0, 0원 이하 지출 0, 빈 거래처 0, 통계 제외 3건이었다. 7월 통계 포함 지출 82건 합계도 홈과 같은 `1,385,433원`이었다.
+- 미분류 109건은 release sideload의 `Firebase App Check token is invalid`로 Gemini batch가 실패한 결과다. 로컬 파싱 합계와 이미 학습된 카테고리 결과는 기준선과 같으므로 SMS regex·local embedding은 원복하지 않는다.
+
+### 화면과 시스템 경로
+
+- 홈 요약/추이/TOP 4/오늘 내역, 가계부 목록·달력·고정 거래 필터 적용 및 해제, 거래 상세·원본 문자·카테고리 picker, 카테고리 상세 가격순, 카테고리 설정 지출·수입·이체, 거래처 규칙 폼을 순회했다.
+- 설정의 문자 제외 문구/번호/카드, 거래 알림 토글, Google 계정 선택, 로컬 복원 picker, 전체 삭제 확인 후 취소, 개인정보 처리방침, 테마·월 시작일·예산 설정을 데이터 변경 없이 확인했다.
+- 알림 접근을 허용한 뒤 시스템 `enabled_notification_listeners`와 `dumpsys notification`에서 `NotificationTransactionService`가 실제 연결된 상태를 확인했다.
+- 인사이트 local fast path는 `이번 달 총 지출`에 `1,385,433원`, `미분류 항목`에 실제 ID/일시/가게/금액을 반환했다. AI 의존 `식비가 수입 대비 적절해?`는 App Check 오류 bubble과 `다시 요청`을 표시했고 프로세스는 유지됐다.
+
+### 후속 실패 격리 패치와 최신 산출물
+
+- 실기기 clean sync는 APK SHA-256 `365CD41B9324F74E81C2562C2EEA7D269B54C988D766381ED6E981610C78FD65` 후보에서 수행했다. 이후 패치는 SMS parser/rule/embedding이 아니라 카테고리 AI 실패 격리와 Job 상호배제만 변경했다.
+- App Check 실패를 첫 카테고리 요청 뒤 15분간 차단하고 대기 batch, 2차 라운드, 수입 분류, resume 재시도를 네트워크 호출 없이 종료한다. cooldown 중에도 StoreRule/vector/local keyword 단계와 `source=local` 저장은 유지한다.
+- SMS 동기화 전체 처리, 자동 분류, 홈/설정 수동 분류는 한 Job만 소유한다. sync coverage와 카드 자동 등록도 소유 Job 안에서 끝내며, 잔여 분류는 소유권 해제 뒤 시작한다.
+- 전체 삭제 gate는 중복 호출을 직렬화하고 취소 cleanup 동안 신규 분류·동기화를 거부한다. 취소된 sync의 진행 UI와 pending silent 재실행도 함께 제거한다.
+- gate epoch로 삭제 전에 생성된 증분·월별 sync와 resume 분류 검사를 무효화한다. 월별 sync가 무효화·취소·실패되면 실제 차감된 1크레딧만 `month_sync_refund`로 복구한다.
+- 카테고리/수입 LLM batch는 공유 단일 permit으로 실행해 첫 App Check 실패 뒤 다음 batch가 네트워크를 시작하는 경쟁을 차단한다.
+- SMS 권한을 먼저 확인하고 광고를 표시한다. 권한 거부 시 광고와 sync를 시작하지 않고 다이얼로그를 유지한다. 광고 표시 직전에는 월별 sync 다이얼로그 UI만 숨기고 pending gate epoch는 보존하며, 사용자가 명시적으로 취소하거나 광고 표시가 실패할 때만 pending 요청을 제거하고 보상 성공 콜백은 보존한 epoch로 크레딧 지급과 월별 sync를 계속한다.
+- 인프로세스 취소·시작 거부·sync 실패는 실제 차감분만 환불한다. 차감 직후 프로세스가 강제 종료되면 영속 request ID/정산 상태가 없어 1크레딧을 자동 복구하지 못하는 잔여 리스크가 있으며, 현재는 가상 크레딧·RTDB gate 단계라 비차단으로 분류한다. 유료 크레딧 도입 전에는 영속 정산을 추가해야 한다.
+- 최종 release 에뮬레이터 재설치 결과 cold start category batch 오류 1회, cooldown 활성화 1회, 동일 PID 재진입 후 추가 batch 오류 0회, 설정 수동 분류 후 추가 batch 오류 0회, cooldown local-only skip 2회, `2 unclassified` 유지, fatal/ANR 0건이었다.
+- 최종 Debug/Release 단위 테스트는 각각 257개, 실패·오류·skip 0이다. `lintRelease`는 0 errors, 199 warnings, 4 hints다.
+- 최신 APK는 8,847,549 bytes, SHA-256 `35129257F5C345914A4E7C476DEE9288D79604A10FCC2674B0891297502CA25C`; AAB는 15,037,075 bytes, SHA-256 `85FCE0517B8D61217AEEB3AA82D9D9242F24DAAEF4E19B2DF31DE2FEB18028F3`이다. APK v2 서명·16KB zipalign과 AAB `jar verified`를 통과했다.
+- 최신 패치 실기기 덮어 설치 직전에 기기 ADB 연결이 해제됐다. 최신 APK의 App Check 실패 격리는 동일 Android 16 release 에뮬레이터에서 확인했고, 실기기에는 재연결 후 `adb install -r` 및 1회 로그 확인만 남았다.
+
 ## 2026-07-12 배포 판정
 
-소스의 RTDB API key 전달 구조는 제거됐고 APK/AAB 빌드, 서명, lint, 245개 단위 테스트, parser audit, release AVD SMS/알림/화면 smoke를 통과했다. 로컬 산출물 기준 배포 품질은 충족하지만, Firebase AI Logic의 App Check 강제 적용이 꺼져 있으므로 현재 판정은 **배포 및 develop 병합 보류**다.
+소스의 RTDB API key 전달 구조는 제거됐고 APK/AAB 빌드, 서명, lint, 257개 단위 테스트, parser audit, release AVD SMS/알림/화면 smoke를 통과했다. 로컬 산출물 기준 배포 품질은 충족하지만, Firebase AI Logic의 App Check 강제 적용이 꺼져 있으므로 현재 판정은 **배포 및 develop 병합 보류**다.
 
 남은 게이트는 다음 두 단계다.
 

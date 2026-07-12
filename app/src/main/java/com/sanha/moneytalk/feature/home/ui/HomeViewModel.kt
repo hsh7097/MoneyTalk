@@ -11,6 +11,7 @@ import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.database.entity.isIncludedInExpenseStats
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.model.Category
+import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
 import com.sanha.moneytalk.core.sms.DeletedSmsTracker
@@ -32,6 +33,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import androidx.compose.runtime.Stable
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -124,6 +126,7 @@ class HomeViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val categoryClassifierService: CategoryClassifierService,
+    private val classificationState: ClassificationState,
     private val settingsDataStore: SettingsDataStore,
     private val dataRefreshEvent: DataRefreshEvent,
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
@@ -695,7 +698,7 @@ class HomeViewModel @Inject constructor(
      * 미분류 항목을 Gemini로 일괄 분류
      */
     fun classifyUnclassifiedExpenses(onResult: (Int) -> Unit) {
-        viewModelScope.launch {
+        val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
             try {
                 val count = withContext(Dispatchers.IO) {
                     categoryClassifierService.classifyUnclassifiedExpenses()
@@ -705,10 +708,18 @@ class HomeViewModel @Inject constructor(
                     loadCurrentAndAdjacentPages()
                 }
                 onResult(count)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 MoneyTalkLogger.e("분류 실패: ${e.message}")
                 onResult(0)
             }
+        }
+        if (classificationState.tryRegisterJob(job)) {
+            job.start()
+        } else {
+            job.cancel()
+            onResult(0)
         }
     }
 
@@ -751,7 +762,7 @@ class HomeViewModel @Inject constructor(
      * 미분류 항목 전체 분류 시작 (최대 3라운드)
      */
     fun startFullClassification() {
-        viewModelScope.launch {
+        val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
             val initialCount = withContext(Dispatchers.IO) {
                 categoryClassifierService.getUnclassifiedCount()
             }
@@ -823,6 +834,14 @@ class HomeViewModel @Inject constructor(
                     )
                 }
             } catch (e: CancellationException) {
+                _uiState.update {
+                    it.copy(
+                        isClassifying = false,
+                        classifyProgress = "",
+                        classifyProgressCurrent = 0,
+                        classifyProgressTotal = 0
+                    )
+                }
                 throw e
             } catch (e: Exception) {
                 MoneyTalkLogger.e("전체 분류 실패: ${e.message}")
@@ -836,6 +855,11 @@ class HomeViewModel @Inject constructor(
                     )
                 }
             }
+        }
+        if (classificationState.tryRegisterJob(job)) {
+            job.start()
+        } else {
+            job.cancel()
         }
     }
 

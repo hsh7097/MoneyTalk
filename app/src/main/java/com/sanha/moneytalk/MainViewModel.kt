@@ -42,15 +42,16 @@ import com.sanha.moneytalk.core.sync.SmsSyncRangeCalculator
 import com.sanha.moneytalk.core.sync.SyncCoveragePagePolicy
 import com.sanha.moneytalk.core.sync.SyncCoverageRecordCounts
 import com.sanha.moneytalk.core.sync.SyncCoverageRecorder
-import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -97,7 +98,6 @@ class MainViewModel @Inject constructor(
     private val smsSyncRangeCalculator: SmsSyncRangeCalculator,
     private val syncCoverageRecorder: SyncCoverageRecorder,
     private val syncCoveragePagePolicy: SyncCoveragePagePolicy,
-    private val geminiRepository: GeminiRepository,
     private val snackbarBus: AppSnackbarBus,
     private val classificationState: ClassificationState,
     private val analyticsHelper: AnalyticsHelper,
@@ -177,11 +177,15 @@ class MainViewModel @Inject constructor(
 
     /** resume 자동 분류 중복 실행 방지 플래그 */
     private val isResumeClassificationChecking = AtomicBoolean(false)
+    /** App Check cooldown 동안 resume local-only 분류를 한 번만 허용 */
+    private val hasRunLocalOnlyResumeClassification = AtomicBoolean(false)
     /** syncSmsV2 재진입 방지 플래그 (동시 호출 시 중복 수입 방지) */
     private val isSyncRunning = AtomicBoolean(false)
     /** 동기화 중 들어온 silent 재실행 요청 */
     @Volatile
     private var pendingSilentSyncRequest = false
+    @Volatile
+    private var pendingFullSyncRegistrationEpoch: Long? = null
     /** 실제 성공한 동기화 구간 캐시 */
     private var syncCoverageEntries: List<SyncCoverageEntity> = emptyList()
     /** 최초 진입(onCreate) 여부 — 첫 onAppResume 호출 시 초기 동기화 다이얼로그 표시용 */
@@ -246,19 +250,11 @@ class MainViewModel @Inject constructor(
                 if (firstLaunch && recentInstantSave) {
                     MoneyTalkLogger.i("onAppResume: 최근 즉시 저장 감지 → silent 백그라운드 동기화")
                 }
-                viewModelScope.launch {
-                    val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
-                    val readPlan = withContext(Dispatchers.IO) {
-                        buildProviderCatchUpReadPlan(range)
-                    }
-                    syncSmsV2(
-                        targetMonthRange = range,
-                        updateLastSyncTime = true,
-                        silent = true,
-                        trigger = SyncCoverageTrigger.APP_RESUME_INCREMENTAL,
-                        readPlan = readPlan
-                    )
-                }
+                syncSmsV2(
+                    updateLastSyncTime = true,
+                    silent = true,
+                    trigger = SyncCoverageTrigger.APP_RESUME_INCREMENTAL
+                )
                 syncTriggered = true
             }
         } else if (!hasSmsPermission) {
@@ -342,16 +338,10 @@ class MainViewModel @Inject constructor(
 
                     DataRefreshEvent.RefreshType.SMS_RECEIVED -> {
                         MoneyTalkLogger.i("SMS 수신 이벤트 → silent 증분 동기화 시작")
-                        val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
-                        val readPlan = withContext(Dispatchers.IO) {
-                            buildProviderCatchUpReadPlan(range)
-                        }
                         syncSmsV2(
-                            targetMonthRange = range,
                             updateLastSyncTime = true,
                             silent = true,
-                            trigger = SyncCoverageTrigger.SMS_RECEIVED_INCREMENTAL,
-                            readPlan = readPlan
+                            trigger = SyncCoverageTrigger.SMS_RECEIVED_INCREMENTAL
                         )
                     }
 
@@ -391,8 +381,8 @@ class MainViewModel @Inject constructor(
     }
 
     private fun normalizeStoredCardNames() {
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
+        val job = viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            try {
                 val updatedCount = expenseRepository.normalizeStoredCardNames()
                 if (updatedCount > 0) {
                     ownedCardRepository.registerCardsFromSync(
@@ -401,9 +391,16 @@ class MainViewModel @Inject constructor(
                     MoneyTalkLogger.i("저장 카드명 정규화 완료: ${updatedCount}건")
                     notifyDataChanged()
                 }
-            }.onFailure { e ->
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 MoneyTalkLogger.w("저장 카드명 정규화 실패: ${e.message}")
             }
+        }
+        if (classificationState.tryRegisterJob(job)) {
+            job.start()
+        } else {
+            job.cancel()
         }
     }
 
@@ -468,6 +465,11 @@ class MainViewModel @Inject constructor(
         val reprocessExisting: Boolean = false
     )
 
+    private data class PreparedSyncRequest(
+        val targetMonthRange: Pair<Long, Long>,
+        val readPlan: SyncReadPlan
+    )
+
     private suspend fun buildProviderCatchUpReadPlan(targetRange: Pair<Long, Long>): SyncReadPlan {
         val lastRcsScanTime = settingsDataStore.getLastRcsProviderScanTime()
         val fallbackStart = smsSyncRangeCalculator.calculateDefaultProviderCatchUpStart(
@@ -496,6 +498,7 @@ class MainViewModel @Inject constructor(
      * 증분 동기화: lastSyncTime 이후 ~ 현재까지 처리
      */
     private fun launchSync() {
+        val registrationEpoch = classificationState.captureRegistrationEpoch() ?: return
         if (!isSyncRunning.compareAndSet(false, true)) {
             MoneyTalkLogger.w("launchSync: 이미 동기화 진행 중 → 스킵")
             return
@@ -503,8 +506,10 @@ class MainViewModel @Inject constructor(
 
         analyticsHelper.logClick(AnalyticsEvent.SCREEN_HOME, AnalyticsEvent.CLICK_SYNC_SMS)
 
-        viewModelScope.launch {
+        viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            var syncCompleted = false
             try {
+                acquireSyncClassificationOwnership(registrationEpoch)
                 val fullRange = withContext(Dispatchers.IO) { calculateIncrementalRange() }
                 val isInitialSync = withContext(Dispatchers.IO) { settingsDataStore.getLastSyncTime() == 0L }
 
@@ -534,15 +539,7 @@ class MainViewModel @Inject constructor(
 
                 if (isInitialSync) {
                     // 초기 동기화 완료 → 카드 자동 등록 + 데이터 변경 통지 + AI 성과 요약
-                    if (result.detectedCardNames.isNotEmpty()) {
-                        viewModelScope.launch(Dispatchers.IO) {
-                            try {
-                                ownedCardRepository.registerCardsFromSync(result.detectedCardNames)
-                            } catch (e: Exception) {
-                                MoneyTalkLogger.w("카드 자동 등록 실패: ${e.message}")
-                            }
-                        }
-                    }
+                    registerDetectedCards(result.detectedCardNames)
                     notifyDataChanged()
 
                     val hasData = result.expenseCount > 0 || result.incomeCount > 0
@@ -582,13 +579,17 @@ class MainViewModel @Inject constructor(
                         showNoDataMessage = false
                     )
                 }
+                syncCompleted = true
             } catch (e: CancellationException) {
+                handleSyncCancellation()
                 throw e
             } catch (e: Exception) {
                 handleSyncError(e, silent = false)
             } finally {
                 isSyncRunning.set(false)
-                tryResumeClassification()
+                if (syncCompleted && !pendingSilentSyncRequest) {
+                    scheduleResumeClassificationAfterSync()
+                }
                 drainPendingSilentSyncIfNeeded()
             }
         }
@@ -635,18 +636,10 @@ class MainViewModel @Inject constructor(
      * Screen에서 직접 호출하는 간편 래퍼.
      */
     fun syncIncremental() {
-        viewModelScope.launch {
-            val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
-            val readPlan = withContext(Dispatchers.IO) {
-                buildProviderCatchUpReadPlan(range)
-            }
-            syncSmsV2(
-                targetMonthRange = range,
-                updateLastSyncTime = true,
-                trigger = SyncCoverageTrigger.MANUAL_INCREMENTAL,
-                readPlan = readPlan
-            )
-        }
+        syncSmsV2(
+            updateLastSyncTime = true,
+            trigger = SyncCoverageTrigger.MANUAL_INCREMENTAL
+        )
     }
 
     /**
@@ -655,32 +648,38 @@ class MainViewModel @Inject constructor(
      * 기존 호출부(syncIncremental, unlockFullSync 등) 호환 유지.
      * 내부적으로 syncSmsV2Internal()을 호출.
      *
-     * @param targetMonthRange 동기화 대상 기간 (startMillis, endMillis)
+     * @param targetMonthRange 동기화 대상 기간. null이면 소유권 확보 후 증분 범위를 계산한다.
      * @param updateLastSyncTime true면 동기화 후 lastSyncTime 갱신 (증분=true, 월별=false)
      * @param silent true면 다이얼로그/진행 상태 표시 안함
      * @param onSyncComplete 동기화 성공 완료 시 추가 콜백 (월별 해제 마킹 등)
      */
     private fun syncSmsV2(
-        targetMonthRange: Pair<Long, Long>,
+        targetMonthRange: Pair<Long, Long>? = null,
         updateLastSyncTime: Boolean = true,
         silent: Boolean = false,
         trigger: SyncCoverageTrigger = SyncCoverageTrigger.MANUAL_INCREMENTAL,
         onSyncComplete: (suspend () -> Unit)? = null,
-        readPlan: SyncReadPlan = SyncReadPlan(targetRange = targetMonthRange)
-    ) {
+        readPlan: SyncReadPlan? = null,
+        requestedRegistrationEpoch: Long? = null,
+        onSyncAborted: (suspend () -> Unit)? = null
+    ): Boolean {
+        val currentEpoch = classificationState.captureRegistrationEpoch() ?: return false
+        val registrationEpoch = requestedRegistrationEpoch ?: currentEpoch
+        if (!classificationState.isRegistrationEpochCurrent(registrationEpoch)) return false
         if (!isSyncRunning.compareAndSet(false, true)) {
             if (silent) {
                 pendingSilentSyncRequest = true
                 MoneyTalkLogger.i("syncSmsV2: 이미 동기화 진행 중 → silent 재실행 예약")
             }
             MoneyTalkLogger.w("syncSmsV2: 이미 동기화 진행 중 → 스킵")
-            return
+            return false
         }
 
         if (!silent) {
             analyticsHelper.logClick(AnalyticsEvent.SCREEN_HOME, AnalyticsEvent.CLICK_SYNC_SMS)
         }
-        viewModelScope.launch {
+        viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            var syncCompleted = false
             if (!silent) {
                 _uiState.update {
                     it.copy(
@@ -698,41 +697,92 @@ class MainViewModel @Inject constructor(
             }
 
             try {
+                acquireSyncClassificationOwnership(registrationEpoch)
+                val preparedRequest = prepareSyncRequest(targetMonthRange, readPlan)
                 val result = withContext(Dispatchers.IO) {
-                    syncSmsV2Internal(readPlan, updateLastSyncTime, silent)
+                    syncSmsV2Internal(preparedRequest.readPlan, updateLastSyncTime, silent)
                 }
 
-                recordSuccessfulSyncCoverage(targetMonthRange, trigger, result)
+                recordSuccessfulSyncCoverage(preparedRequest.targetMonthRange, trigger, result)
                 handleSyncResult(result, silent)
                 onSyncComplete?.invoke()
+                syncCompleted = true
             } catch (e: CancellationException) {
+                runSyncAbortedCallback(onSyncAborted)
+                handleSyncCancellation()
                 throw e
             } catch (e: Exception) {
+                runSyncAbortedCallback(onSyncAborted)
                 handleSyncError(e, silent)
             } finally {
                 isSyncRunning.set(false)
-                tryResumeClassification()
+                if (syncCompleted && !pendingSilentSyncRequest) {
+                    scheduleResumeClassificationAfterSync()
+                }
                 drainPendingSilentSyncIfNeeded()
             }
+        }
+        return true
+    }
+
+    private suspend fun runSyncAbortedCallback(callback: (suspend () -> Unit)?) {
+        if (callback == null) return
+        withContext(NonCancellable) {
+            try {
+                callback()
+            } catch (e: Exception) {
+                MoneyTalkLogger.w("동기화 중단 후처리 실패: ${e.message}")
+            }
+        }
+    }
+
+    /** 동기화의 DB 처리와 후처리가 끝날 때까지 전역 분류 소유권을 유지한다. */
+    private suspend fun acquireSyncClassificationOwnership(registrationEpoch: Long) {
+        val syncJob = coroutineContext[Job]
+            ?: throw CancellationException("SMS 동기화 Job을 확인할 수 없습니다")
+        if (!classificationState.replaceWith(syncJob, expectedEpoch = registrationEpoch)) {
+            throw CancellationException("SMS 동기화 분류 소유권을 확보하지 못했습니다")
+        }
+        if (!classificationState.isRegistrationEpochCurrent(registrationEpoch)) {
+            throw CancellationException("데이터 초기화 전에 생성된 SMS 동기화 요청입니다")
+        }
+    }
+
+    private suspend fun prepareSyncRequest(
+        targetMonthRange: Pair<Long, Long>?,
+        readPlan: SyncReadPlan?
+    ): PreparedSyncRequest = withContext(Dispatchers.IO) {
+        val resolvedReadPlan = when {
+            readPlan != null -> readPlan
+            targetMonthRange != null -> SyncReadPlan(targetRange = targetMonthRange)
+            else -> {
+                val incrementalRange = calculateIncrementalRange()
+                buildProviderCatchUpReadPlan(incrementalRange)
+            }
+        }
+        PreparedSyncRequest(
+            targetMonthRange = targetMonthRange ?: resolvedReadPlan.targetRange,
+            readPlan = resolvedReadPlan
+        )
+    }
+
+    /** 현재 sync Job의 completion callback이 소유권을 해제한 뒤 잔여 분류를 시도한다. */
+    private suspend fun scheduleResumeClassificationAfterSync() {
+        val completedSyncJob = coroutineContext[Job] ?: return
+        viewModelScope.launch {
+            completedSyncJob.join()
+            tryResumeClassification()
         }
     }
 
     private fun drainPendingSilentSyncIfNeeded() {
         if (!pendingSilentSyncRequest) return
         pendingSilentSyncRequest = false
-        viewModelScope.launch {
-            val range = withContext(Dispatchers.IO) { calculateIncrementalRange() }
-            val readPlan = withContext(Dispatchers.IO) {
-                buildProviderCatchUpReadPlan(range)
-            }
-            syncSmsV2(
-                targetMonthRange = range,
-                updateLastSyncTime = true,
-                silent = true,
-                trigger = SyncCoverageTrigger.PENDING_SILENT_INCREMENTAL,
-                readPlan = readPlan
-            )
-        }
+        syncSmsV2(
+            updateLastSyncTime = true,
+            silent = true,
+            trigger = SyncCoverageTrigger.PENDING_SILENT_INCREMENTAL
+        )
     }
 
     /**
@@ -1288,7 +1338,7 @@ class MainViewModel @Inject constructor(
             .distinct()
 
         if (unclassifiedStores.isNotEmpty()) {
-            val isAiServiceAvailable = geminiRepository.hasApiKey()
+            val isAiServiceAvailable = categoryClassifierService.canAttemptGeminiClassification()
             if (isAiServiceAvailable) {
                 _uiState.update {
                     it.copy(syncProgress = "AI가 카테고리 분류 중...")
@@ -1331,6 +1381,8 @@ class MainViewModel @Inject constructor(
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 MoneyTalkLogger.w("사전 카테고리 분류 실패 (무시): ${e.message}")
             }
@@ -1681,16 +1733,7 @@ class MainViewModel @Inject constructor(
                 "수입 출처 보정 ${result.repairedIncomeSourceCount}건"
         )
 
-        // 카드 자동 등록 (백그라운드)
-        if (result.detectedCardNames.isNotEmpty()) {
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    ownedCardRepository.registerCardsFromSync(result.detectedCardNames)
-                } catch (e: Exception) {
-                    MoneyTalkLogger.w("카드 자동 등록 실패: ${e.message}")
-                }
-            }
-        }
+        registerDetectedCards(result.detectedCardNames)
 
         // 실제 데이터 변경이 있을 때만 HomeVM/HistoryVM에 통지 (불필요한 UI 갱신 방지)
         val hasDataChange = result.expenseCount > 0 || result.incomeCount > 0 ||
@@ -1752,6 +1795,36 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /** 카드 등록도 sync 소유 Job 안에서 끝내 삭제 gate가 완료까지 기다리게 한다. */
+    private suspend fun registerDetectedCards(cardNames: List<String>) {
+        if (cardNames.isEmpty()) return
+        try {
+            withContext(Dispatchers.IO) {
+                ownedCardRepository.registerCardsFromSync(cardNames)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            MoneyTalkLogger.w("카드 자동 등록 실패: ${e.message}")
+        }
+    }
+
+    /** 다른 전역 작업이 동기화를 취소해도 진행 UI가 남지 않도록 정리한다. */
+    private fun handleSyncCancellation() {
+        pendingSilentSyncRequest = false
+        categoryClassifierService.clearCategoryCache()
+        _uiState.update {
+            it.copy(
+                isSyncing = false,
+                showSyncDialog = false,
+                syncProgress = "",
+                syncProgressCurrent = 0,
+                syncProgressTotal = 0,
+                syncStepIndex = 0
+            )
+        }
+    }
+
     /**
      * 동기화 다이얼로그 dismiss (백그라운드에서 계속)
      *
@@ -1785,15 +1858,22 @@ class MainViewModel @Inject constructor(
      * @param year 대상 연도 (Activity 레벨 다이얼로그에서 월 라벨 표시에 사용)
      * @param month 대상 월
      */
-    fun showFullSyncAdDialog(year: Int, month: Int) {
+    private fun showFullSyncAdDialog(year: Int, month: Int, registrationEpoch: Long) {
+        pendingFullSyncRegistrationEpoch = registrationEpoch
         rewardAdManager.preloadCreditAd()
         _uiState.update {
             it.copy(showFullSyncAdDialog = true, fullSyncAdYear = year, fullSyncAdMonth = month)
         }
     }
 
+    /** Keep the pending request while the rewarded ad covers the dialog. */
+    fun hideFullSyncAdDialogForRewardAd() {
+        _uiState.update { it.copy(showFullSyncAdDialog = false) }
+    }
+
     /** 월별 SMS 동기화 광고 다이얼로그 닫기 */
     fun dismissFullSyncAdDialog() {
+        pendingFullSyncRegistrationEpoch = null
         _uiState.update { it.copy(showFullSyncAdDialog = false) }
     }
 
@@ -1803,36 +1883,83 @@ class MainViewModel @Inject constructor(
      * 부족하면 보상형 광고 충전 다이얼로그를 표시한다.
      */
     fun requestMonthSync(year: Int, month: Int) {
+        val registrationEpoch = classificationState.captureRegistrationEpoch() ?: return
         viewModelScope.launch {
-            requestMonthSyncInternal(year, month)
+            requestMonthSyncInternal(year, month, registrationEpoch)
         }
     }
 
     fun onFullSyncRewardAdWatched(year: Int, month: Int) {
+        val registrationEpoch = pendingFullSyncRegistrationEpoch
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 rewardAdManager.addRewardChats()
             }
-            requestMonthSyncInternal(year, month)
+            if (registrationEpoch == null ||
+                !classificationState.isRegistrationEpochCurrent(registrationEpoch)
+            ) {
+                dismissFullSyncAdDialog()
+                return@launch
+            }
+            requestMonthSyncInternal(year, month, registrationEpoch)
         }
     }
 
-    private suspend fun requestMonthSyncInternal(year: Int, month: Int) {
+    private suspend fun requestMonthSyncInternal(
+        year: Int,
+        month: Int,
+        registrationEpoch: Long
+    ) {
+        if (!classificationState.isRegistrationEpochCurrent(registrationEpoch)) return
         val needsCredit = withContext(Dispatchers.IO) {
             rewardAdManager.isMonthSyncCreditRequired()
         }
+        if (!classificationState.isRegistrationEpochCurrent(registrationEpoch)) return
         if (needsCredit) {
-            showFullSyncAdDialog(year, month)
+            showFullSyncAdDialog(year, month, registrationEpoch)
             return
         }
 
-        val consumed = withContext(Dispatchers.IO) {
-            rewardAdManager.consumeMonthSyncCredit()
+        val requestJob = coroutineContext[Job]
+        val creditConsumption = withContext(NonCancellable) {
+            val consumption = withContext(Dispatchers.IO) {
+                rewardAdManager.consumeMonthSyncCredit()
+            }
+            val requestStillValid = requestJob?.isActive == true &&
+                classificationState.isRegistrationEpochCurrent(registrationEpoch)
+            if (!requestStillValid) {
+                if (consumption.charged) {
+                    withContext(Dispatchers.IO) {
+                        rewardAdManager.refundMonthSyncCredit()
+                    }
+                }
+                consumption.copy(canSync = false, charged = false)
+            } else {
+                consumption
+            }
         }
-        if (consumed) {
-            unlockFullSync(year, month)
-        } else {
-            showFullSyncAdDialog(year, month)
+        if (creditConsumption.canSync) {
+            if (!classificationState.isRegistrationEpochCurrent(registrationEpoch)) {
+                if (creditConsumption.charged) {
+                    withContext(NonCancellable + Dispatchers.IO) {
+                        rewardAdManager.refundMonthSyncCredit()
+                    }
+                }
+                return
+            }
+            val started = unlockFullSync(
+                year = year,
+                month = month,
+                registrationEpoch = registrationEpoch,
+                refundCreditOnAbort = creditConsumption.charged
+            )
+            if (!started && creditConsumption.charged) {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    rewardAdManager.refundMonthSyncCredit()
+                }
+            }
+        } else if (classificationState.isRegistrationEpochCurrent(registrationEpoch)) {
+            showFullSyncAdDialog(year, month, registrationEpoch)
         }
     }
 
@@ -1845,15 +1972,22 @@ class MainViewModel @Inject constructor(
      * @param year 대상 연도
      * @param month 대상 월
      */
-    fun unlockFullSync(year: Int, month: Int, isFreeSyncUsed: Boolean = false) {
+    private fun unlockFullSync(
+        year: Int,
+        month: Int,
+        registrationEpoch: Long,
+        isFreeSyncUsed: Boolean = false,
+        refundCreditOnAbort: Boolean = false
+    ): Boolean {
+        if (!classificationState.isRegistrationEpochCurrent(registrationEpoch)) return false
         val yearMonth = String.format(Locale.ROOT, "%04d-%02d", year, month)
+        pendingFullSyncRegistrationEpoch = null
         _uiState.update { it.copy(showFullSyncAdDialog = false) }
 
         val readPlan = calculateMonthReadPlan(year, month)
         val monthLabel = buildSyncMonthLabel(year, month)
-        snackbarBus.show(appContext.getString(R.string.full_sync_unlocked_message, monthLabel))
 
-        syncSmsV2(
+        val started = syncSmsV2(
             readPlan.targetRange,
             updateLastSyncTime = false,
             trigger = SyncCoverageTrigger.MANUAL_MONTH_UNLOCK,
@@ -1863,8 +1997,22 @@ class MainViewModel @Inject constructor(
                     settingsDataStore.incrementFreeSyncUsedCount()
                 }
             },
-            readPlan = readPlan
+            readPlan = readPlan,
+            requestedRegistrationEpoch = registrationEpoch,
+            onSyncAborted = if (refundCreditOnAbort) {
+                {
+                    withContext(Dispatchers.IO) {
+                        rewardAdManager.refundMonthSyncCredit()
+                    }
+                }
+            } else {
+                null
+            }
         )
+        if (started) {
+            snackbarBus.show(appContext.getString(R.string.full_sync_unlocked_message, monthLabel))
+        }
+        return started
     }
 
     /**
@@ -1967,28 +2115,38 @@ class MainViewModel @Inject constructor(
 
     /**
      * resume 시 미분류 항목 자동 분류 시도
-     * 조건: (1) 동기화 미진행 (2) 분류 미진행 (3) AI 서비스 사용 가능 (4) 미분류 항목 존재
+     * 조건: (1) 동기화 미진행 (2) 분류 미진행 (3) 미분류 항목 존재
      *
-     * 동기화 중에는 postSyncCleanup에서 분류를 실행하므로, 여기서 중복 시작하면
-     * API 429 에러 + 지수 백오프로 양쪽 모두 느려지는 문제가 발생한다.
+     * 동기화 Job이 전역 분류 소유권을 유지하고 완료 뒤 이 경로를 다시 예약하므로,
+     * 동기화 중에는 별도 분류를 시작하지 않는다.
      */
     private fun tryResumeClassification() {
+        val registrationEpoch = classificationState.captureRegistrationEpoch() ?: return
         if (_uiState.value.isSyncing) return
         if (classificationState.isRunning.value) return
         if (!isResumeClassificationChecking.compareAndSet(false, true)) return
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val isAiServiceAvailable = geminiRepository.hasApiKey()
-                if (!isAiServiceAvailable) return@launch
+                val canAttemptRemote = categoryClassifierService.canAttemptGeminiClassification()
+                if (canAttemptRemote) {
+                    hasRunLocalOnlyResumeClassification.set(false)
+                } else if (hasRunLocalOnlyResumeClassification.get()) {
+                    return@launch
+                }
 
+                if (!classificationState.isRegistrationEpochCurrent(registrationEpoch)) return@launch
                 val unclassifiedCount = categoryClassifierService.getUnclassifiedCount()
                 if (unclassifiedCount == 0) return@launch
                 if (classificationState.isRunning.value) return@launch
 
                 withContext(Dispatchers.Main) {
-                    if (!classificationState.isRunning.value) {
-                        launchBackgroundCategoryClassification()
+                    if (classificationState.isRegistrationEpochCurrent(registrationEpoch) &&
+                        !classificationState.isRunning.value
+                    ) {
+                        launchBackgroundCategoryClassification(
+                            markLocalOnlyRun = !canAttemptRemote
+                        )
                     }
                 }
             } finally {
@@ -2000,24 +2158,21 @@ class MainViewModel @Inject constructor(
     /**
      * 카테고리 자동 분류를 백그라운드에서 실행 (얼럿 없이 자동)
      */
-    private fun launchBackgroundCategoryClassification() {
-        val job = viewModelScope.launch(Dispatchers.IO) {
-            try {
-                launchBackgroundCategoryClassificationInternal()
-            } finally {
-                coroutineContext[Job]?.let { classificationState.completeJob(it) }
-            }
+    private fun launchBackgroundCategoryClassification(markLocalOnlyRun: Boolean) {
+        val job = viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            launchBackgroundCategoryClassificationInternal(markLocalOnlyRun)
         }
-        classificationState.registerJob(job)
-        if (job.isCompleted) {
-            classificationState.completeJob(job)
+        if (classificationState.tryRegisterJob(job)) {
+            job.start()
+        } else {
+            job.cancel()
         }
     }
 
     /**
      * 카테고리 자동 분류 내부 로직 (IO 디스패처에서 실행)
      */
-    private suspend fun launchBackgroundCategoryClassificationInternal() {
+    private suspend fun launchBackgroundCategoryClassificationInternal(markLocalOnlyRun: Boolean) {
         try {
             val count = categoryClassifierService.getUnclassifiedCount()
             if (count == 0) {
@@ -2028,6 +2183,9 @@ class MainViewModel @Inject constructor(
             val phase1Count = categoryClassifierService.classifyUnclassifiedExpenses(
                 maxStoreCount = 50
             )
+            if (markLocalOnlyRun) {
+                hasRunLocalOnlyResumeClassification.set(true)
+            }
 
 
             if (phase1Count > 0) {

@@ -4,7 +4,7 @@ title: AI Credit And Monetization Policy
 description: AI 크레딧 차감/충전, 광고 gate, 유료화 후속 계획을 현재 구현과 계획으로 나눠 정리한다.
 tags: [moneytalk, ai-credit, monetization, reward-ad, billing]
 resource: app/src/main/java/com/sanha/moneytalk/core/ad/
-timestamp: 2026-07-09T05:20:00+09:00
+timestamp: 2026-07-12T23:14:00+09:00
 status: draft
 ---
 
@@ -49,6 +49,12 @@ status: draft
 초기/증분 동기화는 무료 기본 범위로 수행한다. 사용자가 과거 월로 이동했을 때 `SyncCoverageRepository` 기준 coverage가 부족하면 월별 CTA를 보여주고, 해당 월 custom range 동기화에 1크레딧을 차감한다.
 
 크레딧이 부족하면 보상형 광고 1회 시청으로 기본 2크레딧을 충전한 뒤 다시 차감한다. 광고 로드/표시/보상 실패 시 과거 월 데이터 가져오기를 우회 실행하지 않는다.
+
+월별 요청은 사용자가 처음 누른 시점의 삭제 gate epoch를 광고 보상과 sync 시작까지 유지한다. 전체 삭제로 요청이 무효화되거나 시작된 월 sync가 취소·실패하면 `charged=true`로 실제 차감된 1크레딧만 `month_sync_refund` 원장으로 복구한다. 기능 비활성으로 차감하지 않은 요청에는 환불 크레딧을 만들지 않는다.
+
+SMS 권한을 먼저 확인한 뒤 광고 전체 화면을 띄운다. 권한이 거부되면 광고를 표시하지 않고 충전 다이얼로그와 pending 요청을 유지한다. 광고를 실제로 띄울 때는 `showFullSyncAdDialog`만 끄고 pending epoch를 보존한다. 다이얼로그 취소와 광고 실패는 pending 요청을 제거하고, 보상 성공은 보존한 epoch를 사용해 크레딧 지급 후 월별 sync를 계속한다. UI 닫기와 요청 취소를 같은 메서드로 처리하면 보상만 지급되고 sync가 시작되지 않는 회귀가 생긴다.
+
+현재 환불 경계는 coroutine 취소·시작 거부·sync 실패를 보호하지만 프로세스 강제 종료를 넘는 영속 정산은 제공하지 않는다. 유료 구매 크레딧을 운영하기 전에는 월별 sync request ID, `PENDING/COMPLETED/REFUNDED` 상태와 재시작 reconciliation을 추가해야 한다.
 
 ## API 비용 방어 장치
 
