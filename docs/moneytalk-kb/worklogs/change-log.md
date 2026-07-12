@@ -4,11 +4,16 @@ title: Worklogs KB Change Log
 description: Worklogs KB 변경 이력
 tags: [moneytalk, kb, worklog, changelog]
 resource: docs/moneytalk-kb/worklogs/
-timestamp: 2026-07-12T23:42:00+09:00
+timestamp: 2026-07-13T00:15:00+09:00
 status: draft
 ---
 
 # Change Log
+
+## 2026-07-13
+
+- 사용자 결정에 따라 최종 실기기 덮어 설치 게이트를 Codex_Fold_API_36 Android 16 AVD로 대체하고, APK fingerprint·버전·cold/hot 진입·동일 PID·설정 수동 분류·fatal/ANR 결과를 기록했다.
+- Play 서명 배포본의 AI 정상 응답은 sideload AVD로 재현할 수 없음을 유지하되, Firebase AI Logic App Check 적용 확인과 실패 회로 차단 검증을 근거로 `develop` 병합 블로커에서 배포 직후 운영 검증으로 전환했다.
 
 ## 2026-07-12
 

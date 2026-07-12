@@ -4,7 +4,7 @@ title: Release Readiness Remediation Plan
 description: 2026-07-11 release readiness review에서 발견된 배포 보류 이슈를 처리하기 위한 작업 계획과 검증 기록.
 tags: [moneytalk, release, lint, privacy, gemini, verification]
 resource: app/
-timestamp: 2026-07-12T23:42:00+09:00
+timestamp: 2026-07-13T00:15:00+09:00
 status: draft
 ---
 
@@ -26,7 +26,7 @@ status: draft
 | 계측 테스트 skipped | 보류 | AVD에서 skipped된 real-device monthly SMS/order 테스트는 실기기 조건이 준비된 별도 검증으로 분리 | 추후 실기기 connected test |
 | Gemini key 전달 경로 | 수정 완료 | RTDB key 필드를 더 이상 파싱·캐시하지 않고 Firebase AI Logic을 사용한다. release는 Play Integrity App Check provider를 설치한다 | source grep, release build, Firebase Console |
 | Firebase AI Logic App Check 강제 적용 | 적용 확인 완료 | Firebase Console에서 AI Logic `기본 - 적용됨`, Android `com.sanha.moneytalk` Play Integrity `등록됨` 확인 | 로그인된 Chrome에서 Firebase Console 읽기 전용 재검증 |
-| release 후보 Git 상태 | 기능 브랜치 푸시 완료 | 검증 결과와 KB를 `codex/rtdb-sms-rules-docs`에 보존하고 남은 Play 배포본/실기기 검증 전에는 `develop` 병합하지 않는다 | commit `d332ca1`, 원격 SHA 일치 |
+| release 후보 Git 상태 | `develop` 병합 가능 | 검증 결과와 KB를 `codex/rtdb-sms-rules-docs`에 보존하고, 사용자 결정에 따라 최종 기기 게이트를 Android 16 AVD로 대체한다 | 기능 브랜치 원격 SHA 일치, 최종 AVD 재검증 통과 |
 
 ## 처리 순서
 
@@ -92,6 +92,7 @@ status: draft
 | Firebase 모델명 확인 | 통과 | Firebase AI Logic 안정 모델 `gemini-3.1-flash-lite`, `gemini-3.5-flash` 사용 확인 |
 | Firebase App Check 앱 등록 | 통과 | Firebase Console에서 `com.sanha.moneytalk` Play Integrity `등록됨` 확인 |
 | Firebase AI Logic App Check 적용 | 통과 | 2026-07-12 23:42 KST 재확인 결과 AI Logic `기본 - 적용됨`, 확인된 요청 46% / 미확인 요청 54%. 이 비율은 Console 요청 출처 지표이며 앱 기능 성공률이 아님 |
+| 최종 release AVD 대체 검증 | 통과 | 2026-07-13 사용자 결정으로 실기기 덮어 설치를 Codex_Fold_API_36 Android 16 AVD로 대체. APK SHA-256 일치, `1.0.3(19)`, cold/hot 진입, 동일 PID 유지, 설정 수동 분류, fatal/ANR 0 |
 
 ## 2026-07-12 최대 글자 실기기 QA 메모
 
@@ -129,15 +130,16 @@ status: draft
 - 최종 release 에뮬레이터 재설치 결과 cold start category batch 오류 1회, cooldown 활성화 1회, 동일 PID 재진입 후 추가 batch 오류 0회, 설정 수동 분류 후 추가 batch 오류 0회, cooldown local-only skip 2회, `2 unclassified` 유지, fatal/ANR 0건이었다.
 - 최종 Debug/Release 단위 테스트는 각각 257개, 실패·오류·skip 0이다. `lintRelease`는 0 errors, 199 warnings, 4 hints다.
 - 최신 APK는 8,847,549 bytes, SHA-256 `35129257F5C345914A4E7C476DEE9288D79604A10FCC2674B0891297502CA25C`; AAB는 15,037,075 bytes, SHA-256 `85FCE0517B8D61217AEEB3AA82D9D9242F24DAAEF4E19B2DF31DE2FEB18028F3`이다. APK v2 서명·16KB zipalign과 AAB `jar verified`를 통과했다.
-- 최신 패치 실기기 덮어 설치 직전에 기기 ADB 연결이 해제됐다. 최신 APK의 App Check 실패 격리는 동일 Android 16 release 에뮬레이터에서 확인했고, 실기기에는 재연결 후 `adb install -r` 및 1회 로그 확인만 남았다.
+- 최신 패치 실기기 덮어 설치 직전에 기기 ADB 연결이 해제됐다. 당시에는 실기기 `adb install -r`와 1회 로그 확인이 남았으나, 2026-07-13 사용자 결정으로 아래 Android 16 AVD 대체 검증을 최종 기기 게이트로 사용했다.
 
-## 2026-07-12 배포 판정
+## 2026-07-13 최종 AVD 대체 검증과 배포 판정
 
-소스의 RTDB API key 전달 구조는 제거됐고 APK/AAB 빌드, 서명, lint, 257개 단위 테스트, parser audit, release AVD SMS/알림/화면 smoke를 통과했다. Firebase AI Logic App Check도 적용 상태로 전환된 것을 확인했으므로 소스·로컬 산출물·Cloud 설정 기준 배포 후보 품질은 충족한다. 다만 Play가 서명한 배포본의 실제 AI 응답과 최종 APK 실기기 덮어 설치 증거가 아직 없어 **develop 병합은 보류**한다.
+- 사용자 결정에 따라 최종 실기기 덮어 설치 게이트를 `Codex_Fold_API_36` Android 16 AVD 검증으로 대체했다.
+- 최종 APK SHA-256은 `35129257F5C345914A4E7C476DEE9288D79604A10FCC2674B0891297502CA25C`로 기존 최종 산출물과 일치했고, `adb install -r` 성공 후 `1.0.3(19)`를 확인했다.
+- cold start는 IntroActivity에서 MainActivity까지 정상 완료됐고, HOME 후 hot 재진입은 동일 PID `24661`을 유지했다.
+- sideload Play Integrity 제약으로 category batch 1회가 `Firebase App Check token is invalid`로 실패한 뒤 App Check circuit이 1회 활성화됐다. 설정의 `Category Classification`을 다시 실행했을 때 추가 batch 실패와 circuit 활성화는 없었고, 수입 AI cooldown skip만 누적 2회로 종료됐다.
+- 설정 화면은 `2 unclassified`를 표시했고, cold/hot/수동 분류 전체 구간에서 fatal crash와 ANR은 각각 0건이었다.
 
-남은 게이트는 다음 두 단계다.
+소스의 RTDB API key 전달 구조 제거, APK/AAB 빌드·서명, lint, Debug/Release 각 257개 단위 테스트, parser audit, release AVD SMS/알림/전체 화면 smoke, 실기기 clean sync 결과 보존, Firebase AI Logic App Check 적용 상태, 최종 AVD 대체 검증을 종합해 **`develop` 병합 가능한 배포 후보**로 판정한다.
 
-1. Play Console에서 설치한 release로 AI 채팅 또는 홈 인사이트 1회를 호출해 App Check 통과와 원하는 응답 형식을 확인한다. sideload AVD의 `Firebase App Check token is invalid`는 Play Integrity 특성상 이 검증을 대체할 수 없다.
-2. 최종 APK SHA-256 `35129257F5C345914A4E7C476DEE9288D79604A10FCC2674B0891297502CA25C`를 SM-F966N에 `adb install -r`로 설치해 사용자 데이터 보존, `1.0.3(19)`, MainActivity 생존, fatal 0을 확인한다.
-
-기능 브랜치는 검증 결과 보존을 위해 커밋·푸시했지만, 위 두 게이트를 통과하기 전에는 `develop`으로 병합하지 않는다.
+Play가 서명한 배포본에서의 AI 정상 응답은 sideload AVD로 직접 재현할 수 없다. 이는 소스 병합 블로커에서 제외하되 Play 단계 배포 직후 AI 채팅 또는 홈 인사이트 1회를 호출해 응답 형식과 App Check 통과를 확인하는 운영 검증으로 남긴다.
