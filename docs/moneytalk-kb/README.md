@@ -30,7 +30,7 @@ status: draft
 | [home/README.md](home/README.md) | 홈 탭 도메인 KB 진입점이다. | `feature/home/ui/**` 또는 홈 월별 현황/카테고리/AI 인사이트 작업 시 본다. |
 | [history/README.md](history/README.md) | 내역 화면 도메인 KB 진입점이다. | `feature/history/**` 또는 거래 목록/필터/달력/상세 작업 시 본다. |
 | [chat/README.md](chat/README.md) | AI 채팅 기능/화면 KB 진입점이다. | `feature/chat/**`, `ChatCreditPolicy`, `DataQueryParser`, 토큰 비용 절감 경로를 볼 때 본다. |
-| [settings/README.md](settings/README.md) | 설정 탭 도메인 KB 진입점이다. | `feature/settings/**`, 예산/API key/백업/카드 보유 작업 시 본다. |
+| [settings/README.md](settings/README.md) | 설정 탭 도메인 KB 진입점이다. | `feature/settings/**`, 예산/AI 서비스 상태/백업/카드 보유 작업 시 본다. |
 | [transaction-edit/README.md](transaction-edit/README.md) | 거래 추가/수정 화면 KB다. | 아이템 변경, 카테고리 picker, 일괄 적용 작업 시 본다. |
 | [category-detail/README.md](category-detail/README.md) | 카테고리 상세 화면 KB다. | 홈 카테고리 클릭 후 상세/정렬/월 이동 작업 시 본다. |
 | [category-settings/README.md](category-settings/README.md) | 사용자 카테고리 설정 화면 KB다. | custom category 추가/수정/삭제 작업 시 본다. |
@@ -61,7 +61,7 @@ status: draft
 | `app-shell` | `MainActivity.kt`, `MainViewModel.kt`, `navigation/**`, `MainUiState.kt` | draft | 앱 진입, 하단 탭 4개, NavGraph, Activity 전역 dialog/snackbar |
 | `home` | `feature/home/ui/**`, `feature/home/data/**` | draft | 홈 탭, 월별 현황, 카테고리 지출, AI 인사이트, 미분류 분류 CTA, 홈 코치마크 |
 | `history` | `app/src/main/java/com/sanha/moneytalk/feature/history/` | draft | 내역 화면, 월별 pager, 필터, 달력, 거래 상세/수정 진입 |
-| `settings` | `feature/settings/ui/**` | draft | 설정 탭, 예산, API key, 백업/복원, Google Drive, 카드 보유 |
+| `settings` | `feature/settings/ui/**` | verified | 설정 탭, 예산, AI 서비스 상태, 백업/복원, Google Drive, 카드 보유 |
 | `transaction-edit` | `feature/transactionedit/ui/**` | draft | 지출/수입 추가·수정, 카테고리 picker, 일괄 적용, 삭제 |
 | `category-detail` | `feature/categorydetail/ui/**` | draft | 카테고리 상세 화면, 월 이동, 정렬, 거래 목록 |
 | `category-settings` | `feature/categorysettings/ui/**`, `CustomCategoryRepository` | draft | 사용자 카테고리 관리 |

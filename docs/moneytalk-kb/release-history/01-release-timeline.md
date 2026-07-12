@@ -34,7 +34,7 @@ status: draft
 
 | 변화 | 의미 | 관련 KB |
 |---|---|---|
-| API 키 없는 카테고리 사전 분류 | Gemini API 키가 없어도 로컬 사전 분류 규칙을 저장 | [category-classification](../category-classification/README.md) |
+| AI 서비스 없이 가능한 카테고리 사전 분류 | Firebase AI Logic 호출 전 로컬 사전 분류 규칙과 exact mapping을 저장 | [category-classification](../category-classification/README.md) |
 | 개인정보/릴리스 metadata 보정 | Play 등록 앱명/패키지/개발자명과 웹 정책 정합성 보정 | [onboarding](../onboarding/README.md) |
 | 앱 알림/SMS 교차 중복 보정 | 금융 앱 알림과 SMS가 같은 거래일 때 중복 저장을 줄임 | [notification-ingestion](../notification-ingestion/README.md) |
 

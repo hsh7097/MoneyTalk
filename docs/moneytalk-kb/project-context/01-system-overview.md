@@ -73,8 +73,9 @@ Feature 전용 `Activity`, `ViewModel`, 화면 모델은 `feature/<name>/ui` 또
 
 - 프롬프트 템플릿은 `app/src/main/res/values/string_prompt.xml`에서 관리한다.
 - 프롬프트 보조 문자열과 상태/라벨 문자열은 `app/src/main/res/values/strings.xml`의 `ai_*` 키가 담당한다.
-- 운영 기본 모델은 비용 방어를 위해 `gemini-2.5-flash-lite` 중심이다.
+- 운영 기본 모델은 `PremiumConfig.GeminiModelConfig`의 역할별 기본값(`gemini-3.1-flash-lite`, summary/regex의 `gemini-3.5-flash`)을 사용한다.
 - Pro/preview 계열 검증은 Firebase RTDB `/config/models`에서 역할별 모델명을 override해 내부 테스트 범위로 제한한다.
+- 모든 Gemini 호출은 `FirebaseAiModelFactory`의 Firebase AI Logic 경로를 사용하며 release는 Play Integrity App Check를 요구한다.
 - 최종 답변 모델은 앱이 계산한 조회 결과와 ANALYTICS 결과만 인용해야 하며, 원본 거래 리스트를 직접 합산/평균/비율 계산하지 않는다.
 
 ## Golden Flow 요약

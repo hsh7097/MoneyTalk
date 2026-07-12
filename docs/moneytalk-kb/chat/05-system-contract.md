@@ -118,11 +118,12 @@ ChatViewModel.sendMessage(message)
 
 | 역할 | 기본 모델 | temperature | 프롬프트 |
 |---|---|---:|---|
-| Query analyzer | `gemini-2.5-flash-lite` | 0.3 | `prompt_query_analyzer_system`, `prompt_query_analyzer_user` |
-| Financial advisor final answer | `gemini-2.5-flash-lite` | 0.7 | `prompt_financial_advisor_system`, `prompt_final_answer_*` |
-| Rolling Summary / title | `gemini-2.5-flash` | 0.3 | `prompt_summary_system`, `prompt_rolling_summary_*`, `prompt_chat_title_user` |
+| Query analyzer | `GeminiModelConfig.queryAnalyzer` (기본 `gemini-3.1-flash-lite`) | 0.3 | `prompt_query_analyzer_system`, `prompt_query_analyzer_user` |
+| Financial advisor final answer | `GeminiModelConfig.financialAdvisor` (기본 `gemini-3.1-flash-lite`) | 0.7 | `prompt_financial_advisor_system`, `prompt_final_answer_*` |
+| Rolling Summary / title | `GeminiModelConfig.summary` (기본 `gemini-3.5-flash`) | 0.3 | `prompt_summary_system`, `prompt_rolling_summary_*`, `prompt_chat_title_user` |
 
 프롬프트 본문은 `app/src/main/res/values/string_prompt.xml`에서 관리한다. 보조 라벨/상태 문자열은 `app/src/main/res/values/strings.xml`의 `ai_*` 또는 chat 관련 string을 확인한다.
+모델 객체는 `FirebaseAiModelFactory`에서 생성하며 release 요청은 Play Integrity App Check 검증을 통과해야 한다.
 
 ## Rolling Summary
 

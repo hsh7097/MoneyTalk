@@ -4,13 +4,13 @@ title: SMS Permission Policy
 description: MoneyTalk의 SMS 권한 요청 사유, 데이터 처리 고지, Play Console 릴리스 게이트를 정리한다.
 tags: [moneytalk, onboarding, sms, permission, play-console]
 resource: app/src/main/java/com/sanha/moneytalk/feature/intro/ui/PermissionScreen.kt
-timestamp: 2026-07-09T03:15:00+09:00
+timestamp: 2026-07-11T00:00:00+09:00
 status: draft
 ---
 
 # 01 SMS Permission Policy
 
-> 기준: 2026-07-09 현재 흡수된 SMS 권한 선언 원문, Intro permission screen, privacy disclosure 문서 확인
+> 기준: 2026-07-11 현재 SMS 권한 선언, Intro permission screen, 외부 AI 전송 최소화, privacy disclosure 확인
 
 MoneyTalk는 SMS 기반 자동 가계부 생성을 핵심 기능으로 제공하기 때문에 `READ_SMS`, `RECEIVE_SMS` 권한을 요청한다.
 권한 요청 UI, 개인정보 고지, Play Console 선언, Data safety 내용은 실제 데이터 흐름과 항상 맞아야 한다.
@@ -41,8 +41,11 @@ SMS 접근이 없으면 사용자는 카드 결제, 은행 입금, 이체 내역
 
 거래 데이터는 앱 로컬 DB에 저장된다.
 Google Drive 백업은 사용자가 직접 시작한 경우 사용자의 Drive 계정에 저장된다.
-AI 기능은 카테고리 분류나 상담을 위해 거래처명, 금액, 거래 맥락, 마스킹된 문자 일부를 Gemini API로 보낼 수 있다.
-전화번호 같은 직접 식별자는 가능한 제거하거나 최소화한다.
+로컬 파싱이 실패한 금융 SMS는 자동 기록을 위해 거래처명, 금액, 거래 맥락을 Gemini API로 보낼 수 있다.
+전송 전 `SmsSensitiveDataSanitizer`가 사용자명과 계좌/카드 식별정보를 가능한 제거하거나 최소화한다.
+`SmsOriginSampleCollector`는 파싱 룰 개선을 위해 마스킹된 표본을 RTDB에 저장한다.
+RTDB `/config/send_origin_message=true`인 기간에는 원본 금융 SMS도 함께 저장하며, 충분한 표본을 확보하면 이 값을 `false`로 전환한다.
+`false` 전환은 신규 원문 저장을 막지만 기존 row 전체를 일괄 삭제하지는 않으므로, 룰 검증 후 기존 `originBody` 삭제 절차를 별도로 수행한다.
 SMS 데이터는 판매하거나 광고 목적으로 쓰지 않는다.
 
 ## 앱 내 고지 표면
@@ -65,6 +68,7 @@ SMS 데이터는 판매하거나 광고 목적으로 쓰지 않는다.
 3. 앱 내 권한 고지와 개인정보 처리방침이 실제 데이터 흐름과 일치한다.
 4. Data safety에 SMS 접근, 로컬 저장, AI 처리, Google Drive 백업, Firebase/AdMob 사용, 사용자 삭제 제어를 반영한다.
 5. 새 SMS 처리 경로가 추가되면 [../sms-parsing/README.md](../sms-parsing/README.md), [../sms-pipeline/README.md](../sms-pipeline/README.md), [../notification-ingestion/README.md](../notification-ingestion/README.md)의 데이터 흐름도 함께 확인한다.
+6. `send_origin_message` 운영값, 원문 수집 기간, 기존 `originBody` 삭제 계획을 확인하고 원문 SMS가 release warning/error 로그에 남지 않는지 확인한다.
 
 ## 수정 시 주의
 

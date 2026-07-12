@@ -1,32 +1,49 @@
 ---
 type: structure-map
 title: Embedding 구조 지도
-description: embedding 생성, 저장, 검색, 유사도 정책 파일의 역할을 정리한다.
+description: 로컬 vector 생성, 저장 호환, 검색, 판정 책임을 연결한다.
 tags: [moneytalk, embedding, structure-map]
 resource: app/src/main/java/com/sanha/moneytalk/
-timestamp: 2026-07-08T00:00:00+09:00
-status: draft
+timestamp: 2026-07-12T15:20:00+09:00
+status: verified
 ---
 
 # Embedding 구조 지도
 
+## SMS pattern
+
 ```text
-text/storeName
+SMS body
+-> SmsTemplateEngine.templateize()
 -> SmsEmbeddingService.generateEmbedding(s)
--> StoreEmbeddingRepository
--> StoreEmbeddingDao / StoreEmbeddingEntity
--> VectorSearchEngine.cosineSimilarity()
--> SimilarityPolicy threshold 판단
--> CategoryClassifierService 또는 category propagation
+-> SmsPatternMatcher.refreshStoredEmbeddingsIfNeeded()
+-> SmsPatternDao / SmsPatternEntity
+-> cosine similarity
+-> cached regex 또는 다음 SMS tier
 ```
 
-| 파일 | 분류 | 역할 | 함께 볼 파일 |
+## Store/category
+
+```text
+storeName
+-> StoreAliasManager.normalizeStoreName()
+-> SmsEmbeddingService.generateStoreEmbedding(s)
+-> StoreEmbeddingRepositoryImpl
+-> 최초 cache load 시 legacy vector 재생성
+-> StoreEmbeddingDao / StoreEmbeddingEntity
+-> VectorSearchEngine
+-> StoreNameSimilarityPolicy / CategoryPropagationPolicy
+-> CategoryClassifierService
+```
+
+| 파일 | 분류 | 책임 | 함께 볼 파일 |
 |---|---|---|---|
-| `core/sms/SmsEmbeddingService.kt` | API/service | Gemini embedding REST 호출, 768차원 output, 429 retry | `GeminiApiKeyProvider`, `PremiumConfig` |
-| `core/sms/VectorSearchEngine.kt` | utility | cosine similarity, best/similar store 검색 | `core/similarity/**` |
-| `core/similarity/SimilarityPolicy.kt` | policy | 유사도 판단 contract | 구현체들 |
-| `core/similarity/SmsPatternSimilarityPolicy.kt` | policy | SMS 패턴 유사도 threshold | `sms-pipeline` KB |
-| `core/similarity/StoreNameSimilarityPolicy.kt` | policy | 거래처명 유사도 threshold | `CategoryClassifierService` |
-| `core/similarity/CategoryPropagationPolicy.kt` | policy | 수동 수정 category 전파 규칙 | `StoreEmbeddingRepository` |
-| `feature/home/data/StoreEmbeddingRepository*.kt` | data | 거래처 embedding cache 저장/검색/업데이트 | `StoreEmbeddingDao.kt` |
-| `core/database/entity/StoreEmbeddingEntity.kt` | model | embedding vector, category, source 저장 | `FloatListConverter.kt` |
+| `core/sms/SmsEmbeddingService.kt` | local service | SMS/store 결정적 768차원 vector | `SmsEmbeddingServiceTest.kt` |
+| `core/sms/SmsTemplateEngine.kt` | transform | SMS의 가변값을 placeholder template으로 변환 | `SmsPipeline.kt` |
+| `core/sms/SmsPatternMatcher.kt` | search/data | legacy pattern vector 갱신, sender별 pattern 검색 | `SmsPatternDao.kt` |
+| `core/sms/VectorSearchEngine.kt` | utility | cosine, best/similar store 검색 | `core/similarity/**` |
+| `core/util/StoreAliasManager.kt` | normalize | 알려진 거래처 alias를 대표명으로 수렴 | `StoreNameNormalizer.kt` |
+| `feature/home/data/StoreEmbeddingRepositoryImpl.kt` | data | cache, 갱신, 저장, category propagation | `StoreEmbeddingDao.kt` |
+| `core/similarity/*.kt` | policy | autoApply/confirm/propagate/group threshold | threshold registry |
+
+의존 방향은 local transform/vector -> pure search -> policy -> domain action 순서다. 검색 utility가 category나 SMS 저장을 직접 판단하지 않는다.

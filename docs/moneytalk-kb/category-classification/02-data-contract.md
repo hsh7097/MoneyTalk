@@ -21,5 +21,5 @@ status: draft
 ## 변경 시 주의
 
 - 카테고리 표시명이 바뀌면 custom category, filter, App Functions 응답까지 확인한다.
-- embedding model/threshold가 바뀌면 vector cache 품질과 재분류 경로를 확인한다.
+- local embedding 정규화/해싱/threshold가 바뀌면 vector cache 자동 갱신, grouping 품질과 재분류 경로를 확인한다.
 - 수입 카테고리와 지출 카테고리는 mapper가 다를 수 있다.

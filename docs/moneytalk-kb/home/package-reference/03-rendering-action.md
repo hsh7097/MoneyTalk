@@ -27,7 +27,7 @@ status: draft
 | UI | 파일 | 역할 |
 |---|---|---|
 | 미분류 분류 dialog | `HomeScreen.kt` | 미분류 건이 있을 때 전체 분류 실행 유도 |
-| Gemini API key 필요 dialog | `HomeScreen.kt` | 분류 기능에 API key가 필요할 때 표시 |
+| AI 서비스 불가 안내 | `HomeScreen.kt`, `HomeViewModel.kt` | RTDB service disabled 또는 Firebase AI Logic 호출 실패 시 표시 |
 | Home coachmark | `HomeCoachMark.kt`, `CoachMarkOverlay.kt` | 첫 사용 시 홈 주요 영역 안내 |
 
 ## Navigation/action

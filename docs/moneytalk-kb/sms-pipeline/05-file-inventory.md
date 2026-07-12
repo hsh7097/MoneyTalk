@@ -4,7 +4,7 @@ title: SMS Pipeline File Inventory
 description: SMS Pipeline 파일별 역할과 참조 시점을 인덱싱한다.
 tags: [moneytalk, sms, file-inventory]
 resource: app/src/main/java/com/sanha/moneytalk/core/sms/
-timestamp: 2026-07-09T03:25:00+09:00
+timestamp: 2026-07-11T00:00:00+09:00
 status: draft
 ---
 
@@ -21,6 +21,8 @@ status: draft
 | `SmsPatternMatcher.kt` | 벡터 패턴 매칭 | 유사도/regex fallback | 핵심 |
 | `SmsGroupClassifier.kt` | 미매칭 그룹핑과 LLM regex 생성 | 신규 패턴 처리 | 핵심 |
 | `GeminiSmsExtractor.kt` | LLM 추출과 regex 생성 | Gemini 추출 변경 | 핵심 |
+| `SmsSensitiveDataSanitizer.kt` | 외부 처리 전 직접 식별정보 최소화 | Gemini/RTDB 개인정보 경로 | 핵심 |
+| `SmsOriginSampleCollector.kt` | RTDB 성공/실패 표본과 원문 수집 gate | `sms_origin`, `send_origin_message` 변경 | 핵심 |
 | `SmsReaderV2.kt` | SMS/MMS/RCS 원본 읽기 | provider read 문제 | 핵심 |
 | `SmsSyncMessageReader.kt` | 동기화 기간 원본 읽기 래퍼 | 기간 동기화 문제 | 핵심 후보 |
 | `SmsInstantProcessor.kt` | 실시간 1건 처리 | receiver/notification 즉시 저장 | 핵심 후보 |

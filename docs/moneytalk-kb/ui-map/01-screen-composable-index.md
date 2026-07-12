@@ -4,7 +4,7 @@ title: Screen Composable Index
 description: MoneyTalk 화면별 Composable 계층과 관련 KB 라우팅을 요약한다.
 tags: [moneytalk, ui, compose, screen]
 resource: app/src/main/java/com/sanha/moneytalk/
-timestamp: 2026-07-09T06:00:00+09:00
+timestamp: 2026-07-12T00:00:00+09:00
 status: draft
 ---
 
@@ -26,14 +26,14 @@ status: draft
 | Home | `HomeScreen`, `HomePageContent`, `MonthlyOverviewSection`, `SpendingTrendSection`, `CategoryExpenseSection`, `AiInsightCard`, `TransactionCardCompose` | [home](../home/README.md), [home surface map](../home/package-reference/05-surface-map.md) |
 | History | `HistoryScreen`, `HistoryHeader`, `FilterTabRow`, `HistoryFilter`, `TransactionListView`, `BillingCycleCalendarView` | [history](../history/README.md), [filtering](../filtering/README.md) |
 | Chat | `ChatScreen`, `ChatRoomListView`, `ChatRoomView`, `ChatComponents` | [chat](../chat/README.md) |
-| Settings | `SettingsScreen`, `SettingsItemCompose`, `SettingsSectionCompose`, `BudgetBottomSheet`, settings dialogs | [settings](../settings/README.md), [settings menu map](../settings/package-reference/05-menu-map.md) |
+| Settings | `SettingsScreen`, `SettingsItemCompose`, `SettingsSectionCompose`, `BudgetBottomSheet`, `ExportDialog`, settings dialogs | [settings](../settings/README.md), [settings menu map](../settings/package-reference/05-menu-map.md) |
 
 ## 보조 화면
 
 | 화면 | 주요 파일 | 함께 볼 KB |
 |---|---|---|
 | Category Detail | `CategoryDetailActivity`, `CategoryDetailScreen`, `CategorySpendingTrendInfo` | [category-detail](../category-detail/README.md) |
-| Transaction Edit | `TransactionEditActivity`, `TransactionEditScreen`, `TransactionEditViewModel` | [transaction-edit](../transaction-edit/README.md), [transaction-mutation](../transaction-mutation/README.md) |
+| Transaction Edit | `TransactionEditActivity`, `TransactionEditScreen`, `TransactionEditDetailContent`, `TransactionEditViewModel` | [transaction-edit](../transaction-edit/README.md), [transaction-mutation](../transaction-mutation/README.md) |
 | Transaction Detail List | `TransactionDetailListActivity`, `TransactionDetailListScreen` | [transaction-list](../transaction-list/README.md) |
 | SMS Settings | `SmsSettingsActivity`, `SmsSettingsScreen`, `SmsSettingsViewModel` | [sms-settings](../sms-settings/README.md) |
 | AI Credit | `AiCreditActivity`, `AiCreditScreen`, AI credit repository state | [ai-credit-screen](../ai-credit-screen/README.md), [budget-credit-monetization](../budget-credit-monetization/README.md) |
@@ -46,10 +46,11 @@ status: draft
 |---|---|---|
 | `TransactionCardCompose` / `TransactionCardInfo` | 지출/수입 통합 카드 | Home/History/CategoryDetail/TransactionList에서 함께 사용 |
 | `TransactionGroupHeaderCompose` / `TransactionGroupHeaderInfo` | 날짜/그룹 헤더 | 목록 grouping 변경 시 확인 |
-| `CumulativeTrendSection` | 누적 추이 차트 | Home과 CategoryDetail의 기간/필터 차이를 같이 확인 |
+| `CumulativeTrendSection` / `VicoCumulativeChart` | 누적 추이 차트 | Home과 CategoryDetail의 기간/필터 차이를 같이 확인. 기간 헤더가 시작/종료일을 제공하므로 X축 양끝은 비우고 중간 날짜만 표시하며, Samsung Fold와 큰 글자 AVD에서 `...`가 없는지 검증 |
 | `SegmentedTabRowCompose` / `SegmentedTabInfo` | 아이콘 지원 탭 | History/설정류 화면에서 재사용 |
 | `SettingsItemCompose` / `SettingsSectionCompose` | 설정 row/section | Settings menu map과 함께 갱신 |
 | `CategoryIcon` | 카테고리 icon/색상 | custom category fallback 확인 |
+| `CategorySelectDialog` / `CategoryGridItem` | 거래 편집, History filter, Store Rule의 공통 카테고리 picker | `fontScale >= 1.5`에서는 3열과 최대 두 줄 라벨을 유지해 이름 말줄임을 방지 |
 
 ## Coachmark
 

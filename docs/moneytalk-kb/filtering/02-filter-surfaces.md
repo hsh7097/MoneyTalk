@@ -4,7 +4,7 @@ title: Filtering surfaces
 description: MoneyTalk의 필터 계층을 화면 필터, 노출 필터, 통계 제외, SMS 입력 제외, 백업 필터로 나눠 정리한다.
 tags: [moneytalk, filtering, surface, history, sms]
 resource: app/src/main/java/com/sanha/moneytalk/
-timestamp: 2026-07-09T02:02:36+09:00
+timestamp: 2026-07-11T00:00:00+09:00
 status: draft
 ---
 
@@ -68,7 +68,19 @@ SmsInstantProcessor.shouldShowExpenseNotification()
 | 거래처 규칙 | store rule이 이후 저장/수정 거래에 적용 |
 | 채팅/App Functions | `updateExpenseStatsExcluded`, `updateStoreRule` 계열 action |
 
-카드대금 납부/결제대금/자동이체성 문구는 기본적으로 통계 제외 후보로 본다. 카드 승인으로 이미 소비가 잡힌 뒤 상환 거래가 다시 소비로 중복 집계되는 것을 막기 위한 정책이다.
+카드대금 납부/결제대금/이용대금/이용금액/자동이체성 문구는 기본적으로 통계 제외 후보로 본다. 카드 승인으로 이미 소비가 잡힌 뒤 상환 거래가 다시 소비로 중복 집계되는 것을 막기 위한 정책이다.
+
+카드대금 문구를 입력 단계에서 모두 버리지는 않는다. 실제 출금/인출 완료와 원화 금액이 확인되면 거래를 저장하고 통계에서만 제외한다. 반대로 예정/명세서/청구서/결제일 안내는 입력 단계에서 저장하지 않는다.
+
+| SMS 유형 | 입력 처리 | 저장 후 처리 |
+|---|---|---|
+| 완료된 카드대금 출금 | PAYMENT로 보존 | `isExcludedFromStats=true` |
+| 카드대금 예정/명세서 | SKIP | 저장 없음 |
+| 교통/하이패스 N건 요약 | SKIP | 저장 없음 |
+| KSNET/매출접수 N건 집계 | SKIP | 저장 없음 |
+| 승인/결제/사용 금액 0원 | SKIP | 저장 없음 |
+| 쇼핑 금액과 입금계좌만 있는 미완료 안내 | SKIP | 저장 없음 |
+| 취소/환불 | INCOME | 수입 파서로 저장 |
 
 ## SMS 입력 제외
 
@@ -102,3 +114,5 @@ SmsSettingsScreen
 2. 카드 제외 변경 후 Home, History, CategoryDetail, TransactionList, Chat/App Functions, 노티 표시를 같이 확인했는가?
 3. 통계 제외 거래가 목록에는 남고 합계/차트에서만 빠지는지 확인했는가?
 4. SMS 제외 키워드가 신규 입력과 기존 데이터 노출에 각각 어떻게 적용되는지 문서화했는가?
+5. 카드대금 완료 출금과 예정 안내를 구분하고 저장/통계 제외를 각각 검증했는가?
+6. 집계형 SMS와 취소 SMS가 지출 Fast Path에 들어가지 않는지 확인했는가?

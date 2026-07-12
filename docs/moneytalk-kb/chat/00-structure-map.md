@@ -39,10 +39,10 @@ core/util/
 |---|---|---|---|
 | `ChatScreen.kt` | entry/rendering/action | Chat 탭 entry, 채팅방 목록/방 내부 전환, reward ad dialog | `ChatViewModel.kt`, `ChatComponents.kt` |
 | `ChatRoomListView.kt` | rendering/action | 채팅 세션 목록, 세션 선택/삭제/제목 UI | `ChatRepositoryImpl.kt` |
-| `ChatComponents.kt` | rendering | guide 질문, bubble, typing, retry, API key dialog | `ChatScreen.kt` |
+| `ChatComponents.kt` | rendering | guide 질문, bubble, typing, retry, AI 오류 상태 | `ChatScreen.kt` |
 | `ChatViewModel.kt` | data/action | 채팅 orchestration, credit gate, local route, Gemini 3-step, query/action 실행 | `LocalChatQueryRouter.kt`, `DataQueryParser.kt` |
 | `ChatRepositoryImpl.kt` | data | 세션/메시지 저장, rolling summary, local exchange 저장 | `ChatDao.kt` |
-| `GeminiRepositoryImpl.kt` | AI/API | query analyzer, final answer, title/summary Gemini 호출 | `ChatPrompts.kt`, `PremiumConfig.kt` |
+| `GeminiRepositoryImpl.kt` | AI/API | Firebase AI Logic 기반 query analyzer, final answer, title/summary 호출 | `FirebaseAiModelFactory.kt`, `ChatPrompts.kt`, `PremiumConfig.kt` |
 | `ChatPrompts.kt` | prompt | XML prompt resource 접근 | `string_prompt.xml` |
 | `coachmark/ChatCoachMark.kt` | onboarding | Chat 화면 코치마크 step | `coachmark/README.md` |
 

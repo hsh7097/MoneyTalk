@@ -4,7 +4,7 @@ title: SMS Pipeline 구조 지도
 description: SMS Pipeline의 파일 구조, 책임, AI 참조 순서를 정리한다.
 tags: [moneytalk, sms, structure-map]
 resource: app/src/main/java/com/sanha/moneytalk/core/sms/
-timestamp: 2026-07-03T16:30:00+09:00
+timestamp: 2026-07-11T00:00:00+09:00
 status: draft
 ---
 
@@ -19,6 +19,7 @@ status: draft
 | filter | 사전 필터와 결제/수입/스킵 분류 | `SmsPreFilter.kt`, `SmsIncomeFilter.kt` |
 | fast path | sender regex 룰 로드/매칭/동기화 | `SmsRegexRuleMatcher.kt`, `SmsRegexRuleAssetLoader.kt`, `SmsRegexRuleSyncService.kt` |
 | vector/llm | 임베딩, 패턴 매칭, LLM 추출, regex 생성 | `SmsPipeline.kt`, `SmsPatternMatcher.kt`, `SmsGroupClassifier.kt`, `GeminiSmsExtractor.kt` |
+| privacy | 외부 AI/RTDB 표본의 직접 식별정보 최소화와 원문 수집 게이트 | `SmsSensitiveDataSanitizer.kt`, `SmsOriginSampleCollector.kt`, `PremiumManager.kt` |
 | realtime | 실시간 1건 처리 | `SmsInstantProcessor.kt`, `receiver/*` |
 | sync coverage | 동기화 기간과 coverage 기록 | `core/sync/*` |
 
@@ -32,6 +33,8 @@ status: draft
 | `SmsReaderV2.kt` | SMS/MMS/RCS provider에서 원본을 읽어 `SmsInput`으로 변환 | `SmsSyncMessageReader.kt`, `receiver/*` |
 | `SmsTransactionDateResolver.kt` | 본문 날짜/시간 해석 공통 유틸 | `SmsIncomeParser.kt`, `SmsParser.kt` |
 | `SmsInstantProcessor.kt` | 실시간 1건 처리 | `receiver/SmsReceiver.kt`, `NotificationTransactionService.kt` |
+| `SmsSensitiveDataSanitizer.kt` | Gemini 요청과 RTDB 마스킹 표본에서 사용자명, 계좌/카드 식별정보를 제거 | `GeminiSmsExtractor.kt`, `SmsOriginSampleCollector.kt` |
+| `SmsOriginSampleCollector.kt` | RTDB 표본 upsert와 `send_origin_message` 원문 포함 제어 | `PremiumManager.kt`, `06-rule-json-guide.md` |
 
 ## AI Reference Order
 
@@ -40,4 +43,5 @@ status: draft
 | 파싱 순서 변경 | `README.md` -> `01-purpose-architecture.md` -> `SmsSyncCoordinator.kt` |
 | Fast Path 룰 변경 | `README.md` -> `03-extension-points.md` -> `SmsRegexRuleMatcher.kt` |
 | LLM 추출 변경 | `README.md` -> `00-structure-map.md` -> `GeminiSmsExtractor.kt` |
+| SMS 외부 전송/표본 변경 | `README.md` -> `06-rule-json-guide.md` -> `SmsSensitiveDataSanitizer.kt` -> `SmsOriginSampleCollector.kt` |
 | 실시간 수신 변경 | `README.md` -> `05-file-inventory.md` -> `SmsInstantProcessor.kt` -> `receiver/*` |
