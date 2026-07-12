@@ -4,7 +4,7 @@ title: MoneyTalk KB
 description: MoneyTalk Android 코드 작업을 위한 AI용 라우팅 및 구조 지식 베이스다.
 tags: [moneytalk, kb, android, compose, room]
 resource: app/src/main/java/com/sanha/moneytalk/
-timestamp: 2026-07-09T03:20:00+09:00
+timestamp: 2026-07-13T01:11:00+09:00
 status: draft
 ---
 
@@ -26,6 +26,7 @@ status: draft
 | [screen-requirements/README.md](screen-requirements/README.md) | 화면별 요구사항, 작업 계획서, 개발 가능성 감사표를 정리한다. | 특정 화면을 KB만 보고 수정할 수 있는지 판단할 때 본다. |
 | [00-change-index.md](00-change-index.md) | KB 변경 이력 색인이다. | KB가 왜 바뀌었는지 확인할 때 본다. |
 | [source-docs/README.md](source-docs/README.md) | 기존 `docs/*.md`의 KB 흡수/참조 기준을 정리한다. | 루트 문서 내용이 어느 KB로 흡수됐는지 판단할 때 본다. |
+| [release-history/README.md](release-history/README.md) | 버전별 기능·안정화·검증·운영 결정 이력이다. | 태그 이후 변경이나 릴리즈 후보의 전체 맥락을 복원할 때 본다. |
 | [app-shell/README.md](app-shell/README.md) | 앱 진입, 하단 탭 4개, NavGraph, Activity 전역 다이얼로그 KB다. | `MainActivity`, `MainViewModel`, `navigation/**` 작업 시 본다. |
 | [home/README.md](home/README.md) | 홈 탭 도메인 KB 진입점이다. | `feature/home/ui/**` 또는 홈 월별 현황/카테고리/AI 인사이트 작업 시 본다. |
 | [history/README.md](history/README.md) | 내역 화면 도메인 KB 진입점이다. | `feature/history/**` 또는 거래 목록/필터/달력/상세 작업 시 본다. |
@@ -86,6 +87,7 @@ status: draft
 | `sms-pipeline` | `app/src/main/java/com/sanha/moneytalk/core/sms/` | draft | SMS/MMS/RCS 읽기, 사전 필터, 수입 분류, sender regex Fast Path, Vector/LLM 파싱 |
 | `finance-data` | `app/src/main/java/com/sanha/moneytalk/core/database/`, `feature/home/data/` | draft | Room DB, DAO, Repository, 카테고리/거래처/크레딧 데이터 흐름 |
 | `source-docs` | `docs/*.md` | draft | 기존 루트 문서의 KB 흡수/참조 위치와 계획/이력 문서 분리 기준 |
+| `release-history` | Git tag·commit과 릴리즈 검증 KB | verified | 버전별 기능 변경, 안정화, 검증 기준선, 잔여 운영 확인 |
 
 ## 작성 원칙
 

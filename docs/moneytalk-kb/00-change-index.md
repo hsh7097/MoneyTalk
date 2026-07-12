@@ -4,7 +4,7 @@ title: MoneyTalk KB Change Index
 description: MoneyTalk KB의 루트 변경 이력 색인이다.
 tags: [moneytalk, kb, changelog, android]
 resource: docs/moneytalk-kb/
-timestamp: 2026-07-09T01:55:05+09:00
+timestamp: 2026-07-13T01:11:00+09:00
 status: draft
 ---
 
@@ -30,3 +30,4 @@ status: draft
 | 2026-07-09 | 기존 `docs/*.md` 확인. `moneytalk-kb/**`, `kb-scaffold/**` 제외 | 루트 문서 흡수 기준 추가 | `source-docs/**`, `sms-pipeline/06-rule-json-guide.md`, `onboarding/01-sms-permission-policy.md`, `README.md`, `00-agent-routing.md`, `01-structure-map.md` | 기존 루트 문서를 기능 KB로 라우팅하고, SMS 룰 운영 가이드와 SMS 권한 release gate를 KB에 흡수. |
 | 2026-07-09 | 화면 코드 진입점과 `moneytalk-kb/**` 문서 대조 | 화면 개발 가능성 감사 | `screen-requirements/02-screen-development-audit-plan.md`, `screen-requirements/03-screen-development-readiness-audit.md`, `screen-requirements/README.md` | KB만 보고 각 화면을 개발·수정할 수 있는지 확인하는 작업 계획서와 화면별 판정표를 추가. |
 | 2026-07-09 | `categorydetail`, `transactionlist`, `categorysettings`, `storerulesettings` 화면 코드 재확인 | 보조 화면 package-reference 보강 | `category-detail/package-reference/**`, `transaction-list/package-reference/**`, `category-settings/package-reference/**`, `store-rule-settings/package-reference/**`, `00-agent-routing.md`, `screen-requirements/03-screen-development-readiness-audit.md` | 작은 수정 가능으로 남긴 보조 화면 4개를 entry/data/rendering/checklist 기준 세부 KB로 확장하고 개발 가능 판정으로 갱신. |
+| 2026-07-13 | `1.0.2..fa07dda` 커밋과 2026-07-12~13 코드·검증 KB 대조 | 1.0.3 릴리즈 이력 통합 | `release-history/02-release-1.0.3-development-summary.md`, `release-history/README.md`, `release-history/01-release-timeline.md`, `release-history/change-log.md`, `README.md`, `00-agent-routing.md` | AI 크레딧, Firebase AI Logic, SMS 룰·표본 정책, local embedding, sync race, UI, 검증과 잔여 운영 확인을 한 진입점으로 통합하고 태그 diff 요청을 routing에 연결. |

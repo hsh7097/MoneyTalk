@@ -4,7 +4,7 @@ title: Release Timeline
 description: MoneyTalk 주요 릴리스/변경 축을 기능 KB 관점으로 요약한다.
 tags: [moneytalk, release, changelog, history]
 resource: docs/moneytalk-kb/release-history/
-timestamp: 2026-07-09T06:15:00+09:00
+timestamp: 2026-07-13T01:11:00+09:00
 status: draft
 ---
 
@@ -16,6 +16,7 @@ status: draft
 
 | 변화 | 의미 | 관련 KB |
 |---|---|---|
+| 1.0.3 배포 후보 통합 | `1.0.2` 이후 28개 커밋의 AI 크레딧, Firebase AI Logic, SMS 룰, local embedding, sync 안정화, UI·검증 결과를 버전 단위로 고정 | [1.0.3 개발 요약](02-release-1.0.3-development-summary.md) |
 | 채팅 단순 조회 로컬 처리 | 안전한 단순 조회는 Gemini analyzer/final/summary 없이 앱 내부 `DataQuery`와 템플릿 응답으로 처리 | [chat](../chat/README.md) |
 | AI 크레딧 정책 단순화 | 채팅 1회 1크레딧, 과거 월 문자 가져오기 월 1개당 1크레딧, 보상형 광고 2크레딧 | [budget-credit-monetization](../budget-credit-monetization/README.md) |
 | Gemini 기본 모델 비용 방어 | 기본 운영 모델을 Flash Lite 중심으로 고정 | [project-context](../project-context/README.md) |

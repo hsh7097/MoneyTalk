@@ -4,7 +4,7 @@ title: MoneyTalk Agent Routing
 description: 변경 파일 경로와 작업 키워드를 기준으로 AI가 읽을 KB 문서를 결정한다.
 tags: [moneytalk, kb, routing, android]
 resource: app/src/main/java/com/sanha/moneytalk/
-timestamp: 2026-07-09T03:20:00+09:00
+timestamp: 2026-07-13T01:11:00+09:00
 status: draft
 ---
 
@@ -68,6 +68,7 @@ status: draft
 | App Functions 문서 흡수 이력, agent DB 조회/수정 함수 목록 | [app-functions/README.md](app-functions/README.md), [app-functions/06-function-catalog.md](app-functions/06-function-catalog.md), [app-functions/07-operational-playbook.md](app-functions/07-operational-playbook.md) | 루트 문서 내용은 App Functions KB로 흡수 완료 |
 | SMS 룰 JSON 운영 가이드, `sms_rules_v1.json` | [sms-pipeline/06-rule-json-guide.md](sms-pipeline/06-rule-json-guide.md), [sms-pipeline/README.md](sms-pipeline/README.md) | Fast Path sender regex 룰 운영 |
 | SMS 권한 정책, Play Console release gate | [onboarding/01-sms-permission-policy.md](onboarding/01-sms-permission-policy.md), [sms-parsing/README.md](sms-parsing/README.md) | SMS 권한 고지, Play Console release gate |
+| `1.0.2` 이후 변경, `1.0.3`, 버전별 개발 요약, 릴리즈 노트, 태그 diff | [release-history/02-release-1.0.3-development-summary.md](release-history/02-release-1.0.3-development-summary.md), [release-history/01-release-timeline.md](release-history/01-release-timeline.md) | 1.0.3 기능·안정화·검증·운영 결정과 28개 커밋 이력 |
 
 ## 패키지 이동 시 갱신
 
