@@ -4,7 +4,7 @@ title: Release Readiness Remediation Plan
 description: 2026-07-11 release readiness review에서 발견된 배포 보류 이슈를 처리하기 위한 작업 계획과 검증 기록.
 tags: [moneytalk, release, lint, privacy, gemini, verification]
 resource: app/
-timestamp: 2026-07-12T23:14:00+09:00
+timestamp: 2026-07-12T23:42:00+09:00
 status: draft
 ---
 
@@ -25,8 +25,8 @@ status: draft
 | Google Sign-In 회귀 | 조건부 통과 | AVD에서 Google 계정 선택 화면 진입과 앱 프로세스 생존 확인. 실제 Drive 계정 선택 이후 백업/복원은 실기기 후속 검증 | release AVD account chooser, crash log |
 | 계측 테스트 skipped | 보류 | AVD에서 skipped된 real-device monthly SMS/order 테스트는 실기기 조건이 준비된 별도 검증으로 분리 | 추후 실기기 connected test |
 | Gemini key 전달 경로 | 수정 완료 | RTDB key 필드를 더 이상 파싱·캐시하지 않고 Firebase AI Logic을 사용한다. release는 Play Integrity App Check provider를 설치한다 | source grep, release build, Firebase Console |
-| Firebase AI Logic App Check 강제 적용 | **배포 보류** | Play Integrity provider는 등록됐지만 AI Logic 앱 상태가 `등록됨(적용되지 않음)`이다. 현재 로그인 계정에는 적용 관리 권한이 없다 | 프로젝트 소유자가 AI Logic App Check 적용 후 Play 배포본 호출 확인 |
-| release 후보 Git 상태 | 진행 중 | 기능 브랜치에서 검증·커밋·푸시하고, App Check 배포 게이트가 닫히기 전에는 `develop` 병합하지 않는다 | staged diff 감사, feature push |
+| Firebase AI Logic App Check 강제 적용 | 적용 확인 완료 | Firebase Console에서 AI Logic `기본 - 적용됨`, Android `com.sanha.moneytalk` Play Integrity `등록됨` 확인 | 로그인된 Chrome에서 Firebase Console 읽기 전용 재검증 |
+| release 후보 Git 상태 | 기능 브랜치 푸시 완료 | 검증 결과와 KB를 `codex/rtdb-sms-rules-docs`에 보존하고 남은 Play 배포본/실기기 검증 전에는 `develop` 병합하지 않는다 | commit `d332ca1`, 원격 SHA 일치 |
 
 ## 처리 순서
 
@@ -91,7 +91,7 @@ status: draft
 | 최신 APK/AAB fingerprint | 통과 | APK 8,831,165 bytes, SHA-256 `365CD41B9324F74E81C2562C2EEA7D269B54C988D766381ED6E981610C78FD65`; AAB 15,022,495 bytes, SHA-256 `9484D128F7059180722CCAF79DFAE8FBB8AF4E06469C0147AF9B6825FBDDC542` |
 | Firebase 모델명 확인 | 통과 | Firebase AI Logic 안정 모델 `gemini-3.1-flash-lite`, `gemini-3.5-flash` 사용 확인 |
 | Firebase App Check 앱 등록 | 통과 | Firebase Console에서 `com.sanha.moneytalk` Play Integrity `등록됨` 확인 |
-| Firebase AI Logic App Check 적용 | **실패/배포 차단** | AI Logic 앱 상태 `등록됨(적용되지 않음)`. 현재 로그인된 두 계정 모두 적용 관리 권한 없음 |
+| Firebase AI Logic App Check 적용 | 통과 | 2026-07-12 23:42 KST 재확인 결과 AI Logic `기본 - 적용됨`, 확인된 요청 46% / 미확인 요청 54%. 이 비율은 Console 요청 출처 지표이며 앱 기능 성공률이 아님 |
 
 ## 2026-07-12 최대 글자 실기기 QA 메모
 
@@ -133,11 +133,11 @@ status: draft
 
 ## 2026-07-12 배포 판정
 
-소스의 RTDB API key 전달 구조는 제거됐고 APK/AAB 빌드, 서명, lint, 257개 단위 테스트, parser audit, release AVD SMS/알림/화면 smoke를 통과했다. 로컬 산출물 기준 배포 품질은 충족하지만, Firebase AI Logic의 App Check 강제 적용이 꺼져 있으므로 현재 판정은 **배포 및 develop 병합 보류**다.
+소스의 RTDB API key 전달 구조는 제거됐고 APK/AAB 빌드, 서명, lint, 257개 단위 테스트, parser audit, release AVD SMS/알림/화면 smoke를 통과했다. Firebase AI Logic App Check도 적용 상태로 전환된 것을 확인했으므로 소스·로컬 산출물·Cloud 설정 기준 배포 후보 품질은 충족한다. 다만 Play가 서명한 배포본의 실제 AI 응답과 최종 APK 실기기 덮어 설치 증거가 아직 없어 **develop 병합은 보류**한다.
 
 남은 게이트는 다음 두 단계다.
 
-1. Firebase 프로젝트 소유자가 AI Logic의 `com.sanha.moneytalk` App Check 상태를 `등록됨(적용되지 않음)`에서 적용 상태로 전환한다.
-2. Play Console에서 설치한 release로 AI 채팅 또는 홈 인사이트 1회를 호출해 App Check와 원하는 응답 형식을 확인한다. sideload AVD의 `Firebase App Check token is invalid`는 Play Integrity 특성상 이 검증을 대체할 수 없다.
+1. Play Console에서 설치한 release로 AI 채팅 또는 홈 인사이트 1회를 호출해 App Check 통과와 원하는 응답 형식을 확인한다. sideload AVD의 `Firebase App Check token is invalid`는 Play Integrity 특성상 이 검증을 대체할 수 없다.
+2. 최종 APK SHA-256 `35129257F5C345914A4E7C476DEE9288D79604A10FCC2674B0891297502CA25C`를 SM-F966N에 `adb install -r`로 설치해 사용자 데이터 보존, `1.0.3(19)`, MainActivity 생존, fatal 0을 확인한다.
 
-기능 브랜치는 검증 결과 보존을 위해 커밋·푸시할 수 있지만, 위 두 게이트를 통과하기 전에는 `develop`으로 병합하지 않는다.
+기능 브랜치는 검증 결과 보존을 위해 커밋·푸시했지만, 위 두 게이트를 통과하기 전에는 `develop`으로 병합하지 않는다.
