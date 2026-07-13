@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<app-function-app-metadata xmlns:appfunctions="http://schemas.android.com/apk/res-auto"
-    appfunctions:description="@string/app_functions_app_description"
+<AppFunctionAppMetadata xmlns:appfunctions="http://schemas.android.com/apk/androidx.appfunctions"
+    appfunctions:description="척척 가계부에 저장된 수입, 지출, 예산, 카드, 거래처 규칙, 카테고리 설정을 조회하고 필요한 항목을 수정합니다."
     appfunctions:displayDescription="@string/app_functions_app_display_description" />

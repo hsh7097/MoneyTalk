@@ -4,14 +4,14 @@ title: App Functions 기능
 description: agent가 MoneyTalk 앱 데이터를 읽거나 일부 설정/거래를 수정하는 App Functions 기능 KB다.
 tags: [moneytalk, app-functions, feature, agent]
 resource: app/src/main/java/com/sanha/moneytalk/core/appfunctions/
-timestamp: 2026-07-09T02:45:00+09:00
+timestamp: 2026-07-13T23:23:18+09:00
 status: draft
 ---
 
 # App Functions 기능
 
 > 상태: draft
-> 기준: 2026-07-09 현재 `core/appfunctions`, KSP 생성 `app_functions.xml`, 흡수된 App Functions 카탈로그 확인
+> 기준: 2026-07-13 현재 `core/appfunctions`, 앱 수준 metadata, KSP 생성 `app_functions.xml`, 흡수된 App Functions 카탈로그 확인
 
 App Functions 기능은 assistant/agent가 앱 내부 데이터를 조회하거나 일부 설정/거래를 수정할 수 있게 노출하는 기능이다.
 
@@ -51,3 +51,20 @@ assistant/agent
 | KSP 생성 확인 | `app/build/generated/ksp/debug/resources/assets/app_functions.xml` |
 
 `1.0.0-alpha09`는 `compileSdk 37+`, `AGP 9.1.0+` 요구 조건 때문에 현재 프로젝트 설정에서는 올리지 않는다.
+
+## 앱 수준 metadata 계약
+
+`AndroidManifest.xml`의 `android.app.appfunctions.app_metadata` property는 `res/xml/app_functions_app_metadata.xml`을 가리킨다. 이 XML은 Play Console이 AAB 업로드 단계에서 별도로 파싱하므로 다음 형식을 유지한다.
+
+```xml
+<AppFunctionAppMetadata
+    xmlns:appfunctions="http://schemas.android.com/apk/androidx.appfunctions"
+    appfunctions:description="앱 함수 사용 범위를 설명하는 문장"
+    appfunctions:displayDescription="@string/app_functions_app_display_description" />
+```
+
+- 루트 태그 `AppFunctionAppMetadata`는 대소문자를 포함해 그대로 사용한다.
+- `description`은 metadata XML에 문자열로 선언한다.
+- 사용자에게 보이는 `displayDescription`은 지역화 string resource를 참조한다.
+- KSP 생성 `assets/app_functions.xml`, `assets/app_functions_v2.xml`과 앱 수준 metadata XML은 서로 다른 산출물이다. 한쪽의 XML 파싱 성공만으로 다른 쪽의 Play 호환성을 판단하지 않는다.
+- `bundletool validate`는 AAB 구조 검증이다. metadata 의미 검증의 최종 release gate는 Play Console 업로드 성공이다.

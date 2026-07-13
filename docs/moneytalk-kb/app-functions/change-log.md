@@ -4,11 +4,20 @@ title: App Functions KB Change Log
 description: App Functions 기능 KB 변경 상세 이력을 기록한다.
 tags: [moneytalk, app-functions, changelog]
 resource: docs/moneytalk-kb/app-functions/
-timestamp: 2026-07-03T17:10:00+09:00
+timestamp: 2026-07-13T23:23:18+09:00
 status: draft
 ---
 
 # App Functions Change Log
+
+## 2026-07-13
+
+- 기준: Play Console의 Android App Functions metadata XML 파싱 오류와 release AAB 내부 파일 확인
+- 원인: 앱 수준 metadata 루트가 공식 `AppFunctionAppMetadata`가 아닌 `app-function-app-metadata`로 선언됨
+- 변경:
+  - 루트 태그, App Functions library namespace, `description` 선언을 공식 형식으로 정렬
+  - KSP 생성 함수 metadata와 앱 수준 metadata의 검증 경계를 KB에 명시
+  - `bundletool validate`와 Play Console 업로드를 분리된 release gate로 기록
 
 ## 2026-07-09
 

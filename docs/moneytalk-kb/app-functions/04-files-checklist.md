@@ -4,7 +4,7 @@ title: App Functions Files Checklist
 description: App Functions 수정 전후에 확인할 파일과 검증 질문을 정리한다.
 tags: [moneytalk, app-functions, checklist]
 resource: app/src/main/java/com/sanha/moneytalk/core/appfunctions/
-timestamp: 2026-07-09T02:45:00+09:00
+timestamp: 2026-07-13T23:23:18+09:00
 status: draft
 ---
 
@@ -21,6 +21,7 @@ status: draft
 | category 수정 함수 변경 | [category-classification](../category-classification/README.md) |
 | 함수 노출 범위 확인 | [06-function-catalog.md](06-function-catalog.md) |
 | DB 점검 절차 변경 | [07-operational-playbook.md](07-operational-playbook.md) |
+| Play Console metadata 파싱 오류 | `AndroidManifest.xml`, `app_functions_app_metadata.xml`, KSP 생성 `app_functions*.xml` |
 
 ## 수정 전 질문
 
@@ -29,4 +30,7 @@ status: draft
 - App Function 본문에서 DB 작업이 IO dispatcher로 오프로드되는가?
 - response model 변경이 generated metadata에 반영되는가?
 - 함수 카탈로그와 운영 플레이북 갱신이 필요한가?
+- 앱 수준 metadata 루트가 정확히 `AppFunctionAppMetadata`인가?
+- 앱 수준 metadata와 KSP 생성 함수 metadata를 구분해 각각 XML 파싱을 확인했는가?
+- release AAB를 `bundletool validate`로 확인하고 Play Console 업로드까지 통과했는가?
 - 기존 루트 문서와 충돌하면 [../source-docs/01-consolidation-map.md](../source-docs/01-consolidation-map.md)에 따라 KB 우선으로 정리했는가?
