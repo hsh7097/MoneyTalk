@@ -42,3 +42,9 @@ status: verified
 - 잘못된 숫자·음수·금액 범위 초과는 `null` 결과로 구분하고 전체 저장 및 모드 전환을 막으며 오류를 표시한다. 일부 정상 항목만 저장하거나 값을 제한해서 저장하지 않는다. 전체 예산의 숫자 범위도 저장 전에 확인한다.
 - 비율 표시와 자동 변환은 `Long`으로 계산한다. 전체 1원·카테고리 `Int.MAX_VALUE`원처럼 비율이 `Int` 범위를 넘는 경우도 원래 금액을 표현할 수 있으면 허용한다. 표시·저장은 `resolveBudgetPercentAmount()`를 함께 쓰며 곱셈 전에 계산 금액의 범위를 검증한다.
 - 회귀 검증은 `BudgetInputAmountsTest`의 전체 예산 증감, 직접 입력 보존, 전체 예산 미설정, 비율 삭제, 금액 계산 경계 사례를 사용한다.
+
+## 기능별 렌더러 (2026-09-08)
+
+`SettingsScreen` 아래 메뉴는 `SettingsDisplaySection`, `SettingsBudgetSection`, `SettingsCreditSection`, `SettingsCategorySection`, `SettingsDataSection`, `SettingsAppSection`으로 분리한다. 진행 표시는 `SettingsLoadingOverlay`, `activeDialog` 분기는 `SettingsDialogs`가 담당한다. 메뉴 순서, 문구, 패딩, ID, 파일 선택/Drive 로그인 결과 처리는 유지한다.
+
+코치마크 스크롤 index는 AI 크레딧 섹션 노출 여부로 계산한다. 크레딧 메뉴가 들어간 경우 카테고리/데이터 target의 실제 index도 1 증가한다.

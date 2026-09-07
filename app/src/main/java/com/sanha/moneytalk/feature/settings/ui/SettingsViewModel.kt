@@ -2,41 +2,31 @@ package com.sanha.moneytalk.feature.settings.ui
 
 import android.content.Context
 import android.net.Uri
-import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.feature.settings.data.SettingsBackupService
+import com.sanha.moneytalk.feature.settings.data.SettingsDataResetService
 import com.sanha.moneytalk.core.ad.RewardAdManager
 import com.sanha.moneytalk.core.database.AiCreditRepository
-import com.sanha.moneytalk.core.database.AppDatabase
-import com.sanha.moneytalk.core.database.CustomCategoryRepository
-import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.dao.BudgetDao
-import com.sanha.moneytalk.core.database.dao.ChatDao
-import com.sanha.moneytalk.core.database.SyncCoverageRepository
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.notification.NotificationAccessHelper
-import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.theme.ThemeMode
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.util.BackupData
 import com.sanha.moneytalk.core.util.DataBackupManager
-import com.sanha.moneytalk.core.sms.DeletedSmsTracker
-import com.sanha.moneytalk.core.sms.SmsFallbackScheduler
 import com.sanha.moneytalk.core.util.DataRefreshEvent
-import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
 import com.sanha.moneytalk.core.util.GoogleDriveHelper
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
-import com.sanha.moneytalk.feature.home.data.CategoryRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
-import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
 import com.sanha.moneytalk.feature.home.data.StoreRuleSyncService
 import com.sanha.moneytalk.receiver.NotificationTransactionService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -53,138 +43,26 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
-/** Settings 화면의 모든 사용자 인터랙션을 Intent로 정의 */
-sealed interface SettingsIntent {
-    // 다이얼로그 열기
-    data object ShowMonthStartDayDialog : SettingsIntent
-    data object ShowDeleteConfirmDialog : SettingsIntent
-    data object ShowExportDialog : SettingsIntent
-    data object ShowGoogleDriveDialog : SettingsIntent
-    data object ShowAppInfoDialog : SettingsIntent
-    data object ShowPrivacyDialog : SettingsIntent
-    data object ShowThemeDialog : SettingsIntent
-    data object ShowMonthlyBudgetDialog : SettingsIntent
-    data object ShowBudgetBottomSheet : SettingsIntent
-
-    // 다이얼로그 닫기
-    data object DismissDialog : SettingsIntent
-
-    // 액션
-    data class SaveMonthStartDay(val day: Int) : SettingsIntent
-    data class SaveMonthlyBudget(val amount: Int) : SettingsIntent
-    data class SaveBudgets(
-        val totalBudget: Int?,
-        val categoryBudgets: Map<String, Int>
-    ) : SettingsIntent
-    data class SaveThemeMode(val mode: ThemeMode) : SettingsIntent
-    data object ClassifyUnclassified : SettingsIntent
-    data object DeleteAllData : SettingsIntent
-    data object DeleteDuplicates : SettingsIntent
-    data object DebugFullSyncAllMessages : SettingsIntent
-    data object DebugSyncTodayMessages : SettingsIntent
-    data object OpenRestoreFilePicker : SettingsIntent
-    data class SetPendingRestoreUri(val uri: Uri) : SettingsIntent
-    data object ConfirmRestore : SettingsIntent
-    data class ToggleNotification(val enabled: Boolean) : SettingsIntent
-}
-
-/** 다이얼로그 종류 (하나의 필드로 관리) */
-enum class SettingsDialog {
-    MONTH_START_DAY,
-    DELETE_CONFIRM,
-    RESTORE_CONFIRM,
-    EXPORT,
-    GOOGLE_DRIVE,
-    APP_INFO,
-    PRIVACY,
-    THEME,
-    MONTHLY_BUDGET,
-    BUDGET_BOTTOM_SHEET
-}
-
-@Stable
-data class SettingsUiState(
-    val hasApiKey: Boolean = false,
-    val monthStartDay: Int = 1,
-    val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val isLoading: Boolean = false,
-    val backupContent: String? = null,
-    val exportFormat: ExportFormat = ExportFormat.JSON,
-    val exportFilter: ExportFilter = ExportFilter(),
-    // 카드/카테고리 목록 (필터용)
-    val availableCards: List<String> = emptyList(),
-    val availableCategories: List<String> = emptyList(),
-    // 구글 드라이브 관련
-    val isGoogleSignedIn: Boolean = false,
-    val googleAccountName: String? = null,
-    val driveBackupFiles: List<DriveBackupFile> = emptyList(),
-    // 카테고리 분류 관련
-    val unclassifiedCount: Int = 0,
-    val isClassifying: Boolean = false,
-    val classifyProgress: String = "",
-    val classifyProgressCurrent: Int = 0,
-    val classifyProgressTotal: Int = 0,
-    // 내 카드 관리
-    val ownedCards: List<com.sanha.moneytalk.core.database.entity.OwnedCardEntity> = emptyList(),
-    // 백그라운드 분류 진행 중 (HomeViewModel에서 진행 중인 경우)
-    val isBackgroundClassifying: Boolean = false,
-    // 다이얼로그 상태 (null이면 닫힘)
-    val activeDialog: SettingsDialog? = null,
-    // 복원 대기 URI
-    val pendingRestoreUri: Uri? = null,
-    // 복원 파일 선택 트리거
-    val triggerRestoreFilePicker: Boolean = false,
-    // 월 예산
-    val monthlyBudget: Int? = null,
-    // 카테고리별 예산 (category displayName → monthlyLimit)
-    val categoryBudgets: Map<String, Int> = emptyMap(),
-    // 거래 알림 설정
-    val notificationEnabled: Boolean = false,
-    // 알림 접근 권한 상태
-    val notificationAccessEnabled: Boolean = false,
-    // AI 크레딧
-    val isCreditFeatureEnabled: Boolean = false,
-    val aiCreditBalance: Int = 0
-)
-
-private data class RestoreCounts(
-    val expenses: Int,
-    val incomes: Int,
-    val categorySettings: Int,
-    val storeRules: Int,
-    val userSettings: Int
-)
-
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsDataStore: SettingsDataStore,
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
+    private val backupService: SettingsBackupService,
+    private val dataResetService: SettingsDataResetService,
     private val googleDriveHelper: GoogleDriveHelper,
     private val categoryClassifierService: CategoryClassifierService,
-    private val categoryRepository: CategoryRepository,
-    private val customCategoryRepository: CustomCategoryRepository,
-    private val categoryProvider: CategoryProvider,
-    private val storeRuleRepository: StoreRuleRepository,
     private val storeRuleSyncService: StoreRuleSyncService,
-    private val smsExclusionRepository: SmsExclusionRepository,
-    private val appDatabase: AppDatabase,
-    private val chatDao: ChatDao,
     private val budgetDao: BudgetDao,
-    private val syncCoverageRepository: SyncCoverageRepository,
     private val dataRefreshEvent: DataRefreshEvent,
     private val ownedCardRepository: com.sanha.moneytalk.core.database.OwnedCardRepository,
     private val aiCreditRepository: AiCreditRepository,
     private val rewardAdManager: RewardAdManager,
     private val snackbarBus: AppSnackbarBus,
     private val classificationState: ClassificationState,
-    private val smsFallbackScheduler: SmsFallbackScheduler,
     private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
-
-    companion object {
-    }
 
     private fun message(resId: Int, vararg args: Any): String {
         return context.getString(resId, *args)
@@ -269,6 +147,15 @@ class SettingsViewModel @Inject constructor(
             }
 
             is SettingsIntent.ToggleNotification -> saveNotificationEnabled(intent.enabled)
+            is SettingsIntent.SetExportFilter -> setExportFilter(intent.filter)
+            is SettingsIntent.SetExportFormat -> setExportFormat(intent.format)
+            is SettingsIntent.PrepareBackup -> prepareBackup()
+            is SettingsIntent.ImportBackup -> importBackup(context, intent.uri)
+            is SettingsIntent.LoadDriveBackupFiles -> loadDriveBackupFiles()
+            is SettingsIntent.RestoreDriveBackup -> restoreFromGoogleDrive(intent.fileId)
+            is SettingsIntent.DeleteDriveBackup -> deleteDriveBackupFile(intent.fileId)
+            is SettingsIntent.SignOutGoogle -> signOutGoogle(context)
+            is SettingsIntent.ResetScreenOnboardings -> resetAllScreenOnboardings()
         }
     }
 
@@ -571,40 +458,11 @@ class SettingsViewModel @Inject constructor(
             try {
                 val state = _uiState.value
                 val content = withContext(Dispatchers.IO) {
-                    var expenses = expenseRepository.getAllExpensesOnce()
-                    var incomes = incomeRepository.getAllIncomesOnce()
-                    val filter = state.exportFilter
-
-                    // 필터 적용
-                    if (filter.includeExpenses) {
-                        expenses = DataBackupManager.filterExpenses(expenses, filter)
-                    } else {
-                        expenses = emptyList()
-                    }
-
-                    if (filter.includeIncomes) {
-                        incomes = DataBackupManager.filterIncomes(incomes, filter)
-                    } else {
-                        incomes = emptyList()
-                    }
-
-                    val savedMonthlyIncome = settingsDataStore.getMonthlyIncome()
-                    when (state.exportFormat) {
-                        ExportFormat.JSON -> DataBackupManager.createBackupJson(
-                            expenses = expenses,
-                            incomes = incomes,
-                            monthlyIncome = savedMonthlyIncome,
-                            monthStartDay = state.monthStartDay,
-                            categoryMappings = categoryRepository.getAllMappingsOnce(),
-                            customCategories = customCategoryRepository.getAll(),
-                            storeRules = storeRuleRepository.getAllOnce(),
-                            budgets = budgetDao.getBudgetsByMonthOnce("default"),
-                            ownedCards = ownedCardRepository.getAllCardsOnce(),
-                            smsExclusionKeywords = smsExclusionRepository.getUserKeywordEntities()
-                        )
-
-                        ExportFormat.CSV -> DataBackupManager.createCombinedCsv(expenses, incomes)
-                    }
+                    backupService.prepare(
+                        filter = state.exportFilter,
+                        format = state.exportFormat,
+                        monthStartDay = state.monthStartDay
+                    )
                 }
 
                 _uiState.update {
@@ -702,70 +560,9 @@ class SettingsViewModel @Inject constructor(
     private suspend fun restoreData(backupData: BackupData) {
         try {
             val restoredCounts = withContext(Dispatchers.IO) {
-                // 설정 복원
-                settingsDataStore.saveMonthlyIncome(backupData.settings.monthlyIncome)
-                settingsDataStore.saveMonthStartDay(backupData.settings.monthStartDay)
-
-                // 지출 데이터 복원
-                val expenses = DataBackupManager.convertToExpenseEntities(backupData.expenses.orEmpty())
-                if (expenses.isNotEmpty()) {
-                    expenseRepository.insertAll(expenses)
-                }
-
-                // 수입 데이터 복원
-                val incomes = DataBackupManager.convertToIncomeEntities(backupData.incomes.orEmpty())
-                if (incomes.isNotEmpty()) {
-                    incomeRepository.insertAll(incomes)
-                }
-
-                val categoryMappings = DataBackupManager.convertToCategoryMappingEntities(
-                    backupData.categoryMappings.orEmpty()
-                )
-                categoryRepository.restoreMappings(categoryMappings)
-
-                val customCategories = DataBackupManager.convertToCustomCategoryEntities(
-                    backupData.customCategories.orEmpty()
-                )
-                customCategoryRepository.insertAll(customCategories)
-
-                val storeRules = DataBackupManager.convertToStoreRuleEntities(
-                    backupData.storeRules.orEmpty()
-                )
-                storeRules.forEach { rule ->
-                    storeRuleSyncService.applyRuleChange(
-                        previousRule = null,
-                        newRule = rule
-                    )
-                }
-                storeRuleSyncService.reapplyAllRules()
-
-                val budgets = DataBackupManager.convertToBudgetEntities(backupData.budgets.orEmpty())
-                if (budgets.isNotEmpty()) {
-                    budgetDao.insertAll(budgets)
-                }
-
-                val ownedCards = DataBackupManager.convertToOwnedCardEntities(
-                    backupData.ownedCards.orEmpty()
-                )
-                ownedCardRepository.upsertAll(ownedCards)
-
-                val smsExclusionKeywords = DataBackupManager.convertToSmsExclusionKeywordEntities(
-                    backupData.smsExclusionKeywords.orEmpty()
-                )
-                smsExclusionRepository.restoreKeywords(smsExclusionKeywords)
-                expenseRepository.deleteDuplicates()
-                incomeRepository.deleteDuplicates()
-
-                RestoreCounts(
-                    expenses = expenses.size,
-                    incomes = incomes.size,
-                    categorySettings = categoryMappings.size + customCategories.size,
-                    storeRules = storeRules.size,
-                    userSettings = budgets.size + ownedCards.size + smsExclusionKeywords.size
-                )
+                backupService.restore(backupData)
             }
 
-            categoryProvider.invalidateCache()
             _uiState.update {
                 it.copy(
                     isLoading = false,
@@ -773,7 +570,6 @@ class SettingsViewModel @Inject constructor(
                 )
             }
             loadFilterOptions()
-            loadOwnedCards()
             loadMonthlyBudget()
             dataRefreshEvent.emit(DataRefreshEvent.RefreshType.CATEGORY_UPDATED)
             snackbarBus.show(
@@ -814,38 +610,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                classificationState.withRegistrationsPaused {
-                    withContext(Dispatchers.IO) {
-                        // 삭제 전에 예약된 문자도 비워 백그라운드 작업이 다시 적재하지 않게 한다.
-                        smsFallbackScheduler.clearPending()
-                        // 선택적 테이블 삭제 (벡터 데이터 보존)
-                        // SmsPatternEntity, StoreEmbeddingEntity는 학습 데이터이므로 유지
-                        expenseRepository.deleteAll()
-                        incomeRepository.deleteAll()
-                        chatDao.deleteAll()          // chat_history 삭제
-                        chatDao.deleteAllSessions()  // chat_sessions 삭제
-                        budgetDao.deleteAll()
-                        categoryRepository.deleteAllMappings()
-                        ownedCardRepository.deleteAll()
-
-                        // 설정 초기화
-                        settingsDataStore.saveMonthlyIncome(0)
-                        settingsDataStore.saveMonthStartDay(1)
-                        // 마지막 동기화 시간 초기화 (다음 동기화 시 전체 동기화 되도록)
-                        settingsDataStore.saveLastSyncTime(0L)
-                        settingsDataStore.saveLastRcsProviderScanTime(0L)
-                        // 실제 동기화 구간 기록도 함께 제거
-                        syncCoverageRepository.clearAll()
-                        // 광고 시청 기록 초기화 (월별 전체 동기화 다시 가능하도록)
-                        settingsDataStore.clearSyncedMonths()
-                    }
-
-                    // 전체 삭제 시 삭제 추적 목록도 초기화 (새 동기화에서 재수집 가능하도록)
-                    DeletedSmsTracker.clear()
-
-                    // gate가 열린 뒤 새 작업이 들어오기 전에 삭제 이벤트를 전달한다.
-                    dataRefreshEvent.emit(DataRefreshEvent.RefreshType.ALL_DATA_DELETED)
-                }
+                dataResetService.reset()
 
                 _uiState.update {
                     it.copy(

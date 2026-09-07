@@ -39,8 +39,8 @@ Settings는 네 번째 하단 탭이며 앱 환경, 예산, AI 서비스/크레�
 NavGraph -> SettingsScreen
 -> SettingsViewModel.uiState / onIntent()
 -> SettingsDataStore, BudgetDao, OwnedCardRepository, AiCreditRepository
--> DataBackupManager / GoogleDriveHelper
--> Settings*Dialogs / BudgetBottomSheet
+-> SettingsBackupService / SettingsDataResetService / GoogleDriveHelper
+-> Settings*Section / SettingsDialogs / BudgetBottomSheet
 ```
 
 ## 작업 판단
