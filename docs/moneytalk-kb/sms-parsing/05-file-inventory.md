@@ -16,6 +16,8 @@ status: draft
 | `SmsSyncMessageReader.kt` | 동기화 범위 원본 읽기 래퍼 | 원본 누락 | 핵심 |
 | `SmsReaderV2.kt` | SMS/MMS/RCS provider read | channel/provider 문제 | 핵심 |
 | `SmsSyncCoordinator.kt` | batch parsing 외부 진입점 | 파싱 단계 순서 | 핵심 |
+| `SmsIngestionWriter.kt` | 화면/백그라운드 공통 저장 및 보정 | 중복, 환불/수입 정본, 저장 건수 | 핵심 |
+| `SmsFallbackQueue/Scheduler/Processor.kt` | 미확정 후보 영속화와 백그라운드 후속 처리 | 화면을 열어야 반영되는 지연 | 핵심 |
 | `SmsPipeline.kt` | Vector/LLM fallback | 미매칭 처리 | 핵심 |
 | `CategoryClassifierService.kt` | 저장 전/후 카테고리 분류 | 분류 누락 | 핵심 |
 | `ExpenseRepository.kt` | 지출 batch insert/query | 저장 결과 문제 | 핵심 |

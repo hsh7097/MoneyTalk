@@ -27,4 +27,4 @@ SMS Pipeline은 문자 원본을 거래 데이터로 바꾸는 공통 엔진이�
 
 - 수입 SMS는 Fast Path 룰 대상이 아니며 수입 파서 경로를 확인한다.
 - 동기화 범위와 coverage는 `core/sync`가 담당한다.
-- DB 저장과 중복 보정은 `MainViewModel`과 Repository 경로도 함께 봐야 한다.
+- DB 저장과 중복 보정은 `SmsIngestionWriter`, `ExpenseDao`의 자동 수집 트랜잭션, Repository 경로를 함께 본다. `MainViewModel`과 `SmsFallbackProcessor`가 같은 writer를 사용한다.

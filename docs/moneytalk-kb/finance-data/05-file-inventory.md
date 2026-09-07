@@ -14,6 +14,7 @@ status: draft
 |---|---|---|---|
 | `core/database/AppDatabase.kt` | Room DB 정의, entity/DAO/migration 등록 | DB schema, migration | 핵심 |
 | `core/database/dao/ExpenseDao.kt` | 지출 DAO | 지출 query/CRUD | 핵심 |
+| `core/database/dao/ExpenseIngestionResult.kt` | 자동 수집 신규/갱신/스킵 결과 | 새 거래 알림과 중복 저장 처리 | 핵심 |
 | `core/database/dao/IncomeDao.kt` | 수입 DAO | 수입 query/CRUD | 핵심 |
 | `core/database/dao/SmsPatternDao.kt` | SMS 패턴 DAO | 파싱 패턴 저장/조회 | 핵심 후보 |
 | `core/database/entity/ExpenseEntity.kt` | 지출 entity | 지출 schema 변경 | 핵심 |
@@ -22,6 +23,7 @@ status: draft
 | `core/database/OwnedCardRepository.kt` | 카드 화이트리스트 관리 | 카드 숨김/표시 | 핵심 후보 |
 | `core/database/SmsExclusionRepository.kt` | SMS 제외 키워드 관리 | 제외 키워드 설정 | 핵심 후보 |
 | `feature/home/data/ExpenseRepository.kt` | 지출 Repository | 화면 지출 데이터 | 핵심 |
+| `core/sms/SmsIngestionWriter.kt` | 화면/백그라운드 공용 SMS 저장 및 기존 내역 보정 | 자동 수집, fuzzy/교차 타입/삭제 epoch | 핵심 |
 | `feature/home/data/IncomeRepository.kt` | 수입 Repository | 화면 수입 데이터 | 핵심 |
 | `feature/home/data/CategoryClassifierServiceImpl.kt` | 카테고리 분류 구현 | 자동 분류 | 핵심 후보 |
 | `feature/home/data/StoreRuleRepository.kt` | 거래처 규칙 Repository | 거래처 규칙/소급 적용 | 핵심 후보 |

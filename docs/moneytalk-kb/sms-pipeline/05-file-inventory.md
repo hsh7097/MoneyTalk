@@ -26,6 +26,12 @@ status: draft
 | `SmsReaderV2.kt` | SMS/MMS/RCS 원본 읽기 | provider read 문제 | 핵심 |
 | `SmsSyncMessageReader.kt` | 동기화 기간 원본 읽기 래퍼 | 기간 동기화 문제 | 핵심 후보 |
 | `SmsInstantProcessor.kt` | 실시간 1건 처리 | receiver/notification 즉시 저장 | 핵심 후보 |
+| `SmsIngestionWriter.kt` | 화면/백그라운드 공통 저장 정책 | 중복·수입/환불 보정, 저장 결과 | 핵심 |
+| `SmsFallbackQueue.kt` | 미확정 후보와 재시도 예산 영속화 | 재시작/중복 enqueue/전체 삭제 | 핵심 후보 |
+| `SmsFallbackScheduler.kt` | JobScheduler 예약과 세대 관리 | 화면 밖 후속 처리 | 핵심 후보 |
+| `SmsFallbackProcessor.kt` | 후보 파싱과 공통 writer 실행 | 네트워크 재시도/분류 소유권 | 핵심 후보 |
+| `receiver/SmsFallbackJobService.kt` | Android Job 생명주기 | 시작/중단/재예약 | 핵심 후보 |
+| `receiver/ProviderChangeQueue.kt`, `receiver/ProviderBodyReader.kt` | provider 변경 병합 및 지연 본문 재조회 | MMS/RCS 늦은 반영 | 핵심 후보 |
 | `SmsTransactionDateResolver.kt` | 거래 날짜/시간 해석 | 날짜 파싱 오류 | 핵심 |
 | `SmsRegexRuleSyncService.kt` | Asset seed + RTDB overlay 병합 | 룰 동기화 | 핵심 후보 |
 | `VectorSearchEngine.kt` | 벡터 유사도 계산 | similarity 계산 | 보조 |

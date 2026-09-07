@@ -196,6 +196,10 @@ python scripts/sms_origin_rule_audit.py --origin <sms_origin-export.json> --asse
 
 감사 결과는 표본 row와 `count` 누적 관측치를 구분해서 읽는다.
 
+`sms_origin`은 실패 중심으로 수집될 수 있으므로 이 표본의 매칭률을 전체 사용자의 정확도로 표현하지 않는다. 감사 스크립트는 Vector/Gemini를 실행하지 않는다. `pipeline_*`라는 출력 이름도 로컬 지출 룰·수입·SKIP 재생 결과이며 앱 전체 파이프라인의 최종 성공률을 뜻하지 않는다. 2026-09-07 추가 표본 결과와 보류 항목은 [07-rtdb-sms-origin-import-log.md](07-rtdb-sms-origin-import-log.md)를 본다.
+
+런타임 priority는 DAO의 실제 성공/실패 이벤트에서 조정한다. 조회할 때마다 누적 match/fail 점수를 다시 더하지 않는다. 일반적인 regex 불일치는 실패 카운터를 올리는 이벤트가 아니며, 기존 비활성화 임계값과 sender/type별 ACTIVE 상한은 유지한다.
+
 | 항목 | 의미 |
 |---|---|
 | `current_asset_matched` | regex 일치 후 금액 `> 0`과 유효 store 검증까지 통과한 표본 row 수 |
@@ -241,6 +245,6 @@ Step1.5 SenderRegex: 매칭 X건, 폴백 Y건
 - 같은 sender의 다른 type 룰과 오분류 가능성이 없는가?
 - 완료된 카드대금 출금은 실제 출금액을 잡고 통계 제외되는가?
 - 외화 금액을 원화 `Int`로 오인하거나 0원 거래를 생성하지 않는가?
-- `policy_false_positive=0`, `actionable_unmatched=0`인가?
+- `policy_false_positive=0`이며, `actionable_unmatched`의 잔여 항목에 보류 근거가 기록됐는가?
 - 취소/환불은 Fast Path가 아니라 수입 경로로 가는가?
 - 교통/KSNET/매출접수 N건 요약이 입력 단계와 LLM 이전 방어 단계에서 모두 차단되는가?

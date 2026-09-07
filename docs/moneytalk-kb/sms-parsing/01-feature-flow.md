@@ -16,6 +16,7 @@ status: draft
 |---|---|---|
 | 앱 resume | `MainViewModel.onAppResume()` | 권한 확인 후 silent 증분 동기화 |
 | `DataRefreshEvent.RefreshType.SMS_RECEIVED` | `MainViewModel.observeDataRefreshEvents()` | 실시간 수신 후 동기화 |
+| 즉시 처리 `Deferred` | `SmsFallbackScheduler -> SmsFallbackJobService` | 화면 밖 미확정 금융 후보 후속 분석 및 저장 |
 | 수동/디버그 동기화 | `MainViewModel` sync 호출부 | 전체/오늘/월별 범위 |
 
 ## End-to-End Flow

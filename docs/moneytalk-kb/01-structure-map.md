@@ -76,6 +76,8 @@ status: draft
 |---|---|---|
 | `MainActivity.kt` | 앱 진입, SMS 권한 요청, theme, 전역 dialog/snackbar shell | `MainViewModel.kt`, `navigation/NavGraph.kt` |
 | `MainViewModel.kt` | Activity-scoped SMS 동기화, 권한, 광고, coverage, resume sync orchestration | `core/sms/*`, `core/sync/*`, `feature/home/data/*Repository.kt` |
+| `core/sms/SmsIngestionWriter.kt` | 화면/백그라운드 공통 수입·지출 저장과 보정 | `ExpenseDao`, `ExpenseRepository`, `IncomeRepository` |
+| `core/sms/SmsFallback*.kt`, `receiver/SmsFallbackJobService.kt` | 미확정 금융 후보의 영속 큐와 화면 밖 후속 처리 | `ClassificationState`, `SmsSyncCoordinator`, `SmsIngestionWriter` |
 | `navigation/NavGraph.kt` | Home, History, Chat, Settings route 연결 | 각 feature `*Screen.kt` |
 | `core/database/AppDatabase.kt` | Room entity/DAO 등록과 migration 정의 | `core/database/dao/**`, `core/database/entity/**`, `core/di/DatabaseModule.kt` |
 | `core/sms/SmsSyncCoordinator.kt` | SMS batch parsing 외부 진입점 | `SmsPreFilter.kt`, `SmsIncomeFilter.kt`, `SmsRegexRuleMatcher.kt`, `SmsPipeline.kt` |

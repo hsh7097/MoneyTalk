@@ -15,6 +15,8 @@ status: draft
 
 SMS Pipeline은 문자 원본을 읽고 지출/수입 거래로 변환하는 공통 파이프라인이다.
 
+2026-09-07에는 운영 표본 241개에서 지출 Fast Path 매칭을 3개에서 219개로 보강했다. 표본 편향과 잔여 17개 검토 사항은 import log에 기록한다. 화면 밖 미확정 후보 재처리와 원자적 저장 계약은 [../sms-parsing/06-ingestion-contract.md](../sms-parsing/06-ingestion-contract.md)를 본다.
+
 ## 먼저 볼 파일
 
 | 문서 | 역할 | 언제 보는가 |

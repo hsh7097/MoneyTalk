@@ -4,7 +4,7 @@ title: MoneyTalk KB Change Index
 description: MoneyTalk KB의 루트 변경 이력 색인이다.
 tags: [moneytalk, kb, changelog, android]
 resource: docs/moneytalk-kb/
-timestamp: 2026-07-13T23:23:18+09:00
+timestamp: 2026-09-08T00:08:00+09:00
 status: draft
 ---
 
@@ -15,6 +15,9 @@ status: draft
 
 | 날짜 | 기준 | 영향 영역 | 갱신 문서 | 요약 |
 |---|---|---|---|---|
+| 2026-09-08 | 전체 변경의 독립 리뷰 및 커밋 전 재검증 | 정상 반복 결제 보존·예산 범위 검증 | `finance-data/**`, `sms-parsing/**`, `settings/**`, `budget-credit-monetization/**`, `ui-map/01-screen-composable-index.md`, `release-history/**` | 다른 SMS ID를 합칠 때 숫자 잔액 근거와 원문 전체를 요구하고, 예산 계산 범위 초과 시 저장/모드 전환을 차단. Debug/release 빌드·JVM 320개·Room 24개 통과, Fold7에서 오류 표시/저장 차단/입력 보존 확인. 버전 코드 21의 과거 기록과 현재 22를 구분. |
+| 2026-09-08 | Fold7 실기기 화면 재현 및 업데이트 전후 백업 대조 | 수집 정확성·화면 일관성·AI 인증 실패·백업 보존 | `chat/**`, `history/**`, `transaction-list/**`, `filtering/**`, `settings/**`, `budget-credit-monetization/**`, `finance-data/**`, `sms-parsing/**`, `notification-ingestion/**`, `backup-restore/**`, `ui-map/01-screen-composable-index.md` | 동일 문자 재전달, 앱 알림 상호 추출, 예산 비율 저장, 달력 필터 전달, 대화방 뒤로가기, 인증 실패 후 후속 AI 요청 차단 및 백업 메타데이터 보존을 기록. Debug/release 빌드, JVM 312개·Room 21개 통과 후 실기기 1.0.4 업데이트와 기존 백업 필드 불변을 확인. |
+| 2026-09-07 | RTDB 241개 표본, 수신·저장 동시성 및 Job 경계 검토 | SMS 정확성·지연·중복 개선 | `sms-pipeline/**`, `sms-parsing/**`, `finance-data/**`, `notification-ingestion/**`, `backup-restore/01-feature-flow.md`, `01-structure-map.md` | 운영 룰 보강, JSON 검증, 화면 밖 후속 처리와 공통 writer/원자적 저장 경계를 기록. |
 | 2026-07-03 | 현재 소스와 초기 루트 구조/SMS/App Functions 문서 확인 | 초기 KB 생성 | `README.md`, `00-agent-routing.md`, `01-structure-map.md`, `history/**`, `sms-pipeline/**`, `finance-data/**` | 스카폴드 기준으로 MoneyTalk 초기 KB를 생성하고 핵심 라우팅, History 도메인, SMS pipeline, finance data 문서를 작성. |
 | 2026-07-03 | 기능 단위 KB 요구 반영 | 기능 KB 추가 | `README.md`, `00-agent-routing.md`, `01-structure-map.md`, `sms-parsing/**`, `category-classification/**`, `app-functions/**` | 문자 파싱, 카테고리 분류, App Functions 기능을 도메인/서브모듈과 별도 end-to-end 기능 KB로 추가. |
 | 2026-07-08 | `feature/chat/**`, `DataQueryParser`, `ChatCreditPolicy`, `ChatContextBuilder`, 크레딧/심층 분석 계획 확인 | AI 채팅 KB 추가 | `README.md`, `00-agent-routing.md`, `01-structure-map.md`, `chat/**` | 단순 조회도 Gemini에 조회 결과를 다시 보내는 현재 비용 구조와 로컬 정형 조회 우회 설계를 `chat` KB로 분리. |

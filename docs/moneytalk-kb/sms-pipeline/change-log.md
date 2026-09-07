@@ -10,6 +10,14 @@ status: draft
 
 # SMS Pipeline Change Log
 
+## 2026-09-07
+
+- 인증된 Firebase Console에서 현재 `sms_origin` 241개/476회를 export해 검토했다. raw 원문은 git/KB에 포함하지 않는다.
+- 카카오뱅크 잔액 부호 및 국민·신한·현대·삼성·우리 승인/출금 형식을 asset에 추가했다. 지출 Fast Path 3→219개, 정책 오탐 0개이며 전체 앱 정확도로 해석하지 않는다.
+- Gemini 선택 필드 null 처리, 필수 값과 배치 번호 검증, RTDB 룰 노드별 오류 격리, 조회 시 누적 priority 재가산 제거를 반영했다.
+- 미확정 후보 Job/공통 writer/provider 변경 큐의 책임과 운영 재생 결과를 관련 계약 및 파일 색인에 기록했다.
+- JVM 테스트 288개 통과. Android Log 대역은 `src/test`에만 두고 앱/빌드 설정은 변경하지 않았다.
+
 ## 2026-07-11 - release SMS 개인정보 경로 보강
 
 - release 표본 수집은 유지하고, 원문 포함은 RTDB `send_origin_message`로 제어한다.
