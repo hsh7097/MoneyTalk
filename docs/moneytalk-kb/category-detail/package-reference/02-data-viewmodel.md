@@ -4,7 +4,7 @@ title: Category Detail data and ViewModel
 description: Category Detail ViewModel의 월 cache, 데이터 조회, 필터, refresh, 거래 변경 흐름을 설명한다.
 tags: [moneytalk, category-detail, viewmodel, data]
 resource: app/src/main/java/com/sanha/moneytalk/feature/categorydetail/ui/CategoryDetailViewModel.kt
-timestamp: 2026-07-09T07:05:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
@@ -60,7 +60,7 @@ SavedStateHandle extras
 |---|---|---|
 | 표시 목록 | `CategoryDetailExpenseFilters.filterDisplayExpenses(...)` | SMS 제외 키워드와 숨김 카드 제외 |
 | 집계/차트 | `CategoryDetailExpenseFilters.filterStatsExpenses(...)` | 통계 제외 거래를 제거 |
-| 날짜별 header 합계 | `buildDateGroupedItems()` 안의 `filterStatsExpenses(dayExpenses)` | 날짜 그룹 합계에서 통계 제외 반영 |
+| 날짜별 header 합계 | `CategoryTransactionListMapper.build()`의 날짜 그룹 안에서 `filterStatsExpenses(dayExpenses)` | 날짜 그룹 합계에서 통계 제외 반영 |
 
 ## Refresh 반응
 
@@ -78,3 +78,10 @@ SavedStateHandle extras
 | 삭제 | `deleteExpense(expense)` -> `DeletedSmsTracker.markDeleted` -> `expenseRepository.delete` | 원본 SMS 재동기화로 되살아나지 않게 tracker 처리 필요 |
 | 카테고리 변경 | `updateExpenseCategory(storeName, newCategory)` | 동일 거래처 전체 변경이므로 단일 거래 수정이 아니다. |
 | 메모 변경 | `updateExpenseMemo(expenseId, memo)` | blank는 null로 저장한다. |
+
+## 화면 책임 점검 (2026-09-08)
+
+- Activity extra → SavedStateHandle → ViewModel → 월 페이지 모델 → 화면 구조를 유지한다. 차트 mapper와 표시/통계 필터는 이미 독립되어 있다.
+- `CategoryTransactionListMapper`를 추출해 ViewModel의 DB/캐시 책임과 날짜 그룹·금액순 표시 변환을 분리했다. 동일 거래처 수정, 삭제 tracker, refresh 경계는 변경하지 않는다.
+- `CategoryDetailScreen` 내부 hero/월 이동/리스트 헤더는 독립 Composable이며 하나의 카테고리 상세 페이지에만 쓰인다. 추가 공통 모듈 또는 전체 MVI 전환은 도입하지 않는다.
+- `TransactionListMapperInstrumentedTest`로 통계 제외/이체 입금 행을 유지하는지와 헤더 합계, 날짜순/금액순을 검증한다. 월 스와이프·정렬·거래 편집 후 복귀는 기기 확인 대상이다.

@@ -4,7 +4,7 @@ title: History 구조 지도
 description: History 도메인의 폴더, 핵심 파일, 역할, AI 참조 순서를 정리한다.
 tags: [moneytalk, history, structure-map, compose]
 resource: app/src/main/java/com/sanha/moneytalk/feature/history/ui/
-timestamp: 2026-07-03T16:30:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
@@ -16,9 +16,16 @@ status: draft
 feature/history/ui/
 ├── HistoryScreen.kt
 ├── HistoryViewModel.kt
+├── HistoryUiState.kt
+├── HistoryIntent.kt
+├── TransactionListItem.kt
+├── HistoryTransactionListMapper.kt
 ├── HistoryCalendar.kt
 ├── HistoryDialogs.kt
 ├── HistoryFilter.kt
+├── HistoryFilterSelection.kt
+├── HistoryFilterControls.kt
+├── HistoryFilterPickers.kt
 └── HistoryHeader.kt
 ```
 
@@ -30,7 +37,12 @@ feature/history/ui/
 | `HistoryViewModel.kt` | UI state, 월별 page cache, 필터/정렬, 거래 삭제/수정 intent 처리 |
 | `HistoryCalendar.kt` | 달력 모드 렌더링 |
 | `HistoryDialogs.kt` | 거래 상세/수정/삭제 관련 다이얼로그 |
-| `HistoryFilter.kt` | 필터 BottomSheet와 필터 초기화 UI |
+| `HistoryFilter.kt` | 미적용 선택 상태와 필터 시트/코치마크 조합 |
+| `HistoryFilterSelection.kt` | 불변 선택 값, 유형 전환, 카테고리 자동 축소 규칙 |
+| `HistoryFilterControls.kt` | 유형 타일, 필터 옵션, 카테고리 칩/요약, 안내 카드 |
+| `HistoryFilterPickers.kt` | 카드/카테고리 전체 목록 선택 시트 |
+| `HistoryUiState.kt`, `HistoryIntent.kt`, `TransactionListItem.kt` | 화면/월 상태, 사용자 액션, 목록 계약 |
+| `HistoryTransactionListMapper.kt` | 표시 필터, 정렬, 날짜/사용처 그룹 및 통계 합계 |
 | `HistoryHeader.kt` | 기간 요약 헤더 |
 
 ## Core Files And Roles

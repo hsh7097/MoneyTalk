@@ -4,7 +4,7 @@ title: Category Detail 도메인
 description: 홈 카테고리 클릭 후 열리는 카테고리별 상세 화면의 월 이동, 정렬, 거래 목록, 수정 진입을 설명한다.
 tags: [moneytalk, category-detail, domain, compose]
 resource: app/src/main/java/com/sanha/moneytalk/feature/categorydetail/
-timestamp: 2026-07-08T00:00:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
@@ -33,6 +33,7 @@ Category Detail은 홈의 카테고리 지출 영역에서 특정 카테고리�
 | `CategoryDetailActivity.kt` | category parameter를 받아 상세 화면 Activity를 연다. |
 | `CategoryDetailScreen.kt` | 상세 화면 Composable, hero, list header, 월 이동, 거래 목록 렌더링 |
 | `CategoryDetailViewModel.kt` | 월별 page cache, category filter, 정렬, delete/update action |
+| `CategoryTransactionListMapper.kt` | 날짜 그룹/금액 정렬과 통계 합계를 변환한다. |
 | `CategoryDetailExpenseFilters.kt` | keyword/card visibility 기반 지출 필터 |
 | `ui/model/CategoryDetailPageData.kt` | 월별 상세 page data model |
 | `ui/model/CategorySpendingTrendInfo.kt` | 카테고리 상세 chart mapper |

@@ -4,7 +4,7 @@ title: History KB Change Log
 description: History 도메인 KB 변경 상세 이력을 기록한다.
 tags: [moneytalk, history, changelog]
 resource: docs/moneytalk-kb/history/
-timestamp: 2026-07-03T16:30:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
@@ -28,3 +28,9 @@ status: draft
   - `package-reference/*`
 - 다음 검증:
   - 신규 필터 조건 추가 작업에서 `HistoryFilter.kt`와 `HistoryViewModel.kt`를 정확히 찾는지 확인
+
+## 2026-09-08 - 화면 상태와 목록/필터 기능 책임 분리
+
+- `HistoryViewModel`에서 상태/Intent/목록 계약과 목록 mapper를 분리했다. 월 캐시와 조회 Job은 기존 ViewModel에 유지했다.
+- 필터 임시 선택을 불변 `HistoryFilterSelection`으로 묶고, 선택 규칙과 타일/칩/전체 목록 시트의 파일을 분리했다.
+- 기존 렌더링/정렬/통계 제외/달력 상세 조건을 유지하며 JVM 선택 상태 테스트와 Android 목록 mapper 회귀 테스트를 추가했다.
