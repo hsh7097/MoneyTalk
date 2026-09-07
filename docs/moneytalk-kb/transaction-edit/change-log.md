@@ -15,3 +15,7 @@ status: draft
 | 2026-07-12 | SM-F966N, `font_scale=2.0`, 거래 상세/카테고리 picker QA | 날짜 값 두 줄 허용, 공통 picker 3열·두 줄 large-font 모드 추가 | `package-reference/03-rendering-action.md`, `../ui-map/01-screen-composable-index.md` | 날짜·시간 말줄임과 긴 카테고리 이름 식별 불가 문제를 함께 수정. |
 | 2026-07-09 | 실기기 History `+`, 기존 거래, Transaction List 수입 카드 진입 확인 및 `TransactionEditActivity`/`TransactionEditViewModel` 대조 | intent extra 계약 보강 | `package-reference/01-entry-screen.md` | 현재 helper는 `expenseId`/`incomeId`만 전달하고, `extra_initial_date`는 ViewModel에서만 읽는 예비 계약임을 기록. |
 | 2026-07-08 | `feature/transactionedit/ui/**`, `ExpenseRepository`, `IncomeRepository`, `CustomCategoryRepository` 확인 | Transaction Edit 화면 KB 생성 | `README.md`, `00-structure-map.md`, `package-reference/**`, `05-file-inventory.md` | 아이템 추가/수정/삭제, 카테고리 picker, 일괄 적용, 코치마크 작업 시작점을 분리. |
+
+## 2026-09-08
+
+거래 알림 상세 진입과 없는 거래 안내를 추가했다. 진입 인자·상태·미저장 변경 비교를 분리하고 최초 비교 기준을 ViewModel에 유지한다. 규칙 키워드/일괄 적용 변경도 닫기 확인 대상에 포함한다. 기능별 렌더러 이동은 rendering 문서에 기록했다.
