@@ -25,7 +25,7 @@ status: draft
 |---|---|---|
 | Home | `HomeScreen`, `HomePageContent`, `MonthlyOverviewSection`, `SpendingTrendSection`, `CategoryExpenseSection`, `AiInsightCard`, `TransactionCardCompose` | [home](../home/README.md), [home surface map](../home/package-reference/05-surface-map.md) |
 | History | `HistoryScreen`, `HistoryHeader`, `FilterTabRow`, `HistoryFilter`, `TransactionListView`, `BillingCycleCalendarView` — 달력 날짜 선택은 callback으로 현재 필터와 정렬을 상세 화면에 전달 | [history](../history/README.md), [filtering](../filtering/README.md) |
-| Chat | `ChatScreen`, `ChatRoomListView`, `ChatRoomView`, `ChatComponents` | [chat](../chat/README.md) |
+| Chat | `ChatScreen`, `ChatRoomListView`, `ChatRoomView`, `ChatComponents` — 채팅방의 시스템 뒤로가기는 대화 목록으로 복귀 | [chat](../chat/README.md) |
 | Settings | `SettingsScreen`, `SettingsItemCompose`, `SettingsSectionCompose`, `BudgetBottomSheet`, `ExportDialog`, settings dialogs — 비율 예산 저장은 현재 전체 예산으로 계산하며 범위 초과 입력은 오류 표시와 함께 저장 차단 | [settings](../settings/README.md), [settings menu map](../settings/package-reference/05-menu-map.md) |
 
 ## 보조 화면

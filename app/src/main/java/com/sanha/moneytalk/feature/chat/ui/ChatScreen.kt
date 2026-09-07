@@ -1,6 +1,7 @@
 package com.sanha.moneytalk.feature.chat.ui
 
 import android.app.Activity
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -67,6 +68,10 @@ fun ChatScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showAiUnavailableDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf<Long?>(null) }
+
+    BackHandler(enabled = uiState.isInChatRoom) {
+        viewModel.exitChatRoom()
+    }
 
     // ===== 코치마크 (화면별 온보딩) =====
     val coachMarkRegistry = remember { CoachMarkTargetRegistry() }
