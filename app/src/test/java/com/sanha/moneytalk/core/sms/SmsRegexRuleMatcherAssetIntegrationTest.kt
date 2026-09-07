@@ -88,6 +88,126 @@ class SmsRegexRuleMatcherAssetIntegrationTest {
         assertEquals("ignored cancellation rules must not update match counts", 0, ruleDao.matchCountUpdates)
     }
 
+    @Test
+    fun `repeated rule lookups do not reapply historical priority bonuses`() {
+        val sender = "15881234"
+        val observedRule = SmsRegexRuleEntity(
+            senderAddress = sender,
+            type = "expense",
+            ruleKey = "previously-observed",
+            bodyRegex = "테스트상점A (?<amount>[0-9,]+)원",
+            amountGroup = "amount",
+            priority = 850,
+            matchCount = 3,
+            lastMatchedAt = System.currentTimeMillis() - 15L * 24L * 60L * 60L * 1000L
+        )
+        val preferredRule = observedRule.copy(
+            ruleKey = "preferred",
+            bodyRegex = "테스트상점B (?<amount>[0-9,]+)원",
+            priority = 900,
+            matchCount = 0,
+            lastMatchedAt = 0L
+        )
+        val ruleDao = FakeSmsRegexRuleDao(listOf(observedRule, preferredRule))
+        val matcher = createMatcher(ruleDao)
+
+        repeat(3) { index ->
+            runSuspend {
+                matcher.matchPaymentCandidates(listOf(SmsInput(
+                    id = "unrelated-$index",
+                    body = "다른형식 거래 12,300원",
+                    address = sender,
+                    date = sampleTimestamp()
+                )))
+            }
+        }
+
+        val rules = runSuspend { ruleDao.getActiveRulesBySender(sender) }
+        assertEquals(listOf("preferred", "previously-observed"), rules.map { it.ruleKey })
+        assertEquals(listOf(900, 850), rules.map { it.priority })
+        assertEquals(0, ruleDao.matchCountUpdates)
+    }
+
+    @Test
+    fun `different SMS formats do not count as failures or deactivate a valid rule`() {
+        val rule = SmsRegexRuleEntity(
+            senderAddress = "15881234",
+            type = "expense",
+            ruleKey = "valid-other-format",
+            bodyRegex = "테스트상점 (?<amount>[0-9,]+)원",
+            amountGroup = "amount",
+            priority = 900
+        )
+        val ruleDao = FakeSmsRegexRuleDao(listOf(rule))
+        val matcher = createMatcher(ruleDao)
+
+        val result = runSuspend {
+            matcher.matchPaymentCandidates((1..20).map { index ->
+                SmsInput(
+                    id = "unmatched-format-$index",
+                    body = "다른형식 거래 12,300원",
+                    address = rule.senderAddress,
+                    date = sampleTimestamp()
+                )
+            })
+        }
+
+        val storedRule = runSuspend {
+            ruleDao.getRule(rule.senderAddress, rule.type, rule.ruleKey)
+        }
+        assertEquals(20, result.unmatched.size)
+        assertEquals("ACTIVE", storedRule?.status)
+        assertEquals(0, storedRule?.failCount)
+    }
+
+    @Test
+    fun `operational SMS formats pass input filters and preserve transaction fields`() {
+        // Synthetic values preserve the observed layouts without copying customer transactions.
+        val samples = listOf(
+            Sample("카카오 음수 잔액", "15993333", "[Web발신]\n[카카오뱅크] 카드결제\n홍*동(1234)\n04/24 13:45\n12,300원\n테스트상점\n잔액 -100,000원", 12_300, "테스트상점", "카카오뱅크", "2026-04-24 13:45"),
+            Sample("카카오 출금", "15993333", "[Web발신]\n[카카오뱅크]\n홍*동(1234)\n04/24 13:45\n출금 12,300원\n테스트상점\n잔액 -100,000원", 12_300, "테스트상점", "카카오뱅크", "2026-04-24 13:45"),
+            Sample("KB 줄바꿈 승인", "15881688", "[Web발신]\nKB국민카드1234승인\n홍*동님\n12,300원 일시불\n04/24 13:45\n테스트상점\n누적100,000원", 12_300, "테스트상점", "KB국민카드", "2026-04-24 13:45"),
+            Sample("KB 체크 사용", "15881688", "[Web발신]\nKB국민체크(1234)\n홍*동\n04/24 13:45\n12,300원\n테스트주유소 사용", 12_300, "테스트주유소", "KB국민체크", "2026-04-24 13:45"),
+            Sample("신한 체크", "15447200", "[신한체크승인] 홍*동(1234) 04/24 13:45 12,300원 테스트상점 잔액100,000원", 12_300, "테스트상점", "신한", "2026-04-24 13:45"),
+            Sample("신한 지원금 포함 승인", "15447200", "신한(1234)승인 12,300원(고유가지원10,000원) 04/24 13:45 테스트상점 잔액 100,000원", 12_300, "테스트상점", "신한", "2026-04-24 13:45"),
+            Sample("현대 제휴카드", "15776200", "[Web발신]\n현대 지마켓스마일승인 홍*동\n12,300원 일시불\n04/24 13:45 테스트상점\n누적100,000원", 12_300, "테스트상점", "현대", "2026-04-24 13:45"),
+            Sample("신한은행 초 단위 시각", "15778000", "[Web발신]\n[신한은행]04/24\n13:45:36\n[123-***-123456]\n출금\n12,300원\n테스트상점", 12_300, "테스트상점", "신한은행", "2026-04-24 13:45"),
+            Sample("삼성 가족카드", "15888900", "삼성가족1234승인 홍*동\n12,300원 일시불\n04/24 13:45 테스트상점\n누적100,000원", 12_300, "테스트상점", "삼성", "2026-04-24 13:45"),
+            Sample("삼성 할부", "15888900", "삼성1234승인 홍*동\n12,300원 3개월\n04/24 13:45 테스트상점\n누적100,000원", 12_300, "테스트상점", "삼성", "2026-04-24 13:45"),
+            Sample("우리 앱 형식", "15889955", "● 우리카드 이용안내\n우리카드(1234)승인\n홍*동\n12,300원 일시불\n04/24 13:45\n테스트상점", 12_300, "테스트상점", "우리카드", "2026-04-24 13:45")
+        )
+        val matcher = createMatcher(FakeSmsRegexRuleDao(loadAssetRules()))
+        val incomeFilter = SmsIncomeFilter()
+        samples.forEachIndexed { index, sample ->
+            val input = SmsInput("operational-$index", sample.body, sample.sender, sampleTimestamp())
+            assertEquals("${sample.issuer} must pass the input filter", listOf(input), SmsPreFilter().filter(listOf(input)))
+            assertEquals("${sample.issuer} must reach payment parsing", SmsType.PAYMENT, incomeFilter.classify(sample.body).first)
+            val result = runSuspend { matcher.matchPaymentCandidates(listOf(input)) }
+            assertEquals("${sample.issuer} must have exactly one result", 1, result.matched.size)
+            val analysis = result.matched.single().analysis
+            assertEquals("${sample.issuer} transaction amount, not balance/support amount", sample.amount, analysis.amount)
+            assertEquals(sample.store, analysis.storeName)
+            assertEquals(sample.card, analysis.cardName)
+            assertEquals(sample.dateTime, analysis.dateTime)
+        }
+    }
+
+    @Test
+    fun `operational rules cannot turn refund or scheduled notices into expenses`() {
+        val incomeFilter = SmsIncomeFilter()
+        val approved = "[Web발신]\nKB국민카드1234승인\n홍*동님\n12,300원 일시불\n04/24 13:45\n테스트상점\n누적100,000원"
+        val cancelled = approved.replace("승인", "승인취소")
+        assertEquals(SmsType.INCOME, incomeFilter.classify(cancelled).first)
+        val matcher = createMatcher(FakeSmsRegexRuleDao(loadAssetRules()))
+        val result = runSuspend {
+            matcher.matchPaymentCandidates(listOf(SmsInput("cancelled-operation", cancelled, "15881688", sampleTimestamp())))
+        }
+        assertTrue("cancellation must not match the approval rule", result.matched.isEmpty())
+
+        val scheduled = "[Web발신]\n[카카오뱅크]\n홍*동(1234)\n04/24 13:45\n출금예정 12,300원\n테스트상점\n잔액 -100,000원"
+        assertEquals(SmsType.SKIP, incomeFilter.classify(scheduled).first)
+    }
+
     private fun createMatcher(ruleDao: SmsRegexRuleDao): SmsRegexRuleMatcher {
         return SmsRegexRuleMatcher(
             ruleRepository = SmsRegexRuleRepository(ruleDao),

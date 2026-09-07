@@ -1,9 +1,9 @@
 package com.sanha.moneytalk.core.sms
 
-import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.FirebaseDatabase
 import com.sanha.moneytalk.core.database.entity.SmsRegexRuleEntity
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -41,12 +41,14 @@ class SmsRegexRemoteRuleLoader @Inject constructor(
         return try {
             val loaded = withContext(Dispatchers.IO) {
                 val snapshot = db.getReference(RULES_PATH).get().await()
-                parseSnapshot(snapshot)
+                parseRules(snapshot.value)
             }
             cachedRules = loaded
             cacheTimestamp = now
             MoneyTalkLogger.i("RTDB 룰 로드 완료: ${loaded.size}건")
             loaded
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             MoneyTalkLogger.w("RTDB 룰 로드 실패: ${e.message}")
             emptyList()
@@ -58,50 +60,60 @@ class SmsRegexRemoteRuleLoader @Inject constructor(
         cacheTimestamp = 0L
     }
 
-    private fun parseSnapshot(snapshot: DataSnapshot): List<SmsRegexRuleEntity> {
+    internal fun parseRules(value: Any?): List<SmsRegexRuleEntity> {
+        val senderNodes = value as? Map<*, *> ?: return emptyList()
         val now = System.currentTimeMillis()
         val result = mutableListOf<SmsRegexRuleEntity>()
 
-        for (senderSnapshot in snapshot.children) {
-            val senderRaw = senderSnapshot.key ?: continue
+        for ((senderKey, senderNode) in senderNodes) {
+            val senderRaw = senderKey as? String ?: continue
             val sender = SmsFilter.normalizeAddress(senderRaw)
+            val typeNodes = senderNode as? Map<*, *> ?: continue
 
-            for (typeSnapshot in senderSnapshot.children) {
-                val type = typeSnapshot.key ?: continue
+            for ((typeKey, typeNode) in typeNodes) {
+                val type = typeKey as? String ?: continue
+                val ruleNodes = typeNode as? Map<*, *> ?: continue
 
-                for (ruleSnapshot in typeSnapshot.children) {
-                    val ruleKey = ruleSnapshot.key ?: continue
-                    val rawBodyRegex = ruleSnapshot.getString("bodyRegex")
-                    if (rawBodyRegex.isNullOrBlank()) continue
-                    val bodyRegex = normalizeBodyRegex(rawBodyRegex)
-                    if (bodyRegex.isBlank()) {
-                        MoneyTalkLogger.w(
-                            "RTDB 룰 스킵: invalid bodyRegex sender=$sender type=$type ruleKey=$ruleKey"
+                for ((ruleNodeKey, ruleNode) in ruleNodes) {
+                    val ruleKey = ruleNodeKey as? String ?: continue
+                    val rule = ruleNode as? Map<*, *> ?: continue
+                    try {
+                        val rawBodyRegex = rule.getString("bodyRegex")
+                        if (rawBodyRegex.isBlank()) continue
+                        val bodyRegex = normalizeBodyRegex(rawBodyRegex)
+                        if (bodyRegex.isBlank()) {
+                            MoneyTalkLogger.w(
+                                "RTDB 룰 스킵: invalid bodyRegex sender=$sender type=$type ruleKey=$ruleKey"
+                            )
+                            continue
+                        }
+
+                        result.add(
+                            SmsRegexRuleEntity(
+                                senderAddress = sender,
+                                type = type,
+                                ruleKey = ruleKey,
+                                bodyRegex = bodyRegex,
+                                amountGroup = rule.getString("amountGroup"),
+                                storeGroup = rule.getString("storeGroup"),
+                                cardGroup = rule.getString("cardGroup"),
+                                dateGroup = rule.getString("dateGroup"),
+                                priority = rule.getInt("priority", 0),
+                                status = rule.getString("status", "ACTIVE"),
+                                source = rule.getString("source", "rtdb"),
+                                version = rule.getInt("version", 1),
+                                matchCount = rule.getInt("matchCount", 0),
+                                failCount = rule.getInt("failCount", 0),
+                                lastMatchedAt = rule.getLong("lastMatchedAt", 0L),
+                                updatedAt = rule.getLong("updatedAt", now),
+                                createdAt = rule.getLong("createdAt", now)
+                            )
                         )
-                        continue
+                    } catch (_: IllegalArgumentException) {
+                        MoneyTalkLogger.w("RTDB 룰 스킵: invalid field sender=$sender type=$type ruleKey=$ruleKey")
+                    } catch (_: ArithmeticException) {
+                        MoneyTalkLogger.w("RTDB 룰 스킵: invalid number sender=$sender type=$type ruleKey=$ruleKey")
                     }
-
-                    result.add(
-                        SmsRegexRuleEntity(
-                            senderAddress = sender,
-                            type = type,
-                            ruleKey = ruleKey,
-                            bodyRegex = bodyRegex,
-                            amountGroup = ruleSnapshot.getString("amountGroup"),
-                            storeGroup = ruleSnapshot.getString("storeGroup"),
-                            cardGroup = ruleSnapshot.getString("cardGroup"),
-                            dateGroup = ruleSnapshot.getString("dateGroup"),
-                            priority = ruleSnapshot.getInt("priority", 0),
-                            status = ruleSnapshot.getString("status", "ACTIVE"),
-                            source = ruleSnapshot.getString("source", "rtdb"),
-                            version = ruleSnapshot.getInt("version", 1),
-                            matchCount = ruleSnapshot.getInt("matchCount", 0),
-                            failCount = ruleSnapshot.getInt("failCount", 0),
-                            lastMatchedAt = ruleSnapshot.getLong("lastMatchedAt", 0L),
-                            updatedAt = ruleSnapshot.getLong("updatedAt", now),
-                            createdAt = ruleSnapshot.getLong("createdAt", now)
-                        )
-                    )
                 }
             }
         }
@@ -152,18 +164,20 @@ class SmsRegexRemoteRuleLoader @Inject constructor(
     }
 }
 
-private fun DataSnapshot.getString(key: String, defaultValue: String = ""): String {
-    return child(key).getValue(String::class.java) ?: defaultValue
+private fun Map<*, *>.getString(key: String, defaultValue: String = ""): String {
+    val value = get(key) ?: return defaultValue
+    require(value is String) { "Invalid string field: $key" }
+    return value
 }
 
-private fun DataSnapshot.getInt(key: String, defaultValue: Int = 0): Int {
-    return child(key).getValue(Int::class.java)
-        ?: child(key).getValue(Long::class.java)?.toInt()
-        ?: defaultValue
+private fun Map<*, *>.getInt(key: String, defaultValue: Int = 0): Int {
+    val value = get(key) ?: return defaultValue
+    require(value is Number) { "Invalid numeric field: $key" }
+    return value.toString().toBigDecimal().intValueExact()
 }
 
-private fun DataSnapshot.getLong(key: String, defaultValue: Long = 0L): Long {
-    return child(key).getValue(Long::class.java)
-        ?: child(key).getValue(Int::class.java)?.toLong()
-        ?: defaultValue
+private fun Map<*, *>.getLong(key: String, defaultValue: Long = 0L): Long {
+    val value = get(key) ?: return defaultValue
+    require(value is Number) { "Invalid numeric field: $key" }
+    return value.toString().toBigDecimal().longValueExact()
 }

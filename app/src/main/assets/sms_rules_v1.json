@@ -212,6 +212,18 @@
           "status": "ACTIVE",
           "source": "asset",
           "version": 1
+        },
+        "938a8793eb4febf207027258": {
+          "type": "expense",
+          "priority": 930,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?(?<card>\\ud604\\ub300)\\s+\\uc9c0\\ub9c8\\ucf13\\uc2a4\\ub9c8\\uc77c\\uc2b9\\uc778\\s+[^\\n]+\\n\\s*(?<amount>[\\d,]+)\\uc6d0\\s*(?:\\uc77c\\uc2dc\\ubd88|\\d+\\uac1c\\uc6d4)\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s+(?<store>[^\\n]+?)\\s*\\n\\s*\\ub204\\uc801\\s*[\\d,]+\\uc6d0\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
         }
       }
     },
@@ -254,6 +266,30 @@
           "status": "ACTIVE",
           "source": "asset",
           "version": 1
+        },
+        "46720822210cef6799c2ec2b": {
+          "type": "expense",
+          "priority": 930,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>\\uc2e0\\ud55c)\\uccb4\\ud06c\\uc2b9\\uc778\\]\\s*\\S+\\([\\d*]+\\)\\s+(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s+(?<amount>[\\d,]+)\\uc6d0\\s+(?<store>.+?)\\s+\\uc794\\uc561\\s*[-+]?[\\d,]+\\uc6d0\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
+        "73b746417efd41a1e914abdf": {
+          "type": "expense",
+          "priority": 920,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?(?<card>\\uc2e0\\ud55c)\\([\\d*]+\\)\\uc2b9\\uc778\\s+(?<amount>[\\d,]+)\\uc6d0\\(\\uace0\\uc720\\uac00\\uc9c0\\uc6d0[\\d,]+\\uc6d0\\)\\s+(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s+(?<store>.+?)\\s+\\uc794\\uc561\\s*[-+]?[\\d,]+\\uc6d0\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
         }
       }
     },
@@ -288,7 +324,31 @@
         "a37ad62d9240a88ad4beaabd": {
           "type": "expense",
           "priority": 925,
-          "bodyRegex": "(?s)(?:\\[Web\ubc1c\uc2e0\\]\\s*)?(?<card>KB\uad6d\ubbfc\uce74\ub4dc)\\d+\\s*\\n\\s*\uc2b9\uc778\\s*\\n\\s*(?<amount>[\\d,]+)\\s*\uc6d0\\s*(?:\\(\uc77c\uc2dc\ubd88\\)|\\d+\uac1c\uc6d4)\\s*\\n\\s*(?<store>[^\\n]+)\\s*\\n\\s*\uace0\uac1d\uba85\\s*\\n\\s*\\S+\ub2d8\\s*\\n\\s*\uc2b9\uc778\uc2dc\uac01\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*\ub204\uc801\\s*\\n\\s*[\\d,]+\uc6d0",
+          "bodyRegex": "(?s)(?:\\[Web발신\\]\\s*)?(?<card>KB국민카드)\\d+\\s*\\n\\s*승인\\s*\\n\\s*(?<amount>[\\d,]+)\\s*원\\s*(?:\\(일시불\\)|\\d+개월)\\s*\\n\\s*(?<store>[^\\n]+)\\s*\\n\\s*고객명\\s*\\n\\s*\\S+님\\s*\\n\\s*승인시각\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*누적\\s*\\n\\s*[\\d,]+원",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
+        "581385df5869fe56aa9200ea": {
+          "type": "expense",
+          "priority": 930,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?(?<card>KB\\uad6d\\ubbfc\\uce74\\ub4dc)[\\d*]+\\uc2b9\\uc778\\s*\\n[^\\n]+\\n\\s*(?<amount>[\\d,]+)\\uc6d0\\s*(?:\\uc77c\\uc2dc\\ubd88|\\d+\\uac1c\\uc6d4)\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*(?<store>[^\\n]+?)\\s*\\n\\s*\\ub204\\uc801\\s*[\\d,]+\\uc6d0\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
+        "bc5cf246b76150776a22eb10": {
+          "type": "expense",
+          "priority": 920,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?(?<card>KB\\uad6d\\ubbfc\\uccb4\\ud06c)\\([\\d*]+\\)\\s*\\n[^\\n]+\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*(?<amount>[\\d,]+)\\uc6d0\\s*\\n\\s*(?<store>[^\\n]+?)\\s+\\uc0ac\\uc6a9\\s*$",
           "amountGroup": "amount",
           "storeGroup": "store",
           "cardGroup": "card",
@@ -428,6 +488,18 @@
           "status": "ACTIVE",
           "source": "asset",
           "version": 1
+        },
+        "dd7c2aca75c5ab1d84f5d17f": {
+          "type": "expense",
+          "priority": 930,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?(?:\\u25cf\\s*\\uc6b0\\ub9ac\\uce74\\ub4dc\\s+\\uc774\\uc6a9\\uc548\\ub0b4\\s*)?(?<card>\\uc6b0\\ub9ac\\uce74\\ub4dc)\\([\\d*]+\\)\\uc2b9\\uc778\\s*\\n[^\\n]+\\n\\s*(?<amount>[\\d,]+)\\uc6d0\\s*(?:\\uc77c\\uc2dc\\ubd88|\\d+\\uac1c\\uc6d4)\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*(?<store>[^\\n]+?)\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
         }
       }
     },
@@ -487,6 +559,18 @@
           "type": "expense",
           "priority": 870,
           "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?(?<card>\\uc0bc\\uc131)\\d+\\uc2b9\\uc778\\s+[^\\n]*\\n(?<amount>[\\d,]+)\\uc6d0\\s*(?:\\uc77c\\uc2dc\\ubd88|\\d+\\uac1c\\uc6d4)\\s*\\n(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s+(?<store>[^\\n]+)\\s*\\n\\ub204\\uc801[\\d,]+\\uc6d0",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
+        "1fbb4aa00d6e7fd760c42b1f": {
+          "type": "expense",
+          "priority": 930,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?(?<card>\\uc0bc\\uc131)(?:\\uac00\\uc871)?[\\d*]+\\uc2b9\\uc778\\s+[^\\n]+\\n\\s*(?<amount>[\\d,]+)\\uc6d0\\s*(?:\\uc77c\\uc2dc\\ubd88|\\d+\\uac1c\\uc6d4)\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s+(?<store>[^\\n]+?)\\s*\\n\\s*\\ub204\\uc801\\s*[\\d,]+\\uc6d0\\s*$",
           "amountGroup": "amount",
           "storeGroup": "store",
           "cardGroup": "card",
@@ -568,7 +652,7 @@
         "24d30563f49ec9994ff38023": {
           "type": "expense",
           "priority": 928,
-          "bodyRegex": "(?s)(?:\\[Web\ubc1c\uc2e0\\]\\s*)?(?<card>NH\uce74\ub4dc)\\d+\\*+\\d+\\*\uc2e0\uc6a9\uc2b9\uc778\\s*\\n\\s*\\S+\\s*\\n\\s*(?<amount>[\\d,]+)\uc6d0\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*(?<store>[^\\n]+)\\s*\\n\\s*\ucd1d\ub204\uc801[\\d,]+\uc6d0",
+          "bodyRegex": "(?s)(?:\\[Web발신\\]\\s*)?(?<card>NH카드)\\d+\\*+\\d+\\*신용승인\\s*\\n\\s*\\S+\\s*\\n\\s*(?<amount>[\\d,]+)원\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*(?<store>[^\\n]+)\\s*\\n\\s*총누적[\\d,]+원",
           "amountGroup": "amount",
           "storeGroup": "store",
           "cardGroup": "card",
@@ -622,7 +706,7 @@
         "4e421ce19f9d3d552dc3acfa": {
           "type": "expense",
           "priority": 915,
-          "bodyRegex": "(?s)(?:\\[Web\ubc1c\uc2e0\\]\\s*)?(?<card>\ub18d\ud611)\\s*\ucd9c\uae08(?<amount>[\\d,]+)\uc6d0\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s+\\d+-\\*+-\\d+-\\d+\\s+(?<store>.+?)\\s+\uc794\uc561-?[\\d,]+\uc6d0",
+          "bodyRegex": "(?s)(?:\\[Web발신\\]\\s*)?(?<card>농협)\\s*출금(?<amount>[\\d,]+)원\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s+\\d+-\\*+-\\d+-\\d+\\s+(?<store>.+?)\\s+잔액-?[\\d,]+원",
           "amountGroup": "amount",
           "storeGroup": "store",
           "cardGroup": "card",
@@ -638,7 +722,7 @@
         "5bef52a9f844cbfc0339c1ac": {
           "type": "expense",
           "priority": 930,
-          "bodyRegex": "(?s)(?:\\[Web\ubc1c\uc2e0\\]\\s*)?\uae08\uc561\\s*\\n\\s*(?<amount>[\\d,]+)\uc6d0\\s*\\n\\s*\uce74\ub4dc\\s*\\n\\s*(?<card>\ud558\ub098[^\\n]*?\\*)\\s*\\n\\s*\uc190\ub2d8\uba85\\s*\\n\\s*\\S+\\s*\\n\\s*\uac70\ub798\uc885\ub958\\s*\\n\\s*\\S+\\s*\\n\\s*\uac70\ub798\uad6c\ubd84\\s*\\n\\s*(?:\uc77c\uc2dc\ubd88|\\d+\uac1c\uc6d4)\\s*\\n\\s*\uc0ac\uc6a9\ucc98\\s*\\n\\s*(?<store>[^\\n]+?)\\s*\\n\\s*\uac70\ub798\uc2dc\uac04\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})",
+          "bodyRegex": "(?s)(?:\\[Web발신\\]\\s*)?금액\\s*\\n\\s*(?<amount>[\\d,]+)원\\s*\\n\\s*카드\\s*\\n\\s*(?<card>하나[^\\n]*?\\*)\\s*\\n\\s*손님명\\s*\\n\\s*\\S+\\s*\\n\\s*거래종류\\s*\\n\\s*\\S+\\s*\\n\\s*거래구분\\s*\\n\\s*(?:일시불|\\d+개월)\\s*\\n\\s*사용처\\s*\\n\\s*(?<store>[^\\n]+?)\\s*\\n\\s*거래시간\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})",
           "amountGroup": "amount",
           "storeGroup": "store",
           "cardGroup": "card",
@@ -654,7 +738,7 @@
         "91f95b7d2bf2d200abe8f317": {
           "type": "expense",
           "priority": 920,
-          "bodyRegex": "(?s)(?:\\[Web\ubc1c\uc2e0\\]\\s*)?(?<store>[^\\n]+?)\\s*\\n\\s*(?<amount>[\\d,]+)\uc6d0\\s*\uc2b9\uc778\\s*\\n\\s*[^\\n]*(?<card>\ub86f\ub370\ubc95\uc778(?:\uce74\ub4dc)?)\\s*\\d+[^\\n]*\\s*\\n\\s*(?:\uc77c\uc2dc\ubd88|\\d+\uac1c\uc6d4)\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*\ub204\uc801\\s*[\\d,]+\uc6d0",
+          "bodyRegex": "(?s)(?:\\[Web발신\\]\\s*)?(?<store>[^\\n]+?)\\s*\\n\\s*(?<amount>[\\d,]+)원\\s*승인\\s*\\n\\s*[^\\n]*(?<card>롯데법인(?:카드)?)\\s*\\d+[^\\n]*\\s*\\n\\s*(?:일시불|\\d+개월)\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*누적\\s*[\\d,]+원",
           "amountGroup": "amount",
           "storeGroup": "store",
           "cardGroup": "card",
@@ -666,7 +750,7 @@
         "2714e3fa1d66add7b5ae1090": {
           "type": "expense",
           "priority": 925,
-          "bodyRegex": "(?s)(?:\\[Web\ubc1c\uc2e0\\]\\s*)?\uc774\uc6a9\uae08\uc561\uc774\\s+\uae30\uc5c5\uc740\ud589\uc5d0\uc11c\\s+\ucd9c\uae08\ub410\uc5b4\uc694\\.\\s*-\\s*\ucd9c\uae08\uc561:\\s*(?<amount>[\\d,]+)\uc6d0\\s*-\\s*\ucd9c\uae08\uc77c:\\s*(?<date>\\d{2}/\\d{2})\\s*-\\s*(?<issuer>\ub86f\ub370\ubc95\uc778)\\(\\d+\\)",
+          "bodyRegex": "(?s)(?:\\[Web발신\\]\\s*)?이용금액이\\s+기업은행에서\\s+출금됐어요\\.\\s*-\\s*출금액:\\s*(?<amount>[\\d,]+)원\\s*-\\s*출금일:\\s*(?<date>\\d{2}/\\d{2})\\s*-\\s*(?<issuer>롯데법인)\\(\\d+\\)",
           "amountGroup": "amount",
           "storeGroup": "issuer",
           "cardGroup": "issuer",
@@ -680,7 +764,7 @@
         "c8a381599123686479685267": {
           "type": "overseas",
           "priority": 910,
-          "bodyRegex": "(?s)(?:\\[Web\ubc1c\uc2e0\\]\\s*)?(?<store>[^\\n]+?)\\s*\\n\\s*KRW\\s+(?<amount>[\\d,]+)\\s+\ud574\uc678\uc2b9\uc778\\s*\\n\\s*[^\\n]*(?<card>\ub86f\ub370\ubc95\uc778(?:\uce74\ub4dc)?)\\s*\\d+[^\\n]*\\s*\\n\\s*(?:\uc77c\uc2dc\ubd88|\\d+\uac1c\uc6d4)\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*\ub204\uc801\\s*[\\d,]+\uc6d0",
+          "bodyRegex": "(?s)(?:\\[Web발신\\]\\s*)?(?<store>[^\\n]+?)\\s*\\n\\s*KRW\\s+(?<amount>[\\d,]+)\\s+해외승인\\s*\\n\\s*[^\\n]*(?<card>롯데법인(?:카드)?)\\s*\\d+[^\\n]*\\s*\\n\\s*(?:일시불|\\d+개월)\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*누적\\s*[\\d,]+원",
           "amountGroup": "amount",
           "storeGroup": "store",
           "cardGroup": "card",
@@ -696,7 +780,31 @@
         "b8b27604d590f5fea1de7cc2": {
           "type": "expense",
           "priority": 920,
-          "bodyRegex": "(?s)(?:\\[Web\ubc1c\uc2e0\\]\\s*)?\\[(?<card>\uce74\uce74\uc624\ubc45\ud06c)\\]\\s*\uce74\ub4dc\uacb0\uc81c\\s*\\n\\s*[^\\n]+\\(\\d+\\)\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*(?<amount>[\\d,]+)\uc6d0\\s*\\n\\s*(?<store>[^\\n]+?)\\s*\\n\\s*\uc794\uc561\\s*[\\d,]+\uc6d0\\s*$",
+          "bodyRegex": "(?s)(?:\\[Web발신\\]\\s*)?\\[(?<card>카카오뱅크)\\]\\s*카드결제\\s*\\n\\s*[^\\n]+\\(\\d+\\)\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*(?<amount>[\\d,]+)원\\s*\\n\\s*(?<store>[^\\n]+?)\\s*\\n\\s*잔액\\s*[\\d,]+원\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "INACTIVE",
+          "source": "asset",
+          "version": 1
+        },
+        "35af1f3115a125845d1294ec": {
+          "type": "expense",
+          "priority": 930,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>\\uce74\\uce74\\uc624\\ubc45\\ud06c)\\]\\s*\\uce74\\ub4dc\\uacb0\\uc81c\\s*\\n\\s*[^\\n]+\\([\\d*]+\\)\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*(?<amount>[\\d,]+)\\uc6d0\\s*\\n\\s*(?<store>[^\\n]+?)\\s*\\n\\s*\\uc794\\uc561\\s*[-+]?[\\d,]+\\uc6d0\\s*$",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        },
+        "f66aea16b79deef0b86bf689": {
+          "type": "expense",
+          "priority": 920,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>\\uce74\\uce74\\uc624\\ubc45\\ud06c)\\]\\s*\\n\\s*[^\\n]+\\([\\d*]+\\)\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*\\ucd9c\\uae08\\s+(?<amount>[\\d,]+)\\uc6d0\\s*\\n\\s*(?<store>[^\\n]+?)\\s*\\n\\s*\\uc794\\uc561\\s*[-+]?[\\d,]+\\uc6d0\\s*$",
           "amountGroup": "amount",
           "storeGroup": "store",
           "cardGroup": "card",
@@ -712,7 +820,7 @@
         "1565223af5283ac74b5f60f6": {
           "type": "expense",
           "priority": 920,
-          "bodyRegex": "(?s)(?<card>\ubd80\uc0b0BC)\\(\\d+\\)\\s*\\n\\s*(?<amount>[\\d,]+)\uc6d0\\s*(?:\uc0ac\uc6a9|\ub9e4\ucd9c\uc811\uc218)\\s*\\n\\s*.*?\\n\\s*\\S+\ub2d8\\s*\\n\\s*(?:\uc77c\uc2dc\ubd88\\s*)?(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*\ucd1d\ub204\uc801\\s*\\n\\s*[\\d,]+\uc6d0\\s*\\n\\s*(?<store>[^\\n]+)",
+          "bodyRegex": "(?s)(?<card>부산BC)\\(\\d+\\)\\s*\\n\\s*(?<amount>[\\d,]+)원\\s*(?:사용|매출접수)\\s*\\n\\s*.*?\\n\\s*\\S+님\\s*\\n\\s*(?:일시불\\s*)?(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*총누적\\s*\\n\\s*[\\d,]+원\\s*\\n\\s*(?<store>[^\\n]+)",
           "amountGroup": "amount",
           "storeGroup": "store",
           "cardGroup": "card",
@@ -728,7 +836,7 @@
         "0d149abfd63bb02706af8c69": {
           "type": "expense",
           "priority": 915,
-          "bodyRegex": "(?s)\ucd9c\uae08\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*(?<amount>[\\d,]+)\\s*\\n\\s*\uacc4\uc88c\\s*\\n\\s*(?<card>\\d+\\*+\\d+)\\s*\\n\\s*\ub0b4\uc6a9\\s*\\n\\s*\uba54\ubaa8\\s*\\n\\s*(?<store>[^\\n]+)\\s*\\n\\s*\uc794\uc561\\s*\\n\\s*-?[\\d,]+",
+          "bodyRegex": "(?s)출금\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*(?<amount>[\\d,]+)\\s*\\n\\s*계좌\\s*\\n\\s*(?<card>\\d+\\*+\\d+)\\s*\\n\\s*내용\\s*\\n\\s*메모\\s*\\n\\s*(?<store>[^\\n]+)\\s*\\n\\s*잔액\\s*\\n\\s*-?[\\d,]+",
           "amountGroup": "amount",
           "storeGroup": "store",
           "cardGroup": "card",
@@ -744,7 +852,7 @@
         "1d1af6a754a74f7e9e6a3aca": {
           "type": "expense",
           "priority": 910,
-          "bodyRegex": "(?s)(?:\\[Web\ubc1c\uc2e0\\]\\s*)?(?<card>\uc528\ud2f0\uce74\ub4dc)\\(\\d+\\*+\\d+\\*\\)\\s*\\n\\s*\\S+\ub2d8\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*\uc77c\uc2dc\ubd88\\s*(?<amount>[\\d,]+)\uc6d0\\s*\\n\\s*(?<store>[^\\n]+)",
+          "bodyRegex": "(?s)(?:\\[Web발신\\]\\s*)?(?<card>씨티카드)\\(\\d+\\*+\\d+\\*\\)\\s*\\n\\s*\\S+님\\s*\\n\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\\n\\s*일시불\\s*(?<amount>[\\d,]+)원\\s*\\n\\s*(?<store>[^\\n]+)",
           "amountGroup": "amount",
           "storeGroup": "store",
           "cardGroup": "card",
@@ -760,7 +868,23 @@
         "01bb9b9616169381fa57cc4b": {
           "type": "expense",
           "priority": 870,
-          "bodyRegex": "(?s)(?:\\[Web\ubc1c\uc2e0\\]\\s*)?\\[\uc0c8\ub9c8\uc744\uae08\uace0\\]\\s*(?<card>\\d+\\*+\\d+)\\s*(?<store>\uc785\ucd9c\uae08\uc54c\ub9bc\uc218\uc218\ub8cc)\\s*(?<amount>[\\d,]+)\uc6d0\\s*\ucd9c\uae08\\s*\\d+\\*+\\d+\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*\uc794\uc561[\\d,]+\uc6d0",
+          "bodyRegex": "(?s)(?:\\[Web발신\\]\\s*)?\\[새마을금고\\]\\s*(?<card>\\d+\\*+\\d+)\\s*(?<store>입출금알림수수료)\\s*(?<amount>[\\d,]+)원\\s*출금\\s*\\d+\\*+\\d+\\s*(?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})\\s*잔액[\\d,]+원",
+          "amountGroup": "amount",
+          "storeGroup": "store",
+          "cardGroup": "card",
+          "dateGroup": "date",
+          "status": "ACTIVE",
+          "source": "asset",
+          "version": 1
+        }
+      }
+    },
+    "15778000": {
+      "expense": {
+        "0d73ae30f1db0fb523704abe": {
+          "type": "expense",
+          "priority": 930,
+          "bodyRegex": "(?s)(?:\\[Web\\ubc1c\\uc2e0\\]\\s*)?\\[(?<card>\\uc2e0\\ud55c\\uc740\\ud589)\\](?<date>\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})(?::\\d{2})?\\s*\\n\\s*\\[[\\d*\\- ]+\\]\\s*\\n\\s*\\ucd9c\\uae08\\s*\\n\\s*(?<amount>[\\d,]+)\\uc6d0\\s*\\n\\s*(?<store>[^\\n]+?)\\s*$",
           "amountGroup": "amount",
           "storeGroup": "store",
           "cardGroup": "card",

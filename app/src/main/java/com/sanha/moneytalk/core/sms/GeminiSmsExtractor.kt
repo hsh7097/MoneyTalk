@@ -137,6 +137,7 @@ class GeminiSmsExtractor @Inject constructor(
          */
         fun normalizeCategory(rawCategory: String): String {
             val trimmed = rawCategory.trim()
+            if (trimmed.isBlank()) return "기타"
 
             // 이미 유효한 카테고리면 그대로 반환
             if (trimmed in VALID_CATEGORIES) return trimmed
@@ -712,21 +713,47 @@ class GeminiSmsExtractor @Inject constructor(
 
             val json = JsonParser.parseString(jsonStr).asJsonObject
 
-            val rawCategory = json.get("category")?.asString ?: "기타"
-            val normalizedCategory = normalizeCategory(rawCategory)
-
-            LlmExtractionResult(
-                isPayment = json.get("isPayment")?.asBoolean ?: false,
-                amount = json.get("amount")?.asInt ?: 0,
-                storeName = json.get("storeName")?.asString ?: "결제",
-                cardName = json.get("cardName")?.asString ?: "기타",
-                dateTime = json.get("dateTime")?.asString ?: "",
-                category = normalizedCategory
-            )
+            parseExtractionObject(json)
         } catch (e: Exception) {
             MoneyTalkLogger.e("LLM 응답 파싱 실패: ${e.message}")
             null
         }
+    }
+
+    private fun parseExtractionObject(json: JsonObject): LlmExtractionResult? {
+        val paymentValue = json.get("isPayment")
+            ?.takeIf { it.isJsonPrimitive }
+            ?.asJsonPrimitive
+            ?.takeIf { it.isBoolean }
+            ?: return null
+        if (!paymentValue.asBoolean) return LlmExtractionResult(isPayment = false)
+
+        val amount = json.exactIntOrNull("amount")?.takeIf { it > 0 } ?: return null
+        val storeName = json.optionalString("storeName", "").trim()
+            .takeIf { it.isNotBlank() } ?: return null
+
+        return LlmExtractionResult(
+            isPayment = true,
+            amount = amount,
+            storeName = storeName,
+            cardName = json.optionalString("cardName", "기타").ifBlank { "기타" },
+            dateTime = json.optionalString("dateTime", ""),
+            category = normalizeCategory(json.optionalString("category", "기타"))
+        )
+    }
+
+    private fun JsonObject.optionalString(key: String, defaultValue: String): String {
+        val value = get(key)?.takeUnless { it.isJsonNull } ?: return defaultValue
+        require(value.isJsonPrimitive && value.asJsonPrimitive.isString) {
+            "Invalid string field: $key"
+        }
+        return value.asString
+    }
+
+    private fun JsonObject.exactIntOrNull(key: String): Int? {
+        val value = get(key)?.takeIf { it.isJsonPrimitive }?.asJsonPrimitive ?: return null
+        if (!value.isNumber && !value.isString) return null
+        return runCatching { value.asBigDecimal.intValueExact() }.getOrNull()
     }
 
     /**
@@ -746,7 +773,7 @@ class GeminiSmsExtractor @Inject constructor(
                     json.get("storeRegex")?.asString?.trim().orEmpty()
                 ),
                 cardRegex = normalizeRegexCandidate(
-                    json.get("cardRegex")?.asString?.trim().orEmpty()
+                    json.optionalString("cardRegex", "").trim()
                 )
             )
         } catch (e: Exception) {
@@ -1424,29 +1451,19 @@ class GeminiSmsExtractor @Inject constructor(
 
             // no 필드 기반으로 결과 매핑 (1-indexed)
             val resultMap = mutableMapOf<Int, LlmExtractionResult>()
+            val seenNumbers = mutableSetOf<Int>()
 
             for (element in jsonArray) {
                 try {
                     val json = element.asJsonObject
-                    val no = json.get("no")?.asInt ?: continue
-
-                    val batchRawCategory = json.get("category")?.asString ?: "기타"
-                    val batchNormalizedCategory = normalizeCategory(batchRawCategory)
-
-                    val result = LlmExtractionResult(
-                        isPayment = json.get("isPayment")?.asBoolean ?: false,
-                        amount = json.get("amount")?.asInt ?: 0,
-                        storeName = json.get("storeName")?.asString ?: "결제",
-                        cardName = json.get("cardName")?.asString ?: "기타",
-                        dateTime = try {
-                            json.get("dateTime")?.asString ?: ""
-                        } catch (e: Exception) {
-                            ""
-                        },
-                        category = batchNormalizedCategory
-                    )
-
-                    resultMap[no] = result
+                    val no = json.exactIntOrNull("no")?.takeIf { it in 1..expectedSize }
+                        ?: continue
+                    if (!seenNumbers.add(no)) {
+                        // 중복 번호의 어느 결과가 원문에 해당하는지 알 수 없으므로 둘 다 버린다.
+                        resultMap.remove(no)
+                        continue
+                    }
+                    parseExtractionObject(json)?.let { resultMap[no] = it }
                 } catch (e: Exception) {
                     MoneyTalkLogger.w("배치 응답 항목 파싱 실패: ${e.message}")
                 }
@@ -1459,7 +1476,7 @@ class GeminiSmsExtractor @Inject constructor(
 
             // 절반 이상 파싱 성공해야 유효한 결과
             val parsedCount = results.count { it != null }
-            if (parsedCount < expectedSize / 2) {
+            if (parsedCount < (expectedSize + 1) / 2) {
                 MoneyTalkLogger.w("배치 파싱 결과가 너무 적음: $parsedCount/$expectedSize")
                 return null
             }

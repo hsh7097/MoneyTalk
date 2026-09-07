@@ -214,19 +214,6 @@ class SmsRegexRuleMatcher @Inject constructor(
                     timestamp = now
                 )
                 changed = true
-                continue
-            }
-
-            val tunedPriority = computeAdaptivePriority(rule, now)
-            if (tunedPriority != rule.priority) {
-                ruleRepository.updatePriority(
-                    senderAddress = sender,
-                    type = rule.type,
-                    ruleKey = rule.ruleKey,
-                    priority = tunedPriority,
-                    timestamp = now
-                )
-                changed = true
             }
         }
 
@@ -276,27 +263,6 @@ class SmsRegexRuleMatcher @Inject constructor(
         val isStale = (now - rule.lastMatchedAt) >= staleMs
         val failureDominant = rule.failCount >= (rule.matchCount + 8)
         return isStale && failureDominant
-    }
-
-    private fun computeAdaptivePriority(rule: SmsRegexRuleEntity, now: Long): Int {
-        val basePriority = maxOf(rule.priority, defaultPriorityByType(rule.type))
-        val performanceScore = (rule.matchCount * 8) - (rule.failCount * 9)
-        val recencyBonus = when {
-            rule.lastMatchedAt <= 0L -> 0
-            (now - rule.lastMatchedAt) <= 7L * 24L * 60L * 60L * 1000L -> 40
-            (now - rule.lastMatchedAt) <= 30L * 24L * 60L * 60L * 1000L -> 20
-            (now - rule.lastMatchedAt) <= 90L * 24L * 60L * 60L * 1000L -> 5
-            else -> -20
-        }
-        return (basePriority + performanceScore + recencyBonus).coerceIn(0, 1000)
-    }
-
-    private fun defaultPriorityByType(type: String): Int {
-        return when (type.lowercase(Locale.ROOT)) {
-            "expense", "payment", "debit" -> 700
-            "overseas" -> 620
-            else -> 600
-        }
     }
 
     private suspend fun matchOne(
