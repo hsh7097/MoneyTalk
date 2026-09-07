@@ -60,6 +60,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.activity.ComponentActivity
 import com.sanha.moneytalk.feature.transactionedit.ui.TransactionEditActivity
+import com.sanha.moneytalk.feature.transactionlist.ui.TransactionDetailFilter
+import com.sanha.moneytalk.feature.transactionlist.ui.TransactionDetailListActivity
 import com.sanha.moneytalk.MainViewModel
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
@@ -344,7 +346,24 @@ fun HistoryScreen(
                         month = pageMonth,
                         monthStartDay = uiState.monthStartDay,
                         dailyTotals = pageData.dailyTotals,
-                        dailyIncomeTotals = pageData.dailyIncomeTotals
+                        dailyIncomeTotals = pageData.dailyIncomeTotals,
+                        onDateClick = { date ->
+                            TransactionDetailListActivity.open(
+                                context,
+                                date,
+                                TransactionDetailFilter(
+                                    sortOrder = uiState.sortOrder,
+                                    showExpenses = uiState.showExpenses,
+                                    showIncomes = uiState.showIncomes,
+                                    showTransfers = uiState.showTransfers,
+                                    expenseCategories = uiState.selectedExpenseCategories,
+                                    incomeCategories = uiState.selectedIncomeCategories,
+                                    transferCategories = uiState.selectedTransferCategories,
+                                    cardNames = uiState.selectedCardNames,
+                                    fixedExpenseFilter = uiState.fixedExpenseFilter
+                                )
+                            )
+                        }
                     )
                 }
             }

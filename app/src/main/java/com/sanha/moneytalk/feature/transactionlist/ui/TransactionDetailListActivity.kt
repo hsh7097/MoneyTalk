@@ -26,10 +26,28 @@ class TransactionDetailListActivity : ComponentActivity() {
     companion object {
         private const val EXTRA_DATE = "extra_date"
 
-        fun open(context: Context, date: String) {
+        fun open(context: Context, date: String, filter: TransactionDetailFilter? = null) {
             context.startActivity(
                 Intent(context, TransactionDetailListActivity::class.java).apply {
                     putExtra(EXTRA_DATE, date)
+                    if (filter != null) {
+                        putExtra(TransactionDetailFilter.EXTRA_FILTER_ENABLED, true)
+                        putExtra(TransactionDetailFilter.EXTRA_SORT_ORDER, filter.sortOrder.name)
+                        putExtra(TransactionDetailFilter.EXTRA_SHOW_EXPENSES, filter.showExpenses)
+                        putExtra(TransactionDetailFilter.EXTRA_SHOW_INCOMES, filter.showIncomes)
+                        putExtra(TransactionDetailFilter.EXTRA_SHOW_TRANSFERS, filter.showTransfers)
+                        putStringArrayListExtra(
+                            TransactionDetailFilter.EXTRA_EXPENSE_CATEGORIES, ArrayList(filter.expenseCategories)
+                        )
+                        putStringArrayListExtra(
+                            TransactionDetailFilter.EXTRA_INCOME_CATEGORIES, ArrayList(filter.incomeCategories)
+                        )
+                        putStringArrayListExtra(
+                            TransactionDetailFilter.EXTRA_TRANSFER_CATEGORIES, ArrayList(filter.transferCategories)
+                        )
+                        putStringArrayListExtra(TransactionDetailFilter.EXTRA_CARD_NAMES, ArrayList(filter.cardNames))
+                        putExtra(TransactionDetailFilter.EXTRA_FIXED_FILTER, filter.fixedExpenseFilter.name)
+                    }
                 }
             )
         }

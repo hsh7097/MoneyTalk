@@ -15,6 +15,7 @@ status: draft
 | 변경 유형 | 먼저 볼 파일 | 함께 볼 파일 |
 |---|---|---|
 | 진입 조건/extra | `TransactionDetailListActivity.kt` | `TransactionDetailListViewModel.kt`, History 날짜 클릭부 |
+| 달력 선택 필터/정렬 | `TransactionDetailFilter.kt`, `TransactionDetailListFilters.kt` | `HistoryScreen.kt`, `HistoryCalendar.kt`, `TransactionDetailListFiltersTest.kt` |
 | 날짜 파싱/조회 | `TransactionDetailListViewModel.kt` | `DateUtils`, `ExpenseRepository`, `IncomeRepository` |
 | 카드 숨김 반영 | `TransactionDetailListViewModel.kt` | `CardVisibilityFilter.kt`, `OwnedCardRepository` |
 | 거래 카드 UI/action | `TransactionDetailListScreen.kt` | `TransactionEditActivity.kt`, transaction card 공통 컴포넌트 |
@@ -27,10 +28,13 @@ status: draft
 3. 수입 카드 클릭 시 `incomeId`, 지출 카드 클릭 시 `expenseId`로 Transaction Edit에 들어가는가?
 4. 거래 수정/삭제 후 돌아왔을 때 `DataRefreshEvent`로 목록이 갱신되는가?
 5. 수입과 지출이 모두 있는 날짜에서 표시 순서가 의도와 맞는가?
+6. 카드/유형/카테고리/고정 필터 후 달력 날짜를 누르면 같은 조건이 유지되는가? 통계 제외는 목록에 남고 SMS 제외와 숨김 카드는 빠지는가?
+7. 날짜 extra만 있는 기존 intent가 수입 우선 기본 순서로 열리는가? primitive 필터 값이 SavedStateHandle에서 복원되는가?
 
 ## 권장 검증
 
 - `.\gradlew.bat assembleDebug`
+- `TransactionDetailListFiltersTest` JVM 테스트
 - History 달력 또는 날짜 영역에서 Transaction Detail List 진입
 - 빈 날짜, 지출만 있는 날짜, 수입만 있는 날짜, 둘 다 있는 날짜 확인
 - 카드 숨김 설정 후 지출 목록 반영 확인

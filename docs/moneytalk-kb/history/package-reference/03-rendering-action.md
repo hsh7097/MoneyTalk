@@ -28,6 +28,7 @@ HistoryScreen
 - 외부 카테고리 필터는 `HistoryScreen`의 `LaunchedEffect(filterCategory)`에서 한 번 소비된다.
 - 거래 클릭/삭제/메모/카테고리 변경은 `HistoryIntent`를 통해 `HistoryViewModel`로 전달된다.
 - `+` 버튼 또는 수정 진입은 `TransactionEditActivity`를 확인한다.
+- 달력 날짜 클릭은 `BillingCycleCalendarView.onDateClick`을 통해 `HistoryScreen`으로 전달한다. `HistoryScreen`은 현재 유형/카테고리/카드/고정/정렬을 `TransactionDetailFilter`로 묶어 날짜 상세 Activity에 전달한다.
 - 동기화 CTA, 권한 상태는 `MainViewModel.screenSyncUiState`를 통해 표시된다.
 
 ## 수정 시 확인

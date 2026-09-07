@@ -30,7 +30,9 @@ Transaction List는 특정 조건의 거래 목록을 별도 Activity로 보여�
 |---|---|
 | `TransactionDetailListActivity.kt` | 목록 상세 Activity entry와 intent extra |
 | `TransactionDetailListScreen.kt` | 거래 목록 렌더링과 empty/loading/error UI |
-| `TransactionDetailListViewModel.kt` | 조건별 지출/수입 목록 로딩, 카드 숨김 필터 |
+| `TransactionDetailListViewModel.kt` | 날짜별 조회, 전달된 필터 복원, refresh 후 같은 조건으로 재조회 |
+| `TransactionDetailFilter.kt` | 달력 필터 값과 primitive intent extra 복원 계약 |
+| `TransactionDetailListFilters.kt` | 표시 대상 필터링과 지출/수입 통합 정렬 |
 
 ## 작업 판단
 

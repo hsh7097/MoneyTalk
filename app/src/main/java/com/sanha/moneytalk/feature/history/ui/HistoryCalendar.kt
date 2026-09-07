@@ -39,10 +39,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
-import androidx.compose.ui.platform.LocalContext
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.util.toDpTextUnit
-import com.sanha.moneytalk.feature.transactionlist.ui.TransactionDetailListActivity
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -71,13 +69,13 @@ fun BillingCycleCalendarView(
     month: Int,
     monthStartDay: Int,
     dailyTotals: Map<String, Int>, // "yyyy-MM-dd" -> expense amount
-    dailyIncomeTotals: Map<String, Int> = emptyMap() // "yyyy-MM-dd" -> income amount
+    dailyIncomeTotals: Map<String, Int> = emptyMap(), // "yyyy-MM-dd" -> income amount
+    onDateClick: (String) -> Unit
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
     val compactNumberFormat = NumberFormat.getNumberInstance(Locale.KOREA).apply {
         maximumFractionDigits = 1
     }
-    val context = LocalContext.current
     val today = Calendar.getInstance()
     val todayYear = today.get(Calendar.YEAR)
     val todayMonth = today.get(Calendar.MONTH) + 1
@@ -274,7 +272,7 @@ fun BillingCycleCalendarView(
                                 isSelected = false,
                                 onClick = {
                                     if (calendarDay.isCurrentPeriod && !calendarDay.isFuture) {
-                                        TransactionDetailListActivity.open(context, calendarDay.dateString)
+                                        onDateClick(calendarDay.dateString)
                                     }
                                 },
                                 modifier = Modifier

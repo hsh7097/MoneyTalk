@@ -24,7 +24,7 @@ status: draft
 | 탭 | 주요 Composable/파일 | 함께 볼 KB |
 |---|---|---|
 | Home | `HomeScreen`, `HomePageContent`, `MonthlyOverviewSection`, `SpendingTrendSection`, `CategoryExpenseSection`, `AiInsightCard`, `TransactionCardCompose` | [home](../home/README.md), [home surface map](../home/package-reference/05-surface-map.md) |
-| History | `HistoryScreen`, `HistoryHeader`, `FilterTabRow`, `HistoryFilter`, `TransactionListView`, `BillingCycleCalendarView` | [history](../history/README.md), [filtering](../filtering/README.md) |
+| History | `HistoryScreen`, `HistoryHeader`, `FilterTabRow`, `HistoryFilter`, `TransactionListView`, `BillingCycleCalendarView` — 달력 날짜 선택은 callback으로 현재 필터와 정렬을 상세 화면에 전달 | [history](../history/README.md), [filtering](../filtering/README.md) |
 | Chat | `ChatScreen`, `ChatRoomListView`, `ChatRoomView`, `ChatComponents` | [chat](../chat/README.md) |
 | Settings | `SettingsScreen`, `SettingsItemCompose`, `SettingsSectionCompose`, `BudgetBottomSheet`, `ExportDialog`, settings dialogs — 비율 예산 저장은 현재 전체 예산으로 계산하며 범위 초과 입력은 오류 표시와 함께 저장 차단 | [settings](../settings/README.md), [settings menu map](../settings/package-reference/05-menu-map.md) |
 
@@ -34,7 +34,7 @@ status: draft
 |---|---|---|
 | Category Detail | `CategoryDetailActivity`, `CategoryDetailScreen`, `CategorySpendingTrendInfo` | [category-detail](../category-detail/README.md) |
 | Transaction Edit | `TransactionEditActivity`, `TransactionEditScreen`, `TransactionEditDetailContent`, `TransactionEditViewModel` | [transaction-edit](../transaction-edit/README.md), [transaction-mutation](../transaction-mutation/README.md) |
-| Transaction Detail List | `TransactionDetailListActivity`, `TransactionDetailListScreen` | [transaction-list](../transaction-list/README.md) |
+| Transaction Detail List | `TransactionDetailListActivity`, `TransactionDetailListScreen` — 달력에서 전달한 조건에 따라 지출·수입 통합 목록을 렌더링 | [transaction-list](../transaction-list/README.md) |
 | SMS Settings | `SmsSettingsActivity`, `SmsSettingsScreen`, `SmsSettingsViewModel` | [sms-settings](../sms-settings/README.md) |
 | AI Credit | `AiCreditActivity`, `AiCreditScreen`, AI credit repository state | [ai-credit-screen](../ai-credit-screen/README.md), [budget-credit-monetization](../budget-credit-monetization/README.md) |
 | Category Settings | `CategorySettingsActivity`, `CategorySettingsScreen` | [category-settings](../category-settings/README.md), [category-classification](../category-classification/README.md) |

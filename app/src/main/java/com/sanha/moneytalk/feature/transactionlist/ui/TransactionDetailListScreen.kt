@@ -100,7 +100,7 @@ fun TransactionDetailListScreen(
             return
         }
 
-        val hasTransactions = uiState.expenses.isNotEmpty() || uiState.incomes.isNotEmpty()
+        val hasTransactions = uiState.items.isNotEmpty()
 
         if (!hasTransactions) {
             Box(
@@ -125,30 +125,29 @@ fun TransactionDetailListScreen(
         ) {
             item { Spacer(modifier = Modifier.height(4.dp)) }
 
-            // 수입 항목
             items(
-                items = uiState.incomes,
-                key = { "income_${it.id}" }
-            ) { income ->
-                TransactionCardCompose(
-                    info = IncomeTransactionCardInfo(income),
-                    onClick = {
-                        TransactionEditActivity.open(context, incomeId = income.id)
+                items = uiState.items,
+                key = {
+                    when (it) {
+                        is TransactionDetailListItem.Expense -> "expense_${it.expense.id}"
+                        is TransactionDetailListItem.Income -> "income_${it.income.id}"
                     }
-                )
-            }
-
-            // 지출 항목
-            items(
-                items = uiState.expenses,
-                key = { "expense_${it.id}" }
-            ) { expense ->
-                TransactionCardCompose(
-                    info = ExpenseTransactionCardInfo(expense),
-                    onClick = {
-                        TransactionEditActivity.open(context, expenseId = expense.id)
-                    }
-                )
+                }
+            ) { item ->
+                when (item) {
+                    is TransactionDetailListItem.Expense -> TransactionCardCompose(
+                        info = ExpenseTransactionCardInfo(item.expense),
+                        onClick = {
+                            TransactionEditActivity.open(context, expenseId = item.expense.id)
+                        }
+                    )
+                    is TransactionDetailListItem.Income -> TransactionCardCompose(
+                        info = IncomeTransactionCardInfo(item.income),
+                        onClick = {
+                            TransactionEditActivity.open(context, incomeId = item.income.id)
+                        }
+                    )
+                }
             }
 
             item { Spacer(modifier = Modifier.height(16.dp)) }

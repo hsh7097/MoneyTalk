@@ -5,9 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sanha.moneytalk.core.database.OwnedCardRepository
-import com.sanha.moneytalk.core.database.entity.ExpenseEntity
-import com.sanha.moneytalk.core.database.entity.IncomeEntity
-import com.sanha.moneytalk.core.util.CardVisibilityFilter
+import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
@@ -30,8 +28,7 @@ data class TransactionDetailListUiState(
     val dateString: String = "",
     val monthStr: String = "",
     val dayNum: Int = 0,
-    val expenses: List<ExpenseEntity> = emptyList(),
-    val incomes: List<IncomeEntity> = emptyList()
+    val items: List<TransactionDetailListItem> = emptyList()
 )
 
 /**
@@ -46,11 +43,13 @@ class TransactionDetailListViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val ownedCardRepository: OwnedCardRepository,
+    private val smsExclusionRepository: SmsExclusionRepository,
     private val dataRefreshEvent: DataRefreshEvent
 ) : ViewModel() {
 
     private val dateString: String =
         savedStateHandle[EXTRA_DATE] ?: ""
+    private val filter = TransactionDetailFilter.fromSavedStateHandle(savedStateHandle)
 
     private val _uiState = MutableStateFlow(TransactionDetailListUiState())
     val uiState: StateFlow<TransactionDetailListUiState> = _uiState.asStateFlow()
@@ -100,19 +99,23 @@ class TransactionDetailListViewModel @Inject constructor(
             val endTime = cal.timeInMillis
 
             val excludedCardNames = ownedCardRepository.getExcludedCardNames()
-            val expenses = CardVisibilityFilter.filterVisibleExpenses(
+            val exclusionKeywords = if (filter != null) {
+                smsExclusionRepository.getAllKeywordStrings()
+            } else {
+                emptySet()
+            }
+            val items = TransactionDetailListFilters.buildItems(
                 expenseRepository.getExpensesByDateRangeOnce(startTime, endTime),
+                incomeRepository.getIncomesByDateRangeOnce(startTime, endTime),
+                filter,
+                exclusionKeywords,
                 excludedCardNames
             )
-                .sortedByDescending { it.dateTime }
-            val incomes = incomeRepository.getIncomesByDateRangeOnce(startTime, endTime)
-                .sortedByDescending { it.dateTime }
 
             _uiState.update {
                 it.copy(
                     isLoading = false,
-                    expenses = expenses,
-                    incomes = incomes
+                    items = items
                 )
             }
         }
