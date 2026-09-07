@@ -16,6 +16,7 @@ object AppNotificationTransactionParser {
     )
 
     private val amountPattern = Regex("""([\d,]+)\s*원""")
+    private val merchantFieldPattern = Regex("""^가맹점\s*[:：]\s*(.+)$""")
     private val whitespacePattern = Regex("""\s+""")
     private val dateOrTimePattern = Regex(
         """(?:\d{1,2}[/.-]\d{1,2}|\d{1,2}:\d{2}|오전|오후)"""
@@ -36,6 +37,7 @@ object AppNotificationTransactionParser {
     private val invalidStoreKeywords = listOf(
         "알림", "입금", "취소", "잔액", "누적", "잔고", "보유", "내역"
     )
+    private val invalidStoreLabels = setOf("금액", "일시", "가맹점")
     private val nonTransactionNoticePatterns = listOf(
         Regex("""납입\s*일"""),
         Regex("""납입\s*예정"""),
@@ -101,6 +103,7 @@ object AppNotificationTransactionParser {
         amountRange: IntRange,
         appLabel: String
     ): String? {
+        extractStoreFromMerchantField(body, appLabel)?.let { return it }
         extractStoreFromAccountTargetLine(body, appLabel)?.let { return it }
         extractStoreAfterBalanceAmount(body, appLabel)?.let { return it }
         extractStoreAfterBalanceLine(body, appLabel)?.let { return it }
@@ -121,6 +124,23 @@ object AppNotificationTransactionParser {
 
         return nearbyLines.firstNotNullOfOrNull { sanitizeStoreCandidate(it, appLabel) }
             ?: lines.firstNotNullOfOrNull { sanitizeStoreCandidate(it, appLabel) }
+    }
+
+    private fun extractStoreFromMerchantField(
+        body: String,
+        appLabel: String
+    ): String? {
+        return body.lineSequence()
+            .map(::normalizeText)
+            .mapNotNull { line ->
+                val match = merchantFieldPattern.find(line) ?: return@mapNotNull null
+                sanitizeStoreCandidate(
+                    raw = match.groupValues[1],
+                    appLabel = appLabel,
+                    allowShort = true
+                )
+            }
+            .firstOrNull()
     }
 
     private fun extractStoreFromAccountTargetLine(
@@ -218,12 +238,13 @@ object AppNotificationTransactionParser {
             .replace("완료", " ")
             .replace("되었습니다", " ")
             .replace("했습니다", " ")
-            .trim(' ', '-', ':', '|')
+            .trim(' ', '-', ':', '：', '|')
         candidate = normalizeText(candidate)
 
         val minLength = if (allowShort) 1 else 2
         if (candidate.length !in minLength..40) return null
         if (candidate == appLabel) return null
+        if (candidate in invalidStoreLabels) return null
         if (dateOrTimePattern.containsMatchIn(candidate)) return null
         if (cardNumberPattern.containsMatchIn(candidate)) return null
         if (candidate.all { it.isDigit() || it.isWhitespace() || it in ",.-:/" }) return null

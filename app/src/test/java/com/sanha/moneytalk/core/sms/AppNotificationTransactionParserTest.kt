@@ -8,6 +8,77 @@ import org.junit.Test
 class AppNotificationTransactionParserTest {
 
     @Test
+    fun `ssgpay merchant field takes precedence over amount label`() {
+        val body = """
+            [결제 알림]
+            일시: 09/01 12:34
+            금액: 12,300원
+            가맹점: 테스트마트
+            SSGPAY
+        """.trimIndent()
+
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = body,
+            appLabel = "SSGPAY",
+            packageName = "com.example.wallet"
+        )
+
+        assertNotNull(result)
+        assertEquals(12_300, result?.amount)
+        assertEquals("테스트마트", result?.storeName)
+        assertEquals("SSGPAY", result?.cardName)
+    }
+
+    @Test
+    fun `merchant field accepts spaces full width colon and short name`() {
+        val body = """
+            금액： 1,200원
+            가맹점 ： 봄
+        """.trimIndent()
+
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = body,
+            appLabel = "SSGPAY",
+            packageName = "com.example.wallet"
+        )
+
+        assertEquals(1_200, result?.amount)
+        assertEquals("봄", result?.storeName)
+    }
+
+    @Test
+    fun `empty merchant field does not save field labels as store`() {
+        val body = """
+            [결제 알림]
+            일시:
+            금액： 1,200원
+            가맹점:
+            SSGPAY
+        """.trimIndent()
+
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = body,
+            appLabel = "SSGPAY",
+            packageName = "com.example.wallet"
+        )
+
+        assertEquals(1_200, result?.amount)
+        assertEquals("SSGPAY", result?.storeName)
+    }
+
+    @Test
+    fun `amount label exclusion keeps merchants containing the label`() {
+        val result = AppNotificationTransactionParser.parseExpense(
+            body = "금액상점 1,200원 결제",
+            appLabel = "SSGPAY",
+            packageName = "com.example.wallet"
+        )
+
+        assertEquals(1_200, result?.amount)
+        assertEquals("금액상점", result?.storeName)
+    }
+
+    @Test
     fun `multiline app notification extracts store and amount`() {
         val body = """
             카카오뱅크
