@@ -125,6 +125,16 @@ ChatViewModel.sendMessage(message)
 프롬프트 본문은 `app/src/main/res/values/string_prompt.xml`에서 관리한다. 보조 라벨/상태 문자열은 `app/src/main/res/values/strings.xml`의 `ai_*` 또는 chat 관련 string을 확인한다.
 모델 객체는 `FirebaseAiModelFactory`에서 생성하며 release 요청은 Play Integrity App Check 검증을 통과해야 한다.
 
+### 인증 실패 처리
+
+- query analyzer가 App Check 인증 오류로 실패하면 같은 질문의 기본 조회 보완과 final answer 호출을 중단한다. 일반 파싱·모델 오류의 기존 fallback은 유지한다.
+- 분류 기준은 카테고리 AI가 사용하는 `FirebaseAiRateLimitPolicy`를 재사용하며, 감싸진 예외의 cause도 확인한다. `Too many attempts`만으로는 인증 실패로 단정하지 않고 App Check 문맥이 함께 있어야 한다.
+- analyzer와 final answer 예외는 원인 cause를 보존하고 coroutine 취소는 다시 전파한다. 인증 실패 시 이미 차감한 크레딧은 기존 `CreditRefundGuard` 경로로 한 번만 반환한다.
+- 사용자에게는 `chat_app_verification_failed`의 한국어 인증 안내를 표시한다. 영어 내부 오류를 그대로 보여주거나 설치 방식이 원인이라고 단정하지 않는다.
+- 이 변경은 App Check 설정·토큰 갱신·카테고리의 기존 15분 차단 정책을 바꾸지 않는다. SDK의 `Too many attempts` 상태나 실제 Play Integrity 거절 원인은 별도 운영 진단 대상이다.
+
+`FirebaseAiRateLimitPolicyTest`는 감싸진 인증 실패, 일반 quota/JSON 파싱 실패 유지, App Check 문맥이 있는/없는 시도 제한 오류를 구분한다. 실제 채팅의 final 호출 생략과 안내·환불 표시는 통합 검증 대상이다.
+
 ## Rolling Summary
 
 - 최근 3턴, 6개 메시지를 window로 유지한다.

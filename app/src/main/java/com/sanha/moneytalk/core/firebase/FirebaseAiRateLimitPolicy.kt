@@ -23,9 +23,14 @@ internal object FirebaseAiRateLimitPolicy {
     fun isAppCheckFailure(errorClassName: String, errorMessage: String): Boolean {
         val normalized = "$errorClassName $errorMessage".lowercase()
         val mentionsAppCheck = normalized.contains("app check") || normalized.contains("appcheck")
-        return mentionsAppCheck && listOf("invalid", "token", "attestation", "integrity")
+        return mentionsAppCheck && listOf("invalid", "token", "attestation", "integrity", "too many attempts")
             .any(normalized::contains)
     }
+
+    fun isAppCheckFailure(error: Throwable): Boolean =
+        generateSequence(error) { it.cause }.any {
+            isAppCheckFailure(it.javaClass.name, it.message.orEmpty())
+        }
 
     fun retryAfterMillis(errorMessage: String): Long? {
         val seconds = retryAfterRegex.find(errorMessage)

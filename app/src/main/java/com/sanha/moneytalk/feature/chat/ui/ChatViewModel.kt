@@ -19,6 +19,7 @@ import kotlin.math.abs
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
+import com.sanha.moneytalk.core.firebase.FirebaseAiRateLimitPolicy
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.util.ActionResult
 import com.sanha.moneytalk.core.util.ActionType
@@ -574,6 +575,10 @@ class ChatViewModel @Inject constructor(
                 val contextualMessage =
                     ChatContextBuilder.buildQueryAnalysisContext(appContext, chatContext)
                 val analyzeResult = geminiRepository.analyzeQueryNeeds(contextualMessage)
+                analyzeResult.exceptionOrNull()?.let { error ->
+                    // 인증 실패는 기본 조회로 보완해도 다음 AI 요청에서 해결되지 않는다.
+                    if (FirebaseAiRateLimitPolicy.isAppCheckFailure(error)) throw error
+                }
 
                 val queryResults = mutableListOf<QueryResult>()
                 val actionResults = mutableListOf<ActionResult>()
@@ -682,7 +687,11 @@ class ChatViewModel @Inject constructor(
                         refundOnce(sessionId)
                         chatRepository.saveAiResponseAndUpdateSummary(
                             sessionId,
-                            "죄송해요, 응답을 받는 중 오류가 발생했어요 😢\n(${e.message})"
+                            if (FirebaseAiRateLimitPolicy.isAppCheckFailure(e)) {
+                                appContext.getString(R.string.chat_app_verification_failed)
+                            } else {
+                                appContext.getString(R.string.error_response, e.message)
+                            }
                         )
                         _uiState.update { it.copy(canRetry = true) }
                     }
@@ -700,7 +709,11 @@ class ChatViewModel @Inject constructor(
             withContext(Dispatchers.IO) {
                 chatRepository.saveAiResponseAndUpdateSummary(
                     sessionId,
-                    "오류가 발생했어요 😢\n(${e.message})"
+                    if (FirebaseAiRateLimitPolicy.isAppCheckFailure(e)) {
+                        appContext.getString(R.string.chat_app_verification_failed)
+                    } else {
+                        appContext.getString(R.string.error_general, e.message)
+                    }
                 )
             }
             _uiState.update {

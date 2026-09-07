@@ -16,6 +16,7 @@ import com.sanha.moneytalk.core.util.DataQueryParser
 import com.sanha.moneytalk.core.util.DataQueryRequest
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.core.util.QueryResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.text.SimpleDateFormat
@@ -395,11 +396,13 @@ class GeminiRepositoryImpl @Inject constructor(
 
             val queryRequest = DataQueryParser.parseQueryRequest(responseText)
             Result.success(queryRequest)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             MoneyTalkLogger.e("쿼리 분석 실패", e)
             MoneyTalkLogger.e("에러 메시지: ${e.message}")
             MoneyTalkLogger.e("에러 클래스: ${e.javaClass.simpleName}")
-            Result.failure(Exception("쿼리 분석 실패: ${e.message}"))
+            Result.failure(Exception("쿼리 분석 실패: ${e.message}", e))
         }
     }
 
@@ -503,9 +506,11 @@ class GeminiRepositoryImpl @Inject constructor(
             val responseText = response.text ?: "응답을 받지 못했어요."
 
             Result.success(responseText)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             MoneyTalkLogger.e("컨텍스트 기반 답변 생성 실패", e)
-            Result.failure(Exception("요청 실패: ${e.message}"))
+            Result.failure(Exception("요청 실패: ${e.message}", e))
         }
     }
 

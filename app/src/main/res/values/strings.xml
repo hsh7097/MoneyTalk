@@ -54,6 +54,7 @@
     <string name="chat_no_sessions">아직 저장된 인사이트가 없습니다</string>
     <string name="chat_start_new">인사이트 질문 시작</string>
     <string name="chat_retry">다시 요청</string>
+    <string name="chat_app_verification_failed">앱 인증을 확인하지 못해 AI 답변을 만들 수 없어요. 잠시 후 다시 시도해 주세요. 계속되면 Play 스토어에서 앱 업데이트를 확인해 주세요.</string>
     <string name="budget_input_invalid">예산 금액과 비율을 확인해 주세요. 금액은 2,147,483,647원까지 설정할 수 있어요.</string>
     <string name="chat_default_session_title">새 인사이트</string>
     <string name="chat_previous_session_title">이전 인사이트</string>

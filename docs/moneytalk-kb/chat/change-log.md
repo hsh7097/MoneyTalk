@@ -4,11 +4,26 @@ title: Chat KB Change Log
 description: MoneyTalk AI 채팅 KB의 상세 변경 이력을 기록한다.
 tags: [moneytalk, kb, chat, changelog]
 resource: docs/moneytalk-kb/chat/
-timestamp: 2026-07-08T00:00:00+09:00
+timestamp: 2026-09-07T00:00:00+09:00
 status: draft
 ---
 
 # Chat KB Change Log
+
+## 2026-09-07 - 인증 실패 뒤 같은 질문의 AI 재호출 차단
+
+- 기준: 실기기 release 1.0.3에서 AI 상담 질문이 `Firebase App Check token is invalid`로 실패하고, analyzer 실패 후에도 final answer를 호출하는 코드 경로 확인.
+- 변경 근거: 기존 `FirebaseAiRateLimitPolicy`의 인증 분류를 cause 체인까지 재사용해 analyzer 인증 실패를 즉시 종료한다. 일반 분석 오류 fallback은 유지하며 analyzer/final 예외의 cause와 coroutine 취소를 보존한다.
+- 사용자 안내: 영어 인증 오류 대신 `strings.xml`의 한국어 안내를 표시한다. 이미 차감한 크레딧은 기존 단일 환불 경로를 따른다.
+- 갱신한 문서: `05-system-contract.md`, `package-reference/03-rendering-action.md`
+- 검증: 감싸진 App Check 오류와 quota/파싱 오류/문맥 없는 `Too many attempts`를 구분하는 단위 테스트 추가. 코드 셀프 리뷰 완료, 통합 빌드·실기기 결과는 루트 작업에서 확인한다. 운영 보안 설정은 변경하지 않았다.
+
+## 2026-09-07 - 채팅방 시스템 뒤로가기 경로 수정
+
+- 기준: 실기기 설치 앱 1.0.3에서 기존 채팅방의 시스템 뒤로가기가 홈으로 이동하는 현상 재현, `ChatScreen.kt`와 `MainActivity.BackPressHandler` 확인.
+- 변경 근거: 채팅방에 있을 때만 `ChatScreen`의 `BackHandler`를 활성화하고 기존 `exitChatRoom()`을 호출해 상단 뒤로가기와 같은 목록 복귀 및 제목 갱신 경로를 사용한다.
+- 갱신한 문서: `package-reference/01-entry-screen.md`, `package-reference/03-rendering-action.md`
+- 검증: 변경 코드 셀프 리뷰 후 통합 빌드와 실기기에서 채팅방 → 목록 → 홈 순서 및 상단 뒤로가기 회귀 확인이 필요하다.
 
 ## 2026-07-09 - 채팅 시스템 계약 KB화
 

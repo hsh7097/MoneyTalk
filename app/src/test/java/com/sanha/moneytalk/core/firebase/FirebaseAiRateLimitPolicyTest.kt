@@ -58,6 +58,32 @@ class FirebaseAiRateLimitPolicyTest {
     }
 
     @Test
+    fun recognizesAppCheckFailureInsideWrappedQueryError() {
+        val error = Exception("쿼리 분석 실패", Exception("Firebase App Check token is invalid."))
+
+        assertTrue(FirebaseAiRateLimitPolicy.isAppCheckFailure(error))
+    }
+
+    @Test
+    fun preservesNormalQueryFallbackForQuotaAndParseFailures() {
+        val quotaError = Exception("쿼리 분석 실패", Exception("429 RESOURCE_EXHAUSTED"))
+        val parseError = Exception("쿼리 분석 실패", IllegalArgumentException("Invalid JSON token"))
+
+        assertFalse(FirebaseAiRateLimitPolicy.isAppCheckFailure(quotaError))
+        assertFalse(FirebaseAiRateLimitPolicy.isAppCheckFailure(parseError))
+    }
+
+    @Test
+    fun recognizesTooManyAttemptsOnlyWithAppCheckContext() {
+        assertTrue(FirebaseAiRateLimitPolicy.isAppCheckFailure(
+            "com.google.firebase.appcheck.FirebaseAppCheckException", "Too many attempts."
+        ))
+        assertFalse(FirebaseAiRateLimitPolicy.isAppCheckFailure(
+            "com.google.firebase.FirebaseException", "Too many attempts."
+        ))
+    }
+
+    @Test
     fun parsesRetryAfterWithSafetyBuffer() {
         assertEquals(
             12_424L,
