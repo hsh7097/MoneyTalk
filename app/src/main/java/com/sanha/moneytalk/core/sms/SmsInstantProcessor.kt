@@ -302,24 +302,28 @@ class SmsInstantProcessor @Inject constructor(
 
         entity = applyStoreRules(entity)
         val saveResult = expenseRepository.insertIngested(entity)
-        if (saveResult == ExpenseIngestionResult.SKIPPED) return Result.Skipped
+        if (saveResult == ExpenseIngestionResult.Skipped) return Result.Skipped
         markPendingReconciliation(smsId)
         MoneyTalkLogger.i("[InstantSMS] 지출 저장: ${entity.storeName} ${entity.amount}원 [${entity.category}]")
 
         // 알림 (설정에서 활성화된 경우만)
         if (
             showUserNotification &&
-            saveResult == ExpenseIngestionResult.INSERTED &&
+            saveResult is ExpenseIngestionResult.Inserted &&
             shouldShowExpenseNotification(entity)
         ) {
             notificationManager.showExpenseNotification(
+                expenseId = saveResult.expenseId,
                 amount = entity.amount,
-                storeName = entity.storeName,
-                cardName = entity.cardName
+                storeName = entity.storeName
             )
         }
 
-        return Result.Expense(entity)
+        return Result.Expense(entity.copy(id = when (saveResult) {
+            is ExpenseIngestionResult.Inserted -> saveResult.expenseId
+            is ExpenseIngestionResult.Updated -> saveResult.expenseId
+            ExpenseIngestionResult.Skipped -> return Result.Skipped
+        }))
     }
 
     private suspend fun processAppNotificationExpense(
@@ -383,7 +387,7 @@ class SmsInstantProcessor @Inject constructor(
 
         val entity = applyStoreRules(baseEntity)
         val saveResult = expenseRepository.insertIngested(entity)
-        if (saveResult == ExpenseIngestionResult.SKIPPED) {
+        if (saveResult == ExpenseIngestionResult.Skipped) {
             MoneyTalkLogger.i(
                 "[InstantAppNoti] 교차 소스 중복 스킵: " +
                     "${entity.amount}원"
@@ -397,17 +401,21 @@ class SmsInstantProcessor @Inject constructor(
                 "${entity.storeName} ${entity.amount}원 [${entity.category}]"
         )
 
-        if (showUserNotification && saveResult == ExpenseIngestionResult.INSERTED &&
+        if (showUserNotification && saveResult is ExpenseIngestionResult.Inserted &&
             shouldShowExpenseNotification(entity)
         ) {
             notificationManager.showExpenseNotification(
+                expenseId = saveResult.expenseId,
                 amount = entity.amount,
-                storeName = entity.storeName,
-                cardName = entity.cardName
+                storeName = entity.storeName
             )
         }
 
-        return Result.Expense(entity)
+        return Result.Expense(entity.copy(id = when (saveResult) {
+            is ExpenseIngestionResult.Inserted -> saveResult.expenseId
+            is ExpenseIngestionResult.Updated -> saveResult.expenseId
+            ExpenseIngestionResult.Skipped -> return Result.Skipped
+        }))
     }
 
     private suspend fun shouldShowExpenseNotification(entity: ExpenseEntity): Boolean {
@@ -492,7 +500,9 @@ class SmsInstantProcessor @Inject constructor(
             false
         }
 
-        val entityToInsert = restoredDuplicate?.let { existing ->
+        // 알림은 수입 행 ID를 가리키므로 환불 안내를 정본으로 교체해도 ID를 유지한다.
+        val retainedIncome = restoredDuplicate ?: duplicate?.takeIf { replacedRefundNotice }
+        val entityToInsert = retainedIncome?.let { existing ->
             entity.copy(
                 id = existing.id,
                 memo = existing.memo,
@@ -501,8 +511,10 @@ class SmsInstantProcessor @Inject constructor(
             )
         } ?: entity
 
-        incomeRepository.insert(entityToInsert)
-        if (replacedRefundNotice && duplicate != null && duplicate.id > 0L) {
+        val savedIncomeId = incomeRepository.insert(entityToInsert)
+        if (replacedRefundNotice && duplicate != null &&
+            duplicate.id > 0L && duplicate.id != savedIncomeId
+        ) {
             incomeRepository.deleteById(duplicate.id)
         }
         markPendingReconciliation(smsId, needsReconciliation = needsReconciliation)
@@ -519,13 +531,14 @@ class SmsInstantProcessor @Inject constructor(
             settingsDataStore.isNotificationEnabled()
         ) {
             notificationManager.showIncomeNotification(
+                incomeId = savedIncomeId,
                 amount = entityToInsert.amount,
                 source = entityToInsert.source,
                 incomeType = entityToInsert.type
             )
         }
 
-        return Result.Income(entityToInsert)
+        return Result.Income(entityToInsert.copy(id = savedIncomeId))
     }
 
     private suspend fun findRestoredIncomeDuplicate(entity: IncomeEntity): IncomeEntity? {

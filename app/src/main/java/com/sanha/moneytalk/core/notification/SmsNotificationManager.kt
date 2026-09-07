@@ -5,12 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
-import com.sanha.moneytalk.MainActivity
 import com.sanha.moneytalk.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.text.NumberFormat
@@ -32,10 +30,7 @@ class SmsNotificationManager @Inject constructor(
         /** v2: IMPORTANCE_HIGH로 변경 (헤드업 알림 지원). 기존 채널은 삭제 */
         const val CHANNEL_ID = "sms_transaction_v2"
         private const val OLD_CHANNEL_ID = "sms_transaction"
-        private var notificationId = 1000
     }
-
-    private val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
 
     /** Application.onCreate()에서 호출하여 알림 채널 등록 */
     fun createNotificationChannel() {
@@ -59,21 +54,24 @@ class SmsNotificationManager @Inject constructor(
 
     /** 지출 거래 알림 표시 */
     fun showExpenseNotification(
+        expenseId: Long,
         amount: Int,
-        storeName: String,
-        cardName: String
+        storeName: String
     ) {
-        showNotification(storeName, "${numberFormat.format(amount)}원")
+        showNotification("expense:$expenseId", storeName, amount,
+            TransactionNotificationIntents.expense(context, expenseId))
     }
 
     /** 수입 거래 알림 표시 */
     fun showIncomeNotification(
+        incomeId: Long,
         amount: Int,
         source: String,
         incomeType: String
     ) {
-        val title = if (source.isNotBlank()) "$source $incomeType" else "입금"
-        showNotification(title, "${numberFormat.format(amount)}원")
+        val title = if (source.isNotBlank()) "$source $incomeType" else context.getString(R.string.notification_income_title)
+        showNotification("income:$incomeId", title, amount,
+            TransactionNotificationIntents.income(context, incomeId))
     }
 
     /** 앱 진입 시 MoneyTalk 거래 알림을 정리 */
@@ -83,21 +81,16 @@ class SmsNotificationManager @Inject constructor(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             manager.activeNotifications
                 .filter { it.notification.channelId == CHANNEL_ID }
-                .forEach { manager.cancel(it.id) }
+                .forEach { manager.cancel(it.tag, it.id) }
             return
         }
 
         manager.cancelAll()
     }
 
-    private fun showNotification(title: String, body: String) {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+    private fun showNotification(tag: String, title: String, amount: Int, pendingIntent: PendingIntent) {
+        val body = context.getString(R.string.notification_transaction_amount,
+            NumberFormat.getNumberInstance(Locale.KOREA).format(amount))
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
@@ -118,6 +111,7 @@ class SmsNotificationManager @Inject constructor(
         }
 
         val manager = context.getSystemService(NotificationManager::class.java)
-        manager.notify(notificationId++, notification)
+        // 프로세스 재시작이나 지출/수입 테이블의 동일 숫자 ID에도 다른 거래를 덮지 않는다.
+        manager.notify(tag, 0, notification)
     }
 }

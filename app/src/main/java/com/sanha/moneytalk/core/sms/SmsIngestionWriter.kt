@@ -585,12 +585,12 @@ class SmsIngestionWriter @Inject constructor(
                 val outcomes = expenseRepository.insertAllIngested(chunk)
                 outcomes.forEachIndexed { index, outcome ->
                     when (outcome) {
-                        ExpenseIngestionResult.INSERTED -> {
+                        is ExpenseIngestionResult.Inserted -> {
                             if (chunk[index].smsId in crossTypeIncomeIdsBySmsId) reconciledCount++
                             else newCount++
                         }
-                        ExpenseIngestionResult.UPDATED -> reconciledCount++
-                        ExpenseIngestionResult.SKIPPED -> Unit
+                        is ExpenseIngestionResult.Updated -> reconciledCount++
+                        ExpenseIngestionResult.Skipped -> Unit
                     }
                 }
                 ensureWritable(registrationEpoch)
@@ -712,9 +712,16 @@ class SmsIngestionWriter @Inject constructor(
                         isNewFlags[duplicateIndex] = false
                         newCount--
                     }
-                    refundDuplicateCandidates.removeAll { it.batchIndex == duplicateIndex }
                 }
-                if (semanticDuplicateIncome.batchIndex == null && semanticDuplicateIncome.income.id > 0) {
+                refundDuplicateCandidates.remove(semanticDuplicateIncome)
+                // DB에 저장된 환불 행을 정본으로 보정할 때 기존 알림의 상세 대상 ID도 유지한다.
+                if (existingIncome == null && semanticDuplicateIncome.income.id > 0L) {
+                    existingIncome = semanticDuplicateIncome.income
+                }
+                if (semanticDuplicateIncome.batchIndex == null &&
+                    semanticDuplicateIncome.income.id > 0L &&
+                    semanticDuplicateIncome.income.id != existingIncome?.id
+                ) {
                     duplicateIncomeIdsBySmsId[smsId] = semanticDuplicateIncome.income.id
                 }
                 if (existingIncome != null) {
@@ -726,6 +733,12 @@ class SmsIngestionWriter @Inject constructor(
             } else if (semanticDuplicateIncome != null) {
                 if (existingIncome != null) {
                     reconciledCount++
+                    // 같은 배치에서 이미 정본으로 보정한 ID를 뒤늦은 안내 원문으로 되돌리지 않는다.
+                    if (semanticDuplicateIncome.batchIndex != null &&
+                        existingIncome.id == semanticDuplicateIncome.income.id
+                    ) {
+                        skipInsertFlags[i] = true
+                    }
                 } else {
                     reconciledCount++
                     skipInsertFlags[i] = true
@@ -773,7 +786,9 @@ class SmsIngestionWriter @Inject constructor(
                 filteredBatch.mapNotNull { crossTypeExpenseIdsBySmsId[it.smsId] }
                     .distinct().forEach { expenseRepository.deleteById(it) }
                 filteredBatch.mapNotNull { duplicateIncomeIdsBySmsId[it.smsId] }
-                    .distinct().forEach { incomeRepository.deleteById(it) }
+                    .distinct()
+                    .filterNot { duplicateId -> filteredBatch.any { it.id == duplicateId } }
+                    .forEach { incomeRepository.deleteById(it) }
                 for (chunk in filteredBatch.chunked(DB_BATCH_INSERT_SIZE)) {
                     ensureWritable(registrationEpoch)
                     incomeRepository.insertAll(chunk)

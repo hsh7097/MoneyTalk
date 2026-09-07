@@ -38,3 +38,9 @@ caller screen
 - 지출과 수입은 로딩/저장 경로가 다르므로 intent extra와 `TransactionType`을 같이 확인한다.
 - 신규 지출 추가와 기존 거래 수정은 초기 state 기본값이 다르다.
 - Activity 결과를 caller에 직접 반환하기보다 repository 저장 후 `DataRefreshEvent`로 관련 화면을 갱신한다.
+
+## 알림 진입
+
+`TransactionEditActivity.createIntent(context, expenseId, incomeId)`는 화면 목록의 `open`과 거래 알림이 공유한다. extra 이름은 `TransactionEditArgs`에 모아 ViewModel과 Activity의 중복 문자열을 없앴다. 알림은 `TransactionNotificationIntents`에서 고유 URI와 홈 parent stack을 추가한다. 지출/이체는 expense ID, 수입은 income ID로 조회한다.
+
+기존 거래 ID가 없으면 오류 안내만 표시하고 신규 거래로 초기화하지 않는다. 알림 진입과 기존 목록 진입 모두 같은 정책을 사용한다. 명시적으로 ID를 주지 않은 `open(context)`의 신규 작성은 그대로 유지한다.

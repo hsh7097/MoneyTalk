@@ -115,6 +115,7 @@
         <!-- 거래 편집/추가 -->
         <activity
             android:name=".feature.transactionedit.ui.TransactionEditActivity"
+            android:parentActivityName=".MainActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />

@@ -48,14 +48,14 @@ interface ExpenseDao {
         val existing = getExpenseBySmsId(expense.smsId)
             ?: expense.id.takeIf { it > 0L }?.let { getExpenseById(it) }
         if (existing != null) {
-            if (!reconcileExisting) return ExpenseIngestionResult.SKIPPED
+            if (!reconcileExisting) return ExpenseIngestionResult.Skipped
             insert(expense.copy(
                 id = existing.id,
                 memo = existing.memo,
                 isExcludedFromStats = existing.isExcludedFromStats,
                 createdAt = existing.createdAt
             ))
-            return ExpenseIngestionResult.UPDATED
+            return ExpenseIngestionResult.Updated(existing.id)
         }
 
         val window = TransactionSemanticDedupe.CROSS_SOURCE_WINDOW_MS
@@ -64,7 +64,7 @@ interface ExpenseDao {
             expense.dateTime + window
         )
         if (candidates.any { TransactionSemanticDedupe.isSameSmsRedelivery(expense, it) }) {
-            return ExpenseIngestionResult.SKIPPED
+            return ExpenseIngestionResult.Skipped
         }
         val duplicate = TransactionSemanticDedupe.findPotentialCrossSourceDuplicate(
             expense,
@@ -72,7 +72,7 @@ interface ExpenseDao {
         )
         if (duplicate != null) {
             if (TransactionSemanticDedupe.isAppGenerated(expense)) {
-                return ExpenseIngestionResult.SKIPPED
+                return ExpenseIngestionResult.Skipped
             }
             // 앱 알림 행을 SMS 정본으로 갱신해 ID와 사용자 설정을 보존한다.
             insert(expense.copy(
@@ -82,11 +82,10 @@ interface ExpenseDao {
                 isExcludedFromStats = duplicate.isExcludedFromStats || expense.isExcludedFromStats,
                 createdAt = duplicate.createdAt
             ))
-            return ExpenseIngestionResult.UPDATED
+            return ExpenseIngestionResult.Updated(duplicate.id)
         }
 
-        insert(expense)
-        return ExpenseIngestionResult.INSERTED
+        return ExpenseIngestionResult.Inserted(insert(expense))
     }
 
     /** 배치도 동일한 판정을 사용하되 chunk를 하나의 transaction으로 저장한다. */

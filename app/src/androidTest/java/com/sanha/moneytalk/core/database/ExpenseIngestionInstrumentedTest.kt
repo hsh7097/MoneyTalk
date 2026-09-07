@@ -3,13 +3,25 @@ package com.sanha.moneytalk.core.database
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.google.gson.Gson
 import com.sanha.moneytalk.core.database.dao.ExpenseIngestionResult
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
+import com.sanha.moneytalk.core.datastore.SettingsDataStore
+import com.sanha.moneytalk.core.firebase.PremiumManager
+import com.sanha.moneytalk.core.notification.SmsNotificationManager
+import com.sanha.moneytalk.core.sms.SmsChannelProbeCollector
+import com.sanha.moneytalk.core.sms.SmsEmbeddingService
+import com.sanha.moneytalk.core.sms.SmsIncomeFilter
+import com.sanha.moneytalk.core.sms.SmsInstantProcessor
 import com.sanha.moneytalk.core.sms.SmsIngestionWriter
 import com.sanha.moneytalk.core.sms.SmsInput
+import com.sanha.moneytalk.core.sms.SmsOriginSampleCollector
 import com.sanha.moneytalk.core.sms.SmsParseResult
+import com.sanha.moneytalk.core.sms.SmsPreFilter
+import com.sanha.moneytalk.core.sms.SmsRegexRuleMatcher
+import com.sanha.moneytalk.core.sms.SmsTemplateEngine
 import com.sanha.moneytalk.core.sms.SmsTransactionDateResolver
 import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.util.DateUtils
@@ -73,10 +85,11 @@ class ExpenseIngestionInstrumentedTest {
                 { repository.insertIngested(app) }
             )
 
-            assertEquals(1, results.count { it == ExpenseIngestionResult.INSERTED })
+            assertEquals(1, results.count { it is ExpenseIngestionResult.Inserted })
             val stored = repository.getExpensesByDateRangeOnce(sms.dateTime, app.dateTime)
             assertEquals(1, stored.size)
             assertEquals(sms.smsId, stored.single().smsId)
+            assertEquals(stored.single().id, results.filterIsInstance<ExpenseIngestionResult.Inserted>().single().expenseId)
         }
         assertEquals(30, repository.getExpenseCount())
     }
@@ -110,7 +123,7 @@ class ExpenseIngestionInstrumentedTest {
             val result = repository.insertIngested(expense("sms"))
 
             val stored = repository.getAllExpensesOnce().single()
-            assertEquals(ExpenseIngestionResult.UPDATED, result)
+            assertEquals(ExpenseIngestionResult.Updated(existing.id), result)
             assertEquals(existing.id, stored.id)
             assertEquals("sms", stored.smsId)
             assertEquals(existing.memo, stored.memo)
@@ -128,7 +141,7 @@ class ExpenseIngestionInstrumentedTest {
 
         val result = repository.insertIngested(sms)
 
-        assertEquals(ExpenseIngestionResult.SKIPPED, result)
+        assertEquals(ExpenseIngestionResult.Skipped, result)
         assertEquals(edited, repository.getAllExpensesOnce().single())
     }
 
@@ -144,8 +157,8 @@ class ExpenseIngestionInstrumentedTest {
                 { repository.insertIngested(second) }
             )
 
-            assertEquals(1, results.count { it == ExpenseIngestionResult.INSERTED })
-            assertEquals(1, results.count { it == ExpenseIngestionResult.SKIPPED })
+            assertEquals(1, results.count { it is ExpenseIngestionResult.Inserted })
+            assertEquals(1, results.count { it == ExpenseIngestionResult.Skipped })
             assertEquals(1, repository.getExpensesByDateRangeOnce(transactionAt, transactionAt).size)
         }
         assertEquals(30, repository.getExpenseCount())
@@ -161,8 +174,8 @@ class ExpenseIngestionInstrumentedTest {
             { repository.insertIngested(second) }
         )
 
-        assertEquals(1, results.count { it == ExpenseIngestionResult.INSERTED })
-        assertEquals(1, results.count { it == ExpenseIngestionResult.SKIPPED })
+        assertEquals(1, results.count { it is ExpenseIngestionResult.Inserted })
+        assertEquals(1, results.count { it == ExpenseIngestionResult.Skipped })
         assertEquals(1, repository.getExpenseCount())
     }
 
@@ -179,7 +192,7 @@ class ExpenseIngestionInstrumentedTest {
             { repository.insertIngested(second) }
         )
 
-        assertEquals(listOf(ExpenseIngestionResult.INSERTED, ExpenseIngestionResult.INSERTED), results)
+        assertEquals(2, results.count { it is ExpenseIngestionResult.Inserted })
         assertEquals(
             setOf(first.smsId, second.smsId),
             repository.getAllExpensesOnce().map { it.smsId }.toSet()
@@ -198,7 +211,7 @@ class ExpenseIngestionInstrumentedTest {
             { repository.insertIngested(second) }
         )
 
-        assertEquals(2, results.count { it == ExpenseIngestionResult.INSERTED })
+        assertEquals(2, results.count { it is ExpenseIngestionResult.Inserted })
         assertEquals(2, repository.getExpenseCount())
     }
 
@@ -249,8 +262,8 @@ class ExpenseIngestionInstrumentedTest {
         val withinWindow = repository.insertIngested(smsExpense(receivedAt = baseTime + 60_000L))
         val outsideWindow = repository.insertIngested(smsExpense(receivedAt = baseTime + 60_001L))
 
-        assertEquals(ExpenseIngestionResult.SKIPPED, withinWindow)
-        assertEquals(ExpenseIngestionResult.INSERTED, outsideWindow)
+        assertEquals(ExpenseIngestionResult.Skipped, withinWindow)
+        assertTrue(outsideWindow is ExpenseIngestionResult.Inserted)
         assertEquals(2, repository.getExpenseCount())
     }
 
@@ -267,7 +280,7 @@ class ExpenseIngestionInstrumentedTest {
 
         val result = repository.insertIngested(smsExpense(receivedAt = baseTime + 2_000L))
 
-        assertEquals(ExpenseIngestionResult.SKIPPED, result)
+        assertEquals(ExpenseIngestionResult.Skipped, result)
         assertEquals(edited, repository.getAllExpensesOnce().single())
     }
 
@@ -440,6 +453,122 @@ class ExpenseIngestionInstrumentedTest {
     }
 
     @Test
+    fun writerRefundReplacementPreservesNotificationTargetAndMetadata() = runBlocking(Dispatchers.IO) {
+        val original = refundNotice()
+        val originalId = database.incomeDao().insert(original)
+
+        val result = writer.write(emptyList(), listOf(refundDeposit()),
+            requireNotNull(classificationState.captureRegistrationEpoch()))
+
+        val stored = database.incomeDao().getAllIncomesOnce().single()
+        assertEquals(originalId, stored.id)
+        assertEquals(original.memo, stored.memo)
+        assertEquals(original.createdAt, stored.createdAt)
+        assertEquals(original.recurringDay, stored.recurringDay)
+        assertEquals(refundDeposit().body, stored.originalSms)
+        assertEquals("refund-deposit", stored.smsId)
+        assertEquals(0, result.incomes.newCount)
+        assertEquals(1, result.incomes.reconciledCount)
+    }
+
+    @Test
+    fun writerRetainsRestoredIdAndDeletesOnlyDistinctRefundNotice() = runBlocking(Dispatchers.IO) {
+        val noticeId = database.incomeDao().insert(refundNotice())
+        val restored = restoredRefundDeposit()
+        val restoredId = database.incomeDao().insert(restored)
+
+        writer.write(emptyList(), listOf(refundDeposit()),
+            requireNotNull(classificationState.captureRegistrationEpoch()))
+
+        val stored = database.incomeDao().getAllIncomesOnce().single()
+        assertEquals(restoredId, stored.id)
+        assertEquals(restored.memo, stored.memo)
+        assertEquals(restored.createdAt, stored.createdAt)
+        assertEquals(null, database.incomeDao().getIncomeById(noticeId))
+    }
+
+    @Test
+    fun writerRefundReplacementWithinBatchStillCreatesOnlyOneIncome() = runBlocking(Dispatchers.IO) {
+        val notice = refundNotice()
+        val noticeInput = SmsInput("refund-notice", requireNotNull(notice.originalSms), notice.senderAddress, baseTime)
+
+        val result = writer.write(emptyList(), listOf(noticeInput, refundDeposit()),
+            requireNotNull(classificationState.captureRegistrationEpoch()))
+
+        val stored = database.incomeDao().getAllIncomesOnce().single()
+        assertEquals("refund-deposit", stored.smsId)
+        assertEquals(1, result.incomes.newCount)
+    }
+
+    @Test
+    fun writerLaterNoticeCannotOverwriteRefundDepositAtRetainedId() = runBlocking(Dispatchers.IO) {
+        val notice = refundNotice()
+        val originalId = database.incomeDao().insert(notice)
+        val noticeInput = SmsInput("refund-notice", requireNotNull(notice.originalSms), notice.senderAddress, baseTime)
+
+        writer.write(emptyList(), listOf(refundDeposit(), noticeInput),
+            requireNotNull(classificationState.captureRegistrationEpoch()))
+
+        val stored = database.incomeDao().getAllIncomesOnce().single()
+        assertEquals(originalId, stored.id)
+        assertEquals("refund-deposit", stored.smsId)
+        assertEquals(refundDeposit().body, stored.originalSms)
+    }
+
+    @Test
+    fun instantRefundReplacementPreservesNotificationTargetAndMetadata() = runBlocking(Dispatchers.IO) {
+        val original = refundNotice()
+        val originalId = database.incomeDao().insert(original)
+        val input = refundDeposit()
+
+        val result = instantProcessor().processAndSave(input.address, input.body, input.date, showUserNotification = false)
+
+        assertTrue(result is SmsInstantProcessor.Result.Income)
+        val stored = database.incomeDao().getAllIncomesOnce().single()
+        assertEquals(originalId, stored.id)
+        assertEquals(originalId, (result as SmsInstantProcessor.Result.Income).entity.id)
+        assertEquals(original.memo, stored.memo)
+        assertEquals(original.createdAt, stored.createdAt)
+        assertEquals(original.recurringDay, stored.recurringDay)
+        assertEquals(input.body, stored.originalSms)
+        SmsInstantProcessor.clearPendingReconciliationIds(listOf(requireNotNull(stored.smsId)))
+    }
+
+    @Test
+    fun instantRestoredRefundReplacementNeverDeletesRetainedRow() = runBlocking(Dispatchers.IO) {
+        // 복원 행 자체가 semantic duplicate로도 선택되는 경우 기존 코드는 갱신 직후 같은 ID를 삭제했다.
+        val restored = refundNotice().copy(smsId = null)
+        val restoredId = database.incomeDao().insert(restored)
+        val input = SmsInput("restored-notice", requireNotNull(restored.originalSms), restored.senderAddress, baseTime)
+
+        val result = instantProcessor().processAndSave(input.address, input.body, input.date, showUserNotification = false)
+
+        assertTrue(result is SmsInstantProcessor.Result.Income)
+        val stored = database.incomeDao().getAllIncomesOnce().single()
+        assertEquals(restoredId, stored.id)
+        assertEquals(restored.memo, stored.memo)
+        assertEquals(restored.createdAt, stored.createdAt)
+        SmsInstantProcessor.clearPendingReconciliationIds(listOf(requireNotNull(stored.smsId)))
+    }
+
+    @Test
+    fun instantRestoredDepositWinsOverDistinctRefundNotice() = runBlocking(Dispatchers.IO) {
+        val noticeId = database.incomeDao().insert(refundNotice())
+        val restored = restoredRefundDeposit()
+        val restoredId = database.incomeDao().insert(restored)
+        val input = refundDeposit()
+
+        val result = instantProcessor().processAndSave(input.address, input.body, input.date, showUserNotification = false)
+
+        assertTrue(result is SmsInstantProcessor.Result.Income)
+        val stored = database.incomeDao().getAllIncomesOnce().single()
+        assertEquals(restoredId, stored.id)
+        assertEquals(restored.memo, stored.memo)
+        assertEquals(null, database.incomeDao().getIncomeById(noticeId))
+        SmsInstantProcessor.clearPendingReconciliationIds(listOf(requireNotNull(stored.smsId)))
+    }
+
+    @Test
     fun failedExpenseReplacementRestoresOriginalIncome() = runBlocking(Dispatchers.IO) {
         val sms = expense("reclassified")
         val original = IncomeEntity(
@@ -494,6 +623,41 @@ class ExpenseIngestionInstrumentedTest {
             failed = true
         }
         assertTrue("Expected injected SQLite write failure", failed)
+    }
+
+    private fun refundDeposit() = SmsInput(
+        "refund-deposit",
+        "[Web발신]\n[우리은행]\n입금 12,000원\n테스트상점 → 입출금통장(1234)\n잔액 50,000원",
+        "15889955", baseTime
+    )
+
+    private fun refundNotice() = IncomeEntity(
+        smsId = "refund-notice", amount = 12_000, type = "환불", source = "테스트상점",
+        description = "테스트상점 환불", isRecurring = false, recurringDay = 15,
+        dateTime = baseTime, originalSms = "우리카드 12,000원 결제 취소 테스트상점",
+        senderAddress = "15889955", memo = "환불 확인 메모", createdAt = baseTime - 100_000
+    )
+
+    private fun restoredRefundDeposit() = refundNotice().copy(
+        smsId = null, type = "입금", description = "테스트상점에서 입금",
+        originalSms = refundDeposit().body, memo = "복원한 사용자 메모", createdAt = baseTime - 200_000
+    )
+
+    private fun instantProcessor(): SmsInstantProcessor {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val settings = SettingsDataStore(context)
+        val matcher = SmsRegexRuleMatcher(
+            SmsRegexRuleRepository(database.smsRegexRuleDao()), database.smsPatternDao(),
+            SmsTemplateEngine(SmsEmbeddingService()),
+            SmsOriginSampleCollector(null, PremiumManager(null, settings, Gson())),
+            SmsChannelProbeCollector(database.smsChannelProbeLogDao())
+        )
+        return SmsInstantProcessor(
+            SmsPreFilter(), SmsIncomeFilter(), matcher, repository,
+            IncomeRepository(database.incomeDao()), StoreRuleRepository(database.storeRuleDao()),
+            SmsExclusionRepository(database.smsExclusionKeywordDao()), OwnedCardRepository(database.ownedCardDao()),
+            SmsNotificationManager(context), settings
+        )
     }
 
     private suspend fun <T> concurrently(first: suspend () -> T, second: suspend () -> T): List<T> =

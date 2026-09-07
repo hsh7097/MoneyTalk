@@ -1,8 +1,6 @@
 package com.sanha.moneytalk.feature.transactionedit.ui
 
 import android.content.Context
-import androidx.annotation.StringRes
-import androidx.compose.runtime.Stable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -35,47 +33,6 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 import javax.inject.Inject
 
-@Stable
-data class TransactionEditUiState(
-    val isNew: Boolean = true,
-    val transactionType: TransactionType = TransactionType.EXPENSE,
-    val isLoading: Boolean = true,
-    val amount: String = "",
-    val storeName: String = "",
-    val category: String = Category.ETC.displayName,
-    val cardName: String = "",
-    val incomeType: String = "",
-    val source: String = "",
-    val dateMillis: Long = System.currentTimeMillis(),
-    val hour: Int = Calendar.getInstance().get(Calendar.HOUR_OF_DAY),
-    val minute: Int = Calendar.getInstance().get(Calendar.MINUTE),
-    val memo: String = "",
-    val originalSms: String = "",
-    val isFixed: Boolean = false,
-    val isExcludedFromStats: Boolean = false,
-    val transferDirection: TransferDirection? = null,
-    /** 카테고리 변경을 동일 거래처에 일괄 적용 */
-    val applyCategoryToAll: Boolean = false,
-    /** 고정 거래 변경을 동일 거래처에 일괄 적용 */
-    val applyFixedToAll: Boolean = false,
-    /** 통계 제외 변경을 동일 거래처에 일괄 적용 */
-    val applyStatsExcludeToAll: Boolean = false,
-    /** 거래처 규칙 매칭 키워드 (일괄 적용 시 사용) */
-    val ruleKeyword: String = "",
-    val categoryEntries: List<CategoryInfo> = Category.expenseEntries,
-    val showCategoryPicker: Boolean = false,
-    val showAddCategoryDialog: Boolean = false,
-    val addCategoryEmoji: String = "\uD83D\uDCE6",
-    val addCategoryName: String = "",
-    @StringRes val addCategoryErrorResId: Int? = null,
-    val isSaved: Boolean = false,
-    val isDeleted: Boolean = false
-) {
-    /** 하위 호환용 계산 프로퍼티 */
-    val isIncome: Boolean get() = transactionType == TransactionType.INCOME
-    val isTransfer: Boolean get() = transactionType == TransactionType.TRANSFER
-}
-
 /**
  * 거래 편집/추가 ViewModel.
  *
@@ -89,10 +46,6 @@ data class TransactionEditUiState(
  * - 지출/이체 → 수입: 저장 시 ExpenseEntity 삭제 + IncomeEntity 생성
  * - 수입 → 지출/이체: 저장 시 IncomeEntity 삭제 + ExpenseEntity 생성
  */
-private const val EXTRA_EXPENSE_ID = "extra_expense_id"
-private const val EXTRA_INCOME_ID = "extra_income_id"
-private const val EXTRA_INITIAL_DATE = "extra_initial_date"
-
 @HiltViewModel
 class TransactionEditViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
@@ -108,13 +61,20 @@ class TransactionEditViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    private val expenseId: Long = savedStateHandle[EXTRA_EXPENSE_ID] ?: -1L
-    private val incomeId: Long = savedStateHandle[EXTRA_INCOME_ID] ?: -1L
-    private val initialDate: Long = savedStateHandle[EXTRA_INITIAL_DATE]
+    private val expenseId: Long = savedStateHandle[TransactionEditArgs.EXPENSE_ID] ?: -1L
+    private val incomeId: Long = savedStateHandle[TransactionEditArgs.INCOME_ID] ?: -1L
+    private val initialDate: Long = savedStateHandle[TransactionEditArgs.INITIAL_DATE]
         ?: System.currentTimeMillis()
 
     private val _uiState = MutableStateFlow(TransactionEditUiState())
     val uiState: StateFlow<TransactionEditUiState> = _uiState.asStateFlow()
+
+    private var initialSnapshot: TransactionEditSnapshot? = null
+
+    fun hasPendingChanges(state: TransactionEditUiState): Boolean {
+        val original = initialSnapshot ?: return false
+        return !state.isSaved && !state.isDeleted && state.toEditSnapshot() != original
+    }
 
     /** 원본 entity (수정 시 smsId 등 보존용) */
     private var originalExpenseEntity: ExpenseEntity? = null
@@ -190,9 +150,14 @@ class TransactionEditViewModel @Inject constructor(
                         categoryEntries = defaultCategoryEntries(type)
                     )
                 }
+                initialSnapshot = _uiState.value.toEditSnapshot()
                 refreshCategoryEntries(type)
             } else {
-                initNewExpense()
+                _uiState.update { it.copy(
+                    isNew = false,
+                    isLoading = false,
+                    loadErrorResId = R.string.transaction_edit_not_found
+                ) }
             }
         }
     }
@@ -228,9 +193,14 @@ class TransactionEditViewModel @Inject constructor(
                         categoryEntries = defaultCategoryEntries(TransactionType.INCOME)
                     )
                 }
+                initialSnapshot = _uiState.value.toEditSnapshot()
                 refreshCategoryEntries(TransactionType.INCOME)
             } else {
-                initNewExpense()
+                _uiState.update { it.copy(
+                    isNew = false,
+                    isLoading = false,
+                    loadErrorResId = R.string.transaction_edit_not_found
+                ) }
             }
         }
     }
@@ -251,6 +221,7 @@ class TransactionEditViewModel @Inject constructor(
                 categoryEntries = defaultCategoryEntries(TransactionType.EXPENSE)
             )
         }
+        initialSnapshot = _uiState.value.toEditSnapshot()
         refreshCategoryEntries(TransactionType.EXPENSE)
     }
 
@@ -475,6 +446,7 @@ class TransactionEditViewModel @Inject constructor(
 
     fun save() {
         val state = _uiState.value
+        if (state.isLoading || state.loadErrorResId != null) return
         when (state.transactionType) {
             TransactionType.INCOME -> saveAsIncome(state)
             TransactionType.EXPENSE, TransactionType.TRANSFER -> saveAsExpense(state)

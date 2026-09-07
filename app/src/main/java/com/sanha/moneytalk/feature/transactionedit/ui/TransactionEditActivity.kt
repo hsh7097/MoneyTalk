@@ -25,20 +25,21 @@ import javax.inject.Inject
 class TransactionEditActivity : ComponentActivity() {
 
     companion object {
-        private const val EXTRA_EXPENSE_ID = "extra_expense_id"
-        private const val EXTRA_INCOME_ID = "extra_income_id"
+        fun createIntent(
+            context: Context,
+            expenseId: Long = -1L,
+            incomeId: Long = -1L
+        ): Intent = Intent(context, TransactionEditActivity::class.java).apply {
+            putExtra(TransactionEditArgs.EXPENSE_ID, expenseId)
+            putExtra(TransactionEditArgs.INCOME_ID, incomeId)
+        }
 
         fun open(
             context: Context,
             expenseId: Long = -1L,
             incomeId: Long = -1L
         ) {
-            context.startActivity(
-                Intent(context, TransactionEditActivity::class.java).apply {
-                    putExtra(EXTRA_EXPENSE_ID, expenseId)
-                    putExtra(EXTRA_INCOME_ID, incomeId)
-                }
-            )
+            context.startActivity(createIntent(context, expenseId, incomeId))
         }
     }
 

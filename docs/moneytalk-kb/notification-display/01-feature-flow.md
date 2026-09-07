@@ -77,3 +77,16 @@ Android M 이상은 MoneyTalk 거래 알림 채널만 취소한다. 그 미만�
 2. 외부 알림을 읽는 `NotificationTransactionService` 수정과 자체 노티 표시 수정이 섞이지 않았는가?
 3. 신규 거래 저장 없이 노티만 표시하는 경로를 만들지 않았는가?
 4. 앱 진입 시 오래된 거래 알림이 정리되는가?
+
+## 거래 상세로 이동 (2026-09-08)
+
+- `ExpenseDao.insertIngested`는 신규/갱신 결과에 실제 저장 ID를 반환한다. `SmsInstantProcessor`는 새 거래에만 이 ID를 사용해 알림을 게시한다. 수입도 `IncomeRepository.insert` 반환 ID를 사용한다.
+- `TransactionNotificationIntents`가 `TransactionEditActivity.createIntent`의 기존 지출/수입 extra 계약을 재사용한다. `moneytalk://transaction/expense/{Long ID}` / `income/{Long ID}` URI는 PendingIntent 식별용이며 공개 deep link가 아니다.
+- extras만 다른 PendingIntent는 같은 객체가 될 수 있으므로 타입·ID URI로 구분한다. notification tag도 `expense:{ID}` / `income:{ID}`로 나누어 프로세스 재시작과 서로 다른 테이블의 동일 ID에 영향을 받지 않는다.
+- `TaskStackBuilder`와 manifest의 `parentActivityName=.MainActivity`가 홈 → 거래 편집 스택을 만든다. 다른 거래의 편집 ViewModel을 재사용하지 않으며 닫기/저장/뒤로가기는 홈으로 돌아간다. 알림 진입은 새 back stack을 구성한다.
+- 이미 삭제되거나 다른 유형으로 전환된 거래는 찾을 수 없다는 안내를 표시한다. 존재하지 않는 ID를 새 거래 입력으로 바꾸지 않고 저장도 차단한다.
+- `clearTransactionNotifications`는 `(tag, id)`로 취소하여 새 알림과 기존 숫자 ID 알림을 모두 정리한다. 기존 설정·권한·카드 숨김·중복 알림 억제 조건은 유지한다.
+
+검증 기준: `TransactionNotificationInstrumentedTest`(실제 앱 DB/Activity/PendingIntent, 테스트 AVD 전용), `ExpenseIngestionInstrumentedTest`(원자적 저장 ID), 실제 알림 창 cold/warm 탭. 실행 결과는 구조 감사의 통합 검증 기록을 참조한다.
+
+알림 back stack 구성은 [Android 공식 안내](https://developer.android.com/develop/ui/views/notifications/navigation)를 따른다.

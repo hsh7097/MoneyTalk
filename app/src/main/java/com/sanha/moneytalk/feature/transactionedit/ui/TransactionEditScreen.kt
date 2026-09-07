@@ -22,7 +22,6 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,44 +41,6 @@ import com.sanha.moneytalk.core.ui.component.CategorySelectDialog
 import com.sanha.moneytalk.feature.transactionedit.ui.model.TransactionType
 import com.sanha.moneytalk.feature.transactionedit.ui.coachmark.transactionEditCoachMarkSteps
 import kotlinx.coroutines.delay
-
-private data class TransactionEditSnapshot(
-    val transactionType: TransactionType,
-    val amount: String,
-    val storeName: String,
-    val category: String,
-    val cardName: String,
-    val incomeType: String,
-    val source: String,
-    val dateMillis: Long,
-    val hour: Int,
-    val minute: Int,
-    val memo: String,
-    val isFixed: Boolean,
-    val isExcludedFromStats: Boolean,
-    val applyStatsExcludeToAll: Boolean,
-    val transferDirection: String?
-)
-
-private fun TransactionEditUiState.toSnapshot(): TransactionEditSnapshot {
-    return TransactionEditSnapshot(
-        transactionType = transactionType,
-        amount = amount,
-        storeName = storeName,
-        category = category,
-        cardName = cardName,
-        incomeType = incomeType,
-        source = source,
-        dateMillis = dateMillis,
-        hour = hour,
-        minute = minute,
-        memo = memo,
-        isFixed = isFixed,
-        isExcludedFromStats = isExcludedFromStats,
-        applyStatsExcludeToAll = applyStatsExcludeToAll,
-        transferDirection = transferDirection?.dbValue
-    )
-}
 
 private fun TransactionType.toCategoryType(): CategoryType {
     return when (this) {
@@ -103,6 +64,18 @@ fun TransactionEditScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    val loadErrorResId = uiState.loadErrorResId
+    if (loadErrorResId != null) {
+        AlertDialog(
+            onDismissRequest = onBack,
+            text = { Text(stringResource(loadErrorResId)) },
+            confirmButton = {
+                TextButton(onClick = onBack) { Text(stringResource(R.string.common_confirm)) }
+            }
+        )
+        return
+    }
+
     // 저장/삭제 완료 시 화면 종료
     LaunchedEffect(uiState.isSaved, uiState.isDeleted) {
         if (uiState.isSaved || uiState.isDeleted) {
@@ -114,20 +87,7 @@ fun TransactionEditScreen(
     var showTimePicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showExitConfirm by remember { mutableStateOf(false) }
-    var initialSnapshot by remember { mutableStateOf<TransactionEditSnapshot?>(null) }
-
-    LaunchedEffect(uiState.isLoading) {
-        if (!uiState.isLoading && initialSnapshot == null) {
-            initialSnapshot = uiState.toSnapshot()
-        }
-    }
-
-    val hasPendingChanges by remember(uiState, initialSnapshot) {
-        derivedStateOf {
-            val snapshot = initialSnapshot ?: return@derivedStateOf false
-            !uiState.isSaved && !uiState.isDeleted && uiState.toSnapshot() != snapshot
-        }
-    }
+    val hasPendingChanges = viewModel.hasPendingChanges(uiState)
 
     val onRequestClose = remember(
         hasPendingChanges,

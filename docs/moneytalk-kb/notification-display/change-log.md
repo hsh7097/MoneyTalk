@@ -14,3 +14,7 @@ status: draft
 |---|---|---|---|---|
 | 2026-07-11 | AVD 합성 SMS, `SmsReceiver`, `SmsInstantProcessor`, `dumpsys notification` 확인 | 거래 저장 후 자체 알림 표시 E2E 검증 기록 | `README.md`, `01-feature-flow.md` | 네트워크를 끈 AVD에서 신한카드 형식 합성 SMS를 수신해 `QA_MARKET 8,910원` 저장과 `sms_transaction_v2` 알림의 동일 제목/금액 표시를 확인했다. 거래 알림 toggle이 off이면 자체 알림이 생기지 않고, 테스트 후 다시 off로 복원했다. |
 | 2026-07-09 | `SmsNotificationManager`, `SmsInstantProcessor`, `MoneyTalkApplication`, `MainActivity`, `SettingsScreen` 확인 | Notification Display 기능 KB 생성 | `README.md`, `00-structure-map.md`, `01-feature-flow.md`, `05-file-inventory.md` | 외부 알림 수신과 MoneyTalk 자체 거래 알림 표시를 분리해 문서화. |
+
+## 2026-09-08
+
+저장 ID 기반 거래 상세 연결, 타입별 PendingIntent/notification tag, parent back stack, 삭제된 거래 안내 계약을 추가했다.
