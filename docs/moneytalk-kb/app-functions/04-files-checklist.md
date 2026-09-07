@@ -15,6 +15,8 @@ status: draft
 | 작업 | 확인 파일 |
 |---|---|
 | 함수 추가 | `MoneyTalkChatAppFunctions.kt`, `MoneyTalkChatAppFunctionReader.kt` |
+| 수정 함수 변경 | `MoneyTalkChatAppFunctionActionExecutor.kt` |
+| 분석/공통 입력 계약 | `MoneyTalkAppFunctionAnalyticsCalculator.kt`, `MoneyTalkAppFunctionInputRules.kt` |
 | 월간 요약 변경 | `MoneyTalkFinanceAppFunctions.kt`, `MoneyTalkFinanceSummaryReader.kt` |
 | 응답 모델 변경 | `MoneyTalkChatAppFunctionModels.kt`, `MoneyTalkFinanceSummaryModels.kt` |
 | DB 조회 변경 | [finance-data](../finance-data/README.md), Repository/DAO |
@@ -26,6 +28,8 @@ status: draft
 ## 수정 전 질문
 
 - 조회 함수인가 수정 함수인가?
+- Reader에는 조회·응답 조합만, ActionExecutor에는 변경 검증·쓰기·알림만 있는가?
+- 분석기는 저장소와 UI 상태 없이 전달된 지출로 계산하는가?
 - 삭제성 함수라면 기본 비활성 정책을 유지했는가?
 - App Function 본문에서 DB 작업이 IO dispatcher로 오프로드되는가?
 - response model 변경이 generated metadata에 반영되는가?
@@ -34,3 +38,9 @@ status: draft
 - 앱 수준 metadata와 KSP 생성 함수 metadata를 구분해 각각 XML 파싱을 확인했는가?
 - release AAB를 `bundletool validate`로 확인하고 Play Console 업로드까지 통과했는가?
 - 기존 루트 문서와 충돌하면 [../source-docs/01-consolidation-map.md](../source-docs/01-consolidation-map.md)에 따라 KB 우선으로 정리했는가?
+
+## 내부 책임 분리 회귀 검증
+
+- JVM `MoneyTalkAppFunctionAnalyticsCalculatorTest`: typed 합계/건수, 필터→그룹→정렬 순서, 하위/커스텀 카테고리, 정수 평균, 빈 결과, 요일/메모 AND, 최대 개수.
+- Room `MoneyTalkAppFunctionExecutionTest`: 지출/수입 입력 후 Reader 조회, 변경 이벤트, 거래처 규칙 소급 적용, 잘못된 입력/날짜 처리.
+- 같은 Room 테스트의 앱 EntryPoint smoke는 **폐기 가능한 에뮬레이터 전용**이다. 실제 Hilt 객체를 통해 고유 합성 거래 1건을 읽고 분석한 뒤 `finally`에서 그 ID만 제거한다.

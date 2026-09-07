@@ -17,7 +17,10 @@ status: draft
 | `MoneyTalkFinanceSummaryReader.kt` | 월간 요약 데이터 조합 | summary 계산/validation | 핵심 |
 | `MoneyTalkFinanceSummaryModels.kt` | 월간 요약 응답 모델 | response contract 변경 | 핵심 후보 |
 | `MoneyTalkChatAppFunctions.kt` | 조회/수정 App Function 선언 | 함수 추가/삭제/enable 변경 | 핵심 |
-| `MoneyTalkChatAppFunctionReader.kt` | 실제 DB/DataStore/Repository 작업 | business logic 변경 | 핵심 |
+| `MoneyTalkChatAppFunctionReader.kt` | 저장 데이터 조회와 typed 응답 조합 | 조회 범위/응답 변경 | 핵심 |
+| `MoneyTalkChatAppFunctionActionExecutor.kt` | 입력 검증, 수정 작업과 변경 이벤트 | 거래/설정 변경 | 핵심 |
+| `MoneyTalkAppFunctionAnalyticsCalculator.kt` | 필터/그룹/집계/정렬 계산 | 복합 분석 결과 변경 | 핵심 |
+| `MoneyTalkAppFunctionInputRules.kt` | 공통 날짜/카테고리/개수 계약 | 입력 해석 변경 | 핵심 |
 | `MoneyTalkChatAppFunctionModels.kt` | chat operation response model | 응답 모델 변경 | 핵심 후보 |
 | `app_functions_app_metadata.xml` | App Functions metadata 등록 | generated metadata 문제 | 핵심 후보 |
 | `app/build/generated/ksp/debug/resources/assets/app_functions.xml` | KSP가 생성한 실제 등록 함수 metadata | 함수 수/disabled 수 확인 | 생성 산출물 |

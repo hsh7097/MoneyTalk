@@ -9,4 +9,5 @@ import dagger.hilt.components.SingletonComponent
 interface MoneyTalkAppFunctionEntryPoint {
     fun financeSummaryReader(): MoneyTalkFinanceSummaryReader
     fun chatAppFunctionReader(): MoneyTalkChatAppFunctionReader
+    fun chatAppFunctionActionExecutor(): MoneyTalkChatAppFunctionActionExecutor
 }

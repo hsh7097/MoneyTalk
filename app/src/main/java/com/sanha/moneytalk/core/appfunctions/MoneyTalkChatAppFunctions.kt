@@ -8,7 +8,8 @@ import kotlinx.coroutines.withContext
 
 @Suppress("UNUSED_PARAMETER")
 class MoneyTalkChatAppFunctions(
-    private val reader: MoneyTalkChatAppFunctionReader
+    private val reader: MoneyTalkChatAppFunctionReader,
+    private val actionExecutor: MoneyTalkChatAppFunctionActionExecutor
 ) {
     /**
      * AI 채팅에서 지원하던 결정론적 조회/수정 작업을 AppFunction으로 사용할 수 있는지 확인합니다.
@@ -383,7 +384,7 @@ class MoneyTalkChatAppFunctions(
         expenseId: Long? = null,
         newCategory: String? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.updateExpenseCategory(expenseId, newCategory) }
+        return execute { actionExecutor.updateExpenseCategory(expenseId, newCategory) }
     }
 
     /**
@@ -399,7 +400,7 @@ class MoneyTalkChatAppFunctions(
         storeName: String? = null,
         newCategory: String? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.updateExpenseCategoryByStore(storeName, newCategory) }
+        return execute { actionExecutor.updateExpenseCategoryByStore(storeName, newCategory) }
     }
 
     /**
@@ -415,7 +416,7 @@ class MoneyTalkChatAppFunctions(
         keyword: String? = null,
         newCategory: String? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.updateExpenseCategoryByKeyword(keyword, newCategory) }
+        return execute { actionExecutor.updateExpenseCategoryByKeyword(keyword, newCategory) }
     }
 
     /**
@@ -429,7 +430,7 @@ class MoneyTalkChatAppFunctions(
         appFunctionContext: AppFunctionContext,
         expenseId: Long? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.deleteExpense(expenseId) }
+        return execute { actionExecutor.deleteExpense(expenseId) }
     }
 
     /**
@@ -443,7 +444,7 @@ class MoneyTalkChatAppFunctions(
         appFunctionContext: AppFunctionContext,
         keyword: String? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.deleteExpensesByKeyword(keyword) }
+        return execute { actionExecutor.deleteExpensesByKeyword(keyword) }
     }
 
     /**
@@ -455,7 +456,7 @@ class MoneyTalkChatAppFunctions(
     suspend fun deleteDuplicateExpenses(
         appFunctionContext: AppFunctionContext
     ): MoneyTalkOperationResult {
-        return execute { reader.deleteDuplicateExpenses() }
+        return execute { actionExecutor.deleteDuplicateExpenses() }
     }
 
     /**
@@ -479,7 +480,7 @@ class MoneyTalkChatAppFunctions(
         category: String? = null,
         memo: String? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.addExpense(storeName, amount, date, cardName, category, memo) }
+        return execute { actionExecutor.addExpense(storeName, amount, date, cardName, category, memo) }
     }
 
     /**
@@ -495,7 +496,7 @@ class MoneyTalkChatAppFunctions(
         expenseId: Long? = null,
         memo: String? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.updateExpenseMemo(expenseId, memo) }
+        return execute { actionExecutor.updateExpenseMemo(expenseId, memo) }
     }
 
     /**
@@ -511,7 +512,7 @@ class MoneyTalkChatAppFunctions(
         expenseId: Long? = null,
         newStoreName: String? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.updateExpenseStoreName(expenseId, newStoreName) }
+        return execute { actionExecutor.updateExpenseStoreName(expenseId, newStoreName) }
     }
 
     /**
@@ -527,7 +528,7 @@ class MoneyTalkChatAppFunctions(
         expenseId: Long? = null,
         newAmount: Int? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.updateExpenseAmount(expenseId, newAmount) }
+        return execute { actionExecutor.updateExpenseAmount(expenseId, newAmount) }
     }
 
     /**
@@ -543,7 +544,7 @@ class MoneyTalkChatAppFunctions(
         expenseId: Long? = null,
         isFixed: Boolean? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.updateExpenseFixed(expenseId, isFixed) }
+        return execute { actionExecutor.updateExpenseFixed(expenseId, isFixed) }
     }
 
     /**
@@ -559,7 +560,7 @@ class MoneyTalkChatAppFunctions(
         expenseId: Long? = null,
         isExcludedFromStats: Boolean? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.updateExpenseStatsExcluded(expenseId, isExcludedFromStats) }
+        return execute { actionExecutor.updateExpenseStatsExcluded(expenseId, isExcludedFromStats) }
     }
 
     /**
@@ -590,7 +591,7 @@ class MoneyTalkChatAppFunctions(
         recurringDay: Int? = null
     ): MoneyTalkOperationResult {
         return execute {
-            reader.addIncome(
+            actionExecutor.addIncome(
                 source = source,
                 description = description,
                 amount = amount,
@@ -617,7 +618,7 @@ class MoneyTalkChatAppFunctions(
         incomeId: Long? = null,
         memo: String? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.updateIncomeMemo(incomeId, memo) }
+        return execute { actionExecutor.updateIncomeMemo(incomeId, memo) }
     }
 
     /**
@@ -633,7 +634,7 @@ class MoneyTalkChatAppFunctions(
         keyword: String? = null,
         newCategory: String? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.updateIncomeCategoryByKeyword(keyword, newCategory) }
+        return execute { actionExecutor.updateIncomeCategoryByKeyword(keyword, newCategory) }
     }
 
     /**
@@ -649,7 +650,7 @@ class MoneyTalkChatAppFunctions(
         keyword: String? = null,
         isRecurring: Boolean? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.updateIncomeRecurringByKeyword(keyword, isRecurring) }
+        return execute { actionExecutor.updateIncomeRecurringByKeyword(keyword, isRecurring) }
     }
 
     /**
@@ -663,7 +664,7 @@ class MoneyTalkChatAppFunctions(
         appFunctionContext: AppFunctionContext,
         keyword: String? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.addSmsExclusionKeyword(keyword) }
+        return execute { actionExecutor.addSmsExclusionKeyword(keyword) }
     }
 
     /**
@@ -677,7 +678,7 @@ class MoneyTalkChatAppFunctions(
         appFunctionContext: AppFunctionContext,
         keyword: String? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.removeSmsExclusionKeyword(keyword) }
+        return execute { actionExecutor.removeSmsExclusionKeyword(keyword) }
     }
 
     /**
@@ -693,7 +694,7 @@ class MoneyTalkChatAppFunctions(
         cardName: String? = null,
         isOwned: Boolean? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.setCardOwnership(cardName, isOwned) }
+        return execute { actionExecutor.setCardOwnership(cardName, isOwned) }
     }
 
     /**
@@ -709,7 +710,7 @@ class MoneyTalkChatAppFunctions(
         cardName: String? = null,
         isOwned: Boolean? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.addManualCard(cardName, isOwned) }
+        return execute { actionExecutor.addManualCard(cardName, isOwned) }
     }
 
     /**
@@ -725,7 +726,7 @@ class MoneyTalkChatAppFunctions(
         category: String? = null,
         amount: Int? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.setBudget(category, amount) }
+        return execute { actionExecutor.setBudget(category, amount) }
     }
 
     /**
@@ -739,7 +740,7 @@ class MoneyTalkChatAppFunctions(
         appFunctionContext: AppFunctionContext,
         amount: Int? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.setMonthlyIncome(amount) }
+        return execute { actionExecutor.setMonthlyIncome(amount) }
     }
 
     /**
@@ -753,7 +754,7 @@ class MoneyTalkChatAppFunctions(
         appFunctionContext: AppFunctionContext,
         day: Int? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.setMonthStartDay(day) }
+        return execute { actionExecutor.setMonthStartDay(day) }
     }
 
     /**
@@ -773,7 +774,7 @@ class MoneyTalkChatAppFunctions(
         isFixed: Boolean? = null,
         isExcludedFromStats: Boolean? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.upsertStoreRule(keyword, category, isFixed, isExcludedFromStats) }
+        return execute { actionExecutor.upsertStoreRule(keyword, category, isFixed, isExcludedFromStats) }
     }
 
     /**
@@ -789,7 +790,7 @@ class MoneyTalkChatAppFunctions(
         ruleId: Long? = null,
         keyword: String? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.deleteStoreRule(ruleId, keyword) }
+        return execute { actionExecutor.deleteStoreRule(ruleId, keyword) }
     }
 
     /**
@@ -807,7 +808,7 @@ class MoneyTalkChatAppFunctions(
         emoji: String? = null,
         categoryType: String? = null
     ): MoneyTalkOperationResult {
-        return execute { reader.addCustomCategory(displayName, emoji, categoryType) }
+        return execute { actionExecutor.addCustomCategory(displayName, emoji, categoryType) }
     }
 
     private suspend fun <T> execute(block: suspend () -> T): T {

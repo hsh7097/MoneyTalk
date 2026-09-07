@@ -10,6 +10,14 @@ status: draft
 
 # App Functions Change Log
 
+## 2026-09-08
+
+- 근거: 화면/기능별 책임 감사에서 `MoneyTalkChatAppFunctionReader`가 조회, 26개 수정 함수와 복합 분석을 함께 소유한 점을 확인했다.
+- 변경: Reader는 조회·응답 조합, ActionExecutor는 입력 검증·쓰기·변경 이벤트, AnalyticsCalculator는 전달된 지출의 순수 계산으로 분리했다. InputRules에서 공유 날짜·카테고리·개수 계약을 유지한다.
+- 연결: 공개 `MoneyTalkChatAppFunctions`가 Reader/ActionExecutor에 직접 위임하고 Application factory와 Hilt EntryPoint를 갱신했다. 함수 이름, 인자, 응답 모델, 기본 enabled 설정은 유지한다.
+- 정적 검증: HEAD 대비 조회/수정 본문, 분석 알고리즘/도우미와 공개 함수 선언 보존을 대조했다.
+- 회귀 검증 추가: JVM 분석 7개, Room 실행 4개와 에뮬레이터 실제 EntryPoint 1개. 실행 결과는 전체 작업 검증 보고에 기록한다.
+
 ## 2026-07-13
 
 - 기준: Play Console의 Android App Functions metadata XML 파싱 오류와 release AAB 내부 파일 확인

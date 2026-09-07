@@ -56,7 +56,7 @@ status: draft
 | `analyzeExpenses` | enabled | 필터, 그룹, metric 기반 지출 분석 결과를 반환한다. |
 
 `analyzeExpenses`는 기간, 카테고리, 거래처, 카드, 키워드, 금액 범위, 고정 지출, 통계 제외 조건을 조합한다.
-상위 카테고리 요청에서 하위 카테고리 포함 여부가 필요하면 reader의 `includeSubcategories` 경로를 함께 확인한다.
+상위 카테고리 요청에서 하위 카테고리 포함 여부가 필요하면 `MoneyTalkAppFunctionAnalyticsCalculator`의 `includeSubcategories` 경로와 `MoneyTalkAppFunctionInputRules`를 함께 확인한다.
 
 ## 수입 조회
 
@@ -96,7 +96,7 @@ status: draft
 | `updateIncomeCategoryByKeyword` | enabled | 수입 출처/설명 키워드 기준 카테고리를 변경한다. |
 | `updateIncomeRecurringByKeyword` | enabled | 수입 출처/설명 키워드 기준 고정 수입 여부를 변경한다. |
 
-수정 함수는 `MoneyTalkChatAppFunctionReader`에서 validation과 repository 호출을 수행한다.
+수정 함수는 `MoneyTalkChatAppFunctionActionExecutor`에서 validation과 repository 호출, 변경 이벤트를 수행한다. 조회는 Reader, 복합 분석 계산은 `MoneyTalkAppFunctionAnalyticsCalculator`가 담당한다.
 DB write 이후 화면 갱신이 필요하면 기존 `DataRefreshEvent` 발행 경로를 확인한다.
 
 ## 설정 수정

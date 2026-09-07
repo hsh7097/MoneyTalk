@@ -53,7 +53,10 @@ class MoneyTalkApplication : Application(), AppFunctionConfiguration.Provider {
                     this,
                     MoneyTalkAppFunctionEntryPoint::class.java
                 )
-                MoneyTalkChatAppFunctions(entryPoint.chatAppFunctionReader())
+                MoneyTalkChatAppFunctions(
+                    entryPoint.chatAppFunctionReader(),
+                    entryPoint.chatAppFunctionActionExecutor()
+                )
             }
             .build()
     }

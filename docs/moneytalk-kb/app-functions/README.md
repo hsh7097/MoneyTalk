@@ -19,7 +19,7 @@ App Functions 기능은 assistant/agent가 앱 내부 데이터를 조회하거�
 
 | 문서 | 역할 | 언제 보는가 |
 |---|---|---|
-| [00-structure-map.md](00-structure-map.md) | App Functions 파일과 책임을 정리한다. | 변경 파일이 노출 함수, reader, model 중 어디인지 판단할 때 본다. |
+| [00-structure-map.md](00-structure-map.md) | App Functions 파일과 책임을 정리한다. | 변경 파일이 노출 함수, 조회, 수정, 계산, model 중 어디인지 판단할 때 본다. |
 | [01-feature-flow.md](01-feature-flow.md) | agent 호출부터 Repository/DAO 접근, 응답 반환까지 흐름을 설명한다. | 기능 읽어오기/수정 흐름을 따라갈 때 본다. |
 | [02-data-contract.md](02-data-contract.md) | App Function 함수, request parameter, response model contract를 설명한다. | 함수 추가/응답 모델 변경 시 본다. |
 | [03-extension-points.md](03-extension-points.md) | 새 App Function 추가와 삭제성 함수 정책을 정리한다. | agent 기능을 늘릴 때 본다. |
@@ -34,10 +34,12 @@ App Functions 기능은 assistant/agent가 앱 내부 데이터를 조회하거�
 ```text
 assistant/agent
 → @AppFunction method
-→ Reader
+→ Reader(조회) / ActionExecutor(수정)
 → Repository/DAO/DataStore
 → Serializable response model
 ```
+
+복합 분석은 Reader가 기간별 데이터를 조회한 뒤 `MoneyTalkAppFunctionAnalyticsCalculator`에 전달한다. 계산기는 저장소와 화면 상태를 참조하지 않는다. `MoneyTalkAppFunctionInputRules`는 조회·수정에 공통인 날짜 해석, 카테고리 범위, 결과 개수 계약을 유지한다.
 
 ## 현재 노출 범위
 

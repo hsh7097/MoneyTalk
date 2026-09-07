@@ -18,11 +18,14 @@ status: draft
 | 지출 조회 | `getExpenses`, `getExpenseCategoryTotals`, `getExpensesByStore`, `getExpensesByCard` | `MoneyTalkChatAppFunctionReader.kt` |
 | 수입 조회 | `getIncomes`, `getTotalIncome` | `MoneyTalkChatAppFunctionReader.kt` |
 | 설정/메타 조회 | `getOwnedCards`, `getStoreRules`, `getCustomCategories`, `getBudgetStatus` | `MoneyTalkChatAppFunctionReader.kt` |
-| 거래/설정 수정 | `addExpense`, `updateExpenseCategory`, `setBudget`, `setMonthStartDay` | `MoneyTalkChatAppFunctionReader.kt` |
+| 거래/설정 수정 | `addExpense`, `updateExpenseCategory`, `setBudget`, `setMonthStartDay` | `MoneyTalkChatAppFunctionActionExecutor.kt` |
+| 복합 분석 | `analyzeExpenses` | Reader 조회 → `MoneyTalkAppFunctionAnalyticsCalculator.kt` |
 
 현재 KSP 생성 metadata 기준 등록 함수는 50개이고, 기본 활성 함수는 46개다.
 `deleteExpense`, `deleteExpensesByKeyword`, `deleteDuplicateExpenses`, `deleteStoreRule`은 `isEnabled=false`로 등록만 되어 있다.
 전체 함수 목록은 [06-function-catalog.md](06-function-catalog.md)를 기준으로 본다.
+
+Reader/ActionExecutor/계산기 분리는 내부 구현 경계다. 공개 `@AppFunction` 인자, 기본값, 응답 모델, 비활성 삭제 함수와 결과 코드는 그대로 유지한다. 날짜·카테고리·조회 개수의 공통 해석은 `MoneyTalkAppFunctionInputRules`에서 관리한다.
 
 ## 모델
 

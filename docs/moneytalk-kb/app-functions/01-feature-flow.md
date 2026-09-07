@@ -36,11 +36,24 @@ agent call
 ```text
 agent call
 → @AppFunction update/add/set method
-→ Reader validation
+→ execute { actionExecutor.update/add/set(...) }
+→ MoneyTalkChatAppFunctionActionExecutor validation
 → Repository/DAO/DataStore write
 → DataRefreshEvent emit where needed
 → MoneyTalkOperationResult
 ```
+
+## 복합 분석 흐름
+
+```text
+agent call
+→ MoneyTalkChatAppFunctions.analyzeExpenses(...)
+→ Reader: 날짜 범위 검증 + Repository 조회
+→ MoneyTalkAppFunctionAnalyticsCalculator: 필터 → 그룹 → 메트릭 → 정렬/개수 제한
+→ MoneyTalkAnalyticsResponse
+```
+
+날짜 해석은 조회와 수정이 `MoneyTalkAppFunctionInputRules.parseDate`를 공유한다. 카테고리 하위 항목 해석과 결과 개수 제한도 Reader/계산기가 같은 규칙을 사용한다. 조회·수정 모두 노출 클래스의 `execute`에서 IO dispatcher 및 `AppFunctionInvalidArgumentException` 변환을 유지한다.
 
 ## 삭제성 함수 정책
 

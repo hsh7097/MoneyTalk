@@ -15,7 +15,9 @@ status: draft
 | 새 조회 함수 | `MoneyTalkChatAppFunctions.kt`, `MoneyTalkChatAppFunctionReader.kt` | response model과 docs 동시 갱신 |
 | 새 요약 함수 | `MoneyTalkFinanceAppFunctions.kt`, `MoneyTalkFinanceSummaryReader.kt` | 날짜/monthStartDay validation 확인 |
 | 새 응답 모델 | `MoneyTalkChatAppFunctionModels.kt` 또는 `MoneyTalkFinanceSummaryModels.kt` | `@AppFunctionSerializable` contract 유지 |
-| 새 수정 함수 | `MoneyTalkChatAppFunctions.kt`, Reader | validation, DataRefreshEvent, 삭제성 정책 확인 |
+| 새 수정 함수 | `MoneyTalkChatAppFunctions.kt`, `MoneyTalkChatAppFunctionActionExecutor.kt` | validation, DataRefreshEvent, 삭제성 정책 확인 |
+| 분석 계산 변경 | `MoneyTalkAppFunctionAnalyticsCalculator.kt` | 저장소 조회와 분리하고 typed 결과/정렬/개수 계약 검증 |
+| 공통 입력 해석 | `MoneyTalkAppFunctionInputRules.kt` | 조회와 수정의 날짜, 카테고리와 개수 제한 영향 확인 |
 | metadata | `app_functions_app_metadata.xml`, generated `app_functions.xml` | KSP 생성 결과 확인 |
 
 삭제성 함수는 기본 비활성 정책을 유지한다.

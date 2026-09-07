@@ -93,7 +93,7 @@ $x.appfunctions.appfunction.Count
 
 ## 주의사항
 
-- App Function 본문은 DB 작업을 main thread에서 직접 수행하지 않도록 reader/repository 경로를 확인한다.
+- App Function 본문은 DB 작업을 main thread에서 직접 수행하지 않도록 `execute`의 IO 전환과 Reader/ActionExecutor → Repository 경로를 확인한다.
 - 응답 모델 변경은 DB schema 변경이 아니어도 KSP 생성 metadata와 agent 호출 contract에 영향을 준다.
 - 삭제성 함수는 `isEnabled=false` 정책을 유지한다.
 - 루트 App Functions 원문은 이 KB로 흡수 후 삭제됐다. 실제 작업 라우팅은 이 KB 패키지를 우선한다.
