@@ -14,11 +14,11 @@ status: draft
 
 | 작업 | 먼저 볼 파일 |
 |---|---|
-| 채팅 화면 UI | `ChatScreen.kt`, `ChatComponents.kt`, `ChatRoomListView.kt` |
+| 채팅 화면 UI | `ChatScreen.kt`, `ChatRoomView.kt`, `ChatRoomListView.kt`, 기능별 `Chat*.kt` |
 | 단순 조회 비용 절감 | `LocalChatQueryRouter.kt`, `ChatViewModel.kt`, `LocalChatQueryRouterTest.kt` |
 | Gemini prompt/model | `GeminiRepositoryImpl.kt`, `ChatPrompts.kt`, `string_prompt.xml`, `PremiumConfig.kt` |
 | 크레딧/광고 | `ChatCreditPolicy.kt`, `AiCreditRepository.kt`, `RewardAdManager.kt` |
-| DB query/action | `DataQueryParser.kt`, `ChatViewModel.executeQuery()`, `ChatViewModel.executeAction()` |
+| DB query/action | `DataQueryParser.kt`, `ChatQueryExecutor.execute()`, `ChatActionExecutor.execute()` |
 
 ## 검증 질문
 

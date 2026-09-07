@@ -10,6 +10,14 @@ status: draft
 
 # Chat KB Change Log
 
+## 2026-09-08 - 화면/계산/수정 책임 분리와 메시지 구독 정리
+
+- `ChatViewModel`의 18종 query, 13종 action, ANALYTICS를 `ChatQueryExecutor`, `ChatActionExecutor`, `ChatAnalyticsCalculator`로 분리하고 표시 모델을 `ChatUiState.kt`로 이동했다. MVVM과 기존 조회/저장/크레딧 계약을 유지한다.
+- 채팅방 및 가이드/말풍선/타이핑/재시도/광고/서비스 상태 렌더링을 기능별 파일로 분리했다. Composable 인자와 화면 배치는 유지했다.
+- 세션별 메시지 구독이 계속 쌓이는 문제를 `ChatMessageObserver` 단일 전환 구독으로 수정했다. 이전 방의 결과는 현재 방에 반영하지 않는다.
+- 검증 코드: 분석 계산 6개, 메시지 구독 전환 4개 회귀 테스트 추가. 실행 결과는 통합 빌드와 QA 기록에서 확인한다.
+- 검토 후 유지: 세션 행은 목록과 같은 기능이므로 `ChatRoomListView.kt`에 유지하고, `ChatRepositoryImpl`의 메시지/요약 저장과 `GeminiRepositoryImpl`의 AI API 경계는 유지했다.
+
 ## 2026-09-07 - 인증 실패 뒤 같은 질문의 AI 재호출 차단
 
 - 기준: 실기기 release 1.0.3에서 AI 상담 질문이 `Firebase App Check token is invalid`로 실패하고, analyzer 실패 후에도 final answer를 호출하는 코드 경로 확인.

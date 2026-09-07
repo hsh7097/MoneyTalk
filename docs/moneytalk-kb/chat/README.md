@@ -36,20 +36,20 @@ status: draft
 사용자 질문
 -> ChatCreditPolicy.estimate()
 -> LocalChatQueryRouter.tryRoute()
-   -> 매칭 성공: executeQuery() -> Local template answer -> saveLocalExchange()
+   -> 매칭 성공: ChatQueryExecutor.execute() -> Local template answer -> saveLocalExchange()
    -> 매칭 실패: 기존 Gemini 3-step
 -> ChatRepository.sendMessageAndBuildContext()
 -> GeminiRepository.analyzeQueryNeeds()
 -> DataQueryParser.parseQueryRequest()
--> ChatViewModel.executeQuery() / executeAction() / executeAnalytics()
+-> ChatQueryExecutor.execute() / ChatActionExecutor.execute() / ChatAnalyticsCalculator.calculate()
 -> ChatContextBuilder.buildFinalAnswerPrompt()
 -> GeminiRepository.generateFinalAnswerWithContext()
 -> ChatRepository.saveAiResponseAndUpdateSummary()
 ```
 
 현재 구조의 핵심은 Gemini가 원본 DB를 직접 계산하지 않고, `DataQueryRequest` JSON으로 필요한 쿼리/액션만 요청한다는 점이다.
-실제 합계, 평균, 건수, 비율, 필터링은 `ChatViewModel.executeQuery()`와 `executeAnalytics()`에서 앱이 수행한다.
-1차 로컬 우회에서는 `LocalChatQueryRouter`가 안전한 조회 질문을 `DataQuery`로 직접 만들고, 같은 `executeQuery()`를 실행한 뒤 Gemini 없이 `strings.xml` 템플릿 응답을 저장한다.
+실제 합계, 평균, 건수, 비율, 필터링은 `ChatQueryExecutor.execute()`와 `ChatAnalyticsCalculator.calculate()`에서 앱이 수행한다.
+1차 로컬 우회에서는 `LocalChatQueryRouter`가 안전한 조회 질문을 `DataQuery`로 직접 만들고, 같은 `ChatQueryExecutor.execute()`를 실행한 뒤 Gemini 없이 `strings.xml` 템플릿 응답을 저장한다.
 
 ## 현재 토큰 비용 경계
 
@@ -57,7 +57,7 @@ status: draft
 
 | 단계 | 현재 입력 | 비용/정확도 영향 |
 |---|---|---|
-| Local route | 현재 질문 | 매칭 성공 시 Gemini 호출 없이 `executeQuery()`와 템플릿 응답만 사용한다. |
+| Local route | 현재 질문 | 매칭 성공 시 Gemini 호출 없이 `ChatQueryExecutor.execute()`와 템플릿 응답만 사용한다. |
 | Step 1 query analyzer | 요약, 최근 대화, 현재 질문, 날짜 기준 | 로컬 라우터 미매칭 조회 또는 상담/분석 질문에서 호출된다. |
 | Step 3 final answer | 월수입, 조회 결과 문자열, 액션 결과, 최근 대화, 현재 질문 | 로컬 라우터 미매칭 조회 또는 상담/분석 질문에서 호출된다. |
 | Rolling Summary | 윈도우 밖 대화 메시지 | 로컬 조회는 `saveLocalExchange()`로 사용자/응답을 저장해 summary 갱신을 건너뛴다. 기존 Gemini 경로는 사용자 메시지 저장 시 summary 갱신 경로를 탄다. |
@@ -85,7 +85,7 @@ status: draft
 사용자 질문
 -> LocalChatQueryRouter.tryRoute(message)
    -> 매칭 성공: DataQuery 생성
-      -> ChatViewModel.executeQuery() 실행
+      -> ChatQueryExecutor.execute() 실행
       -> ChatViewModel.buildLocalLookupResponse()로 템플릿 응답 생성
       -> Gemini analyze/final answer 호출 생략
       -> Rolling Summary 갱신 생략 또는 로컬 저장만 수행
@@ -100,7 +100,7 @@ status: draft
 | 질문 유형 | 로컬 생성 쿼리 | 비고 |
 |---|---|---|
 | `이번 달 총 지출 얼마야` | `QueryType.TOTAL_EXPENSE` | 앱의 커스텀 월 시작일을 사용한다. |
-| `식비 얼마야`, `배달 얼마야` | `QueryType.TOTAL_EXPENSE` + category | 상위 카테고리는 기존 `executeQuery()`의 하위 포함 규칙을 재사용한다. |
+| `식비 얼마야`, `배달 얼마야` | `QueryType.TOTAL_EXPENSE` + category | 상위 카테고리는 기존 `ChatQueryExecutor.execute()`의 하위 포함 규칙을 재사용한다. |
 | `식비 내역 보여줘` | `QueryType.EXPENSE_LIST` + category + limit | 현재 앱 기준 이번 달 범위에서 조회한다. |
 | `카테고리별 지출 보여줘` | `QueryType.EXPENSE_BY_CATEGORY` | leaf 카테고리 분해를 유지한다. |
 | `최근 지출 10개` | `QueryType.EXPENSE_LIST` + 1970-01-01~오늘 + limit | 결과 리스트를 Gemini에 다시 보내지 않는다. |
@@ -137,7 +137,9 @@ status: draft
 
 | 파일 | 역할 | 언제 보는가 |
 |---|---|---|
-| `feature/chat/ui/ChatViewModel.kt` | 채팅 orchestration, 쿼리/액션/분석 실행 | 로컬 우회 분기, executeQuery 재사용, 응답 저장 방식 변경 |
+| `feature/chat/ui/ChatViewModel.kt` | 채팅 orchestration, 크레딧, UI 상태 | 로컬 우회 분기, 응답 저장 방식 변경 |
+| `feature/chat/data/ChatQueryExecutor.kt`, `ChatActionExecutor.kt`, `ChatAnalyticsCalculator.kt` | 조회/수정/순수 분석 실행 경계 | SQL 조회, 필터/집계, 수정 액션 변경 |
+| `feature/chat/data/ChatMessageObserver.kt` | 선택 세션 메시지 구독 | 방 전환, 삭제, 중복 구독 검증 |
 | `core/util/LocalChatQueryRouter.kt` | 단순 조회 문구를 `DataQuery`로 변환 | 로컬 처리 범위, 제외 키워드, 기간 제한 변경 |
 | `feature/chat/data/GeminiRepositoryImpl.kt` | Gemini 모델 호출 | analyze/final answer 호출 조건 변경 |
 | `feature/chat/data/ChatRepositoryImpl.kt` | 사용자/AI 메시지 저장, Rolling Summary | 로컬 응답에서 summary 호출을 피할 때 |
@@ -162,6 +164,6 @@ status: draft
 2. 단순 조회 매칭 성공 시 `generateFinalAnswerWithContext()`가 호출되지 않는가?
 3. 로컬 응답 저장이 Rolling Summary Gemini 호출을 유발하지 않는가?
 4. 기존 Gemini 경로가 필요한 상담/분석 질문은 그대로 동작하는가?
-5. 커스텀 월 시작일, 제외 카드, `isExcludedFromStats`, 하위 카테고리 포함 규칙이 기존 `executeQuery()`와 동일하게 적용되는가?
+5. 커스텀 월 시작일, 제외 카드, `isExcludedFromStats`, 하위 카테고리 포함 규칙이 기존 `ChatQueryExecutor.execute()`와 동일하게 적용되는가?
 6. 사용자가 보는 문장은 템플릿 응답이어도 어색하지 않은가?
 7. 미지원 기간 표현은 잘못된 기본 기간으로 로컬 계산하지 않고 기존 Gemini 경로로 넘어가는가?

@@ -20,12 +20,12 @@ status: draft
 ChatViewModel.sendMessage(message)
 -> ChatCreditPolicy.estimate()
 -> LocalChatQueryRouter.tryRoute()
-   -> 성공: executeQuery() -> buildLocalLookupResponse() -> ChatRepository.saveLocalExchange()
+   -> 성공: ChatQueryExecutor.execute() -> buildLocalLookupResponse() -> ChatRepository.saveLocalExchange()
    -> 실패: Gemini 3-step
 -> ChatRepository.sendMessageAndBuildContext()
 -> GeminiRepository.analyzeQueryNeeds()
 -> DataQueryParser.parseQueryRequest()
--> executeQuery() / executeAction() / executeAnalytics()
+-> ChatQueryExecutor.execute() / ChatActionExecutor.execute() / ChatAnalyticsCalculator.calculate()
 -> ChatContextBuilder.buildFinalAnswerPrompt()
 -> GeminiRepository.generateFinalAnswerWithContext()
 -> ChatRepository.saveAiResponseAndUpdateSummary()
@@ -33,7 +33,7 @@ ChatViewModel.sendMessage(message)
 
 ## Local Fast Path
 
-`LocalChatQueryRouter`가 안전하게 해석할 수 있는 단순 조회는 Gemini analyzer, final answer, Rolling Summary 요약 모델을 호출하지 않는다. 라우터가 만든 `DataQuery`는 기존 `ChatViewModel.executeQuery()`를 재사용하고, 응답은 템플릿으로 저장한다.
+`LocalChatQueryRouter`가 안전하게 해석할 수 있는 단순 조회는 Gemini analyzer, final answer, Rolling Summary 요약 모델을 호출하지 않는다. 라우터가 만든 `DataQuery`는 기존 `ChatQueryExecutor.execute()`를 재사용하고, 응답은 템플릿으로 저장한다.
 
 | 로컬 처리 | 비고 |
 |---|---|
@@ -109,7 +109,7 @@ ChatViewModel.sendMessage(message)
 
 수치 안전 원칙:
 
-- 합계/평균/건수/최대/최소는 `executeAnalytics()` 또는 Room query가 계산한다.
+- 합계/평균/건수/최대/최소는 `ChatAnalyticsCalculator.calculate()` 또는 Room query가 계산한다.
 - Gemini final answer는 `[조회된 데이터]`, `[ANALYTICS 계산 결과]`만 인용한다.
 - 서로 다른 query 결과를 Gemini가 임의 합산/비교해 새 수치를 만들지 않는다.
 - 데이터가 없거나 표본이 1~2건이면 패턴/습관/추세 판단을 보류한다.
