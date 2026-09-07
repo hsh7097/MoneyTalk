@@ -38,3 +38,15 @@ SMS Settings는 SMS 파싱 전에 제외할 키워드와 발신자 차단 설정
 
 1. 제외 키워드/발신자 변경 후 기존 Home/History 표시 필터와 신규 SMS sync 필터가 모두 영향을 받는가?
 2. SMS pipeline의 pre-filter 단계와 UI 설정 값이 같은 repository를 보는가?
+
+## 화면별 책임 (2026-09-08)
+
+| 파일 | 책임 |
+|---|---|
+| `SmsSettingsScreen.kt` | 내부 route, toolbar title/back, ViewModel 상태와 callback 연결 |
+| `SmsSettingsMainContent.kt` | 동기화 상태/요청, 세 관리 화면 진입 메뉴 |
+| `BlockedPhraseManageScreen.kt` | 기본/사용자 제외 문구 목록과 사용자 문구 추가/삭제 |
+| `BlockedSenderManageScreen.kt` | 차단 발신자 목록과 추가/삭제 |
+| `ExcludedCardManageScreen.kt` | 제외 카드 수동 등록과 소유/제외 toggle |
+
+각 관리 화면은 기존 상태와 callback 시그니처를 유지한다. 저장소 호출은 `SmsSettingsViewModel`에 있으며 입력값은 해당 관리 화면의 Compose-local state다. route 이름/뒤로가기/필터 저장 정책은 바꾸지 않는다.

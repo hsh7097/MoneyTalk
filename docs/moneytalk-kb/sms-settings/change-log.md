@@ -13,3 +13,7 @@ status: draft
 | 날짜 | 근거 | 변경 | 영향 문서 | 메모 |
 |---|---|---|---|---|
 | 2026-07-08 | `feature/smssettings/ui/**`, SMS 제외/차단 repository 확인 | SMS Settings 화면 KB 생성 | `README.md` | SMS 제외 키워드/발신자 설정 화면과 SMS pipeline 영향 경계를 기록. |
+
+## 2026-09-08
+
+- 메인/제외 문구/차단 발신자/제외 카드 화면을 각각 기능 파일로 분리했다. route와 저장 콜백은 유지했다.
