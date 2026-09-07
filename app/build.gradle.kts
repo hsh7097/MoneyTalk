@@ -43,9 +43,9 @@ android {
     defaultConfig {
         applicationId = "com.sanha.moneytalk"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 20
-        versionName = "1.0.3"
+        targetSdk = 36
+        versionCode = 22
+        versionName = "1.0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

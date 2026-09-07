@@ -10,6 +10,15 @@ status: draft
 
 # Change Log
 
+## 2026-09-08
+
+- 현재 작업 트리의 `versionCode 22`와 과거 기록의 `21`을 구분하고, 1.0.4 APK 빌드·설치 확인과 Play 업로드 검증의 경계를 보강했다.
+
+## 2026-07-24
+
+- Google Play 대상 API 정책 대응을 위해 `targetSdk 36`, `versionCode 21`, `versionName 1.0.4`로 변경한 근거와 검증 경계를 `03-release-1.0.4-target-sdk-update.md`에 기록했다.
+- Play Console 알림 해소 여부는 새 AAB 업로드 후 별도 확인해야 함을 명시했다.
+
 ## 2026-07-13
 
 - `1.0.2` 태그부터 `fa07dda` 1.0.3 배포 후보까지 28개 커밋을 기능·안정화·검증·운영 결정으로 통합한 `02-release-1.0.3-development-summary.md`를 추가했다.
