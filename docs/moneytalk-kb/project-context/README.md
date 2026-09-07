@@ -4,7 +4,7 @@ title: Project Context KB
 description: MoneyTalk 전체 구조, 핵심 시스템, 임계값, AI/프롬프트 운영 경계를 요약한다.
 tags: [moneytalk, kb, project-context, architecture, threshold]
 resource: docs/moneytalk-kb/project-context/
-timestamp: 2026-07-09T05:10:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
@@ -21,6 +21,7 @@ status: draft
 |---|---|---|
 | [01-system-overview.md](01-system-overview.md) | 앱 정의, 패키지 책임, 핵심 시스템, DB/AI 운영 경계 | 작업 시작 시 전체 맥락을 복원할 때 |
 | [02-threshold-registry.md](02-threshold-registry.md) | SMS/가게명/카테고리 전파 유사도와 주요 파이프라인 상수 | 임계값 변경, 파싱/분류 정확도 조정 |
+| [03-screen-function-architecture-audit.md](03-screen-function-architecture-audit.md) | 13개 화면 도메인과 공통 기능의 책임 분리/유지 판단 및 검증 지점 | 화면별 클래스, MVVM/MVI, 가독성·패턴 정리 판단 |
 | [change-log.md](change-log.md) | 이 패키지 변경 로그 | 왜 구조/임계값 문서가 바뀌었는지 확인 |
 
 ## 소유 경계

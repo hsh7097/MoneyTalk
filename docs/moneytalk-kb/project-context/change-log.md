@@ -4,11 +4,17 @@ title: Project Context KB Change Log
 description: Project Context KB 변경 이력
 tags: [moneytalk, kb, project-context, changelog]
 resource: docs/moneytalk-kb/project-context/
-timestamp: 2026-07-09T05:10:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
 # Change Log
+
+## 2026-09-08
+
+- 13개 feature 화면 도메인과 앱 전역/SMS/알림/백업/AI 실행의 책임 감사 문서를 추가했다.
+- 기존 MVVM 유지 이유, 실제 분리한 state/mapper/service/Composable와 이미 적절해 유지한 경계를 구분했다.
+- 테스트 항목과 검증 한계를 기록했다. 통합 빌드/기기 통과 여부는 실제 로그 확인 전에는 주장하지 않는다.
 
 ## 2026-07-09
 

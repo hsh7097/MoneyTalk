@@ -4,11 +4,17 @@ title: UI Map KB Change Log
 description: UI Map KB 변경 이력
 tags: [moneytalk, kb, ui, changelog]
 resource: docs/moneytalk-kb/ui-map/
-timestamp: 2026-07-12T23:14:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
 # Change Log
+
+## 2026-09-08
+
+- MainActivity의 App/동기화 dialog, Home 페이지/섹션, History 필터, Chat 기능 UI, Settings 메뉴/화면, SMS 관리, 거래처 규칙 편집, 거래 편집 카드 분리를 현재 소스 경로로 반영했다.
+- 45개 기능 파일의 82개 Composable 선언 위치와 관련 KB를 명시했다. 실제 파일/함수와 상대 링크를 대조했다.
+- 화면/기능 전체의 상태·서비스·mapper 책임 감사 문서로 연결했다.
 
 ## 2026-07-12
 

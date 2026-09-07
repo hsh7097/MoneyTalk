@@ -4,14 +4,14 @@ title: MoneyTalk 구조 지도
 description: MoneyTalk 앱의 루트, 패키지 구조, 핵심 파일, AI 참조 순서를 정리한다.
 tags: [moneytalk, kb, structure-map, android]
 resource: app/src/main/java/com/sanha/moneytalk/
-timestamp: 2026-07-09T03:20:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
 # MoneyTalk 구조 지도
 
 > 상태: draft
-> 기준: 2026-07-08 현재 코드 확인
+> 기준: 2026-09-08 현재 소스의 진입/상태/기능 서비스 경계 확인
 
 ## Root
 
@@ -27,24 +27,25 @@ status: draft
 
 | package 또는 folder | 책임 | 대표 파일 |
 |---|---|---|
-| root | 앱 진입, Activity-scoped sync 상태, 전역 dialog/snackbar | `MainActivity.kt`, `MainViewModel.kt`, `MoneyTalkApplication.kt` |
+| root | 앱 진입, Activity-scoped sync 상태, 전역 dialog/snackbar | `MainActivity.kt`, `MoneyTalkApp.kt`, `SmsSyncDialogs.kt`, `MainViewModel.kt`, `MoneyTalkApplication.kt` |
 | `navigation` | bottom tab route와 Compose NavHost | `NavGraph.kt`, `Screen.kt`, `BottomNavItem.kt` |
 | `feature/home` | 홈 탭, 월 요약, 카테고리 분류, 데이터 repository | `HomeScreen.kt`, `HomeViewModel.kt`, `feature/home/data/*Repository.kt` |
 | `feature/history` | 내역 탭, 월별 pager, 목록/달력/필터, 상세/수정 진입 | `HistoryScreen.kt`, `HistoryViewModel.kt`, `HistoryFilter.kt`, `HistoryDialogs.kt` |
-| `feature/chat` | AI 상담 탭, Gemini 상담, 채팅방 | `ChatScreen.kt`, `ChatViewModel.kt`, `ChatRepositoryImpl.kt` |
-| `feature/settings` | 설정 탭, 백업/복원, 수입/예산/앱 설정 | `SettingsScreen.kt`, `SettingsViewModel.kt` |
+| `feature/chat` | AI 상담 탭, Gemini 상담, 채팅방 | `ChatScreen.kt`, `ChatRoomView.kt`, `ChatViewModel.kt`, `ChatQueryExecutor.kt`, `ChatActionExecutor.kt`, `ChatAnalyticsCalculator.kt`, `ChatRepositoryImpl.kt` |
+| `feature/settings/ui` | 설정 탭, 기능별 메뉴/다이얼로그, 화면 상태와 액션 | `SettingsScreen.kt`, `SettingsContract.kt`, `SettingsViewModel.kt`, `Settings*Section.kt` |
+| `feature/settings/data` | 백업 준비/복원과 전체 데이터 초기화의 기능 서비스 | `SettingsBackupService.kt`, `SettingsDataResetService.kt` |
 | `feature/aicredit` | AI 크레딧 잔액/원장 화면 | `AiCreditScreen.kt`, `AiCreditViewModel.kt` |
 | `feature/categorydetail` | 카테고리 상세 화면 | `CategoryDetailScreen.kt`, `CategoryDetailViewModel.kt` |
 | `feature/*settings` | 카테고리/SMS/거래처 규칙 설정 Activity | `CategorySettingsActivity.kt`, `SmsSettingsActivity.kt`, `StoreRuleSettingsActivity.kt` |
-| `feature/transactionedit` | 거래 추가/수정 화면 | `TransactionEditActivity.kt`, `TransactionEditViewModel.kt` |
+| `feature/transactionedit` | 거래 추가/수정 화면 | `TransactionEditActivity.kt`, `TransactionEditArgs.kt`, `TransactionEditUiState.kt`, `TransactionEditViewModel.kt` |
 | `feature/transactionlist` | 조건 기반 거래 상세 목록 | `TransactionDetailListActivity.kt`, `TransactionDetailListViewModel.kt` |
 | `feature/intro`, `feature/splash` | 초기 온보딩, 권한 안내, Splash | `IntroActivity.kt`, `OnboardingScreen.kt`, `PermissionScreen.kt`, `SplashScreen.kt` |
 | `core/database` | Room DB, DAO, Entity, DB-backed repository | `AppDatabase.kt`, `ExpenseDao.kt`, `IncomeDao.kt` |
-| `core/sms` | SMS/MMS/RCS 파싱 파이프라인 | `SmsSyncCoordinator.kt`, `SmsPipeline.kt`, `SmsRegexRuleMatcher.kt` |
+| `core/sms` | SMS/MMS/RCS 파싱 파이프라인 | `SmsSyncCoordinator.kt`, `SmsPipeline.kt`, `SmsRegexRuleMatcher.kt`, `SmsSyncResultFilter.kt`, `StoredIncomeSourceRepairer.kt` |
 | `core/sync` | 동기화 범위와 coverage 정책 | `SmsSyncRangeCalculator.kt`, `SyncCoverageRecorder.kt` |
-| `core/appfunctions` | Android App Functions 노출 함수 | `MoneyTalkFinanceAppFunctions.kt`, `MoneyTalkChatAppFunctions.kt` |
+| `core/appfunctions` | Android App Functions 노출 함수 | `MoneyTalkFinanceAppFunctions.kt`, `MoneyTalkChatAppFunctions.kt`, `MoneyTalkChatAppFunctionReader.kt`, `MoneyTalkChatAppFunctionActionExecutor.kt`, `MoneyTalkAppFunctionAnalyticsCalculator.kt` |
 | `core/ui` | 공통 Compose UI와 snackbar/coachmark | `AppSnackbarBus.kt`, `TransactionCardCompose.kt` |
-| `core/notification` | 금융앱 알림 접근/후보 분석/원격 목록, 거래 알림 표시 | `NotificationAccessHelper.kt`, `FinancialAppCandidateAnalyzer.kt`, `SmsNotificationManager.kt` |
+| `core/notification` | 금융앱 알림 접근/후보 분석/원격 목록, 거래 알림 표시 | `NotificationAccessHelper.kt`, `FinancialAppCandidateAnalyzer.kt`, `SmsNotificationManager.kt`, `TransactionNotificationIntents.kt` |
 | `core/firebase` | Analytics, Crashlytics, Premium config | `AnalyticsHelper.kt`, `PremiumManager.kt` |
 | `receiver` | SMS/MMS/RCS/notification 실시간 수신 보조 | `SmsReceiver.kt`, `MmsContentObserver.kt`, `NotificationTransactionService.kt` |
 
@@ -74,20 +75,32 @@ status: draft
 
 | 파일 | 역할 | 수정 시 함께 확인할 파일 |
 |---|---|---|
-| `MainActivity.kt` | 앱 진입, SMS 권한 요청, theme, 전역 dialog/snackbar shell | `MainViewModel.kt`, `navigation/NavGraph.kt` |
+| `MainActivity.kt` | 플랫폼 수명주기, SMS 권한, theme, 앱 root 부착 | `MainViewModel.kt`, `MoneyTalkApp.kt` |
+| `MoneyTalkApp.kt` | 탭/NavHost/전역 dialog/snackbar 조합 | `SmsSyncDialogs.kt`, `navigation/NavGraph.kt` |
+| `SmsSyncDialogs.kt` | 동기화 진행/결과 표시와 사용자 이벤트 | `MainDialogUiState`, `MoneyTalkApp.kt` |
 | `MainViewModel.kt` | Activity-scoped SMS 동기화, 권한, 광고, coverage, resume sync orchestration | `core/sms/*`, `core/sync/*`, `feature/home/data/*Repository.kt` |
+| `core/sms/SmsSyncResultFilter.kt` | 파싱 거래 시각 기준 월 저장 범위 필터 | `MainViewModel.kt`, `SyncResult` |
+| `core/sms/StoredIncomeSourceRepairer.kt` | 원문이 있는 기존 수입의 잘못된 출처 보정 | `MainViewModel.kt`, `SmsIncomeParser.kt`, `IncomeRepository.kt` |
+| `core/notification/TransactionNotificationIntents.kt` | 저장된 지출/수입 ID별 알림 진입과 뒤로가기 stack | `SmsNotificationManager.kt`, `TransactionEditArgs.kt` |
 | `core/sms/SmsIngestionWriter.kt` | 화면/백그라운드 공통 수입·지출 저장과 보정 | `ExpenseDao`, `ExpenseRepository`, `IncomeRepository` |
 | `core/sms/SmsFallback*.kt`, `receiver/SmsFallbackJobService.kt` | 미확정 금융 후보의 영속 큐와 화면 밖 후속 처리 | `ClassificationState`, `SmsSyncCoordinator`, `SmsIngestionWriter` |
 | `navigation/NavGraph.kt` | Home, History, Chat, Settings route 연결 | 각 feature `*Screen.kt` |
 | `core/database/AppDatabase.kt` | Room entity/DAO 등록과 migration 정의 | `core/database/dao/**`, `core/database/entity/**`, `core/di/DatabaseModule.kt` |
 | `core/sms/SmsSyncCoordinator.kt` | SMS batch parsing 외부 진입점 | `SmsPreFilter.kt`, `SmsIncomeFilter.kt`, `SmsRegexRuleMatcher.kt`, `SmsPipeline.kt` |
-| `feature/history/ui/HistoryViewModel.kt` | History 화면 state, 필터, 월별 page cache, 거래 action 처리 | `HistoryScreen.kt`, `HistoryFilter.kt`, `HistoryDialogs.kt` |
+| `feature/history/ui/HistoryViewModel.kt` | 월별 조회/cache, 필터 적용, 거래 action | `HistoryUiState.kt`, `HistoryIntent.kt`, `HistoryTransactionListMapper.kt` |
+| `feature/history/ui/HistoryFilterSelection.kt` | 적용 전 선택 값과 유형/카테고리 전환 규칙 | `HistoryFilter.kt`, `HistoryFilterControls.kt`, `HistoryFilterPickers.kt` |
+| `feature/home/ui/model/HomeCategoryExpenseInfo.kt` | 카테고리 순위/예산 표시 계산과 값 계약 | `component/CategoryExpenseSection.kt` |
+| `feature/chat/data/ChatMessageObserver.kt` | 현재 세션의 메시지 Flow 하나만 관찰 | `ChatViewModel.kt`, `ChatRepository.kt` |
+| `feature/settings/data/SettingsBackupService.kt`, `SettingsDataResetService.kt` | 저장소들을 거치는 백업/복원/삭제 실행 순서 | `SettingsViewModel.kt`, `DataBackupManager.kt` |
+| `core/appfunctions/MoneyTalkChatAppFunctionReader.kt`, `MoneyTalkChatAppFunctionActionExecutor.kt`, `MoneyTalkAppFunctionAnalyticsCalculator.kt` | App Functions의 typed 조회/변경/계산 실행 분리 | `MoneyTalkChatAppFunctions.kt`, `MoneyTalkChatAppFunctionModels.kt` |
+| `feature/transactionedit/ui/TransactionEditSnapshot.kt` | 실제 저장 입력의 변경 감지 계약 | `TransactionEditUiState.kt`, `TransactionEditViewModel.kt` |
 
 ## AI 참조 순서
 
 | 작업 유형 | 참조 순서 |
 |---|---|
 | 변경 파일 분류 | `00-agent-routing.md` -> 이 문서 -> 해당 패키지 README |
+| 화면/기능 구조 감사 | `project-context/03-screen-function-architecture-audit.md` -> 영향 화면 README -> `ui-map/01-screen-composable-index.md` |
 | 화면 진입 경로/실기기 QA | `02-screen-entry-paths.md` -> 영향 화면 README -> 실제 `*Activity.kt`/`*Screen.kt` |
 | 앱 진입/하단 탭 변경 | `app-shell/README.md` -> `app-shell/00-structure-map.md` -> `MainActivity.kt`/`navigation/**` |
 | Home 화면 변경 | `home/README.md` -> `home/00-structure-map.md` -> `home/package-reference/README.md` |

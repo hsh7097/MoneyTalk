@@ -4,7 +4,7 @@ title: MoneyTalk KB
 description: MoneyTalk Android 코드 작업을 위한 AI용 라우팅 및 구조 지식 베이스다.
 tags: [moneytalk, kb, android, compose, room]
 resource: app/src/main/java/com/sanha/moneytalk/
-timestamp: 2026-07-13T01:11:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
@@ -22,6 +22,7 @@ status: draft
 |---|---|---|
 | [00-agent-routing.md](00-agent-routing.md) | 변경 파일 경로를 KB 문서로 연결한다. | 작업 시작 또는 자동화 실행 시 가장 먼저 본다. |
 | [01-structure-map.md](01-structure-map.md) | 앱 전체 패키지 구조와 핵심 파일 위치를 정리한다. | 변경 파일이 어느 책임에 속하는지 판단할 때 본다. |
+| [project-context/03-screen-function-architecture-audit.md](project-context/03-screen-function-architecture-audit.md) | 13개 화면 도메인과 공통 기능의 책임 분리/유지 판단을 정리한다. | 화면별 클래스, MVVM/MVI, 전체 가독성/패턴 감사 시 본다. |
 | [02-screen-entry-paths.md](02-screen-entry-paths.md) | 화면별 사용자 진입 경로, 코드 route, Activity entry를 정리한다. | 실기기 QA, 화면 이동, route/intent 변경 시 본다. |
 | [screen-requirements/README.md](screen-requirements/README.md) | 화면별 요구사항, 작업 계획서, 개발 가능성 감사표를 정리한다. | 특정 화면을 KB만 보고 수정할 수 있는지 판단할 때 본다. |
 | [00-change-index.md](00-change-index.md) | KB 변경 이력 색인이다. | KB가 왜 바뀌었는지 확인할 때 본다. |
