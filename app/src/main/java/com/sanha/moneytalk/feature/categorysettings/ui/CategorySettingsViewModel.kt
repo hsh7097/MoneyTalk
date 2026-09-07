@@ -12,6 +12,7 @@ import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.model.CustomCategoryInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,6 +40,7 @@ class CategorySettingsViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(CategorySettingsUiState())
     val uiState: StateFlow<CategorySettingsUiState> = _uiState.asStateFlow()
+    private var categoryLoadJob: Job? = null
 
     init {
         loadCategories()
@@ -113,8 +115,9 @@ class CategorySettingsViewModel @Inject constructor(
     }
 
     private fun loadCategories() {
-        viewModelScope.launch {
-            val type = _uiState.value.selectedTab
+        val type = _uiState.value.selectedTab
+        categoryLoadJob?.cancel()
+        categoryLoadJob = viewModelScope.launch {
             val defaults: List<CategoryInfo> = when (type) {
                 CategoryType.EXPENSE -> Category.expenseEntries
                 CategoryType.INCOME -> Category.incomeEntries
@@ -135,7 +138,12 @@ class CategorySettingsViewModel @Inject constructor(
                 )
             }
             _uiState.update {
-                it.copy(defaultCategories = defaults, customCategories = customs)
+                // 이전 탭 조회가 늦게 끝나도 현재 탭의 목록을 덮지 않는다.
+                if (it.selectedTab == type) {
+                    it.copy(defaultCategories = defaults, customCategories = customs)
+                } else {
+                    it
+                }
             }
         }
     }

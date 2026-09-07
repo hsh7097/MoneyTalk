@@ -58,3 +58,7 @@ CategorySettingsScreen action
 2. 현재 코드는 기존 거래의 category displayName을 migration하지 않는다. 삭제 정책을 바꾸려면 거래 데이터 영향 정책을 별도 설계해야 한다.
 3. `CustomCategoryRepository.isDuplicate(name, type)`는 같은 type 안에서만 중복을 본다.
 4. `CategoryProvider.invalidateCache()`를 빼면 다른 화면의 category list가 stale 상태가 될 수 있다.
+
+## 탭 조회 수명 (2026-09-08)
+
+`categoryLoadJob`은 현재 카테고리 목록 조회 하나만 관리한다. 새 탭 선택/추가/삭제 후 재조회 시 이전 작업을 취소하고 선택 타입을 시작 시 캡처한다. 결과 반영 시에도 `selectedTab`이 같은지 확인하므로 지출 조회가 늦게 끝나 수입/이체 탭의 목록을 덮지 않는다. 추가/삭제 validation과 category cache 무효화 정책은 그대로 유지한다.
