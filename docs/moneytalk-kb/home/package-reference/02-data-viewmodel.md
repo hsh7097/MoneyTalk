@@ -4,7 +4,7 @@ title: Home data/ViewModel
 description: HomeViewModel의 state, page cache, repository 조회, AI insight, 분류 흐름을 설명한다.
 tags: [moneytalk, home, viewmodel, data]
 resource: app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeViewModel.kt
-timestamp: 2026-07-08T00:00:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
@@ -42,3 +42,10 @@ HomeViewModel.loadPageData(year, month)
 - [finance-data/README.md](../../finance-data/README.md): DAO/Repository/Entity
 - [category-classification/README.md](../../category-classification/README.md): 자동/수동 카테고리 분류
 - [data-refresh/README.md](../../data-refresh/README.md): `DataRefreshEvent` 갱신 흐름
+
+## 화면 책임 점검 (2026-09-08)
+
+- `HomeUiState.kt`에 화면/월 페이지 계약을 두고 ViewModel은 Repository 조회, 월 캐시, 취소 Job, 분류 진행 상태를 조율한다.
+- 분류 알고리즘은 기존 `CategoryClassifierService`, 누적 계산은 `CumulativeChartDataBuilder`, 차트 변환은 `HomeSpendingTrendInfo`에 유지한다. MVI 전체 전환 없이 기존 MVVM 수명주기를 유지한다.
+- 카테고리 순위/미분류 병합/예산 비율/90% 경고/초과 판정은 `HomeCategoryExpenseMapper`로 분리했다. 표시 모델은 DB 조회나 상태 변경을 하지 않는다.
+- `HomeCategoryExpenseMapperTest`는 순위와 미분류 합산, 90%/100%/초과 예산, 미설정/0 예산, 빈 목록을 검증한다.

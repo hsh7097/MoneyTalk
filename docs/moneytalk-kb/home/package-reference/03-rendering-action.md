@@ -4,7 +4,7 @@ title: Home rendering/action
 description: HomeScreen의 Composable 섹션, dialog, 클릭 action, 코치마크 연결을 설명한다.
 tags: [moneytalk, home, compose, action]
 resource: app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt
-timestamp: 2026-07-08T00:00:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
@@ -15,12 +15,12 @@ status: draft
 | Composable | 역할 | 액션 |
 |---|---|---|
 | `HomeScreen` | Home 탭 entry, state 수집, dialog/coachmark overlay | 월 이동, 분류 dialog, category detail, transaction edit |
-| `HomePageContent` | 월별 page data 기반 전체 홈 content 조합 | 섹션별 callback 전달 |
-| `MonthlyOverviewSection` | 월 지출/수입/예산 요약 | 월 이동 header와 함께 확인 |
+| `HomePageContent` (`HomePageContent.kt`) | 월별 page data 기반 전체 홈 content 조합 | 섹션별 callback 전달 |
+| `MonthlyOverviewSection` (`component/MonthlyOverviewSection.kt`) | 월 지출/수입/예산 요약 | 월 이동 header와 함께 확인 |
 | `SpendingTrendSection` | 누적/추세 차트 | `HomeSpendingTrendInfo` 확인 |
-| `CategoryExpenseSection` | 카테고리별 지출 랭킹 | category chip 선택 또는 상세 이동 |
-| `AiInsightCard` | 홈 AI 한줄 인사이트 | 홈 인사이트 모델/비용 확인 |
-| `EmptyExpenseSection` | 데이터 없음 상태 | SMS 권한/동기화 CTA 확인 |
+| `CategoryExpenseSection` (`component/CategoryExpenseSection.kt`) | 카테고리별 지출 랭킹 | category chip 선택 또는 상세 이동 |
+| `AiInsightCard` (`component/AiInsightCard.kt`) | 홈 AI 한줄 인사이트 | 홈 인사이트 모델/비용 확인 |
+| `EmptyExpenseSection` (`component/EmptyExpenseSection.kt`) | 데이터 없음 상태 | SMS 권한/동기화 CTA 확인 |
 
 ## Dialog와 overlay
 
@@ -36,3 +36,10 @@ status: draft
 - 거래 클릭 또는 수정은 `TransactionEditActivity` 경로를 확인한다.
 - 전체 월 동기화는 Activity-scoped `MainViewModel.showFullSyncAdDialog()`와 연결된다.
 - `onRequestSmsPermission`은 Activity 권한 요청 callback이므로 화면 내부에서 직접 permission launcher를 만들지 않는다.
+
+## 분리 후 경계
+
+- `HomeScreen`은 state 수집, pager와 ViewModel 연결, 알림/코치마크/분류 dialog를 담당한다.
+- `HomePageContent`는 기존 표시 조건과 callback을 유지하며 섹션을 조합한다. `TodayItem`은 오늘 지출/수입 렌더링용 모델로 같은 파일에 둔다.
+- 카테고리 섹션은 `HomeCategoryExpenseInfo`의 비율과 예산 상태를 읽고 펼치기/선택만 처리한다. 표시 문자열·색상·아이콘은 Composable에서 처리한다.
+- 회귀 확인: 월 이동/탭 재클릭, 카테고리 펼치기·상세 진입, 오늘 지출/수입 편집, 권한·과거 월 CTA, 분류/인사이트 표시.

@@ -4,7 +4,7 @@ title: Home 파일 인벤토리
 description: Home 도메인 파일의 역할, 확인 시점, 함께 볼 파일을 정리한다.
 tags: [moneytalk, home, file-inventory]
 resource: app/src/main/java/com/sanha/moneytalk/feature/home/
-timestamp: 2026-07-08T00:00:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
@@ -12,7 +12,14 @@ status: draft
 
 | 파일 | 역할 | 언제 보는가 | 분류 | 함께 볼 파일 |
 |---|---|---|---|---|
-| `feature/home/ui/HomeScreen.kt` | 홈 탭 Composable, 섹션, dialog, action | 홈 UI, 카테고리 클릭, 분류 CTA | 핵심 | `HomeViewModel.kt` |
+| `feature/home/ui/HomeScreen.kt` | 탭 진입, state 수집, pager/dialog/coachmark 조율 | 홈 UI, 카테고리 클릭, 분류 CTA | 핵심 | `HomeViewModel.kt` |
+| `feature/home/ui/HomeUiState.kt` | HomeUiState/HomePageData 계약 | 상태 필드 변경 | 핵심 | `HomeViewModel.kt`, `HomePageContent.kt` |
+| `feature/home/ui/HomePageContent.kt` | 월 페이지 조합, 오늘 거래, CTA, 스크롤 | 페이지 표시 조건 | 핵심 | `HomeScreen.kt`, `component/**` |
+| `feature/home/ui/component/MonthlyOverviewSection.kt` | 월 이동/월 지출·수입 hero | 월 요약 표시 | 보조 | `HomePageContent.kt` |
+| `feature/home/ui/component/CategoryExpenseSection.kt` | 순위 펼치기/선택, 카테고리 행 | 카테고리 UI | 보조 | `HomeCategoryExpenseInfo.kt` |
+| `feature/home/ui/component/AiInsightCard.kt` | 인사이트 카드/마스코트 | AI 카드 표시 | 보조 | `HomePageContent.kt` |
+| `feature/home/ui/component/EmptyExpenseSection.kt` | 기존 빈 지출 섹션 | 빈 상태 표시 | 보조 | `HomePageContent.kt` |
+| `feature/home/ui/model/HomeCategoryExpenseInfo.kt` | 카테고리 순위/예산 표시 계산 | 분류 병합/비율/경고 경계 | 핵심 | `CategoryExpenseSection.kt` |
 | `feature/home/ui/HomeViewModel.kt` | 홈 state/cache/data/action | 월별 합계, cache, AI insight, refresh | 핵심 | `ExpenseRepository.kt`, `IncomeRepository.kt` |
 | `feature/home/ui/coachmark/HomeCoachMark.kt` | 홈 코치마크 step | 온보딩 target 변경 | 핵심 후보 | `core/ui/coachmark/**` |
 | `feature/home/ui/component/SpendingTrendSection.kt` | 홈 소비 추세 차트 | 차트 UI/데이터 mapper 변경 | 핵심 후보 | `HomeSpendingTrendInfo.kt` |

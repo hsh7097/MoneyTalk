@@ -4,7 +4,7 @@ title: Home 구조 지도
 description: Home 탭의 UI, ViewModel, data repository, 코치마크 파일 구조와 AI 참조 순서를 정리한다.
 tags: [moneytalk, home, structure-map]
 resource: app/src/main/java/com/sanha/moneytalk/feature/home/
-timestamp: 2026-07-08T00:00:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
@@ -17,8 +17,15 @@ feature/home/
 ├── ui/
 │   ├── HomeScreen.kt
 │   ├── HomeViewModel.kt
+│   ├── HomeUiState.kt
+│   ├── HomePageContent.kt
 │   ├── coachmark/HomeCoachMark.kt
 │   ├── component/SpendingTrendSection.kt
+│   ├── component/MonthlyOverviewSection.kt
+│   ├── component/CategoryExpenseSection.kt
+│   ├── component/AiInsightCard.kt
+│   ├── component/EmptyExpenseSection.kt
+│   ├── model/HomeCategoryExpenseInfo.kt
 │   └── model/HomeSpendingTrendInfo.kt
 └── data/
     ├── ExpenseRepository.kt
@@ -36,6 +43,10 @@ feature/home/
 | 파일 | 분류 | 역할 | 함께 볼 파일 |
 |---|---|---|---|
 | `HomeScreen.kt` | entry/rendering/action | 홈 탭 Composable, 월 이동, 카테고리/거래 클릭, dialog, 코치마크 overlay | `HomeViewModel.kt`, `HomeCoachMark.kt` |
+| `HomeUiState.kt` | state | 월별 HomePageData와 화면 HomeUiState 계약 | `HomeViewModel.kt`, `HomePageContent.kt` |
+| `HomePageContent.kt` | rendering | 월 페이지의 CTA/요약/차트/카테고리/오늘 거래 조합 | `component/**` |
+| `component/MonthlyOverviewSection.kt`, `CategoryExpenseSection.kt`, `AiInsightCard.kt` | rendering | 월 요약, 카테고리 순위, AI 카드의 독립 렌더링 | `HomePageContent.kt` |
+| `model/HomeCategoryExpenseInfo.kt` | mapper | 순위/미분류 병합, 예산 사용률, 경고/초과 표시 값 | `CategoryExpenseSection.kt` |
 | `HomeViewModel.kt` | data/action | 월별 page cache, repository 조회, AI insight, 미분류 분류, refresh event 수집 | `ExpenseRepository.kt`, `IncomeRepository.kt`, `SettingsDataStore.kt` |
 | `component/SpendingTrendSection.kt` | rendering | 누적/추세 차트 섹션 | `HomeSpendingTrendInfo.kt`, `core/ui/component/chart/**` |
 | `model/HomeSpendingTrendInfo.kt` | mapper | 홈 월별 페이지 데이터를 공통 차트 model로 변환 | `SpendingTrendSection.kt` |
