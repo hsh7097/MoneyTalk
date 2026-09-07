@@ -16,6 +16,75 @@ import org.junit.Test
 class DataBackupManagerTest {
 
     @Test
+    fun `수입 사용자 편집값과 원등록시각을 JSON 왕복 후 보존한다`() {
+        val income = IncomeEntity(
+            id = 41,
+            smsId = "synthetic-income-1",
+            amount = 45_000,
+            type = "입금",
+            source = "테스트 수입처",
+            description = "테스트 입금",
+            isRecurring = false,
+            dateTime = 1_700_000_000_000L,
+            originalSms = "테스트 입금 45,000원",
+            senderAddress = "15880000",
+            memo = "사용자 수입 메모",
+            category = "사용자 수입 분류",
+            createdAt = 1_700_000_003_000L
+        )
+        val manualIncome = income.copy(
+            id = 42,
+            smsId = null,
+            originalSms = null,
+            senderAddress = "",
+            isRecurring = true,
+            recurringDay = 25,
+            createdAt = 1_700_000_004_000L
+        )
+        val json = DataBackupManager.createBackupJson(
+            expenses = emptyList(),
+            incomes = listOf(income, manualIncome),
+            monthlyIncome = 0,
+            monthStartDay = 1
+        )
+        val backup = Gson().fromJson(json, BackupData::class.java)
+
+        val restored = DataBackupManager.convertToIncomeEntities(backup.incomes)
+
+        assertEquals(listOf(income.copy(id = 0), manualIncome.copy(id = 0)), restored)
+    }
+
+    @Test
+    fun `지출 메모와 원등록시각을 JSON 왕복 후 보존한다`() {
+        val expense = ExpenseEntity(
+            id = 51,
+            amount = 12_000,
+            storeName = "테스트 상점",
+            category = "쇼핑",
+            cardName = "테스트 카드",
+            dateTime = 1_700_000_000_000L,
+            originalSms = "테스트 상점 12,000원 승인",
+            smsId = "synthetic-expense-1",
+            senderAddress = "15880000",
+            memo = "사용자 지출 메모",
+            isFixed = true,
+            isExcludedFromStats = true,
+            createdAt = 1_700_000_002_000L
+        )
+        val json = DataBackupManager.createBackupJson(
+            expenses = listOf(expense),
+            incomes = emptyList(),
+            monthlyIncome = 0,
+            monthStartDay = 1
+        )
+        val backup = Gson().fromJson(json, BackupData::class.java)
+
+        val restored = DataBackupManager.convertToExpenseEntities(backup.expenses).single()
+
+        assertEquals(expense.copy(id = 0), restored)
+    }
+
+    @Test
     fun `JSON 백업에 사용자 설정과 거래 보정 필드를 포함한다`() {
         val json = DataBackupManager.createBackupJson(
             expenses = listOf(
@@ -147,12 +216,19 @@ class DataBackupManagerTest {
         """.trimIndent()
         val backupData = Gson().fromJson(legacyJson, BackupData::class.java)
 
+        val restoreStartedAt = System.currentTimeMillis()
         val expense = DataBackupManager.convertToExpenseEntities(backupData.expenses.orEmpty()).single()
         val income = DataBackupManager.convertToIncomeEntities(backupData.incomes.orEmpty()).single()
+        val restoreFinishedAt = System.currentTimeMillis()
 
         assertEquals("EXPENSE", expense.transactionType)
         assertEquals("", expense.transferDirection)
         assertEquals(null, income.smsId)
+        assertEquals("미분류", income.category)
+        assertEquals("", income.source)
+        assertEquals(null, income.memo)
+        assertTrue(expense.createdAt in restoreStartedAt..restoreFinishedAt)
+        assertTrue(income.createdAt in restoreStartedAt..restoreFinishedAt)
     }
 
     @Test

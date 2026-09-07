@@ -103,7 +103,9 @@ data class ExpenseBackup(
     @SerializedName("transactionType")
     val transactionType: String = "EXPENSE",
     @SerializedName("transferDirection")
-    val transferDirection: String = ""
+    val transferDirection: String = "",
+    @SerializedName("createdAt")
+    val createdAt: Long? = null
 )
 
 data class IncomeBackup(
@@ -124,7 +126,15 @@ data class IncomeBackup(
     @SerializedName("senderAddress")
     val senderAddress: String = "",
     @SerializedName("originalSms")
-    val originalSms: String? = null
+    val originalSms: String? = null,
+    @SerializedName("category")
+    val category: String? = null,
+    @SerializedName("source")
+    val source: String? = null,
+    @SerializedName("memo")
+    val memo: String? = null,
+    @SerializedName("createdAt")
+    val createdAt: Long? = null
 )
 
 data class CategoryMappingBackup(
@@ -314,7 +324,8 @@ object DataBackupManager {
                     isFixed = expense.isFixed,
                     isExcludedFromStats = expense.isExcludedFromStats,
                     transactionType = expense.transactionType,
-                    transferDirection = expense.transferDirection
+                    transferDirection = expense.transferDirection,
+                    createdAt = expense.createdAt
                 )
             },
             incomes = incomes.map { income ->
@@ -327,7 +338,11 @@ object DataBackupManager {
                     recurringDay = income.recurringDay,
                     dateTime = income.dateTime,
                     senderAddress = income.senderAddress,
-                    originalSms = income.originalSms
+                    originalSms = income.originalSms,
+                    category = income.category,
+                    source = income.source,
+                    memo = income.memo,
+                    createdAt = income.createdAt
                 )
             },
             categoryMappings = categoryMappings.map { mapping ->
@@ -561,7 +576,7 @@ object DataBackupManager {
                 isExcludedFromStats = backup.isExcludedFromStats,
                 transactionType = backup.transactionType.orDefaultIfBlank("EXPENSE"),
                 transferDirection = backup.transferDirection.orEmpty(),
-                createdAt = System.currentTimeMillis()
+                createdAt = backup.createdAt ?: System.currentTimeMillis()
             )
         }
     }
@@ -579,7 +594,10 @@ object DataBackupManager {
                 dateTime = backup.dateTime,
                 senderAddress = backup.senderAddress.orEmpty(),
                 originalSms = backup.originalSms,
-                createdAt = System.currentTimeMillis()
+                category = backup.category.orDefaultIfBlank("미분류"),
+                source = backup.source.orEmpty(),
+                memo = backup.memo,
+                createdAt = backup.createdAt ?: System.currentTimeMillis()
             )
         }
     }
