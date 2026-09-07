@@ -56,3 +56,7 @@ StoreRuleSettingsScreen
 2. category picker는 현재 지출 category만 사용한다. 수입/이체 규칙을 추가하려면 `CategoryType` 정책부터 분리한다.
 3. `StoreRuleListItem`은 category/fixed/stats label을 조건부 표시한다. 새 rule 필드를 추가하면 목록 label과 dialog 입력을 같이 갱신한다.
 4. 코치마크는 target registry에 등록된 target만 표시하므로 target key 누락 시 guide가 안 뜬다.
+
+## 편집 기능 파일 분리 (2026-09-08)
+
+`AddEditRuleDialog`는 `StoreRuleEditorDialog.kt`로 이동했다. `StoreRuleSettingsScreen`은 목록, 코치마크, 카테고리 picker와 dialog 조합을 담당한다. 편집기는 기존 입력값/callback만 받으며 추가/편집, 기존 stats 제외 값 보존, 카테고리 reset, nullable fixed 규칙의 저장 정책은 ViewModel과 `StoreRuleSyncService`에 유지한다.

@@ -35,3 +35,7 @@ Store Rule Settings는 거래처명/키워드 기반 규칙을 관리해 카테�
 | `feature/home/data/StoreRuleRepository.kt` | 규칙 DB repository |
 | `feature/home/data/StoreRuleSyncService.kt` | 규칙 동기화/적용 보조 |
 | `feature/storerulesettings/ui/coachmark/StoreRuleCoachMark.kt` | Store Rule 화면 코치마크 |
+
+## 편집 UI 경계
+
+`StoreRuleEditorDialog.kt`의 `AddEditRuleDialog`가 규칙 입력 UI를 담당한다. 목록 화면과 입력 폼의 파일을 나누되 ViewModel의 CRUD/validation과 소급 적용 서비스는 유지한다.
