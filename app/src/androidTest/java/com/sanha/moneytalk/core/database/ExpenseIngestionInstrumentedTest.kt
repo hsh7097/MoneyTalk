@@ -1,0 +1,586 @@
+package com.sanha.moneytalk.core.database
+
+import androidx.room.Room
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.sanha.moneytalk.core.database.dao.ExpenseIngestionResult
+import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.model.SmsAnalysisResult
+import com.sanha.moneytalk.core.sms.SmsIngestionWriter
+import com.sanha.moneytalk.core.sms.SmsInput
+import com.sanha.moneytalk.core.sms.SmsParseResult
+import com.sanha.moneytalk.core.sms.SmsTransactionDateResolver
+import com.sanha.moneytalk.core.ui.ClassificationState
+import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
+import com.sanha.moneytalk.feature.home.data.ExpenseRepository
+import com.sanha.moneytalk.feature.home.data.IncomeRepository
+import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class ExpenseIngestionInstrumentedTest {
+    private lateinit var database: AppDatabase
+    private lateinit var repository: ExpenseRepository
+    private lateinit var writer: SmsIngestionWriter
+    private lateinit var classificationState: ClassificationState
+    private val baseTime = 1_783_332_000_000L
+
+    @Before
+    fun setUp() {
+        database = Room.inMemoryDatabaseBuilder(
+            InstrumentationRegistry.getInstrumentation().targetContext,
+            AppDatabase::class.java
+        ).build()
+        repository = ExpenseRepository(database.expenseDao())
+        classificationState = ClassificationState()
+        writer = SmsIngestionWriter(
+            repository,
+            IncomeRepository(database.incomeDao()),
+            LocalCategoryClassifier(),
+            StoreRuleRepository(database.storeRuleDao()),
+            classificationState,
+            database
+        )
+    }
+
+    @After
+    fun tearDown() {
+        database.close()
+    }
+
+    @Test
+    fun concurrentSmsAndAppNotificationKeepOneSmsRecord() = runBlocking(Dispatchers.IO) {
+        repeat(30) { index ->
+            val sms = expense("sms-$index", time = baseTime + index * 180_000L)
+            val app = expense("app-$index", app = true, time = sms.dateTime + 20_000L)
+            val results = concurrently(
+                { repository.insertIngested(sms) },
+                { repository.insertIngested(app) }
+            )
+
+            assertEquals(1, results.count { it == ExpenseIngestionResult.INSERTED })
+            val stored = repository.getExpensesByDateRangeOnce(sms.dateTime, app.dateTime)
+            assertEquals(1, stored.size)
+            assertEquals(sms.smsId, stored.single().smsId)
+        }
+        assertEquals(30, repository.getExpenseCount())
+    }
+
+    @Test
+    fun concurrentBatchAndInstantNotificationUseSameDeduplicationBoundary() =
+        runBlocking(Dispatchers.IO) {
+            val sms = expense("batch-sms")
+            val app = expense("instant-app", app = true, time = baseTime + 20_000L)
+            concurrently(
+                { repository.insertAllIngested(listOf(sms)) },
+                { repository.insertIngested(app) }
+            )
+
+            assertEquals(1, repository.getExpenseCount())
+            assertEquals(sms.smsId, repository.getAllExpensesOnce().single().smsId)
+        }
+
+    @Test
+    fun smsReplacesAppNotificationWithoutChangingRowIdOrUserMetadata() =
+        runBlocking(Dispatchers.IO) {
+            val app = expense("app", app = true).copy(
+                memo = "분할 정산",
+                isFixed = true,
+                isExcludedFromStats = true,
+                createdAt = baseTime - 10_000L
+            )
+            repository.insertIngested(app)
+            val existing = repository.getAllExpensesOnce().single()
+
+            val result = repository.insertIngested(expense("sms"))
+
+            val stored = repository.getAllExpensesOnce().single()
+            assertEquals(ExpenseIngestionResult.UPDATED, result)
+            assertEquals(existing.id, stored.id)
+            assertEquals("sms", stored.smsId)
+            assertEquals(existing.memo, stored.memo)
+            assertEquals(existing.createdAt, stored.createdAt)
+            assertTrue(stored.isFixed)
+            assertTrue(stored.isExcludedFromStats)
+        }
+
+    @Test
+    fun repeatedDeliveryOfSameSmsDoesNotOverwriteEditedRecord() = runBlocking(Dispatchers.IO) {
+        val sms = expense("sms")
+        repository.insertIngested(sms)
+        val edited = repository.getAllExpensesOnce().single().copy(memo = "사용자 메모")
+        repository.update(edited)
+
+        val result = repository.insertIngested(sms)
+
+        assertEquals(ExpenseIngestionResult.SKIPPED, result)
+        assertEquals(edited, repository.getAllExpensesOnce().single())
+    }
+
+    @Test
+    fun concurrentSmsRedeliveryWithDriftedReceiveTimesKeepsOneRecord() = runBlocking(Dispatchers.IO) {
+        repeat(30) { index ->
+            val transactionAt = baseTime + index * 180_000L
+            val first = smsExpense(receivedAt = transactionAt + 7_200_000L, transactionAt = transactionAt)
+            val second = smsExpense(receivedAt = transactionAt + 7_202_000L, transactionAt = transactionAt)
+
+            val results = concurrently(
+                { repository.insertIngested(first) },
+                { repository.insertIngested(second) }
+            )
+
+            assertEquals(1, results.count { it == ExpenseIngestionResult.INSERTED })
+            assertEquals(1, results.count { it == ExpenseIngestionResult.SKIPPED })
+            assertEquals(1, repository.getExpensesByDateRangeOnce(transactionAt, transactionAt).size)
+        }
+        assertEquals(30, repository.getExpenseCount())
+    }
+
+    @Test
+    fun concurrentBatchAndInstantSmsRedeliveryKeepOneRecord() = runBlocking(Dispatchers.IO) {
+        val first = smsExpense(receivedAt = baseTime)
+        val second = smsExpense(receivedAt = baseTime + 2_000L)
+
+        val results = concurrently(
+            { repository.insertAllIngested(listOf(first)).single() },
+            { repository.insertIngested(second) }
+        )
+
+        assertEquals(1, results.count { it == ExpenseIngestionResult.INSERTED })
+        assertEquals(1, results.count { it == ExpenseIngestionResult.SKIPPED })
+        assertEquals(1, repository.getExpenseCount())
+    }
+
+    @Test
+    fun concurrentSameMinutePaymentsWithDifferentBalancesRemainSeparate() = runBlocking(Dispatchers.IO) {
+        val first = smsExpense(receivedAt = baseTime + 10_000L)
+        val second = smsExpense(
+            receivedAt = baseTime + 50_000L,
+            body = first.originalSms.replace("잔액100,000원", "잔액88,000원")
+        )
+
+        val results = concurrently(
+            { repository.insertIngested(first) },
+            { repository.insertIngested(second) }
+        )
+
+        assertEquals(listOf(ExpenseIngestionResult.INSERTED, ExpenseIngestionResult.INSERTED), results)
+        assertEquals(
+            setOf(first.smsId, second.smsId),
+            repository.getAllExpensesOnce().map { it.smsId }.toSet()
+        )
+    }
+
+    @Test
+    fun concurrentIdenticalMinutePaymentsWithoutBalanceRemainSeparate() = runBlocking(Dispatchers.IO) {
+        val first = sameMinutePaymentWithoutBalance(baseTime)
+        val second = sameMinutePaymentWithoutBalance(baseTime + 39_000L)
+        assertEquals(first.dateTime, second.dateTime)
+        assertEquals(first.originalSms, second.originalSms)
+
+        val results = concurrently(
+            { repository.insertIngested(first) },
+            { repository.insertIngested(second) }
+        )
+
+        assertEquals(2, results.count { it == ExpenseIngestionResult.INSERTED })
+        assertEquals(2, repository.getExpenseCount())
+    }
+
+    @Test
+    fun writerKeepsIdenticalMinutePaymentsWithoutBalanceInOneBatch() = runBlocking(Dispatchers.IO) {
+        val first = sameMinutePaymentWithoutBalance(baseTime)
+        val second = sameMinutePaymentWithoutBalance(baseTime + 20_000L)
+        val parsed = listOf(parsedExpense(first, baseTime), parsedExpense(second, baseTime + 20_000L))
+        val inputs = parsed.map { it.input }
+        val snapshot = writer.buildExistingSmsSnapshot(inputs, baseTime to baseTime + 60_000L)
+
+        assertEquals(inputs, writer.readAndFilterSms(inputs, emptyMap(), snapshot))
+        val result = writer.write(parsed, emptyList(),
+            requireNotNull(classificationState.captureRegistrationEpoch()))
+
+        assertEquals(2, result.expenses.newCount)
+        assertEquals(2, repository.getExpenseCount())
+    }
+
+    @Test
+    fun writerKeepsRepeatedPaymentAndDoesNotCompleteAnotherPendingSms() = runBlocking(Dispatchers.IO) {
+        val first = sameMinutePaymentWithoutBalance(baseTime)
+        val second = sameMinutePaymentWithoutBalance(baseTime + 39_000L)
+        repository.insertIngested(first)
+        val firstInput = parsedExpense(first, baseTime).input
+        val secondParsed = parsedExpense(second, baseTime + 39_000L)
+        val snapshot = writer.buildExistingSmsSnapshot(
+            listOf(secondParsed.input), baseTime to baseTime + 60_000L
+        )
+        val pending = writer.buildSmsIdCandidateIndex(setOf(first.smsId), snapshot)
+
+        assertEquals(listOf(secondParsed.input), writer.readAndFilterSms(
+            listOf(secondParsed.input), pending, snapshot
+        ))
+        assertTrue(writer.findMatchingSmsIds(secondParsed.input, pending).isEmpty())
+        assertEquals(setOf(first.smsId), writer.findMatchingSmsIds(firstInput, pending))
+        val result = writer.write(listOf(secondParsed), emptyList(),
+            requireNotNull(classificationState.captureRegistrationEpoch()))
+
+        assertEquals(1, result.expenses.newCount)
+        assertEquals(2, repository.getExpenseCount())
+    }
+
+    @Test
+    fun smsRedeliveryWindowUsesReceivedTimeInsteadOfTransactionMinute() = runBlocking(Dispatchers.IO) {
+        repository.insertIngested(smsExpense(receivedAt = baseTime))
+
+        val withinWindow = repository.insertIngested(smsExpense(receivedAt = baseTime + 60_000L))
+        val outsideWindow = repository.insertIngested(smsExpense(receivedAt = baseTime + 60_001L))
+
+        assertEquals(ExpenseIngestionResult.SKIPPED, withinWindow)
+        assertEquals(ExpenseIngestionResult.INSERTED, outsideWindow)
+        assertEquals(2, repository.getExpenseCount())
+    }
+
+    @Test
+    fun driftedSmsRedeliveryDoesNotOverwriteUserMetadata() = runBlocking(Dispatchers.IO) {
+        repository.insertIngested(smsExpense(receivedAt = baseTime))
+        val edited = repository.getAllExpensesOnce().single().copy(
+            memo = "사용자 메모",
+            category = "쇼핑",
+            isFixed = true,
+            isExcludedFromStats = true
+        )
+        repository.update(edited)
+
+        val result = repository.insertIngested(smsExpense(receivedAt = baseTime + 2_000L))
+
+        assertEquals(ExpenseIngestionResult.SKIPPED, result)
+        assertEquals(edited, repository.getAllExpensesOnce().single())
+    }
+
+    @Test
+    fun sameChannelRepeatedPaymentsWithSameAmountAndBodyRemainSeparate() =
+        runBlocking(Dispatchers.IO) {
+            repository.insertIngested(smsExpense(receivedAt = baseTime))
+            repository.insertIngested(smsExpense(
+                receivedAt = baseTime + 20_000L,
+                transactionAt = baseTime + 20_000L
+            ))
+            repository.insertIngested(expense("app-1", app = true, time = baseTime + 180_000L))
+            repository.insertIngested(expense("app-2", app = true, time = baseTime + 200_000L))
+
+            assertEquals(4, repository.getExpenseCount())
+        }
+
+    @Test
+    fun differentCardsAndDistinctTransactionsOutsideWindowRemainSeparate() =
+        runBlocking(Dispatchers.IO) {
+            repository.insertIngested(expense("sms"))
+            repository.insertIngested(expense("other-card", app = true).copy(
+                originalSms = "우리카드 5678 승인\n테스트상점\n12,000원"
+            ))
+            repository.insertIngested(expense("later-app", app = true, time = baseTime + 60_001L))
+
+            assertEquals(3, repository.getExpenseCount())
+        }
+
+    @Test
+    fun batchReconciliationUpdatesParsingAndKeepsLatestUserMetadata() =
+        runBlocking(Dispatchers.IO) {
+            val sms = expense("sms")
+            repository.insertIngested(sms)
+            val stored = repository.getAllExpensesOnce().single()
+            repository.update(stored.copy(memo = "사용자 메모", isExcludedFromStats = true))
+
+            repository.insertAllIngested(listOf(sms.copy(category = "식비")))
+
+            val reconciled = repository.getAllExpensesOnce().single()
+            assertEquals(stored.id, reconciled.id)
+            assertEquals("식비", reconciled.category)
+            assertEquals("사용자 메모", reconciled.memo)
+            assertTrue(reconciled.isExcludedFromStats)
+            assertFalse(reconciled.senderAddress.startsWith("app:"))
+        }
+
+    @Test
+    fun writerReconcilesTimestampDriftWithoutLosingMemo() = runBlocking(Dispatchers.IO) {
+        val sms = expense("unused").copy(originalSms = "우리카드 1234 승인\n테스트상점\n12,000원\n잔액100,000")
+        val firstId = "${sms.senderAddress}_${baseTime}_${sms.originalSms.hashCode()}"
+        repository.insertIngested(sms.copy(smsId = firstId, memo = "보존할 메모"))
+        val existing = repository.getAllExpensesOnce().single()
+        val providerId = "${sms.senderAddress}_${baseTime + 20_000L}_${sms.originalSms.hashCode()}"
+        val parsed = parsedExpense(sms.copy(smsId = providerId), baseTime + 20_000L)
+        val snapshot = writer.buildExistingSmsSnapshot(listOf(parsed.input), baseTime to baseTime + 60_000L)
+        val pending = writer.buildSmsIdCandidateIndex(setOf(firstId), snapshot)
+
+        assertEquals(setOf(firstId), writer.findMatchingSmsIds(parsed.input, pending))
+        assertEquals(listOf(parsed.input), writer.readAndFilterSms(listOf(parsed.input), pending, snapshot))
+
+        writer.write(
+            expenses = listOf(parsed),
+            incomes = emptyList(),
+            registrationEpoch = requireNotNull(classificationState.captureRegistrationEpoch())
+        )
+
+        val reconciled = repository.getAllExpensesOnce().single()
+        assertEquals(existing.id, reconciled.id)
+        assertEquals(providerId, reconciled.smsId)
+        assertEquals(existing.memo, reconciled.memo)
+    }
+
+    @Test
+    fun writerKeepsPaymentAndItsCancellationInSeparateTables() = runBlocking(Dispatchers.IO) {
+        val payment = expense("payment")
+        val cancellation = SmsInput(
+            id = "cancel",
+            body = "12,000원 결제 취소 우리카드 | 테스트상점(일시불)",
+            address = "15889955",
+            date = baseTime + 120_000L
+        )
+
+        writer.write(
+            listOf(parsedExpense(payment)),
+            listOf(cancellation),
+            requireNotNull(classificationState.captureRegistrationEpoch())
+        )
+
+        assertEquals(1, repository.getExpenseCount())
+        val income = database.incomeDao().getAllIncomesOnce().single()
+        assertEquals("cancel", income.smsId)
+        assertEquals(12_000, income.amount)
+        assertEquals("환불", income.type)
+    }
+
+    @Test
+    fun writerRejectsRequestCreatedBeforeDataDeletion() = runBlocking(Dispatchers.IO) {
+        val previousEpoch = requireNotNull(classificationState.captureRegistrationEpoch())
+        classificationState.withRegistrationsPaused { }
+        var cancelled = false
+        try {
+            writer.write(listOf(parsedExpense(expense("old-job"))), emptyList(), previousEpoch)
+        } catch (_: CancellationException) {
+            cancelled = true
+        }
+
+        assertTrue(cancelled)
+        assertEquals(0, repository.getExpenseCount())
+        assertEquals(0, database.incomeDao().getIncomeCount())
+    }
+
+    @Test
+    fun writerReportsSmsReplacingAppAsReconciliation() = runBlocking(Dispatchers.IO) {
+        repository.insertIngested(expense("app", app = true))
+
+        val result = writer.write(
+            listOf(parsedExpense(expense("sms"))), emptyList(),
+            requireNotNull(classificationState.captureRegistrationEpoch())
+        )
+
+        assertEquals(0, result.expenses.newCount)
+        assertEquals(1, result.expenses.reconciledCount)
+        assertEquals(1, repository.getExpenseCount())
+    }
+
+    @Test
+    fun writerReportsSkippedDuplicateAsHandled() = runBlocking(Dispatchers.IO) {
+        repository.insertIngested(expense("sms"))
+
+        val result = writer.write(
+            listOf(parsedExpense(expense("app", app = true))), emptyList(),
+            requireNotNull(classificationState.captureRegistrationEpoch())
+        )
+
+        assertEquals(0, result.expenses.newCount)
+        assertEquals(0, result.expenses.reconciledCount)
+        assertEquals(setOf("app"), result.handledSmsIds)
+        assertEquals(1, repository.getExpenseCount())
+    }
+
+    @Test
+    fun writerLeavesUnparsedIncomeUnhandled() = runBlocking(Dispatchers.IO) {
+        val input = SmsInput("unparsed", "입금 알림", "15889955", baseTime)
+
+        val result = writer.write(emptyList(), listOf(input),
+            requireNotNull(classificationState.captureRegistrationEpoch()))
+
+        assertTrue(result.handledSmsIds.isEmpty())
+        assertEquals(0, database.incomeDao().getIncomeCount())
+    }
+
+    @Test
+    fun writerStoresOrdinaryDepositWithoutAnExpense() = runBlocking(Dispatchers.IO) {
+        val input = SmsInput(
+            "deposit", "입금 100,000원\n테스터 → 입출금통장(1234)\n잔액 250,000원",
+            "15889955", baseTime
+        )
+
+        val result = writer.write(emptyList(), listOf(input),
+            requireNotNull(classificationState.captureRegistrationEpoch()))
+
+        val stored = database.incomeDao().getAllIncomesOnce().single()
+        assertEquals(100_000, stored.amount)
+        assertEquals("테스터", stored.source)
+        assertEquals("입금", stored.type)
+        assertEquals(1, result.incomes.newCount)
+        assertEquals(setOf("deposit"), result.handledSmsIds)
+        assertEquals(0, repository.getExpenseCount())
+    }
+
+    @Test
+    fun failedExpenseReplacementRestoresOriginalIncome() = runBlocking(Dispatchers.IO) {
+        val sms = expense("reclassified")
+        val original = IncomeEntity(
+            smsId = sms.smsId, amount = sms.amount, type = "입금",
+            description = "파싱 보정 대상", isRecurring = false,
+            dateTime = sms.dateTime, originalSms = sms.originalSms, memo = "보존 메모"
+        )
+        database.incomeDao().insert(original)
+        val stored = database.incomeDao().getAllIncomesOnce().single()
+        database.openHelper.writableDatabase.execSQL(
+            "CREATE TRIGGER reject_expense BEFORE INSERT ON expenses " +
+                "BEGIN SELECT RAISE(ABORT, 'test write failure'); END"
+        )
+
+        assertWriteFails {
+            writer.write(listOf(parsedExpense(sms)), emptyList(),
+                requireNotNull(classificationState.captureRegistrationEpoch()))
+        }
+
+        assertEquals(stored, database.incomeDao().getAllIncomesOnce().single())
+        assertEquals(0, repository.getExpenseCount())
+    }
+
+    @Test
+    fun failedIncomeReplacementRestoresOriginalExpense() = runBlocking(Dispatchers.IO) {
+        val original = expense("reclassified").copy(memo = "보존 메모")
+        repository.insertIngested(original)
+        val stored = repository.getAllExpensesOnce().single()
+        database.openHelper.writableDatabase.execSQL(
+            "CREATE TRIGGER reject_income BEFORE INSERT ON incomes " +
+                "BEGIN SELECT RAISE(ABORT, 'test write failure'); END"
+        )
+        val cancellation = SmsInput(
+            original.smsId, "12,000원 결제 취소 우리카드 | 테스트상점(일시불)",
+            original.senderAddress, baseTime
+        )
+
+        assertWriteFails {
+            writer.write(emptyList(), listOf(cancellation),
+                requireNotNull(classificationState.captureRegistrationEpoch()))
+        }
+
+        assertEquals(stored, repository.getAllExpensesOnce().single())
+        assertEquals(0, database.incomeDao().getIncomeCount())
+    }
+
+    private suspend fun assertWriteFails(operation: suspend () -> Unit) {
+        var failed = false
+        try {
+            operation()
+        } catch (_: android.database.sqlite.SQLiteConstraintException) {
+            failed = true
+        }
+        assertTrue("Expected injected SQLite write failure", failed)
+    }
+
+    private suspend fun <T> concurrently(first: suspend () -> T, second: suspend () -> T): List<T> =
+        coroutineScope {
+            val start = CompletableDeferred<Unit>()
+            val jobs = listOf(first, second).map { operation ->
+                async(Dispatchers.IO) {
+                    start.await()
+                    operation()
+                }
+            }
+            start.complete(Unit)
+            jobs.awaitAll()
+        }
+
+    private fun smsExpense(
+        receivedAt: Long,
+        transactionAt: Long = baseTime,
+        body: String = "우리카드 1234 승인\n테스트상점\n12,000원\n잔액100,000원"
+    ): ExpenseEntity {
+        val sms = expense("unused", time = transactionAt).copy(originalSms = body)
+        return sms.copy(smsId = "${sms.senderAddress}_${receivedAt}_${body.hashCode()}")
+    }
+
+    private fun sameMinutePaymentWithoutBalance(receivedAt: Long): ExpenseEntity {
+        val body = "우리카드 1234 승인\n테스트상점\n12,000원\n${DateUtils.formatDateTime(baseTime).substring(5)}"
+        val transactionAt = DateUtils.parseDateTime(
+            SmsTransactionDateResolver.extractDateTime(body, receivedAt)
+        )
+        return smsExpense(receivedAt, transactionAt, body)
+    }
+
+    private fun expense(
+        smsId: String,
+        app: Boolean = false,
+        time: Long = baseTime
+    ): ExpenseEntity = ExpenseEntity(
+        amount = 12_000,
+        storeName = "테스트상점",
+        category = "기타",
+        // SmsInstantProcessor가 DB에 저장하는 정규화된 카드사명과 동일하게 구성한다.
+        cardName = "우리",
+        dateTime = time,
+        originalSms = "우리카드 1234 승인\n테스트상점\n12,000원",
+        smsId = smsId,
+        senderAddress = if (app) "app:com.wooricard.smartapp" else "15889955"
+    )
+
+    private fun parsedExpense(expense: ExpenseEntity, receivedAt: Long = expense.dateTime) =
+        SmsParseResult(
+            input = SmsInput(expense.smsId, expense.originalSms, expense.senderAddress, receivedAt),
+            analysis = SmsAnalysisResult(
+                expense.amount,
+                expense.storeName,
+                "식비",
+                DateUtils.formatDateTime(expense.dateTime),
+                expense.cardName
+            ),
+            tier = 2,
+            confidence = 1f
+        )
+
+    private class LocalCategoryClassifier : CategoryClassifierService {
+        override suspend fun initCategoryCache() = Unit
+        override fun clearCategoryCache() = Unit
+        override suspend fun flushPendingMappings() = Unit
+        override suspend fun getCategory(storeName: String, originalSms: String) = "식비"
+        override suspend fun classifyStoreNamesInMemory(
+            storeNames: List<String>,
+            onStepProgress: (suspend (String, Int, Int) -> Unit)?
+        ) = emptyMap<String, String>()
+        override suspend fun classifyUnclassifiedExpenses(
+            onStepProgress: (suspend (String, Int, Int) -> Unit)?, maxStoreCount: Int?
+        ) = 0
+        override suspend fun updateExpenseCategory(expenseId: Long, storeName: String, newCategory: String) = Unit
+        override suspend fun updateCategoryForAllSameStore(storeName: String, newCategory: String) = Unit
+        override suspend fun hasGeminiApiKey() = false
+        override suspend fun canAttemptGeminiClassification() = false
+        override suspend fun reclassifyLowConfidenceItems(confidenceThreshold: Float) = 0
+        override suspend fun getUnclassifiedCount() = 0
+        override suspend fun getVectorCacheCount() = 0
+        override suspend fun classifyUnclassifiedIncomes(onStepProgress: (suspend (String, Int, Int) -> Unit)?) = 0
+        override suspend fun getUnclassifiedIncomeCount() = 0
+        override suspend fun classifyAllUntilComplete(
+            onProgress: suspend (Int, Int, Int) -> Unit,
+            onStepProgress: (suspend (String, Int, Int) -> Unit)?,
+            maxRounds: Int
+        ) = 0
+    }
+}

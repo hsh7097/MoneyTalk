@@ -7,6 +7,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.sanha.moneytalk.core.notification.FinancialAppDiscoveryRepository
 import com.sanha.moneytalk.core.sms.SmsInstantProcessor
+import com.sanha.moneytalk.core.sms.SmsFallbackScheduler
 import com.sanha.moneytalk.core.sms.SmsReaderV2
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
@@ -39,6 +40,7 @@ class NotificationTransactionService : NotificationListenerService() {
         fun dataRefreshEvent(): DataRefreshEvent
         fun smsReaderV2(): SmsReaderV2
         fun financialAppDiscoveryRepository(): FinancialAppDiscoveryRepository
+        fun fallbackScheduler(): SmsFallbackScheduler
     }
 
     companion object {
@@ -130,6 +132,7 @@ class NotificationTransactionService : NotificationListenerService() {
         sbn: StatusBarNotification,
         showUserNotification: Boolean = true
     ) {
+        val fallbackToken = entryPoint.fallbackScheduler().captureRequest()
         val parsed = NotificationContentParser.parse(
             sbn = sbn,
             requireSupportedPackage = false
@@ -177,7 +180,8 @@ class NotificationTransactionService : NotificationListenerService() {
 
         processProviderMessage(
             message = providerMessage,
-            showUserNotification = showUserNotification
+            showUserNotification = showUserNotification,
+            fallbackToken = fallbackToken
         )
     }
 
@@ -213,6 +217,9 @@ class NotificationTransactionService : NotificationListenerService() {
                 dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
             }
 
+            is SmsInstantProcessor.Result.Deferred -> {
+                // Deferred is only produced for SMS provider financial candidates.
+            }
             is SmsInstantProcessor.Result.Skipped -> {
                 MoneyTalkLogger.i(
                     "[NotiService] 앱 알림 즉시 처리 스킵: " +
@@ -391,7 +398,8 @@ class NotificationTransactionService : NotificationListenerService() {
 
     private suspend fun processProviderMessage(
         message: ProviderMessage,
-        showUserNotification: Boolean
+        showUserNotification: Boolean,
+        fallbackToken: SmsFallbackScheduler.RequestToken?
     ) {
         val instantProcessor = entryPoint.instantProcessor()
         val dataRefreshEvent = entryPoint.dataRefreshEvent()
@@ -418,6 +426,12 @@ class NotificationTransactionService : NotificationListenerService() {
                     dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
                 }
 
+                is SmsInstantProcessor.Result.Deferred -> {
+                    entryPoint.fallbackScheduler().enqueue(
+                        message.address, message.body, message.timestamp, fallbackToken
+                    )
+                    dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.SMS_RECEIVED)
+                }
                 is SmsInstantProcessor.Result.Skipped -> {
                     if (shouldRequestBatchRefresh(message.channel)) {
                         MoneyTalkLogger.i(

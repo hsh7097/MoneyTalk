@@ -17,6 +17,7 @@
     <!-- 인터넷 권한 (Claude API) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <queries>
         <!-- 금융 앱 알림 설정 화면에서 설치 여부를 확인할 앱 목록 -->
@@ -163,6 +164,11 @@
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
+
+        <service
+            android:name=".receiver.SmsFallbackJobService"
+            android:exported="true"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <!-- 메시지 앱 알림 기반 실시간 거래 감지 (RCS/비즈메시지 보완) -->
         <service

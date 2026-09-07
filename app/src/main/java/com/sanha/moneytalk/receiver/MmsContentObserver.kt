@@ -8,15 +8,14 @@ import android.os.Looper
 import com.sanha.moneytalk.core.sms.SmsFilter
 import com.sanha.moneytalk.core.sms.SmsChannelProbeCollector
 import com.sanha.moneytalk.core.sms.SmsInstantProcessor
+import com.sanha.moneytalk.core.sms.SmsFallbackScheduler
 import com.sanha.moneytalk.core.sms.SmsReaderV2
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -40,7 +39,8 @@ class MmsContentObserver @Inject constructor(
     private val smsReaderV2: SmsReaderV2,
     private val instantProcessor: SmsInstantProcessor,
     private val dataRefreshEvent: DataRefreshEvent,
-    private val channelProbeCollector: SmsChannelProbeCollector
+    private val channelProbeCollector: SmsChannelProbeCollector,
+    private val fallbackScheduler: SmsFallbackScheduler
 ) : ContentObserver(Handler(Looper.getMainLooper())) {
 
     companion object {
@@ -65,7 +65,15 @@ class MmsContentObserver @Inject constructor(
     private val processedMmsIds = ConcurrentHashMap<String, Long>()
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val processMutex = Mutex()
+    private val changeQueue = ProviderChangeQueue(scope) {
+        try {
+            processRecentMms()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            MoneyTalkLogger.e("[MmsObserver] 처리 예외: ${e.message}")
+        }
+    }
 
     private var cachedContentResolver: ContentResolver? = null
 
@@ -82,16 +90,7 @@ class MmsContentObserver @Inject constructor(
 
     override fun onChange(selfChange: Boolean, uri: Uri?) {
         super.onChange(selfChange, uri)
-        scope.launch {
-            if (!processMutex.tryLock()) return@launch
-            try {
-                processRecentMms()
-            } catch (e: Exception) {
-                MoneyTalkLogger.e("[MmsObserver] 처리 예외: ${e.message}")
-            } finally {
-                processMutex.unlock()
-            }
-        }
+        changeQueue.requestScan()
     }
 
     private suspend fun processRecentMms() {
@@ -141,6 +140,7 @@ class MmsContentObserver @Inject constructor(
         mmsId: String,
         timestampMillis: Long
     ): CandidateOutcome {
+        val fallbackToken = fallbackScheduler.captureRequest()
         cleanExpiredEntries()
         if (processedMmsIds.putIfAbsent(mmsId, System.currentTimeMillis()) != null) {
             return CandidateOutcome()
@@ -148,12 +148,8 @@ class MmsContentObserver @Inject constructor(
 
         MoneyTalkLogger.i("[MmsObserver] 새 MMS 감지: id=$mmsId")
 
-        var body: String? = null
-        for (delayMs in BODY_RETRY_DELAYS) {
-            body = smsReaderV2.getMmsTextBody(contentResolver, mmsId)
-            if (!body.isNullOrBlank()) break
-            MoneyTalkLogger.i("[MmsObserver] body 미준비, ${delayMs}ms 후 재시도")
-            delay(delayMs)
+        val body = ProviderBodyReader.read(BODY_RETRY_DELAYS) {
+            smsReaderV2.getMmsTextBody(contentResolver, mmsId)
         }
 
         if (body.isNullOrBlank()) {
@@ -214,6 +210,10 @@ class MmsContentObserver @Inject constructor(
                     )
                     MoneyTalkLogger.i("[MmsObserver] 즉시 수입 저장: ${result.entity.amount}원")
                     CandidateOutcome(instantSuccess = true)
+                }
+                is SmsInstantProcessor.Result.Deferred -> {
+                    fallbackScheduler.enqueue(address, body, timestampMillis, fallbackToken)
+                    CandidateOutcome(shouldTriggerSync = true)
                 }
                 is SmsInstantProcessor.Result.Skipped -> {
                     channelProbeCollector.collect(

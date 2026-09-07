@@ -8,15 +8,14 @@ import android.os.Looper
 import com.sanha.moneytalk.core.sms.SmsChannelProbeCollector
 import com.sanha.moneytalk.core.sms.SmsFilter
 import com.sanha.moneytalk.core.sms.SmsInstantProcessor
+import com.sanha.moneytalk.core.sms.SmsFallbackScheduler
 import com.sanha.moneytalk.core.sms.SmsReaderV2
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -32,7 +31,8 @@ class RcsContentObserver @Inject constructor(
     private val smsReaderV2: SmsReaderV2,
     private val instantProcessor: SmsInstantProcessor,
     private val dataRefreshEvent: DataRefreshEvent,
-    private val channelProbeCollector: SmsChannelProbeCollector
+    private val channelProbeCollector: SmsChannelProbeCollector,
+    private val fallbackScheduler: SmsFallbackScheduler
 ) : ContentObserver(Handler(Looper.getMainLooper())) {
 
     companion object {
@@ -50,7 +50,15 @@ class RcsContentObserver @Inject constructor(
 
     private val processedRcsIds = ConcurrentHashMap<String, Long>()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val processMutex = Mutex()
+    private val changeQueue = ProviderChangeQueue(scope) {
+        try {
+            processRecentRcs()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            MoneyTalkLogger.e("[RcsObserver] 처리 예외: ${e.message}")
+        }
+    }
     private var cachedContentResolver: ContentResolver? = null
 
     fun register(contentResolver: ContentResolver) {
@@ -69,16 +77,7 @@ class RcsContentObserver @Inject constructor(
 
     override fun onChange(selfChange: Boolean, uri: Uri?) {
         super.onChange(selfChange, uri)
-        scope.launch {
-            if (!processMutex.tryLock()) return@launch
-            try {
-                processRecentRcs()
-            } catch (e: Exception) {
-                MoneyTalkLogger.e("[RcsObserver] 처리 예외: ${e.message}")
-            } finally {
-                processMutex.unlock()
-            }
-        }
+        changeQueue.requestScan()
     }
 
     private suspend fun processRecentRcs() {
@@ -137,24 +136,17 @@ class RcsContentObserver @Inject constructor(
         contentResolver: ContentResolver,
         candidate: RcsCandidate
     ): CandidateOutcome {
+        val fallbackToken = fallbackScheduler.captureRequest()
         cleanExpiredEntries()
         if (processedRcsIds.putIfAbsent(candidate.rcsId, System.currentTimeMillis()) != null) {
             return CandidateOutcome()
         }
 
-        var body = candidate.rawBody
-        for (delayMs in BODY_RETRY_DELAYS) {
+        val body = ProviderBodyReader.read(BODY_RETRY_DELAYS) {
             val latestRawBody = getRcsRawBody(contentResolver, candidate.rcsId)
-            val latestBody = smsReaderV2.extractRcsText(latestRawBody ?: body)
-            if (latestBody.isNotBlank()) {
-                body = latestBody
-                break
-            }
-            delay(delayMs)
+            smsReaderV2.extractRcsText(latestRawBody ?: candidate.rawBody)
         }
-
-        body = smsReaderV2.extractRcsText(body)
-        if (body.isBlank()) {
+        if (body.isNullOrBlank()) {
             processedRcsIds.remove(candidate.rcsId)
             return CandidateOutcome()
         }
@@ -210,6 +202,10 @@ class RcsContentObserver @Inject constructor(
                     CandidateOutcome(instantSuccess = true)
                 }
 
+                is SmsInstantProcessor.Result.Deferred -> {
+                    fallbackScheduler.enqueue(candidate.address, body, candidate.timestampMillis, fallbackToken)
+                    CandidateOutcome(shouldTriggerSync = true)
+                }
                 is SmsInstantProcessor.Result.Skipped -> {
                     channelProbeCollector.collect(
                         channel = "rcs_observer",

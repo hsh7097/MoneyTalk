@@ -11,6 +11,33 @@ class TransactionSemanticDedupeTest {
     private val baseTime = 1_764_000_000_000L
 
     @Test
+    fun `identical balance evidence accepts wonless amounts and common labels`() {
+        listOf("잔액100,000", "잔고: -100,000원", "누적： 100,000원").forEach { balance ->
+            val body = "테스트상점 12,000원 승인\n$balance"
+            assertTrue(TransactionSemanticDedupe.hasSameSmsRedeliveryEvidence(body, body))
+        }
+    }
+
+    @Test
+    fun `same merchant amount and minute without a numeric balance is not redelivery evidence`() {
+        listOf(
+            "테스트상점 12,000원 승인 09/08 12:34",
+            "잔액상점 12,000원 승인 09/08 12:34",
+            "테스트상점 12,000원 승인\n잔액 확인하기"
+        ).forEach { body ->
+            assertFalse(TransactionSemanticDedupe.hasSameSmsRedeliveryEvidence(body, body))
+        }
+    }
+
+    @Test
+    fun `matching balance label still requires identical original text`() {
+        val body = "테스트상점 12,000원 승인\n잔액100,000"
+        assertFalse(TransactionSemanticDedupe.hasSameSmsRedeliveryEvidence(
+            body, body.replace("잔액100,000", "잔액88,000")
+        ))
+    }
+
+    @Test
     fun `same amount card name store name and one minute window across app and sms is duplicate`() {
         val sms = expense(
             senderAddress = "15889955",

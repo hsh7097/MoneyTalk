@@ -11,32 +11,22 @@ import com.sanha.moneytalk.core.database.OwnedCardRepository
 import com.sanha.moneytalk.core.database.SmsExclusionRepository
 import com.sanha.moneytalk.core.database.SyncCoverageRepository
 import com.sanha.moneytalk.core.database.SyncCoverageTrigger
-import com.sanha.moneytalk.core.database.entity.ExpenseEntity
-import com.sanha.moneytalk.core.database.entity.IncomeEntity
-import com.sanha.moneytalk.core.database.entity.StoreRuleEntity
 import com.sanha.moneytalk.core.database.entity.SyncCoverageEntity
-import com.sanha.moneytalk.core.model.Category
-import com.sanha.moneytalk.core.model.IncomeCategoryMapper
-import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.util.DataRefreshEvent
-import com.sanha.moneytalk.core.util.CardNameNormalizer
 import com.sanha.moneytalk.core.util.DateUtils
-import com.sanha.moneytalk.core.util.StatsExclusionClassifier
-import com.sanha.moneytalk.core.sms.RefundIncomeSemanticDedupe
 import com.sanha.moneytalk.core.sms.SmsIncomeParser
 import com.sanha.moneytalk.core.sms.SmsInput
-import com.sanha.moneytalk.core.sms.SmsFilter
-import com.sanha.moneytalk.core.sms.DeletedSmsTracker
 import com.sanha.moneytalk.core.sms.SmsInstantProcessor
 import com.sanha.moneytalk.core.sms.SmsPipeline
 import com.sanha.moneytalk.core.sms.SmsSyncMessageReader
 import com.sanha.moneytalk.core.sms.SmsSyncCoordinator
 import com.sanha.moneytalk.core.sms.SyncStats
+import com.sanha.moneytalk.core.sms.SmsIngestionWriter
 import com.sanha.moneytalk.core.sync.ProviderReadRangeCalculator
 import com.sanha.moneytalk.core.sync.SmsSyncRangeCalculator
 import com.sanha.moneytalk.core.sync.SyncCoveragePagePolicy
@@ -45,15 +35,12 @@ import com.sanha.moneytalk.core.sync.SyncCoverageRecorder
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
-import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -64,7 +51,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.abs
 import java.util.Calendar
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
@@ -103,17 +89,11 @@ class MainViewModel @Inject constructor(
     private val analyticsHelper: AnalyticsHelper,
     private val rewardAdManager: com.sanha.moneytalk.core.ad.RewardAdManager,
     private val smsSyncCoordinator: SmsSyncCoordinator,
-    private val storeRuleRepository: StoreRuleRepository,
+    private val smsIngestionWriter: SmsIngestionWriter,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
 
     companion object {
-
-        /** DB 배치 삽입 크기 */
-        private const val DB_BATCH_INSERT_SIZE = 100
-
-        /** smsId 존재 여부 조회 chunk 크기 (SQLite bind limit 여유) */
-        private const val SMS_ID_LOOKUP_CHUNK_SIZE = 500
 
         /** 카테고리 분류 최대 반복 횟수 */
         private const val MAX_CLASSIFICATION_ROUNDS = 3
@@ -123,12 +103,6 @@ class MainViewModel @Inject constructor(
 
         /** provider scan 경계 누락 방지용 overlap */
         private const val PROVIDER_SCAN_OVERLAP_MARGIN_MS = 5L * 60 * 1000
-
-        /** smsId 타임스탬프 오차 허용 범위 */
-        private const val FUZZY_TIME_MARGIN_MS = 60_000L
-
-        /** fuzzy dedupe 후보 조회 시 대상 기간 앞뒤로 확장할 범위 */
-        private const val FUZZY_CANDIDATE_PADDING_MS = 3L * 24 * 60 * 60 * 1000
 
     }
 
@@ -412,38 +386,6 @@ class MainViewModel @Inject constructor(
         val classifiedCount: Int
     )
 
-    private data class SaveResult(
-        val newCount: Int = 0,
-        val reconciledCount: Int = 0
-    )
-
-    private data class ParsedSmsId(
-        val address: String,
-        val timestamp: Long,
-        val bodyHash: String
-    ) {
-        val contentKey: String = "${address}_${bodyHash}"
-    }
-
-    private data class SmsMatchCandidate(
-        val smsId: String,
-        val timestamp: Long
-    )
-
-    private data class RefundDuplicateCandidate(
-        val income: IncomeEntity,
-        val batchIndex: Int? = null
-    )
-
-    private data class ExistingSmsSnapshot(
-        val exactSmsIds: Set<String> = emptySet(),
-        val expensesBySmsId: Map<String, ExpenseEntity> = emptyMap(),
-        val incomesBySmsId: Map<String, IncomeEntity> = emptyMap(),
-        val incomes: List<IncomeEntity> = emptyList(),
-        val restoredIncomesByContentKey: Map<String, IncomeEntity> = emptyMap(),
-        val contentIndex: Map<String, List<SmsMatchCandidate>> = emptyMap()
-    )
-
     /** 동기화 최종 결과 */
     private data class SyncResult(
         val expenseCount: Int,
@@ -528,7 +470,8 @@ class MainViewModel @Inject constructor(
                     syncSmsV2Internal(
                         readPlan = buildProviderCatchUpReadPlan(fullRange),
                         updateLastSyncTime = true,
-                        silent = false
+                        silent = false,
+                        registrationEpoch = registrationEpoch
                     )
                 }
                 recordSuccessfulSyncCoverage(
@@ -700,7 +643,7 @@ class MainViewModel @Inject constructor(
                 acquireSyncClassificationOwnership(registrationEpoch)
                 val preparedRequest = prepareSyncRequest(targetMonthRange, readPlan)
                 val result = withContext(Dispatchers.IO) {
-                    syncSmsV2Internal(preparedRequest.readPlan, updateLastSyncTime, silent)
+                    syncSmsV2Internal(preparedRequest.readPlan, updateLastSyncTime, silent, registrationEpoch)
                 }
 
                 recordSuccessfulSyncCoverage(preparedRequest.targetMonthRange, trigger, result)
@@ -793,7 +736,8 @@ class MainViewModel @Inject constructor(
     private suspend fun syncSmsV2Internal(
         readPlan: SyncReadPlan,
         updateLastSyncTime: Boolean,
-        silent: Boolean
+        silent: Boolean,
+        registrationEpoch: Long
     ): SyncResult {
         // 제외 키워드 설정
         val userExcludeKeywords = smsExclusionRepository.getUserKeywords()
@@ -820,10 +764,12 @@ class MainViewModel @Inject constructor(
         }
 
         _uiState.update { it.copy(syncProgress = "이미 등록된 내역 확인 중...") }
-        val existingSnapshot = buildExistingSmsSnapshot(allSmsList, readPlan.readRange)
+        val existingSnapshot = smsIngestionWriter.buildExistingSmsSnapshot(allSmsList, readPlan.readRange)
         val pendingReconciliationIds = SmsInstantProcessor.snapshotPendingReconciliationIds()
-        val pendingContentIndex = buildSmsIdCandidateIndex(pendingReconciliationIds)
-        val smsInputs = readAndFilterSms(
+        val pendingContentIndex = smsIngestionWriter.buildSmsIdCandidateIndex(
+            pendingReconciliationIds, existingSnapshot
+        )
+        val smsInputs = smsIngestionWriter.readAndFilterSms(
             allSmsList = allSmsList,
             pendingContentIndex = pendingContentIndex,
             existingSnapshot = existingSnapshot,
@@ -854,15 +800,29 @@ class MainViewModel @Inject constructor(
         )
 
         val reconciledExpenseIds = targetFilteredResult.expenses
-            .flatMap { parsed -> findMatchingSmsIds(parsed.input.id, pendingContentIndex) }
+            .flatMap { parsed -> smsIngestionWriter.findMatchingSmsIds(parsed.input, pendingContentIndex) }
             .toSet()
         val reconciledIncomeIds = targetFilteredResult.incomes
-            .flatMap { income -> findMatchingSmsIds(income.id, pendingContentIndex) }
+            .flatMap { income -> smsIngestionWriter.findMatchingSmsIds(income, pendingContentIndex) }
             .toSet()
 
         // Step 3: DB 저장
-        val expenseSaveResult = saveExpenses(targetFilteredResult.expenses, existingSnapshot)
-        val incomeSaveResult = saveIncomes(targetFilteredResult.incomes, existingSnapshot)
+        val writeResult = smsIngestionWriter.write(
+            expenses = targetFilteredResult.expenses,
+            incomes = targetFilteredResult.incomes,
+            registrationEpoch = registrationEpoch
+        ) { progress ->
+            _uiState.update {
+                it.copy(
+                    syncStepIndex = SmsPipeline.STEP_SAVE,
+                    syncProgress = progress.message,
+                    syncProgressCurrent = progress.current ?: it.syncProgressCurrent,
+                    syncProgressTotal = progress.total ?: it.syncProgressTotal
+                )
+            }
+        }
+        val expenseSaveResult = writeResult.expenses
+        val incomeSaveResult = writeResult.incomes
         val repairedIncomeSourceCount = repairStoredIncomeSourcesIfNeeded(readPlan)
 
         // Step 4: 후처리 (카테고리 분류, 패턴 정리, lastSyncTime 갱신)
@@ -923,63 +883,6 @@ class MainViewModel @Inject constructor(
         )
     }
 
-    /**
-     * 읽은 SMS 목록을 기존 내역 및 pending 상태와 비교해 신규 처리 대상만 남긴다.
-     */
-    private fun readAndFilterSms(
-        allSmsList: List<SmsInput>,
-        pendingContentIndex: Map<String, List<SmsMatchCandidate>>,
-        existingSnapshot: ExistingSmsSnapshot,
-        reprocessExisting: Boolean = false
-    ): List<SmsInput> {
-        val acceptedContentIndex = mutableMapOf<String, MutableList<SmsMatchCandidate>>()
-        val newSmsList = mutableListOf<SmsInput>()
-
-        for (sms in allSmsList) {
-            // 사용자가 명시적으로 삭제한 SMS는 재처리하지 않음
-            if (DeletedSmsTracker.isDeleted(sms.id)) continue
-
-            val contentKey = buildContentKey(sms.address, sms.body)
-            val existsInCurrentBatch = findClosestCandidate(
-                contentKey = contentKey,
-                timestamp = sms.date,
-                candidateIndex = acceptedContentIndex
-            ) != null
-            val existsInDbExact = sms.id in existingSnapshot.exactSmsIds
-            val existsInDbFuzzy = findClosestCandidate(
-                contentKey = contentKey,
-                timestamp = sms.date,
-                candidateIndex = existingSnapshot.contentIndex
-            ) != null
-            val existsInDb = existsInDbExact || existsInDbFuzzy
-
-            val existsInPending = findClosestCandidate(
-                contentKey = contentKey,
-                timestamp = sms.date,
-                candidateIndex = pendingContentIndex
-            ) != null
-
-            val shouldProcess = when {
-                existsInCurrentBatch -> false
-                reprocessExisting -> true
-                existsInDb && existsInPending -> true
-                existsInDb -> false
-                else -> true
-            }
-
-            if (shouldProcess) {
-                newSmsList += sms
-                acceptedContentIndex.getOrPut(contentKey) { mutableListOf() } += SmsMatchCandidate(
-                    smsId = sms.id,
-                    timestamp = sms.date
-                )
-            }
-        }
-        MoneyTalkLogger.i("syncSmsV2 중복 제거: ${allSmsList.size}건 → ${newSmsList.size}건")
-
-        return newSmsList
-    }
-
     private suspend fun repairStoredIncomeSourcesIfNeeded(readPlan: SyncReadPlan): Int {
         if (!readPlan.reprocessExisting) return 0
 
@@ -1030,200 +933,6 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * 현재 읽은 SMS 기준으로 기존 DB 스냅샷을 구성한다.
-     *
-     * exact dedupe는 chunk 조회로 유지하고,
-     * fuzzy dedupe 후보는 대상 기간 주변의 기존 거래만 읽어 메모리 사용을 제한한다.
-     */
-    private suspend fun buildExistingSmsSnapshot(
-        allSmsList: List<SmsInput>,
-        targetMonthRange: Pair<Long, Long>
-    ): ExistingSmsSnapshot {
-        if (allSmsList.isEmpty()) return ExistingSmsSnapshot()
-
-        val smsIdChunks = allSmsList
-            .map { it.id }
-            .distinct()
-            .chunked(SMS_ID_LOOKUP_CHUNK_SIZE)
-
-        val exactSmsIds = coroutineScope {
-            val expenseExistingDeferred = async {
-                val ids = HashSet<String>()
-                for (chunk in smsIdChunks) {
-                    ids.addAll(expenseRepository.getExistingSmsIds(chunk))
-                }
-                ids
-            }
-            val incomeExistingDeferred = async {
-                val ids = HashSet<String>()
-                for (chunk in smsIdChunks) {
-                    ids.addAll(incomeRepository.getExistingSmsIds(chunk))
-                }
-                ids
-            }
-            expenseExistingDeferred.await() + incomeExistingDeferred.await()
-        }
-
-        val minSmsTimestamp = allSmsList.minOf { it.date }
-        val maxSmsTimestamp = allSmsList.maxOf { it.date }
-        val candidateStart = maxOf(
-            0L,
-            minOf(targetMonthRange.first, minSmsTimestamp) - FUZZY_CANDIDATE_PADDING_MS
-        )
-        val candidateEnd = maxOf(targetMonthRange.second, maxSmsTimestamp) + FUZZY_CANDIDATE_PADDING_MS
-        val existingData = coroutineScope {
-            val expensesDeferred = async {
-                expenseRepository.getExpensesByDateRangeOnce(candidateStart, candidateEnd)
-            }
-            val incomesDeferred = async {
-                incomeRepository.getIncomesByDateRangeOnce(candidateStart, candidateEnd)
-            }
-            expensesDeferred.await() to incomesDeferred.await()
-        }
-
-        val existingExpenses = existingData.first
-        val existingIncomes = existingData.second
-
-        return ExistingSmsSnapshot(
-            exactSmsIds = exactSmsIds,
-            expensesBySmsId = existingExpenses.associateBy { it.smsId },
-            incomesBySmsId = existingIncomes
-                .mapNotNull { income -> income.smsId?.let { it to income } }
-                .toMap(),
-            incomes = existingIncomes,
-            restoredIncomesByContentKey = buildRestoredIncomeContentIndex(existingIncomes),
-            contentIndex = buildExistingContentIndex(existingExpenses, existingIncomes)
-        )
-    }
-
-    /**
-     * smsId 목록을 fuzzy dedupe용 content index로 변환한다.
-     */
-    private fun buildSmsIdCandidateIndex(
-        smsIds: Collection<String>
-    ): Map<String, List<SmsMatchCandidate>> {
-        return smsIds.mapNotNull { smsId ->
-            parseSmsId(smsId)?.let { parsed ->
-                parsed.contentKey to SmsMatchCandidate(
-                    smsId = smsId,
-                    timestamp = parsed.timestamp
-                )
-            }
-        }.groupBy({ it.first }, { it.second })
-    }
-
-    private fun buildExistingContentIndex(
-        expenses: List<ExpenseEntity>,
-        incomes: List<IncomeEntity>
-    ): Map<String, List<SmsMatchCandidate>> {
-        val entries = mutableListOf<Pair<String, SmsMatchCandidate>>()
-
-        expenses.forEach { expense ->
-            parseSmsId(expense.smsId)?.let { parsed ->
-                entries += parsed.contentKey to SmsMatchCandidate(
-                    smsId = expense.smsId,
-                    timestamp = parsed.timestamp
-                )
-            }
-        }
-
-        incomes.forEach { income ->
-            val smsId = income.smsId ?: return@forEach
-            parseSmsId(smsId)?.let { parsed ->
-                entries += parsed.contentKey to SmsMatchCandidate(
-                    smsId = smsId,
-                    timestamp = parsed.timestamp
-                )
-            }
-        }
-
-        return entries.groupBy({ it.first }, { it.second })
-    }
-
-    private fun buildRestoredIncomeContentIndex(
-        incomes: List<IncomeEntity>
-    ): Map<String, IncomeEntity> {
-        return incomes
-            .filter { it.smsId.isNullOrBlank() }
-            .mapNotNull { income ->
-                buildIncomeContentKey(income)?.let { key -> key to income }
-            }
-            .toMap()
-    }
-
-    private fun parseSmsId(smsId: String): ParsedSmsId? {
-        val lastSeparator = smsId.lastIndexOf('_')
-        if (lastSeparator <= 0 || lastSeparator == smsId.lastIndex) return null
-
-        val secondLastSeparator = smsId.lastIndexOf('_', startIndex = lastSeparator - 1)
-        if (secondLastSeparator <= 0 || secondLastSeparator == lastSeparator - 1) return null
-
-        val address = smsId.substring(0, secondLastSeparator)
-        val timestamp = smsId.substring(secondLastSeparator + 1, lastSeparator).toLongOrNull()
-            ?: return null
-        val bodyHash = smsId.substring(lastSeparator + 1)
-        if (bodyHash.isBlank()) return null
-
-        return ParsedSmsId(
-            address = address,
-            timestamp = timestamp,
-            bodyHash = bodyHash
-        )
-    }
-
-    private fun buildContentKey(address: String, body: String): String =
-        "${SmsFilter.normalizeAddress(address)}_${body.hashCode()}"
-
-    private fun buildIncomeContentKey(income: IncomeEntity): String? {
-        val originalSms = income.originalSms?.takeIf { it.isNotBlank() } ?: return null
-        val senderAddress = SmsFilter.normalizeAddress(income.senderAddress)
-            .takeIf { it.isNotBlank() } ?: return null
-        return "${buildContentKey(senderAddress, originalSms)}_${income.dateTime}_${income.amount}"
-    }
-
-    private fun findClosestCandidate(
-        contentKey: String,
-        timestamp: Long,
-        candidateIndex: Map<String, List<SmsMatchCandidate>>
-    ): SmsMatchCandidate? {
-        val candidates = candidateIndex[contentKey] ?: return null
-        var closestCandidate: SmsMatchCandidate? = null
-        var closestDiff = Long.MAX_VALUE
-
-        for (candidate in candidates) {
-            val diff = abs(candidate.timestamp - timestamp)
-            if (diff <= FUZZY_TIME_MARGIN_MS && diff < closestDiff) {
-                closestCandidate = candidate
-                closestDiff = diff
-            }
-        }
-
-        return closestCandidate
-    }
-
-    private fun findMatchingSmsIds(
-        smsId: String,
-        candidateIndex: Map<String, List<SmsMatchCandidate>>
-    ): Set<String> {
-        val parsed = parseSmsId(smsId) ?: return emptySet()
-        val candidates = candidateIndex[parsed.contentKey] ?: return emptySet()
-        val matches = mutableSetOf<String>()
-
-        for (candidate in candidates) {
-            if (abs(candidate.timestamp - parsed.timestamp) <= FUZZY_TIME_MARGIN_MS) {
-                matches += candidate.smsId
-            }
-        }
-
-        return matches
-    }
-
-    private fun supportsFixedExpense(expense: ExpenseEntity): Boolean {
-        return expense.transactionType == "EXPENSE" ||
-            expense.transactionType == "TRANSFER"
-    }
-
-    /**
      * sms 파이프라인 실행 (SmsSyncCoordinator.process)
      *
      * @param silent true면 dataRefreshEvent에 진행 상태를 전파하지 않음
@@ -1254,421 +963,6 @@ class MainViewModel @Inject constructor(
                 }
             }
         }
-    }
-
-    /**
-     * 지출 파싱 결과를 ExpenseEntity로 변환하여 DB에 배치 저장
-     *
-     * 카테고리 분류를 DB INSERT 전에 완료하여 UI 깜빡임을 방지합니다.
-     * Phase 1: 로컬 분류 (캐시 + 키워드)
-     * Phase 2: Gemini 사전 분류 ("미분류" 항목을 API로 분류)
-     * Phase 3: 분류 완료된 엔티티를 DB에 배치 저장
-     */
-    private suspend fun saveExpenses(
-        expenses: List<com.sanha.moneytalk.core.sms.SmsParseResult>,
-        existingSnapshot: ExistingSmsSnapshot
-    ): SaveResult {
-        if (expenses.isEmpty()) return SaveResult()
-
-        _uiState.update { it.copy(syncStepIndex = SmsPipeline.STEP_SAVE, syncProgress = "지출 저장 중...") }
-
-        // Phase 1: 엔티티 빌드 + 로컬 분류
-        val entities = ArrayList<ExpenseEntity>(expenses.size)
-        for (parsed in expenses) {
-            val localCategory = if (parsed.analysis.category.isNotBlank() &&
-                parsed.analysis.category != "미분류" &&
-                parsed.analysis.category != "기타"
-            ) {
-                parsed.analysis.category
-            } else {
-                categoryClassifierService.getCategory(
-                    storeName = parsed.analysis.storeName,
-                    originalSms = parsed.input.body
-                )
-            }
-
-            entities.add(
-                ExpenseEntity(
-                    amount = parsed.analysis.amount,
-                    storeName = parsed.analysis.storeName,
-                    category = localCategory,
-                    cardName = CardNameNormalizer.normalizeWithFallback(parsed.analysis.cardName, parsed.input.body),
-                    dateTime = DateUtils.parseDateTime(parsed.analysis.dateTime),
-                    originalSms = parsed.input.body,
-                    smsId = parsed.input.id,
-                    senderAddress = SmsFilter.normalizeAddress(parsed.input.address)
-                )
-            )
-        }
-
-        // Phase 1.5: StoreRule 적용 (최우선 = Tier 0)
-        val allRules = storeRuleRepository.getAllOnce()
-        val ruleCandidates = StoreRuleRepository.buildMatchCandidates(allRules)
-        fun findMatchingStoreRule(storeName: String): StoreRuleEntity? {
-            return StoreRuleRepository.findBestMatchingRuleFromCandidates(ruleCandidates, storeName)
-        }
-
-        fun resolveStatsExclusion(entity: ExpenseEntity): Boolean {
-            return findMatchingStoreRule(entity.storeName)?.isExcludedFromStats
-                ?: StatsExclusionClassifier.shouldExcludeExpense(entity)
-        }
-
-        if (allRules.isNotEmpty()) {
-            for (i in entities.indices) {
-                val entity = entities[i]
-                val matchedRule = findMatchingStoreRule(entity.storeName)
-                if (matchedRule != null) {
-                    entities[i] = entity.copy(
-                        category = matchedRule.category ?: entity.category,
-                        isFixed = if (supportsFixedExpense(entity)) {
-                            matchedRule.isFixed ?: entity.isFixed
-                        } else {
-                            entity.isFixed
-                        },
-                        isExcludedFromStats = matchedRule.isExcludedFromStats ?: entity.isExcludedFromStats
-                    )
-                }
-            }
-        }
-
-        // Phase 2: "미분류" 가게명을 사전 분류 (로컬 규칙은 AI 서비스와 무관하게 수행)
-        val unclassifiedStores = entities
-            .filter { it.category == "미분류" }
-            .map { it.storeName }
-            .distinct()
-
-        if (unclassifiedStores.isNotEmpty()) {
-            val isAiServiceAvailable = categoryClassifierService.canAttemptGeminiClassification()
-            if (isAiServiceAvailable) {
-                _uiState.update {
-                    it.copy(syncProgress = "AI가 카테고리 분류 중...")
-                }
-            }
-            try {
-                val classificationResults = categoryClassifierService.classifyStoreNamesInMemory(
-                    storeNames = unclassifiedStores,
-                    onStepProgress = if (isAiServiceAvailable) {
-                        { step, current, total ->
-                            _uiState.update {
-                                it.copy(
-                                    syncProgress = "AI가 카테고리 분류 중...\n$step",
-                                    syncProgressCurrent = current,
-                                    syncProgressTotal = total
-                                )
-                            }
-                        }
-                    } else {
-                        null
-                    }
-                )
-
-                if (classificationResults.isNotEmpty()) {
-                    for (i in entities.indices) {
-                        val entity = entities[i]
-                        if (entity.category == "미분류") {
-                            val newCategory = classificationResults[entity.storeName]
-                            if (newCategory != null) {
-                                val isTransfer = newCategory == Category.TRANSFER_GENERAL.displayName
-                                val updated = entity.copy(
-                                    category = newCategory,
-                                    transactionType = if (isTransfer) "TRANSFER" else entity.transactionType,
-                                    transferDirection = if (isTransfer) TransferDirection.WITHDRAWAL.dbValue else entity.transferDirection
-                                )
-                                entities[i] = updated.copy(
-                                    isExcludedFromStats = resolveStatsExclusion(updated)
-                                )
-                            }
-                        }
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                MoneyTalkLogger.w("사전 카테고리 분류 실패 (무시): ${e.message}")
-            }
-        }
-
-        val smsIds = entities.map { it.smsId }.distinct()
-        val existingExpensesBySmsId = expenseRepository.getExpensesBySmsIds(smsIds)
-            .associateBy { it.smsId }
-        val existingIncomesBySmsId = incomeRepository.getIncomesBySmsIds(smsIds)
-            .mapNotNull { income -> income.smsId?.let { it to income } }
-            .toMap()
-        val crossTypeIncomeIdsToDelete = mutableSetOf<Long>()
-        val isNewFlags = BooleanArray(entities.size)
-        var newCount = 0
-        var reconciledCount = 0
-
-        for (i in entities.indices) {
-            val entity = entities[i]
-
-            // 1. 정확한 ID로 먼저 확인
-            var existingExpense = existingExpensesBySmsId[entity.smsId]
-            var existingIncome = existingIncomesBySmsId[entity.smsId]
-
-            // 2. 정확한 ID가 없으면 Fuzzy 매칭 시도
-            if (existingExpense == null && existingIncome == null) {
-                val parsedSmsId = parseSmsId(entity.smsId)
-                if (parsedSmsId != null) {
-                    val fuzzyMatch = findClosestCandidate(
-                        contentKey = buildContentKey(entity.senderAddress, entity.originalSms),
-                        timestamp = parsedSmsId.timestamp,
-                        candidateIndex = existingSnapshot.contentIndex
-                    )
-                    val fuzzyId = fuzzyMatch?.smsId
-                    if (fuzzyId != null) {
-                        existingExpense = existingSnapshot.expensesBySmsId[fuzzyId]
-                        if (existingExpense == null) {
-                            existingIncome = existingSnapshot.incomesBySmsId[fuzzyId]
-                        }
-                    }
-                }
-            }
-
-            if (existingExpense != null || existingIncome != null) {
-                reconciledCount++
-            } else {
-                isNewFlags[i] = true
-                newCount++
-            }
-
-            if (existingIncome != null) {
-                crossTypeIncomeIdsToDelete += existingIncome.id
-            }
-
-            if (existingExpense != null) {
-                entities[i] = entity.copy(
-                    id = existingExpense.id,
-                    memo = existingExpense.memo,
-                    isExcludedFromStats = existingExpense.isExcludedFromStats,
-                    createdAt = existingExpense.createdAt
-                )
-            } else {
-                entities[i] = entity.copy(
-                    isExcludedFromStats = resolveStatsExclusion(entity)
-                )
-            }
-        }
-
-        crossTypeIncomeIdsToDelete.forEach { incomeRepository.deleteById(it) }
-
-        // Phase 3: 사용자가 삭제한 항목 제외 후 DB에 배치 저장
-        val filteredEntities = entities.filterNot { DeletedSmsTracker.isDeleted(it.smsId) }
-        _uiState.update { it.copy(syncProgress = "지출 저장 중...") }
-        for (chunk in filteredEntities.chunked(DB_BATCH_INSERT_SIZE)) {
-            expenseRepository.insertAll(chunk)
-        }
-
-        return SaveResult(
-            newCount = newCount,
-            reconciledCount = reconciledCount
-        )
-    }
-
-    /**
-     * 수입 SMS를 SmsIncomeParser로 파싱하여 DB에 배치 저장
-     */
-    private suspend fun saveIncomes(
-        incomes: List<SmsInput>,
-        existingSnapshot: ExistingSmsSnapshot
-    ): SaveResult {
-        if (incomes.isEmpty()) return SaveResult()
-
-        _uiState.update { it.copy(syncProgress = "수입 처리 중...") }
-        val batch = mutableListOf<IncomeEntity>()
-        val batchSmsIds = mutableSetOf<String>()
-        var newCount = 0
-        var reconciledCount = 0
-
-        for (income in incomes) {
-            try {
-                val amount = SmsIncomeParser.extractIncomeAmount(income.body)
-                val incomeType = SmsIncomeParser.extractIncomeType(income.body)
-                val source = SmsIncomeParser.extractIncomeSource(income.body)
-                val dateTime = SmsIncomeParser.extractDateTime(income.body, income.date)
-
-                if (amount > 0) {
-                    batchSmsIds += income.id
-                    batch.add(
-                        IncomeEntity(
-                            smsId = income.id,
-                            amount = amount,
-                            type = incomeType,
-                            source = source,
-                            description = if (source.isNotBlank()) "${source}에서 $incomeType" else incomeType,
-                            isRecurring = incomeType == "급여",
-                            dateTime = DateUtils.parseDateTime(dateTime),
-                            originalSms = income.body,
-                            senderAddress = SmsFilter.normalizeAddress(income.address),
-                            category = IncomeCategoryMapper.categoryForType(incomeType)
-                        )
-                    )
-                }
-            } catch (e: Exception) {
-                MoneyTalkLogger.e("수입 처리 실패: ${income.id} - ${e.message}")
-            }
-        }
-
-        val existingIncomesBySmsId = incomeRepository.getIncomesBySmsIds(batchSmsIds.toList())
-            .mapNotNull { income -> income.smsId?.let { it to income } }
-            .toMap()
-        val existingExpensesBySmsId = expenseRepository.getExpensesBySmsIds(batchSmsIds.toList())
-            .associateBy { it.smsId }
-        val crossTypeExpenseIdsToDelete = mutableSetOf<Long>()
-        val duplicateIncomeIdsToDelete = mutableSetOf<Long>()
-        val isNewFlags = BooleanArray(batch.size)
-        val skipInsertFlags = BooleanArray(batch.size)
-        val refundDuplicateCandidates = existingSnapshot.incomes
-            .map { RefundDuplicateCandidate(income = it) }
-            .toMutableList()
-
-        for (i in batch.indices) {
-            val entity = batch[i]
-            val smsId = entity.smsId ?: continue
-
-            var existingIncome = existingIncomesBySmsId[smsId]
-            var existingExpense = existingExpensesBySmsId[smsId]
-
-            // Fuzzy 매칭
-            if (existingIncome == null && existingExpense == null) {
-                val parsedSmsId = parseSmsId(smsId)
-                if (parsedSmsId != null) {
-                    val fuzzyMatch = findClosestCandidate(
-                        contentKey = buildContentKey(entity.senderAddress, entity.originalSms.orEmpty()),
-                        timestamp = parsedSmsId.timestamp,
-                        candidateIndex = existingSnapshot.contentIndex
-                    )
-                    val fuzzyId = fuzzyMatch?.smsId
-                    if (fuzzyId != null) {
-                        existingIncome = existingSnapshot.incomesBySmsId[fuzzyId]
-                        if (existingIncome == null) {
-                            existingExpense = existingSnapshot.expensesBySmsId[fuzzyId]
-                        }
-                    }
-                }
-            }
-
-            if (existingIncome == null && existingExpense == null) {
-                existingIncome = findRestoredIncomeDuplicate(entity, existingSnapshot)
-            }
-
-            val semanticDuplicateIncome = if (existingExpense == null) {
-                findSemanticDuplicateRefundIncome(entity, refundDuplicateCandidates)
-            } else {
-                null
-            }
-
-            if (
-                semanticDuplicateIncome != null &&
-                shouldPreferCurrentRefundIncome(entity, semanticDuplicateIncome.income)
-            ) {
-                semanticDuplicateIncome.batchIndex?.let { duplicateIndex ->
-                    skipInsertFlags[duplicateIndex] = true
-                    if (isNewFlags[duplicateIndex]) {
-                        isNewFlags[duplicateIndex] = false
-                        newCount--
-                    }
-                    refundDuplicateCandidates.removeAll { it.batchIndex == duplicateIndex }
-                }
-                if (semanticDuplicateIncome.batchIndex == null && semanticDuplicateIncome.income.id > 0) {
-                    duplicateIncomeIdsToDelete += semanticDuplicateIncome.income.id
-                }
-                if (existingIncome != null) {
-                    reconciledCount++
-                } else {
-                    isNewFlags[i] = true
-                    newCount++
-                }
-            } else if (semanticDuplicateIncome != null) {
-                if (existingIncome != null) {
-                    reconciledCount++
-                } else {
-                    reconciledCount++
-                    skipInsertFlags[i] = true
-                    MoneyTalkLogger.i(
-                        "수입 중복 알림 스킵: amount=${entity.amount}, existingId=${semanticDuplicateIncome.income.id}"
-                    )
-                }
-            } else if (existingIncome != null || existingExpense != null) {
-                reconciledCount++
-            } else {
-                isNewFlags[i] = true
-                newCount++
-            }
-
-            if (existingExpense != null) {
-                crossTypeExpenseIdsToDelete += existingExpense.id
-            }
-
-            if (existingIncome != null) {
-                batch[i] = entity.copy(
-                    id = existingIncome.id,
-                    memo = existingIncome.memo,
-                    recurringDay = existingIncome.recurringDay,
-                    createdAt = existingIncome.createdAt
-                )
-            }
-
-            val isDeletedIncome = batch[i].smsId?.let { DeletedSmsTracker.isDeleted(it) } == true
-            if (!skipInsertFlags[i] && !isDeletedIncome) {
-                refundDuplicateCandidates += RefundDuplicateCandidate(
-                    income = batch[i],
-                    batchIndex = i
-                )
-            }
-        }
-
-        crossTypeExpenseIdsToDelete.forEach { expenseRepository.deleteById(it) }
-        duplicateIncomeIdsToDelete.forEach { incomeRepository.deleteById(it) }
-
-        // 사용자가 삭제한 항목 제외 후 저장
-        val filteredBatch = batch.filterIndexed { index, entity ->
-            !skipInsertFlags[index] &&
-                entity.smsId?.let { DeletedSmsTracker.isDeleted(it) } != true
-        }
-        if (filteredBatch.isNotEmpty()) {
-            for (chunk in filteredBatch.chunked(DB_BATCH_INSERT_SIZE)) {
-                incomeRepository.insertAll(chunk)
-            }
-        }
-
-        return SaveResult(
-            newCount = newCount,
-            reconciledCount = reconciledCount
-        )
-    }
-
-    private fun findSemanticDuplicateRefundIncome(
-        entity: IncomeEntity,
-        candidates: List<RefundDuplicateCandidate>
-    ): RefundDuplicateCandidate? {
-        return candidates.firstOrNull { candidate ->
-            val existing = candidate.income
-            RefundIncomeSemanticDedupe.isPotentialDuplicate(entity, existing)
-        }
-    }
-
-    private fun findRestoredIncomeDuplicate(
-        entity: IncomeEntity,
-        existingSnapshot: ExistingSmsSnapshot
-    ): IncomeEntity? {
-        val contentKey = buildIncomeContentKey(entity) ?: return null
-        return existingSnapshot.restoredIncomesByContentKey[contentKey]
-    }
-
-    private fun shouldPreferCurrentRefundIncome(
-        entity: IncomeEntity,
-        duplicate: IncomeEntity
-    ): Boolean {
-        return RefundIncomeSemanticDedupe.shouldPreferCandidate(entity, duplicate)
-    }
-
-    private fun isRefundLikeIncome(entity: IncomeEntity): Boolean {
-        return RefundIncomeSemanticDedupe.isRefundLike(entity)
-    }
-
-    private fun isRefundNoticeIncome(entity: IncomeEntity): Boolean {
-        return RefundIncomeSemanticDedupe.isRefundNotice(entity)
     }
 
     /**

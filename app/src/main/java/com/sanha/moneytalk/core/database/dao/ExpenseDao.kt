@@ -5,8 +5,10 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.sms.TransactionSemanticDedupe
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -36,6 +38,64 @@ interface ExpenseDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(expenses: List<ExpenseEntity>)
+
+    /** SMS/앱 알림 중복 조회와 저장을 같은 트랜잭션에서 처리한다. */
+    @Transaction
+    suspend fun insertIngested(
+        expense: ExpenseEntity,
+        reconcileExisting: Boolean = false
+    ): ExpenseIngestionResult {
+        val existing = getExpenseBySmsId(expense.smsId)
+            ?: expense.id.takeIf { it > 0L }?.let { getExpenseById(it) }
+        if (existing != null) {
+            if (!reconcileExisting) return ExpenseIngestionResult.SKIPPED
+            insert(expense.copy(
+                id = existing.id,
+                memo = existing.memo,
+                isExcludedFromStats = existing.isExcludedFromStats,
+                createdAt = existing.createdAt
+            ))
+            return ExpenseIngestionResult.UPDATED
+        }
+
+        val window = TransactionSemanticDedupe.CROSS_SOURCE_WINDOW_MS
+        val candidates = getExpensesByDateRangeOnce(
+            maxOf(0L, expense.dateTime - window),
+            expense.dateTime + window
+        )
+        if (candidates.any { TransactionSemanticDedupe.isSameSmsRedelivery(expense, it) }) {
+            return ExpenseIngestionResult.SKIPPED
+        }
+        val duplicate = TransactionSemanticDedupe.findPotentialCrossSourceDuplicate(
+            expense,
+            candidates
+        )
+        if (duplicate != null) {
+            if (TransactionSemanticDedupe.isAppGenerated(expense)) {
+                return ExpenseIngestionResult.SKIPPED
+            }
+            // 앱 알림 행을 SMS 정본으로 갱신해 ID와 사용자 설정을 보존한다.
+            insert(expense.copy(
+                id = duplicate.id,
+                memo = duplicate.memo ?: expense.memo,
+                isFixed = duplicate.isFixed || expense.isFixed,
+                isExcludedFromStats = duplicate.isExcludedFromStats || expense.isExcludedFromStats,
+                createdAt = duplicate.createdAt
+            ))
+            return ExpenseIngestionResult.UPDATED
+        }
+
+        insert(expense)
+        return ExpenseIngestionResult.INSERTED
+    }
+
+    /** 배치도 동일한 판정을 사용하되 chunk를 하나의 transaction으로 저장한다. */
+    @Transaction
+    suspend fun insertAllIngested(expenses: List<ExpenseEntity>): List<ExpenseIngestionResult> {
+        return expenses.map { expense ->
+            insertIngested(expense, reconcileExisting = true)
+        }
+    }
 
     @Update
     suspend fun update(expense: ExpenseEntity)

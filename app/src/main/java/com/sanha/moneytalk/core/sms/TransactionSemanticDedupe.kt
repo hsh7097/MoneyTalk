@@ -4,7 +4,7 @@ import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import kotlin.math.abs
 
 /**
- * SMS와 앱 알림처럼 smsId가 달라지는 소스 간 동일 거래를 비교한다.
+ * 동일 SMS 재전달과 SMS/앱 알림처럼 smsId가 달라지는 동일 거래를 비교한다.
  *
  * 카드 suffix는 본문에 노출되는 카드번호 끝자리 또는 마스킹 번호 조각이다.
  * 양쪽 본문에서 모두 추출되면 반드시 같아야 중복으로 본다.
@@ -13,6 +13,7 @@ object TransactionSemanticDedupe {
 
     const val CROSS_SOURCE_WINDOW_MS: Long = 60 * 1000L
     private const val APP_ADDRESS_PREFIX = "app:"
+    private val smsRedeliveryBalancePattern = Regex("""(?:잔액|잔고|누적)\s*[:：]?\s*[-+]?\d[\d,]*""")
     private val cardSuffixPatterns = listOf(
         Regex("""(?<!\d)(\d{3,4})[-\s]?\*{2,}[-\s]?(\d{2,4})(?!\d)"""),
         Regex("""(?<!\d)(\d{3,4})[-\s]?[xX]{2,}[-\s]?(\d{2,4})(?!\d)"""),
@@ -21,6 +22,35 @@ object TransactionSemanticDedupe {
 
     fun isAppGenerated(entity: ExpenseEntity): Boolean {
         return entity.senderAddress.startsWith(APP_ADDRESS_PREFIX)
+    }
+
+    /** 동일 SMS 재전달은 거래시각이 아닌 smsId의 수신시각 차이로 비교한다. */
+    fun isSameSmsRedelivery(candidate: ExpenseEntity, existing: ExpenseEntity): Boolean {
+        if (isAppGenerated(candidate) || isAppGenerated(existing)) return false
+        if (candidate.senderAddress.isBlank() || candidate.senderAddress != existing.senderAddress) return false
+        if (!hasSameSmsRedeliveryEvidence(candidate.originalSms, existing.originalSms)) return false
+        if (candidate.amount != existing.amount || candidate.dateTime != existing.dateTime ||
+            candidate.cardName != existing.cardName || candidate.storeName != existing.storeName ||
+            candidate.transactionType != existing.transactionType ||
+            candidate.transferDirection != existing.transferDirection
+        ) return false
+
+        val candidateReceivedAt = smsReceivedAt(candidate) ?: return false
+        val existingReceivedAt = smsReceivedAt(existing) ?: return false
+        return abs(candidateReceivedAt - existingReceivedAt) <= CROSS_SOURCE_WINDOW_MS
+    }
+
+    /** 분 단위 승인시각과 상호만 같은 정상 반복 결제를 합치지 않는다. */
+    fun hasSameSmsRedeliveryEvidence(candidateBody: String, existingBody: String): Boolean {
+        return candidateBody.isNotBlank() && candidateBody == existingBody &&
+            smsRedeliveryBalancePattern.containsMatchIn(candidateBody)
+    }
+
+    private fun smsReceivedAt(entity: ExpenseEntity): Long? {
+        val prefix = "${entity.senderAddress}_"
+        val suffix = "_${entity.originalSms.hashCode()}"
+        if (!entity.smsId.startsWith(prefix) || !entity.smsId.endsWith(suffix)) return null
+        return entity.smsId.removePrefix(prefix).removeSuffix(suffix).toLongOrNull()
     }
 
     fun isPotentialCrossSourceDuplicate(

@@ -3,6 +3,7 @@ package com.sanha.moneytalk.feature.home.data
 import com.sanha.moneytalk.core.database.dao.CategorySum
 import com.sanha.moneytalk.core.database.dao.DailySum
 import com.sanha.moneytalk.core.database.dao.ExpenseDao
+import com.sanha.moneytalk.core.database.dao.ExpenseIngestionResult
 import com.sanha.moneytalk.core.database.dao.MonthlySum
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.sms.TransactionSemanticDedupe
@@ -75,6 +76,14 @@ class ExpenseRepository @Inject constructor(
 
     /** 여러 지출 항목 일괄 삽입 */
     suspend fun insertAll(expenses: List<ExpenseEntity>) = expenseDao.insertAll(expenses)
+
+    /** 자동 수집 전용. 수동 입력/백업 복원은 기존 insert 경로를 사용한다. */
+    suspend fun insertIngested(
+        expense: ExpenseEntity,
+        reconcileExisting: Boolean = false
+    ): ExpenseIngestionResult = expenseDao.insertIngested(expense, reconcileExisting)
+
+    suspend fun insertAllIngested(expenses: List<ExpenseEntity>) = expenseDao.insertAllIngested(expenses)
 
     /** 지출 항목 수정 */
     suspend fun update(expense: ExpenseEntity) = expenseDao.update(expense)

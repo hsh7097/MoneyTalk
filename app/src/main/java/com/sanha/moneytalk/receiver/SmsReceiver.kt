@@ -6,6 +6,7 @@ import android.content.Intent
 import android.provider.Telephony
 import com.sanha.moneytalk.core.sms.SmsChannelProbeCollector
 import com.sanha.moneytalk.core.sms.SmsInstantProcessor
+import com.sanha.moneytalk.core.sms.SmsFallbackScheduler
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import dagger.hilt.android.AndroidEntryPoint
@@ -36,6 +37,9 @@ class SmsReceiver : BroadcastReceiver() {
 
     @Inject
     lateinit var channelProbeCollector: SmsChannelProbeCollector
+
+    @Inject
+    lateinit var fallbackScheduler: SmsFallbackScheduler
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
@@ -71,6 +75,7 @@ class SmsReceiver : BroadcastReceiver() {
             timestamp = timestamp
         )
 
+        val fallbackToken = fallbackScheduler.captureRequest()
         // goAsync()로 코루틴 작업 범위 확장 (최대 10초)
         val pendingResult = goAsync()
 
@@ -101,6 +106,10 @@ class SmsReceiver : BroadcastReceiver() {
                         )
                         MoneyTalkLogger.i("[SmsReceiver] 즉시 수입 저장: ${result.entity.amount}원")
                     }
+                    is SmsInstantProcessor.Result.Deferred -> {
+                        fallbackScheduler.enqueue(address, body, timestamp, fallbackToken)
+                        MoneyTalkLogger.i("[SmsReceiver] 미매칭 금융 문자 → 백그라운드 재처리 예약")
+                    }
                     is SmsInstantProcessor.Result.Skipped -> {
                         channelProbeCollector.collect(
                             channel = "sms_receiver",
@@ -109,7 +118,7 @@ class SmsReceiver : BroadcastReceiver() {
                             body = body,
                             timestamp = timestamp
                         )
-                        MoneyTalkLogger.i("[SmsReceiver] 비결제 또는 미매칭 → 후속 배치 동기화 대기")
+                        MoneyTalkLogger.i("[SmsReceiver] 비결제 또는 중복 문자 스킵")
                     }
                     is SmsInstantProcessor.Result.Error -> {
                         channelProbeCollector.collect(
@@ -126,16 +135,18 @@ class SmsReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 MoneyTalkLogger.e("[SmsReceiver] 즉시 처리 예외: ${e.message}")
             } finally {
-                if (instantSuccess) {
-                    // 즉시 저장 성공 → UI 갱신만 트리거 (중복 적재 방지)
-                    // 배치 동기화(SMS_RECEIVED)는 트리거하지 않는다.
-                    // 다음 onAppResume()에서 증분 동기화가 재검증/Gemini 분류 보완 수행.
-                    dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
-                } else {
-                    // 미처리 (regex 미매칭 등) → 배치 동기화에서 벡터/LLM 파이프라인으로 처리
-                    dataRefreshEvent.emitSuspend(DataRefreshEvent.RefreshType.SMS_RECEIVED)
+                try {
+                    if (instantSuccess) {
+                        // 즉시 저장 성공 → UI 갱신만 트리거 (중복 적재 방지)
+                        // 다음 onAppResume()에서 증분 동기화가 재검증/Gemini 분류 보완 수행.
+                        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+                    } else {
+                        // UI가 있으면 증분 동기화도 보완한다. Deferred는 별도 OS 작업에 보존된다.
+                        dataRefreshEvent.emit(DataRefreshEvent.RefreshType.SMS_RECEIVED)
+                    }
+                } finally {
+                    pendingResult.finish()
                 }
-                pendingResult.finish()
             }
         }
     }

@@ -12,6 +12,7 @@ import com.sanha.moneytalk.core.firebase.CrashlyticsHelper
 import com.sanha.moneytalk.core.firebase.PremiumManager
 import com.sanha.moneytalk.core.notification.SmsNotificationManager
 import com.sanha.moneytalk.core.sms.DeletedSmsTracker
+import com.sanha.moneytalk.core.sms.SmsFallbackScheduler
 import com.sanha.moneytalk.core.util.BuildVariantPolicy
 import com.sanha.moneytalk.core.util.MoneyTalkLogger
 import com.sanha.moneytalk.receiver.MmsContentObserver
@@ -34,6 +35,9 @@ class MoneyTalkApplication : Application(), AppFunctionConfiguration.Provider {
 
     @Inject
     lateinit var rcsContentObserver: RcsContentObserver
+
+    @Inject
+    lateinit var smsFallbackScheduler: SmsFallbackScheduler
 
     override val appFunctionConfiguration: AppFunctionConfiguration by lazy {
         AppFunctionConfiguration.Builder()
@@ -87,6 +91,7 @@ class MoneyTalkApplication : Application(), AppFunctionConfiguration.Provider {
         if (BuildVariantPolicy.isMonetizationEnabled) {
             MobileAds.initialize(this) {}
         }
+        smsFallbackScheduler.restorePending()
     }
 
     private fun initializeFirebase(): Boolean {

@@ -26,6 +26,7 @@ import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.util.BackupData
 import com.sanha.moneytalk.core.util.DataBackupManager
 import com.sanha.moneytalk.core.sms.DeletedSmsTracker
+import com.sanha.moneytalk.core.sms.SmsFallbackScheduler
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DriveBackupFile
 import com.sanha.moneytalk.core.util.ExportFilter
@@ -178,6 +179,7 @@ class SettingsViewModel @Inject constructor(
     private val rewardAdManager: RewardAdManager,
     private val snackbarBus: AppSnackbarBus,
     private val classificationState: ClassificationState,
+    private val smsFallbackScheduler: SmsFallbackScheduler,
     private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
 
@@ -814,6 +816,8 @@ class SettingsViewModel @Inject constructor(
             try {
                 classificationState.withRegistrationsPaused {
                     withContext(Dispatchers.IO) {
+                        // 삭제 전에 예약된 문자도 비워 백그라운드 작업이 다시 적재하지 않게 한다.
+                        smsFallbackScheduler.clearPending()
                         // 선택적 테이블 삭제 (벡터 데이터 보존)
                         // SmsPatternEntity, StoreEmbeddingEntity는 학습 데이터이므로 유지
                         expenseRepository.deleteAll()
