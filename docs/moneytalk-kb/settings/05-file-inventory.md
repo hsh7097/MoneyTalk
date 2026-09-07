@@ -15,6 +15,7 @@ status: draft
 | `feature/settings/ui/SettingsScreen.kt` | 설정 탭 UI와 row action | 설정 UI/진입 변경 | 핵심 | `SettingsViewModel.kt` |
 | `feature/settings/ui/SettingsViewModel.kt` | 설정 state/intent/data orchestration | 설정 저장, backup, drive, budget | 핵심 | `SettingsUiState`, repositories |
 | `feature/settings/ui/BudgetBottomSheet.kt` | 예산 입력 bottom sheet | 총/카테고리 예산 | 핵심 후보 | `BudgetDao.kt` |
+| `feature/settings/ui/BudgetInputAmounts.kt` | 활성 입력 모드와 현재 전체 예산으로 저장 금액 계산 | 비율/금액 전환, 예산 저장 | 보조 | `BudgetBottomSheet.kt`, `BudgetInputAmountsTest.kt` |
 | `feature/settings/ui/SettingsDataDialogs.kt` | export/import/Drive dialog | 백업/복원/Drive | 핵심 후보 | `DataBackupManager.kt` |
 | `feature/settings/ui/SettingsInfoDialogs.kt` | 앱 정보/개인정보 dialog | 정보성 dialog | 보조 | `strings.xml` |
 | `feature/settings/ui/SettingsPreferenceDialogs.kt` | 테마/월 시작일/예산 dialog | 설정 preference | 핵심 후보 | `SettingsViewModel.kt` |

@@ -12,6 +12,8 @@ status: draft
 
 | 날짜 | 근거 | 변경 | 영향 문서 | 메모 |
 |---|---|---|---|---|
+| 2026-09-08 | `BudgetInputAmountsTest`, 예산 금액 경계 교차 리뷰 | 잘못된 입력·금액 계산 범위 초과를 오류로 표시하고 저장·모드 전환 차단 | `package-reference/03-rendering-action.md`, `../budget-credit-monetization/01-feature-flow.md` | Long 비율을 유지하고 곱셈 전에 결과 범위를 확인해 임의의 값 제한·항목 삭제를 방지. |
+| 2026-09-07 | `BudgetBottomSheet`, `BudgetInputAmounts`, `BudgetInputAmountsTest` | 비율 입력 후 전체 예산 변경 시 현재 금액을 저장하도록 보정 | `package-reference/03-rendering-action.md`, `00-structure-map.md`, `05-file-inventory.md` | 선택 모드 재클릭에 따른 입력 재변환을 막고 총액 증감·금액 입력 유지·계산 경계 회귀 사례를 추가. |
 | 2026-07-12 | SM-F966N, `font_scale=2.0`, `ExportDialog` 실기기 QA | 내보내기 형식 선택지를 세로 전체 폭으로 변경, 즉시 실행 메뉴 계약 보강 | `package-reference/03-rendering-action.md`, `package-reference/05-menu-map.md`, `../ui-map/01-screen-composable-index.md` | CSV 세로 붕괴를 제거하고 중복 정리/가이드 초기화 QA 주의사항을 기록. |
 | 2026-07-12 | Firebase AI Logic/App Check 전환과 release emulator 순회 | 사용자 API key 설정 계약 제거, AI 서비스 상태 계약 반영 | `README.md`, `00-structure-map.md`, `package-reference/02-data-viewmodel.md`, `03-rendering-action.md`, `05-menu-map.md`, `05-file-inventory.md` | Settings에는 API key row/dialog가 없고 RTDB service/model 설정과 Firebase AI Logic만 사용함을 기록. |
 | 2026-07-08 | `feature/settings/ui/**`, `SettingsViewModel.kt`, `DataBackupManager.kt`, `OwnedCardRepository` 확인 | Settings 화면 KB 생성 | `README.md`, `00-structure-map.md`, `package-reference/**`, `05-file-inventory.md` | 설정 탭의 예산/API key/백업/Drive/카드 보유/코치마크 작업 시작점을 분리. |

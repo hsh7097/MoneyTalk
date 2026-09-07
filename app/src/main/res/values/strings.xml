@@ -54,6 +54,7 @@
     <string name="chat_no_sessions">아직 저장된 인사이트가 없습니다</string>
     <string name="chat_start_new">인사이트 질문 시작</string>
     <string name="chat_retry">다시 요청</string>
+    <string name="budget_input_invalid">예산 금액과 비율을 확인해 주세요. 금액은 2,147,483,647원까지 설정할 수 있어요.</string>
     <string name="chat_default_session_title">새 인사이트</string>
     <string name="chat_previous_session_title">이전 인사이트</string>
     <string name="chat_local_lookup_answer">확인한 결과예요.\n\n%1$s</string>

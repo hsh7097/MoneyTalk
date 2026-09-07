@@ -4,7 +4,7 @@ title: Screen Composable Index
 description: MoneyTalk 화면별 Composable 계층과 관련 KB 라우팅을 요약한다.
 tags: [moneytalk, ui, compose, screen]
 resource: app/src/main/java/com/sanha/moneytalk/
-timestamp: 2026-07-12T23:14:00+09:00
+timestamp: 2026-09-07T23:48:00+09:00
 status: draft
 ---
 
@@ -26,7 +26,7 @@ status: draft
 | Home | `HomeScreen`, `HomePageContent`, `MonthlyOverviewSection`, `SpendingTrendSection`, `CategoryExpenseSection`, `AiInsightCard`, `TransactionCardCompose` | [home](../home/README.md), [home surface map](../home/package-reference/05-surface-map.md) |
 | History | `HistoryScreen`, `HistoryHeader`, `FilterTabRow`, `HistoryFilter`, `TransactionListView`, `BillingCycleCalendarView` | [history](../history/README.md), [filtering](../filtering/README.md) |
 | Chat | `ChatScreen`, `ChatRoomListView`, `ChatRoomView`, `ChatComponents` | [chat](../chat/README.md) |
-| Settings | `SettingsScreen`, `SettingsItemCompose`, `SettingsSectionCompose`, `BudgetBottomSheet`, `ExportDialog`, settings dialogs | [settings](../settings/README.md), [settings menu map](../settings/package-reference/05-menu-map.md) |
+| Settings | `SettingsScreen`, `SettingsItemCompose`, `SettingsSectionCompose`, `BudgetBottomSheet`, `ExportDialog`, settings dialogs — 비율 예산 저장은 현재 전체 예산으로 계산하며 범위 초과 입력은 오류 표시와 함께 저장 차단 | [settings](../settings/README.md), [settings menu map](../settings/package-reference/05-menu-map.md) |
 
 ## 보조 화면
 

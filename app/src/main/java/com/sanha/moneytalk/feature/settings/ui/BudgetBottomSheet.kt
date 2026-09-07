@@ -85,7 +85,7 @@ fun BudgetBottomSheet(
             val totalBudget = currentTotalBudget ?: 0
             if (totalBudget > 0) {
                 currentCategoryBudgets.forEach { (category, amount) ->
-                    val percent = (amount * 100L / totalBudget).toInt()
+                    val percent = amount * 100L / totalBudget
                     if (percent > 0) put(category, percent.toString())
                 }
             }
@@ -94,6 +94,15 @@ fun BudgetBottomSheet(
 
     val configuration = LocalConfiguration.current
     val maxSheetHeight = configuration.screenHeightDp.dp - 300.dp
+    val totalBudget = tempTotalBudget.value.toIntOrNull()
+    val categoryBudgets = resolveCategoryBudgetAmounts(
+        totalBudget = totalBudget,
+        isPercentMode = isPercentMode.value,
+        categoryAmounts = tempCategoryBudgets,
+        categoryPercents = tempCategoryPercents
+    )
+    val hasInvalidInput = (tempTotalBudget.value.isNotBlank() && totalBudget == null) ||
+        categoryBudgets == null
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -137,27 +146,27 @@ fun BudgetBottomSheet(
                     CategoryBudgetHeader(
                         isPercentMode = isPercentMode.value,
                         showModeToggle = totalBudgetValue > 0,
-                        onModeToggle = { usePercent ->
+                        onModeToggle = toggle@ { usePercent ->
                             val total = tempTotalBudget.value.toIntOrNull() ?: 0
-                            if (usePercent && total > 0) {
+                            if (usePercent && !isPercentMode.value && total > 0) {
                                 // 금액 → % 전환: 현재 금액을 % 로 변환
+                                val categoryPercents = resolveCategoryBudgetPercents(
+                                    total,
+                                    tempCategoryBudgets
+                                ) ?: return@toggle
                                 tempCategoryPercents.clear()
-                                tempCategoryBudgets.forEach { (category, amountStr) ->
-                                    val amount = amountStr.toIntOrNull() ?: 0
-                                    if (amount > 0) {
-                                        val pct = (amount * 100L / total).toInt()
-                                        if (pct > 0) tempCategoryPercents[category] = pct.toString()
-                                    }
-                                }
-                            } else if (!usePercent && total > 0) {
+                                tempCategoryPercents.putAll(categoryPercents)
+                            } else if (!usePercent && isPercentMode.value && total > 0) {
                                 // % → 금액 전환: % 를 금액으로 변환
+                                val categoryBudgets = resolveCategoryBudgetAmounts(
+                                    totalBudget = total,
+                                    isPercentMode = true,
+                                    categoryAmounts = tempCategoryBudgets,
+                                    categoryPercents = tempCategoryPercents
+                                ) ?: return@toggle
                                 tempCategoryBudgets.clear()
-                                tempCategoryPercents.forEach { (category, pctStr) ->
-                                    val pct = pctStr.toIntOrNull() ?: 0
-                                    if (pct > 0) {
-                                        val amount = (total.toLong() * pct / 100).toInt()
-                                        tempCategoryBudgets[category] = amount.toString()
-                                    }
+                                categoryBudgets.forEach { (category, amount) ->
+                                    tempCategoryBudgets[category] = amount.toString()
                                 }
                             }
                             isPercentMode.value = usePercent
@@ -190,11 +199,10 @@ fun BudgetBottomSheet(
                                 } else {
                                     tempCategoryPercents[category.displayName] = newPercent
                                     // % → 금액 자동 동기화
-                                    val pct = newPercent.toIntOrNull() ?: 0
-                                    if (pct > 0) {
-                                        val amount = (totalBudgetValue.toLong() * pct / 100).toInt()
+                                    val amount = resolveBudgetPercentAmount(totalBudgetValue, newPercent)
+                                    if (amount != null && amount > 0) {
                                         tempCategoryBudgets[category.displayName] = amount.toString()
-                                    } else {
+                                    } else if (amount == 0) {
                                         tempCategoryBudgets.remove(category.displayName)
                                     }
                                 }
@@ -225,14 +233,21 @@ fun BudgetBottomSheet(
 
             // 하단 고정 저장 버튼
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            if (hasInvalidInput) {
+                Text(
+                    text = stringResource(R.string.budget_input_invalid),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                )
+            }
             Button(
                 onClick = {
-                    val totalBudget = tempTotalBudget.value.toIntOrNull()
-                    val categoryBudgets = tempCategoryBudgets
-                        .mapValues { it.value.toIntOrNull() ?: 0 }
-                        .filterValues { it > 0 }
-                    onSave(totalBudget, categoryBudgets)
+                    if (!hasInvalidInput && categoryBudgets != null) {
+                        onSave(totalBudget, categoryBudgets)
+                    }
                 },
+                enabled = !hasInvalidInput,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 12.dp)
@@ -399,7 +414,7 @@ private fun CategoryBudgetRow(
         // % 표시 (전체 예산이 있을 때만)
         if (totalBudget > 0) {
             val amount = amountText.toIntOrNull() ?: 0
-            val percent = if (amount > 0) (amount * 100 / totalBudget) else 0
+            val percent = if (amount > 0) (amount * 100L / totalBudget) else 0L
             Text(
                 text = "(${percent}%)",
                 style = MaterialTheme.typography.labelMedium,
@@ -449,8 +464,8 @@ private fun CategoryBudgetPercentRow(
             onValueChange = { input ->
                 val filtered = input.filter { it.isDigit() }
                 // 100% 초과 방지
-                val value = filtered.toIntOrNull()
-                if (value == null || value <= 100) {
+                val value = filtered.toLongOrNull()
+                if (filtered.isBlank() || (value != null && value <= 100)) {
                     onPercentChange(filtered)
                 }
             },
@@ -469,11 +484,10 @@ private fun CategoryBudgetPercentRow(
         )
 
         // 계산된 금액 표시
-        val percent = percentText.toIntOrNull() ?: 0
-        val calculatedAmount = if (percent > 0) (totalBudget.toLong() * percent / 100).toInt() else 0
+        val calculatedAmount = resolveBudgetPercentAmount(totalBudget, percentText)
         val numberFormat = remember { java.text.NumberFormat.getNumberInstance(java.util.Locale.KOREA) }
         Text(
-            text = if (calculatedAmount > 0) "${numberFormat.format(calculatedAmount)}원" else "",
+            text = if (calculatedAmount != null && calculatedAmount > 0) "${numberFormat.format(calculatedAmount)}원" else "",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
             modifier = Modifier

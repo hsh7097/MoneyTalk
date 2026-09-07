@@ -20,6 +20,10 @@ SettingsScreen
 -> Home/Chat budget status query
 ```
 
+- `BudgetBottomSheet`는 비율 모드에서 저장 시점의 전체 예산으로 카테고리 금액을 계산해 전달한다. 전체 100만원·식비 30%에서 전체만 200만원으로 바꿔도 표시와 저장은 모두 식비 60만원이다.
+- 금액 직접 입력은 전체 예산 변경으로 비례 조정하지 않는다. 자세한 입력 전환 계약은 [Settings rendering/action](../settings/package-reference/03-rendering-action.md)을 따른다.
+- 금액 입력 또는 비율 계산 결과가 표현 범위를 넘으면 오류를 표시하고 저장·모드 전환을 막는다. 값의 잘라내기나 카테고리 항목 삭제로 처리하지 않는다. 자동 변환된 100% 초과 비율은 계산 금액이 `Int` 범위 안이면 허용한다.
+
 ## AI 크레딧
 
 ```text
