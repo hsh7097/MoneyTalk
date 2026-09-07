@@ -19,6 +19,8 @@ import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.core.sms.SmsSyncResultFilter
+import com.sanha.moneytalk.core.sms.StoredIncomeSourceRepairer
 import com.sanha.moneytalk.core.sms.SmsIncomeParser
 import com.sanha.moneytalk.core.sms.SmsInput
 import com.sanha.moneytalk.core.sms.SmsInstantProcessor
@@ -34,7 +36,6 @@ import com.sanha.moneytalk.core.sync.SyncCoverageRecordCounts
 import com.sanha.moneytalk.core.sync.SyncCoverageRecorder
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
-import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
@@ -73,7 +74,7 @@ import kotlin.coroutines.coroutineContext
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
-    private val incomeRepository: IncomeRepository,
+    private val storedIncomeSourceRepairer: StoredIncomeSourceRepairer,
     private val categoryClassifierService: CategoryClassifierService,
     private val smsSyncMessageReader: SmsSyncMessageReader,
     private val settingsDataStore: SettingsDataStore,
@@ -794,7 +795,7 @@ class MainViewModel @Inject constructor(
 
         // Step 2: sms 파이프라인 실행
         val syncResult = processSmsPipeline(smsInputs, silent)
-        val targetFilteredResult = filterSyncResultByTransactionRange(
+        val targetFilteredResult = SmsSyncResultFilter.filterByTransactionRange(
             syncResult = syncResult,
             transactionRange = readPlan.filterTransactionRange
         )
@@ -857,32 +858,6 @@ class MainViewModel @Inject constructor(
         )
     }
 
-    private fun filterSyncResultByTransactionRange(
-        syncResult: com.sanha.moneytalk.core.sms.SyncResult,
-        transactionRange: Pair<Long, Long>?
-    ): com.sanha.moneytalk.core.sms.SyncResult {
-        if (transactionRange == null) return syncResult
-
-        val filteredExpenses = syncResult.expenses.filter { parsed ->
-            DateUtils.parseDateTime(parsed.analysis.dateTime) in transactionRange.first..transactionRange.second
-        }
-        val filteredIncomes = syncResult.incomes.filter { income ->
-            val dateTime = SmsIncomeParser.extractDateTime(income.body, income.date)
-            DateUtils.parseDateTime(dateTime) in transactionRange.first..transactionRange.second
-        }
-
-        val droppedByRange = syncResult.expenses.size + syncResult.incomes.size -
-            filteredExpenses.size - filteredIncomes.size
-        if (droppedByRange > 0) {
-            MoneyTalkLogger.i("월 동기화 저장 범위 밖 SMS ${droppedByRange}건 제외")
-        }
-
-        return syncResult.copy(
-            expenses = filteredExpenses,
-            incomes = filteredIncomes
-        )
-    }
-
     private suspend fun repairStoredIncomeSourcesIfNeeded(readPlan: SyncReadPlan): Int {
         if (!readPlan.reprocessExisting) return 0
 
@@ -890,46 +865,7 @@ class MainViewModel @Inject constructor(
             it.copy(syncProgress = appContext.getString(R.string.sync_repair_income_sources))
         }
 
-        val incomes = incomeRepository.getIncomesByDateRangeOnce(
-            readPlan.targetRange.first,
-            readPlan.targetRange.second
-        )
-        var repairedCount = 0
-
-        for (income in incomes) {
-            val originalSms = income.originalSms?.takeIf { it.isNotBlank() } ?: continue
-            val parsedSource = SmsIncomeParser.extractIncomeSource(originalSms)
-            val shouldRepair = when {
-                parsedSource.isNotBlank() &&
-                    parsedSource != income.source &&
-                    SmsIncomeParser.isInvalidIncomeSource(income.source) -> true
-                parsedSource.isBlank() &&
-                    income.source.isNotBlank() &&
-                    SmsIncomeParser.isInvalidIncomeSource(income.source) -> true
-                else -> false
-            }
-            if (!shouldRepair) continue
-
-            val incomeType = income.type.ifBlank { SmsIncomeParser.extractIncomeType(originalSms) }
-            val description = if (parsedSource.isNotBlank()) {
-                "${parsedSource}에서 $incomeType"
-            } else {
-                incomeType
-            }
-            incomeRepository.update(
-                income.copy(
-                    source = parsedSource,
-                    description = description
-                )
-            )
-            repairedCount++
-        }
-
-        if (repairedCount > 0) {
-            MoneyTalkLogger.i("기존 수입 출처 보정 완료: ${repairedCount}건")
-        }
-
-        return repairedCount
+        return storedIncomeSourceRepairer.repair(readPlan.targetRange)
     }
 
     /**

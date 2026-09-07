@@ -21,3 +21,12 @@ status: draft
 | `navigation/NavGraph.kt` | route별 Composable 연결 | 탭 화면 연결, argument 전달 | 핵심 | 각 화면 `README.md` |
 | `core/ui/AppSnackbarBus.kt` | root snackbar event bus | 전역 snackbar 노출 | 보조 | `MainActivity.kt` |
 | `core/ui/ForceUpdateDialog.kt` | 강제 업데이트 dialog | 앱 업데이트 정책 UI | 보조 | `ForceUpdateChecker.kt` |
+
+## 기능 분리 추가 파일 (2026-09-08)
+
+- `MoneyTalkApp.kt`: 앱 Compose 조율/탭/플랫폼 광고 연결.
+- `SmsSyncDialogs.kt`: 진행 표시와 완료 요약.
+- `core/sms/SmsSyncResultFilter.kt`: 저장 대상의 거래 날짜 필터.
+- `core/sms/StoredIncomeSourceRepairer.kt`: 기존 수입 출처 보정.
+
+`MainActivity.kt`의 Compose root/Stepper 구현 설명은 위 분리 파일을 함께 확인한다.

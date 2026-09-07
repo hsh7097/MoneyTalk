@@ -54,3 +54,16 @@ MainActivity.onCreate()
 - `MainViewModel`은 Activity-scoped 공유 상태를 담당한다. 홈/내역 화면 내부 state를 직접 넣지 않는다.
 - `NavGraph`는 하단 탭 route 연결만 담당한다. 개별 화면의 dialog/action 세부 구현은 각 화면 파일에 둔다.
 - Bottom tab title은 `strings.xml`의 `nav_*` resource를 사용한다.
+
+## 2026-09-08 책임 정리
+
+| 파일 | 현재 책임 |
+|---|---|
+| `MainActivity.kt` | Android 진입/권한/테마/강제 업데이트, onResume 수집 및 알림 정리 |
+| `MoneyTalkApp.kt` | 탭과 NavGraph, 전역 snackbar/화면 추적, 광고 표시 플랫폼 콜백과 BackHandler |
+| `SmsSyncDialogs.kt` | 상태·콜백 기반 동기화 진행/완료 요약 렌더링 |
+| `MainViewModel.kt` | 수집·분류·크레딧 orchestration과 취소/세대/진행 상태 소유 |
+| `core/sms/SmsSyncResultFilter.kt` | 파싱 거래 시각으로 요청한 월의 저장 범위 필터 |
+| `core/sms/StoredIncomeSourceRepairer.kt` | 원문 기반 기존 수입 출처 보정 |
+
+알림 상세는 홈을 parent로 갖는 별도 편집 Activity다. 기존 MVVM·Hilt 구조와 수집 실행 세대/취소 책임은 유지한다. 수입 보정 전 진행 상태와 실행 여부는 MainViewModel에서 판단하고 서비스는 전달된 범위만 처리한다.
