@@ -26,6 +26,7 @@ status: draft
 | [05-finance-ui-design-system-20260908.md](05-finance-ui-design-system-20260908.md) | 금융 UI의 중립 표면·의미 색상·타이포·공통 행·큰 글자 기준 | 공통 테마, 거래/설정 행, CTA/차트/탭의 시각 규칙 확인 |
 | [06-finance-ux-plan-20260908.md](06-finance-ux-plan-20260908.md) | 공식 벤치마크 자료와 기획·디자인 교차 검토, 화면 위계·필터 동선 감사 | 변경 이유와 보존할 금융 의미, 관찰한 화면과 미검증 범위 구분 |
 | [07-finance-ui-validation-20260908.md](07-finance-ui-validation-20260908.md) | 금융 UI의 빌드·자동 검사·합성 데이터 화면 검증 결과 | 실제 통과 결과, 중간 실패와 후속 검사, 최신 캡처의 적용 범위 확인 |
+| [08-home-ledger-ux-validation-20260909.md](08-home-ledger-ux-validation-20260909.md) | 홈·가계부 후속 기능의 최종 검증과 기능별 커밋 | 주간 근거·고정 제외·의미 색상·차트 날짜 선택·접히는 요약·미정리 편집 연결 확인 |
 | [change-log.md](change-log.md) | 이 패키지 변경 로그 | 왜 구조/임계값 문서가 바뀌었는지 확인 |
 
 ## 소유 경계

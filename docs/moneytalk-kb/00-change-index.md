@@ -15,6 +15,7 @@ status: draft
 
 | 날짜 | 기준 | 영향 영역 | 갱신 문서 | 요약 |
 |---|---|---|---|---|
+| 2026-09-09 | 홈·가계부 후속 기능 통합 검증 | Home·History·Category Review·공통 차트/금액 | [후속 검증 기록](project-context/08-home-ledger-ux-validation-20260909.md), Home·History 계약·화면 요구·Composable 맵 | 주간 고정 제외·기간별 근거·다크 대비·수입 빨강/지출 파랑·고정 예상 하단 이동·접히는 요약/한 줄 필터·차트 날짜 선택을 검증하고 기능별로 커밋한다. |
 | 2026-09-09 | 소비 브리핑과 근거 범위 개선 | Home·Weekly Evidence | Home data/render/surface, 화면 요구·Composable 맵·라우팅 | 테두리·두 기간 강조, 주간 고정 제외와 동일한 두 7일 근거·편집을 연결한다. 월 전체·차트·예산은 유지한다. |
 | 2026-09-09 | 미분류 직접 정리 요청 | Settings·Category Review | 설정 rendering/menu map, 화면 요구·Composable 맵·라우팅 | 설정 건수와 목록에 동일한 숨김카드/SMS 필터를 적용하고 기존 편집·같은 거래처 적용으로 연결. 자동 분류는 별도 실행으로 유지. |
 | 2026-09-08 | 토스·뱅크샐러드 공식 자료, 디자이너·기획자 교차 검토와 현재 UI 코드 대조 | 금융 UI 체계·4개 탭·거래/관리 화면 | `project-context/05-finance-ui-design-system-20260908.md`, `06-finance-ux-plan-20260908.md`, [통합 검증 기록](project-context/07-finance-ui-validation-20260908.md), Composable 맵·화면 요구·Home·App Shell·화면별 rendering 문서 | 중립 표면/의미 색상과 큰 글자 배치, 필터 재편집/X 초기화, 홈 기간 중립 제목·비율 분모·기록 안내, 공통 탭/하단 label, 전체 폭 금액 편집·달력 금액 폭 측정·차트 축 색상을 반영. 실행 통과 결과와 중간 실패·후속 검증을 구분. |
