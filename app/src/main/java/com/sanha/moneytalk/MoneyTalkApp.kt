@@ -2,11 +2,9 @@ package com.sanha.moneytalk
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -32,7 +30,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -47,7 +44,6 @@ import com.sanha.moneytalk.core.firebase.AnalyticsEvent
 import com.sanha.moneytalk.core.firebase.AnalyticsHelper
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
 import com.sanha.moneytalk.core.util.DateUtils
-import com.sanha.moneytalk.core.util.toDpTextUnit
 import com.sanha.moneytalk.navigation.NavGraph
 import com.sanha.moneytalk.navigation.Screen
 import com.sanha.moneytalk.navigation.bottomNavItems
@@ -190,7 +186,6 @@ fun MoneyTalkApp(
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
                     NavigationBar(
-                        modifier = Modifier.height(64.dp),
                         containerColor = MaterialTheme.colorScheme.surface,
                         tonalElevation = 0.dp,
                         windowInsets = WindowInsets(0)
@@ -221,42 +216,21 @@ fun MoneyTalkApp(
                                     }
                                 },
                                 icon = {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(top = 4.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            Icon(
-                                                imageVector = if (isSelected) {
-                                                    item.selectedIcon
-                                                } else {
-                                                    item.unselectedIcon
-                                                },
-                                                contentDescription = title,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                            Text(
-                                                text = title,
-                                                fontSize = 12.dp.toDpTextUnit
-                                            )
-                                        }
-                                    }
+                                    Icon(
+                                        imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp)
+                                    )
                                 },
-                                label = null,
+                                label = {
+                                    Text(text = title, style = MaterialTheme.typography.labelSmall)
+                                },
                                 colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.onSurface,
-                                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                    unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(
-                                        alpha = 0.5f
-                                    ),
-                                    unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(
-                                        alpha = 0.5f
-                                    ),
-                                    indicatorColor = MaterialTheme.colorScheme.surface
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer
                                 )
                             )
                         }
@@ -266,6 +240,7 @@ fun MoneyTalkApp(
         }
     ) { paddingValues ->
         Surface(
+            color = MaterialTheme.colorScheme.background,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)

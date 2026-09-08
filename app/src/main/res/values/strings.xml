@@ -224,7 +224,7 @@
     <string name="home_trend_comparison_more">지난달 대비 %1$s원(%2$d%%) 더 쓰고 있어요</string>
     <string name="home_trend_comparison_less">지난달 대비 %1$s원(%2$d%%) 적게 쓰고 있어요</string>
     <string name="home_trend_comparison_same">지난달과 비슷하게 쓰고 있어요</string>
-    <string name="home_trend_comparison_no_data">지난달 데이터가 없어요</string>
+    <string name="home_trend_comparison_no_data">지난달 비교 금액이 없어요</string>
     <string name="home_empty_expense_title">아직 지출 내역이 없어요</string>
     <string name="home_empty_expense_subtitle">문자를 동기화해서 지출을 추가해보세요</string>
     <string name="cta_import_data_title">카드 결제 내역을 가져와 보세요</string>
@@ -315,7 +315,7 @@
     <string name="history_delete_title">삭제 확인</string>
     <string name="history_delete_message">%s 지출 내역을 삭제할까요?</string>
     <string name="history_no_spend_month">%d월 무지출</string>
-    <string name="history_no_spend_total">총 %d일 ></string>
+    <string name="history_no_spend_total">총 %d일</string>
     <string name="history_search_hint">가게명, 카테고리로 검색</string>
     <string name="history_add_expense_title">지출 추가</string>
     <string name="history_amount">금액</string>
@@ -663,13 +663,13 @@
 
     <!-- 카테고리 상세 -->
     <string name="action_back">뒤로가기</string>
-    <string name="category_detail_monthly_summary">%s 이번 달 지출</string>
+    <string name="category_detail_monthly_summary">%s 이 기간 지출</string>
     <string name="category_detail_budget_remaining">%s원 남음</string>
     <string name="category_detail_budget_over">%s원 초과</string>
     <string name="category_detail_budget_not_set">예산 미설정</string>
     <string name="category_detail_recent_transactions">최근 %s 내역</string>
     <string name="category_detail_spending_trend">%s 지출 추이</string>
-    <string name="category_detail_empty">이 달에는 %s 지출이 없습니다</string>
+    <string name="category_detail_empty">이 기간에는 %s 지출이 없습니다</string>
 
     <!-- 카테고리 상세 정렬 -->
     <string name="category_sort_date">최신순</string>

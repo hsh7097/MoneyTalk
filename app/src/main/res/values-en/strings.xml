@@ -176,7 +176,7 @@
     <string name="history_delete_title">Confirm Delete</string>
     <string name="history_delete_message">Delete %s expense?</string>
     <string name="history_no_spend_month">No-spend %d</string>
-    <string name="history_no_spend_total">%d days total ></string>
+    <string name="history_no_spend_total">%d days total</string>
     <string name="history_search_hint">Search by store, category</string>
     <string name="history_add_expense_title">Add Expense</string>
     <string name="history_amount">Amount</string>
@@ -523,7 +523,7 @@
     <string name="sms_regex_reason_card_compile_failed">cardRegex is not a valid regex. Check JSON escaping.</string>
 
     <!-- Category detail sort -->
-    <string name="category_detail_monthly_summary">This month %s spending</string>
+    <string name="category_detail_monthly_summary">%s spending for this period</string>
     <string name="category_detail_budget_remaining">%s won left</string>
     <string name="category_detail_budget_over">%s won over</string>
     <string name="category_detail_budget_not_set">Budget not set</string>
@@ -679,7 +679,7 @@
     <string name="home_trend_comparison_more">You are spending ₩%1$s (%2$d%%) more than last month</string>
     <string name="home_trend_comparison_less">You are spending ₩%1$s (%2$d%%) less than last month</string>
     <string name="home_trend_comparison_same">Your spending is similar to last month</string>
-    <string name="home_trend_comparison_no_data">No data for last month</string>
+    <string name="home_trend_comparison_no_data">No comparable spending from last month</string>
     <string name="sync_no_data">No data</string>
     <string name="permission_title">To use 척척 가계부 safely,\nplease allow the following permissions.</string>
     <string name="permission_sms_label">SMS Permission</string>
@@ -720,7 +720,7 @@
     <string name="partial_sync_cta_subtitle_no_ad">Tap to import missing %1$s data</string>
     <string name="action_back">Back</string>
     <string name="category_detail_spending_trend">%s Spending Trend</string>
-    <string name="category_detail_empty">No %s spending this month</string>
+    <string name="category_detail_empty">No %s spending for this period</string>
     <string name="transfer_direction_withdrawal">Withdrawal</string>
     <string name="transfer_direction_deposit">Deposit</string>
     <string name="transfer_category_picker_title">Choose Transfer Category</string>

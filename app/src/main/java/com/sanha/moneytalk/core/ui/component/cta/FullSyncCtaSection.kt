@@ -1,10 +1,10 @@
 package com.sanha.moneytalk.core.ui.component.cta
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,10 +23,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
-import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
+import com.sanha.moneytalk.core.theme.MoneyTalkDimens
 
 /**
  * 기간 데이터 가져오기 CTA.
@@ -42,23 +43,22 @@ fun FullSyncCtaSection(
     isAdEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
-    val accentColor = if (isPartial) FriendlyMoneyColors.Honey else FriendlyMoneyColors.Mint
     Card(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .clickable(enabled = !isSyncing, onClick = onRequestFullSync),
-        shape = RoundedCornerShape(22.dp),
+            .defaultMinSize(minHeight = 72.dp)
+            .clickable(role = Role.Button, enabled = !isSyncing, onClick = onRequestFullSync),
+        shape = RoundedCornerShape(MoneyTalkDimens.CardRadius),
         colors = CardDefaults.cardColors(
-            containerColor = FriendlyMoneyColors.elevatedCardBackground
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = BorderStroke(1.dp, FriendlyMoneyColors.border),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(MoneyTalkDimens.CardPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -67,9 +67,9 @@ fun FullSyncCtaSection(
                         if (isPartial) R.string.partial_sync_cta_title
                         else R.string.full_sync_cta_title
                     ),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = FriendlyMoneyColors.textPrimary
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(3.dp))
                 Text(
@@ -83,8 +83,7 @@ fun FullSyncCtaSection(
                         monthLabel
                     ),
                     style = MaterialTheme.typography.bodySmall,
-                    color = FriendlyMoneyColors.textSecondary,
-                    maxLines = 1
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
@@ -92,13 +91,13 @@ fun FullSyncCtaSection(
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
-                    color = accentColor
+                    color = MaterialTheme.colorScheme.primary
                 )
             } else {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = accentColor
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
         }

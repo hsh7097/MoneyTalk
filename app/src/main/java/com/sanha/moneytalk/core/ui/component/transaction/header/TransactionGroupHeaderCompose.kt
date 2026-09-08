@@ -70,7 +70,7 @@ fun TransactionGroupHeaderCompose(
                         )
                     }",
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Medium,
                     color = MaterialTheme.moneyTalkColors.income,
                     maxLines = 1,
                     overflow = TextOverflow.Clip,
@@ -86,8 +86,8 @@ fun TransactionGroupHeaderCompose(
                         )
                     }",
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.moneyTalkColors.expense,
                     maxLines = 1,
                     overflow = TextOverflow.Clip,
                     softWrap = false

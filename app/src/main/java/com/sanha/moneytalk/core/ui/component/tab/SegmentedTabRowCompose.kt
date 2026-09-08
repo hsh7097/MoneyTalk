@@ -1,11 +1,12 @@
 package com.sanha.moneytalk.core.ui.component.tab
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
@@ -16,16 +17,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
-import com.sanha.moneytalk.core.util.toDpTextUnit
 
 /**
  * 세그먼트 스타일 탭 Row.
@@ -42,7 +42,8 @@ fun SegmentedTabRowCompose(
             .width(IntrinsicSize.Max)
             .clip(RoundedCornerShape(14.dp))
             .background(FriendlyMoneyColors.elevatedCardBackground)
-            .padding(2.dp),
+            .selectableGroup()
+            .padding(3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         tabs.forEachIndexed { index, tab ->
@@ -67,17 +68,14 @@ private fun SegmentedTab(
 
     Box(
         modifier = Modifier
-            .padding(3.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .defaultMinSize(minWidth = 56.dp, minHeight = 48.dp)
+            .clip(RoundedCornerShape(11.dp))
             .background(
                 if (info.isSelected) info.selectedColor
                 else Color.Transparent
             )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onClick() }
-            .padding(horizontal = 10.dp, vertical = 2.dp),
+            .selectable(selected = info.isSelected, role = Role.Tab, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -88,15 +86,15 @@ private fun SegmentedTab(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(16.dp),
                     tint = textColor
                 )
-                Spacer(modifier = Modifier.width(2.dp))
+                Spacer(modifier = Modifier.width(4.dp))
             }
             Text(
                 text = info.label,
-                fontSize = 14.toDpTextUnit,
-                fontWeight = if (info.isSelected) FontWeight.Bold else FontWeight.Normal,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (info.isSelected) FontWeight.SemiBold else FontWeight.Medium,
                 color = textColor,
                 textAlign = TextAlign.Center
             )
