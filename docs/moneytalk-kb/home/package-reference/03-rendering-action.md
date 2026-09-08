@@ -52,7 +52,7 @@ status: draft
 
 - `HomeScreen`은 state 수집, pager와 ViewModel 연결, 알림/코치마크/분류 dialog를 담당한다. 선택 페이지의 이전 `year/month`에 대해 sync coverage와 부분 수집 여부를 확인해 `isPreviousMonthSynced`로 전달한다. 회계월 시작일과 연도 경계도 기존 coverage 정책을 따른다.
 - `HomePageContent`는 600996a의 좌우 16dp 화면 여백·전체 오늘 목록을 복원하되 최신 요청에 따라 차트를 월 지출 바로 아래로 옮긴다. 하단 content padding은 실기기에서 마지막 거래를 가린 FAB를 피하도록 80dp로 보정한다. `showAnalysis`/`showAllToday`와 별도 상단 비교/분석 진입 컴포넌트는 제거한다. `TodayItem`은 오늘 지출/수입 렌더링용 모델로 같은 파일에 둔다.
-- `HomeTheme`은 앱 전체 색상·Typography를 되돌리지 않고 홈 안의 `MaterialTheme`과 MoneyTalk 확장 색상/숫자 스타일만 원래 표현으로 감싼다. 다른 화면과 공용 거래 작업 메뉴의 변경을 홈 복원 작업에 섞지 않는다.
+- `HomeTheme`은 앱 전체 색상·Typography를 되돌리지 않고 홈 안의 `MaterialTheme`과 MoneyTalk 확장 색상/숫자 스타일만 원래 표현으로 감싼다. 다크 모드 보조 글자는 `#B0BAC6`으로 표시하고, 고정 예상 카드의 기본 글자는 `onSurface`로 지정해 제목·거래명·금액이 흐린 보조색을 상속하지 않게 한다. 그라데이션·섹션 순서와 다른 화면의 색상은 유지한다.
 - `HomeColors`와 홈 전용 거래 카드/CTA는 원래 홈의 색상·테두리·카테고리 칩을 제공한다. `TransactionCardInfo`와 클릭 계약은 재사용하며 History 등 다른 화면은 공용 `TransactionCardCompose`/CTA의 새 표현을 유지한다.
 - `BriefingBudgetSection`은 호출 제거 후 파일도 삭제했다. `SpendingBriefingCalculator`의 예산 `null`·0원·초과·잔여 일수 계산, 예산 설정과 차트의 양수 예산 토글은 유지한다. 과거 월 계산의 예산 값도 현재 공통 예산이며 월별 스냅샷은 아니다. `SpendingBriefingCard`는 `weeklyComparison`이 있을 때만 기록 안내와 최근/직전 7일 또는 과거 월 마지막 7일을 보여준다.
 - `HomeSpendingComparison.calculate()`는 누적 배열 0번을 시작 0원으로 보고 당월 차트 비교는 `todayDayIndex`까지, 과거 월은 각 월 마지막 누적값을 비교한다. 전월이 더 짧으면 마지막 지점으로 제한한다. Hero는 `monthlyExpense`의 월 전체 기록을 표시하므로 미래 날짜 기록이 있으면 당월 차트의 오늘까지 금액과 다를 수 있다. 예산/카테고리도 저장된 월 전체 기록 기준을 유지한다.

@@ -59,6 +59,8 @@ status: draft
 
 ## 금융 UI 표시 체계
 
+- `HomeTheme`의 다크 보조 글자는 `#B0BAC6`을 사용한다. `RecurringExpenseForecastCard`는 기본 content color를 `onSurface`로 지정해 제목·거래명·금액을 밝게 유지하고, 날짜·근거와 차트 축은 보조색으로 구분한다.
+
 색상·간격·큰 글자 규칙은 [금융 UI 디자인 기준](../project-context/05-finance-ui-design-system-20260908.md), 화면 위계와 독립 리뷰는 [금융 UI 사용성 감사](../project-context/06-finance-ux-plan-20260908.md)를 본다. `MoneyTalkTheme`의 중립 배경/표면과 의미 색상을 공통으로 사용하며, 실제 검사 통과 여부는 [통합 검증 기록](../project-context/07-finance-ui-validation-20260908.md)과 로그로 확인한다.
 
 - Home은 `HomeTheme`/`HomeColors`로 기존 UI를 복원한다. CTA → 중앙 월 이동/초록·노랑 그라데이션의 월 전체 지출·수입 → 카드 없는 누적 차트 → 예산을 뺀 최근 소비 비교 → 고정 예상 → 카테고리 → 오늘 전체 내역 순서다. 주간 비교가 없으면 브리핑도 숨긴다. 차트의 당월 오늘까지/과거 전체·미래 날짜 제외·수집 상태·실제 0원 보정과 예산/평균 토글은 유지한다. Hero는 월 전체 기록이므로 당월 차트와 범위가 다를 수 있다. 카테고리의 예산/전체 표시 지출 분모 계산은 같고 원래 퍼센트 표시를 사용한다.
