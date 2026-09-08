@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_recurring_title">Upcoming fixed expenses</string>
+    <string name="home_recurring_period">Estimated for %1$s – %2$s</string>
+    <string name="home_recurring_total">Estimated total %1$s</string>
+    <string name="home_recurring_note">Based on previous fixed expenses. Actual payment dates and amounts may differ.</string>
+    <string name="home_recurring_date">%1$d/%2$d</string>
+    <string name="home_recurring_amount">₩%1$s</string>
+    <string name="home_recurring_expected_date">Expected %1$s</string>
+    <string name="home_recurring_card_category">%1$s · %2$s</string>
+    <string name="home_recurring_evidence">Based on %1$d recent months · Tap to view the recorded payment</string>
+    <string name="home_recurring_show_all">View all %1$d</string>
+</resources>

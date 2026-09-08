@@ -71,6 +71,7 @@ status: draft
 | `feature/home/briefing/SpendingBriefingCard.kt` | `SpendingBriefingCard` | 기록 기준 안내와 예산·주간 비교 조합 |
 | `feature/home/briefing/BriefingBudgetSection.kt` | `BriefingBudgetSection` | 잔여/초과 예산, 오늘 포함 일수, 하루 참고액 |
 | `feature/home/briefing/BriefingWeeklySection.kt` | `BriefingWeeklySection` | 최근/직전 7일, 증가 카테고리와 내역 진입 |
+| `feature/home/recurring/RecurringExpenseForecastCard.kt` | `RecurringExpenseForecastCard`, `RecurringExpenseHeader`, `RecurringExpenseRow`, `recurringDate`, `recurringAmount` | 고정 지출 예상 3개·전체 시트, 근거 거래 버튼, 날짜/금액 표시 |
 | `feature/home/ui/component/MonthlyOverviewSection.kt` | `MonthlyOverviewSection` | 월 이동과 월 지출/수입 요약 |
 | `feature/home/ui/component/CategoryExpenseSection.kt` | `CategoryExpenseSection`, `CategoryRankingExpenseRow` | 카테고리 순위 펼치기/선택/행 |
 | `feature/home/ui/component/AiInsightCard.kt` | `AiInsightCard`, `AiCoachMascot` | AI 인사이트 카드 |
