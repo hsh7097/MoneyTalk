@@ -95,7 +95,7 @@ class IncomeTransactionCardInfo(
     override val amount: Int = income.amount
     override val isIncome: Boolean = true
     override val iconEmoji: String = "\uD83D\uDCB0"
-    override val categoryTag: String = income.type
+    override val categoryTag: String = income.category
     override val time: String = timeFormat.format(Date(income.dateTime))
     override val memoText: String? = income.memo?.takeIf { it.isNotBlank() }
     override val isFixed: Boolean = income.isRecurring
