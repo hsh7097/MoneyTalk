@@ -29,7 +29,7 @@ status: draft
 | [source-docs/README.md](source-docs/README.md) | 기존 `docs/*.md`의 KB 흡수/참조 기준을 정리한다. | 루트 문서 내용이 어느 KB로 흡수됐는지 판단할 때 본다. |
 | [release-history/README.md](release-history/README.md) | 버전별 기능·안정화·검증·운영 결정 이력이다. | 태그 이후 변경이나 릴리즈 후보의 전체 맥락을 복원할 때 본다. |
 | [app-shell/README.md](app-shell/README.md) | 앱 진입, 하단 탭 4개, NavGraph, Activity 전역 다이얼로그 KB다. | `MainActivity`, `MainViewModel`, `navigation/**` 작업 시 본다. |
-| [home/README.md](home/README.md) | 홈 탭 도메인 KB 진입점이다. | `feature/home/ui/**` 또는 홈 월별 현황/카테고리/AI 인사이트 작업 시 본다. |
+| [home/README.md](home/README.md) | 홈 탭 도메인 KB 진입점이다. | `feature/home/ui/**`, `briefing/**`, `recurring/**` 또는 월별 현황/카테고리/로컬 소비 요약·고정 지출 예상 작업 시 본다. |
 | [history/README.md](history/README.md) | 내역 화면 도메인 KB 진입점이다. | `feature/history/**` 또는 거래 목록/필터/달력/상세 작업 시 본다. |
 | [chat/README.md](chat/README.md) | AI 채팅 기능/화면 KB 진입점이다. | `feature/chat/**`, `ChatCreditPolicy`, `DataQueryParser`, 토큰 비용 절감 경로를 볼 때 본다. |
 | [settings/README.md](settings/README.md) | 설정 탭 도메인 KB 진입점이다. | `feature/settings/**`, 예산/AI 서비스 상태/백업/카드 보유 작업 시 본다. |
@@ -61,7 +61,7 @@ status: draft
 | 패키지 | 기준 코드 경로 | 상태 | 설명 |
 |---|---|---|---|
 | `app-shell` | `MainActivity.kt`, `MainViewModel.kt`, `navigation/**`, `MainUiState.kt` | draft | 앱 진입, 하단 탭 4개, NavGraph, Activity 전역 dialog/snackbar |
-| `home` | `feature/home/ui/**`, `feature/home/data/**` | draft | 홈 탭, 월별 현황, 카테고리 지출, AI 인사이트, 미분류 분류 CTA, 홈 코치마크 |
+| `home` | `feature/home/ui/**`, `feature/home/data/**`, `feature/home/briefing/**`, `feature/home/recurring/**` | draft | 홈 탭, 월별 현황, 로컬 소비 브리핑·고정 지출 예상, 카테고리 지출, 미분류 분류 CTA, 홈 코치마크 |
 | `history` | `app/src/main/java/com/sanha/moneytalk/feature/history/` | draft | 내역 화면, 월별 pager, 필터, 달력, 거래 상세/수정 진입 |
 | `settings` | `feature/settings/ui/**` | verified | 설정 탭, 예산, AI 서비스 상태, 백업/복원, Google Drive, 카드 보유 |
 | `transaction-edit` | `feature/transactionedit/ui/**` | draft | 지출/수입 추가·수정, 카테고리 picker, 일괄 적용, 삭제 |

@@ -1,4 +1,4 @@
-﻿---
+---
 type: structure-map
 title: MoneyTalk 구조 지도
 description: MoneyTalk 앱의 루트, 패키지 구조, 핵심 파일, AI 참조 순서를 정리한다.
@@ -29,7 +29,7 @@ status: draft
 |---|---|---|
 | root | 앱 진입, Activity-scoped sync 상태, 전역 dialog/snackbar | `MainActivity.kt`, `MoneyTalkApp.kt`, `SmsSyncDialogs.kt`, `MainViewModel.kt`, `MoneyTalkApplication.kt` |
 | `navigation` | bottom tab route와 Compose NavHost | `NavGraph.kt`, `Screen.kt`, `BottomNavItem.kt` |
-| `feature/home` | 홈 탭, 월 요약, 카테고리 분류, 데이터 repository | `HomeScreen.kt`, `HomeViewModel.kt`, `feature/home/data/*Repository.kt` |
+| `feature/home` | 홈 탭, 월 요약, 로컬 소비 브리핑·고정 지출 예상, 카테고리 분류, 데이터 repository | `HomeScreen.kt`, `HomeViewModel.kt`, `briefing/**`, `recurring/**`, `feature/home/data/*Repository.kt` |
 | `feature/history` | 내역 탭, 월별 pager, 목록/달력/필터, 상세/수정 진입 | `HistoryScreen.kt`, `HistoryViewModel.kt`, `HistoryFilter.kt`, `HistoryDialogs.kt` |
 | `feature/chat` | AI 상담 탭, Gemini 상담, 채팅방 | `ChatScreen.kt`, `ChatRoomView.kt`, `ChatViewModel.kt`, `ChatQueryExecutor.kt`, `ChatActionExecutor.kt`, `ChatAnalyticsCalculator.kt`, `ChatRepositoryImpl.kt` |
 | `feature/settings/ui` | 설정 탭, 기능별 메뉴/다이얼로그, 화면 상태와 액션 | `SettingsScreen.kt`, `SettingsContract.kt`, `SettingsViewModel.kt`, `Settings*Section.kt` |
@@ -38,6 +38,7 @@ status: draft
 | `feature/categorydetail` | 카테고리 상세 화면 | `CategoryDetailScreen.kt`, `CategoryDetailViewModel.kt` |
 | `feature/*settings` | 카테고리/SMS/거래처 규칙 설정 Activity | `CategorySettingsActivity.kt`, `SmsSettingsActivity.kt`, `StoreRuleSettingsActivity.kt` |
 | `feature/transactionedit` | 거래 추가/수정 화면 | `TransactionEditActivity.kt`, `TransactionEditArgs.kt`, `TransactionEditUiState.kt`, `TransactionEditViewModel.kt` |
+| `feature/transactionactions` | 목록 롱클릭의 수정/삭제 메뉴, 기존 편집 진입과 단건 삭제 | `TransactionQuickActionDialog.kt`, `TransactionQuickActionViewModel.kt`, `TransactionQuickActionService.kt` |
 | `feature/transactionlist` | 조건 기반 거래 상세 목록 | `TransactionDetailListActivity.kt`, `TransactionDetailListViewModel.kt` |
 | `feature/intro`, `feature/splash` | 초기 온보딩, 권한 안내, Splash | `IntroActivity.kt`, `OnboardingScreen.kt`, `PermissionScreen.kt`, `SplashScreen.kt` |
 | `core/database` | Room DB, DAO, Entity, DB-backed repository | `AppDatabase.kt`, `ExpenseDao.kt`, `IncomeDao.kt` |
@@ -56,7 +57,8 @@ status: draft
 | 앱 진입/하단 탭 | [app-shell/README.md](app-shell/README.md) | `MainActivity.kt`, `MainViewModel.kt`, `navigation/**` |
 | 홈 화면 | [home/README.md](home/README.md) | `HomeScreen.kt`, `HomeViewModel.kt` |
 | 설정 화면 | [settings/README.md](settings/README.md) | `SettingsScreen.kt`, `SettingsViewModel.kt` |
-| 거래 아이템 변경 | [transaction-edit/README.md](transaction-edit/README.md), [transaction-mutation/README.md](transaction-mutation/README.md) | `TransactionEditViewModel.kt`, `ExpenseRepository.kt`, `IncomeRepository.kt` |
+| 거래 아이템 변경 | [transaction-edit/README.md](transaction-edit/README.md), [transaction-mutation/README.md](transaction-mutation/README.md) | `TransactionEditViewModel.kt`, `TransactionQuickActionService.kt`, `ExpenseRepository.kt`, `IncomeRepository.kt` |
+| 로컬 제품 개선 | [project-context/04-product-improvements-20260908.md](project-context/04-product-improvements-20260908.md) | `feature/home/briefing/**`, `feature/home/recurring/**`, `feature/transactionactions/**` |
 | 문자 파싱 | [sms-parsing/README.md](sms-parsing/README.md) | `MainViewModel.kt`, `core/sms/**`, `core/sync/**` |
 | 카테고리 분류 | [category-classification/README.md](category-classification/README.md) | `CategoryClassifierServiceImpl.kt`, `GeminiCategoryRepositoryImpl.kt`, `StoreEmbeddingRepositoryImpl.kt` |
 | AI 채팅 | [chat/README.md](chat/README.md), [chat/00-structure-map.md](chat/00-structure-map.md) | `feature/chat/**`, `core/util/LocalChatQueryRouter.kt`, `core/util/DataQueryParser.kt`, `core/util/ChatCreditPolicy.kt`, `core/util/ChatContextBuilder.kt` |

@@ -22,6 +22,7 @@ status: draft
 | [01-system-overview.md](01-system-overview.md) | 앱 정의, 패키지 책임, 핵심 시스템, DB/AI 운영 경계 | 작업 시작 시 전체 맥락을 복원할 때 |
 | [02-threshold-registry.md](02-threshold-registry.md) | SMS/가게명/카테고리 전파 유사도와 주요 파이프라인 상수 | 임계값 변경, 파싱/분류 정확도 조정 |
 | [03-screen-function-architecture-audit.md](03-screen-function-architecture-audit.md) | 13개 화면 도메인과 공통 기능의 책임 분리/유지 판단 및 검증 지점 | 화면별 클래스, MVVM/MVI, 가독성·패턴 정리 판단 |
+| [04-product-improvements-20260908.md](04-product-improvements-20260908.md) | 공식 제품 자료에 근거한 로컬 소비 브리핑·고정 지출 예상·단건 정리의 현재 구현과 한계 | 다시 열 이유, 정리 동선, 비용 없는 기본 확인의 선택 근거와 검증 범위 |
 | [change-log.md](change-log.md) | 이 패키지 변경 로그 | 왜 구조/임계값 문서가 바뀌었는지 확인 |
 
 ## 소유 경계

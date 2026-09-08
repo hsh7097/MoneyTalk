@@ -4,11 +4,16 @@ title: Screen Requirements KB Change Log
 description: Screen Requirements KB 변경 이력
 tags: [moneytalk, kb, screen, changelog]
 resource: docs/moneytalk-kb/screen-requirements/
-timestamp: 2026-07-09T06:05:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
 # Change Log
+
+## 2026-09-08
+
+- Home 브리핑·고정 지출 예상, 4개 목록의 롱클릭 단건 변경, History 수입 검색을 현재 화면 요구 인덱스에 반영했다.
+- 부분 기록 안내, 예상/실제 분리, 단건 저장/취소/삭제, 추가 AI·광고·크레딧 없는 계산을 검증 조건으로 연결했다.
 
 ## 2026-07-09
 

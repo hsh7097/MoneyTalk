@@ -4,7 +4,7 @@ title: Screen Requirements Index
 description: 화면별 핵심 요구사항과 담당 KB를 연결한다.
 tags: [moneytalk, screen, requirements, ui]
 resource: app/src/main/java/com/sanha/moneytalk/feature/
-timestamp: 2026-07-09T06:05:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
@@ -24,8 +24,8 @@ status: draft
 
 | 화면 | 핵심 요구 | 담당 KB |
 |---|---|---|
-| Home | 월 네비게이션, 월간 현황 hero, SMS/과거 월 CTA, 누적 차트, 카테고리 지출, AI 인사이트, 오늘 내역, FAB | [home](../home/README.md), [home surface map](../home/package-reference/05-surface-map.md) |
-| History | 목록/달력/수입 view mode, 헤더, 필터 탭/BottomSheet, 거래 목록, 수동 지출 추가, 외부 카테고리 필터 | [history](../history/README.md), [filtering](../filtering/README.md) |
+| Home | 월 네비게이션/현황, SMS/과거 월 CTA, 로컬 예산·주간 브리핑, 근거 있는 고정 지출 예상, 누적 차트, 카테고리 지출, 오늘 거래 클릭·롱클릭, FAB | [home](../home/README.md), [home surface map](../home/package-reference/05-surface-map.md) |
+| History | 목록/달력/수입 view mode, 헤더, 필터/정렬, 지출·수입 전체 기간 검색, 거래 롱클릭 단건 수정/삭제, 수동 추가, 외부 카테고리 필터 | [history](../history/README.md), [filtering](../filtering/README.md) |
 | Chat | 세션 목록, 채팅방, 가이드 질문, 입력, Local Fast Path, Gemini 3-step, query/action/ANALYTICS, Rolling Summary, 크레딧/광고 | [chat](../chat/README.md), [chat contract](../chat/05-system-contract.md) |
 | Settings | 화면 설정, 월 시작일/예산, AI 크레딧, 데이터 관리, 카테고리/거래처/SMS 설정, 백업/복원, 앱 정보 | [settings](../settings/README.md), [settings menu map](../settings/package-reference/05-menu-map.md) |
 
@@ -33,9 +33,9 @@ status: draft
 
 | 화면 | 핵심 요구 | 담당 KB |
 |---|---|---|
-| Category Detail | 홈에서 진입, 월간 추이, 해당 카테고리 거래 목록, CRUD, 카테고리 필터 | [category-detail](../category-detail/README.md) |
+| Category Detail | 홈/브리핑에서 진입, 월간 추이, 해당 카테고리 목록, 클릭 상세 편집·롱클릭 단건 수정/삭제 | [category-detail](../category-detail/README.md) |
 | Transaction Edit | 신규/기존 지출/수입 편집, 금액/가게/카테고리/메모/고정/통계 제외, 동일 거래처 적용 | [transaction-edit](../transaction-edit/README.md), [transaction-mutation](../transaction-mutation/README.md) |
-| Transaction Detail List | 날짜별 거래 목록, 그룹 헤더, 지출/수입 카드, 상세 편집 진입 | [transaction-list](../transaction-list/README.md) |
+| Transaction Detail List | 날짜별 거래 목록, 그룹 헤더, 지출/수입 카드, 상세 편집·롱클릭 단건 수정/삭제 | [transaction-list](../transaction-list/README.md) |
 | SMS Settings | 제외 키워드, 차단 발신자, 신규 파싱 입력 제외 | [sms-settings](../sms-settings/README.md), [filtering](../filtering/README.md) |
 | AI Credit | 잔액, 최근 원장, 광고 충전 진입, feature gate | [ai-credit-screen](../ai-credit-screen/README.md), [budget-credit-monetization](../budget-credit-monetization/README.md) |
 | Category Settings | custom category 추가/수정/삭제/재정렬 | [category-settings](../category-settings/README.md), [category-classification](../category-classification/README.md) |
@@ -52,6 +52,13 @@ status: draft
 | SMS 파싱 파이프라인 | batch/instant SMS, regex/vector/LLM, coverage | [sms-parsing](../sms-parsing/README.md), [sms-pipeline](../sms-pipeline/README.md) |
 | 카테고리 분류 | 4-tier 자동 분류, 사용자 수정 학습 | [category-classification](../category-classification/README.md) |
 | Room DB | schema/migration, finance data repository | [finance-data](../finance-data/README.md) |
+
+## 로컬 기능의 표시·저장 계약
+
+- 브리핑은 기록 기준임을 항상 알리고 부분 수집/권한 없음 안내를 보존한다. 과거 월에는 미래 하루 참고액을 표시하지 않고 예산 초과는 음수 참고액 대신 초과 금액으로 표시한다.
+- 고정 지출 예상은 실제 일정이나 결제 완료가 아니다. 후보가 없으면 카드를 숨기고, 미래 거래 삽입/예산 차감/새 알림을 만들지 않는다. 근거 버튼은 실제 거래로 이동한다.
+- 거래 롱클릭은 화면 중앙의 작은 작업 메뉴로 표시한다. 거래명·닫기 X 아래 구분선과 아이콘을 곁들인 세로형 `수정`·`삭제` 행을 두고, 행 전체를 누를 수 있게 한다. 삭제만 위험 색상으로 구분하며 수정은 유형과 ID를 보존해 기존 편집 화면을 연다. 삭제는 별도 확인에서 거래명·금액을 보여준다. 메뉴 닫기의 데이터 불변, 수입·지출 ID 구분, 삭제 중 닫기와 중복 동작 차단, 삭제 원문 재수집 방지를 확인한다.
+- 새 브리핑/예상 계산은 AI 요청·광고·크레딧 차감을 만들지 않는다. 사용성 효과와 운영 비용/광고 지급의 검증 범위는 [제품 개선 검토](../project-context/04-product-improvements-20260908.md)를 본다.
 
 ## 변경 시 체크
 

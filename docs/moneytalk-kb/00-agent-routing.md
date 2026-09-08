@@ -1,4 +1,4 @@
-﻿---
+---
 type: routing
 title: MoneyTalk Agent Routing
 description: 변경 파일 경로와 작업 키워드를 기준으로 AI가 읽을 KB 문서를 결정한다.
@@ -34,7 +34,9 @@ status: draft
 |---|---|---|
 | `app/src/main/java/com/sanha/moneytalk/MainActivity.kt`, `MainViewModel.kt`, `MainUiState.kt`, `MoneyTalkApp.kt`, `SmsSyncDialogs.kt`, `navigation/**` | [app-shell/README.md](app-shell/README.md), [app-shell/00-structure-map.md](app-shell/00-structure-map.md) | 앱 진입, 하단 탭 4개, Activity-scoped sync/ad/dialog 상태 |
 | 화면별/기능별 구조, MVVM/MVI, 책임 분리, 전체 가독성 감사 | [project-context/03-screen-function-architecture-audit.md](project-context/03-screen-function-architecture-audit.md), [ui-map/01-screen-composable-index.md](ui-map/01-screen-composable-index.md), 영향 화면 README | 13개 feature 도메인의 정리/유지 경계와 검증 지점 |
-| `app/src/main/java/com/sanha/moneytalk/feature/home/ui/**` | [home/README.md](home/README.md), [home/00-structure-map.md](home/00-structure-map.md), [home/package-reference/README.md](home/package-reference/README.md) | 홈 탭, 월별 현황, 카테고리 지출, AI 인사이트, 홈 코치마크 |
+| `app/src/main/java/com/sanha/moneytalk/feature/home/ui/**`, `feature/home/briefing/**`, `feature/home/recurring/**` | [home/README.md](home/README.md), [home/00-structure-map.md](home/00-structure-map.md), [home/package-reference/README.md](home/package-reference/README.md) | 홈 탭, 월별 현황, 로컬 소비 브리핑, 고정 지출 예상, 카테고리와 코치마크 |
+| 사용성, 경쟁 앱, 소비 브리핑, 고정 지출 예상 | [project-context/04-product-improvements-20260908.md](project-context/04-product-improvements-20260908.md), [home/README.md](home/README.md) | 현재 구현의 선택 이유·정확성 한계와 운영 확인을 분리 |
+| `app/src/main/java/com/sanha/moneytalk/feature/transactionactions/**`, 거래 롱클릭, 수정/삭제 메뉴 | [transaction-mutation/01-feature-flow.md](transaction-mutation/01-feature-flow.md), [ui-map/01-screen-composable-index.md](ui-map/01-screen-composable-index.md), 해당 화면 README | 유형+ID 기반 기존 편집 진입, 단건 삭제 추적, 화면별 중앙 메뉴 상태 |
 | `app/src/main/java/com/sanha/moneytalk/feature/history/**` | [history/README.md](history/README.md), [history/00-structure-map.md](history/00-structure-map.md), [history/package-reference/README.md](history/package-reference/README.md) | 내역 화면, 필터, 달력, 상세/수정 진입 |
 | `app/src/main/java/com/sanha/moneytalk/feature/settings/data/**` | [settings/package-reference/02-data-viewmodel.md](settings/package-reference/02-data-viewmodel.md), [backup-restore/README.md](backup-restore/README.md), [finance-data/README.md](finance-data/README.md) | 백업 준비/복원, 삭제 서비스의 저장 순서와 큐/캐시 초기화 |
 | `app/src/main/java/com/sanha/moneytalk/feature/settings/**` | [settings/README.md](settings/README.md), [settings/00-structure-map.md](settings/00-structure-map.md), [settings/package-reference/README.md](settings/package-reference/README.md) | 설정 탭, 예산, AI 서비스 상태, 백업/복원, 카드 보유, Google Drive |
