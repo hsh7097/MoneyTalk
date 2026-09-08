@@ -1,7 +1,5 @@
 package com.sanha.moneytalk.feature.transactionedit.ui
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -33,15 +31,14 @@ internal fun TransactionSectionCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = TransactionEditDesignColors.card
         ),
-        border = BorderStroke(1.dp, TransactionEditDesignColors.border),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(20.dp)
         ) {
             if (title != null) {
                 Row(
@@ -74,10 +71,10 @@ internal fun TransactionDivider() {
 }
 
 internal object TransactionEditDesignColors {
-    val Mint = Color(0xFF43B883)
-    val Coral = Color(0xFFFF6B5B)
-    val Honey = Color(0xFFF4B740)
-    val Sky = Color(0xFF7BB8FF)
+    val accent: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = MaterialTheme.colorScheme.primary
 
     val background: Color
         @Composable
@@ -92,12 +89,12 @@ internal object TransactionEditDesignColors {
     val innerCard: Color
         @Composable
         @ReadOnlyComposable
-        get() = MaterialTheme.colorScheme.surfaceVariant
+        get() = MaterialTheme.colorScheme.surfaceContainerLow
 
     val segmentBackground: Color
         @Composable
         @ReadOnlyComposable
-        get() = MaterialTheme.colorScheme.surfaceVariant
+        get() = MaterialTheme.colorScheme.surfaceContainerHigh
 
     val border: Color
         @Composable

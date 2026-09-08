@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -150,6 +151,7 @@ private fun DetailEditRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 56.dp)
             .padding(vertical = 8.dp),
         verticalAlignment = if (singleLine) Alignment.CenterVertically else Alignment.Top
     ) {
@@ -162,9 +164,10 @@ private fun DetailEditRow(
             textStyle = MaterialTheme.typography.bodyMedium.copy(
                 color = TransactionEditDesignColors.textPrimary
             ),
-            cursorBrush = SolidColor(TransactionEditDesignColors.Mint),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             modifier = Modifier
                 .weight(1f)
+                .heightIn(min = 48.dp)
                 .onFocusChanged { isFocused = it.isFocused },
             decorationBox = { innerTextField ->
                 Box {
@@ -182,7 +185,7 @@ private fun DetailEditRow(
         if (isFocused && value.isNotBlank()) {
             IconButton(
                 onClick = { onValueChange("") },
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
@@ -211,6 +214,7 @@ private fun DetailRowFrame(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .heightIn(min = 56.dp)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -256,6 +260,7 @@ private fun CompactRuleCheckbox(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .clickable { onCheckedChange(!checked) }
+            .heightIn(min = 48.dp)
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

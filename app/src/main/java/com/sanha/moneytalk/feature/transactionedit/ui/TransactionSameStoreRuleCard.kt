@@ -1,6 +1,5 @@
 package com.sanha.moneytalk.feature.transactionedit.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -56,7 +55,7 @@ private fun RuleKeywordInput(
     keyword: String,
     onKeywordChange: (String) -> Unit
 ) {
-    val accentColor = TransactionEditDesignColors.Mint
+    val accentColor = TransactionEditDesignColors.accent
     OutlinedTextField(
         value = keyword,
         onValueChange = onKeywordChange,
@@ -93,9 +92,8 @@ private fun KeywordGuideCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = TransactionEditDesignColors.Mint.copy(alpha = 0.12f)
-        ),
-        border = BorderStroke(1.dp, TransactionEditDesignColors.Mint.copy(alpha = 0.2f))
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
@@ -110,7 +108,7 @@ private fun KeywordGuideCard(
                 TextButton(onClick = onDismiss) {
                     Text(
                         text = stringResource(R.string.transaction_edit_keyword_guide_confirm),
-                        color = TransactionEditDesignColors.Mint
+                        color = TransactionEditDesignColors.accent
                     )
                 }
             }

@@ -1,17 +1,19 @@
 package com.sanha.moneytalk.feature.transactionedit.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -32,17 +34,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.TransferDirection
-import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
+import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.component.rememberCategoryEmoji
 import com.sanha.moneytalk.core.util.toDpTextUnit
 import com.sanha.moneytalk.feature.transactionedit.ui.model.TransactionType
@@ -69,7 +76,7 @@ internal fun TransactionHeroCard(
                 modifier = Modifier
                     .size(52.dp)
                     .clip(RoundedCornerShape(18.dp))
-                    .background(accentColor.copy(alpha = if (FriendlyMoneyColors.isDark) 0.2f else 0.16f)),
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -78,10 +85,7 @@ internal fun TransactionHeroCard(
                 )
             }
 
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
+            Box(modifier = Modifier.weight(1f)) {
                 EditableHeroText(
                     value = uiState.storeName,
                     placeholder = stringResource(R.string.transaction_edit_store_hint),
@@ -91,15 +95,17 @@ internal fun TransactionHeroCard(
                         fontWeight = FontWeight.Bold
                     )
                 )
-                EditableHeroAmount(
-                    amount = uiState.amount,
-                    transactionType = uiState.transactionType,
-                    transferDirection = uiState.transferDirection,
-                    accentColor = accentColor,
-                    onAmountChange = onAmountChange
-                )
             }
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        EditableHeroAmount(
+            amount = uiState.amount,
+            transactionType = uiState.transactionType,
+            transferDirection = uiState.transferDirection,
+            accentColor = accentColor,
+            onAmountChange = onAmountChange
+        )
 
         Spacer(modifier = Modifier.height(18.dp))
 
@@ -118,16 +124,20 @@ private fun EditableHeroText(
     textColor: Color,
     textStyle: androidx.compose.ui.text.TextStyle
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            singleLine = true,
+            maxLines = 3,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             textStyle = textStyle.copy(color = textColor),
-            cursorBrush = SolidColor(TransactionEditDesignColors.Mint),
-            modifier = Modifier.weight(1f),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
             decorationBox = { innerTextField ->
-                Box {
+                Box(contentAlignment = Alignment.CenterStart) {
                     if (value.isBlank()) {
                         Text(
                             text = placeholder,
@@ -172,40 +182,71 @@ private fun EditableHeroAmount(
     val amountTransformation = remember(prefix, suffix) {
         SignedAmountTransformation(prefix = prefix, suffix = suffix)
     }
+    val renderedAmount = amountTransformation.filter(AnnotatedString(amount)).text
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val baseStyle = MaterialTheme.typography.headlineMedium.copy(
+        color = accentColor,
+        fontWeight = FontWeight.Bold
+    )
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        BasicTextField(
-            value = amount,
-            onValueChange = { onAmountChange(it.filter { char -> char.isDigit() }) },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            textStyle = MaterialTheme.typography.headlineMedium.copy(
-                color = accentColor,
-                fontWeight = FontWeight.Bold
-            ),
-            visualTransformation = amountTransformation,
-            cursorBrush = SolidColor(accentColor),
-            modifier = Modifier
-                .weight(1f)
-                .onFocusChanged { isFocused = it.isFocused },
-            decorationBox = { innerTextField ->
-                Box {
-                    if (amount.isBlank()) {
-                        Text(
-                            text = stringResource(R.string.transaction_edit_amount_hint),
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = TransactionEditDesignColors.textSecondary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    innerTextField()
-                }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        BoxWithConstraints(modifier = Modifier.weight(1f)) {
+            // Measure the signed, formatted value at the user's font scale before shrinking.
+            // A small cursor allowance prevents BasicTextField scrolling off the leading digit.
+            val measuredWidth = textMeasurer.measure(
+                text = renderedAmount,
+                style = baseStyle,
+                softWrap = false,
+                maxLines = 1
+            ).size.width
+            val availableWidth = (constraints.maxWidth - with(density) { 4.dp.toPx() }).coerceAtLeast(1f)
+            val textScale = (availableWidth / measuredWidth.coerceAtLeast(1)).coerceAtMost(1f)
+            var amountStyle = baseStyle.copy(fontSize = baseStyle.fontSize * textScale)
+            while (amountStyle.fontSize.value > 1f && textMeasurer.measure(
+                    text = renderedAmount,
+                    style = amountStyle,
+                    softWrap = false,
+                    maxLines = 1
+                ).size.width > availableWidth
+            ) {
+                amountStyle = amountStyle.copy(fontSize = (amountStyle.fontSize.value - 0.5f).coerceAtLeast(1f).sp)
             }
-        )
+            BasicTextField(
+                value = amount,
+                onValueChange = { onAmountChange(it.filter { char -> char.isDigit() }) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                textStyle = amountStyle,
+                visualTransformation = amountTransformation,
+                cursorBrush = SolidColor(accentColor),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .onFocusChanged { isFocused = it.isFocused },
+                decorationBox = { innerTextField ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (amount.isBlank()) {
+                            Text(
+                                text = stringResource(R.string.transaction_edit_amount_hint),
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = TransactionEditDesignColors.textSecondary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
+            )
+        }
         if (isFocused && amount.isNotBlank()) {
             IconButton(
                 onClick = { onAmountChange("") },
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
@@ -215,12 +256,14 @@ private fun EditableHeroAmount(
                 )
             }
         } else {
-            Icon(
-                imageVector = Icons.Default.Edit,
-                contentDescription = null,
-                tint = TransactionEditDesignColors.textSecondary,
-                modifier = Modifier.size(16.dp)
-            )
+            Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = null,
+                    tint = TransactionEditDesignColors.textSecondary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
     }
 }
@@ -233,6 +276,7 @@ private fun TransactionTypeSegmentedControl(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .selectableGroup()
             .clip(RoundedCornerShape(16.dp))
             .background(TransactionEditDesignColors.segmentBackground)
             .padding(3.dp),
@@ -240,32 +284,33 @@ private fun TransactionTypeSegmentedControl(
     ) {
         TransactionType.entries.forEach { type ->
             val selected = type == currentType
-            val accentColor = type.accentColor()
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(42.dp)
+                    .heightIn(min = 48.dp)
                     .clip(RoundedCornerShape(13.dp))
-                    .background(if (selected) accentColor else Color.Transparent)
-                    .clickable { onTypeChange(type) },
+                    .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                    .selectable(selected = selected, role = Role.Tab) { onTypeChange(type) }
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = stringResource(type.labelResId),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                    color = if (selected) Color.White else TransactionEditDesignColors.textSecondary
+                    color = if (selected) MaterialTheme.colorScheme.onSurface else TransactionEditDesignColors.textSecondary
                 )
             }
         }
     }
 }
 
+@Composable
 private fun TransactionType.accentColor(): Color {
     return when (this) {
-        TransactionType.EXPENSE -> TransactionEditDesignColors.Coral
-        TransactionType.INCOME -> TransactionEditDesignColors.Mint
-        TransactionType.TRANSFER -> TransactionEditDesignColors.Sky
+        TransactionType.EXPENSE -> MaterialTheme.moneyTalkColors.expense
+        TransactionType.INCOME -> MaterialTheme.moneyTalkColors.income
+        TransactionType.TRANSFER -> MaterialTheme.colorScheme.onSurface
     }
 }
 

@@ -19,7 +19,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -141,8 +140,8 @@ private fun AutomationOptionRow(
             checked = selected,
             onCheckedChange = onSelectedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = TransactionEditDesignColors.Mint,
+                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                checkedTrackColor = MaterialTheme.colorScheme.primary,
                 uncheckedThumbColor = TransactionEditDesignColors.textSecondary,
                 uncheckedTrackColor = TransactionEditDesignColors.innerCard,
                 uncheckedBorderColor = TransactionEditDesignColors.border
@@ -160,7 +159,7 @@ private fun SameStoreHeaderCheckbox(
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
             .clickable { onCheckedChange(!checked) }
-            .heightIn(min = 32.dp),
+            .heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Checkbox(

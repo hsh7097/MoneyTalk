@@ -7,7 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,7 +24,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -43,7 +42,7 @@ internal fun TransactionEditTopBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .heightIn(min = 56.dp)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -58,7 +57,7 @@ internal fun TransactionEditTopBar(
             text = stringResource(
                 if (isNew) R.string.transaction_add_title else R.string.transaction_edit_title
             ),
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = TransactionEditDesignColors.textPrimary,
             modifier = Modifier.weight(1f)
@@ -66,7 +65,7 @@ internal fun TransactionEditTopBar(
         TextButton(onClick = onSave) {
             Text(
                 text = stringResource(R.string.transaction_edit_save),
-                color = TransactionEditDesignColors.Mint,
+                color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -83,7 +82,7 @@ internal fun TransactionEditBottomActions(
         modifier = Modifier
             .fillMaxWidth()
             .background(TransactionEditDesignColors.background)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         if (!isNew) {
@@ -91,11 +90,11 @@ internal fun TransactionEditBottomActions(
                 onClick = onDelete,
                 modifier = Modifier
                     .weight(1f)
-                    .height(54.dp),
+                    .heightIn(min = 54.dp),
                 shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(1.dp, TransactionEditDesignColors.border),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = TransactionEditDesignColors.textPrimary
+                    contentColor = MaterialTheme.colorScheme.error
                 )
             ) {
                 Text(
@@ -109,12 +108,12 @@ internal fun TransactionEditBottomActions(
         Button(
             onClick = onSave,
             modifier = Modifier
-                .weight(1f)
-                .height(54.dp),
+                .weight(if (isNew) 1f else 2f)
+                .heightIn(min = 54.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = TransactionEditDesignColors.Mint,
-                contentColor = Color.White
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
             )
         ) {
             Text(
