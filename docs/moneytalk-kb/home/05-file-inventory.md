@@ -41,3 +41,5 @@ status: draft
 | `feature/home/data/StoreEmbeddingRepository*.kt` | 거래처 embedding 저장/검색 | 유사도/embedding 분류 | 핵심 후보 | `embedding/README.md` |
 | `feature/home/data/StoreRuleRepository.kt` | 사용자 거래처 규칙 저장/조회 | 수동 규칙/일괄 분류 | 핵심 후보 | `store-rule-settings/README.md` |
 | `feature/home/data/StoreRuleSyncService.kt` | 규칙 동기화/적용 보조 | 거래처 규칙 동기화 | 보조 | `StoreRuleRepository.kt` |
+
+- `feature/weeklyevidence/WeeklyEvidenceRequest.kt`, `WeeklyEvidenceFilter.kt`, `ui/WeeklyEvidenceActivity.kt`, `WeeklyEvidenceViewModel.kt`, `WeeklyEvidenceScreen.kt`: 브리핑의 정확한 기간·금액 근거를 독립 화면으로 제공한다.

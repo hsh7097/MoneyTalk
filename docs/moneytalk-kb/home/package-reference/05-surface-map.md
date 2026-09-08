@@ -20,7 +20,7 @@ Home은 하단 탭 첫 번째 화면이다. `HomeScreen`이 state와 Activity ca
 | 과거 월 전체 동기화 CTA | 현재 월이 아니고 해당 월 sync coverage가 없을 때 | `isPartiallyCovered`, `isAdEnabled`, `isSyncing` | 광고/크레딧 정책을 거쳐 월별 full sync 요청 | `HomeFullSyncCta`, `MainViewModel.showFullSyncAdDialog()` |
 | 월간 현황 | 항상 표시 | 중앙 월 시작일 기준 기간, 기존 초록·노랑 그라데이션 카드의 월 전체 지출·수입 배지 | 이전/다음 월 이동 | `MonthlyOverviewSection`, `HomeExpenseAmount`, `DateUtils.getCustomMonthPeriod()` |
 | 누적 지출 추이 | `HomeSpendingTrendInfo`가 생성될 때, 월 지출 바로 아래 | 당월 오늘까지/과거 월 전체 비교 금액, 수집 상태 안내, 선택 기간·수집 완료 전월·최근 3/6개월 평균·양수 예산 누적 데이터 | 전월/평균/예산 범례 토글, `home_trend` 코치마크 | `SpendingTrendSection`, `HomeSpendingTrendInfo`, `CumulativeChartDataBuilder` |
-| 소비 브리핑 | `pageData.spendingBriefing?.weeklyComparison != null` | ‘내 소비 한눈에’의 기록 기준/부분 수집 안내와 최근/직전 7일 또는 과거 월 마지막 7일 비교 | 증가 카테고리 내역 이동 | `SpendingBriefingCard`, `BriefingWeeklySection`, `SpendingBriefingCalculator` |
+| 소비 브리핑 | `pageData.spendingBriefing?.weeklyComparison != null` | ‘내 소비 한눈에’의 기록 기준/부분 수집 안내와 테두리 카드의 고정 제외 최근/이전 7일 금액·날짜 비교 | 증가 카테고리 내역 이동 | `SpendingBriefingCard`, `BriefingWeeklySection`, `SpendingBriefingCalculator` |
 | 고정 지출 예상 | 현재 회계월이며 계산 후보가 있을 때 | 오늘부터 30일, 반복 근거가 충분한 거래의 예상일/금액 | 처음 3개·전체 보기, 최신 실제 근거 거래 열기 | `RecurringExpenseForecastCard`, `RecurringExpenseForecastCalculator` |
 | 카테고리 지출 | 브리핑/고정 예상 다음에 표시 | 통계 포함 지출의 카테고리 합계, 카테고리별 예산/전체 지출 대비 비율 | 처음 4개/전체 펼침, 카테고리 선택/해제, 상세 이동 | `CategoryExpenseSection`, `CategoryDetailActivity.open()` |
 | 오늘 내역 | 현재 월일 때만 카테고리 다음에 표시 | 오늘 지출 합계·지출 건수, 전체 지출/수입 시간 역순 목록 | 클릭 상세 편집, 롱클릭 수정/삭제 | `HomePageContent`, `HomeTransactionCard`, `TransactionQuickActionDialog` |
@@ -86,3 +86,5 @@ Hero는 `monthlyExpense`와 `monthlyIncome`의 월 전체 기록을 표시한다
 4. 카테고리 상세/거래 편집 진입 extra가 보조 화면 KB와 일치하는가?
 5. Hero 월 전체 기록과 당월 차트 오늘까지 금액의 범위를 구분하는가? 전월 비교의 같은 경과일/수집 상태·실제 0원·짧은 전월·미래 날짜·연도 경계를 확인했는가?
 6. 홈 전용 테마·카드 없는 차트 옵션이 다른 화면의 새 테마/공통 차트 기본값에 영향을 주지 않는가?
+
+- 브리핑의 두 기간 금액은 전체 소비 비교, 증가 카테고리는 해당 category 비교를 `WeeklyEvidenceActivity`로 연다. 월별 상세가 아니라 동일한 최근/이전 7일, 기준 시각·시간대를 전달한다. 고정 지출 제외는 이 주간 비교에만 적용한다.

@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.feature.home.briefing.SpendingBriefingCard
+import com.sanha.moneytalk.feature.home.briefing.BriefingWeeklyComparison
 import com.sanha.moneytalk.feature.home.recurring.RecurringExpenseForecastCard
 import com.sanha.moneytalk.feature.transactionactions.model.TransactionTarget
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
@@ -85,7 +86,8 @@ fun HomePageContent(
     isCurrentPage: Boolean = false,
     coroutineScope: kotlinx.coroutines.CoroutineScope,
     onTransactionLongClick: ((TransactionTarget) -> Unit)? = null,
-    onForecastTransactionClick: (Long) -> Unit = {}
+    onForecastTransactionClick: (Long) -> Unit = {},
+    onWeeklyEvidenceSelected: (BriefingWeeklyComparison, String?, Boolean) -> Unit = { _, _, _ -> }
 ) {
     val listState = rememberLazyListState()
     val showScrollToTop by remember {
@@ -217,7 +219,7 @@ fun HomePageContent(
                         briefing = briefing,
                         isPartialCoverage = isPartiallyCovered || !isMonthSynced,
                         hasSmsPermission = hasSmsPermission,
-                        onCategoryClick = { onCategorySelected(it) }
+                        onEvidenceClick = onWeeklyEvidenceSelected
                     )
                 }
             }

@@ -66,8 +66,10 @@ object SpendingBriefingCalculator {
         val recentStart = anchor.minusDays(6)
         val previousStart = anchor.minusDays(13)
         val previousEnd = anchor.minusDays(7)
-        val recent = expenses.inWindow(recentStart, anchor, zoneId, nowMillis)
-        val previous = expenses.inWindow(previousStart, previousEnd, zoneId, nowMillis)
+        // 정기 결제 시점의 차이가 소비 변화로 보이지 않도록 주간 비교에서만 제외한다.
+        val variableExpenses = expenses.filterNot { it.isFixed }
+        val recent = variableExpenses.inWindow(recentStart, anchor, zoneId, nowMillis)
+        val previous = variableExpenses.inWindow(previousStart, previousEnd, zoneId, nowMillis)
         val previousByCategory = previous.groupBy { it.category }
             .mapValues { (_, records) -> records.sumOf { it.amount } }
         val largestIncrease = recent.groupBy { it.category }
@@ -85,7 +87,9 @@ object SpendingBriefingCalculator {
         return BriefingWeeklyComparison(
             recent = BriefingSpendingWindow(recentStart, anchor, recent.sumOf { it.amount }, recent.size),
             previous = BriefingSpendingWindow(previousStart, previousEnd, previous.sumOf { it.amount }, previous.size),
-            largestCategoryIncrease = largestIncrease
+            largestCategoryIncrease = largestIncrease,
+            asOfMillis = nowMillis,
+            timeZoneId = zoneId.id
         )
     }
 

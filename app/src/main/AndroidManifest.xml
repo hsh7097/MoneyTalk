@@ -112,6 +112,13 @@
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- 최근/이전 7일 소비 근거 -->
+        <activity
+            android:name=".feature.weeklyevidence.ui.WeeklyEvidenceActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.MoneyTalk" />
+
         <!-- 거래 편집/추가 -->
         <activity
             android:name=".feature.transactionedit.ui.TransactionEditActivity"

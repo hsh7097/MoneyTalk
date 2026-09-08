@@ -37,6 +37,7 @@ status: draft
 | Transaction Detail List | `TransactionDetailListActivity`, `TransactionDetailListScreen` — 달력에서 전달한 조건에 따라 지출·수입 통합 목록을 렌더링 | [transaction-list](../transaction-list/README.md) |
 | SMS Settings | `SmsSettingsActivity`, `SmsSettingsScreen`, `SmsSettingsMainContent`, `BlockedPhraseManageScreen`, `BlockedSenderManageScreen`, `ExcludedCardManageScreen` | [sms-settings](../sms-settings/README.md) |
 | AI Credit | `AiCreditActivity`, `AiCreditScreen`, AI credit repository state | [ai-credit-screen](../ai-credit-screen/README.md), [budget-credit-monetization](../budget-credit-monetization/README.md) |
+| Weekly Evidence | `WeeklyEvidenceActivity`, `WeeklyEvidenceScreen`, `WeeklyEvidenceContent`: 전체/category별 두 기간 탭·합계·날짜 그룹·편집/롱클릭 | [home](../home/package-reference/03-rendering-action.md) |
 | Category Review | `CategoryReviewActivity`, `CategoryReviewScreen` → `CategoryReviewContent`, `CategoryReviewList`, `CategoryReviewMessage`. 설정의 직접 확인 메뉴에서 기존 편집 화면으로 연결 | [settings](../settings/package-reference/03-rendering-action.md) |
 | Category Settings | `CategorySettingsActivity`, `CategorySettingsScreen` | [category-settings](../category-settings/README.md), [category-classification](../category-classification/README.md) |
 | Store Rule Settings | `StoreRuleSettingsActivity`, `StoreRuleSettingsScreen`, `StoreRuleEditorDialog.kt`의 `AddEditRuleDialog` | [store-rule-settings](../store-rule-settings/README.md) |
@@ -95,7 +96,8 @@ status: draft
 | `feature/home/ui/component/HomeImportDataCta.kt` | `HomeImportDataCta` | 원래 홈 가져오기 CTA와 동기화 중 입력 차단 |
 | `feature/home/ui/component/HomeFullSyncCta.kt` | `HomeFullSyncCta` | 원래 홈 기간 가져오기 CTA, 부분 수집·광고 유무 안내 |
 | `feature/home/briefing/SpendingBriefingCard.kt` | `SpendingBriefingCard` | 주간 비교가 있을 때만 ‘내 소비 한눈에’와 기록 기준·부분 수집 안내 표시. 예산 UI 제거 |
-| `feature/home/briefing/BriefingWeeklySection.kt` | `BriefingWeeklySection` | 최근/직전 7일, 증가 카테고리와 내역 진입 |
+| `feature/home/briefing/BriefingWeeklySection.kt` | `BriefingWeeklySection`, `BriefingPeriodAmount` | 테두리 브리핑 안의 두 7일 파랑 금액/날짜, 고정 제외, 전체/category 근거 진입 |
+| `feature/weeklyevidence/ui/WeeklyEvidenceScreen.kt` | `WeeklyEvidenceScreen`, `WeeklyEvidenceContent` | 동일 날짜·시간대·기준 시각의 두 기간 전환, 합계/목록 및 기존 편집/롱클릭 |
 | `feature/home/recurring/RecurringExpenseForecastCard.kt` | `RecurringExpenseForecastCard`, `RecurringExpenseHeader`, `RecurringExpenseRow`, `recurringDate`, `recurringAmount` | 고정 지출 예상 3개·전체 시트, 근거 거래 버튼, 날짜/금액 표시 |
 | `feature/home/ui/component/MonthlyOverviewSection.kt` | `MonthlyOverviewSection`, `HomeExpenseAmount` | 중앙 월 이동·그라데이션 월 전체 지출/수입. 32sp 흰 금액·동일 크기 통화 단위를 1px 여유 폭으로 측정·재측정해 한 줄 표시 |
 | `feature/home/ui/model/HomeSpendingTrendInfo.kt` | `HomeSpendingTrendInfo.from`, `buildComparisonText` (`@Composable` factory/문구 함수) | `HomeSpendingComparison`의 동일 경과일/과거 전체/수집 상태를 기존 누적 차트 정보로 변환. 실제 0원도 금액 차이로 비교 |

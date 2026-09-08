@@ -9,7 +9,8 @@ import java.time.LocalDate
 data class BriefingExpense(
     val amount: Long,
     val category: String,
-    val dateTime: Long
+    val dateTime: Long,
+    val isFixed: Boolean = false
 )
 
 /** 시작일과 종료일을 모두 포함하는 날짜 구간의 기록된 지출. */
@@ -31,7 +32,10 @@ data class BriefingCategoryIncrease(
 data class BriefingWeeklyComparison(
     val recent: BriefingSpendingWindow,
     val previous: BriefingSpendingWindow,
-    val largestCategoryIncrease: BriefingCategoryIncrease?
+    val largestCategoryIncrease: BriefingCategoryIncrease?,
+    /** 근거 화면도 브리핑과 같은 시각/시간대 경계를 사용한다. */
+    val asOfMillis: Long,
+    val timeZoneId: String
 ) {
     val difference: Long get() = recent.amount - previous.amount
 }

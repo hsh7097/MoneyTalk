@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="weekly_evidence_all_title">Spending comparison</string>
+    <string name="weekly_evidence_title">%1$s spending comparison</string>
+    <string name="weekly_evidence_open">View %1$s comparison details</string>
+    <string name="weekly_evidence_previous">Previous 7 days</string>
+    <string name="weekly_evidence_basis">Fixed expenses excluded · recorded transactions</string>
+    <string name="weekly_evidence_past_anchor">Compared as of the last day of the selected period.</string>
+    <string name="weekly_evidence_empty">No spending to compare in this period.</string>
+    <string name="weekly_evidence_count">%1$d transactions</string>
+    <string name="weekly_evidence_cutoff">Records up to %1$s, when the briefing was calculated. Edits and deletions update the totals.</string>
+    <string name="weekly_evidence_error">Could not load the comparison details.</string>
+    <string name="weekly_evidence_retry">Try again</string>
+</resources>

@@ -51,6 +51,8 @@ import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.feature.home.ui.coachmark.homeCoachMarkSteps
 import com.sanha.moneytalk.feature.home.ui.theme.HomeTheme
 import com.sanha.moneytalk.feature.transactionedit.ui.TransactionEditActivity
+import com.sanha.moneytalk.feature.weeklyevidence.WeeklyEvidenceRequest
+import com.sanha.moneytalk.feature.weeklyevidence.ui.WeeklyEvidenceActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -236,6 +238,9 @@ fun HomeScreen(
                     TransactionEditActivity.open(context, incomeId = income.id)
                 },
                 onTransactionLongClick = quickActions::open,
+                onWeeklyEvidenceSelected = { comparison, category, initiallyRecent ->
+                    WeeklyEvidenceActivity.open(context, WeeklyEvidenceRequest.from(comparison, category, initiallyRecent))
+                },
                 onForecastTransactionClick = { TransactionEditActivity.open(context, expenseId = it) },
                 coachMarkRegistry = coachMarkRegistry,
                 isCurrentPage = page == pagerState.currentPage,

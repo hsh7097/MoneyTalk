@@ -463,7 +463,7 @@ class HomeViewModel @Inject constructor(
                             dailyCumulativeExpenses = dailyCumulative,
                             spendingBriefing = SpendingBriefingCalculator.calculate(
                                 expenses = visibleHistory.filter { it.isIncludedInExpenseStats() }.map {
-                                    BriefingExpense(it.amount.toLong(), it.category, it.dateTime)
+                                    BriefingExpense(it.amount.toLong(), it.category, it.dateTime, isFixed = it.isFixed)
                                 },
                                 periodStart = periodStartDate,
                                 periodEndInclusive = periodEndDate,

@@ -41,11 +41,11 @@ HomeViewModel.loadPageData(year, month)
 ## 로컬 소비 브리핑
 
 - 현재 회계월의 Flow 조회 시작을 현재 달력 월의 3개월 전 1일까지 넓힌다. `visibleHistory`에는 카드 숨김과 SMS 제외를 적용하고, 기존 월 합계/목록에는 회계월 날짜 필터를 다시 적용한다. 과거 회계월은 해당 월만 읽는다.
-- `SpendingBriefingCalculator` 입력은 `BriefingExpense(amount: Long, category, dateTime)`다. 호출자가 `isIncludedInExpenseStats()`까지 적용한다. 계산기는 카드/문자 정책을 다시 구현하거나 수입을 지출에서 빼지 않는다.
+- `SpendingBriefingCalculator` 입력은 `BriefingExpense(amount: Long, category, dateTime, isFixed)`다. 호출자가 `isIncludedInExpenseStats()`까지 적용한다. 계산기는 카드/문자 정책을 다시 구현하거나 수입을 지출에서 빼지 않는다.
 - 월 지출은 회계월 안에 저장된 미래일 수동 거래까지 기존 홈 합계와 같이 포함한다. 주간 비교는 오늘을 포함한 최근 7개 날짜와 직전 7개 날짜를 사용하되 현재 시각 이후 거래는 제외한다. 과거 월은 마지막 날을 기준으로 비교한다.
 - 남은 예산은 전체 월 예산에서 월 지출을 뺀 값이다. 현재 회계월의 남은 날짜는 오늘을 포함한다. 하루 참고액은 남은 예산을 날짜 수로 나눈 원 단위 내림이며, 미설정·초과·과거/미래 월에서는 제공하지 않는다. 초과액은 별도 표시한다.
 - 날짜는 `LocalDate`/`ZoneId`의 날짜 시작 경계로 계산하고 금액 합계는 `Long`이다. 현재 호출부의 회계월은 `DateUtils.getCustomMonthPeriod()`와 동일하다.
-- 가장 증가한 카테고리는 최근 금액 순위가 아니라 두 주의 차액으로 고른다. 양수 증가만 표시하며 동률은 이름순이다. 버튼은 기존 선택 월 카테고리 상세로 이동하므로 주간 범위 전용 검색을 뜻하지 않는다.
+- 가장 증가한 카테고리는 최근 금액 순위가 아니라 두 주의 차액으로 고른다. 양수 증가만 표시하며 동률은 이름순이다. 버튼은 `WeeklyEvidenceActivity`로 동일한 두 7일 구간과 category, 계산 시각·시간대를 전달한다. 금액 카드는 category=null로 해당 기간 전체 소비를 열고, 증가 카테고리 버튼은 저장된 category가 정확히 같은 거래를 연다. 일반 월별 카테고리 행의 상세 이동은 유지한다.
 - 이 계산 경로는 Gemini/광고/크레딧을 호출하지 않는다. `GeminiRepository.generateHomeInsight()`와 `AiInsightCard` 선언은 남아 있지만 현재 홈의 자동 실행/표시 경로에는 연결하지 않는다.
 
 ## 고정 지출 예상
@@ -75,3 +75,5 @@ HomeViewModel.loadPageData(year, month)
 - 분류 알고리즘은 기존 `CategoryClassifierService`, 누적 계산은 `CumulativeChartDataBuilder`, 차트 변환은 `HomeSpendingTrendInfo`에 유지한다. MVI 전체 전환 없이 기존 MVVM 수명주기를 유지한다.
 - 카테고리 순위/미분류 병합/예산 비율/90% 경고/초과 판정은 `HomeCategoryExpenseMapper`로 분리했다. 표시 모델은 DB 조회나 상태 변경을 하지 않는다.
 - `HomeCategoryExpenseMapperTest`는 순위와 미분류 합산, 90%/100%/초과 예산, 미설정/0 예산, 빈 목록을 검증한다.
+
+- 주간 비교와 증가 카테고리 계산에서만 `isFixed` 거래를 제외한다. 월 지출·예산·누적 차트는 전체 지출을 유지한다. 근거 화면도 카드/SMS/통계/고정 제외를 동일하게 적용하고 계산 시각 이후 거래는 제외한다. `WeeklyEvidenceViewModel`은 Room Flow와 DataRefreshEvent로 편집·삭제를 반영하며 합계와 날짜 그룹은 Default에서 계산한다.

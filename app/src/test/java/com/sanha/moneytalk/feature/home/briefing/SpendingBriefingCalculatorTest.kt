@@ -15,6 +15,36 @@ class SpendingBriefingCalculatorTest {
     private val newYork = ZoneId.of("America/New_York")
 
     @Test
+    fun newFixedPaymentDoesNotChangeWeeklyComparisonOrCategoryIncrease() {
+        val variable = listOf(expense(3_000, "2026-09-01T12:00"), expense(5_000, "2026-09-03T12:00"))
+        val before = calculate(variable)
+        val after = calculate(variable + expense(900_000, "2026-09-08T12:00", "주거").copy(isFixed = true))
+
+        assertEquals(before.weeklyComparison, after.weeklyComparison)
+        assertEquals(before.recordedExpense + 900_000, after.recordedExpense)
+        assertEquals(before.budgetRemaining?.minus(900_000), after.budgetRemaining)
+    }
+
+    @Test
+    fun bothWeeksExcludeFixedPaymentsEvenWithinTheSameCategory() {
+        val result = calculate(listOf(
+            expense(1_000, "2026-09-01T12:00"),
+            expense(3_000, "2026-09-03T12:00"),
+            expense(100_000, "2026-09-01T13:00").copy(isFixed = true),
+            expense(300_000, "2026-09-03T13:00").copy(isFixed = true)
+        ))
+        val weekly = requireNotNull(result.weeklyComparison)
+        assertEquals(1_000L, weekly.previous.amount)
+        assertEquals(3_000L, weekly.recent.amount)
+        assertEquals(1, weekly.previous.transactionCount)
+        assertEquals(1, weekly.recent.transactionCount)
+        assertEquals(BriefingCategoryIncrease("식비", 3_000, 1_000), weekly.largestCategoryIncrease)
+        assertEquals(404_000L, result.recordedExpense)
+        assertEquals(seoul.id, weekly.timeZoneId)
+        assertEquals(LocalDateTime.parse("2026-09-08T15:00").atZone(seoul).toInstant().toEpochMilli(), weekly.asOfMillis)
+    }
+
+    @Test
     fun customAccountingMonthUsesOnlyItsExpensesAndIncludesTodayInDaysLeft() {
         val result = calculate(
             expenses = listOf(

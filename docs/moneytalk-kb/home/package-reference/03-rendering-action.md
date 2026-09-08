@@ -21,7 +21,7 @@ status: draft
 | `HomeImportDataCta` / `HomeFullSyncCta` (`component/**`) | 원래 홈의 테두리·색상·22dp 반지름을 보존한 수집 CTA | 기존 권한/부분 수집/광고 조건과 동기화 중 입력 차단 유지 |
 | `HomeTransactionCard` (`component/HomeTransactionCard.kt`) | 기존 `TransactionCardInfo`로 홈의 카테고리 칩·테두리·지출 색상 복원 | 클릭/롱클릭을 상위에 위임, 큰 글자·긴 금액의 세로 배치 유지 |
 | `SpendingBriefingCard` (`briefing/SpendingBriefingCard.kt`) | ‘내 소비 한눈에’의 기록 기준/부분 수집 안내와 최근 소비 비교만 표시. 주간 비교가 없으면 숨김 | 증가 카테고리 내역 이동 |
-| `BriefingWeeklySection` (`briefing/BriefingWeeklySection.kt`) | 최근/직전 7일 또는 과거 월 마지막 7일 비교 | 카테고리 callback |
+| `BriefingWeeklySection` (`briefing/BriefingWeeklySection.kt`) | 고정 지출을 제외한 최근/이전 7일 비교 | 최근/이전 전체 소비 또는 증가 카테고리 근거 callback |
 | `RecurringExpenseForecastCard` (`recurring/RecurringExpenseForecastCard.kt`) | 앞으로 30일 고정 지출 예상, 처음 3개와 전체 시트 | 최신 실제 근거 거래 열기 |
 | `SpendingTrendSection` | 월 지출 바로 아래 카드 없는 누적 차트, `HomeSpendingTrendInfo` 비교 보정 유지 | 전월·3/6개월 평균·예산 범례 토글, `home_trend` 코치마크 |
 | `CategoryExpenseSection` (`component/CategoryExpenseSection.kt`) | 기존 카테고리 지출 행·비율/예산 상태 | 처음 4개/전체 펼침, 행 선택 또는 상세 이동 |
@@ -54,7 +54,7 @@ status: draft
 - `HomePageContent`는 600996a의 좌우 16dp 화면 여백·전체 오늘 목록을 복원하되 최신 요청에 따라 차트를 월 지출 바로 아래로 옮긴다. 하단 content padding은 실기기에서 마지막 거래를 가린 FAB를 피하도록 80dp로 보정한다. `showAnalysis`/`showAllToday`와 별도 상단 비교/분석 진입 컴포넌트는 제거한다. `TodayItem`은 오늘 지출/수입 렌더링용 모델로 같은 파일에 둔다.
 - `HomeTheme`은 앱 전체 색상·Typography를 되돌리지 않고 홈 안의 `MaterialTheme`과 MoneyTalk 확장 색상/숫자 스타일만 원래 표현으로 감싼다. 다크 모드 보조 글자는 `#B0BAC6`으로 표시하고, 고정 예상 카드의 기본 글자는 `onSurface`로 지정해 제목·거래명·금액이 흐린 보조색을 상속하지 않게 한다. 그라데이션·섹션 순서와 다른 화면의 색상은 유지한다.
 - `HomeColors`와 홈 전용 거래 카드/CTA는 원래 홈의 색상·테두리·카테고리 칩을 제공한다. `TransactionCardInfo`와 클릭 계약은 재사용하며 History 등 다른 화면은 공용 `TransactionCardCompose`/CTA의 새 표현을 유지한다.
-- `BriefingBudgetSection`은 호출 제거 후 파일도 삭제했다. `SpendingBriefingCalculator`의 예산 `null`·0원·초과·잔여 일수 계산, 예산 설정과 차트의 양수 예산 토글은 유지한다. 과거 월 계산의 예산 값도 현재 공통 예산이며 월별 스냅샷은 아니다. `SpendingBriefingCard`는 `weeklyComparison`이 있을 때만 기록 안내와 최근/직전 7일 또는 과거 월 마지막 7일을 보여준다.
+- `BriefingBudgetSection`은 호출 제거 후 파일도 삭제했다. `SpendingBriefingCalculator`의 예산 `null`·0원·초과·잔여 일수 계산, 예산 설정과 차트의 양수 예산 토글은 유지한다. 과거 월 계산의 예산 값도 현재 공통 예산이며 월별 스냅샷은 아니다. `SpendingBriefingCard`는 `weeklyComparison`이 있을 때만 기록 안내와 고정 지출을 제외한 최근/이전 7일을 보여준다.
 - `HomeSpendingComparison.calculate()`는 누적 배열 0번을 시작 0원으로 보고 당월 차트 비교는 `todayDayIndex`까지, 과거 월은 각 월 마지막 누적값을 비교한다. 전월이 더 짧으면 마지막 지점으로 제한한다. Hero는 `monthlyExpense`의 월 전체 기록을 표시하므로 미래 날짜 기록이 있으면 당월 차트의 오늘까지 금액과 다를 수 있다. 예산/카테고리도 저장된 월 전체 기록 기준을 유지한다.
 - `HomeSpendingTrendInfo.from()`은 선택 기간의 수집 완료·부분 아님·SMS 권한과 이전 월의 수집 완료 여부를 비교 조건으로 사용한다. 수집 미완료와 배열 부재는 평가 대신 안내하고, 수집 범위가 확인된 전월 0원은 실제 금액 차이로 비교한다. 전월 곡선은 이전 월 수집 범위가 확인됐을 때만 표시한다. 이는 앱의 수집 상태 확인이며 실제 금융 기록 전체의 완전성 보장이 아니다.
 - 별도 두 곡선 상단 차트와 그 Y축 계산은 제거한다. 홈은 `SpendingTrendSection(showCard = false)`로 원래 카드 없는 배치·큰 누적 금액을 사용한다. wrapper와 공통 `CumulativeTrendSection`의 기본값은 `true`여서 CategoryDetail의 새 카드를 유지한다. 홈은 `scaleToVisibleLines = true`로 오늘까지 주 곡선과 켜진 비교선에 맞춰 Y축을 정하고 공통 기본 false는 전체 곡선 기준을 유지한다. 전월·평균·예산 토글과 영역 채움을 유지하며 공통 Vico의 시작 0원~`daysInMonth` X축 보정도 유지한다. 미사용 `showAreaFill` 옵션은 제거했다.
@@ -65,3 +65,6 @@ status: draft
 공통 표현 기준은 [금융 UI 디자인](../../project-context/05-finance-ui-design-system-20260908.md), 선택 이유는 [사용성 감사](../../project-context/06-finance-ux-plan-20260908.md)를 따른다.
 
 - 누적 추이 범례는 `9월`·`8월`처럼 월만 표시한다. 월 이동과 이전 달 조회의 연도 경계 계산은 유지하며 범례에서만 연도를 생략한다.
+
+- 소비 브리핑은 20dp 둥근 테두리 카드다. `최근 7일 소비`와 `이전 7일 소비`의 금액·날짜를 서로 다른 파랑 음영으로 묶고 좁은 폭/큰 글자에서는 세로 배치한다. `고정 지출 제외 · 기록된 내역 기준`을 명시한다. 과거 월에도 같은 제목을 사용하고 선택 기간 마지막 날 기준이라는 설명과 실제 날짜를 함께 표시한다.
+- 두 금액을 누르면 `WeeklyEvidenceActivity`의 해당 기간 탭을 연다. 증가 카테고리 버튼은 같은 화면에 category를 전달한다. 날짜별 거래·합계·기준 시각, 두 기간 전환, 기존 편집/롱클릭을 제공한다. 기존 월별 카테고리 상세 화면에는 주간 브리핑을 보내지 않는다.

@@ -33,11 +33,12 @@ status: draft
 
 | 화면 | 핵심 요구 | 담당 KB |
 |---|---|---|
-| Category Detail | 홈/브리핑에서 진입, 월간 추이, 해당 카테고리 목록, 클릭 상세 편집·롱클릭 단건 수정/삭제 | [category-detail](../category-detail/README.md) |
+| Category Detail | 홈 카테고리 행에서 진입, 월간 추이, 해당 카테고리 목록, 클릭 상세 편집·롱클릭 단건 수정/삭제 | [category-detail](../category-detail/README.md) |
 | Transaction Edit | 신규/기존 지출/수입 편집, 금액/가게/카테고리/메모/고정/통계 제외, 동일 거래처 적용 | [transaction-edit](../transaction-edit/README.md), [transaction-mutation](../transaction-mutation/README.md) |
 | Transaction Detail List | 날짜별 거래 목록, 그룹 헤더, 지출/수입 카드, 상세 편집·롱클릭 단건 수정/삭제 | [transaction-list](../transaction-list/README.md) |
 | SMS Settings | 제외 키워드, 차단 발신자, 신규 파싱 입력 제외 | [sms-settings](../sms-settings/README.md), [filtering](../filtering/README.md) |
 | AI Credit | 잔액, 최근 원장, 광고 충전 진입, feature gate | [ai-credit-screen](../ai-credit-screen/README.md), [budget-credit-monetization](../budget-credit-monetization/README.md) |
+| Weekly Evidence | 브리핑과 같은 두 7일·기준 시각·시간대·고정 제외, 전체/category 범위, 초기 기간 탭, 날짜별 거래·합계와 기존 편집·롱클릭 | [home](../home/package-reference/03-rendering-action.md) |
 | Category Review | 설정에서 전체 기간 미분류 직접 확인, 같은 노출 기준의 건수, 기존 거래 편집과 동일 거래처 적용, 로딩/실패/빈 상태와 복귀 갱신. 자동 분류는 별도 실행 | [settings](../settings/package-reference/03-rendering-action.md), [transaction-edit](../transaction-edit/README.md) |
 | Category Settings | custom category 추가/수정/삭제/재정렬 | [category-settings](../category-settings/README.md), [category-classification](../category-classification/README.md) |
 | Store Rule Settings | 거래처 규칙 추가/편집/삭제, 카테고리/고정/통계 제외 소급 적용 | [store-rule-settings](../store-rule-settings/README.md) |
@@ -59,7 +60,7 @@ status: draft
 - Home은 사용자 요청에 따라 600996a의 기존 UI를 복원한다. `HomeTheme`/`HomeColors`와 홈 전용 거래 카드·CTA로 홈에만 원래 색상과 Typography를 적용하며 다른 화면은 새 테마를 유지한다. 중앙 월 이동 아래 초록·노랑 그라데이션에 월 전체 지출과 수입 배지를 표시한다. 금액은 원래 32sp 흰색 중앙 정렬이고 통화 단위도 같은 크기다. 긴 금액은 1px 여유 폭에서 비례 축소 후 재측정하며 필요하면 0.5sp씩 더 낮춰 한 줄 표시한다.
 - 누적 차트는 최신 요청에 따라 월 지출 바로 아래에 둔다. `SpendingTrendSection(showCard = false)`로 카드 없는 기존 배치와 큰 누적 금액, 영역 채움, 전월·3/6개월 평균·예산 토글을 유지한다. 홈은 `scaleToVisibleLines = true`로 오늘까지 주 곡선과 켜진 비교선에 Y축을 맞추고 다른 화면은 기본 false의 전체 곡선 기준을 유지한다. 다른 화면은 기본 `showCard = true`를 사용한다. 별도 두 곡선 비교 카드·분석 접기는 제거한다.
 - 차트 비교는 당월 오늘까지 같은 경과일, 과거 월 각 월 전체 기준이다. 미래 날짜 거래는 당월 차트 금액·주 곡선에서 제외하지만 Hero·예산·카테고리는 월 전체 기록을 사용하므로 값이 다를 수 있다. 현재/전월 수집 미완료나 배열 부재는 많음/적음 평가 대신 안내하고 미완료 전월 선은 숨긴다. 실제 전월 0원은 금액 차이로 비교하며 앱의 수집 완료를 실제 금융 기록의 완전성으로 단정하지 않는다.
-- ‘내 소비 한눈에’는 차트 다음에 최근 소비 비교가 있을 때만 표시하며 예산·잔여 일수·하루 참고액은 표시하지 않는다. 기록 기준과 부분 수집/권한 안내, 최근/직전 7일 또는 과거 월 마지막 7일 비교와 카테고리 이동을 유지한다. 주간 비교가 없어 카드가 숨겨져도 CTA·차트의 수집 안내는 독립적으로 유지한다. 예산 계산·설정·차트의 양수 예산 토글은 별도 기능으로 남는다.
+- ‘내 소비 한눈에’는 차트 다음에 최근 소비 비교가 있을 때만 표시하며 예산·잔여 일수·하루 참고액은 표시하지 않는다. 기록 기준과 부분 수집/권한 안내, 고정 지출을 뺀 최근/이전 7일 금액을 테두리 카드와 파랑 음영으로 표시한다. 실제 날짜와 과거 월의 마지막 날 기준 안내를 함께 표시한다. 금액은 해당 기간 전체 근거, 증가 카테고리는 같은 두 기간의 category 근거로 이동한다. 주간 비교가 없어 카드가 숨겨져도 CTA·차트의 수집 안내는 독립적으로 유지한다. 예산 계산·설정·차트의 양수 예산 토글은 별도 기능으로 남는다.
 - 고정 예상과 카테고리 다음에는 현재 회계월의 오늘 지출/수입 전체를 최신순으로 표시한다. 오늘 지출 합계·지출 건수 헤더와 클릭/롱클릭을 복원하며 이 건수는 수입을 포함한 목록 총 건수가 아니다. 3건 제한·전체/접기 상태는 사용하지 않는다. 카테고리 행은 원래 퍼센트 표시를 사용하고 분모는 예산이 있으면 카테고리 예산, 없으면 전체 표시 지출이다. 별도 ‘예산 %’/‘비중 %’ 접두어는 없다.
 - 홈 목록은 마지막까지 스크롤했을 때 마지막 거래의 금액과 터치 영역이 ‘맨 위로’ FAB에 가려지지 않도록 아래 80dp content padding을 확보한다. 위·좌우 여백과 거래 데이터는 바꾸지 않는다.
 - 고정 지출 예상은 실제 일정이나 결제 완료가 아니다. 후보가 없으면 카드를 숨기고, 미래 거래 삽입/예산 차감/새 알림을 만들지 않는다. 근거 버튼은 실제 거래로 이동한다.

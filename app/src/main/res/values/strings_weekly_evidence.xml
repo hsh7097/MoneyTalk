@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="weekly_evidence_all_title">소비 비교</string>
+    <string name="weekly_evidence_title">%1$s 소비 비교</string>
+    <string name="weekly_evidence_open">%1$s 비교 내역 보기</string>
+    <string name="weekly_evidence_previous">이전 7일 소비</string>
+    <string name="weekly_evidence_basis">고정 지출 제외 · 기록 기준</string>
+    <string name="weekly_evidence_past_anchor">선택 기간 마지막 날 기준으로 비교했어요.</string>
+    <string name="weekly_evidence_empty">이 기간에 비교할 소비 내역이 없어요.</string>
+    <string name="weekly_evidence_count">%1$d건</string>
+    <string name="weekly_evidence_cutoff">브리핑 기준 시각 %1$s까지의 기록이에요. 수정·삭제한 내역은 합계에 반영돼요.</string>
+    <string name="weekly_evidence_error">비교 내역을 불러오지 못했어요.</string>
+    <string name="weekly_evidence_retry">다시 시도</string>
+</resources>

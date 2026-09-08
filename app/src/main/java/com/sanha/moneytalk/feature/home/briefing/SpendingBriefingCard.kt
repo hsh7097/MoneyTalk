@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.feature.home.briefing
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,14 +23,15 @@ fun SpendingBriefingCard(
     briefing: SpendingBriefing,
     isPartialCoverage: Boolean,
     hasSmsPermission: Boolean,
-    onCategoryClick: (String) -> Unit,
+    onEvidenceClick: (BriefingWeeklyComparison, String?, Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val comparison = briefing.weeklyComparison ?: return
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -41,7 +43,7 @@ fun SpendingBriefingCard(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = stringResource(R.string.home_briefing_recorded_basis),
+                text = stringResource(R.string.weekly_evidence_basis),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -52,7 +54,9 @@ fun SpendingBriefingCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            BriefingWeeklySection(comparison, briefing.isCurrentPeriod, onCategoryClick)
+            BriefingWeeklySection(comparison, briefing.isCurrentPeriod) { category, initiallyRecent ->
+                onEvidenceClick(comparison, category, initiallyRecent)
+            }
         }
     }
 }

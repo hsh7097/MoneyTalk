@@ -26,6 +26,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
@@ -43,6 +44,7 @@ import com.sanha.moneytalk.core.theme.MoneyTalkTheme
 import com.sanha.moneytalk.core.theme.ThemeMode
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.feature.home.briefing.BriefingSpendingWindow
+import com.sanha.moneytalk.feature.home.briefing.BriefingCategoryIncrease
 import com.sanha.moneytalk.feature.home.briefing.BriefingWeeklyComparison
 import com.sanha.moneytalk.feature.home.briefing.SpendingBriefing
 import com.sanha.moneytalk.feature.home.recurring.RecurringExpenseForecast
@@ -51,6 +53,7 @@ import com.sanha.moneytalk.feature.home.ui.HomePageContent
 import com.sanha.moneytalk.feature.home.ui.HomePageData
 import com.sanha.moneytalk.feature.home.ui.theme.HomeTheme
 import com.sanha.moneytalk.feature.transactionactions.model.TransactionTarget
+import com.sanha.moneytalk.feature.weeklyevidence.WeeklyEvidenceRequest
 import java.text.NumberFormat
 import java.io.File
 import java.time.LocalDate
@@ -68,6 +71,31 @@ class HomeFocusInteractionTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val currentPeriod = DateUtils.getEffectiveCurrentMonth(1)
     private val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+
+    @Test fun weeklyEvidenceReceivesTheDisplayedDatesAndCategoryScope() {
+        val page = richPage()
+        val briefing = requireNotNull(page.spendingBriefing)
+        val comparison = requireNotNull(briefing.weeklyComparison).copy(
+            largestCategoryIncrease = BriefingCategoryIncrease(Category.FOOD.displayName, 25_000, 10_000)
+        )
+        val requests = mutableListOf<WeeklyEvidenceRequest>()
+        showHome(
+            mutableStateOf(fixture(page.copy(spendingBriefing = briefing.copy(weeklyComparison = comparison)))),
+            onWeeklyEvidence = { weekly, category, recent -> requests.add(WeeklyEvidenceRequest.from(weekly, category, recent)) }
+        )
+        scrollTo(text(R.string.home_briefing_recent_week))
+        compose.onNodeWithTag("briefing-recent-evidence").performClick()
+        scrollTo(text(R.string.weekly_evidence_previous))
+        compose.onNodeWithTag("briefing-previous-evidence").performClick()
+        tap(text(R.string.weekly_evidence_open, Category.FOOD.displayName))
+        compose.runOnIdle {
+            assertEquals(listOf(null, null, Category.FOOD.displayName), requests.map { it.category })
+            assertEquals(listOf(true, false, true), requests.map { it.initiallyRecent })
+            assertEquals(listOf(comparison.recent.startDate), requests.map { it.recentStart }.distinct())
+            assertEquals(listOf(comparison.previous.startDate), requests.map { it.previousStart }.distinct())
+            assertEquals(listOf(comparison.asOfMillis), requests.map { it.asOfMillis }.distinct())
+        }
+    }
 
     @Test fun monthlyOverviewAndEveryHomeSectionRemainReachable() {
         showHome(mutableStateOf(fixture(pageData = richPage())))
@@ -211,7 +239,8 @@ class HomeFocusInteractionTest {
         state: MutableState<HomeFixture>,
         onExpense: (ExpenseEntity) -> Unit = {},
         onIncome: (IncomeEntity) -> Unit = {},
-        onLongClick: (TransactionTarget) -> Unit = {}
+        onLongClick: (TransactionTarget) -> Unit = {},
+        onWeeklyEvidence: (BriefingWeeklyComparison, String?, Boolean) -> Unit = { _, _, _ -> }
     ) {
         compose.setContent {
             val scope = rememberCoroutineScope()
@@ -246,7 +275,8 @@ class HomeFocusInteractionTest {
                                     onIncomeSelected = onIncome,
                                     isCurrentPage = fixture.isCurrentPage,
                                     coroutineScope = scope,
-                                    onTransactionLongClick = onLongClick
+                                    onTransactionLongClick = onLongClick,
+                                    onWeeklyEvidenceSelected = onWeeklyEvidence
                                 )
                             }
                         }
@@ -311,7 +341,9 @@ class HomeFocusInteractionTest {
                 weeklyComparison = BriefingWeeklyComparison(
                     recent = BriefingSpendingWindow(today.minusDays(6), today, 25_000L, 3),
                     previous = BriefingSpendingWindow(today.minusDays(13), today.minusDays(7), 10_000L, 2),
-                    largestCategoryIncrease = null
+                    largestCategoryIncrease = null,
+                    asOfMillis = now,
+                    timeZoneId = java.time.ZoneId.systemDefault().id
                 )
             ),
             recurringForecast = RecurringExpenseForecast(
