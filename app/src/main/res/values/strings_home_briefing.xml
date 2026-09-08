@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_briefing_title">내 소비 한눈에</string>
+    <string name="home_briefing_recorded_basis">기록된 내역 기준 · 실제 잔액과 다를 수 있어요</string>
+    <string name="home_briefing_partial_records">아직 가져오지 못한 내역이 있을 수 있어요.</string>
+    <string name="home_briefing_budget_title">이 기간 예산</string>
+    <string name="home_briefing_budget_missing">예산을 정하면 남은 금액을 확인할 수 있어요.</string>
+    <string name="home_briefing_budget_missing_settings">설정 > 월 예산 설정에서 예산을 정하면 남은 금액을 확인할 수 있어요.</string>
+    <string name="home_briefing_budget_remaining">%1$s원 남음</string>
+    <string name="home_briefing_budget_over">예산보다 %1$s원 초과</string>
+    <string name="home_briefing_remaining_days">오늘 포함 %1$d일 남음</string>
+    <string name="home_briefing_daily_reference">남은 기간 하루 참고액 %1$s원</string>
+    <string name="home_briefing_set_budget">예산 설정</string>
+    <string name="home_briefing_edit_budget">예산 변경</string>
+    <string name="home_briefing_recent_week">최근 7일 지출 · 오늘 포함</string>
+    <string name="home_briefing_period_last_week">이 기간 마지막 7일 지출</string>
+    <string name="home_briefing_amount">%1$s원</string>
+    <string name="home_briefing_window_dates">%1$s ~ %2$s</string>
+    <string name="home_briefing_previous_week">그전 7일 %1$s원 · %2$s ~ %3$s</string>
+    <string name="home_briefing_no_weekly_records">비교할 지출 기록이 아직 없어요.</string>
+    <string name="home_briefing_week_increased">그전 7일보다 %1$s원 더 기록됐어요.</string>
+    <string name="home_briefing_week_decreased">그전 7일보다 %1$s원 적게 기록됐어요.</string>
+    <string name="home_briefing_week_same">그전 7일과 같은 금액이 기록됐어요.</string>
+    <string name="home_briefing_category_increase">가장 많이 늘어난 카테고리: %1$s, %2$s원 증가</string>
+    <string name="home_briefing_category_details">%1$s 카테고리 내역</string>
+</resources>

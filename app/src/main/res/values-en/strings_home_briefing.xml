@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_briefing_title">Your spending at a glance</string>
+    <string name="home_briefing_recorded_basis">Based on recorded transactions · May differ from your account balance</string>
+    <string name="home_briefing_partial_records">Some transactions may not have been imported yet.</string>
+    <string name="home_briefing_budget_title">Budget for this period</string>
+    <string name="home_briefing_budget_missing">Set a budget to see how much remains.</string>
+    <string name="home_briefing_budget_missing_settings">Set a budget in Settings > Monthly Budget to see how much remains.</string>
+    <string name="home_briefing_budget_remaining">₩%1$s remaining</string>
+    <string name="home_briefing_budget_over">₩%1$s over budget</string>
+    <string name="home_briefing_remaining_days">%1$d days left, including today</string>
+    <string name="home_briefing_daily_reference">Daily reference for the remaining period: ₩%1$s</string>
+    <string name="home_briefing_set_budget">Set budget</string>
+    <string name="home_briefing_edit_budget">Edit budget</string>
+    <string name="home_briefing_recent_week">Last 7 days · Including today</string>
+    <string name="home_briefing_period_last_week">Last 7 days of this period</string>
+    <string name="home_briefing_amount">₩%1$s</string>
+    <string name="home_briefing_window_dates">%1$s – %2$s</string>
+    <string name="home_briefing_previous_week">Previous 7 days: ₩%1$s · %2$s – %3$s</string>
+    <string name="home_briefing_no_weekly_records">There are no recorded expenses to compare yet.</string>
+    <string name="home_briefing_week_increased">₩%1$s more recorded than the previous 7 days.</string>
+    <string name="home_briefing_week_decreased">₩%1$s less recorded than the previous 7 days.</string>
+    <string name="home_briefing_week_same">The same amount was recorded in the previous 7 days.</string>
+    <string name="home_briefing_category_increase">Largest category increase: %1$s, up ₩%2$s</string>
+    <string name="home_briefing_category_details">%1$s transactions</string>
+</resources>
