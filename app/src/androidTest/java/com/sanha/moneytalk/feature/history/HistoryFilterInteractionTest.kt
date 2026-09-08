@@ -7,6 +7,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -41,12 +45,15 @@ class HistoryFilterInteractionTest {
         showActiveFilter()
 
         openFilter()
-        compose.onNodeWithText(Category.FOOD.displayName).assertExists()
         closeFilter()
-        compose.onNodeWithText(context.getString(R.string.history_filter_active_category)).assertExists()
+        compose.onNodeWithTag("history_filter_action").assert(
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.StateDescription,
+                context.getString(R.string.history_filter_active_category)
+            )
+        )
 
         openFilter()
-        compose.onNodeWithText(Category.FOOD.displayName).assertExists()
         closeFilter()
         compose.runOnIdle {
             assertEquals(0, resetCount)
@@ -55,8 +62,9 @@ class HistoryFilterInteractionTest {
 
         compose.onNodeWithContentDescription(context.getString(R.string.history_filter_reset))
             .performClick()
-        compose.onNodeWithText(context.getString(R.string.history_filter_active_category))
-            .assertDoesNotExist()
+        compose.onNodeWithTag("history_filter_action").assert(
+            !SemanticsMatcher.keyIsDefined(SemanticsProperties.StateDescription)
+        )
         compose.onNodeWithText(context.getString(R.string.common_filter)).assertExists()
         compose.runOnIdle {
             assertEquals(1, resetCount)
@@ -126,7 +134,7 @@ class HistoryFilterInteractionTest {
     }
 
     private fun openFilter() {
-        compose.onNodeWithText(context.getString(R.string.common_filter)).performClick()
+        compose.onNodeWithTag("history_filter_action").performClick()
         compose.onNodeWithContentDescription(context.getString(R.string.common_close)).assertExists()
     }
 

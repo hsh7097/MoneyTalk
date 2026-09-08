@@ -30,16 +30,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.R
@@ -103,6 +104,7 @@ fun HistoryScreen(
     TransactionQuickActionDialog(quickActions)
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
+    var headerResetGeneration by remember { mutableIntStateOf(0) }
     // showAddDialog 제거됨 — "+" 버튼은 TransactionEditActivity로 직접 이동
 
     // Activity-scoped MainViewModel (동기화/권한/광고 상태)
@@ -142,6 +144,7 @@ fun HistoryScreen(
     val currentMonthStartDay by rememberUpdatedState(uiState.monthStartDay)
     LaunchedEffect(historyTabReClickEvent) {
         historyTabReClickEvent?.collect {
+            headerResetGeneration += 1
             viewModel.resetFilters()
             val (effYear, effMonth) = com.sanha.moneytalk.core.util.DateUtils.getEffectiveCurrentMonth(
                 currentMonthStartDay
@@ -180,195 +183,201 @@ fun HistoryScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // 검색 모드일 때 검색 바, 아니면 일반 헤더
-        if (uiState.isSearchMode) {
-            SearchBar(
-                query = uiState.searchQuery,
-                onQueryChange = { viewModel.search(it) },
-                onClose = { viewModel.exitSearchMode() }
-            )
-        } else {
-            // 헤더: 타이틀만 (아이콘은 탭 행으로 이동)
-            Text(
-                text = stringResource(R.string.history_title),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 16.dp)
-            )
-
-            // 기간 선택 및 지출/수입 요약
-            Box(modifier = Modifier.onboardingTarget("history_period", coachMarkRegistry)) {
-                PeriodSummaryCard(
-                    year = uiState.selectedYear,
-                    month = uiState.selectedMonth,
-                    monthStartDay = uiState.monthStartDay,
-                    totalExpense = uiState.filteredExpenseTotal,
-                    totalIncome = uiState.filteredIncomeTotal,
-                    onPreviousMonth = {
-                        coroutineScope.launch {
-                            pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                        }
-                    },
-                    onNextMonth = {
-                        coroutineScope.launch {
-                            val target = pagerState.currentPage + 1
-                            if (!MonthPagerUtils.isFutureMonth(target, uiState.monthStartDay)) {
-                                pagerState.animateScrollToPage(target)
-                            }
-                        }
-                    }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // 검색 모드에서는 필터/탭 숨기기 (달력 의미 없음)
-        if (!uiState.isSearchMode) {
-            // 탭 (목록/달력) + 검색/추가/필터 아이콘
-            Box(modifier = Modifier.onboardingTarget("history_view_mode", coachMarkRegistry)) {
-            FilterTabRow(
-                currentMode = viewMode,
-                onModeChange = { viewMode = it },
-                sortOrder = uiState.sortOrder,
-                showExpenses = uiState.showExpenses,
-                showIncomes = uiState.showIncomes,
-                showTransfers = uiState.showTransfers,
-                selectedExpenseCategories = uiState.selectedExpenseCategories,
-                selectedIncomeCategories = uiState.selectedIncomeCategories,
-                selectedTransferCategories = uiState.selectedTransferCategories,
-                selectedCardNames = uiState.selectedCardNames,
-                availableCardNames = uiState.availableCardNames,
-                expenseCategories = uiState.expenseCategories,
-                incomeCategories = uiState.incomeCategories,
-                transferCategories = uiState.transferCategories,
-                fixedExpenseFilter = uiState.fixedExpenseFilter,
-                onApplyFilter = { sortOrder, showExp, showInc, showTransfer, expenseCategories, incomeCategories, transferCategories, cardNames, fixedFilter ->
-                    viewModel.applyFilter(
-                        sortOrder = sortOrder,
-                        showExpenses = showExp,
-                        showIncomes = showInc,
-                        showTransfers = showTransfer,
-                        expenseCategories = expenseCategories,
-                        incomeCategories = incomeCategories,
-                        transferCategories = transferCategories,
-                        cardNames = cardNames,
-                        fixedExpenseFilter = fixedFilter
-                    )
-                },
-                onResetFilter = { viewModel.resetFilters() },
-                onSearchClick = { viewModel.enterSearchMode() },
-                onAddClick = {
-                    TransactionEditActivity.open(context)
-                },
-                hasSeenFilterOnboarding = hasSeenFilterOnboarding,
-                onFilterCoachMarkComplete = { viewModel.markScreenOnboardingSeen("history_filter") }
-            )
-            } // Box (history_view_mode)
-        }
-
         val isBannerAdEnabled by mainViewModel.adManager.isBannerAdEnabledFlow
             .collectAsStateWithLifecycle(initialValue = false)
         val isCreditRewardAdEnabled by mainViewModel.adManager.isCreditRewardAdEnabledFlow
             .collectAsStateWithLifecycle(initialValue = false)
 
-        // 콘텐츠 — HorizontalPager로 월별 페이징
-        HorizontalPager(
-            state = pagerState,
+        HistoryScrollLayout(
+            resetKey = Triple(
+                Triple(uiState.selectedYear, uiState.selectedMonth, uiState.monthStartDay),
+                uiState.isSearchMode,
+                headerResetGeneration
+            ),
+            scrollEnabled = !uiState.isSearchMode,
             modifier = Modifier.weight(1f),
-            beyondViewportPageCount = 1,
-            key = { it },
-            userScrollEnabled = !uiState.isSearchMode
-        ) { page ->
-            // 이 페이지의 (year, month) 계산
-            val (pageYear, pageMonth) = remember(page) {
-                MonthPagerUtils.pageToYearMonth(page)
-            }
-            // pageCache에서 이 페이지의 데이터 읽기
-            // 캐시 미적재 페이지는 isLoading=false로 처리하여 CTA 조건이 즉시 평가되도록 함
-            val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
-                ?: HistoryPageData(isLoading = false)
+            header = {
+                Column {
+                    // 검색 모드일 때 검색 바, 아니면 일반 헤더
+                    if (uiState.isSearchMode) {
+                        SearchBar(
+                            query = uiState.searchQuery,
+                            onQueryChange = { viewModel.search(it) },
+                            onClose = { viewModel.exitSearchMode() }
+                        )
+                    } else {
+                        HistoryTitleBar(
+                            onSearchClick = { viewModel.enterSearchMode() },
+                            onAddClick = { TransactionEditActivity.open(context) }
+                        )
 
-            // CTA 판별용: 현재 실효 월 여부
-            val (effYearCta, effMonthCta) = com.sanha.moneytalk.core.util.DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
-            val isCurrentMonth = pageYear == effYearCta && pageMonth == effMonthCta
-            val currentMonthSyncLabel = stringResource(R.string.home_current_month_sync_label)
-            val syncMonthLabelFormat = stringResource(R.string.home_sync_month_label_format)
-            val pageMonthLabel = if (isCurrentMonth) {
-                currentMonthSyncLabel
-            } else {
-                String.format(syncMonthLabelFormat, pageMonth)
+                        // 기간 선택 및 지출/수입 요약
+                        Box(modifier = Modifier.testTag("history_period_summary").onboardingTarget("history_period", coachMarkRegistry)) {
+                            PeriodSummaryCard(
+                                year = uiState.selectedYear,
+                                month = uiState.selectedMonth,
+                                monthStartDay = uiState.monthStartDay,
+                                totalExpense = uiState.filteredExpenseTotal,
+                                totalIncome = uiState.filteredIncomeTotal,
+                                onPreviousMonth = {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                    }
+                                },
+                                onNextMonth = {
+                                    coroutineScope.launch {
+                                        val target = pagerState.currentPage + 1
+                                        if (!MonthPagerUtils.isFutureMonth(target, uiState.monthStartDay)) {
+                                            pagerState.animateScrollToPage(target)
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            },
+            controls = {
+                // 검색 모드에서는 필터/탭 숨기기 (달력 의미 없음)
+                if (!uiState.isSearchMode) {
+                    // 고정 도구: 목록/달력 + 필터와 전용 초기화
+                    Box(modifier = Modifier.onboardingTarget("history_view_mode", coachMarkRegistry)) {
+                        FilterTabRow(
+                            currentMode = viewMode,
+                            onModeChange = { viewMode = it },
+                            sortOrder = uiState.sortOrder,
+                            showExpenses = uiState.showExpenses,
+                            showIncomes = uiState.showIncomes,
+                            showTransfers = uiState.showTransfers,
+                            selectedExpenseCategories = uiState.selectedExpenseCategories,
+                            selectedIncomeCategories = uiState.selectedIncomeCategories,
+                            selectedTransferCategories = uiState.selectedTransferCategories,
+                            selectedCardNames = uiState.selectedCardNames,
+                            availableCardNames = uiState.availableCardNames,
+                            expenseCategories = uiState.expenseCategories,
+                            incomeCategories = uiState.incomeCategories,
+                            transferCategories = uiState.transferCategories,
+                            fixedExpenseFilter = uiState.fixedExpenseFilter,
+                            onApplyFilter = { sortOrder, showExp, showInc, showTransfer, expenseCategories, incomeCategories, transferCategories, cardNames, fixedFilter ->
+                                viewModel.applyFilter(
+                                    sortOrder = sortOrder,
+                                    showExpenses = showExp,
+                                    showIncomes = showInc,
+                                    showTransfers = showTransfer,
+                                    expenseCategories = expenseCategories,
+                                    incomeCategories = incomeCategories,
+                                    transferCategories = transferCategories,
+                                    cardNames = cardNames,
+                                    fixedExpenseFilter = fixedFilter
+                                )
+                            },
+                            onResetFilter = { viewModel.resetFilters() },
+                            hasSeenFilterOnboarding = hasSeenFilterOnboarding,
+                            onFilterCoachMarkComplete = { viewModel.markScreenOnboardingSeen("history_filter") }
+                        )
+                    } // Box (history_view_mode)
+                }
             }
+        ) { restoreHeader ->
+            // 콘텐츠 — HorizontalPager로 월별 페이징
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                beyondViewportPageCount = 1,
+                key = { it },
+                userScrollEnabled = !uiState.isSearchMode
+            ) { page ->
+                // 이 페이지의 (year, month) 계산
+                val (pageYear, pageMonth) = remember(page) {
+                    MonthPagerUtils.pageToYearMonth(page)
+                }
+                // pageCache에서 이 페이지의 데이터 읽기
+                // 캐시 미적재 페이지는 isLoading=false로 처리하여 CTA 조건이 즉시 평가되도록 함
+                val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
+                    ?: HistoryPageData(isLoading = false)
 
-            when {
-                viewMode == ViewMode.LIST -> {
-                    TransactionListView(
-                        items = pageData.transactionListItems,
-                        isLoading = pageData.isLoading,
-                        showExpenses = uiState.showExpenses,
-                        showIncomes = uiState.showIncomes,
-                        hasActiveFilter = uiState.hasActiveFilter,
-                        isCurrentMonth = isCurrentMonth,
-                        isMonthSynced = mainViewModel.isMonthSynced(pageYear, pageMonth),
-                        isPartiallyCovered = mainViewModel.isPagePartiallyCovered(pageYear, pageMonth),
-                        hasSmsPermission = mainScreenUiState.hasSmsPermission,
-                        monthLabel = pageMonthLabel,
-                        isAdEnabled = isCreditRewardAdEnabled,
-                        onImportData = {
-                            onRequestSmsPermission {
-                                mainViewModel.syncMonthData(pageYear, pageMonth)
-                            }
-                        },
-                        onRequestFullSync = {
-                            if (isCurrentMonth) {
-                                // 현재월 → 현재 페이지 구간을 다시 동기화
+                // CTA 판별용: 현재 실효 월 여부
+                val (effYearCta, effMonthCta) = com.sanha.moneytalk.core.util.DateUtils.getEffectiveCurrentMonth(uiState.monthStartDay)
+                val isCurrentMonth = pageYear == effYearCta && pageMonth == effMonthCta
+                val currentMonthSyncLabel = stringResource(R.string.home_current_month_sync_label)
+                val syncMonthLabelFormat = stringResource(R.string.home_sync_month_label_format)
+                val pageMonthLabel = if (isCurrentMonth) {
+                    currentMonthSyncLabel
+                } else {
+                    String.format(syncMonthLabelFormat, pageMonth)
+                }
+
+                when {
+                    viewMode == ViewMode.LIST || uiState.isSearchMode -> {
+                        TransactionListView(
+                            items = pageData.transactionListItems,
+                            isLoading = pageData.isLoading,
+                            showExpenses = uiState.showExpenses,
+                            showIncomes = uiState.showIncomes,
+                            hasActiveFilter = uiState.hasActiveFilter,
+                            isCurrentMonth = isCurrentMonth,
+                            isMonthSynced = mainViewModel.isMonthSynced(pageYear, pageMonth),
+                            isPartiallyCovered = mainViewModel.isPagePartiallyCovered(pageYear, pageMonth),
+                            hasSmsPermission = mainScreenUiState.hasSmsPermission,
+                            monthLabel = pageMonthLabel,
+                            isAdEnabled = isCreditRewardAdEnabled,
+                            onImportData = {
                                 onRequestSmsPermission {
                                     mainViewModel.syncMonthData(pageYear, pageMonth)
                                 }
-                            } else {
-                                onRequestSmsPermission {
-                                    mainViewModel.requestMonthSync(pageYear, pageMonth)
+                            },
+                            onRequestFullSync = {
+                                if (isCurrentMonth) {
+                                    // 현재월 → 현재 페이지 구간을 다시 동기화
+                                    onRequestSmsPermission {
+                                        mainViewModel.syncMonthData(pageYear, pageMonth)
+                                    }
+                                } else {
+                                    onRequestSmsPermission {
+                                        mainViewModel.requestMonthSync(pageYear, pageMonth)
+                                    }
                                 }
-                            }
-                        },
-                        onTransactionLongClick = quickActions::open,
-                        scrollResetKey = Triple(
-                            Triple(
-                                uiState.selectedExpenseCategories,
-                                uiState.selectedIncomeCategories,
-                                uiState.selectedTransferCategories
-                            ),
-                            uiState.sortOrder,
-                            pageYear to pageMonth
-                        )
-                    )
-                }
-
-                viewMode == ViewMode.CALENDAR -> {
-                    BillingCycleCalendarView(
-                        year = pageYear,
-                        month = pageMonth,
-                        monthStartDay = uiState.monthStartDay,
-                        dailyTotals = pageData.dailyTotals,
-                        dailyIncomeTotals = pageData.dailyIncomeTotals,
-                        onDateClick = { date ->
-                            TransactionDetailListActivity.open(
-                                context,
-                                date,
-                                TransactionDetailFilter(
-                                    sortOrder = uiState.sortOrder,
-                                    showExpenses = uiState.showExpenses,
-                                    showIncomes = uiState.showIncomes,
-                                    showTransfers = uiState.showTransfers,
-                                    expenseCategories = uiState.selectedExpenseCategories,
-                                    incomeCategories = uiState.selectedIncomeCategories,
-                                    transferCategories = uiState.selectedTransferCategories,
-                                    cardNames = uiState.selectedCardNames,
-                                    fixedExpenseFilter = uiState.fixedExpenseFilter
-                                )
+                            },
+                            onTransactionLongClick = quickActions::open,
+                            onScrollToTop = restoreHeader,
+                            scrollResetKey = Triple(
+                                Triple(
+                                    uiState.selectedExpenseCategories,
+                                    uiState.selectedIncomeCategories,
+                                    uiState.selectedTransferCategories
+                                ),
+                                uiState.sortOrder,
+                                pageYear to pageMonth
                             )
-                        }
-                    )
+                        )
+                    }
+
+                    viewMode == ViewMode.CALENDAR -> {
+                        BillingCycleCalendarView(
+                            year = pageYear,
+                            month = pageMonth,
+                            monthStartDay = uiState.monthStartDay,
+                            dailyTotals = pageData.dailyTotals,
+                            dailyIncomeTotals = pageData.dailyIncomeTotals,
+                            onDateClick = { date ->
+                                TransactionDetailListActivity.open(
+                                    context,
+                                    date,
+                                    TransactionDetailFilter(
+                                        sortOrder = uiState.sortOrder,
+                                        showExpenses = uiState.showExpenses,
+                                        showIncomes = uiState.showIncomes,
+                                        showTransfers = uiState.showTransfers,
+                                        expenseCategories = uiState.selectedExpenseCategories,
+                                        incomeCategories = uiState.selectedIncomeCategories,
+                                        transferCategories = uiState.selectedTransferCategories,
+                                        cardNames = uiState.selectedCardNames,
+                                        fixedExpenseFilter = uiState.fixedExpenseFilter
+                                    )
+                                )
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -427,7 +436,8 @@ fun TransactionListView(
     onImportData: () -> Unit = {},
     onRequestFullSync: () -> Unit = {},
     scrollResetKey: Any? = null,
-    onTransactionLongClick: ((TransactionTarget) -> Unit)? = null
+    onTransactionLongClick: ((TransactionTarget) -> Unit)? = null,
+    onScrollToTop: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -629,6 +639,7 @@ fun TransactionListView(
                 onClick = {
                     coroutineScope.launch {
                         listState.animateScrollToItem(0)
+                        onScrollToTop()
                     }
                 },
                 shape = CircleShape,

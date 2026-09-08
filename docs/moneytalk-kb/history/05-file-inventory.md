@@ -4,7 +4,7 @@ title: History File Inventory
 description: History 도메인 파일별 역할과 참조 시점을 인덱싱한다.
 tags: [moneytalk, history, file-inventory]
 resource: app/src/main/java/com/sanha/moneytalk/feature/history/ui/
-timestamp: 2026-09-08T00:00:00+09:00
+timestamp: 2026-09-09T00:00:00+09:00
 status: draft
 ---
 
@@ -17,7 +17,8 @@ status: draft
 | `HistoryCalendar.kt` | 달력 모드 컴포넌트 | 월별 달력 UI, 일별 합계 표시 | 핵심 후보 | `HistoryViewModel.kt`, `HistoryScreen.kt` |
 | `HistoryDialogs.kt` | 거래 상세/수정/삭제 다이얼로그 | 상세 보기, 삭제 확인, 메모/카테고리 변경 | 핵심 후보 | `HistoryViewModel.kt`, `TransactionEditActivity.kt` |
 | `HistoryFilter.kt` | 필터 BottomSheet와 초기화 UI | 카테고리/카드/수입/지출/고정 거래 필터 | 핵심 | `HistoryViewModel.kt` |
-| `HistoryHeader.kt` | 기간 요약 헤더 | 월/기간 요약, header 표시 문제 | 보조 | `HistoryScreen.kt` |
+| `HistoryHeader.kt` | 제목/검색/추가, 기간 요약, 한 줄 보기·필터 도구 | 월/기간 요약, 활성 필터 재편집/초기화 | 보조 | `HistoryScreen.kt`, `HistoryScrollLayout.kt` |
+| `HistoryScrollLayout.kt` | 요약 접힘과 고정 도구의 중첩 스크롤 레이아웃 | 목록/달력 스크롤, 월·검색·탭 재클릭 복원 | 보조 | `HistoryScreen.kt`, `HistoryHeader.kt` |
 | `HistoryUiState.kt` | 화면/월 상태, 정렬/고정 필터 계약 | 상태 필드 변경 | 핵심 | `HistoryViewModel.kt` |
 | `HistoryIntent.kt` | 거래 선택/수정/삭제 사용자 액션 | 사용자 이벤트 변경 | 핵심 | `HistoryViewModel.kt` |
 | `TransactionListItem.kt` | 헤더/지출/수입 렌더링 계약 | 거래 행 표시 | 핵심 | `HistoryTransactionListMapper.kt` |

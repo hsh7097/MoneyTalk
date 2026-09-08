@@ -24,7 +24,7 @@ status: draft
 | 탭 | 주요 Composable/파일 | 함께 볼 KB |
 |---|---|---|
 | Home | `HomeScreen` → `HomeTheme`/`HomePageContent`: `HomeImportDataCta`/`HomeFullSyncCta`, `MonthlyOverviewSection` → `HomeExpenseAmount`, `SpendingTrendSection`, `SpendingBriefingCard` → `BriefingWeeklySection`, `CategoryExpenseSection`, 오늘 전체 `HomeTransactionCard`, 최하단 `RecurringExpenseForecastCard` | [home](../home/README.md), [home surface map](../home/package-reference/05-surface-map.md) |
-| History | `HistoryScreen`, `PeriodSummaryCard`, `SearchBar`, `FilterTabRow`, `FilterBottomSheet`, `TransactionListView`, `BillingCycleCalendarView` — 필터 진입을 항상 유지하고 초기화 X를 분리. 달력 날짜 선택은 현재 필터와 정렬을 상세 화면에 전달 | [history](../history/README.md), [filtering](../filtering/README.md) |
+| History | `HistoryScreen`, `HistoryScrollLayout`, `HistoryTitleBar`, `PeriodSummaryCard`, `SearchBar`, `FilterTabRow`, `FilterBottomSheet`, `TransactionListView`, `BillingCycleCalendarView` — 필터 진입을 항상 유지하고 초기화 X를 분리. 달력 날짜 선택은 현재 필터와 정렬을 상세 화면에 전달 | [history](../history/README.md), [filtering](../filtering/README.md) |
 | Chat | `ChatScreen`, `ChatRoomListView`, `ChatRoomView`, 기능별 메시지/가이드/진행/재시도/광고 dialog 파일 — 채팅방의 시스템 뒤로가기는 대화 목록으로 복귀 | [chat](../chat/README.md) |
 | Settings | `SettingsScreen`, 기능별 `Settings*Section`, `SettingsDialogs`, `SettingsLoadingOverlay`, `BudgetBottomSheet`, `ExportDialog` — 비율 예산 저장은 현재 전체 예산으로 계산하며 범위 초과 입력은 오류 표시와 함께 저장 차단 | [settings](../settings/README.md), [settings menu map](../settings/package-reference/05-menu-map.md) |
 
@@ -106,7 +106,8 @@ status: draft
 | `feature/home/ui/component/EmptyExpenseSection.kt` | `EmptyExpenseSection` | 기존 빈 지출 표시 |
 | `feature/home/ui/component/SpendingTrendSection.kt` | `SpendingTrendSection` | 공통 차트 연결. 기본 `showCard = true`/`scaleToVisibleLines = false`, HomePageContent만 각각 false/true 지정 |
 | `feature/history/ui/HistoryScreen.kt` | `HistoryScreen`, `TransactionListView` | 월 pager, 현재 필터/검색/보기, 날짜별 거래 행과 롱클릭 메뉴 연결 |
-| `feature/history/ui/HistoryHeader.kt` | `SearchBar`, `PeriodSummaryCard`, `FilterTabRow`, `FilterActionButton`, `FilterStatusChip` | 월 요약과 보기 도구, 활성 상태에서도 필터 재편집 및 별도 X 초기화 |
+| `feature/history/ui/HistoryHeader.kt` | `SearchBar`, `HistoryTitleBar`, `PeriodSummaryCard`, `FilterTabRow`, `FilterActionButton` | 접히는 제목/월 요약과 고정 보기·필터 한 줄, 활성 조건명·별도 X 초기화 |
+| `feature/history/ui/HistoryScrollLayout.kt` | `HistoryScrollLayout` | 기존 월별 목록/달력의 nested scroll을 받아 요약만 접고 도구 행은 고정. 월/검색/탭 재클릭/FAB 복원 |
 | `feature/history/ui/HistoryCalendar.kt` | `BillingCycleCalendarView`, `CalendarDayCell`, `CalendarAmountText` | 큰 글자에 맞춘 셀 높이·월 세로 스크롤. 7열 금액의 실제 폭을 측정해 부호·만/억 단위와 정확한 원 단위 접근성 설명을 보존 |
 | `feature/history/ui/HistoryFilter.kt` | `FilterBottomSheet` | 임시 필터 상태와 시트 조합/적용 |
 | `feature/history/ui/HistoryFilterControls.kt` | `FilterTransactionTypeSelector`, `FilterTypeTile`, `FilterGuideCard`, `FilterNoticeCard`, `FilterOptionPillRow`, `FilterOptionPill`, `FilterCategoryChipGroup`, `CategoryChoiceChip`, `FilterCategorySummaryRow` | 유형/옵션/카테고리 선택 UI |
@@ -155,3 +156,6 @@ status: draft
 - 다가올 고정 지출은 현재 회계월의 오늘 거래 다음, 홈 최하단에 표시한다. 실제 소비 확인을 먼저 두며 후보 없음 숨김·근거 거래 진입·80dp 하단 여백은 유지한다.
 
 - 금액 의미색은 수입 빨강·지출 파랑이다. 라이트는 #C6283D/#1D5FC4, 다크는 #FF929B/#7BB3FF를 사용한다. 홈 그라데이션 배경은 유지하고 그 위 금액은 대비가 높은 #5C0820/#031E4A를 쓴다. 통계 제외는 태그로 구분하고 금액 의미색은 유지한다. 브랜드·기간 비교선·예산 초과/오류 색상은 별도 의미를 유지한다.
+
+
+- 가계부의 제목·월 요약은 내역 스크롤에 따라 접히고 목록·달력·필터는 한 줄에 남는다. 좁은 화면/큰 글자는 도구 행을 가로로 스크롤할 수 있으며 터치 영역을 줄이지 않는다. 활성 필터의 짧은 조건명과 전체 접근성 설명, 별도 초기화 X를 유지한다. 월 변경·검색 전환·탭 재클릭·맨 위로 이동하면 요약도 복원한다. 검색 중에는 목록을 표시하고 종료하면 기존 보기 모드로 돌아간다.

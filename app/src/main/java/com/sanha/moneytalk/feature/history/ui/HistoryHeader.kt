@@ -1,5 +1,7 @@
 package com.sanha.moneytalk.feature.history.ui
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,16 +11,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -34,9 +35,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.Category
@@ -87,6 +93,28 @@ fun SearchBar(
                 }
             }
         )
+    }
+}
+
+/** 검색/추가는 월 요약과 함께 움직이며 보기·필터 도구 행의 폭을 차지하지 않는다. */
+@Composable
+internal fun HistoryTitleBar(onSearchClick: () -> Unit, onAddClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = stringResource(R.string.history_title),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(onClick = onSearchClick, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Default.Search, contentDescription = stringResource(R.string.common_search))
+        }
+        IconButton(onClick = onAddClick, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.common_add))
+        }
     }
 }
 
@@ -238,8 +266,6 @@ fun FilterTabRow(
         FixedExpenseFilter
     ) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onResetFilter: () -> Unit = {},
-    onSearchClick: () -> Unit = {},
-    onAddClick: () -> Unit = {},
     hasSeenFilterOnboarding: Boolean = true,
     onFilterCoachMarkComplete: () -> Unit = {}
 ) {
@@ -260,8 +286,6 @@ fun FilterTabRow(
 
     val listLabel = stringResource(R.string.history_view_list)
     val calendarLabel = stringResource(R.string.history_view_calendar)
-    val listIcon = Icons.AutoMirrored.Filled.List
-    val calendarIcon = Icons.Default.DateRange
 
     val tabs = remember(currentMode, primaryColor, onPrimaryColor, listLabel, calendarLabel) {
         listOf(
@@ -270,25 +294,66 @@ fun FilterTabRow(
                 override val isSelected = currentMode == ViewMode.LIST
                 override val selectedColor = primaryColor
                 override val selectedTextColor = onPrimaryColor
-                override val icon = listIcon
             },
             object : SegmentedTabInfo {
                 override val label = calendarLabel
                 override val isSelected = currentMode == ViewMode.CALENDAR
                 override val selectedColor = primaryColor
                 override val selectedTextColor = onPrimaryColor
-                override val icon = calendarIcon
             }
         )
     }
 
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    val hasMultipleFilters = listOf(
+        selectedExpenseCategories.isNotEmpty() ||
+                selectedIncomeCategories.isNotEmpty() ||
+                selectedTransferCategories.isNotEmpty(),
+        selectedCardNames.isNotEmpty(),
+        sortOrder != SortOrder.DATE_DESC,
+        !showExpenses || !showIncomes || !showTransfers,
+        fixedExpenseFilter != FixedExpenseFilter.ALL
+    ).count { it } > 1
+
+    val filterDescription = when {
+        hasMultipleFilters ->
+            stringResource(R.string.history_filter_active_combined)
+        selectedExpenseCategories.isNotEmpty() ||
+                selectedIncomeCategories.isNotEmpty() ||
+                selectedTransferCategories.isNotEmpty() ->
+            stringResource(R.string.history_filter_active_category)
+        selectedCardNames.isNotEmpty() ->
+            stringResource(R.string.history_filter_active_card)
+        !showExpenses || !showIncomes || !showTransfers ->
+            stringResource(R.string.history_filter_active_type)
+        fixedExpenseFilter == FixedExpenseFilter.FIXED_ONLY ->
+            stringResource(R.string.history_filter_active_fixed_only)
+        fixedExpenseFilter == FixedExpenseFilter.EXCLUDE_FIXED ->
+            stringResource(R.string.history_filter_active_fixed_exclude)
+        else ->
+            stringResource(R.string.history_filter_active_sort)
+    }
+
+    val selectedCategories = selectedExpenseCategories + selectedIncomeCategories + selectedTransferCategories
+    val filterLabel = when {
+        !hasActiveFilter || hasMultipleFilters -> stringResource(R.string.common_filter)
+        selectedCategories.isNotEmpty() -> selectedCategories.singleOrNull()
+            ?: stringResource(R.string.history_filter_category)
+        selectedCardNames.isNotEmpty() -> selectedCardNames.singleOrNull()
+            ?: stringResource(R.string.history_filter_card)
+        !showExpenses || !showIncomes || !showTransfers -> stringResource(R.string.history_filter_type)
+        fixedExpenseFilter != FixedExpenseFilter.ALL -> stringResource(R.string.history_filter_fixed)
+        else -> stringResource(R.string.history_filter_sort)
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+            .testTag("history_view_controls"),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             SegmentedTabRowCompose(
@@ -300,63 +365,20 @@ fun FilterTabRow(
                     }
                 }
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onSearchClick, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = stringResource(R.string.common_search),
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                IconButton(onClick = onAddClick, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = stringResource(R.string.common_add),
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
+            FilterActionButton(
+                label = filterLabel,
+                isActive = hasActiveFilter,
+                activeDescription = if (hasActiveFilter) filterDescription else null,
+                onClick = { showBottomSheet = true }
+            )
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterActionButton(onClick = { showBottomSheet = true })
-            if (hasActiveFilter) {
-                val hasMultipleFilters = listOf(
-                    selectedExpenseCategories.isNotEmpty() ||
-                            selectedIncomeCategories.isNotEmpty() ||
-                            selectedTransferCategories.isNotEmpty(),
-                    selectedCardNames.isNotEmpty(),
-                    sortOrder != SortOrder.DATE_DESC,
-                    !showExpenses || !showIncomes || !showTransfers,
-                    fixedExpenseFilter != FixedExpenseFilter.ALL
-                ).count { it } > 1
-
-                val filterDescription = when {
-                    hasMultipleFilters ->
-                        stringResource(R.string.history_filter_active_combined)
-                    selectedExpenseCategories.isNotEmpty() ||
-                            selectedIncomeCategories.isNotEmpty() ||
-                            selectedTransferCategories.isNotEmpty() ->
-                        stringResource(R.string.history_filter_active_category)
-                    selectedCardNames.isNotEmpty() ->
-                        stringResource(R.string.history_filter_active_card)
-                    !showExpenses || !showIncomes || !showTransfers ->
-                        stringResource(R.string.history_filter_active_type)
-                    fixedExpenseFilter == FixedExpenseFilter.FIXED_ONLY ->
-                        stringResource(R.string.history_filter_active_fixed_only)
-                    fixedExpenseFilter == FixedExpenseFilter.EXCLUDE_FIXED ->
-                        stringResource(R.string.history_filter_active_fixed_exclude)
-                    else ->
-                        stringResource(R.string.history_filter_active_sort)
-                }
-
-                FilterStatusChip(
-                    label = filterDescription,
-                    onResetFilter = onResetFilter,
-                    modifier = Modifier.weight(1f)
+        if (hasActiveFilter) {
+            IconButton(onClick = onResetFilter, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = stringResource(R.string.history_filter_reset),
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -400,59 +422,41 @@ fun FilterTabRow(
 }
 
 @Composable
-private fun FilterActionButton(onClick: () -> Unit) {
+private fun FilterActionButton(
+    label: String,
+    isActive: Boolean,
+    activeDescription: String?,
+    onClick: () -> Unit
+) {
+    val filterLabel = stringResource(R.string.common_filter)
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.heightIn(min = 48.dp)
+        color = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        modifier = Modifier.heightIn(min = 48.dp).testTag("history_filter_action").semantics {
+            contentDescription = filterLabel
+            activeDescription?.let { stateDescription = it }
+        }
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(
-                text = stringResource(R.string.common_filter),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
             Icon(
-                imageVector = Icons.Default.KeyboardArrowDown,
+                imageVector = Icons.Default.FilterList,
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-    }
-}
-
-@Composable
-private fun FilterStatusChip(
-    label: String,
-    onResetFilter: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.primaryContainer
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = label,
-                modifier = Modifier.weight(1f).padding(start = 12.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                modifier = Modifier.widthIn(max = 80.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
             )
-            IconButton(onClick = onResetFilter, modifier = Modifier.size(48.dp)) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = stringResource(R.string.history_filter_reset),
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
         }
     }
 }
