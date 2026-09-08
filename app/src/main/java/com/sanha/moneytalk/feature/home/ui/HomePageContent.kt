@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.feature.transactionactions.model.TransactionTarget
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
@@ -80,7 +81,8 @@ fun HomePageContent(
     onIncomeSelected: (IncomeEntity) -> Unit,
     coachMarkRegistry: CoachMarkTargetRegistry? = null,
     isCurrentPage: Boolean = false,
-    coroutineScope: kotlinx.coroutines.CoroutineScope
+    coroutineScope: kotlinx.coroutines.CoroutineScope,
+    onTransactionLongClick: ((TransactionTarget) -> Unit)? = null
 ) {
     val listState = rememberLazyListState()
     val showScrollToTop by remember {
@@ -293,10 +295,16 @@ fun HomePageContent(
                         when (val item = todayTransactions[index]) {
                             is TodayItem.Expense -> TransactionCardCompose(
                                 info = ExpenseTransactionCardInfo(item.expense),
+                                onLongClick = onTransactionLongClick?.let { open ->
+                                    { open(TransactionTarget.Expense(item.expense.id)) }
+                                },
                                 onClick = { onExpenseSelected(item.expense) }
                             )
                             is TodayItem.Income -> TransactionCardCompose(
                                 info = IncomeTransactionCardInfo(item.income),
+                                onLongClick = onTransactionLongClick?.let { open ->
+                                    { open(TransactionTarget.Income(item.income.id)) }
+                                },
                                 onClick = { onIncomeSelected(item.income) }
                             )
                         }

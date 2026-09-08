@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="quick_transaction_title">Transaction</string>
+    <string name="quick_transaction_scope">Applies to this transaction only. Future transactions will not change.</string>
+    <string name="quick_transaction_fixed_expense">Fixed expense</string>
+    <string name="quick_transaction_fixed_income">Recurring income</string>
+    <string name="quick_transaction_fixed_transfer">Recurring transfer</string>
+    <string name="quick_transaction_exclude_stats">Exclude from statistics</string>
+    <string name="quick_transaction_details">Edit</string>
+    <string name="quick_transaction_saving">Saving…</string>
+    <string name="quick_transaction_retry">Try again</string>
+    <string name="quick_transaction_delete_title">Delete this transaction?</string>
+    <string name="quick_transaction_delete_message">Delete %1$s · %2$s? This cannot be undone.</string>
+    <string name="quick_transaction_saved">Transaction updated.</string>
+    <string name="quick_transaction_deleted">Transaction deleted.</string>
+    <string name="quick_transaction_missing">This transaction was deleted or could not be found.</string>
+    <string name="quick_transaction_load_failed">Could not load the transaction. Please try again.</string>
+    <string name="quick_transaction_save_failed">Could not complete the change. Please try again.</string>
+    <string name="quick_transaction_invalid_category">This category is no longer available. Choose another category.</string>
+</resources>

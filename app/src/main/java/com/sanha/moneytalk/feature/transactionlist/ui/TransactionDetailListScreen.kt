@@ -36,6 +36,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.feature.transactionactions.model.TransactionTarget
+import com.sanha.moneytalk.feature.transactionactions.ui.TransactionQuickActionDialog
+import com.sanha.moneytalk.feature.transactionactions.ui.TransactionQuickActionViewModel
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
@@ -55,6 +58,8 @@ fun TransactionDetailListScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val quickActions: TransactionQuickActionViewModel = hiltViewModel(key = "DateQuickActions")
+    TransactionQuickActionDialog(quickActions)
 
     Column(
         modifier = Modifier
@@ -137,12 +142,14 @@ fun TransactionDetailListScreen(
                 when (item) {
                     is TransactionDetailListItem.Expense -> TransactionCardCompose(
                         info = ExpenseTransactionCardInfo(item.expense),
+                        onLongClick = { quickActions.open(TransactionTarget.Expense(item.expense.id)) },
                         onClick = {
                             TransactionEditActivity.open(context, expenseId = item.expense.id)
                         }
                     )
                     is TransactionDetailListItem.Income -> TransactionCardCompose(
                         info = IncomeTransactionCardInfo(item.income),
+                        onLongClick = { quickActions.open(TransactionTarget.Income(item.income.id)) },
                         onClick = {
                             TransactionEditActivity.open(context, incomeId = item.income.id)
                         }

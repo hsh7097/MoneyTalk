@@ -4,7 +4,7 @@ title: Transaction List rendering and action
 description: Transaction Detail List 화면의 Composable 구조, 거래 카드 렌더링, 편집 진입 action을 정리한다.
 tags: [moneytalk, transaction-list, compose, action]
 resource: app/src/main/java/com/sanha/moneytalk/feature/transactionlist/ui/TransactionDetailListScreen.kt
-timestamp: 2026-09-07T00:00:00+09:00
+timestamp: 2026-09-08T00:00:00+09:00
 status: draft
 ---
 
@@ -36,6 +36,9 @@ TransactionDetailListScreen
 | back | `onBack` | Activity finish |
 | 수입 카드 클릭 | `TransactionEditActivity.open(context, incomeId = income.id)` | 수입 편집 화면 진입 |
 | 지출 카드 클릭 | `TransactionEditActivity.open(context, expenseId = expense.id)` | 지출 편집 화면 진입 |
+| 거래 카드 롱클릭 | `TransactionQuickActionViewModel.open(TransactionTarget)` | 유형·ID를 보존한 수정/삭제 중앙 메뉴 |
+
+`TransactionQuickActionDialog`는 이 화면의 별도 ViewModel 상태를 사용하며 거래명·닫기·수정/삭제만 표시한다. 수정 입력은 기존 상세 편집에서 처리하며, 메뉴 닫기/삭제 확인/삭제 추적 계약은 [거래 변경 흐름](../../transaction-mutation/01-feature-flow.md)을 따른다. 변경 후 선택 날짜/유형/카드/고정 조건을 유지한 목록 갱신을 확인한다.
 
 ## 변경 시 주의
 

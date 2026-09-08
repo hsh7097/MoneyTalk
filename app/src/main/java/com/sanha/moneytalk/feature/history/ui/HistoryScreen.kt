@@ -44,6 +44,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.feature.transactionactions.model.TransactionTarget
+import com.sanha.moneytalk.feature.transactionactions.ui.TransactionQuickActionDialog
+import com.sanha.moneytalk.feature.transactionactions.ui.TransactionQuickActionViewModel
 import com.sanha.moneytalk.ScreenSyncUiState
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
@@ -98,6 +101,8 @@ fun HistoryScreen(
     }
 
     val context = LocalContext.current
+    val quickActions: TransactionQuickActionViewModel = hiltViewModel(key = "HistoryQuickActions")
+    TransactionQuickActionDialog(quickActions)
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
     // showAddDialog 제거됨 — "+" 버튼은 TransactionEditActivity로 직접 이동
@@ -328,6 +333,7 @@ fun HistoryScreen(
                                 }
                             }
                         },
+                        onTransactionLongClick = quickActions::open,
                         scrollResetKey = Triple(
                             Triple(
                                 uiState.selectedExpenseCategories,
@@ -422,7 +428,8 @@ fun TransactionListView(
     isAdEnabled: Boolean = true,
     onImportData: () -> Unit = {},
     onRequestFullSync: () -> Unit = {},
-    scrollResetKey: Any? = null
+    scrollResetKey: Any? = null,
+    onTransactionLongClick: ((TransactionTarget) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -580,6 +587,9 @@ fun TransactionListView(
                         is TransactionListItem.ExpenseItem -> {
                             TransactionCardCompose(
                                 info = item.cardInfo,
+                                onLongClick = onTransactionLongClick?.let { open ->
+                                    { open(TransactionTarget.Expense(item.expense.id)) }
+                                },
                                 onClick = {
                                     TransactionEditActivity.open(context, expenseId = item.expense.id)
                                 }
@@ -589,6 +599,9 @@ fun TransactionListView(
                         is TransactionListItem.IncomeItem -> {
                             TransactionCardCompose(
                                 info = item.cardInfo,
+                                onLongClick = onTransactionLongClick?.let { open ->
+                                    { open(TransactionTarget.Income(item.income.id)) }
+                                },
                                 onClick = {
                                     TransactionEditActivity.open(context, incomeId = item.income.id)
                                 }

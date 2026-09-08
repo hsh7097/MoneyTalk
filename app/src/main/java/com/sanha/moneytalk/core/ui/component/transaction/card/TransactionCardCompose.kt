@@ -1,6 +1,8 @@
 package com.sanha.moneytalk.core.ui.component.transaction.card
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,11 +50,13 @@ import java.util.Locale
  * - 중앙: 가게명 + [카테고리 칩] 시간 • 카드명
  * - 우측: -금액원
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TransactionCardCompose(
     info: TransactionCardInfo,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null
 ) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
     val resolvedCategoryEmoji = rememberCategoryEmoji(info.categoryTag.orEmpty())
@@ -101,8 +105,11 @@ fun TransactionCardCompose(
     }
 
     Card(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().combinedClickable(
+            onClick = onClick,
+            onLongClick = onLongClick,
+            onLongClickLabel = stringResource(R.string.quick_transaction_title)
+        ),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
             containerColor = cardContainer

@@ -45,6 +45,8 @@ status: draft
 | 컴포넌트 | 역할 | 주의 |
 |---|---|---|
 | `TransactionCardCompose` / `TransactionCardInfo` | 지출/수입 통합 카드 | Home/History/CategoryDetail/TransactionList에서 함께 사용 |
+| `TransactionQuickActionDialog` | 거래 롱클릭 중앙 모달의 수정/삭제 메뉴 | 거래명·닫기 X와 구분선 아래 아이콘 포함 세로 작업 행. 최대 320dp, 행 전체 터치, 삭제만 위험 색상. 수정은 기존 편집 화면, 삭제는 별도 확인. 4개 목록에서 유형과 ID 보존 |
+| `feature/transactionactions/ui/TransactionQuickActionDialog.kt` | `TransactionQuickActionDialog`, `TransactionQuickActionContent`, `QuickTransactionMenuItem` | 중앙 모달의 거래명·닫기와 아이콘 포함 세로 수정/삭제 행, 기존 편집 화면 진입과 삭제 확인 |
 | `TransactionGroupHeaderCompose` / `TransactionGroupHeaderInfo` | 날짜/그룹 헤더 | 목록 grouping 변경 시 확인 |
 | `CumulativeTrendSection` / `VicoCumulativeChart` | 누적 추이 차트 | Home과 CategoryDetail의 기간/필터 차이를 같이 확인. 기간 헤더가 시작/종료일을 제공하므로 X축 양끝은 비우고 중간 날짜만 표시하며, Samsung Fold와 큰 글자 AVD에서 `...`가 없는지 검증 |
 | `SegmentedTabRowCompose` / `SegmentedTabInfo` | 아이콘 지원 탭 | History/설정류 화면에서 재사용 |
@@ -107,5 +109,6 @@ status: draft
 | `feature/transactionedit/ui/TransactionSameStoreRuleCard.kt` | `TransactionSameStoreRuleCard`, `RuleKeywordInput`, `KeywordGuideCard` | 동일 거래처 적용 키워드 |
 | `feature/transactionedit/ui/TransactionOriginalSmsCard.kt` | `TransactionOriginalSmsCard` | 원본 문자 표시 |
 | `feature/transactionedit/ui/TransactionEditComponents.kt` | `TransactionSectionCard`, `TransactionDivider` | 거래 편집 카드 공통 요소 |
+| `feature/transactionactions/ui/TransactionQuickActionDialog.kt` | `TransactionQuickActionDialog`, `TransactionQuickActionContent`, `QuickTransactionMenuItem` | 중앙 모달의 거래명·닫기와 아이콘 포함 세로 수정/삭제 행, 기존 편집 화면 진입과 삭제 확인 |
 
 알림 진입의 거래 식별/삭제 후 처리 계약은 [notification-display](../notification-display/README.md)와 [transaction-edit](../transaction-edit/README.md)를 따른다. 상태/서비스/mapper 분리의 전체 감사는 [화면과 기능 책임 감사](../project-context/03-screen-function-architecture-audit.md)를 본다.

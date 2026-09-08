@@ -34,6 +34,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.sanha.moneytalk.MainViewModel
 import com.sanha.moneytalk.ScreenSyncUiState
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.feature.transactionactions.ui.TransactionQuickActionDialog
+import com.sanha.moneytalk.feature.transactionactions.ui.TransactionQuickActionViewModel
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
 import com.sanha.moneytalk.core.ui.component.MonthKey
@@ -58,6 +60,8 @@ fun HomeScreen(
     homeTabReClickEvent: kotlinx.coroutines.flow.SharedFlow<Unit>? = null
 ) {
     val context = LocalContext.current
+    val quickActions: TransactionQuickActionViewModel = hiltViewModel(key = "HomeQuickActions")
+    TransactionQuickActionDialog(quickActions)
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // Activity-scoped MainViewModel (동기화/권한/광고 상태 참조)
@@ -221,6 +225,7 @@ fun HomeScreen(
                 onIncomeSelected = { income ->
                     TransactionEditActivity.open(context, incomeId = income.id)
                 },
+                onTransactionLongClick = quickActions::open,
                 coachMarkRegistry = coachMarkRegistry,
                 isCurrentPage = page == pagerState.currentPage,
                 coroutineScope = coroutineScope

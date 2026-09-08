@@ -47,6 +47,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.feature.transactionactions.model.TransactionTarget
+import com.sanha.moneytalk.feature.transactionactions.ui.TransactionQuickActionDialog
+import com.sanha.moneytalk.feature.transactionactions.ui.TransactionQuickActionViewModel
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import androidx.compose.ui.platform.LocalContext
 import com.sanha.moneytalk.core.ui.component.BannerAdCompose
@@ -84,6 +87,8 @@ fun CategoryDetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
+    val quickActions: TransactionQuickActionViewModel = hiltViewModel(key = "CategoryQuickActions")
+    TransactionQuickActionDialog(quickActions)
 
     // HorizontalPager — Virtual Infinite Pager
     val initialPage = remember {
@@ -178,6 +183,7 @@ fun CategoryDetailScreen(
                         }
                     }
                 },
+                onExpenseLongClick = { quickActions.open(TransactionTarget.Expense(it.id)) },
                 onExpenseSelected = { expense ->
                     TransactionEditActivity.open(context, expenseId = expense.id)
                 }
@@ -209,7 +215,8 @@ private fun CategoryDetailPageContent(
     onSortOrderChange: (CategorySortOrder) -> Unit = {},
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
-    onExpenseSelected: (ExpenseEntity) -> Unit
+    onExpenseSelected: (ExpenseEntity) -> Unit,
+    onExpenseLongClick: (ExpenseEntity) -> Unit
 ) {
     if (pageData.isLoading) {
         Box(
@@ -300,6 +307,7 @@ private fun CategoryDetailPageContent(
                         is CategoryTransactionItem.ExpenseItem -> {
                             TransactionCardCompose(
                                 info = item.cardInfo,
+                                onLongClick = { onExpenseLongClick(item.expense) },
                                 onClick = { onExpenseSelected(item.expense) }
                             )
                         }
@@ -337,6 +345,7 @@ private fun CategoryDetailPageContent(
                             is CategoryTransactionItem.ExpenseItem -> {
                                 TransactionCardCompose(
                                     info = item.cardInfo,
+                                    onLongClick = { onExpenseLongClick(item.expense) },
                                     onClick = { onExpenseSelected(item.expense) }
                                 )
                             }

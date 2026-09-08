@@ -12,6 +12,7 @@ status: draft
 
 | 날짜 | 근거 | 변경 | 영향 문서 | 메모 |
 |---|---|---|---|---|
+| 2026-09-08 | `CategoryDetailScreen`의 `onExpenseLongClick` 확인 | 단건 수정/삭제 시트와 브리핑 카테고리 진입 반영 | `package-reference/03-rendering-action.md` | 카테고리 변경 후 현재 목록에서 제외, 주간 전용 목록이 아닌 선택 회계월 진입임을 명시. |
 | 2026-07-09 | `CategoryDetailActivity`, `CategoryDetailViewModel`, `CategoryDetailScreen`, `CategoryDetailExpenseFilters` 재확인 | Category Detail package-reference 추가 | `package-reference/**`, `README.md` | 월 cache, intent extra, 필터/집계, 정렬, 거래 mutation을 세부 문서로 분리. |
 | 2026-07-08 | `feature/categorydetail/ui/**` 확인 | Category Detail 화면 KB 생성 | `README.md`, `00-structure-map.md` | 홈 카테고리 클릭 후 상세 화면의 월 이동, 정렬, 필터, 거래 수정 진입을 분리. |
 

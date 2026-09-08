@@ -40,7 +40,10 @@ CategoryDetailScreen
 | 월 swipe/button | `viewModel.setMonth(year, month)` | 현재/인접 월 cache load |
 | 정렬 tab 변경 | `viewModel.setSortOrder(order)` | cache 안 거래 목록 재정렬 |
 | 거래 카드 클릭 | 거래 수정 화면 진입 | [../../transaction-edit/README.md](../../transaction-edit/README.md) extra 계약 확인 |
+| 거래 카드 롱클릭 | `TransactionQuickActionViewModel.open(TransactionTarget.Expense(id))` | 화면별 수정/삭제 중앙 메뉴, 수정은 기존 편집 화면 진입 |
 | 거래 삭제/메모/카테고리 변경 | ViewModel CRUD 함수 | [../../transaction-mutation/README.md](../../transaction-mutation/README.md) 영향 확인 |
+
+롱클릭은 `CategoryDetailPageContent`의 `onExpenseLongClick`을 통해 연결한다. 수정은 기존 상세 편집을 열고 공용 `TransactionQuickActionService`는 확인한 단건 삭제를 처리한다. 상세 편집으로 카테고리가 달라지면 현재 목록에서 빠진다. 브리핑의 증가 카테고리 버튼도 이 화면의 선택 회계월로 진입하므로 최근 7일 전용 목록을 뜻하지 않는다.
 
 ## 변경 시 주의
 

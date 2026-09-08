@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="quick_transaction_title">거래 관리</string>
+    <string name="quick_transaction_scope">이 거래 한 건에만 적용합니다. 앞으로 들어올 거래에는 적용되지 않아요.</string>
+    <string name="quick_transaction_fixed_expense">고정 지출</string>
+    <string name="quick_transaction_fixed_income">고정 수입</string>
+    <string name="quick_transaction_fixed_transfer">고정 이체</string>
+    <string name="quick_transaction_exclude_stats">통계에서 제외</string>
+    <string name="quick_transaction_details">수정</string>
+    <string name="quick_transaction_saving">저장 중…</string>
+    <string name="quick_transaction_retry">다시 불러오기</string>
+    <string name="quick_transaction_delete_title">이 거래를 삭제할까요?</string>
+    <string name="quick_transaction_delete_message">%1$s · %2$s 내역을 삭제합니다. 삭제한 내역은 되돌릴 수 없어요.</string>
+    <string name="quick_transaction_saved">거래를 수정했어요.</string>
+    <string name="quick_transaction_deleted">거래를 삭제했어요.</string>
+    <string name="quick_transaction_missing">이미 삭제되었거나 찾을 수 없는 거래예요.</string>
+    <string name="quick_transaction_load_failed">거래를 불러오지 못했어요. 다시 시도해 주세요.</string>
+    <string name="quick_transaction_save_failed">변경을 완료하지 못했어요. 다시 시도해 주세요.</string>
+    <string name="quick_transaction_invalid_category">사용할 수 없는 카테고리예요. 다른 카테고리를 선택해 주세요.</string>
+</resources>
