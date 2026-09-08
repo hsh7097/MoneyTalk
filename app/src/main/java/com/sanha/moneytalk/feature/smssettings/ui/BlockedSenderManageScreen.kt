@@ -1,5 +1,6 @@
 package com.sanha.moneytalk.feature.smssettings.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,8 +9,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -42,13 +45,13 @@ internal fun BlockedSenderManageScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             Text(
                 text = stringResource(R.string.sms_settings_blocked_sender_description),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -65,6 +68,7 @@ internal fun BlockedSenderManageScreen(
                     modifier = Modifier.weight(1f),
                     placeholder = { Text(stringResource(R.string.sms_settings_blocked_sender_input_hint)) },
                     singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
                     trailingIcon = {
                         if (newAddress.isNotEmpty()) {
                             IconButton(onClick = { newAddress = "" }) {
@@ -81,7 +85,8 @@ internal fun BlockedSenderManageScreen(
                             newAddress = ""
                         }
                     },
-                    enabled = newAddress.isNotBlank()
+                    enabled = newAddress.isNotBlank(),
+                    modifier = Modifier.heightIn(min = 48.dp)
                 ) {
                     Icon(imageVector = Icons.Default.Add, contentDescription = null)
                     Text(text = stringResource(R.string.common_add))
@@ -92,7 +97,11 @@ internal fun BlockedSenderManageScreen(
         if (blockedSenders.isNotEmpty()) {
             items(blockedSenders, key = { it.address }) { sender ->
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 64.dp)
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+                        .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {

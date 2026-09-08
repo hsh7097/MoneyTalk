@@ -7,8 +7,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
@@ -47,7 +51,7 @@ internal fun AddEditRuleDialog(
             )
         },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 // 키워드 입력
                 OutlinedTextField(
                     value = keyword,
@@ -57,6 +61,7 @@ internal fun AddEditRuleDialog(
                     isError = error != null,
                     supportingText = error?.let { { Text(it) } },
                     singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -79,10 +84,11 @@ internal fun AddEditRuleDialog(
                             ?: stringResource(R.string.store_rule_settings_category_not_set),
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (category != null) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .weight(1f)
                             .clickable(onClick = onCategoryClick)
+                            .heightIn(min = 48.dp)
                             .padding(vertical = 8.dp)
                     )
                     if (category != null) {

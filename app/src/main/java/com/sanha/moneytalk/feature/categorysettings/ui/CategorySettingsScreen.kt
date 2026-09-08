@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,7 +25,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -46,6 +47,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.ui.component.CategoryAddDialog
+import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabInfo
+import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabRowCompose
 import com.sanha.moneytalk.core.util.toDpTextUnit
 
 /**
@@ -65,7 +68,13 @@ fun CategorySettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.category_settings_title)) },
+                title = {
+                    Text(
+                        stringResource(R.string.category_settings_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -89,12 +98,13 @@ fun CategorySettingsScreen(
             CategoryTypeTabRow(
                 selectedType = uiState.selectedTab,
                 onTypeSelected = { viewModel.selectTab(it) },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
             )
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 // 기본 카테고리 헤더
                 item {
@@ -140,7 +150,7 @@ fun CategorySettingsScreen(
                         Text(
                             text = stringResource(R.string.category_settings_custom_empty),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(vertical = 12.dp)
                         )
                     }
@@ -163,8 +173,10 @@ fun CategorySettingsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surface)
                             .clickable { viewModel.showAddDialog() }
-                            .padding(vertical = 12.dp),
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -172,7 +184,7 @@ fun CategorySettingsScreen(
                                 .size(40.dp)
                                 .background(
                                     MaterialTheme.colorScheme.primaryContainer,
-                                    RoundedCornerShape(8.dp)
+                                    RoundedCornerShape(12.dp)
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
@@ -238,26 +250,28 @@ private fun CategoryTypeTabRow(
     onTypeSelected: (CategoryType) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        CategoryType.entries.forEach { type ->
-            FilterChip(
-                selected = type == selectedType,
-                onClick = { onTypeSelected(type) },
-                label = {
-                    Text(
-                        text = when (type) {
-                            CategoryType.EXPENSE -> stringResource(R.string.category_type_expense)
-                            CategoryType.INCOME -> stringResource(R.string.category_type_income)
-                            CategoryType.TRANSFER -> stringResource(R.string.category_type_transfer)
-                        }
-                    )
-                }
-            )
+    val selectedSurface = MaterialTheme.colorScheme.surface
+    val selectedContent = MaterialTheme.colorScheme.onSurface
+    val tabs = CategoryType.entries.map { type ->
+        val typeLabel = stringResource(
+            when (type) {
+                CategoryType.EXPENSE -> R.string.category_type_expense
+                CategoryType.INCOME -> R.string.category_type_income
+                CategoryType.TRANSFER -> R.string.category_type_transfer
+            }
+        )
+        object : SegmentedTabInfo {
+            override val label = typeLabel
+            override val isSelected = type == selectedType
+            override val selectedColor = selectedSurface
+            override val selectedTextColor = selectedContent
         }
     }
+    SegmentedTabRowCompose(
+        tabs = tabs,
+        onTabClick = { onTypeSelected(CategoryType.entries[it]) },
+        modifier = modifier
+    )
 }
 
 @Composable
@@ -270,7 +284,9 @@ private fun CategoryListItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
+            .heightIn(min = 64.dp)
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -290,7 +306,7 @@ private fun CategoryListItem(
                 Icon(
                     Icons.Default.Delete,
                     contentDescription = stringResource(R.string.common_delete),
-                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    tint = MaterialTheme.colorScheme.error
                 )
             }
         }
