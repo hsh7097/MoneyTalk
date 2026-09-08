@@ -42,7 +42,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.CategoryInfo
-import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,7 +92,7 @@ internal fun CardFilterListBottomSheet(
                         text = stringResource(R.string.history_filter_card_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = FriendlyMoneyColors.textPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { isExpanded = !isExpanded }) {
@@ -106,14 +105,14 @@ internal fun CardFilterListBottomSheet(
                                     }
                                 ),
                                 fontWeight = FontWeight.SemiBold,
-                                color = FriendlyMoneyColors.Mint
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                         IconButton(onClick = onDismiss) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = stringResource(R.string.common_close),
-                                tint = FriendlyMoneyColors.textSecondary
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -121,7 +120,7 @@ internal fun CardFilterListBottomSheet(
                 Text(
                     text = selectionSummary,
                     style = MaterialTheme.typography.bodySmall,
-                    color = FriendlyMoneyColors.textSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
 
@@ -245,7 +244,7 @@ internal fun CategoryFilterListBottomSheet(
                         text = stringResource(sheetType.titleResId),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = FriendlyMoneyColors.textPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { isExpanded = !isExpanded }) {
@@ -258,14 +257,14 @@ internal fun CategoryFilterListBottomSheet(
                                     }
                                 ),
                                 fontWeight = FontWeight.SemiBold,
-                                color = FriendlyMoneyColors.Mint
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                         IconButton(onClick = onDismiss) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = stringResource(R.string.common_close),
-                                tint = FriendlyMoneyColors.textSecondary
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -273,7 +272,7 @@ internal fun CategoryFilterListBottomSheet(
                 Text(
                     text = selectionSummary,
                     style = MaterialTheme.typography.bodySmall,
-                    color = FriendlyMoneyColors.textSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
 

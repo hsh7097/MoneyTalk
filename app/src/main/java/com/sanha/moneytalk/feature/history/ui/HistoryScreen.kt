@@ -36,7 +36,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -48,7 +47,6 @@ import com.sanha.moneytalk.feature.transactionactions.model.TransactionTarget
 import com.sanha.moneytalk.feature.transactionactions.ui.TransactionQuickActionDialog
 import com.sanha.moneytalk.feature.transactionactions.ui.TransactionQuickActionViewModel
 import com.sanha.moneytalk.ScreenSyncUiState
-import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkState
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
@@ -193,9 +191,9 @@ fun HistoryScreen(
             // 헤더: 타이틀만 (아이콘은 탭 행으로 이동)
             Text(
                 text = stringResource(R.string.history_title),
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+                modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 16.dp)
             )
 
             // 기간 선택 및 지출/수입 요약
@@ -634,8 +632,8 @@ fun TransactionListView(
                     }
                 },
                 shape = CircleShape,
-                containerColor = MaterialTheme.moneyTalkColors.income,
-                contentColor = Color.White,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
                 elevation = FloatingActionButtonDefaults.elevation(
                     defaultElevation = 4.dp,
                     pressedElevation = 8.dp

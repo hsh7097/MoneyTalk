@@ -1,20 +1,14 @@
 package com.sanha.moneytalk.feature.history.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -24,14 +18,14 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,22 +34,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryInfo
-import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabInfo
 import com.sanha.moneytalk.core.ui.component.tab.SegmentedTabRowCompose
 import com.sanha.moneytalk.core.util.DateUtils
-import com.sanha.moneytalk.core.util.toDpTextUnit
 import java.text.NumberFormat
 import java.util.Calendar
 import java.util.Locale
@@ -86,6 +75,7 @@ fun SearchBar(
             modifier = Modifier.weight(1f),
             placeholder = { Text(stringResource(R.string.history_search_hint)) },
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
             trailingIcon = {
                 if (query.isNotEmpty()) {
                     IconButton(onClick = { onQueryChange("") }) {
@@ -135,137 +125,82 @@ fun PeriodSummaryCard(
         start to end
     }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+    val (currentYear, currentMonth) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
+    val canGoNext = year < currentYear || (year == currentYear && month < currentMonth)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface
     ) {
-        // 왼쪽: 날짜 네비게이션 (줄넘김 형태)
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onPreviousMonth,
-                modifier = Modifier.size(28.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                    contentDescription = stringResource(R.string.home_previous_month),
-                    modifier = Modifier.size(28.dp),
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onPreviousMonth, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        contentDescription = stringResource(R.string.home_previous_month)
+                    )
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = stringResource(R.string.finance_history_month, year, month),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = stringResource(R.string.finance_history_period, startDate, endDate),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                IconButton(
+                    onClick = onNextMonth,
+                    modifier = Modifier.size(48.dp),
+                    enabled = canGoNext
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = stringResource(R.string.home_next_month)
+                    )
+                }
             }
-
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = startDate,
-                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 18.toDpTextUnit),
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                HorizontalDivider(
-                    modifier = Modifier
-                        .width(6.dp)
-                        .padding(vertical = 4.dp),
-                    thickness = 1.dp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = endDate,
-                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 18.toDpTextUnit),
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.home_expense),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.common_won, numberFormat.format(totalExpense)),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.home_income),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.common_won, numberFormat.format(totalIncome)),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.moneyTalkColors.income
+                    )
+                }
             }
-
-            val (effYear, effMonth) = DateUtils.getEffectiveCurrentMonth(monthStartDay)
-            val isCurrentMonth = year >= effYear && month >= effMonth
-            IconButton(
-                onClick = onNextMonth,
-                modifier = Modifier.size(28.dp),
-                enabled = !isCurrentMonth
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = stringResource(R.string.home_next_month),
-                    modifier = Modifier.size(28.dp),
-                    tint = if (isCurrentMonth) {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    }
-                )
-            }
-        }
-
-        // 오른쪽: 지출/수입 요약 (오른쪽 정렬, 동적 너비)
-        Column(
-            horizontalAlignment = Alignment.End,
-            modifier = Modifier.width(IntrinsicSize.Max)
-        ) {
-            // 지출
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.End
-            ) {
-                Text(
-                    text = stringResource(R.string.home_expense),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.widthIn(min = 44.dp),
-                    textAlign = TextAlign.End,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip,
-                    softWrap = false
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = stringResource(R.string.common_won, numberFormat.format(totalExpense)),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.toDpTextUnit),
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.End,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip,
-                    softWrap = false
-                )
-            }
-            // 수입 (0원이어도 항상 표시)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.End
-            ) {
-                Text(
-                    text = stringResource(R.string.home_income),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.widthIn(min = 44.dp),
-                    textAlign = TextAlign.End,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip,
-                    softWrap = false
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = stringResource(
-                        R.string.common_won,
-                        numberFormat.format(totalIncome)
-                    ),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.toDpTextUnit),
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.moneyTalkColors.income,
-                    textAlign = TextAlign.End,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip,
-                    softWrap = false
-                )
-            }
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
@@ -320,15 +255,15 @@ fun FilterTabRow(
             || !showTransfers
             || fixedExpenseFilter != FixedExpenseFilter.ALL
 
-    val primaryColor = FriendlyMoneyColors.Mint
-    val onPrimaryColor = Color.White
+    val primaryColor = MaterialTheme.colorScheme.surface
+    val onPrimaryColor = MaterialTheme.colorScheme.onSurface
 
     val listLabel = stringResource(R.string.history_view_list)
     val calendarLabel = stringResource(R.string.history_view_calendar)
     val listIcon = Icons.AutoMirrored.Filled.List
     val calendarIcon = Icons.Default.DateRange
 
-    val tabs = remember(currentMode, primaryColor, onPrimaryColor) {
+    val tabs = remember(currentMode, primaryColor, onPrimaryColor, listLabel, calendarLabel) {
         listOf(
             object : SegmentedTabInfo {
                 override val label = listLabel
@@ -347,15 +282,13 @@ fun FilterTabRow(
         )
     }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .padding(start = 16.dp, end = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             SegmentedTabRowCompose(
@@ -367,8 +300,29 @@ fun FilterTabRow(
                     }
                 }
             )
-            Spacer(modifier = Modifier.width(8.dp))
-
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onSearchClick, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = stringResource(R.string.common_search),
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                IconButton(onClick = onAddClick, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = stringResource(R.string.common_add),
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterActionButton(onClick = { showBottomSheet = true })
             if (hasActiveFilter) {
                 val hasMultipleFilters = listOf(
                     selectedExpenseCategories.isNotEmpty() ||
@@ -401,36 +355,8 @@ fun FilterTabRow(
 
                 FilterStatusChip(
                     label = filterDescription,
-                    onResetFilter = onResetFilter
-                )
-            } else {
-                FilterActionButton(onClick = { showBottomSheet = true })
-            }
-        }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onSearchClick,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = stringResource(R.string.common_search),
-                    modifier = Modifier.size(24.dp),
-                    tint = FriendlyMoneyColors.Mint
-                )
-            }
-            IconButton(
-                onClick = onAddClick,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = stringResource(R.string.common_add),
-                    modifier = Modifier.size(24.dp),
-                    tint = FriendlyMoneyColors.Coral
+                    onResetFilter = onResetFilter,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
@@ -474,33 +400,28 @@ fun FilterTabRow(
 }
 
 @Composable
-private fun FilterActionButton(
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(FriendlyMoneyColors.elevatedCardBackground)
-            .border(1.dp, FriendlyMoneyColors.border, RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 10.dp, vertical = 7.dp),
-        contentAlignment = Alignment.Center
+private fun FilterActionButton(onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.heightIn(min = 48.dp)
     ) {
         Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
                 text = stringResource(R.string.common_filter),
-                fontSize = 14.toDpTextUnit,
-                fontWeight = FontWeight.Medium,
-                color = FriendlyMoneyColors.textSecondary
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface
             )
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
                 contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = FriendlyMoneyColors.textSecondary
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -509,34 +430,29 @@ private fun FilterActionButton(
 @Composable
 private fun FilterStatusChip(
     label: String,
-    onResetFilter: () -> Unit
+    onResetFilter: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val chipColor = MaterialTheme.moneyTalkColors.income
-
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .border(1.dp, chipColor, RoundedCornerShape(12.dp))
-            .clickable { onResetFilter() }
-            .padding(start = 10.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
-        contentAlignment = Alignment.Center
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.primaryContainer
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = label,
-                fontSize = 13.toDpTextUnit,
-                fontWeight = FontWeight.Medium,
-                color = chipColor
+                modifier = Modifier.weight(1f).padding(start = 12.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
             )
-            Spacer(modifier = Modifier.width(4.dp))
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = stringResource(R.string.common_clear),
-                modifier = Modifier.size(16.dp),
-                tint = chipColor
-            )
+            IconButton(onClick = onResetFilter, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = stringResource(R.string.history_filter_reset),
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
         }
     }
 }

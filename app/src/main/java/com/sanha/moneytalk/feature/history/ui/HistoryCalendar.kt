@@ -4,11 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,9 +15,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -31,13 +31,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.util.toDpTextUnit
@@ -72,7 +75,7 @@ fun BillingCycleCalendarView(
     dailyIncomeTotals: Map<String, Int> = emptyMap(), // "yyyy-MM-dd" -> income amount
     onDateClick: (String) -> Unit
 ) {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.KOREA)
+    val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
     val compactNumberFormat = NumberFormat.getNumberInstance(Locale.KOREA).apply {
         maximumFractionDigits = 1
     }
@@ -119,7 +122,8 @@ fun BillingCycleCalendarView(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 8.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         // 무지출일 배너
         if (noSpendDays > 0) {
@@ -127,9 +131,9 @@ fun BillingCycleCalendarView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 8.dp),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             ) {
                 Row(
@@ -144,7 +148,7 @@ fun BillingCycleCalendarView(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.moneyTalkColors.calendarSunday)
+                                .background(MaterialTheme.colorScheme.primary)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
@@ -155,7 +159,7 @@ fun BillingCycleCalendarView(
                     Text(
                         text = stringResource(R.string.history_no_spend_total, noSpendDays),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -180,19 +184,19 @@ fun BillingCycleCalendarView(
                     color = when (index) {
                         0 -> MaterialTheme.moneyTalkColors.calendarSunday
                         6 -> MaterialTheme.moneyTalkColors.calendarSaturday
-                        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
                     }
                 )
             }
         }
 
-        // 달력 그리드 — 남은 공간을 균등 분배하여 화면 하단까지 채움
-        Column(modifier = Modifier.weight(1f)) {
+        // 작은 화면과 큰 글자에서도 날짜/금액이 잘리지 않도록 세로 스크롤한다.
+        Column {
             weeks.forEachIndexed { weekIndex, week ->
                 val weekTotal = weeklyTotals.getOrNull(weekIndex) ?: 0
                 val weekIncomeTotal = weeklyIncomeTotals.getOrNull(weekIndex) ?: 0
 
-                Column(modifier = Modifier.weight(1f)) {
+                Column {
                     // 주간 디바이더
                     if (weekIndex > 0) {
                         HorizontalDivider(
@@ -207,7 +211,7 @@ fun BillingCycleCalendarView(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .background(MaterialTheme.colorScheme.surface)
                                 .padding(end = 4.dp, top = 4.dp, bottom = 2.dp),
                             horizontalArrangement = Arrangement.End
                         ) {
@@ -215,8 +219,8 @@ fun BillingCycleCalendarView(
                                 Text(
                                     text = "+${formatCompactCalendarAmount(weekIncomeTotal, compactNumberFormat)}",
                                     style = MaterialTheme.typography.bodySmall.copy(
-                                        fontSize = 10.toDpTextUnit,
-                                        lineHeight = 12.toDpTextUnit,
+                                        fontSize = 10.sp,
+                                        lineHeight = 12.sp,
                                         letterSpacing = 0.toDpTextUnit
                                     ),
                                     color = MaterialTheme.moneyTalkColors.income,
@@ -232,11 +236,11 @@ fun BillingCycleCalendarView(
                                 Text(
                                     text = "-${formatCompactCalendarAmount(weekTotal, compactNumberFormat)}",
                                     style = MaterialTheme.typography.bodySmall.copy(
-                                        fontSize = 10.toDpTextUnit,
-                                        lineHeight = 12.toDpTextUnit,
+                                        fontSize = 10.sp,
+                                        lineHeight = 12.sp,
                                         letterSpacing = 0.toDpTextUnit
                                     ),
-                                    color = MaterialTheme.colorScheme.error,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
                                     overflow = TextOverflow.Clip,
                                     softWrap = false
@@ -248,14 +252,14 @@ fun BillingCycleCalendarView(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(18.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .background(MaterialTheme.colorScheme.surface)
                         )
                     }
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f)
+                            .height(80.dp * fontScale)
                     ) {
                         week.forEachIndexed { index, calendarDay ->
                             if (index > 0) {
@@ -298,7 +302,7 @@ fun BillingCycleCalendarView(
 
 /**
  * 달력 날짜 셀
- * 날짜 숫자 + 일별 수입(초록)/지출(빨강) 금액 표시
+ * 날짜 숫자 + 일별 수입(초록)/지출(중립색) 금액 표시
  */
 @Composable
 fun CalendarDayCell(
@@ -333,7 +337,7 @@ fun CalendarDayCell(
             // 날짜
             Box(
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(32.dp * LocalDensity.current.fontScale.coerceAtLeast(1f))
                     .clip(CircleShape)
                     .background(
                         when {
@@ -345,10 +349,10 @@ fun CalendarDayCell(
             ) {
                 Text(
                     text = calendarDay.day.toString(),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.toDpTextUnit),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                     fontWeight = if (calendarDay.isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
                     color = when {
-                        calendarDay.isToday -> Color.White
+                        calendarDay.isToday -> MaterialTheme.colorScheme.onPrimary
                         calendarDay.isFuture -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                         !calendarDay.isCurrentPeriod -> MaterialTheme.colorScheme.onSurface.copy(
                             alpha = 0.3f
@@ -366,23 +370,10 @@ fun CalendarDayCell(
                     R.string.common_won,
                     exactNumberFormat.format(dayIncome)
                 )
-                Text(
+                CalendarAmountText(
                     text = "+${formatCompactCalendarAmount(dayIncome, compactNumberFormat)}",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 8.toDpTextUnit,
-                        lineHeight = 10.toDpTextUnit,
-                        letterSpacing = 0.toDpTextUnit
-                    ),
-                    color = MaterialTheme.moneyTalkColors.income,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip,
-                    softWrap = false,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .semantics {
-                            contentDescription = "+$incomeDescription"
-                        }
+                    exactAmountDescription = "+$incomeDescription",
+                    color = MaterialTheme.moneyTalkColors.income
                 )
             }
 
@@ -392,26 +383,58 @@ fun CalendarDayCell(
                     R.string.common_won,
                     exactNumberFormat.format(dayTotal)
                 )
-                Text(
+                CalendarAmountText(
                     text = "-${formatCompactCalendarAmount(dayTotal, compactNumberFormat)}",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 8.toDpTextUnit,
-                        lineHeight = 10.toDpTextUnit,
-                        letterSpacing = 0.toDpTextUnit
-                    ),
-                    color = MaterialTheme.colorScheme.error,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip,
-                    softWrap = false,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .semantics {
-                            contentDescription = "-$expenseDescription"
-                        }
+                    exactAmountDescription = "-$expenseDescription",
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
+    }
+}
+
+/** Keep the sign, amount and unit together inside one of the seven calendar columns. */
+@Composable
+private fun CalendarAmountText(
+    text: String,
+    exactAmountDescription: String,
+    color: Color
+) {
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val baseStyle = MaterialTheme.typography.labelSmall.copy(
+        fontSize = 10.sp,
+        lineHeight = 12.sp,
+        letterSpacing = 0.sp
+    )
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val availableWidth = constraints.maxWidth
+        val fittedStyle = remember(text, availableWidth, baseStyle, textMeasurer, density) {
+            val measuredWidth = textMeasurer.measure(
+                text = text, style = baseStyle, softWrap = false, maxLines = 1
+            ).size.width
+            val scale = (availableWidth.toFloat() / measuredWidth.coerceAtLeast(1)).coerceAtMost(1f)
+            var style = baseStyle.copy(fontSize = (baseStyle.fontSize.value * scale).coerceAtLeast(1f).sp)
+            // Android's large-font scaling can be nonlinear; verify the fitted size as well.
+            while (style.fontSize.value > 1f && textMeasurer.measure(
+                    text = text, style = style, softWrap = false, maxLines = 1
+                ).size.width > availableWidth
+            ) {
+                style = style.copy(fontSize = (style.fontSize.value - 0.25f).coerceAtLeast(1f).sp)
+            }
+            style
+        }
+        Text(
+            text = text,
+            style = fittedStyle,
+            color = color,
+            maxLines = 1,
+            softWrap = false,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().semantics {
+                contentDescription = exactAmountDescription
+            }
+        )
     }
 }
 

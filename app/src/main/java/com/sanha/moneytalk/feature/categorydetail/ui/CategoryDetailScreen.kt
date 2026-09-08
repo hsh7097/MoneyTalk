@@ -231,7 +231,7 @@ private fun CategoryDetailPageContent(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // 월 네비게이션 헤더
@@ -271,7 +271,7 @@ private fun CategoryDetailPageContent(
                 Text(
                     text = stringResource(R.string.category_detail_empty, categoryName),
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -389,13 +389,13 @@ private fun CategoryDetailHeroCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
+            modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
@@ -412,10 +412,9 @@ private fun CategoryDetailHeroCard(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 if (pageData.periodLabel.isNotBlank()) {
                     Text(
@@ -441,38 +440,37 @@ private fun CategoryTransactionListHeader(
     sortOrder: CategorySortOrder,
     onSortOrderChange: (CategorySortOrder) -> Unit
 ) {
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
+    val selectedSurface = MaterialTheme.colorScheme.surface
+    val selectedContent = MaterialTheme.colorScheme.onSurface
     val dateSortLabel = stringResource(R.string.category_sort_date)
     val amountSortLabel = stringResource(R.string.category_sort_amount)
 
-    val sortTabs = remember(sortOrder, primaryColor, onPrimaryColor) {
+    val sortTabs = remember(sortOrder, selectedSurface, selectedContent, dateSortLabel, amountSortLabel) {
         listOf(
             object : SegmentedTabInfo {
                 override val label = dateSortLabel
                 override val isSelected = sortOrder == CategorySortOrder.DATE_DESC
-                override val selectedColor = primaryColor
-                override val selectedTextColor = onPrimaryColor
+                override val selectedColor = selectedSurface
+                override val selectedTextColor = selectedContent
             },
             object : SegmentedTabInfo {
                 override val label = amountSortLabel
                 override val isSelected = sortOrder == CategorySortOrder.AMOUNT_DESC
-                override val selectedColor = primaryColor
-                override val selectedTextColor = onPrimaryColor
+                override val selectedColor = selectedSurface
+                override val selectedTextColor = selectedContent
             }
         )
     }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
             text = stringResource(R.string.category_detail_recent_transactions, categoryName),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.fillMaxWidth(),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
@@ -528,7 +526,7 @@ private fun MonthNavigationHeader(
                 Text(
                     text = periodLabel,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
             }

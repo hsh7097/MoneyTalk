@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,29 +32,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.CategoryInfo
-import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
-import com.sanha.moneytalk.core.util.toDpTextUnit
 
 private fun filterTypeIcon(type: FilterTransactionType) = when (type) {
     FilterTransactionType.ALL -> Icons.Default.RadioButtonChecked
     FilterTransactionType.EXPENSE -> Icons.Default.ArrowDownward
     FilterTransactionType.INCOME -> Icons.Default.ArrowUpward
     FilterTransactionType.TRANSFER -> Icons.Default.SwapHoriz
-}
-
-private fun filterTypeAccentColor(type: FilterTransactionType): Color = when (type) {
-    FilterTransactionType.ALL -> FriendlyMoneyColors.Honey
-    FilterTransactionType.EXPENSE -> FriendlyMoneyColors.Coral
-    FilterTransactionType.INCOME -> FriendlyMoneyColors.Mint
-    FilterTransactionType.TRANSFER -> FriendlyMoneyColors.Sky
 }
 
 @Composable
@@ -92,47 +84,12 @@ internal fun FilterTransactionTypeSelector(
 internal fun FilterGuideCard(
     modifier: Modifier = Modifier
 ) {
-    val guideShape = RoundedCornerShape(16.dp)
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(guideShape)
-            .background(
-                Brush.horizontalGradient(
-                    colors = listOf(
-                        FriendlyMoneyColors.Mint.copy(alpha = if (FriendlyMoneyColors.isDark) 0.24f else 0.16f),
-                        FriendlyMoneyColors.Sky.copy(alpha = if (FriendlyMoneyColors.isDark) 0.12f else 0.08f)
-                    )
-                )
-            )
-            .border(1.dp, FriendlyMoneyColors.Mint.copy(alpha = 0.22f), guideShape)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(FriendlyMoneyColors.Mint.copy(alpha = 0.20f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = stringResource(R.string.history_filter_guide_icon),
-                fontSize = 18.toDpTextUnit
-            )
-        }
-        Text(
-            text = stringResource(R.string.history_filter_guide_text),
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontSize = 13.toDpTextUnit,
-                lineHeight = 18.toDpTextUnit
-            ),
-            fontWeight = FontWeight.SemiBold,
-            color = FriendlyMoneyColors.textPrimary
-        )
-    }
+    Text(
+        text = stringResource(R.string.history_filter_guide_text),
+        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }
 
 @Composable
@@ -144,36 +101,21 @@ private fun FilterTypeTile(
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(14.dp)
-    val accentColor = filterTypeAccentColor(type)
     val backgroundColor = if (selected) {
-        FriendlyMoneyColors.Mint.copy(alpha = if (FriendlyMoneyColors.isDark) 0.82f else 0.20f)
+        MaterialTheme.colorScheme.primaryContainer
     } else {
-        MaterialTheme.colorScheme.background
+        MaterialTheme.colorScheme.surfaceContainerLow
     }
-    val borderColor = if (selected) {
-        FriendlyMoneyColors.Mint
-    } else {
-        FriendlyMoneyColors.border
-    }
-    val iconColor = if (selected) {
-        when (type) {
-            FilterTransactionType.ALL -> FriendlyMoneyColors.Ink
-            FilterTransactionType.EXPENSE -> FriendlyMoneyColors.Coral
-            FilterTransactionType.INCOME -> FriendlyMoneyColors.MintDeep
-            FilterTransactionType.TRANSFER -> FriendlyMoneyColors.Ink
-        }
-    } else {
-        FriendlyMoneyColors.textSecondary
-    }
+    val borderColor = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
     val textColor = if (selected) {
-        if (FriendlyMoneyColors.isDark) FriendlyMoneyColors.Ink else FriendlyMoneyColors.textPrimary
+        MaterialTheme.colorScheme.onPrimaryContainer
     } else {
-        FriendlyMoneyColors.textSecondary
+        MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     Column(
         modifier = modifier
-            .height(58.dp)
+            .heightIn(min = 64.dp)
             .clip(shape)
             .background(backgroundColor)
             .border(1.dp, borderColor, shape)
@@ -185,13 +127,13 @@ private fun FilterTypeTile(
         Icon(
             imageVector = filterTypeIcon(type),
             contentDescription = null,
-            tint = if (selected) iconColor else accentColor.copy(alpha = 0.58f),
+            tint = textColor,
             modifier = Modifier.size(21.dp)
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.toDpTextUnit),
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             color = textColor,
             maxLines = 1,
@@ -208,8 +150,8 @@ internal fun FilterNoticeCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(999.dp))
-            .background(FriendlyMoneyColors.Mint.copy(alpha = if (FriendlyMoneyColors.isDark) 0.16f else 0.10f))
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -217,14 +159,14 @@ internal fun FilterNoticeCard(
         Icon(
             imageVector = Icons.Default.Check,
             contentDescription = null,
-            tint = FriendlyMoneyColors.Mint,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(16.dp)
         )
         Text(
             text = text,
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Medium,
-            color = FriendlyMoneyColors.Mint
+            color = MaterialTheme.colorScheme.primary
         )
     }
 }
@@ -260,22 +202,21 @@ private fun FilterOptionPill(
 ) {
     val shape = RoundedCornerShape(12.dp)
     val backgroundColor = if (selected) {
-        FriendlyMoneyColors.Mint.copy(alpha = if (FriendlyMoneyColors.isDark) 0.78f else 0.18f)
+        MaterialTheme.colorScheme.primaryContainer
     } else {
-        Color.Transparent
+        MaterialTheme.colorScheme.surfaceContainerLow
     }
-    val textColor = if (selected && FriendlyMoneyColors.isDark) FriendlyMoneyColors.Ink else {
-        if (selected) FriendlyMoneyColors.Mint else FriendlyMoneyColors.textSecondary
-    }
+    val textColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+        else MaterialTheme.colorScheme.onSurfaceVariant
 
     Surface(
         onClick = onClick,
-        modifier = modifier.height(44.dp),
+        modifier = modifier.heightIn(min = 48.dp),
         shape = shape,
         color = backgroundColor,
         border = BorderStroke(
-            width = if (selected) 1.5.dp else 1.dp,
-            color = if (selected) FriendlyMoneyColors.Mint else FriendlyMoneyColors.border
+            width = 1.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
         )
     ) {
         Box(
@@ -284,7 +225,7 @@ private fun FilterOptionPill(
         ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.toDpTextUnit),
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 color = textColor,
                 maxLines = 1,
@@ -321,19 +262,20 @@ internal fun FilterCategoryChipGroup(
         ) {
             Text(
                 text = stringResource(sheetType.titleResId),
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.toDpTextUnit),
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
                 fontWeight = FontWeight.SemiBold,
-                color = FriendlyMoneyColors.textPrimary
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = stringResource(R.string.history_filter_more_categories),
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.SemiBold,
-                color = FriendlyMoneyColors.Mint,
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .clickable(onClick = onMoreClick)
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .heightIn(min = 48.dp)
+                    .padding(horizontal = 8.dp, vertical = 12.dp)
             )
         }
 
@@ -375,15 +317,15 @@ private fun CategoryChoiceChip(
 ) {
     val shape = RoundedCornerShape(11.dp)
     val backgroundColor = if (selected) {
-        FriendlyMoneyColors.Mint.copy(alpha = 0.18f)
+        MaterialTheme.colorScheme.primaryContainer
     } else {
         MaterialTheme.colorScheme.background
     }
-    val borderColor = if (selected) FriendlyMoneyColors.Mint else FriendlyMoneyColors.border
+    val borderColor = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
     val textColor = if (selected) {
-        FriendlyMoneyColors.Mint
+        MaterialTheme.colorScheme.primary
     } else {
-        FriendlyMoneyColors.textSecondary
+        MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     Surface(
@@ -393,19 +335,19 @@ private fun CategoryChoiceChip(
         border = BorderStroke(1.dp, borderColor)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            modifier = Modifier.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             if (emoji != null) {
                 Text(
                     text = emoji,
-                    fontSize = 15.toDpTextUnit
+                    fontSize = 15.sp
                 )
             }
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.toDpTextUnit),
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 color = textColor,
                 maxLines = 1,
@@ -415,7 +357,7 @@ private fun CategoryChoiceChip(
                 Icon(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
-                    tint = FriendlyMoneyColors.Mint,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(14.dp)
                 )
             }
@@ -442,7 +384,7 @@ internal fun FilterCategorySummaryRow(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.SemiBold,
-            color = FriendlyMoneyColors.textPrimary
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         Row(
@@ -452,12 +394,12 @@ internal fun FilterCategorySummaryRow(
             Text(
                 text = summary,
                 style = MaterialTheme.typography.bodyLarge,
-                color = FriendlyMoneyColors.textPrimary
+                color = MaterialTheme.colorScheme.onSurface
             )
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = FriendlyMoneyColors.textSecondary
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
