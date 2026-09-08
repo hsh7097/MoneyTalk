@@ -84,6 +84,8 @@ data class SettingsUiState(
     val driveBackupFiles: List<DriveBackupFile> = emptyList(),
     // 카테고리 분류 관련
     val unclassifiedCount: Int = 0,
+    val isReviewCountLoading: Boolean = true,
+    val hasReviewCountError: Boolean = false,
     val isClassifying: Boolean = false,
     val classifyProgress: String = "",
     val classifyProgressCurrent: Int = 0,

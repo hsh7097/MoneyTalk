@@ -38,6 +38,7 @@ status: draft
 | Transaction Detail List | 날짜별 거래 목록, 그룹 헤더, 지출/수입 카드, 상세 편집·롱클릭 단건 수정/삭제 | [transaction-list](../transaction-list/README.md) |
 | SMS Settings | 제외 키워드, 차단 발신자, 신규 파싱 입력 제외 | [sms-settings](../sms-settings/README.md), [filtering](../filtering/README.md) |
 | AI Credit | 잔액, 최근 원장, 광고 충전 진입, feature gate | [ai-credit-screen](../ai-credit-screen/README.md), [budget-credit-monetization](../budget-credit-monetization/README.md) |
+| Category Review | 설정에서 전체 기간 미분류 직접 확인, 같은 노출 기준의 건수, 기존 거래 편집과 동일 거래처 적용, 로딩/실패/빈 상태와 복귀 갱신. 자동 분류는 별도 실행 | [settings](../settings/package-reference/03-rendering-action.md), [transaction-edit](../transaction-edit/README.md) |
 | Category Settings | custom category 추가/수정/삭제/재정렬 | [category-settings](../category-settings/README.md), [category-classification](../category-classification/README.md) |
 | Store Rule Settings | 거래처 규칙 추가/편집/삭제, 카테고리/고정/통계 제외 소급 적용 | [store-rule-settings](../store-rule-settings/README.md) |
 

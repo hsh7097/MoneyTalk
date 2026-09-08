@@ -35,6 +35,7 @@ status: draft
 | `feature/settings/ui` | 설정 탭, 기능별 메뉴/다이얼로그, 화면 상태와 액션 | `SettingsScreen.kt`, `SettingsContract.kt`, `SettingsViewModel.kt`, `Settings*Section.kt` |
 | `feature/settings/data` | 백업 준비/복원과 전체 데이터 초기화의 기능 서비스 | `SettingsBackupService.kt`, `SettingsDataResetService.kt` |
 | `feature/aicredit` | AI 크레딧 잔액/원장 화면 | `AiCreditScreen.kt`, `AiCreditViewModel.kt` |
+| `feature/categoryreview` | 전체 기간 미분류 직접 확인, 설정 건수 공통 조회 | `CategoryReviewActivity.kt`, `CategoryReviewRepository.kt`, `CategoryReviewViewModel.kt` |
 | `feature/categorydetail` | 카테고리 상세 화면 | `CategoryDetailScreen.kt`, `CategoryDetailViewModel.kt` |
 | `feature/*settings` | 카테고리/SMS/거래처 규칙 설정 Activity | `CategorySettingsActivity.kt`, `SmsSettingsActivity.kt`, `StoreRuleSettingsActivity.kt` |
 | `feature/transactionedit` | 거래 추가/수정 화면 | `TransactionEditActivity.kt`, `TransactionEditArgs.kt`, `TransactionEditUiState.kt`, `TransactionEditViewModel.kt` |

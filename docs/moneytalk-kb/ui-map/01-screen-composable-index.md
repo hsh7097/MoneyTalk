@@ -37,6 +37,7 @@ status: draft
 | Transaction Detail List | `TransactionDetailListActivity`, `TransactionDetailListScreen` — 달력에서 전달한 조건에 따라 지출·수입 통합 목록을 렌더링 | [transaction-list](../transaction-list/README.md) |
 | SMS Settings | `SmsSettingsActivity`, `SmsSettingsScreen`, `SmsSettingsMainContent`, `BlockedPhraseManageScreen`, `BlockedSenderManageScreen`, `ExcludedCardManageScreen` | [sms-settings](../sms-settings/README.md) |
 | AI Credit | `AiCreditActivity`, `AiCreditScreen`, AI credit repository state | [ai-credit-screen](../ai-credit-screen/README.md), [budget-credit-monetization](../budget-credit-monetization/README.md) |
+| Category Review | `CategoryReviewActivity`, `CategoryReviewScreen` → `CategoryReviewContent`, `CategoryReviewList`, `CategoryReviewMessage`. 설정의 직접 확인 메뉴에서 기존 편집 화면으로 연결 | [settings](../settings/package-reference/03-rendering-action.md) |
 | Category Settings | `CategorySettingsActivity`, `CategorySettingsScreen` | [category-settings](../category-settings/README.md), [category-classification](../category-classification/README.md) |
 | Store Rule Settings | `StoreRuleSettingsActivity`, `StoreRuleSettingsScreen`, `StoreRuleEditorDialog.kt`의 `AddEditRuleDialog` | [store-rule-settings](../store-rule-settings/README.md) |
 
@@ -85,6 +86,7 @@ status: draft
 | `core/ui/component/chart/CumulativeTrendSection.kt` | `CumulativeTrendSection` (두 오버로드), `LegendItem` | Info 오버로드의 `showCard` 기본 true. Home만 false로 원래 카드 없는 배치·큰 누적 금액 사용. `scaleToVisibleLines` 기본 false는 전체 곡선, Home true는 오늘까지 주 곡선·켜진 비교선 기준 Y축. 48dp 범례와 선택 상태 |
 | `core/ui/component/chart/VicoCumulativeChart.kt` | `VicoCumulativeChart` | 당월 주 곡선은 오늘 지점까지, X축은 시작 0원부터 월말까지. 현재/비교 실선 3dp/2dp, 테마 축 색상과 원래 영역 채움 |
 | `SmsSyncDialogs.kt` | `SmsSyncProgressDialog`, `SmsEngineSummaryDialog`, `SyncStepIndicator` | 동기화 진행/결과 표시 |
+| `feature/categoryreview/ui/CategoryReviewScreen.kt` | `CategoryReviewScreen`, `CategoryReviewContent`, `CategoryReviewList`, `CategoryReviewMessage` | 전체 기간 미분류 목록, 날짜 그룹·건수, 로딩/오류/빈 상태, 기존 거래 편집 및 복귀 갱신 |
 | `feature/home/ui/HomeScreen.kt` | `HomeScreen` | 탭 수명주기, pager, dialog/coachmark. 이전 페이지 연·월의 완료/부분 수집 상태 전달 |
 | `feature/home/ui/HomePageContent.kt` | `HomePageContent` | 기존 홈 조합을 복원하되 월 지출 바로 아래 누적 차트 배치. 주간 비교·예상·카테고리·오늘 전체 목록과 CTA 연결. 목록 아래 80dp 여백으로 마지막 거래와 맨 위로 FAB 겹침 방지 |
 | `feature/home/ui/theme/HomeTheme.kt` | `HomeTheme` | 홈 범위의 기존 MaterialTheme·확장 색상·숫자 Typography 공급, 앱 전체 테마는 유지 |

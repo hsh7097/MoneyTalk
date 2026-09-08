@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="category_review_title">Uncategorized transactions</string>
+    <string name="category_review_settings_count">%1$d uncategorized · Review transactions</string>
+    <string name="category_review_settings_loading">Checking uncategorized transactions</string>
+    <string name="category_review_settings_error">Open the list to try again</string>
+    <string name="category_review_settings_empty">No uncategorized transactions to review</string>
+    <string name="category_review_count">All dates · %1$d transactions</string>
+    <string name="category_review_hint">Tap a transaction to set its category. The edit screen can also apply it to the same merchant.</string>
+    <string name="category_review_empty">No uncategorized transactions left to review</string>
+    <string name="category_review_error">Could not load uncategorized transactions</string>
+    <string name="category_review_retry">Try again</string>
+    <string name="category_review_auto_title">Categorize automatically</string>
+    <string name="category_review_auto_subtitle">Run automatic categorization for uncategorized transactions</string>
+</resources>

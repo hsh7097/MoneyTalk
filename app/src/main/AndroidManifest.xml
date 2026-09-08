@@ -136,6 +136,12 @@
 
         <!-- 카테고리 설정 -->
         <activity
+            android:name=".feature.categoryreview.ui.CategoryReviewActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.MoneyTalk" />
+
+        <activity
             android:name=".feature.categorysettings.ui.CategorySettingsActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MoneyTalk"

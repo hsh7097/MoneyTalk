@@ -25,6 +25,7 @@ import com.sanha.moneytalk.core.util.ExportFilter
 import com.sanha.moneytalk.core.util.ExportFormat
 import com.sanha.moneytalk.core.util.GoogleDriveHelper
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
+import com.sanha.moneytalk.feature.categoryreview.data.CategoryReviewRepository
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.feature.home.data.StoreRuleSyncService
@@ -34,6 +35,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -61,7 +63,8 @@ class SettingsViewModel @Inject constructor(
     private val rewardAdManager: RewardAdManager,
     private val snackbarBus: AppSnackbarBus,
     private val classificationState: ClassificationState,
-    private val analyticsHelper: AnalyticsHelper
+    private val analyticsHelper: AnalyticsHelper,
+    private val categoryReviewRepository: CategoryReviewRepository
 ) : ViewModel() {
 
     private fun message(resId: Int, vararg args: Any): String {
@@ -70,6 +73,7 @@ class SettingsViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+    private var categoryReviewObservation: Job? = null
 
     init {
         loadSettings()
@@ -906,20 +910,31 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * 미분류 항목 수 조회
+     * 직접 확인 목록과 같은 노출 기준으로 건수를 관찰한다.
      */
     private fun loadUnclassifiedCount() {
-        viewModelScope.launch {
+        categoryReviewObservation?.cancel()
+        _uiState.update { it.copy(isReviewCountLoading = true, hasReviewCountError = false) }
+        categoryReviewObservation = viewModelScope.launch {
             try {
-                val count = withContext(Dispatchers.IO) {
-                    categoryClassifierService.getUnclassifiedCount()
+                categoryReviewRepository.observeExpenses().collect { expenses ->
+                    _uiState.update {
+                        it.copy(
+                            unclassifiedCount = expenses.size,
+                            isReviewCountLoading = false,
+                            hasReviewCountError = false
+                        )
+                    }
                 }
-                _uiState.update { it.copy(unclassifiedCount = count) }
-            } catch (e: Exception) {
-                // 무시
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _uiState.update { it.copy(isReviewCountLoading = false, hasReviewCountError = true) }
             }
         }
     }
+
+    fun refreshCategoryReview() = loadUnclassifiedCount()
 
     /**
      * 미분류 항목 Gemini로 자동 분류
@@ -938,7 +953,6 @@ class SettingsViewModel @Inject constructor(
             val initialCount = withContext(Dispatchers.IO) {
                 categoryClassifierService.getUnclassifiedCount()
             }
-            _uiState.update { it.copy(unclassifiedCount = initialCount) }
             if (initialCount == 0) {
                 snackbarBus.show(message(R.string.settings_classify_nothing_to_process))
                 return@launch

@@ -39,6 +39,7 @@ import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
 import com.sanha.moneytalk.core.ui.coachmark.onboardingTarget
 import com.sanha.moneytalk.core.util.DataBackupManager
 import com.sanha.moneytalk.feature.aicredit.ui.AiCreditActivity
+import com.sanha.moneytalk.feature.categoryreview.ui.CategoryReviewActivity
 import com.sanha.moneytalk.feature.categorysettings.ui.CategorySettingsActivity
 import com.sanha.moneytalk.feature.settings.ui.coachmark.settingsCoachMarkSteps
 import com.sanha.moneytalk.feature.smssettings.ui.SmsSettingsActivity
@@ -115,6 +116,7 @@ fun SettingsScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshNotificationAccess(context)
+                viewModel.refreshCategoryReview()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -240,6 +242,7 @@ fun SettingsScreen(
                 SettingsCategorySection(
                     uiState = uiState,
                     onIntent = viewModel::onIntent,
+                    onOpenReview = { CategoryReviewActivity.open(context) },
                     onOpenCategories = { CategorySettingsActivity.open(context) },
                     onOpenStoreRules = { StoreRuleSettingsActivity.open(context) },
                     modifier = Modifier.onboardingTarget("settings_category", coachMarkRegistry)

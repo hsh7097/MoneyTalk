@@ -12,6 +12,7 @@ status: draft
 
 | 파일 | 역할 | 언제 보는가 | 분류 | 함께 볼 파일 |
 |---|---|---|---|---|
+| `feature/categoryreview/data/**`, `feature/categoryreview/ui/**` | 전체 기간 미분류 조회·노출 필터·건수·화면·편집 진입 | 미분류 직접 확인과 설정 건수 불일치 | 기능 | `SettingsCategorySection.kt`, `TransactionEditActivity.kt` |
 | `feature/settings/ui/SettingsScreen.kt` | 설정 탭 UI와 row action | 설정 UI/진입 변경 | 핵심 | `SettingsViewModel.kt` |
 | `feature/settings/ui/SettingsViewModel.kt` | 설정 state/intent/data orchestration | 설정 저장, backup, drive, budget | 핵심 | `SettingsUiState`, repositories |
 | `feature/settings/ui/BudgetBottomSheet.kt` | 예산 입력 bottom sheet | 총/카테고리 예산 | 핵심 후보 | `BudgetDao.kt` |

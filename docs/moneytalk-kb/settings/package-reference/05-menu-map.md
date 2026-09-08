@@ -20,7 +20,8 @@ Settings는 하단 탭 네 번째 화면이다. 단순 preference 화면이 아�
 | 기간/예산 | 월 시작일 | `SettingsItemCompose` | `SettingsIntent.ShowMonthStartDayDialog` | `SettingsDataStore.monthStartDayFlow`, 홈/내역/카테고리 상세 월 기간 |
 | 기간/예산 | 월 예산/카테고리 예산 | `BudgetBottomSheet` | `SettingsIntent.ShowBudgetBottomSheet`, `SaveBudgets` | `BudgetDao`, 홈 예산 카드, 예산 관련 채팅/App Functions |
 | AI | AI 크레딧 | 조건부 섹션 | `AiCreditActivity.open(context)` | `CreditFeaturePolicy`, `AiCreditRepository` |
-| 카테고리 관리 | 카테고리 정리 | custom row | `SettingsIntent.ClassifyUnclassified` | `CategoryClassifierService`, local embedding, Firebase AI Logic/App Check |
+| 카테고리 관리 | 미정리 거래 | `SettingsItemCompose` | `CategoryReviewActivity.open(context)` -> 기존 거래 편집 | `CategoryReviewRepository`의 표시 가능한 미분류 지출, 읽기 전용 진입 |
+| 카테고리 관리 | 자동으로 분류하기 | custom row | `SettingsIntent.ClassifyUnclassified` | 기존 `CategoryClassifierService`, local embedding, Firebase AI Logic/App Check |
 | 카테고리 관리 | 카테고리 설정 | `SettingsItemCompose` | `CategorySettingsActivity.open(context)` | `CustomCategoryRepository`, category picker |
 | 카테고리 관리 | 거래처 규칙 | `SettingsItemCompose` | `StoreRuleSettingsActivity.open(context)` | `StoreRuleRepository`, 신규/수정 거래 카테고리/고정/통계 제외 |
 | 데이터 관리 | 거래 알림 | switch row | `SettingsIntent.ToggleNotification` | `SettingsDataStore.notificationEnabled`, `SmsInstantProcessor`의 노티 표시 조건 |

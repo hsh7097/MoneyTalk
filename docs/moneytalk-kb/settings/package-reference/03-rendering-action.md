@@ -55,3 +55,12 @@ status: verified
 - 설명 텍스트는 한 줄로 자르지 않고 줄바꿈을 허용하며 읽을 수 있는 보조 텍스트 색상을 쓴다.
 - 섹션 순서 및 item 수, 크레딧 조건부 표시, 코치마크 스크롤 index, 모든 설정/복원/삭제 콜백은 바꾸지 않는다.
 - 확인 항목: 테마/예산 시트 진입·취소, 큰 글자에서 토글과 설명 접근, 크레딧 유무에 따른 코치마크 위치, 삭제 확인과 데이터 관리 메뉴의 기존 동작.
+
+## 미정리 거래 직접 확인 (2026-09-09)
+
+- `SettingsCategorySection`의 `미정리 거래`는 `CategoryReviewActivity`의 전체 기간 목록을 연다. 기존 자동 분류는 바로 아래 `자동으로 분류하기`로 분리하며, 목록 열기와 조회만으로 분류 요청이나 데이터 변경을 실행하지 않는다. 분류 중에도 직접 확인 진입은 유지하고 자동 실행만 중복 클릭을 막는다.
+- 설정 건수와 목록은 `feature/categoryreview/data/CategoryReviewRepository.kt`의 같은 Flow를 사용한다. 기존 DB의 `category == Category.UNCLASSIFIED.displayName`인 지출에 SMS 제외 키워드와 숨긴 카드 필터를 적용한다. `기타`를 미정리로 간주하지 않고, 기간·금액·통계 제외 여부로 거래를 추가 제외하지 않는다. 수입은 이 목록의 대상이 아니다.
+- `CategoryReviewActivity`는 외부 노출하지 않는다. `CategoryReviewScreen`은 날짜별 최신순 목록과 로딩·오류/재시도·빈 상태를 표시한다. 선택한 지출 ID를 기존 `TransactionEditActivity.open(expenseId=...)`에 전달하고 같은 거래처 적용 및 저장 정책을 그대로 사용한다. 원문이나 카테고리 저장 로직을 새 화면에 복제하지 않는다.
+- Room 지출 Flow, 카드 Flow와 전역 갱신 이벤트로 목록을 다시 계산한다. 편집 복귀 시 조회도 갱신하되 기존 목록을 유지해 스크롤 상태를 불필요하게 초기화하지 않는다. 설정 건수도 같은 소스를 관찰하고 설정 복귀 시 다시 구독한다. 자동 분류 내부 진행 건수는 숨김 필터가 없는 기존 서비스 값이므로 직접 확인 건수에 덮어쓰지 않는다.
+- 구현 파일: `CategoryReviewActivity`, `CategoryReviewScreen`/`CategoryReviewContent`, `CategoryReviewViewModel`, `CategoryReviewUiState`, `CategoryReviewRepository`, `CategoryReviewFilter`. 신규 문구는 한국어/영어 `strings_category_review.xml`에 둔다.
+- 회귀 확인: `CategoryReviewFilterTest`는 카테고리 대상·노출 필터·0원/음수/통계 제외·정렬·날짜와 건수를 검증한다. `CategoryReviewRepositoryTest`는 임시 메모리 DB에서 단건/같은 거래처 수정 후 자동 반영, 숨김 조건 갱신, 실패 후 재시도를 확인한다. `CategoryReviewScreenTest`는 상태별 표시, 유형을 보존하는 편집 ID, 직접 확인/자동 분류 액션 분리와 큰 글자 메뉴를 확인한다. 테스트는 준비한 항목이며 실행 결과는 통합 검증 기록을 따른다.

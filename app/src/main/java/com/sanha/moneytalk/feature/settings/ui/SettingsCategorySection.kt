@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -22,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
@@ -33,18 +35,39 @@ import com.sanha.moneytalk.core.ui.component.settings.SettingsSectionCompose
 internal fun SettingsCategorySection(
     uiState: SettingsUiState,
     onIntent: (SettingsIntent) -> Unit,
+    onOpenReview: () -> Unit,
     onOpenCategories: () -> Unit,
     onOpenStoreRules: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier) {
         SettingsSectionCompose(title = stringResource(R.string.settings_section_category)) {
-            // 카테고리 정리 (AI 분류)
+            SettingsItemCompose(
+                info = object : SettingsItemInfo {
+                    override val icon = Icons.Default.FactCheck
+                    override val title = stringResource(R.string.category_review_title)
+                    override val subtitle = when {
+                        uiState.isReviewCountLoading -> stringResource(R.string.category_review_settings_loading)
+                        uiState.hasReviewCountError -> stringResource(R.string.category_review_settings_error)
+                        uiState.unclassifiedCount > 0 -> stringResource(
+                            R.string.category_review_settings_count, uiState.unclassifiedCount
+                        )
+                        else -> stringResource(R.string.category_review_settings_empty)
+                    }
+                },
+                modifier = Modifier.testTag("settings_category_review"),
+                onClick = onOpenReview
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            // 직접 확인과 별개로 사용자가 실행하는 자동 분류
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = 60.dp)
-                    .clickable { onIntent(SettingsIntent.ClassifyUnclassified) }
+                    .testTag("settings_category_auto")
+                    .clickable(enabled = !uiState.isBackgroundClassifying && !uiState.isClassifying) {
+                        onIntent(SettingsIntent.ClassifyUnclassified)
+                    }
                     .alpha(if (uiState.isBackgroundClassifying || uiState.isClassifying) 0.6f else 1f)
                     .padding(vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -63,7 +86,7 @@ internal fun SettingsCategorySection(
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = stringResource(R.string.settings_classify_title),
+                            text = stringResource(R.string.category_review_auto_title),
                             style = MaterialTheme.typography.bodyLarge
                         )
                         Row(
@@ -81,8 +104,7 @@ internal fun SettingsCategorySection(
                                 text = when {
                                     !uiState.hasApiKey -> stringResource(R.string.settings_classify_no_api_key)
                                     uiState.isBackgroundClassifying -> stringResource(R.string.settings_classify_background)
-                                    uiState.unclassifiedCount > 0 -> stringResource(R.string.settings_classify_unclassified, uiState.unclassifiedCount)
-                                    else -> stringResource(R.string.settings_classify_done)
+                                    else -> stringResource(R.string.category_review_auto_subtitle)
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
