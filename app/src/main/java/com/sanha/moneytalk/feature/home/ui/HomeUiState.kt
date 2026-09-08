@@ -6,6 +6,8 @@ import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.util.DateUtils
 import androidx.compose.runtime.Stable
+import com.sanha.moneytalk.feature.home.briefing.SpendingBriefing
+import com.sanha.moneytalk.feature.home.recurring.RecurringExpenseForecast
 
 /**
  * 홈 화면의 페이지별(월별) 데이터.
@@ -25,7 +27,8 @@ data class HomePageData(
     val lastMonthExpense: Int = 0,
     val comparisonPeriodLabel: String = "",
     val periodLabel: String = "",
-    val aiInsight: String = "",
+    val spendingBriefing: SpendingBriefing? = null,
+    val recurringForecast: RecurringExpenseForecast? = null,
     /** 이번 달 일별 누적 지출 (index = dayOffset, value = 누적 금액) */
     val dailyCumulativeExpenses: List<Long> = emptyList(),
     /** 전월 일별 누적 지출 */

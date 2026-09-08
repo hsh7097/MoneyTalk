@@ -18,7 +18,6 @@ import com.sanha.moneytalk.core.util.CumulativeChartDataBuilder
 import com.sanha.moneytalk.core.util.CardVisibilityFilter
 import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.core.util.DateUtils
-import com.sanha.moneytalk.feature.chat.data.GeminiRepository
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
@@ -35,8 +34,12 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
+import java.time.Instant
+import java.time.ZoneId
+import com.sanha.moneytalk.feature.home.briefing.BriefingExpense
+import com.sanha.moneytalk.feature.home.briefing.SpendingBriefingCalculator
+import com.sanha.moneytalk.feature.home.recurring.RecurringExpenseForecastCalculator
 
 /**
  * 홈 화면 ViewModel
@@ -47,7 +50,7 @@ import javax.inject.Inject
  * 주요 기능:
  * - 월별 수입/지출/잔여 예산 표시 (페이지별 독립 캐시)
  * - 카테고리별 지출 합계 표시
- * - AI 인사이트 생성
+ * - 기기 내 지출 브리핑과 고정 결제 예상
  * - Pull-to-Refresh 지원
  * - 카테고리 수동 변경
  */
@@ -61,7 +64,6 @@ class HomeViewModel @Inject constructor(
     private val dataRefreshEvent: DataRefreshEvent,
     private val smsExclusionRepository: com.sanha.moneytalk.core.database.SmsExclusionRepository,
     private val ownedCardRepository: OwnedCardRepository,
-    private val geminiRepository: GeminiRepository,
     private val budgetDao: com.sanha.moneytalk.core.database.dao.BudgetDao
 ) : ViewModel() {
 
@@ -83,8 +85,7 @@ class HomeViewModel @Inject constructor(
     /** 페이지별 로드 Job 관리 (월별 독립 취소) */
     private val pageLoadJobs = mutableMapOf<MonthKey, Job>()
 
-    /** 마지막 AI 인사이트 생성 시 사용된 입력 데이터 해시 (동일 데이터 재생성 방지) */
-    private val lastInsightInputHash = AtomicInteger(0)
+    private var lastForegroundDate = java.time.LocalDate.now()
 
     init {
         loadSettings()
@@ -414,15 +415,24 @@ class HomeViewModel @Inject constructor(
                 ))
 
                 // 지출 내역은 Flow로 실시간 감지 (Room DB 변경 시 자동 업데이트)
-                var insightLoaded = false
+                val zoneId = ZoneId.systemDefault()
+                val periodStartDate = Instant.ofEpochMilli(monthStart).atZone(zoneId).toLocalDate()
+                val periodEndDate = Instant.ofEpochMilli(monthEnd).atZone(zoneId).toLocalDate()
+                val isCurrentPeriod = now in monthStart..monthEnd
+                // 현재 월은 과거 반복 결제와 월 경계를 넘는 7일 비교도 같은 Room Flow로 갱신한다.
+                val observationStart = if (isCurrentPeriod) {
+                    minOf(monthStart, Instant.ofEpochMilli(now).atZone(zoneId).toLocalDate()
+                        .withDayOfMonth(1).minusMonths(3).atStartOfDay(zoneId).toInstant().toEpochMilli())
+                } else monthStart
 
-                expenseRepository.getExpensesByDateRange(monthStart, monthEnd)
+                expenseRepository.getExpensesByDateRange(observationStart, monthEnd)
                     .catch { _ ->
                         updatePageCache(key, (_uiState.value.pageCache[key] ?: HomePageData())
                             .copy(isLoading = false))
                     }
                     .collect { allExpenses ->
-                        val expenses = filterVisibleExpenses(allExpenses)
+                        val visibleHistory = filterVisibleExpenses(allExpenses)
+                        val expenses = visibleHistory.filter { it.dateTime in monthStart..monthEnd }
                         val statsExpenses = expenses.filter { it.isIncludedInExpenseStats() }
                         val totalExpense = statsExpenses.sumOf { it.amount }
                         val categories = statsExpenses
@@ -450,36 +460,21 @@ class HomeViewModel @Inject constructor(
                             monthlyExpense = totalExpense,
                             categoryExpenses = categories,
                             recentExpenses = expenses.sortedByDescending { e -> e.dateTime },
-                            dailyCumulativeExpenses = dailyCumulative
+                            dailyCumulativeExpenses = dailyCumulative,
+                            spendingBriefing = SpendingBriefingCalculator.calculate(
+                                expenses = visibleHistory.filter { it.isIncludedInExpenseStats() }.map {
+                                    BriefingExpense(it.amount.toLong(), it.category, it.dateTime)
+                                },
+                                periodStart = periodStartDate,
+                                periodEndInclusive = periodEndDate,
+                                now = Instant.now(),
+                                zoneId = zoneId,
+                                monthlyBudget = monthlyBudgetValue?.toLong()
+                            ),
+                            recurringForecast = if (isCurrentPeriod) {
+                                RecurringExpenseForecastCalculator.calculate(visibleHistory, Instant.now(), zoneId)
+                            } else null
                         ))
-
-                        // AI 인사이트 생성 (데이터가 있는 모든 월에서 첫 emit 시)
-                        if (!insightLoaded && totalExpense > 0) {
-                            insightLoaded = true
-                            val top3 = categories.take(3)
-                            val lastMonthByCategory = statsLastMonthExpenses
-                                .groupBy { expense ->
-                                    val cat = Category.fromDisplayName(expense.category)
-                                    if (cat == Category.ETC && expense.category != Category.ETC.displayName) {
-                                        expense.category
-                                    } else {
-                                        cat.displayName
-                                    }
-                                }
-                                .mapValues { (_, items) -> items.sumOf { it.amount } }
-                            val lastMonthTop3ForComparison = top3.map { c ->
-                                Pair(c.category, lastMonthByCategory[c.category] ?: 0)
-                            }
-                            loadAiInsight(
-                                key,
-                                totalExpense,
-                                filteredLastMonthExpense,
-                                filteredTodayExpenses.sumOf { e -> e.amount },
-                                top3.map { c -> Pair(c.category, c.total) },
-                                lastMonthTop3ForComparison,
-                                monthlyBudgetValue
-                            )
-                        }
                     }
             } catch (e: CancellationException) {
                 throw e
@@ -491,47 +486,14 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /** AI 인사이트 비동기 생성 (특정 월의 pageCache에 저장) */
-    private fun loadAiInsight(
-        monthKey: MonthKey,
-        monthlyExpense: Int,
-        lastMonthExpense: Int,
-        todayExpense: Int,
-        topCategories: List<Pair<String, Int>>,
-        lastMonthTopCategories: List<Pair<String, Int>>,
-        monthlyBudget: Int?
-    ) {
-        // 입력 데이터 해시 비교
-        val inputHash = listOf(
-            monthlyExpense,
-            lastMonthExpense,
-            todayExpense,
-            topCategories,
-            lastMonthTopCategories,
-            monthlyBudget
-        ).hashCode()
-        val existingInsight = _uiState.value.pageCache[monthKey]?.aiInsight
-        if (inputHash == lastInsightInputHash.get() && existingInsight?.isNotEmpty() == true) return
-        lastInsightInputHash.set(inputHash)
-
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val insight = geminiRepository.generateHomeInsight(
-                    monthlyExpense = monthlyExpense,
-                    lastMonthExpense = lastMonthExpense,
-                    todayExpense = todayExpense,
-                    topCategories = topCategories,
-                    lastMonthTopCategories = lastMonthTopCategories,
-                    monthlyBudget = monthlyBudget
-                )
-                if (insight != null) {
-                    // 해당 월의 캐시가 아직 존재하면 인사이트 저장
-                    val current = _uiState.value.pageCache[monthKey] ?: return@launch
-                    updatePageCache(monthKey, current.copy(aiInsight = insight))
-                }
-            } catch (e: Exception) {
-                MoneyTalkLogger.w("AI 인사이트 생성 실패 (무시): ${e.message}")
-            }
+    /** 앱을 다음 날 다시 열면 남은 날짜와 예상 결제일을 갱신한다. */
+    fun refreshForDateChange() {
+        val today = java.time.LocalDate.now()
+        if (today != lastForegroundDate) {
+            lastForegroundDate = today
+            // 인접 월 밖에 남아 있는 현재 월 캐시도 이전 날짜의 예상을 보관할 수 있다.
+            clearAllPageCache()
+            loadCurrentAndAdjacentPages()
         }
     }
 
@@ -546,7 +508,6 @@ class HomeViewModel @Inject constructor(
             newMonth = 12
             newYear -= 1
         }
-        lastInsightInputHash.set(0)
         _uiState.update { it.copy(selectedYear = newYear, selectedMonth = newMonth) }
         loadCurrentAndAdjacentPages()
     }
@@ -563,7 +524,6 @@ class HomeViewModel @Inject constructor(
             newMonth = 1
             newYear += 1
         }
-        lastInsightInputHash.set(0)
         _uiState.update { it.copy(selectedYear = newYear, selectedMonth = newMonth) }
         loadCurrentAndAdjacentPages()
     }
@@ -572,7 +532,6 @@ class HomeViewModel @Inject constructor(
     fun setMonth(year: Int, month: Int) {
         val state = _uiState.value
         if (state.selectedYear == year && state.selectedMonth == month) return
-        lastInsightInputHash.set(0)
         _uiState.update { it.copy(selectedYear = year, selectedMonth = month) }
         loadCurrentAndAdjacentPages()
     }

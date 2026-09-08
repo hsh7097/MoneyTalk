@@ -23,7 +23,7 @@ status: draft
 
 | 탭 | 주요 Composable/파일 | 함께 볼 KB |
 |---|---|---|
-| Home | `HomeScreen`, `HomePageContent`, `MonthlyOverviewSection`, `SpendingTrendSection`, `CategoryExpenseSection`, `AiInsightCard`, `TransactionCardCompose` | [home](../home/README.md), [home surface map](../home/package-reference/05-surface-map.md) |
+| Home | `HomeScreen`, `HomePageContent`, `MonthlyOverviewSection`, `SpendingBriefingCard`, `RecurringExpenseForecastCard`, `SpendingTrendSection`, `CategoryExpenseSection`, `TransactionCardCompose` | [home](../home/README.md), [home surface map](../home/package-reference/05-surface-map.md) |
 | History | `HistoryScreen`, `HistoryHeader`, `FilterTabRow`, `FilterBottomSheet`, `TransactionListView`, `BillingCycleCalendarView` — 달력 날짜 선택은 callback으로 현재 필터와 정렬을 상세 화면에 전달 | [history](../history/README.md), [filtering](../filtering/README.md) |
 | Chat | `ChatScreen`, `ChatRoomListView`, `ChatRoomView`, 기능별 메시지/가이드/진행/재시도/광고 dialog 파일 — 채팅방의 시스템 뒤로가기는 대화 목록으로 복귀 | [chat](../chat/README.md) |
 | Settings | `SettingsScreen`, 기능별 `Settings*Section`, `SettingsDialogs`, `SettingsLoadingOverlay`, `BudgetBottomSheet`, `ExportDialog` — 비율 예산 저장은 현재 전체 예산으로 계산하며 범위 초과 입력은 오류 표시와 함께 저장 차단 | [settings](../settings/README.md), [settings menu map](../settings/package-reference/05-menu-map.md) |
@@ -46,7 +46,6 @@ status: draft
 |---|---|---|
 | `TransactionCardCompose` / `TransactionCardInfo` | 지출/수입 통합 카드 | Home/History/CategoryDetail/TransactionList에서 함께 사용 |
 | `TransactionQuickActionDialog` | 거래 롱클릭 중앙 모달의 수정/삭제 메뉴 | 거래명·닫기 X와 구분선 아래 아이콘 포함 세로 작업 행. 최대 320dp, 행 전체 터치, 삭제만 위험 색상. 수정은 기존 편집 화면, 삭제는 별도 확인. 4개 목록에서 유형과 ID 보존 |
-| `feature/transactionactions/ui/TransactionQuickActionDialog.kt` | `TransactionQuickActionDialog`, `TransactionQuickActionContent`, `QuickTransactionMenuItem` | 중앙 모달의 거래명·닫기와 아이콘 포함 세로 수정/삭제 행, 기존 편집 화면 진입과 삭제 확인 |
 | `TransactionGroupHeaderCompose` / `TransactionGroupHeaderInfo` | 날짜/그룹 헤더 | 목록 grouping 변경 시 확인 |
 | `CumulativeTrendSection` / `VicoCumulativeChart` | 누적 추이 차트 | Home과 CategoryDetail의 기간/필터 차이를 같이 확인. 기간 헤더가 시작/종료일을 제공하므로 X축 양끝은 비우고 중간 날짜만 표시하며, Samsung Fold와 큰 글자 AVD에서 `...`가 없는지 검증 |
 | `SegmentedTabRowCompose` / `SegmentedTabInfo` | 아이콘 지원 탭 | History/설정류 화면에서 재사용 |
@@ -60,7 +59,7 @@ status: draft
 
 ## 기능별 선언 위치 (2026-09-08)
 
-아래 경로는 `app/src/main/java/com/sanha/moneytalk/` 기준이다. 함수 이름과 화면 조합 순서는 유지하고 실제 파일의 책임을 분리했다. 공개 진입점과 그 파일 안의 private helper를 함께 기록한다.
+아래 경로는 `app/src/main/java/com/sanha/moneytalk/` 기준이다. 기존 책임 분리와 이후 추가한 제품 기능을 함께 기록한다. 공개 진입점, internal/private helper, 문자열을 반환하는 Composable도 실제 선언 기준으로 포함한다.
 
 | 경로 | 선언된 Composable | 책임 |
 |---|---|---|
@@ -74,7 +73,7 @@ status: draft
 | `feature/home/recurring/RecurringExpenseForecastCard.kt` | `RecurringExpenseForecastCard`, `RecurringExpenseHeader`, `RecurringExpenseRow`, `recurringDate`, `recurringAmount` | 고정 지출 예상 3개·전체 시트, 근거 거래 버튼, 날짜/금액 표시 |
 | `feature/home/ui/component/MonthlyOverviewSection.kt` | `MonthlyOverviewSection` | 월 이동과 월 지출/수입 요약 |
 | `feature/home/ui/component/CategoryExpenseSection.kt` | `CategoryExpenseSection`, `CategoryRankingExpenseRow` | 카테고리 순위 펼치기/선택/행 |
-| `feature/home/ui/component/AiInsightCard.kt` | `AiInsightCard`, `AiCoachMascot` | AI 인사이트 카드 |
+| `feature/home/ui/component/AiInsightCard.kt` | `AiInsightCard`, `AiCoachMascot` | 기존 선언 유지, 현재 홈 자동 표시 경로에서는 미호출 |
 | `feature/home/ui/component/EmptyExpenseSection.kt` | `EmptyExpenseSection` | 기존 빈 지출 표시 |
 | `feature/home/ui/component/SpendingTrendSection.kt` | `SpendingTrendSection` | 공통 차트 연결 |
 | `feature/history/ui/HistoryFilter.kt` | `FilterBottomSheet` | 임시 필터 상태와 시트 조합/적용 |

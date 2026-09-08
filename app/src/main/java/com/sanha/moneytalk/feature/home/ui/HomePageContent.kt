@@ -34,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.feature.home.briefing.SpendingBriefingCard
+import com.sanha.moneytalk.feature.home.recurring.RecurringExpenseForecastCard
 import com.sanha.moneytalk.feature.transactionactions.model.TransactionTarget
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
@@ -54,7 +56,6 @@ import java.text.NumberFormat
 import java.util.Locale
 import com.sanha.moneytalk.feature.home.ui.component.MonthlyOverviewSection
 import com.sanha.moneytalk.feature.home.ui.component.CategoryExpenseSection
-import com.sanha.moneytalk.feature.home.ui.component.AiInsightCard
 
 /**
  * 홈 HorizontalPager의 각 페이지 콘텐츠.
@@ -82,7 +83,8 @@ fun HomePageContent(
     coachMarkRegistry: CoachMarkTargetRegistry? = null,
     isCurrentPage: Boolean = false,
     coroutineScope: kotlinx.coroutines.CoroutineScope,
-    onTransactionLongClick: ((TransactionTarget) -> Unit)? = null
+    onTransactionLongClick: ((TransactionTarget) -> Unit)? = null,
+    onForecastTransactionClick: (Long) -> Unit = {}
 ) {
     val listState = rememberLazyListState()
     val showScrollToTop by remember {
@@ -186,6 +188,27 @@ fun HomePageContent(
                 }
             }
 
+            pageData.spendingBriefing?.let { briefing ->
+                item {
+                    SpendingBriefingCard(
+                        briefing = briefing,
+                        isPartialCoverage = isPartiallyCovered || !isMonthSynced,
+                        hasSmsPermission = hasSmsPermission,
+                        onCategoryClick = { onCategorySelected(it) }
+                    )
+                }
+            }
+            if (isCurrentMonth) {
+                pageData.recurringForecast?.takeIf { it.items.isNotEmpty() }?.let { forecast ->
+                    item {
+                        RecurringExpenseForecastCard(
+                            forecast = forecast,
+                            onTransactionClick = onForecastTransactionClick
+                        )
+                    }
+                }
+            }
+
             // ━━━ BLOCK 3: Spending Trend (누적 추이 차트) ━━━
             if (pageData.dailyCumulativeExpenses.isNotEmpty()) {
                 item {
@@ -201,14 +224,7 @@ fun HomePageContent(
                 }
             }
 
-            // ━━━ BLOCK 4: AI Insight + Category ━━━
-            if (pageData.aiInsight.isNotBlank()) {
-                item {
-                    AiInsightCard(
-                        insight = pageData.aiInsight
-                    )
-                }
-            }
+            // ━━━ BLOCK 4: Category ━━━
 
             item {
                 val targetModifier = if (isCurrentPage && coachMarkRegistry != null) {

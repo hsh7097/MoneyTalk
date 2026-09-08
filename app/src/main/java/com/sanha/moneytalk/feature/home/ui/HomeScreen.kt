@@ -19,6 +19,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.Lifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -62,6 +64,7 @@ fun HomeScreen(
     val context = LocalContext.current
     val quickActions: TransactionQuickActionViewModel = hiltViewModel(key = "HomeQuickActions")
     TransactionQuickActionDialog(quickActions)
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshForDateChange() }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // Activity-scoped MainViewModel (동기화/권한/광고 상태 참조)
@@ -226,6 +229,7 @@ fun HomeScreen(
                     TransactionEditActivity.open(context, incomeId = income.id)
                 },
                 onTransactionLongClick = quickActions::open,
+                onForecastTransactionClick = { TransactionEditActivity.open(context, expenseId = it) },
                 coachMarkRegistry = coachMarkRegistry,
                 isCurrentPage = page == pagerState.currentPage,
                 coroutineScope = coroutineScope

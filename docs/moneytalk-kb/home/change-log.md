@@ -12,6 +12,7 @@ status: draft
 
 | 날짜 | 근거 | 변경 | 영향 문서 | 메모 |
 |---|---|---|---|---|
+| 2026-09-08 | `briefing/**`, `recurring/**`, Home 통합 코드 확인 | 무료 소비 브리핑·고정 지출 예상, 오늘 거래 롱클릭과 자동 AI 요청 제거 반영 | `README.md`, 구조/인벤토리, `package-reference/**` | 월/주간 미래 거래 범위, 오늘 포함 일수·DST·Long, 반복 근거와 실제 ID, 부분 기록 안내를 명시. 과거 AI 변경 이력은 유지하며 최종 테스트 결과는 제품 검토에서 확인. |
 | 2026-09-08 | 화면/기능 책임 감사 | Home 화면 조율, 페이지 조합, 기능 섹션, 상태 계약, 카테고리 표시 계산 분리 | `00-structure-map.md`, `05-file-inventory.md`, `package-reference/02-data-viewmodel.md`, `03-rendering-action.md` | 기존 MVVM/월 캐시/분류 서비스 경계 유지. 새 표시 mapper의 경계값 회귀 테스트 추가. |
 | 2026-07-11 | Codex_Fold_API_36 닫힘 화면 `font_scale=2.0`, SM-F966N 닫힘 화면 `font_scale=1.0`, `VicoCumulativeChart` 확인 | 공용 누적 차트 X축 양끝 생략 표시 보정 | `VicoCumulativeChart.kt`, `../ui-map/01-screen-composable-index.md` | Vico alpha 버전은 큰 글자 AVD뿐 아니라 Samsung Fold 정상 배율에서도 첫날/말일을 `...`로 그릴 수 있다. 기간 헤더가 시작일/종료일을 제공하므로 모든 배율에서 양끝 라벨을 비우고 중간 날짜만 표시한다. Home 실기기와 Home/Category Detail AVD를 재검증했다. |
 | 2026-07-08 | `feature/home/ui/**`, `feature/home/data/**`, `core/ui/coachmark/**` 확인 | Home 화면 KB 생성 | `README.md`, `00-structure-map.md`, `package-reference/**`, `05-file-inventory.md` | 홈 탭의 월별 현황, 카테고리 지출, AI 인사이트, 미분류 분류 CTA, 코치마크 작업 시작점을 분리. |
