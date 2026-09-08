@@ -60,6 +60,7 @@ status: draft
 ## 금융 UI 표시 체계
 
 - `HomeTheme`의 다크 보조 글자는 `#B0BAC6`을 사용한다. `RecurringExpenseForecastCard`는 기본 content color를 `onSurface`로 지정해 제목·거래명·금액을 밝게 유지하고, 날짜·근거와 차트 축은 보조색으로 구분한다.
+- 고정 예상 행은 관측 개월 수만 표시한다. 근거 거래 열기 안내는 카드 또는 전체 시트에 한 번만 표시하며 실제 결제일·금액의 불확실성 안내를 유지한다.
 
 색상·간격·큰 글자 규칙은 [금융 UI 디자인 기준](../project-context/05-finance-ui-design-system-20260908.md), 화면 위계와 독립 리뷰는 [금융 UI 사용성 감사](../project-context/06-finance-ux-plan-20260908.md)를 본다. `MoneyTalkTheme`의 중립 배경/표면과 의미 색상을 공통으로 사용하며, 실제 검사 통과 여부는 [통합 검증 기록](../project-context/07-finance-ui-validation-20260908.md)과 로그로 확인한다.
 

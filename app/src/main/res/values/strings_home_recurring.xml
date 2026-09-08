@@ -3,11 +3,11 @@
     <string name="home_recurring_title">다가올 고정 지출</string>
     <string name="home_recurring_period">%1$s ~ %2$s 예상</string>
     <string name="home_recurring_total">예상 합계 %1$s</string>
-    <string name="home_recurring_note">이전 고정 지출을 바탕으로 예상했어요. 실제 결제일·금액은 달라질 수 있어요.</string>
+    <string name="home_recurring_note">실제 결제일·금액은 달라질 수 있어요. 항목을 누르면 근거 거래를 볼 수 있어요.</string>
     <string name="home_recurring_date">%1$d월 %2$d일</string>
     <string name="home_recurring_amount">%1$s원</string>
     <string name="home_recurring_expected_date">%1$s 예상</string>
     <string name="home_recurring_card_category">%1$s · %2$s</string>
-    <string name="home_recurring_evidence">최근 %1$d개월 기록 기준 · 눌러서 실제 거래 확인</string>
+    <string name="home_recurring_evidence">최근 %1$d개월 기록 기준</string>
     <string name="home_recurring_show_all">전체 %1$d개 보기</string>
 </resources>
