@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.theme.MoneyTalkDimens
 
 /**
@@ -51,7 +52,7 @@ fun FullSyncCtaSection(
             .clickable(role = Role.Button, enabled = !isSyncing, onClick = onRequestFullSync),
         shape = RoundedCornerShape(MoneyTalkDimens.CardRadius),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = FriendlyMoneyColors.elevatedCardBackground
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
@@ -69,7 +70,7 @@ fun FullSyncCtaSection(
                     ),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = FriendlyMoneyColors.textPrimary
                 )
                 Spacer(modifier = Modifier.height(3.dp))
                 Text(
@@ -83,7 +84,7 @@ fun FullSyncCtaSection(
                         monthLabel
                     ),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = FriendlyMoneyColors.textSecondary
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
@@ -91,13 +92,13 @@ fun FullSyncCtaSection(
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.primary
+                    color = if (isPartial) FriendlyMoneyColors.Honey else FriendlyMoneyColors.Mint
                 )
             } else {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = if (isPartial) FriendlyMoneyColors.Honey else FriendlyMoneyColors.Mint
                 )
             }
         }

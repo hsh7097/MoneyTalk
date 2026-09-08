@@ -150,7 +150,7 @@ fun CategorySettingsScreen(
                         Text(
                             text = stringResource(R.string.category_settings_custom_empty),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                             modifier = Modifier.padding(vertical = 12.dp)
                         )
                     }
@@ -250,8 +250,8 @@ private fun CategoryTypeTabRow(
     onTypeSelected: (CategoryType) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val selectedSurface = MaterialTheme.colorScheme.surface
-    val selectedContent = MaterialTheme.colorScheme.onSurface
+    val selectedSurface = MaterialTheme.colorScheme.secondaryContainer
+    val selectedContent = MaterialTheme.colorScheme.onSecondaryContainer
     val tabs = CategoryType.entries.map { type ->
         val typeLabel = stringResource(
             when (type) {
@@ -306,7 +306,7 @@ private fun CategoryListItem(
                 Icon(
                     Icons.Default.Delete,
                     contentDescription = stringResource(R.string.common_delete),
-                    tint = MaterialTheme.colorScheme.error
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
             }
         }

@@ -145,7 +145,7 @@ fun StoreRuleSettingsScreen(
                     Text(
                         text = stringResource(R.string.store_rule_settings_empty),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier.padding(vertical = 24.dp)
                     )
                 }
@@ -309,7 +309,7 @@ private fun StoreRuleListItem(
                             )
                         ),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.tertiary
                     )
                 }
             }
@@ -318,7 +318,7 @@ private fun StoreRuleListItem(
             Icon(
                 Icons.Default.Delete,
                 contentDescription = stringResource(R.string.common_delete),
-                tint = MaterialTheme.colorScheme.error
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
             )
         }
     }

@@ -41,6 +41,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.model.CategoryInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -92,7 +93,7 @@ internal fun CardFilterListBottomSheet(
                         text = stringResource(R.string.history_filter_card_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = FriendlyMoneyColors.textPrimary
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { isExpanded = !isExpanded }) {
@@ -105,14 +106,14 @@ internal fun CardFilterListBottomSheet(
                                     }
                                 ),
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary
+                                color = FriendlyMoneyColors.Mint
                             )
                         }
                         IconButton(onClick = onDismiss) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = stringResource(R.string.common_close),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = FriendlyMoneyColors.textSecondary
                             )
                         }
                     }
@@ -120,7 +121,7 @@ internal fun CardFilterListBottomSheet(
                 Text(
                     text = selectionSummary,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = FriendlyMoneyColors.textSecondary,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
 
@@ -244,7 +245,7 @@ internal fun CategoryFilterListBottomSheet(
                         text = stringResource(sheetType.titleResId),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = FriendlyMoneyColors.textPrimary
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { isExpanded = !isExpanded }) {
@@ -257,14 +258,14 @@ internal fun CategoryFilterListBottomSheet(
                                     }
                                 ),
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary
+                                color = FriendlyMoneyColors.Mint
                             )
                         }
                         IconButton(onClick = onDismiss) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = stringResource(R.string.common_close),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = FriendlyMoneyColors.textSecondary
                             )
                         }
                     }
@@ -272,7 +273,7 @@ internal fun CategoryFilterListBottomSheet(
                 Text(
                     text = selectionSummary,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = FriendlyMoneyColors.textSecondary,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
 

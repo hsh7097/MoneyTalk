@@ -92,7 +92,7 @@ private fun KeywordGuideCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = TransactionEditDesignColors.accent.copy(alpha = 0.12f)
         )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {

@@ -198,7 +198,7 @@ fun CumulativeTrendSection(
                 letterSpacing = 0.toDpTextUnit
             ),
             fontWeight = if (showCard) FontWeight.Medium else null,
-            color = MaterialTheme.moneyTalkColors.expense,
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = if (showCard) Int.MAX_VALUE else 1,
             softWrap = showCard
         )
@@ -208,7 +208,7 @@ fun CumulativeTrendSection(
             Spacer(modifier = Modifier.height(2.dp))
             val comparisonColor = when (info.isOverSpending) {
                 true -> MaterialTheme.colorScheme.error
-                false -> MaterialTheme.colorScheme.primary
+                false -> MaterialTheme.moneyTalkColors.income
                 null -> MaterialTheme.moneyTalkColors.textTertiary
             }
             Text(
@@ -451,7 +451,7 @@ private fun LegendItem(
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = if (filled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (filled) 0.7f else 0.35f)
         )
     }
 }

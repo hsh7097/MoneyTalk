@@ -40,7 +40,7 @@ internal fun HomeTheme(content: @Composable () -> Unit) {
                 surface = Color(0xFF252A30),
                 onSurface = Color(0xFFECECEC),
                 surfaceVariant = Color(0xFF2D3239),
-                onSurfaceVariant = Color(0xFFB0BAC6),
+                onSurfaceVariant = Color(0xFF6B7684),
                 outline = Color(0xFF3A3F47),
                 outlineVariant = Color(0xFF3A3F47)
             )

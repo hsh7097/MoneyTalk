@@ -34,9 +34,9 @@ fun ChatBubble(message: ChatMessage) {
                 bottomEnd = if (message.isUser) 4.dp else 16.dp
             ),
             color = if (message.isUser) {
-                MaterialTheme.colorScheme.primaryContainer
+                MaterialTheme.colorScheme.primary
             } else {
-                MaterialTheme.colorScheme.surface
+                MaterialTheme.colorScheme.secondaryContainer
             },
             modifier = Modifier.widthIn(max = 340.dp)
         ) {
@@ -49,9 +49,9 @@ fun ChatBubble(message: ChatMessage) {
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (message.isUser) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
+                        MaterialTheme.colorScheme.onPrimary
                     } else {
-                        MaterialTheme.colorScheme.onSurface
+                        MaterialTheme.colorScheme.onSecondaryContainer
                     }
                 )
             }

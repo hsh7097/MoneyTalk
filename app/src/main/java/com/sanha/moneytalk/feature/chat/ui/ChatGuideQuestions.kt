@@ -126,7 +126,7 @@ fun GuideQuestionsOverlay(
                                             modifier = Modifier.weight(1f),
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = if (hasApiKey) MaterialTheme.colorScheme.onSurface
-                                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                                         )
                                         Icon(
                                             Icons.AutoMirrored.Filled.KeyboardArrowRight,

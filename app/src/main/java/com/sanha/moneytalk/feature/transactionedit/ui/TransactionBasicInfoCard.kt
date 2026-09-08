@@ -164,7 +164,7 @@ private fun DetailEditRow(
             textStyle = MaterialTheme.typography.bodyMedium.copy(
                 color = TransactionEditDesignColors.textPrimary
             ),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            cursorBrush = SolidColor(TransactionEditDesignColors.accent),
             modifier = Modifier
                 .weight(1f)
                 .heightIn(min = 48.dp)

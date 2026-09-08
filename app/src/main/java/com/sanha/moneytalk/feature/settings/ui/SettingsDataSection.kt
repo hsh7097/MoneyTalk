@@ -68,7 +68,7 @@ internal fun SettingsDataSection(
                     Icon(
                         imageVector = Icons.Default.Notifications,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(22.dp)
                     )
                     Column(modifier = Modifier.weight(1f)) {
@@ -79,7 +79,7 @@ internal fun SettingsDataSection(
                         Text(
                             text = stringResource(R.string.settings_notification_subtitle),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                     }
                 }

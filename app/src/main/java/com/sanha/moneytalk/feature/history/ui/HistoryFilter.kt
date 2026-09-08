@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryInfo
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
@@ -226,7 +227,7 @@ fun FilterBottomSheet(
                         text = stringResource(R.string.history_filter_title),
                         style = MaterialTheme.typography.headlineSmall.copy(fontSize = 22.sp),
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = FriendlyMoneyColors.textPrimary
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(
@@ -247,7 +248,7 @@ fun FilterBottomSheet(
                                     }
                                 ),
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary
+                                color = FriendlyMoneyColors.Mint
                             )
                         }
                         IconButton(onClick = onDismiss) {
@@ -281,7 +282,7 @@ fun FilterBottomSheet(
                             text = stringResource(R.string.history_filter_fixed),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = FriendlyMoneyColors.textPrimary,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                         val fixedOptions = listOf(
@@ -303,7 +304,7 @@ fun FilterBottomSheet(
                             text = stringResource(R.string.history_filter_sort),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = FriendlyMoneyColors.textPrimary,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                         val sortOptions = listOf(
@@ -327,20 +328,20 @@ fun FilterBottomSheet(
                             text = stringResource(R.string.history_filter_card),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = FriendlyMoneyColors.textPrimary,
                             modifier = Modifier.padding(bottom = 6.dp)
                         )
                         Text(
                             text = stringResource(R.string.history_filter_card_helper),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = FriendlyMoneyColors.textSecondary,
                             modifier = Modifier.padding(bottom = 10.dp)
                         )
                         if (cardOptions.isEmpty()) {
                             Text(
                                 text = stringResource(R.string.history_filter_no_cards),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = FriendlyMoneyColors.textSecondary,
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
                         } else {
@@ -349,7 +350,7 @@ fun FilterBottomSheet(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(16.dp))
                                     .background(MaterialTheme.colorScheme.background)
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+                                    .border(1.dp, FriendlyMoneyColors.border, RoundedCornerShape(16.dp))
                                     .padding(vertical = 6.dp)
                             ) {
                                 FilterCategorySummaryRow(
@@ -374,13 +375,13 @@ fun FilterBottomSheet(
                             text = stringResource(R.string.history_filter_category),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = FriendlyMoneyColors.textPrimary,
                             modifier = Modifier.padding(bottom = 6.dp)
                         )
                         Text(
                             text = stringResource(R.string.history_filter_category_helper),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = FriendlyMoneyColors.textSecondary,
                             modifier = Modifier.padding(bottom = 10.dp)
                         )
 
@@ -391,7 +392,7 @@ fun FilterBottomSheet(
                                 text = stringResource(R.string.history_filter_type),
                                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                color = FriendlyMoneyColors.textPrimary,
                                 modifier = Modifier.padding(bottom = 10.dp)
                             )
                             FilterTransactionTypeSelector(
@@ -438,7 +439,7 @@ fun FilterBottomSheet(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(16.dp))
                                     .background(MaterialTheme.colorScheme.background)
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+                                    .border(1.dp, FriendlyMoneyColors.border, RoundedCornerShape(16.dp))
                                     .padding(vertical = 6.dp)
                             ) {
                                 if (selection.showExpenses) {
@@ -455,7 +456,7 @@ fun FilterBottomSheet(
                                 }
                                 if (selection.showIncomes) {
                                     if (selection.showExpenses) {
-                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                        HorizontalDivider(color = FriendlyMoneyColors.border)
                                     }
                                     FilterCategorySummaryRow(
                                         label = stringResource(R.string.home_income),
@@ -470,7 +471,7 @@ fun FilterBottomSheet(
                                 }
                                 if (selection.showTransfers) {
                                     if (selection.showExpenses || selection.showIncomes) {
-                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                        HorizontalDivider(color = FriendlyMoneyColors.border)
                                     }
                                     FilterCategorySummaryRow(
                                         label = stringResource(R.string.transaction_type_transfer),
@@ -490,7 +491,7 @@ fun FilterBottomSheet(
                     Spacer(modifier = Modifier.height(88.dp))
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(color = FriendlyMoneyColors.border)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -504,9 +505,9 @@ fun FilterBottomSheet(
                             .weight(0.9f)
                             .height(48.dp),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        border = BorderStroke(1.dp, FriendlyMoneyColors.border),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.primary
+                            contentColor = FriendlyMoneyColors.Mint
                         )
                     ) {
                         Text(
@@ -533,8 +534,8 @@ fun FilterBottomSheet(
                             .height(48.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
+                            containerColor = FriendlyMoneyColors.Mint,
+                            contentColor = FriendlyMoneyColors.Ink
                         )
                     ) {
                         Text(

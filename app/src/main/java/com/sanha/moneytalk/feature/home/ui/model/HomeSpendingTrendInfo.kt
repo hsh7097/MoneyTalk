@@ -55,7 +55,7 @@ data class HomeSpendingTrendInfo(
             if (pageData.dailyCumulativeExpenses.isEmpty()) return null
 
             val primaryColor = MaterialTheme.colorScheme.primary
-            val lastMonthColor = MaterialTheme.colorScheme.onSurfaceVariant
+            val lastMonthColor = Color.Gray
             val avgThreeColor = MaterialTheme.colorScheme.tertiary
             val budgetColor = MaterialTheme.colorScheme.error
 

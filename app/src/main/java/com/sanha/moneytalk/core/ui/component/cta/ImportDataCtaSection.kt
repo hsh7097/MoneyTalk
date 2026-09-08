@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.theme.MoneyTalkDimens
 
 /**
@@ -48,7 +49,7 @@ fun ImportDataCtaSection(
             .clickable(role = Role.Button, enabled = !isSyncing, onClick = onImportData),
         shape = RoundedCornerShape(MoneyTalkDimens.CardRadius),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = FriendlyMoneyColors.elevatedCardBackground
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
@@ -63,13 +64,13 @@ fun ImportDataCtaSection(
                     text = stringResource(R.string.cta_import_data_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = FriendlyMoneyColors.textPrimary
                 )
                 Spacer(modifier = Modifier.height(3.dp))
                 Text(
                     text = stringResource(R.string.cta_import_data_description),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = FriendlyMoneyColors.textSecondary
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
@@ -77,13 +78,13 @@ fun ImportDataCtaSection(
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.primary
+                    color = FriendlyMoneyColors.Coral
                 )
             } else {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = FriendlyMoneyColors.Coral
                 )
             }
         }

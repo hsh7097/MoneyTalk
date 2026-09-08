@@ -141,7 +141,7 @@ private fun AutomationOptionRow(
             onCheckedChange = onSelectedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                checkedTrackColor = TransactionEditDesignColors.accent,
                 uncheckedThumbColor = TransactionEditDesignColors.textSecondary,
                 uncheckedTrackColor = TransactionEditDesignColors.innerCard,
                 uncheckedBorderColor = TransactionEditDesignColors.border

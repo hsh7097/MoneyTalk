@@ -81,7 +81,7 @@ internal fun SettingsCategorySection(
                     Icon(
                         imageVector = Icons.Default.AutoAwesome,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(22.dp)
                     )
                     Column(modifier = Modifier.weight(1f)) {
@@ -107,7 +107,7 @@ internal fun SettingsCategorySection(
                                     else -> stringResource(R.string.category_review_auto_subtitle)
                                 },
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                         }
                     }
@@ -115,7 +115,7 @@ internal fun SettingsCategorySection(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                 )
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

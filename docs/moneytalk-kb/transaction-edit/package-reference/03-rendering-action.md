@@ -4,7 +4,7 @@ title: Transaction Edit rendering/action
 description: TransactionEditScreen과 DetailContent의 UI 카드, picker, bottom action 연결을 설명한다.
 tags: [moneytalk, transaction-edit, compose, action]
 resource: app/src/main/java/com/sanha/moneytalk/feature/transactionedit/ui/TransactionEditDetailContent.kt
-timestamp: 2026-07-12T00:00:00+09:00
+timestamp: 2026-09-09T00:00:00+09:00
 status: draft
 ---
 
@@ -54,7 +54,7 @@ UI 상태, 데이터 저장, category/date picker, 알림 진입 처리에는 �
 
 ## 금융 앱 화면 정리 (2026-09-08)
 
-- 편집 카드에는 공통 `surface`와 24dp 모서리, 20dp 안쪽 여백을 쓴다. 별도 Mint/Coral/Sky 팔레트는 제거하고 저장/커서/스위치는 `primary`·`onPrimary`, 지출 금액은 공통 지출 색, 수입 금액은 공통 수입 색으로 표시한다.
+- 편집 카드의 현재 24dp 모서리와 20dp 안쪽 여백은 유지한다. 2026-09-09 최신 색상 복원 요청에 따라 표면·저장/커서/스위치는 원래 편집 팔레트를 따르고 거래 유형은 지출 `FriendlyMoneyColors.Coral`, 수입 `FriendlyMoneyColors.Mint`, 이체 `FriendlyMoneyColors.Sky`로 구분한다. 금액 폭 측정·입력·저장 동작은 유지하며 이번 색상 복원의 실행 결과는 [후속 통합 검증 기록](../../project-context/08-home-ledger-ux-validation-20260909.md)의 색상 복원 절을 따른다.
 - 거래 유형은 중립 배경의 탭으로 표시하며 선택 상태와 `Role.Tab` 의미를 제공한다. 금액/거래처 입력, 지우기, 같은 거래처 적용 행은 48dp 이상 터치 영역을 확보한다.
 - 저장 버튼의 너비를 삭제보다 크게 두고 삭제 글자만 위험 색상으로 구분한다. 기존 상단 저장, 하단 저장/삭제, 삭제 확인, 동일 거래처 적용, 원문, 금액의 부호·쉼표 cursor mapping은 유지한다.
 - 화면 바깥 여백 20dp, 카드 사이 16dp로 맞춘다. 새 저장 정책이나 추가 필드는 도입하지 않는다.

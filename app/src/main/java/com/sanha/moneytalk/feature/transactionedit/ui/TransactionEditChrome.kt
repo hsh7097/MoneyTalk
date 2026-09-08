@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -65,7 +66,7 @@ internal fun TransactionEditTopBar(
         TextButton(onClick = onSave) {
             Text(
                 text = stringResource(R.string.transaction_edit_save),
-                color = MaterialTheme.colorScheme.primary,
+                color = FriendlyMoneyColors.Mint,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -94,7 +95,7 @@ internal fun TransactionEditBottomActions(
                 shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(1.dp, TransactionEditDesignColors.border),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
+                    contentColor = TransactionEditDesignColors.textPrimary
                 )
             ) {
                 Text(
@@ -112,8 +113,8 @@ internal fun TransactionEditBottomActions(
                 .heightIn(min = 54.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
+                containerColor = FriendlyMoneyColors.Mint,
+                contentColor = Color.White
             )
         ) {
             Text(

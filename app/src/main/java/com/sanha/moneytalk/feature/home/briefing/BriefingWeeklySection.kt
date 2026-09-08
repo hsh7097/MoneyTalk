@@ -16,7 +16,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -36,9 +35,8 @@ internal fun BriefingWeeklySection(
 ) {
     val numberFormat = NumberFormat.getNumberInstance()
     val difference = comparison.difference
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val recentColor = MaterialTheme.moneyTalkColors.expense
-    val previousColor = if (isDark) Color(0xFF9EB6D8) else Color(0xFF48648E)
+    val previousColor = MaterialTheme.colorScheme.onSurfaceVariant
     val fontScale = LocalDensity.current.fontScale
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {

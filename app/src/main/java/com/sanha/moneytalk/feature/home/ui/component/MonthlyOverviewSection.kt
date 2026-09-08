@@ -155,7 +155,7 @@ fun MonthlyOverviewSection(
                         modifier = Modifier
                             .size(8.dp)
                             .background(
-                                color = HomeColors.IncomeOnGradient,
+                                color = Color.White.copy(alpha = 0.5f),
                                 shape = CircleShape
                             )
                     )
@@ -163,7 +163,7 @@ fun MonthlyOverviewSection(
                     Text(
                         text = stringResource(R.string.home_income_badge, numberFormat.format(income)),
                         style = MaterialTheme.typography.bodySmall,
-                        color = HomeColors.IncomeOnGradient
+                        color = Color.White.copy(alpha = 0.8f)
                     )
                 }
             }
@@ -194,7 +194,7 @@ private fun HomeExpenseAmount(amountText: String) {
             textAlign = TextAlign.Center,
             maxLines = 1,
             softWrap = false,
-            color = HomeColors.ExpenseOnGradient
+            color = Color.White
         )
     }
 }

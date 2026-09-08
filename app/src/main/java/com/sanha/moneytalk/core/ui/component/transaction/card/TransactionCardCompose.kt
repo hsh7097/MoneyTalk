@@ -35,8 +35,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.component.CategoryIcon
+import com.sanha.moneytalk.core.ui.component.getCustomCategoryBackgroundColor
 import com.sanha.moneytalk.core.ui.component.rememberCategoryEmoji
 import com.sanha.moneytalk.core.util.toDpTextUnit
 import java.text.NumberFormat
@@ -59,10 +61,16 @@ fun TransactionCardCompose(
     val contentPrimary = if (info.isExcludedFromStats) {
         MaterialTheme.colorScheme.onSurfaceVariant
     } else {
-        MaterialTheme.colorScheme.onSurface
+        FriendlyMoneyColors.textPrimary
     }
-    val contentSecondary = MaterialTheme.colorScheme.onSurfaceVariant
-    val amountColor = if (info.isIncome) {
+    val contentSecondary = if (info.isExcludedFromStats) {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
+    } else {
+        FriendlyMoneyColors.textSecondary
+    }
+    val amountColor = if (info.isExcludedFromStats) {
+        contentSecondary
+    } else if (info.isIncome) {
         MaterialTheme.moneyTalkColors.income
     } else {
         MaterialTheme.moneyTalkColors.expense
@@ -90,7 +98,15 @@ fun TransactionCardCompose(
             onLongClickLabel = stringResource(R.string.quick_transaction_title)
         ),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(
+            containerColor = if (info.isExcludedFromStats) {
+                MaterialTheme.colorScheme.surfaceVariant.copy(
+                    alpha = if (FriendlyMoneyColors.isDark) 0.58f else 0.48f
+                )
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
@@ -106,15 +122,19 @@ fun TransactionCardCompose(
                 if (category != null) {
                     CategoryIcon(
                         category = category,
-                        backgroundColorOverride = MaterialTheme.colorScheme.surfaceVariant,
                         containerSize = 40.dp,
                         fontSize = 21.dp
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                 } else if (iconEmoji != null) {
+                    val iconBackground = if (info.isIncome) {
+                        MaterialTheme.moneyTalkColors.income.copy(alpha = 0.15f)
+                    } else {
+                        getCustomCategoryBackgroundColor(info.categoryTag.orEmpty())
+                    }
                     Box(
                         modifier = Modifier.size(40.dp).clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                            .background(iconBackground),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(text = iconEmoji, fontSize = 20.dp.toDpTextUnit)
@@ -173,7 +193,7 @@ fun TransactionCardCompose(
                                     text = stringResource(R.string.transaction_card_fixed_tag),
                                     modifier = Modifier.width(IntrinsicSize.Max),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = contentSecondary
+                                    color = FriendlyMoneyColors.Coral
                                 )
                             }
                             if (info.isExcludedFromStats) {

@@ -156,7 +156,7 @@ fun VicoCumulativeChart(
     }
 
     val guidelineColor = onSurfaceColor.copy(alpha = 0.08f)
-    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val labelColor = onSurfaceColor.copy(alpha = 0.45f)
 
     // 스크롤/줌 비활성화 — 차트 전체를 화면 폭에 맞춤
     val scrollState = rememberVicoScrollState(scrollEnabled = false)

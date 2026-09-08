@@ -194,7 +194,11 @@ private fun CategoryRankingExpenseRow(
                     text = amountText,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.moneyTalkColors.expense,
+                    color = if (item.isOverBudget) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        FriendlyMoneyColors.textPrimary
+                    },
                     maxLines = 1
                 )
             }

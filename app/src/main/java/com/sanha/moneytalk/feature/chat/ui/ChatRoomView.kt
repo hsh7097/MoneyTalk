@@ -83,7 +83,7 @@ fun ChatRoomView(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
+                    .background(MaterialTheme.colorScheme.background)
                     .padding(horizontal = 4.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -186,7 +186,7 @@ fun ChatRoomView(
 
         // 입력창
         Column(
-            modifier = Modifier.background(MaterialTheme.colorScheme.surface).imePadding()
+            modifier = Modifier.background(MaterialTheme.colorScheme.background).imePadding()
         ) {
             HorizontalDivider(
                 thickness = 1.dp,
@@ -195,7 +195,7 @@ fun ChatRoomView(
             Text(
                 text = stringResource(R.string.chat_ai_disclaimer),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -204,7 +204,7 @@ fun ChatRoomView(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
+                    .background(MaterialTheme.colorScheme.background)
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)

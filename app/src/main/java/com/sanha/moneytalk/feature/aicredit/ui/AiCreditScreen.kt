@@ -153,7 +153,7 @@ private fun AiCreditBalanceCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.primaryContainer
         )
     ) {
         Column(
@@ -167,19 +167,19 @@ private fun AiCreditBalanceCard(
                 Icon(
                     imageVector = Icons.Default.AccountBalanceWallet,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
                     text = stringResource(R.string.ai_credit_balance_label),
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
             Text(
                 text = stringResource(R.string.ai_credit_balance_value, balance),
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             FilledTonalButton(
                 onClick = onWatchAd,
@@ -187,8 +187,7 @@ private fun AiCreditBalanceCard(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             ) {
                 Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null)
@@ -310,7 +309,7 @@ private fun AiCreditLedgerRow(ledger: AiCreditLedgerEntity) {
     val amountColor = if (ledger.amount >= 0) {
         MaterialTheme.colorScheme.primary
     } else {
-        MaterialTheme.colorScheme.onSurface
+        MaterialTheme.colorScheme.error
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {

@@ -84,7 +84,7 @@ internal fun AddEditRuleDialog(
                             ?: stringResource(R.string.store_rule_settings_category_not_set),
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (category != null) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier
                             .weight(1f)
                             .clickable(onClick = onCategoryClick)

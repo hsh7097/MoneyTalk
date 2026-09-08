@@ -1,36 +1,36 @@
 package com.sanha.moneytalk.core.theme
 
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class TransactionSemanticPaletteTest {
     @Test
-    fun incomeIsRedAndExpenseIsBlueInBothModes() {
-        listOf(IncomeLight, IncomeDark).forEach { color ->
-            assertTrue(color.red > color.green && color.red > color.blue)
-        }
-        listOf(ExpenseLight, ExpenseDark).forEach { color ->
-            assertTrue(color.blue > color.red && color.blue > color.green)
-        }
+    fun historicalIncomeAndExpenseColorsAreRestored() {
+        assertEquals(Color(0xFF137FEC), IncomeLight)
+        assertEquals(Color(0xFF3AC977), IncomeDark)
+        assertEquals(Color(0xFFEF4444), ExpenseColor)
+        assertEquals(ExpenseColor, ExpenseLight)
+        assertEquals(ExpenseColor, ExpenseDark)
     }
 
     @Test
-    fun normalTransactionTextRemainsReadableOnSharedAndHomeSurfaces() {
-        val lightSurfaces = listOf(Surface, SurfaceVariant, Color(0xFFF9FAFB), Color(0xFFF3F4F6))
-        val darkSurfaces = listOf(SurfaceDark, SurfaceVariantDark, Color(0xFF252A30), Color(0xFF2D3239))
-        listOf(IncomeLight, ExpenseLight).forEach { color ->
-            lightSurfaces.forEach { surface -> assertTrue(contrast(color, surface) >= 4.5f) }
-        }
-        listOf(IncomeDark, ExpenseDark).forEach { color ->
-            darkSurfaces.forEach { surface -> assertTrue(contrast(color, surface) >= 4.5f) }
-        }
-    }
+    fun historicalLightAndDarkSurfaceAndActionRolesAreRestored() {
+        assertEquals(Color(0xFF1B2838), Primary)
+        assertEquals(Color(0xFFE8EDF2), PrimaryContainer)
+        assertEquals(Color.White, OnPrimary)
+        assertEquals(Color(0xFFF9FAFB), Background)
+        assertEquals(Color.White, Surface)
+        assertEquals(Color(0xFFF3F4F6), SurfaceVariant)
+        assertEquals(Color(0xFF111827), OnSurface)
+        assertEquals(Color(0xFF6B7280), OnSurfaceVariant)
 
-    private fun contrast(foreground: Color, background: Color): Float {
-        val first = foreground.luminance()
-        val second = background.luminance()
-        return (maxOf(first, second) + 0.05f) / (minOf(first, second) + 0.05f)
+        assertEquals(Color(0xFF4CAF50), DarkPrimary)
+        assertEquals(Color(0xFF1B5E20), DarkPrimaryContainer)
+        assertEquals(Color(0xFF171A1E), BackgroundDark)
+        assertEquals(Color(0xFF252A30), SurfaceDark)
+        assertEquals(Color(0xFF2D3239), SurfaceVariantDark)
+        assertEquals(Color(0xFFECECEC), OnSurfaceDark)
+        assertEquals(Color(0xFF6B7684), DarkGrey400)
     }
 }

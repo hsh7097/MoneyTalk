@@ -49,7 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.model.TransferDirection
-import com.sanha.moneytalk.core.theme.moneyTalkColors
+import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.ui.component.rememberCategoryEmoji
 import com.sanha.moneytalk.core.util.toDpTextUnit
 import com.sanha.moneytalk.feature.transactionedit.ui.model.TransactionType
@@ -76,7 +76,7 @@ internal fun TransactionHeroCard(
                 modifier = Modifier
                     .size(52.dp)
                     .clip(RoundedCornerShape(18.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow),
+                    .background(accentColor.copy(alpha = if (FriendlyMoneyColors.isDark) 0.2f else 0.16f)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -134,7 +134,7 @@ private fun EditableHeroText(
             maxLines = 3,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             textStyle = textStyle.copy(color = textColor),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            cursorBrush = SolidColor(FriendlyMoneyColors.Mint),
             modifier = Modifier.weight(1f).heightIn(min = 48.dp),
             decorationBox = { innerTextField ->
                 Box(contentAlignment = Alignment.CenterStart) {
@@ -284,12 +284,13 @@ private fun TransactionTypeSegmentedControl(
     ) {
         TransactionType.entries.forEach { type ->
             val selected = type == currentType
+            val accentColor = type.accentColor()
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 48.dp)
                     .clip(RoundedCornerShape(13.dp))
-                    .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                    .background(if (selected) accentColor else Color.Transparent)
                     .selectable(selected = selected, role = Role.Tab) { onTypeChange(type) }
                     .padding(horizontal = 8.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
@@ -298,7 +299,7 @@ private fun TransactionTypeSegmentedControl(
                     text = stringResource(type.labelResId),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                    color = if (selected) MaterialTheme.colorScheme.onSurface else TransactionEditDesignColors.textSecondary
+                    color = if (selected) Color.White else TransactionEditDesignColors.textSecondary
                 )
             }
         }
@@ -308,9 +309,9 @@ private fun TransactionTypeSegmentedControl(
 @Composable
 private fun TransactionType.accentColor(): Color {
     return when (this) {
-        TransactionType.EXPENSE -> MaterialTheme.moneyTalkColors.expense
-        TransactionType.INCOME -> MaterialTheme.moneyTalkColors.income
-        TransactionType.TRANSFER -> MaterialTheme.colorScheme.onSurface
+        TransactionType.EXPENSE -> FriendlyMoneyColors.Coral
+        TransactionType.INCOME -> FriendlyMoneyColors.Mint
+        TransactionType.TRANSFER -> FriendlyMoneyColors.Sky
     }
 }
 

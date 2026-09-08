@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 
 @Composable
 internal fun TransactionSectionCard(
@@ -74,7 +75,7 @@ internal object TransactionEditDesignColors {
     val accent: Color
         @Composable
         @ReadOnlyComposable
-        get() = MaterialTheme.colorScheme.primary
+        get() = FriendlyMoneyColors.Mint
 
     val background: Color
         @Composable
@@ -89,12 +90,12 @@ internal object TransactionEditDesignColors {
     val innerCard: Color
         @Composable
         @ReadOnlyComposable
-        get() = MaterialTheme.colorScheme.surfaceContainerLow
+        get() = MaterialTheme.colorScheme.surfaceVariant
 
     val segmentBackground: Color
         @Composable
         @ReadOnlyComposable
-        get() = MaterialTheme.colorScheme.surfaceContainerHigh
+        get() = MaterialTheme.colorScheme.surfaceVariant
 
     val border: Color
         @Composable

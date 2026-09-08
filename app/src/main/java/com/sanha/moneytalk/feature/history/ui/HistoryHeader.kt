@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryInfo
 import com.sanha.moneytalk.core.theme.moneyTalkColors
@@ -110,10 +112,18 @@ internal fun HistoryTitleBar(onSearchClick: () -> Unit, onAddClick: () -> Unit) 
             modifier = Modifier.weight(1f)
         )
         IconButton(onClick = onSearchClick, modifier = Modifier.size(48.dp)) {
-            Icon(Icons.Default.Search, contentDescription = stringResource(R.string.common_search))
+            Icon(
+                Icons.Default.Search,
+                contentDescription = stringResource(R.string.common_search),
+                tint = FriendlyMoneyColors.Mint
+            )
         }
         IconButton(onClick = onAddClick, modifier = Modifier.size(48.dp)) {
-            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.common_add))
+            Icon(
+                Icons.Default.Add,
+                contentDescription = stringResource(R.string.common_add),
+                tint = FriendlyMoneyColors.Coral
+            )
         }
     }
 }
@@ -281,8 +291,8 @@ fun FilterTabRow(
             || !showTransfers
             || fixedExpenseFilter != FixedExpenseFilter.ALL
 
-    val primaryColor = MaterialTheme.colorScheme.surface
-    val onPrimaryColor = MaterialTheme.colorScheme.onSurface
+    val primaryColor = FriendlyMoneyColors.Mint
+    val onPrimaryColor = Color.White
 
     val listLabel = stringResource(R.string.history_view_list)
     val calendarLabel = stringResource(R.string.history_view_calendar)
@@ -378,7 +388,7 @@ fun FilterTabRow(
                     imageVector = Icons.Default.Close,
                     contentDescription = stringResource(R.string.history_filter_reset),
                     modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.moneyTalkColors.income
                 )
             }
         }
@@ -432,7 +442,7 @@ private fun FilterActionButton(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
-        color = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        color = if (isActive) Color.Transparent else FriendlyMoneyColors.elevatedCardBackground,
         modifier = Modifier.heightIn(min = 48.dp).testTag("history_filter_action").semantics {
             contentDescription = filterLabel
             activeDescription?.let { stateDescription = it }
@@ -447,7 +457,7 @@ private fun FilterActionButton(
                 imageVector = Icons.Default.FilterList,
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = if (isActive) MaterialTheme.moneyTalkColors.income else FriendlyMoneyColors.textSecondary
             )
             Text(
                 text = label,
@@ -455,7 +465,7 @@ private fun FilterActionButton(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.labelLarge,
-                color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                color = if (isActive) MaterialTheme.moneyTalkColors.income else FriendlyMoneyColors.textSecondary
             )
         }
     }

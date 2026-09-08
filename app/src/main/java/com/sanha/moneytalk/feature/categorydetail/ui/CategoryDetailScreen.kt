@@ -383,7 +383,7 @@ private fun CategoryDetailHeroCard(
     }
     val budgetStatusColor = when {
         budget == null || budget <= 0 -> MaterialTheme.colorScheme.onSurfaceVariant
-        pageData.monthlyExpense <= budget -> MaterialTheme.colorScheme.primary
+        pageData.monthlyExpense <= budget -> MaterialTheme.moneyTalkColors.income
         else -> MaterialTheme.colorScheme.error
     }
 
@@ -410,7 +410,7 @@ private fun CategoryDetailHeroCard(
                 ),
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.moneyTalkColors.expense
+                color = MaterialTheme.colorScheme.onSurface
             )
             Column(
                 modifier = Modifier.fillMaxWidth(),
