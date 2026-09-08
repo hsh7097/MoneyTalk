@@ -60,6 +60,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.util.Locale
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -107,9 +108,17 @@ class HomeFocusInteractionTest {
         scrollTo(text(R.string.home_cumulative_spending)).assertIsDisplayed()
         scrollTo(text(R.string.home_briefing_recent_week)).assertIsDisplayed()
         compose.onNodeWithText(text(R.string.home_briefing_budget_title)).assertDoesNotExist()
-        scrollTo(text(R.string.home_recurring_title)).assertIsDisplayed()
         scrollTo(text(R.string.home_expense_top4)).assertIsDisplayed()
         scrollTo(text(R.string.home_today_transactions)).assertIsDisplayed()
+        scrollTo(text(R.string.home_recurring_title)).assertIsDisplayed()
+    }
+
+    @Test fun recurringForecastAppearsAfterTheLastTodayTransaction() {
+        showHome(mutableStateOf(fixture(richPage(withToday = true))))
+        scrollTo("home-fixture subscription").assertIsDisplayed()
+        val lastTransaction = compose.onNodeWithText("home-fixture oldest expense").fetchSemanticsNode().boundsInRoot
+        val forecastTitle = compose.onNodeWithText(text(R.string.home_recurring_title)).fetchSemanticsNode().boundsInRoot
+        assertTrue("Forecast must follow today's final transaction", forecastTitle.top >= lastTransaction.bottom)
     }
 
     @Test fun everyTodayRowPreservesExpenseAndIncomeIdsForClicksAndLongClicks() {

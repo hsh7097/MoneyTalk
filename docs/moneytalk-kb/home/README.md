@@ -13,7 +13,7 @@ status: draft
 > 상태: draft
 > 기준: 2026-09-08 현재 `feature/home/ui/**`, `briefing/**`, `recurring/**`, `data/**` 확인
 
-Home은 첫 번째 하단 탭이며 월별 지출/수입, 고정 지출을 뺀 최근 7일 소비, 근거가 있는 고정 지출 예상, 카테고리 지출과 오늘 거래를 보여준다. 브리핑과 예상은 저장된 거래로 계산하며 홈 진입 시 Gemini 문장을 자동 요청하지 않는다. 미분류 자동 분류는 기존 별도 실행 흐름을 유지한다.
+Home은 첫 번째 하단 탭이며 월별 지출/수입, 고정 지출을 뺀 최근 7일 소비, 카테고리 지출과 오늘 거래, 최하단의 근거가 있는 고정 지출 예상를 보여준다. 브리핑과 예상은 저장된 거래로 계산하며 홈 진입 시 Gemini 문장을 자동 요청하지 않는다. 미분류 자동 분류는 기존 별도 실행 흐름을 유지한다.
 
 ## 먼저 볼 파일
 
@@ -62,3 +62,5 @@ NavGraph -> HomeScreen
 - 카테고리 분류 원리 자체는 [category-classification/README.md](../category-classification/README.md)를 같이 본다.
 - 오늘 거래 롱클릭의 단건 수정/삭제는 [transaction-mutation/01-feature-flow.md](../transaction-mutation/01-feature-flow.md)를 본다.
 - 기능 선택 근거와 미검증 제품 효과는 [제품 개선 검토](../project-context/04-product-improvements-20260908.md)에 둔다.
+
+- 다가올 고정 지출은 현재 회계월의 오늘 거래 다음, 홈 최하단에 표시한다. 실제 소비 확인을 먼저 두며 후보 없음 숨김·근거 거래 진입·80dp 하단 여백은 유지한다.

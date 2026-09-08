@@ -23,7 +23,7 @@ status: draft
 
 | 탭 | 주요 Composable/파일 | 함께 볼 KB |
 |---|---|---|
-| Home | `HomeScreen` → `HomeTheme`/`HomePageContent`: `HomeImportDataCta`/`HomeFullSyncCta`, `MonthlyOverviewSection` → `HomeExpenseAmount`, `SpendingTrendSection`, `SpendingBriefingCard` → `BriefingWeeklySection`, `RecurringExpenseForecastCard`, `CategoryExpenseSection`, 오늘 전체 `HomeTransactionCard` | [home](../home/README.md), [home surface map](../home/package-reference/05-surface-map.md) |
+| Home | `HomeScreen` → `HomeTheme`/`HomePageContent`: `HomeImportDataCta`/`HomeFullSyncCta`, `MonthlyOverviewSection` → `HomeExpenseAmount`, `SpendingTrendSection`, `SpendingBriefingCard` → `BriefingWeeklySection`, `CategoryExpenseSection`, 오늘 전체 `HomeTransactionCard`, 최하단 `RecurringExpenseForecastCard` | [home](../home/README.md), [home surface map](../home/package-reference/05-surface-map.md) |
 | History | `HistoryScreen`, `PeriodSummaryCard`, `SearchBar`, `FilterTabRow`, `FilterBottomSheet`, `TransactionListView`, `BillingCycleCalendarView` — 필터 진입을 항상 유지하고 초기화 X를 분리. 달력 날짜 선택은 현재 필터와 정렬을 상세 화면에 전달 | [history](../history/README.md), [filtering](../filtering/README.md) |
 | Chat | `ChatScreen`, `ChatRoomListView`, `ChatRoomView`, 기능별 메시지/가이드/진행/재시도/광고 dialog 파일 — 채팅방의 시스템 뒤로가기는 대화 목록으로 복귀 | [chat](../chat/README.md) |
 | Settings | `SettingsScreen`, 기능별 `Settings*Section`, `SettingsDialogs`, `SettingsLoadingOverlay`, `BudgetBottomSheet`, `ExportDialog` — 비율 예산 저장은 현재 전체 예산으로 계산하며 범위 초과 입력은 오류 표시와 함께 저장 차단 | [settings](../settings/README.md), [settings menu map](../settings/package-reference/05-menu-map.md) |
@@ -66,7 +66,7 @@ status: draft
 
 색상·간격·큰 글자 규칙은 [금융 UI 디자인 기준](../project-context/05-finance-ui-design-system-20260908.md), 화면 위계와 독립 리뷰는 [금융 UI 사용성 감사](../project-context/06-finance-ux-plan-20260908.md)를 본다. `MoneyTalkTheme`의 중립 배경/표면과 의미 색상을 공통으로 사용하며, 실제 검사 통과 여부는 [통합 검증 기록](../project-context/07-finance-ui-validation-20260908.md)과 로그로 확인한다.
 
-- Home은 `HomeTheme`/`HomeColors`로 기존 UI를 복원한다. CTA → 중앙 월 이동/초록·노랑 그라데이션의 월 전체 지출·수입 → 카드 없는 누적 차트 → 예산을 뺀 최근 소비 비교 → 고정 예상 → 카테고리 → 오늘 전체 내역 순서다. 주간 비교가 없으면 브리핑도 숨긴다. 차트의 당월 오늘까지/과거 전체·미래 날짜 제외·수집 상태·실제 0원 보정과 예산/평균 토글은 유지한다. Hero는 월 전체 기록이므로 당월 차트와 범위가 다를 수 있다. 카테고리의 예산/전체 표시 지출 분모 계산은 같고 원래 퍼센트 표시를 사용한다.
+- Home은 `HomeTheme`/`HomeColors`로 기존 UI를 복원한다. CTA → 중앙 월 이동/초록·노랑 그라데이션의 월 전체 지출·수입 → 카드 없는 누적 차트 → 예산을 뺀 최근 소비 비교 → 카테고리 → 오늘 전체 내역 → 고정 예상 순서다. 주간 비교가 없으면 브리핑도 숨긴다. 차트의 당월 오늘까지/과거 전체·미래 날짜 제외·수집 상태·실제 0원 보정과 예산/평균 토글은 유지한다. Hero는 월 전체 기록이므로 당월 차트와 범위가 다를 수 있다. 카테고리의 예산/전체 표시 지출 분모 계산은 같고 원래 퍼센트 표시를 사용한다.
 - 내역은 기간 요약, 목록/달력·검색·추가, 필터 영역을 나눈다. 달력은 큰 글자에서 셀 높이를 늘리고 월 전체를 세로로 스크롤한다.
 - App root의 `NavigationBarItem`은 24dp 기본 아이콘과 `label` 슬롯을 사용한다. 아이콘 설명은 null로 두어 탭 이름을 중복 낭독하지 않는다.
 - 채팅은 새 질문 버튼, 기존 대화 목록, 카테고리별 질문 행을 구분한다. 설정은 섹션/코치마크 순서를 유지하며 공통 행을 사용한다. 관리·편집 화면도 같은 표면과 의미 색상을 사용한다.
@@ -151,3 +151,5 @@ status: draft
 알림 진입의 거래 식별/삭제 후 처리 계약은 [notification-display](../notification-display/README.md)와 [transaction-edit](../transaction-edit/README.md)를 따른다. 상태/서비스/mapper 분리의 전체 감사는 [화면과 기능 책임 감사](../project-context/03-screen-function-architecture-audit.md)를 본다.
 
 - 홈 누적 추이의 현재/이전 월 범례는 월만 표시한다. 상단 월 선택과 실제 비교 기간은 연도를 유지한다.
+
+- 다가올 고정 지출은 현재 회계월의 오늘 거래 다음, 홈 최하단에 표시한다. 실제 소비 확인을 먼저 두며 후보 없음 숨김·근거 거래 진입·80dp 하단 여백은 유지한다.

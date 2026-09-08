@@ -223,17 +223,6 @@ fun HomePageContent(
                     )
                 }
             }
-            if (isCurrentMonth) {
-                pageData.recurringForecast?.takeIf { it.items.isNotEmpty() }?.let { forecast ->
-                    item {
-                        RecurringExpenseForecastCard(
-                            forecast = forecast,
-                            onTransactionClick = onForecastTransactionClick
-                        )
-                    }
-                }
-            }
-
             // ━━━ BLOCK 4: Category ━━━
 
             item {
@@ -334,6 +323,18 @@ fun HomePageContent(
                                 onClick = { onIncomeSelected(item.income) }
                             )
                         }
+                    }
+                }
+            }
+
+            // 이미 기록된 오늘 거래를 확인한 뒤 앞으로 예정된 고정 지출을 보여준다.
+            if (isCurrentMonth) {
+                pageData.recurringForecast?.takeIf { it.items.isNotEmpty() }?.let { forecast ->
+                    item {
+                        RecurringExpenseForecastCard(
+                            forecast = forecast,
+                            onTransactionClick = onForecastTransactionClick
+                        )
                     }
                 }
             }
