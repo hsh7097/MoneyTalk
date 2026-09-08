@@ -20,13 +20,14 @@ HistoryScreen
 ├── HistoryFilter
 ├── HistoryDialogs
 ├── TransactionCardCompose
+├── TransactionQuickActionDialog
 └── TransactionGroupHeaderCompose
 ```
 
 ## Action 흐름
 
 - 외부 카테고리 필터는 `HistoryScreen`의 `LaunchedEffect(filterCategory)`에서 한 번 소비된다.
-- 거래 클릭/삭제/메모/카테고리 변경은 `HistoryIntent`를 통해 `HistoryViewModel`로 전달된다.
+- 일반 거래 클릭은 상세 편집으로 이동한다. 롱클릭은 화면별 `TransactionQuickActionViewModel`의 수정/삭제 메뉴를 연다. 수정은 기존 `TransactionEditActivity`, 확인한 단건 삭제는 공용 `TransactionQuickActionService`가 처리한다. 기존 상세 dialog의 `HistoryIntent` 경로와 구분한다.
 - `+` 버튼 또는 수정 진입은 `TransactionEditActivity`를 확인한다.
 - 달력 날짜 클릭은 `BillingCycleCalendarView.onDateClick`을 통해 `HistoryScreen`으로 전달한다. `HistoryScreen`은 현재 유형/카테고리/카드/고정/정렬을 `TransactionDetailFilter`로 묶어 날짜 상세 Activity에 전달한다.
 - 동기화 CTA, 권한 상태는 `MainViewModel.screenSyncUiState`를 통해 표시된다.
@@ -40,6 +41,15 @@ HistoryScreen
 | 달력 UI 변경 | `HistoryCalendar.kt` | `HistoryViewModel.kt` |
 | 필터 UI 변경 | `HistoryFilter.kt` | `HistoryViewModel.kt` |
 | 상세/삭제/메모 dialog 변경 | `HistoryDialogs.kt` | `HistoryViewModel.kt` |
+| 롱클릭 수정/삭제 메뉴 | `feature/transactionactions/ui/TransactionQuickActionDialog.kt` | `TransactionQuickActionViewModel`, `TransactionQuickActionService`, `TransactionEditActivity` |
+
+## 직접 정리와 검색
+
+- 목록의 지출/수입 카드에 `onLongClick`을 전달한다. `TransactionTarget`에 유형과 실제 ID를 함께 보존하므로 동일 숫자 ID의 지출과 수입이 충돌하지 않는다.
+- 중앙 모달에는 거래명·닫기 X·수정/삭제만 표시한다. 수정은 유형과 ID로 기존 상세 편집을 열고, 삭제는 거래명·금액이 있는 별도 확인 dialog를 거친다. 카테고리·고정·통계 제외 등 입력은 상세 편집에서 처리한다.
+- 내역 검색은 전체 기간 지출과 수입을 모두 조회한다. 수입 전용 보기에서도 검색 결과를 표시하며 검색 종료 시 선택 월의 일반 목록으로 돌아간다. 유형·카드·카테고리·고정·SMS 제외가 적용되는 세부 경계는 `02-data-viewmodel.md`를 본다.
+- 기존 미분류/카테고리 필터 뒤에서 롱클릭으로 직접 정리할 수 있다. `기타`를 오류나 미분류로 간주하는 새 검토 상태는 추가하지 않는다.
+- 검증: 수입 전용 검색, 검색어 연속 변경/검색 종료, 검색 결과에서 편집 후 결과 유지/갱신, 메뉴 닫기, 삭제한 거래 재열기, 삭제 중 중복 동작 차단.
 
 ## 필터 기능 분리 (2026-09-08)
 

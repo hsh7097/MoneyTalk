@@ -24,8 +24,11 @@ import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -71,6 +74,7 @@ class HistoryViewModel @Inject constructor(
 
     /** 페이지별 로드 Job 관리 (월별 독립 취소) */
     private val pageLoadJobs = mutableMapOf<MonthKey, Job>()
+    private var searchJob: Job? = null
 
     /** 페이지 캐시 최대 허용 범위 (현재 월 ± 이 값) */
     private companion object {
@@ -106,6 +110,8 @@ class HistoryViewModel @Inject constructor(
 
     /** 전체 페이지 캐시 클리어 */
     private fun clearAllPageCache() {
+        searchJob?.cancel()
+        searchJob = null
         pageLoadJobs.values.forEach { it.cancel() }
         pageLoadJobs.clear()
         _uiState.update { it.copy(pageCache = emptyMap()) }
@@ -117,6 +123,10 @@ class HistoryViewModel @Inject constructor(
      */
     private fun refreshCurrentPages() {
         val state = _uiState.value
+        if (state.searchQuery.isNotBlank()) {
+            searchTransactions(state.searchQuery)
+            return
+        }
         val year = state.selectedYear
         val month = state.selectedMonth
 
@@ -132,6 +142,10 @@ class HistoryViewModel @Inject constructor(
     /** 현재 + 인접 월 데이터 로드 (공통 진입점) */
     private fun loadCurrentAndAdjacentPages() {
         val state = _uiState.value
+        if (state.searchQuery.isNotBlank()) {
+            searchTransactions(state.searchQuery)
+            return
+        }
         val year = state.selectedYear
         val month = state.selectedMonth
 
@@ -569,28 +583,36 @@ class HistoryViewModel @Inject constructor(
             clearAllPageCache()
             loadCurrentAndAdjacentPages()
         } else {
-            searchExpenses(query)
+            searchTransactions(query)
         }
     }
 
-    /** 지출 내역 검색 (검색 결과는 현재 월의 pageCache에 저장) */
-    private fun searchExpenses(query: String) {
+    /** 전체 기간의 지출/수입 검색. 검색 결과는 현재 월의 pageCache에 저장한다. */
+    private fun searchTransactions(query: String) {
         val state = _uiState.value
         val key = MonthKey(state.selectedYear, state.selectedMonth)
+        searchJob?.cancel()
         pageLoadJobs[key]?.cancel()
-        pageLoadJobs[key] = viewModelScope.launch {
+        val job = viewModelScope.launch {
             updatePageCache(key, HistoryPageData(isLoading = true))
 
             try {
-                val results = withContext(Dispatchers.IO) {
-                    expenseRepository.searchExpenses(query)
+                val (results, incomeResults) = withContext(Dispatchers.IO) {
+                    expenseRepository.searchExpenses(query) to incomeRepository.searchIncomes(query)
                 }
-                val currentState = _uiState.value
                 val excludedCardNames = withContext(Dispatchers.IO) {
                     ownedCardRepository.getExcludedCardNames()
                 }
+                val exclusionKeywords = withContext(Dispatchers.IO) {
+                    smsExclusionRepository.getAllKeywordStrings()
+                }
+                val currentState = _uiState.value
+                val keywordFilteredResults = results.filter { expense ->
+                    val smsLower = expense.originalSms.lowercase()
+                    exclusionKeywords.none { smsLower.contains(it) }
+                }
                 val visibleResults = CardVisibilityFilter.filterVisibleExpenses(
-                    results,
+                    keywordFilteredResults,
                     excludedCardNames
                 )
                 val cardFilteredResults = CardVisibilityFilter.filterSelectedExpenses(
@@ -599,23 +621,45 @@ class HistoryViewModel @Inject constructor(
                 )
                 val sortedResults = transactionListMapper.sortExpenses(cardFilteredResults, currentState.sortOrder)
                 val filteredResults = cardFilteredResults.filterExpensesByFixed(currentState.fixedExpenseFilter)
+                val filteredIncomes = if (!currentState.showIncomes || currentState.selectedCardNames.isNotEmpty()) {
+                    emptyList()
+                } else {
+                    incomeResults.filter { income ->
+                        val smsLower = income.originalSms?.lowercase()
+                        val includedByKeyword = smsLower == null || exclusionKeywords.none { smsLower.contains(it) }
+                        val includedByCategory = currentState.selectedIncomeCategories.isEmpty() ||
+                            income.category in currentState.selectedIncomeCategories
+                        includedByKeyword && includedByCategory
+                    }.filterIncomesByFixed(currentState.fixedExpenseFilter)
+                }
+                val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.KOREA)
+                currentCoroutineContext().ensureActive()
                 updatePageCache(key, HistoryPageData(
                     isLoading = false,
                     expenses = sortedResults,
+                    incomes = filteredIncomes,
+                    monthlyIncomeTotal = filteredIncomes.sumOf { it.amount },
+                    dailyIncomeTotals = filteredIncomes.groupBy { dateFormat.format(java.util.Date(it.dateTime)) }
+                        .mapValues { (_, incomes) -> incomes.sumOf { it.amount } },
                     monthlyTotal = filteredResults
                         .filter { it.isIncludedInExpenseStats() }
                         .sumOf { e -> e.amount },
                     transactionListItems = transactionListMapper.build(
-                        sortedResults, emptyList(), currentState.sortOrder,
+                        sortedResults, filteredIncomes, currentState.sortOrder,
                         currentState.showExpenses, currentState.showIncomes, currentState.showTransfers,
                         currentState.fixedExpenseFilter
                     )
                 ))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
+                currentCoroutineContext().ensureActive()
                 updatePageCache(key, HistoryPageData(isLoading = false))
                 _uiState.update { it.copy(errorMessage = e.message) }
             }
         }
+        searchJob = job
+        pageLoadJobs[key] = job
     }
 
     // ========== 수동 지출 추가 기능 ==========
