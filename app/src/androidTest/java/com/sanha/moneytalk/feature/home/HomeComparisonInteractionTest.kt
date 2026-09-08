@@ -224,7 +224,7 @@ class HomeComparisonInteractionTest {
     private fun outsideOverview() = !hasAnyAncestor(hasTestTag(overviewTag))
 
     private fun legendMatcher(month: YearMonth) =
-        hasText(text(R.string.finance_comparison_month_label, month.year, month.monthValue)) and
+        hasText(text(R.string.finance_comparison_month_label, month.monthValue)) and
             outsideOverview()
 
     private fun scrollTo(label: String) = scrollTo(hasText(label))

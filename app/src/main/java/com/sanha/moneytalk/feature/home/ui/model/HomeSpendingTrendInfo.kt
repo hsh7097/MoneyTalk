@@ -63,7 +63,7 @@ data class HomeSpendingTrendInfo(
                 points = pageData.dailyCumulativeExpenses,
                 color = primaryColor,
                 isSolid = true,
-                label = stringResource(R.string.finance_comparison_month_label, year, month)
+                label = stringResource(R.string.finance_comparison_month_label, month)
             )
 
             val previousMonth = YearMonth.of(year, month).minusMonths(1)
@@ -74,7 +74,6 @@ data class HomeSpendingTrendInfo(
                     isSolid = false,
                     label = stringResource(
                         R.string.finance_comparison_month_label,
-                        previousMonth.year,
                         previousMonth.monthValue
                     )
                 )

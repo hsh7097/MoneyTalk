@@ -147,3 +147,5 @@ status: draft
 | `feature/transactionactions/ui/TransactionQuickActionDialog.kt` | `TransactionQuickActionDialog`, `TransactionQuickActionContent`, `QuickTransactionMenuItem` | 중앙 모달의 거래명·닫기와 아이콘 포함 세로 수정/삭제 행, 기존 편집 화면 진입과 삭제 확인 |
 
 알림 진입의 거래 식별/삭제 후 처리 계약은 [notification-display](../notification-display/README.md)와 [transaction-edit](../transaction-edit/README.md)를 따른다. 상태/서비스/mapper 분리의 전체 감사는 [화면과 기능 책임 감사](../project-context/03-screen-function-architecture-audit.md)를 본다.
+
+- 홈 누적 추이의 현재/이전 월 범례는 월만 표시한다. 상단 월 선택과 실제 비교 기간은 연도를 유지한다.
