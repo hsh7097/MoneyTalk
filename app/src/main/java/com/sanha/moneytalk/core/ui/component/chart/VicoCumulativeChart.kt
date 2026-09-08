@@ -4,8 +4,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberAxisGuidelineComponent
@@ -37,9 +41,10 @@ import com.patrykandpatrick.vico.core.cartesian.layer.LineCartesianLayer
  * @param comparisonLines 토글 활성화된 비교 곡선 리스트
  * @param comparisonAlphas 각 비교 곡선의 알파값 (0f=투명, 1f=불투명). 토글 애니메이션용
  * @param daysInMonth 해당 월 총 일수
- * @param todayDayIndex 오늘이 해당 월의 몇번째 날인지 (0-based, -1이면 과거 월)
- * @param yAxisMax Y축 최대값 (토글 상태와 무관하게 고정된 값, 호출부에서 계산)
+ * @param todayDayIndex 오늘까지의 경과 일수. 0은 시작 전 기준점, N은 N일차, -1은 과거 기간.
+ * @param yAxisMax 호출부가 선택한 Y축 최대값
  * @param modifier 외부 Modifier
+ * @param inspection 선택된 날짜와 원본 금액. null이면 선택 가이드를 숨긴다.
  */
 @Composable
 fun VicoCumulativeChart(
@@ -49,9 +54,22 @@ fun VicoCumulativeChart(
     daysInMonth: Int,
     todayDayIndex: Int,
     yAxisMax: Long,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    inspectionEnabled: Boolean = false,
+    inspectionLastDay: Int = 0,
+    inspection: CumulativeChartInspection? = null,
+    onInspectionDaySelected: (Int?) -> Unit = {},
+    inspectionKey: Any? = null
 ) {
     val modelProducer = remember { CartesianChartModelProducer() }
+    val geometry = remember(inspectionKey) { CumulativeInspectionGeometry() }
+    val inspectionState = rememberUpdatedState(inspection)
+    val onSelectDay by rememberUpdatedState(onInspectionDaySelected)
+    val guideColor = rememberUpdatedState(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f).toArgb())
+    val pointBackground = rememberUpdatedState(MaterialTheme.colorScheme.surface.toArgb())
+    val inspectionDecoration = remember(geometry) {
+        CumulativeInspectionDecoration(geometry, inspectionState, guideColor, pointBackground)
+    }
 
     // index 0은 기간 시작의 0원, index N은 N일차 누적이므로 말일까지 포함한다.
     val xAxisMax = daysInMonth.coerceAtLeast(1)
@@ -188,11 +206,18 @@ fun VicoCumulativeChart(
                     )
                 },
             ),
+            decorations = if (inspectionEnabled) listOf(inspectionDecoration) else emptyList(),
         ),
         modelProducer = modelProducer,
         scrollState = scrollState,
         zoomState = zoomState,
-        modifier = modifier,
+        modifier = modifier.then(
+            if (inspectionEnabled) Modifier.testTag("cumulative-inspection-chart")
+                .cumulativeInspectionGesture(inspectionKey to inspectionLastDay) { position ->
+                    onSelectDay(geometry.dayAt(position.x, position.y, inspectionLastDay))
+                }
+            else Modifier
+        ),
     )
 }
 

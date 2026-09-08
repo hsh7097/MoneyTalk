@@ -55,6 +55,8 @@ import com.sanha.moneytalk.core.util.DateUtils
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
+import java.time.Instant
+import java.time.ZoneId
 import com.sanha.moneytalk.feature.home.ui.component.MonthlyOverviewSection
 import com.sanha.moneytalk.feature.home.ui.component.CategoryExpenseSection
 
@@ -207,7 +209,16 @@ fun HomePageContent(
                             Modifier.onboardingTarget("home_trend", coachMarkRegistry)
                         } else Modifier
                         Box(modifier = targetModifier) {
-                            SpendingTrendSection(info = trendInfo, showCard = false, scaleToVisibleLines = true)
+                            val inspectionPeriodStart = remember(year, month, monthStartDay) {
+                                Instant.ofEpochMilli(DateUtils.getCustomMonthPeriod(year, month, monthStartDay).first)
+                                    .atZone(ZoneId.systemDefault()).toLocalDate()
+                            }
+                            SpendingTrendSection(
+                                info = trendInfo,
+                                showCard = false,
+                                scaleToVisibleLines = true,
+                                inspectionPeriodStart = inspectionPeriodStart.takeIf { isCurrentPage }
+                            )
                         }
                     }
                 }

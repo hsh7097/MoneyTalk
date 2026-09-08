@@ -26,6 +26,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
@@ -45,6 +47,7 @@ import com.sanha.moneytalk.core.theme.MoneyTalkDimens
 import com.sanha.moneytalk.core.util.toDpTextUnit
 import java.text.NumberFormat
 import java.util.Locale
+import java.time.LocalDate
 import kotlin.math.floor
 import kotlin.math.log10
 import kotlin.math.pow
@@ -77,6 +80,7 @@ data class ToggleableLine(
  * @param modifier 외부 Modifier
  * @param showCard false면 별도 카드 없이 제목과 누적 금액을 표시하는 기존 배치를 사용한다.
  * @param scaleToVisibleLines 표시한 곡선과 오늘까지의 주 곡선으로 Y축 범위를 정한다.
+ * @param inspectionPeriodStart 실제 기간 시작일. 제공한 화면에서만 날짜 선택을 활성화한다.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -84,9 +88,11 @@ fun CumulativeTrendSection(
     info: SpendingTrendInfo,
     modifier: Modifier = Modifier,
     showCard: Boolean = true,
-    scaleToVisibleLines: Boolean = false
+    scaleToVisibleLines: Boolean = false,
+    inspectionPeriodStart: LocalDate? = null
 ) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
+    var selectedDay by remember(inspectionPeriodStart) { mutableStateOf<Int?>(null) }
 
     // 각 토글 곡선의 체크 상태 관리
     val toggleStates = remember(info.toggleableLines.size) {
@@ -127,6 +133,19 @@ fun CumulativeTrendSection(
                 )
             }
         }
+    }
+
+    val inspectionComparisons = info.toggleableLines.filterIndexed { index, _ -> toggleStates[index].value }.map { it.line }
+    val inspectionLastDay = lastInspectableDay(info.primaryLine, inspectionComparisons, info.daysInMonth, info.todayDayIndex)
+    val inspection = inspectionPeriodStart?.let { start ->
+        cumulativeChartInspection(
+            dayIndex = selectedDay,
+            periodStart = start,
+            primaryLine = info.primaryLine,
+            visibleComparisons = inspectionComparisons,
+            daysInMonth = info.daysInMonth,
+            todayDayIndex = info.todayDayIndex
+        )
     }
 
     val yAxisMax = remember(info.primaryLine, info.toggleableLines, info.todayDayIndex, allComparisonLines, scaleToVisibleLines) {
@@ -212,12 +231,30 @@ fun CumulativeTrendSection(
             daysInMonth = info.daysInMonth,
             todayDayIndex = info.todayDayIndex,
             yAxisMax = yAxisMax,
+            inspectionEnabled = inspectionPeriodStart != null,
+            inspectionLastDay = inspectionLastDay,
+            inspection = inspection,
+            onInspectionDaySelected = { selectedDay = it },
+            inspectionKey = inspectionPeriodStart,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(200.dp)
         )
 
         Spacer(modifier = Modifier.height(8.dp))
+
+        if (inspectionPeriodStart != null) {
+            if (inspection != null) {
+                CumulativeInspectionReadout(inspection = inspection, onClose = { selectedDay = null })
+            } else {
+                Text(
+                    stringResource(R.string.chart_inspection_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         // 범례 행: primaryLine(채워진 원) + toggleableLines(테두리/채워진 원 토글)
         FlowRow(

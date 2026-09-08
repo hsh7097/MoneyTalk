@@ -4,7 +4,7 @@ title: Home rendering/action
 description: HomeScreen의 Composable 섹션, dialog, 클릭 action, 코치마크 연결을 설명한다.
 tags: [moneytalk, home, compose, action]
 resource: app/src/main/java/com/sanha/moneytalk/feature/home/ui/HomeScreen.kt
-timestamp: 2026-09-08T00:00:00+09:00
+timestamp: 2026-09-09T00:00:00+09:00
 status: draft
 ---
 
@@ -23,7 +23,8 @@ status: draft
 | `SpendingBriefingCard` (`briefing/SpendingBriefingCard.kt`) | ‘내 소비 한눈에’의 기록 기준/부분 수집 안내와 최근 소비 비교만 표시. 주간 비교가 없으면 숨김 | 증가 카테고리 내역 이동 |
 | `BriefingWeeklySection` (`briefing/BriefingWeeklySection.kt`) | 고정 지출을 제외한 최근/이전 7일 비교 | 최근/이전 전체 소비 또는 증가 카테고리 근거 callback |
 | `RecurringExpenseForecastCard` (`recurring/RecurringExpenseForecastCard.kt`) | 앞으로 30일 고정 지출 예상, 처음 3개와 전체 시트 | 최신 실제 근거 거래 열기 |
-| `SpendingTrendSection` | 월 지출 바로 아래 카드 없는 누적 차트, `HomeSpendingTrendInfo` 비교 보정 유지 | 전월·3/6개월 평균·예산 범례 토글, `home_trend` 코치마크 |
+| `SpendingTrendSection` | 월 지출 바로 아래 카드 없는 누적 차트, `HomeSpendingTrendInfo` 비교 보정 유지 | 전월·3/6개월 평균·예산 토글, 탭/롱프레스 드래그 날짜 선택, `home_trend` 코치마크 |
+| `CumulativeInspectionReadout` (`core/ui/component/chart/CumulativeInspectionReadout.kt`) | 선택 날짜·기간 경과일과 표시 곡선의 원본 누적 금액을 차트 아래 표시 | 닫기로 선택 해제, 지출 금액은 파랑·곡선 구분은 점 색상 |
 | `CategoryExpenseSection` (`component/CategoryExpenseSection.kt`) | 기존 카테고리 지출 행·비율/예산 상태 | 처음 4개/전체 펼침, 행 선택 또는 상세 이동 |
 | `AiInsightCard` (`component/AiInsightCard.kt`) | 남아 있는 기존 선언; 현재 홈에서는 미호출 | 다시 연결하면 비용 정책부터 검토 |
 | `EmptyExpenseSection` (`component/EmptyExpenseSection.kt`) | 데이터 없음 상태 | SMS 권한/동기화 CTA 확인 |
@@ -48,6 +49,14 @@ status: draft
 - 전체 월 동기화는 Activity-scoped `MainViewModel.showFullSyncAdDialog()`와 연결된다.
 - `onRequestSmsPermission`은 Activity 권한 요청 callback이므로 화면 내부에서 직접 permission launcher를 만들지 않는다.
 
+## 누적 차트 날짜 선택
+
+- `HomePageContent`는 `DateUtils.getCustomMonthPeriod()`의 실제 회계 기간 시작일을 `LocalDate`로 변환해 활성 페이지의 `SpendingTrendSection`에만 전달한다. `inspectionPeriodStart` 기본값은 null이므로 CategoryDetail과 기존 Canvas 오버로드의 동작은 유지한다.
+- 차트를 짧게 누르면 해당 날짜를 선택하고, 길게 누른 뒤 좌우로 움직이면 선택 날짜를 바꾼다. 롱프레스가 성립하기 전 이동은 소비하지 않아 홈 세로 스크롤과 가로 월 pager를 보존한다. 손을 떼어도 선택을 유지하며 `닫기`, 선택 월/회계 시작일 변경, 페이지 비활성화 시 초기화한다.
+- 선택선과 곡선별 점은 실제 plot 좌표에 표시한다. 금액 패널은 차트 아래·범례 위에 두어 선택 중 차트 위치를 유지한다. 날짜는 `기간 시작일 + (dayIndex - 1)`이며 `M월 d일 · 기간 N일차 누적`으로 표시한다. 시작 0원인 index 0과 plot 밖은 날짜 내역으로 선택하지 않는다.
+- `CumulativeChartInspection`은 주 곡선과 켜진 전월·3/6개월 평균·예산선의 원본 `Long`만 읽는다. 렌더링 애니메이션용 0원 배열이나 꺼진 선은 금액 근거로 사용하지 않고 실제 0원은 그대로 표시한다. 선택 범위는 선택 회계 기간과 표시 곡선의 실제 길이 안으로 제한한다.
+- 당월 오늘 이후에는 당월 금액을 생략하고 오늘까지만 표시한다는 안내를 둔다. 같은 경과일의 전월·평균·예산 값이 있으면 조회할 수 있다. 각 비교선은 해당 index가 있을 때만 표시하며 짧은 전월의 말일 값을 이후 날짜로 연장하지 않는다. 이는 날짜별 조회 계약이며 아래의 기존 요약 비교 계산과 구분한다. 날짜 선택은 새 DB 조회·저장·AI 호출을 만들지 않는다.
+
 ## 분리 후 경계
 
 - `HomeScreen`은 state 수집, pager와 ViewModel 연결, 알림/코치마크/분류 dialog를 담당한다. 선택 페이지의 이전 `year/month`에 대해 sync coverage와 부분 수집 여부를 확인해 `isPreviousMonthSynced`로 전달한다. 회계월 시작일과 연도 경계도 기존 coverage 정책을 따른다.
@@ -66,7 +75,7 @@ status: draft
 
 - 누적 추이 범례는 `9월`·`8월`처럼 월만 표시한다. 월 이동과 이전 달 조회의 연도 경계 계산은 유지하며 범례에서만 연도를 생략한다.
 
-- 소비 브리핑은 20dp 둥근 테두리 카드다. `최근 7일 소비`와 `이전 7일 소비`의 금액·날짜를 서로 다른 파랑 음영으로 묶고 좁은 폭/큰 글자에서는 세로 배치한다. `고정 지출 제외 · 기록된 내역 기준`을 명시한다. 과거 월에도 같은 제목을 사용하고 선택 기간 마지막 날 기준이라는 설명과 실제 날짜를 함께 표시한다.
+- 소비 브리핑은 20dp 둥근 테두리 카드다. `최근 7일 소비`와 `이전 7일 소비`의 금액·날짜를 서로 다른 파랑 음영으로 묶고 좁은 폭/큰 글자에서는 세로 배치한다. `고정 지출 제외 · 기록 기준`을 명시한다. 과거 월에도 같은 제목을 사용하고 선택 기간 마지막 날 기준이라는 설명과 실제 날짜를 함께 표시한다.
 - 두 금액을 누르면 `WeeklyEvidenceActivity`의 해당 기간 탭을 연다. 증가 카테고리 버튼은 같은 화면에 category를 전달한다. 날짜별 거래·합계·기준 시각, 두 기간 전환, 기존 편집/롱클릭을 제공한다. 기존 월별 카테고리 상세 화면에는 주간 브리핑을 보내지 않는다.
 
 - 다가올 고정 지출은 현재 회계월의 오늘 거래 다음, 홈 최하단에 표시한다. 실제 소비 확인을 먼저 두며 후보 없음 숨김·근거 거래 진입·80dp 하단 여백은 유지한다.

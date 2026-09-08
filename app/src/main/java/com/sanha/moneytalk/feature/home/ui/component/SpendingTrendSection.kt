@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.sanha.moneytalk.core.ui.component.chart.CumulativeTrendSection
 import com.sanha.moneytalk.core.ui.component.chart.SpendingTrendInfo
+import java.time.LocalDate
 
 /**
  * 누적 추이 섹션 Composable.
@@ -20,7 +21,8 @@ fun SpendingTrendSection(
     info: SpendingTrendInfo,
     modifier: Modifier = Modifier,
     showCard: Boolean = true,
-    scaleToVisibleLines: Boolean = false
+    scaleToVisibleLines: Boolean = false,
+    inspectionPeriodStart: LocalDate? = null
 ) {
     if (info.primaryLine.points.isEmpty()) return
 
@@ -28,6 +30,7 @@ fun SpendingTrendSection(
         info = info,
         modifier = modifier,
         showCard = showCard,
-        scaleToVisibleLines = scaleToVisibleLines
+        scaleToVisibleLines = scaleToVisibleLines,
+        inspectionPeriodStart = inspectionPeriodStart
     )
 }

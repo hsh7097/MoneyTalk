@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chart_inspection_hint">날짜를 누르거나 길게 눌러 움직이면 금액을 볼 수 있어요.</string>
+    <string name="chart_inspection_date">%1$d월 %2$d일 · 기간 %3$d일차 누적</string>
+    <string name="chart_inspection_close">닫기</string>
+    <string name="chart_inspection_primary_unavailable">%1$s의 해당 날짜 누적 기록이 없어요.</string>
+    <string name="chart_inspection_primary_today_limit">%1$s 금액은 오늘까지만 표시해요.</string>
+</resources>
