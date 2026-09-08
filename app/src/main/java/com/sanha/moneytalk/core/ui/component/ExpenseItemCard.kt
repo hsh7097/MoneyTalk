@@ -61,6 +61,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.model.Category
 import com.sanha.moneytalk.core.model.CategoryInfo
@@ -131,7 +132,7 @@ fun ExpenseDetailDialog(
                         R.string.common_won,
                         numberFormat.format(expense.amount)
                     ),
-                    valueColor = MaterialTheme.colorScheme.error
+                    valueColor = MaterialTheme.moneyTalkColors.expense
                 )
 
                 // 카테고리 (수정 가능하면 클릭 가능)

@@ -179,7 +179,7 @@ fun CumulativeTrendSection(
                 letterSpacing = 0.toDpTextUnit
             ),
             fontWeight = if (showCard) FontWeight.Medium else null,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = MaterialTheme.moneyTalkColors.expense,
             maxLines = if (showCard) Int.MAX_VALUE else 1,
             softWrap = showCard
         )
@@ -189,7 +189,7 @@ fun CumulativeTrendSection(
             Spacer(modifier = Modifier.height(2.dp))
             val comparisonColor = when (info.isOverSpending) {
                 true -> MaterialTheme.colorScheme.error
-                false -> MaterialTheme.moneyTalkColors.income
+                false -> MaterialTheme.colorScheme.primary
                 null -> MaterialTheme.moneyTalkColors.textTertiary
             }
             Text(

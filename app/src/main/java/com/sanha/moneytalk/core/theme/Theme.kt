@@ -83,7 +83,7 @@ val MaterialTheme.moneyTalkTypography: MoneyTalkNumberTypography
 // 화면과 공통 컴포넌트가 같은 의미 색상을 공유한다.
 private val LightExtendedColors = MoneyTalkExtendedColors(
     income = IncomeLight,
-    expense = ExpenseColor,
+    expense = ExpenseLight,
     calendarSunday = CalendarSunday,
     calendarSaturday = CalendarSaturday,
     navyDark = NavyDark,
@@ -98,7 +98,7 @@ private val LightExtendedColors = MoneyTalkExtendedColors(
 
 private val DarkExtendedColors = MoneyTalkExtendedColors(
     income = IncomeDark,
-    expense = OnSurfaceDark,
+    expense = ExpenseDark,
     calendarSunday = ErrorLight,
     calendarSaturday = Color(0xFF9DC6FA),
     navyDark = OnSurfaceDark,

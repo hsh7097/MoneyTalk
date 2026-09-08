@@ -61,10 +61,11 @@ val Outline = Color(0xFF9AA5B1)
 val OutlineDark = Color(0xFF697582)
 val OutlineVariant = Gray200
 
-// 양수/음수 기호로 의미를 함께 전달하며 일반 지출은 위험 색상으로 강조하지 않는다.
-val IncomeLight = Primary
-val IncomeDark = SecondaryLight
-val ExpenseColor = OnSurface
+// 금액은 수입=빨강, 지출=파랑으로 통일하고 부호를 함께 표시한다.
+val IncomeLight = Color(0xFFC6283D)
+val IncomeDark = Color(0xFFFF929B)
+val ExpenseLight = Color(0xFF1D5FC4)
+val ExpenseDark = Color(0xFF7BB3FF)
 
 val CalendarSunday = Error
 val CalendarSaturday = Color(0xFF386AA6)

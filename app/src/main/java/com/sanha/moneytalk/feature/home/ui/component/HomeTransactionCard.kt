@@ -102,12 +102,10 @@ internal fun HomeTransactionCard(
     } else {
         HomeColors.mintTintContent
     }
-    val amountColor = if (isStatsExcluded) {
-        contentSecondary
-    } else if (info.isIncome) {
+    val amountColor = if (info.isIncome) {
         MaterialTheme.moneyTalkColors.income
     } else {
-        MaterialTheme.colorScheme.error
+        MaterialTheme.moneyTalkColors.expense
     }
 
     Card(

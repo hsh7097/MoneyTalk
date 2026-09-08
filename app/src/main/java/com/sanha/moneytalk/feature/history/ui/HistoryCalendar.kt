@@ -240,7 +240,7 @@ fun BillingCycleCalendarView(
                                         lineHeight = 12.sp,
                                         letterSpacing = 0.toDpTextUnit
                                     ),
-                                    color = MaterialTheme.colorScheme.onSurface,
+                                    color = MaterialTheme.moneyTalkColors.expense,
                                     maxLines = 1,
                                     overflow = TextOverflow.Clip,
                                     softWrap = false
@@ -386,7 +386,7 @@ fun CalendarDayCell(
                 CalendarAmountText(
                     text = "-${formatCompactCalendarAmount(dayTotal, compactNumberFormat)}",
                     exactAmountDescription = "-$expenseDescription",
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.moneyTalkColors.expense
                 )
             }
         }

@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.core.theme.LocalMoneyTalkColors
 import com.sanha.moneytalk.core.theme.LocalMoneyTalkNumberTypography
 
-/** 600996a의 홈 표현만 복원한다. 앱 테마 선택과 시스템 바 설정은 바깥 테마가 담당한다. */
+/** 홈 표면은 600996a를 따르고 금액 의미색은 공통 테마를 따른다. 시스템 바는 바깥 테마가 담당한다. */
 @Composable
 internal fun HomeTheme(content: @Composable () -> Unit) {
     val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
@@ -76,8 +76,6 @@ internal fun HomeTheme(content: @Composable () -> Unit) {
     val inheritedColors = LocalMoneyTalkColors.current
     val extendedColors = remember(darkTheme, inheritedColors, colors) {
         inheritedColors.copy(
-            income = if (darkTheme) Color(0xFF3AC977) else Color(0xFF137FEC),
-            expense = Color(0xFFEF4444),
             calendarSunday = Color(0xFFEF4444),
             calendarSaturday = Color(0xFF137FEC),
             navyDark = if (darkTheme) Color(0xFFA5D6A7) else Color(0xFF1B2838),

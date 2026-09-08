@@ -17,7 +17,7 @@ status: draft
 | `HomeScreen` | Home 탭 entry, state 수집, dialog/coachmark overlay | 월 이동, 분류 dialog, category detail, transaction edit |
 | `HomeTheme` (`ui/theme/HomeTheme.kt`) | 600996a 시점의 색상·Typography를 홈 범위에 제공 | 앱 테마 선택/시스템 바와 다른 화면의 새 테마는 바깥에서 유지 |
 | `HomePageContent` (`HomePageContent.kt`) | CTA → 월 요약 → 누적 차트 → 최근 소비 비교 → 카테고리 → 오늘 전체 내역 → 현재 월 고정 예상 | 섹션별 callback 전달, 분석 접기와 오늘 3건 제한 없음 |
-| `MonthlyOverviewSection` / `HomeExpenseAmount` (`component/MonthlyOverviewSection.kt`) | 중앙 월 이동과 초록·노랑 그라데이션 카드의 월 전체 지출/수입 배지 | 48dp 월 이동 버튼, 흰 금액·수입 표시, 긴 금액의 폭 측정 |
+| `MonthlyOverviewSection` / `HomeExpenseAmount` (`component/MonthlyOverviewSection.kt`) | 중앙 월 이동과 초록·노랑 그라데이션 카드의 월 전체 지출/수입 배지 | 48dp 월 이동 버튼, 파랑 지출·빨강 수입 표시, 긴 금액의 폭 측정 |
 | `HomeImportDataCta` / `HomeFullSyncCta` (`component/**`) | 원래 홈의 테두리·색상·22dp 반지름을 보존한 수집 CTA | 기존 권한/부분 수집/광고 조건과 동기화 중 입력 차단 유지 |
 | `HomeTransactionCard` (`component/HomeTransactionCard.kt`) | 기존 `TransactionCardInfo`로 홈의 카테고리 칩·테두리·지출 색상 복원 | 클릭/롱클릭을 상위에 위임, 큰 글자·긴 금액의 세로 배치 유지 |
 | `SpendingBriefingCard` (`briefing/SpendingBriefingCard.kt`) | ‘내 소비 한눈에’의 기록 기준/부분 수집 안내와 최근 소비 비교만 표시. 주간 비교가 없으면 숨김 | 증가 카테고리 내역 이동 |
@@ -70,3 +70,5 @@ status: draft
 - 두 금액을 누르면 `WeeklyEvidenceActivity`의 해당 기간 탭을 연다. 증가 카테고리 버튼은 같은 화면에 category를 전달한다. 날짜별 거래·합계·기준 시각, 두 기간 전환, 기존 편집/롱클릭을 제공한다. 기존 월별 카테고리 상세 화면에는 주간 브리핑을 보내지 않는다.
 
 - 다가올 고정 지출은 현재 회계월의 오늘 거래 다음, 홈 최하단에 표시한다. 실제 소비 확인을 먼저 두며 후보 없음 숨김·근거 거래 진입·80dp 하단 여백은 유지한다.
+
+- 금액 의미색은 수입 빨강·지출 파랑이다. 라이트는 #C6283D/#1D5FC4, 다크는 #FF929B/#7BB3FF를 사용한다. 홈 그라데이션 배경은 유지하고 그 위 금액은 대비가 높은 #5C0820/#031E4A를 쓴다. 통계 제외는 태그로 구분하고 금액 의미색은 유지한다. 브랜드·기간 비교선·예산 초과/오류 색상은 별도 의미를 유지한다.

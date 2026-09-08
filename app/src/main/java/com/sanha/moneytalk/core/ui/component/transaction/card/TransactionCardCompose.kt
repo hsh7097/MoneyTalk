@@ -62,9 +62,7 @@ fun TransactionCardCompose(
         MaterialTheme.colorScheme.onSurface
     }
     val contentSecondary = MaterialTheme.colorScheme.onSurfaceVariant
-    val amountColor = if (info.isExcludedFromStats) {
-        contentSecondary
-    } else if (info.isIncome) {
+    val amountColor = if (info.isIncome) {
         MaterialTheme.moneyTalkColors.income
     } else {
         MaterialTheme.moneyTalkColors.expense

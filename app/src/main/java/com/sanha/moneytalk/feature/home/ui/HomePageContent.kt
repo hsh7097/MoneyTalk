@@ -271,7 +271,7 @@ fun HomePageContent(
                                 ),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                color = MaterialTheme.moneyTalkColors.expense,
                                 maxLines = 1,
                                 softWrap = false
                             )
@@ -356,7 +356,7 @@ fun HomePageContent(
                     }
                 },
                 shape = CircleShape,
-                containerColor = MaterialTheme.moneyTalkColors.income,
+                containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = Color.White,
                 elevation = FloatingActionButtonDefaults.elevation(
                     defaultElevation = 4.dp,

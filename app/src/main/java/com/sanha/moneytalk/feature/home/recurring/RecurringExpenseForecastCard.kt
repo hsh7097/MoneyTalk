@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.theme.moneyTalkColors
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.util.Locale
@@ -131,7 +132,8 @@ private fun RecurringExpenseHeader(forecast: RecurringExpenseForecast) {
         Text(
             text = stringResource(R.string.home_recurring_total, recurringAmount(forecast.totalExpectedAmount)),
             style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.moneyTalkColors.expense
         )
     }
 }
@@ -170,7 +172,8 @@ private fun RecurringExpenseRow(
                 text = recurringAmount(item.expectedAmount),
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.moneyTalkColors.expense
             )
         }
         Text(

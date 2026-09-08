@@ -6,12 +6,15 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 
-/** 600996a에서 홈의 거래 카드, CTA, 카테고리에 사용한 색상만 보존한다. */
+/** 기존 홈 표면·장식 색상과 그라데이션 위에서 읽을 수 있는 금액 의미색. */
 internal object HomeColors {
     val Mint = Color(0xFF43B883)
     val MintDeep = Color(0xFF1F7A53)
     val Coral = Color(0xFFFF6B5B)
     val Honey = Color(0xFFF4B740)
+    // 고정된 밝은 그라데이션 위의 금액도 같은 빨강/파랑 의미를 유지한다.
+    val IncomeOnGradient = Color(0xFF5C0820)
+    val ExpenseOnGradient = Color(0xFF031E4A)
 
     private val Ink = Color(0xFF20302A)
 

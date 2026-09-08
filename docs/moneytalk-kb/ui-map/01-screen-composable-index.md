@@ -46,7 +46,7 @@ status: draft
 
 | 컴포넌트 | 역할 | 주의 |
 |---|---|---|
-| `TransactionCardCompose` / `TransactionCardInfo` | 거래명·금액 우선의 지출/수입 통합 카드 | History/CategoryDetail/TransactionList 공용. Home은 같은 Info를 받는 `HomeTransactionCard`로 원래 표현을 사용. 공용은 일반 지출 중립색·별도 상태 FlowRow. 양쪽 모두 글자 배율 1.3 초과·폭 320dp 미만·금액 12자 초과이면 금액을 다음 줄로 배치 |
+| `TransactionCardCompose` / `TransactionCardInfo` | 거래명·금액 우선의 지출/수입 통합 카드 | History/CategoryDetail/TransactionList 공용. Home은 같은 Info를 받는 `HomeTransactionCard`로 원래 표현을 사용. 공용은 수입 빨강·지출 파랑·별도 상태 FlowRow. 양쪽 모두 글자 배율 1.3 초과·폭 320dp 미만·금액 12자 초과이면 금액을 다음 줄로 배치 |
 | `TransactionQuickActionDialog` | 거래 롱클릭 중앙 모달의 수정/삭제 메뉴 | 거래명·닫기 X와 구분선 아래 아이콘 포함 세로 작업 행. 최대 320dp, 행 전체 터치, 삭제만 위험 색상. 수정은 기존 편집 화면, 삭제는 별도 확인. 4개 목록에서 유형과 ID 보존 |
 | `TransactionGroupHeaderCompose` / `TransactionGroupHeaderInfo` | 날짜/그룹 헤더 | 목록 grouping 변경 시 확인 |
 | `CumulativeTrendSection` / `VicoCumulativeChart` | 누적 추이 차트 | Home과 CategoryDetail의 기간/필터 차이를 같이 확인. 양축 라벨은 `onSurfaceVariant`. 0원 원점부터 `daysInMonth`까지 X축 경과일을 맞춘다. Home은 `showCard = false`로 카드 없는 원래 배치, 다른 화면은 기본 true의 새 카드 유지 |
@@ -99,7 +99,7 @@ status: draft
 | `feature/home/briefing/BriefingWeeklySection.kt` | `BriefingWeeklySection`, `BriefingPeriodAmount` | 테두리 브리핑 안의 두 7일 파랑 금액/날짜, 고정 제외, 전체/category 근거 진입 |
 | `feature/weeklyevidence/ui/WeeklyEvidenceScreen.kt` | `WeeklyEvidenceScreen`, `WeeklyEvidenceContent` | 동일 날짜·시간대·기준 시각의 두 기간 전환, 합계/목록 및 기존 편집/롱클릭 |
 | `feature/home/recurring/RecurringExpenseForecastCard.kt` | `RecurringExpenseForecastCard`, `RecurringExpenseHeader`, `RecurringExpenseRow`, `recurringDate`, `recurringAmount` | 고정 지출 예상 3개·전체 시트, 근거 거래 버튼, 날짜/금액 표시 |
-| `feature/home/ui/component/MonthlyOverviewSection.kt` | `MonthlyOverviewSection`, `HomeExpenseAmount` | 중앙 월 이동·그라데이션 월 전체 지출/수입. 32sp 흰 금액·동일 크기 통화 단위를 1px 여유 폭으로 측정·재측정해 한 줄 표시 |
+| `feature/home/ui/component/MonthlyOverviewSection.kt` | `MonthlyOverviewSection`, `HomeExpenseAmount` | 중앙 월 이동·그라데이션 월 전체 지출/수입. 32sp 짙은 파랑 금액·동일 크기 통화 단위를 1px 여유 폭으로 측정·재측정해 한 줄 표시 |
 | `feature/home/ui/model/HomeSpendingTrendInfo.kt` | `HomeSpendingTrendInfo.from`, `buildComparisonText` (`@Composable` factory/문구 함수) | `HomeSpendingComparison`의 동일 경과일/과거 전체/수집 상태를 기존 누적 차트 정보로 변환. 실제 0원도 금액 차이로 비교 |
 | `feature/home/ui/component/CategoryExpenseSection.kt` | `CategoryExpenseSection`, `CategoryRankingExpenseRow` | 원래 카테고리 순위 행·퍼센트·예산 상태와 펼치기/선택 유지 |
 | `feature/home/ui/component/AiInsightCard.kt` | `AiInsightCard`, `AiCoachMascot` | 기존 선언 유지, 현재 홈 자동 표시 경로에서는 미호출 |
@@ -153,3 +153,5 @@ status: draft
 - 홈 누적 추이의 현재/이전 월 범례는 월만 표시한다. 상단 월 선택과 실제 비교 기간은 연도를 유지한다.
 
 - 다가올 고정 지출은 현재 회계월의 오늘 거래 다음, 홈 최하단에 표시한다. 실제 소비 확인을 먼저 두며 후보 없음 숨김·근거 거래 진입·80dp 하단 여백은 유지한다.
+
+- 금액 의미색은 수입 빨강·지출 파랑이다. 라이트는 #C6283D/#1D5FC4, 다크는 #FF929B/#7BB3FF를 사용한다. 홈 그라데이션 배경은 유지하고 그 위 금액은 대비가 높은 #5C0820/#031E4A를 쓴다. 통계 제외는 태그로 구분하고 금액 의미색은 유지한다. 브랜드·기간 비교선·예산 초과/오류 색상은 별도 의미를 유지한다.

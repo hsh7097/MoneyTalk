@@ -182,7 +182,7 @@ fun PeriodSummaryCard(
                         text = stringResource(R.string.common_won, numberFormat.format(totalExpense)),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.moneyTalkColors.expense
                     )
                 }
                 Column(modifier = Modifier.weight(1f)) {
