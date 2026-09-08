@@ -2,7 +2,7 @@ package com.sanha.moneytalk.core.ui.component.chart
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,12 +10,14 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.animation.core.Animatable
@@ -31,14 +33,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.theme.moneyTalkTypography
+import com.sanha.moneytalk.core.theme.MoneyTalkDimens
 import com.sanha.moneytalk.core.util.toDpTextUnit
 import java.text.NumberFormat
 import java.util.Locale
+import kotlin.math.floor
+import kotlin.math.log10
+import kotlin.math.pow
 
 /**
  * 토글 가능한 곡선 정보.
@@ -66,12 +75,16 @@ data class ToggleableLine(
  *
  * @param info 차트 데이터 Contract ([SpendingTrendInfo] 구현체)
  * @param modifier 외부 Modifier
+ * @param showCard false면 별도 카드 없이 제목과 누적 금액을 표시하는 기존 배치를 사용한다.
+ * @param scaleToVisibleLines 표시한 곡선과 오늘까지의 주 곡선으로 Y축 범위를 정한다.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CumulativeTrendSection(
     info: SpendingTrendInfo,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showCard: Boolean = true,
+    scaleToVisibleLines: Boolean = false
 ) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.KOREA) }
 
@@ -116,26 +129,39 @@ fun CumulativeTrendSection(
         }
     }
 
-    // Y축 최대값: 토글 상태와 무관하게 모든 곡선의 최대값 기준 고정
-    val yAxisMax = remember(info.primaryLine, info.toggleableLines) {
+    val yAxisMax = remember(info.primaryLine, info.toggleableLines, info.todayDayIndex, allComparisonLines, scaleToVisibleLines) {
+        val primaryPoints = if (scaleToVisibleLines && info.todayDayIndex >= 0) {
+            info.primaryLine.points.take(info.todayDayIndex + 1)
+        } else info.primaryLine.points
+        val comparisonLines = if (scaleToVisibleLines) allComparisonLines else info.toggleableLines.map { it.line }
         val allMax = maxOf(
-            info.primaryLine.points.maxOrNull() ?: 0L,
-            info.toggleableLines.maxOfOrNull { it.line.points.maxOrNull() ?: 0L } ?: 0L
+            primaryPoints.maxOrNull() ?: 0L,
+            comparisonLines.maxOfOrNull { it.points.maxOrNull() ?: 0L } ?: 0L
         )
-        ceilToNiceValue(allMax)
+        if (scaleToVisibleLines) visibleTrendAxisMax(allMax) else ceilToNiceValue(allMax)
     }
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(
+        modifier = modifier.fillMaxWidth().then(
+            if (showCard) Modifier
+                .clip(RoundedCornerShape(MoneyTalkDimens.CardRadius))
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(MoneyTalkDimens.CardPadding)
+            else Modifier
+        )
+    ) {
         // 타이틀
         Text(
             text = info.title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.moneyTalkColors.textSecondary
+            style = if (showCard) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleSmall,
+            fontWeight = if (showCard) FontWeight.SemiBold else null,
+            color = if (showCard) MaterialTheme.colorScheme.onSurface else MaterialTheme.moneyTalkColors.textSecondary,
+            modifier = Modifier.semantics { heading() }
         )
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // 큰 금액
+        // 차트가 집계한 금액
         val currentAmountText = stringResource(
             R.string.common_won,
             numberFormat.format(info.currentAmount)
@@ -147,14 +173,15 @@ fun CumulativeTrendSection(
         }
         Text(
             text = currentAmountText,
-            style = MaterialTheme.moneyTalkTypography.numberLarge.copy(
+            style = if (showCard) MaterialTheme.typography.bodyLarge else MaterialTheme.moneyTalkTypography.numberLarge.copy(
                 fontSize = amountFontSize.toDpTextUnit,
                 lineHeight = (amountFontSize + 8).toDpTextUnit,
                 letterSpacing = 0.toDpTextUnit
             ),
+            fontWeight = if (showCard) FontWeight.Medium else null,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            softWrap = false
+            maxLines = if (showCard) Int.MAX_VALUE else 1,
+            softWrap = showCard
         )
 
         // 비교 문구
@@ -167,7 +194,7 @@ fun CumulativeTrendSection(
             }
             Text(
                 text = info.comparisonText,
-                style = MaterialTheme.typography.bodySmall.copy(
+                style = if (showCard) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall.copy(
                     fontSize = 14.toDpTextUnit,
                     lineHeight = 20.toDpTextUnit
                 ),
@@ -195,7 +222,7 @@ fun CumulativeTrendSection(
         // 범례 행: primaryLine(채워진 원) + toggleableLines(테두리/채워진 원 토글)
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             // 메인 곡선 (항상 표시, 채워진 큰 원)
@@ -205,7 +232,6 @@ fun CumulativeTrendSection(
                 filled = true,
                 toggleable = false
             )
-            Spacer(modifier = Modifier.width(12.dp))
 
             // 토글 가능 곡선 (테두리 원 ↔ 채워진 원)
             info.toggleableLines.forEachIndexed { index, toggleable ->
@@ -218,11 +244,24 @@ fun CumulativeTrendSection(
                         toggleable = true,
                         onClick = { toggleStates[index].value = !toggleStates[index].value }
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
                 }
             }
         }
     }
+}
+
+/** 낮은 지출에도 최소 100만원 축을 강제하지 않고 1/2/5 단위로 올림한다. */
+internal fun visibleTrendAxisMax(rawMax: Long): Long {
+    if (rawMax <= 0L) return 1L
+    val magnitude = 10.0.pow(floor(log10(rawMax.toDouble())))
+    val normalizedMax = rawMax / magnitude
+    val step = when {
+        normalizedMax <= 1.0 -> 1.0
+        normalizedMax <= 2.0 -> 2.0
+        normalizedMax <= 5.0 -> 5.0
+        else -> 10.0
+    }
+    return (step * magnitude).toLong().coerceAtLeast(rawMax)
 }
 
 /**
@@ -275,13 +314,19 @@ fun CumulativeTrendSection(
         )
     }
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(
+        modifier = modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(MoneyTalkDimens.CardRadius))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(MoneyTalkDimens.CardPadding)
+    ) {
         // 제목
         Text(
             text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.semantics { heading() }
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -294,7 +339,7 @@ fun CumulativeTrendSection(
         // 범례 행
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             LegendItem(
@@ -303,7 +348,6 @@ fun CumulativeTrendSection(
                 filled = true,
                 toggleable = false
             )
-            Spacer(modifier = Modifier.width(12.dp))
 
             toggleableLines.forEachIndexed { index, toggleable ->
                 if (index < toggleStates.size) {
@@ -315,7 +359,6 @@ fun CumulativeTrendSection(
                         toggleable = true,
                         onClick = { toggleStates[index].value = !toggleStates[index].value }
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
                 }
             }
         }
@@ -338,19 +381,19 @@ private fun LegendItem(
     toggleable: Boolean,
     onClick: (() -> Unit)? = null
 ) {
-    val textAlpha = if (filled) 0.7f else 0.35f
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
+            .defaultMinSize(minHeight = 48.dp)
             .clip(MaterialTheme.shapes.small)
             .then(
                 if (toggleable && onClick != null) {
-                    Modifier.clickable { onClick() }
+                    Modifier.toggleable(value = filled, role = Role.Checkbox, onValueChange = { onClick() })
                 } else {
                     Modifier
                 }
             )
-            .padding(vertical = 4.dp, horizontal = 6.dp)
+            .padding(vertical = 8.dp, horizontal = 6.dp)
     ) {
         // 원: 글자 크기에 맞춘 크기 (12dp)
         val dotSize = 12.dp
@@ -371,7 +414,7 @@ private fun LegendItem(
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = textAlpha)
+            color = if (filled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

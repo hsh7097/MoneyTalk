@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="finance_comparison_month_label">%1$d년 %2$d월</string>
+    <string name="finance_comparison_current_more">지난달 이맘때보다 %1$s원 더 썼어요</string>
+    <string name="finance_comparison_current_less">지난달 이맘때보다 %1$s원 덜 썼어요</string>
+    <string name="finance_comparison_current_same">지난달 이맘때와 지출이 같아요</string>
+    <string name="finance_comparison_past_more">이전 달보다 %1$s원 더 썼어요</string>
+    <string name="finance_comparison_past_less">이전 달보다 %1$s원 덜 썼어요</string>
+    <string name="finance_comparison_past_same">이전 달과 지출이 같아요</string>
+    <string name="finance_comparison_current_incomplete">이 기간 내역을 더 가져오면 비교할 수 있어요</string>
+    <string name="finance_comparison_previous_incomplete">이전 달 내역을 더 가져오면 비교할 수 있어요</string>
+    <string name="finance_comparison_missing_data">비교할 내역이 아직 없어요</string>
+</resources>

@@ -18,12 +18,16 @@ import com.sanha.moneytalk.core.ui.component.chart.SpendingTrendInfo
 @Composable
 fun SpendingTrendSection(
     info: SpendingTrendInfo,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showCard: Boolean = true,
+    scaleToVisibleLines: Boolean = false
 ) {
     if (info.primaryLine.points.isEmpty()) return
 
     CumulativeTrendSection(
         info = info,
-        modifier = modifier
+        modifier = modifier,
+        showCard = showCard,
+        scaleToVisibleLines = scaleToVisibleLines
     )
 }

@@ -53,8 +53,8 @@ fun VicoCumulativeChart(
 ) {
     val modelProducer = remember { CartesianChartModelProducer() }
 
-    // X축 최대값: 전체 월 일수 기준 고정 (데이터 변동과 무관하게 축 범위 일정)
-    val xAxisMax = (daysInMonth - 1).coerceAtLeast(1)
+    // index 0은 기간 시작의 0원, index N은 N일차 누적이므로 말일까지 포함한다.
+    val xAxisMax = daysInMonth.coerceAtLeast(1)
 
     // 데이터 변경 시 모델 업데이트
     LaunchedEffect(primaryLine, comparisonLines, daysInMonth, todayDayIndex) {
@@ -84,6 +84,7 @@ fun VicoCumulativeChart(
 
     // 라인 스타일: 메인 곡선 (두꺼운 선 + 영역 그라디언트)
     val primaryVicoLine = rememberLine(
+        thickness = 3.dp,
         fill = remember(primaryLine.color) {
             LineCartesianLayer.LineFill.single(fill(primaryLine.color))
         },
@@ -99,6 +100,7 @@ fun VicoCumulativeChart(
         val alpha = comparisonAlphas.getOrElse(index) { 1f }
         val lineColor = line.color.copy(alpha = alpha)
         rememberLine(
+            thickness = 2.dp,
             fill = remember(lineColor) {
                 LineCartesianLayer.LineFill.single(fill(lineColor))
             },
@@ -119,8 +121,8 @@ fun VicoCumulativeChart(
     // X축 라벨 포매터
     val bottomValueFormatter = remember(daysInMonth) {
         CartesianValueFormatter { x, _, _ ->
-            val day = x.toInt() + 1
-            if (day == 1 || day == daysInMonth) {
+            val day = x.toInt()
+            if (day <= 0 || day >= daysInMonth) {
                 ""
             } else {
                 "$day"
@@ -136,7 +138,7 @@ fun VicoCumulativeChart(
     }
 
     val guidelineColor = onSurfaceColor.copy(alpha = 0.08f)
-    val labelColor = onSurfaceColor.copy(alpha = 0.45f)
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     // 스크롤/줌 비활성화 — 차트 전체를 화면 폭에 맞춤
     val scrollState = rememberVicoScrollState(scrollEnabled = false)

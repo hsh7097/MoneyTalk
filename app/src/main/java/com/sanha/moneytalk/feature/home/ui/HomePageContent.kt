@@ -40,13 +40,13 @@ import com.sanha.moneytalk.feature.transactionactions.model.TransactionTarget
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.Category
-import com.sanha.moneytalk.core.ui.component.cta.FullSyncCtaSection
-import com.sanha.moneytalk.core.ui.component.cta.ImportDataCtaSection
+import com.sanha.moneytalk.feature.home.ui.component.HomeFullSyncCta
+import com.sanha.moneytalk.feature.home.ui.component.HomeImportDataCta
 import com.sanha.moneytalk.feature.home.ui.component.SpendingTrendSection
 import com.sanha.moneytalk.feature.home.ui.model.HomeSpendingTrendInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.ExpenseTransactionCardInfo
 import com.sanha.moneytalk.core.ui.component.transaction.card.IncomeTransactionCardInfo
-import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
+import com.sanha.moneytalk.feature.home.ui.component.HomeTransactionCard
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
 import com.sanha.moneytalk.core.ui.coachmark.onboardingTarget
@@ -69,6 +69,7 @@ fun HomePageContent(
     monthStartDay: Int,
     isMonthSynced: Boolean,
     isPartiallyCovered: Boolean,
+    isPreviousMonthSynced: Boolean = false,
     hasSmsPermission: Boolean,
     selectedCategory: String?,
     isSyncing: Boolean,
@@ -118,7 +119,8 @@ fun HomePageContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(vertical = 16.dp),
+            // 마지막 거래도 맨 위로 버튼(48dp) 위까지 스크롤할 수 있게 여유를 둔다.
+            contentPadding = PaddingValues(top = 16.dp, bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // CTA 표시 조건 계산
@@ -149,7 +151,7 @@ fun HomePageContent(
                         Modifier.onboardingTarget("home_sync_cta", coachMarkRegistry)
                     } else Modifier
                     Box(modifier = targetModifier) {
-                        ImportDataCtaSection(
+                        HomeImportDataCta(
                             onImportData = onIncrementalSync,
                             isSyncing = isSyncing
                         )
@@ -159,7 +161,7 @@ fun HomePageContent(
 
             if (showPastMonthSyncCta) {
                 item {
-                    FullSyncCtaSection(
+                    HomeFullSyncCta(
                         onRequestFullSync = onFullSync,
                         monthLabel = ctaMonthLabel,
                         isPartial = isPartiallyCovered,
@@ -188,7 +190,28 @@ fun HomePageContent(
                 }
             }
 
-            pageData.spendingBriefing?.let { briefing ->
+            // ━━━ BLOCK 3: Spending Trend (누적 추이 차트) ━━━
+            if (pageData.dailyCumulativeExpenses.isNotEmpty()) {
+                item {
+                    val trendInfo = HomeSpendingTrendInfo.from(
+                        pageData = pageData,
+                        year = year,
+                        month = month,
+                        isCurrentPeriodComplete = isMonthSynced && !isPartiallyCovered && hasSmsPermission,
+                        isPreviousPeriodComplete = isPreviousMonthSynced
+                    )
+                    if (trendInfo != null) {
+                        val targetModifier = if (isCurrentPage && coachMarkRegistry != null) {
+                            Modifier.onboardingTarget("home_trend", coachMarkRegistry)
+                        } else Modifier
+                        Box(modifier = targetModifier) {
+                            SpendingTrendSection(info = trendInfo, showCard = false, scaleToVisibleLines = true)
+                        }
+                    }
+                }
+            }
+
+            pageData.spendingBriefing?.takeIf { it.weeklyComparison != null }?.let { briefing ->
                 item {
                     SpendingBriefingCard(
                         briefing = briefing,
@@ -205,21 +228,6 @@ fun HomePageContent(
                             forecast = forecast,
                             onTransactionClick = onForecastTransactionClick
                         )
-                    }
-                }
-            }
-
-            // ━━━ BLOCK 3: Spending Trend (누적 추이 차트) ━━━
-            if (pageData.dailyCumulativeExpenses.isNotEmpty()) {
-                item {
-                    val trendInfo = HomeSpendingTrendInfo.from(pageData)
-                    if (trendInfo != null) {
-                        val targetModifier = if (isCurrentPage && coachMarkRegistry != null) {
-                            Modifier.onboardingTarget("home_trend", coachMarkRegistry)
-                        } else Modifier
-                        Box(modifier = targetModifier) {
-                            SpendingTrendSection(info = trendInfo)
-                        }
                     }
                 }
             }
@@ -309,14 +317,14 @@ fun HomePageContent(
                         }
                     ) { index ->
                         when (val item = todayTransactions[index]) {
-                            is TodayItem.Expense -> TransactionCardCompose(
+                            is TodayItem.Expense -> HomeTransactionCard(
                                 info = ExpenseTransactionCardInfo(item.expense),
                                 onLongClick = onTransactionLongClick?.let { open ->
                                     { open(TransactionTarget.Expense(item.expense.id)) }
                                 },
                                 onClick = { onExpenseSelected(item.expense) }
                             )
-                            is TodayItem.Income -> TransactionCardCompose(
+                            is TodayItem.Income -> HomeTransactionCard(
                                 info = IncomeTransactionCardInfo(item.income),
                                 onLongClick = onTransactionLongClick?.let { open ->
                                     { open(TransactionTarget.Income(item.income.id)) }

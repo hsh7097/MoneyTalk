@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,12 +28,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.sanha.moneytalk.R
-import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
+import com.sanha.moneytalk.feature.home.ui.theme.HomeColors
 import com.sanha.moneytalk.core.util.DateUtils
 import java.text.NumberFormat
 import java.util.Locale
@@ -54,7 +58,7 @@ fun MonthlyOverviewSection(
     val isCurrentMonth = year > effYear || (year == effYear && month >= effMonth)
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("home-monthly-overview"),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // 월 네비게이션 — 큰 화살표 + 중앙 정렬
@@ -122,9 +126,9 @@ fun MonthlyOverviewSection(
                 .background(
                     brush = Brush.linearGradient(
                         colors = listOf(
-                            FriendlyMoneyColors.MintDeep,
-                            FriendlyMoneyColors.Mint,
-                            FriendlyMoneyColors.Honey.copy(alpha = 0.82f)
+                            HomeColors.MintDeep,
+                            HomeColors.Mint,
+                            HomeColors.Honey.copy(alpha = 0.82f)
                         )
                     )
                 )
@@ -140,11 +144,7 @@ fun MonthlyOverviewSection(
                     color = Color.White.copy(alpha = 0.82f)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.common_won, numberFormat.format(expense)),
-                    style = MaterialTheme.typography.displayLarge,
-                    color = Color.White
-                )
+                HomeExpenseAmount(stringResource(R.string.common_won, numberFormat.format(expense)))
                 Spacer(modifier = Modifier.height(12.dp))
                 // 수입 뱃지
                 Row(
@@ -168,5 +168,33 @@ fun MonthlyOverviewSection(
                 }
             }
         }
+    }
+}
+
+/** 기존 중앙 정렬·숫자/통화 단위 크기를 유지하고, 공간이 부족할 때만 축소한다. */
+@Composable
+private fun HomeExpenseAmount(amountText: String) {
+    val textMeasurer = rememberTextMeasurer()
+    val baseStyle = MaterialTheme.typography.displayLarge
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val availableWidth = (constraints.maxWidth - 1).coerceAtLeast(1)
+        val measuredWidth = textMeasurer.measure(amountText, style = baseStyle, softWrap = false, maxLines = 1).size.width
+        val scale = (availableWidth.toFloat() / measuredWidth.coerceAtLeast(1)).coerceAtMost(1f)
+        var amountStyle = baseStyle.copy(fontSize = baseStyle.fontSize * scale)
+        while (amountStyle.fontSize.value > 1f && textMeasurer.measure(
+                amountText, style = amountStyle, softWrap = false, maxLines = 1
+            ).size.width > availableWidth
+        ) {
+            amountStyle = amountStyle.copy(fontSize = (amountStyle.fontSize.value - 0.5f).coerceAtLeast(1f).sp)
+        }
+        Text(
+            text = amountText,
+            modifier = Modifier.fillMaxWidth(),
+            style = amountStyle,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            softWrap = false,
+            color = Color.White
+        )
     }
 }

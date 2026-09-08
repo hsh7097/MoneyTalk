@@ -39,7 +39,7 @@ import com.sanha.moneytalk.core.ui.component.getCustomCategoryBackgroundColor
 import com.sanha.moneytalk.core.ui.component.getCustomCategoryChartColor
 import com.sanha.moneytalk.core.ui.component.getCategoryChartColor
 import com.sanha.moneytalk.core.ui.component.rememberCategoryEmoji
-import com.sanha.moneytalk.core.theme.FriendlyMoneyColors
+import com.sanha.moneytalk.feature.home.ui.theme.HomeColors as FriendlyMoneyColors
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import java.text.NumberFormat
 import java.util.Locale

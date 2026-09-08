@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,9 +23,9 @@ fun SpendingBriefingCard(
     isPartialCoverage: Boolean,
     hasSmsPermission: Boolean,
     onCategoryClick: (String) -> Unit,
-    onBudgetClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val comparison = briefing.weeklyComparison ?: return
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -53,11 +52,7 @@ fun SpendingBriefingCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            BriefingBudgetSection(briefing, onBudgetClick)
-            briefing.weeklyComparison?.let { comparison ->
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                BriefingWeeklySection(comparison, briefing.isCurrentPeriod, onCategoryClick)
-            }
+            BriefingWeeklySection(comparison, briefing.isCurrentPeriod, onCategoryClick)
         }
     }
 }

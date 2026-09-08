@@ -49,6 +49,7 @@ import com.sanha.moneytalk.core.ui.coachmark.CoachMarkState
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
 import com.sanha.moneytalk.core.util.DateUtils
 import com.sanha.moneytalk.feature.home.ui.coachmark.homeCoachMarkSteps
+import com.sanha.moneytalk.feature.home.ui.theme.HomeTheme
 import com.sanha.moneytalk.feature.transactionedit.ui.TransactionEditActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -61,6 +62,7 @@ fun HomeScreen(
     onRequestSmsPermission: (onGranted: () -> Unit) -> Unit,
     homeTabReClickEvent: kotlinx.coroutines.flow.SharedFlow<Unit>? = null
 ) {
+    HomeTheme {
     val context = LocalContext.current
     val quickActions: TransactionQuickActionViewModel = hiltViewModel(key = "HomeQuickActions")
     TransactionQuickActionDialog(quickActions)
@@ -162,6 +164,9 @@ fun HomeScreen(
             // 캐시 미적재 첫 프레임은 loading 상태로 유지해 빈 CTA가 먼저 번쩍이지 않도록 한다.
             val pageData = uiState.pageCache[MonthKey(pageYear, pageMonth)]
                 ?: HomePageData(isLoading = true)
+            val (previousYear, previousMonth) = remember(page) {
+                MonthPagerUtils.pageToYearMonth(page - 1)
+            }
 
             HomePageContent(
                 pageData = pageData,
@@ -170,6 +175,8 @@ fun HomeScreen(
                 monthStartDay = uiState.monthStartDay,
                 isMonthSynced = mainViewModel.isMonthSynced(pageYear, pageMonth),
                 isPartiallyCovered = mainViewModel.isPagePartiallyCovered(pageYear, pageMonth),
+                isPreviousMonthSynced = mainViewModel.isMonthSynced(previousYear, previousMonth) &&
+                    !mainViewModel.isPagePartiallyCovered(previousYear, previousMonth),
                 hasSmsPermission = mainScreenUiState.hasSmsPermission,
                 selectedCategory = uiState.selectedCategory,
                 isSyncing = mainScreenUiState.isSyncing,
@@ -334,4 +341,5 @@ fun HomeScreen(
 
     // 동기화 다이얼로그, AI 성과 요약, 월별 SMS 동기화 광고 다이얼로그는
     // Activity 레벨(MoneyTalkApp)에서 MainViewModel을 통해 표시
+    }
 }
