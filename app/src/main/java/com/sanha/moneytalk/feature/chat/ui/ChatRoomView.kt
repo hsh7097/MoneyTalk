@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -70,7 +71,7 @@ fun ChatRoomView(
     // 현재 세션 제목 찾기
     val currentSessionTitle = uiState.sessions
         .find { it.id == uiState.currentSessionId }
-        ?.title ?: "새 대화"
+        ?.title ?: stringResource(R.string.chat_new_session)
 
     Column(
         modifier = Modifier
@@ -82,7 +83,7 @@ fun ChatRoomView(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
+                    .background(MaterialTheme.colorScheme.surface)
                     .padding(horizontal = 4.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -143,7 +144,7 @@ fun ChatRoomView(
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
                 state = listState,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
                 items(
@@ -185,7 +186,7 @@ fun ChatRoomView(
 
         // 입력창
         Column(
-            modifier = Modifier.imePadding()
+            modifier = Modifier.background(MaterialTheme.colorScheme.surface).imePadding()
         ) {
             HorizontalDivider(
                 thickness = 1.dp,
@@ -194,17 +195,17 @@ fun ChatRoomView(
             Text(
                 text = stringResource(R.string.chat_ai_disclaimer),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp)
+                    .padding(start = 20.dp, end = 20.dp, top = 12.dp)
             )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(16.dp),
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -228,7 +229,7 @@ fun ChatRoomView(
                             }
                         }
                     },
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(16.dp),
                     maxLines = 3,
                     enabled = hasApiKey && !uiState.isLoading
                 )
@@ -240,6 +241,7 @@ fun ChatRoomView(
                             messageText = ""
                         }
                     },
+                    modifier = Modifier.size(48.dp),
                     enabled = messageText.isNotBlank() && !uiState.isLoading && hasApiKey
                 ) {
                     Icon(

@@ -34,11 +34,11 @@ fun ChatBubble(message: ChatMessage) {
                 bottomEnd = if (message.isUser) 4.dp else 16.dp
             ),
             color = if (message.isUser) {
-                MaterialTheme.colorScheme.primary
+                MaterialTheme.colorScheme.primaryContainer
             } else {
-                MaterialTheme.colorScheme.secondaryContainer
+                MaterialTheme.colorScheme.surface
             },
-            modifier = Modifier.widthIn(max = 300.dp)
+            modifier = Modifier.widthIn(max = 340.dp)
         ) {
             SelectionContainer {
                 val renderedContent = remember(message.content) {
@@ -46,12 +46,12 @@ fun ChatBubble(message: ChatMessage) {
                 }
                 Text(
                     text = renderedContent,
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (message.isUser) {
-                        MaterialTheme.colorScheme.onPrimary
+                        MaterialTheme.colorScheme.onPrimaryContainer
                     } else {
-                        MaterialTheme.colorScheme.onSecondaryContainer
+                        MaterialTheme.colorScheme.onSurface
                     }
                 )
             }
