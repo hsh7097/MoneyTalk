@@ -51,3 +51,7 @@ CategoryDetailScreen
 2. `CategoryDetailPageContent`에 새 블록을 추가하면 loading/empty/error 상태에서 같은 블록이 보여야 하는지 먼저 정한다.
 3. 정렬 tab을 늘리면 `CategorySortOrder`, `setSortOrder()`, `CategoryTransactionListMapper.build()`를 동시에 갱신한다.
 4. 거래 카드 UI 자체를 바꾸면 공통 [../../ui-map/README.md](../../ui-map/README.md)와 transaction card 공통 컴포넌트 영향도 확인한다.
+
+## 금융 앱 화면 정리 (2026-09-08)
+
+바깥 여백 20dp, 요약 카드 모서리 24dp/안쪽 여백 20dp를 적용한다. 기간과 예산 상태는 세로로 배치하고, 목록 제목 아래에 중립 색의 정렬 탭을 둬 긴 제목과 정렬 버튼이 같은 줄에서 경쟁하지 않게 한다. 기간/빈 상태 안내는 `onSurfaceVariant`로 읽을 수 있게 표시한다. 월 이동·정렬·필터·거래 ID·롱클릭 경로는 유지한다.

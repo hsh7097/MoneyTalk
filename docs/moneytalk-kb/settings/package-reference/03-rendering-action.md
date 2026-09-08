@@ -45,6 +45,13 @@ status: verified
 
 ## 기능별 렌더러 (2026-09-08)
 
-`SettingsScreen` 아래 메뉴는 `SettingsDisplaySection`, `SettingsBudgetSection`, `SettingsCreditSection`, `SettingsCategorySection`, `SettingsDataSection`, `SettingsAppSection`으로 분리한다. 진행 표시는 `SettingsLoadingOverlay`, `activeDialog` 분기는 `SettingsDialogs`가 담당한다. 메뉴 순서, 문구, 패딩, ID, 파일 선택/Drive 로그인 결과 처리는 유지한다.
+`SettingsScreen` 아래 메뉴는 `SettingsDisplaySection`, `SettingsBudgetSection`, `SettingsCreditSection`, `SettingsCategorySection`, `SettingsDataSection`, `SettingsAppSection`으로 분리한다. 진행 표시는 `SettingsLoadingOverlay`, `activeDialog` 분기는 `SettingsDialogs`가 담당한다. 메뉴 순서, 문구, ID, 파일 선택/Drive 로그인 결과 처리는 유지한다.
 
 코치마크 스크롤 index는 AI 크레딧 섹션 노출 여부로 계산한다. 크레딧 메뉴가 들어간 경우 카테고리/데이터 target의 실제 index도 1 증가한다.
+
+## 금융 UI 정리 (2026-09-08)
+
+- 설정 목록 외부 여백은 20dp로 통일한다. 공통 설정 섹션/행의 중립색 카드·아이콘·텍스트 계층을 따르고, 카테고리 정리/알림 토글 custom 행도 60dp 최소 높이와 22dp 아이콘·14dp 간격을 사용한다.
+- 설명 텍스트는 한 줄로 자르지 않고 줄바꿈을 허용하며 읽을 수 있는 보조 텍스트 색상을 쓴다.
+- 섹션 순서 및 item 수, 크레딧 조건부 표시, 코치마크 스크롤 index, 모든 설정/복원/삭제 콜백은 바꾸지 않는다.
+- 확인 항목: 테마/예산 시트 진입·취소, 큰 글자에서 토글과 설명 접근, 크레딧 유무에 따른 코치마크 위치, 삭제 확인과 데이터 관리 메뉴의 기존 동작.

@@ -37,3 +37,7 @@ AI 크레딧 기능이 활성화되면 앱 첫 실행 보상 5크레딧이 1회 
 | `core/database/AiCreditRepository.kt` | 크레딧 balance/ledger repository |
 | `core/ad/CreditFeaturePolicy.kt` | 수익화 활성 조건 |
 | `core/ad/RewardAdManager.kt` | 보상형 광고 표시 |
+
+## 금융 앱 화면 정리 (2026-09-08)
+
+잔액/정책/안내는 중립 `surface` 카드와 24dp 모서리, 20dp 여백을 공유한다. 잔액 숫자를 먼저 읽게 하고 광고 충전 버튼만 `primary`·`onPrimary`로 강조한다. 광고 비활성 상태와 보상 수량 문구는 그대로 유지한다. 원장 소비는 중립 글자색, 적립은 기본 강조색으로 구분하며 크레딧 계산·광고 요청·feature gate는 변경하지 않는다.

@@ -15,6 +15,7 @@ status: draft
 
 | 날짜 | 기준 | 영향 영역 | 갱신 문서 | 요약 |
 |---|---|---|---|---|
+| 2026-09-08 | 토스·뱅크샐러드 공식 자료, 디자이너·기획자 교차 검토와 현재 UI 코드 대조 | 금융 UI 체계·4개 탭·거래/관리 화면 | `project-context/05-finance-ui-design-system-20260908.md`, `06-finance-ux-plan-20260908.md`, [통합 검증 기록](project-context/07-finance-ui-validation-20260908.md), Composable 맵·화면 요구·Home·App Shell·화면별 rendering 문서 | 중립 표면/의미 색상과 큰 글자 배치, 필터 재편집/X 초기화, 홈 기간 중립 제목·비율 분모·기록 안내, 공통 탭/하단 label, 전체 폭 금액 편집·달력 금액 폭 측정·차트 축 색상을 반영. 실행 통과 결과와 중간 실패·후속 검증을 구분. |
 | 2026-09-08 | 중앙 모달의 정보가 많다는 사용자 피드백 | 거래명·수정/삭제 중심의 작은 작업 메뉴 | `transaction-mutation/01-feature-flow.md`, `ui-map/01-screen-composable-index.md`, 화면 요구와 영향 화면 rendering 문서, 제품 검토 | 모달 입력/저장 UI를 제거하고 수정은 기존 편집 화면으로 연결. 삭제 확인·유형/ID·삭제 추적을 유지. 이전 빌드 검증과 이번 변경 결과를 구분. |
 | 2026-09-08 | 거래 롱클릭 UI에 대한 사용자 피드백 | 간단 수정/삭제 중앙 모달 | `transaction-mutation/01-feature-flow.md`, `ui-map/01-screen-composable-index.md`, 화면 요구와 영향 화면 rendering 문서 | 공용 진입점을 `TransactionQuickActionDialog`로 변경. 미저장 닫기와 저장 중 동작 차단은 유지. |
 | 2026-09-08 | 제품 코드 감사·공식 경쟁 자료·로컬 기능 구현 | 무료 소비 브리핑·고정 지출 예상·롱클릭 단건 변경·수입 검색 | `project-context/04-product-improvements-20260908.md`, `home/**`, `history/**`, `transaction-mutation/**`, 거래 목록/카테고리 상세, 화면 요구/Composable 맵, routing/구조 지도 | 현재 실행에서 홈 자동 Gemini 인사이트를 로컬 계산으로 대체. 예상의 읽기 전용 조건, 최신 행 보존과 삭제 추적, 검색 취소 경계, 합계 정의·개인정보·지급 후속을 분리. 최종 통합 테스트 결과는 실행 로그 확인 후 기록. |

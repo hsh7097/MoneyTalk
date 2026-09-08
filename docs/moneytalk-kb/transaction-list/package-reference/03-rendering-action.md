@@ -46,3 +46,7 @@ TransactionDetailListScreen
 2. 거래 카드 공통 UI를 바꾸려면 `core/ui/component/transaction/card/**`와 [../../ui-map/README.md](../../ui-map/README.md)를 같이 본다.
 3. 카드 클릭 action을 바꾸면 [../../transaction-edit/README.md](../../transaction-edit/README.md)의 extra 계약과 맞춘다.
 4. title 포맷을 바꾸면 ViewModel의 `monthStr`, `dayNum` 생성 방식도 같이 확인한다.
+
+## 금융 앱 화면 정리 (2026-09-08)
+
+목록 바깥 여백은 20dp로 맞추고 빈 상태에는 불투명한 `onSurfaceVariant`를 사용한다. 거래 행의 모양과 타이포는 공통 `TransactionCardCompose` 변경을 따른다. 조회 조건, 지출/수입 접두사 key, 클릭과 롱클릭의 유형별 ID 전달은 유지한다.

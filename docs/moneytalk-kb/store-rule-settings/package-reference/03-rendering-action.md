@@ -60,3 +60,7 @@ StoreRuleSettingsScreen
 ## 편집 기능 파일 분리 (2026-09-08)
 
 `AddEditRuleDialog`는 `StoreRuleEditorDialog.kt`로 이동했다. `StoreRuleSettingsScreen`은 목록, 코치마크, 카테고리 picker와 dialog 조합을 담당한다. 편집기는 기존 입력값/callback만 받으며 추가/편집, 기존 stats 제외 값 보존, 카테고리 reset, nullable fixed 규칙의 저장 정책은 ViewModel과 `StoreRuleSyncService`에 유지한다.
+
+## 금융 앱 화면 정리 (2026-09-08)
+
+규칙은 중립 `surface` 카드로 표시하고 키워드 아래 카테고리/고정/통계 제외 설명을 세로로 배치해 좁은 화면의 가로 충돌을 줄인다. 편집 dialog 본문은 큰 글자와 키보드 환경에서 스크롤할 수 있으며 카테고리 클릭 영역은 최소 48dp다. 저장/해제/삭제 확인과 소급 적용 callback은 유지한다.

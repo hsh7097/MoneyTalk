@@ -38,4 +38,12 @@ status: draft
 - `ChatScreen.kt`는 ViewModel을 구독하는 화면 진입점이고, `ChatRoomView.kt`는 값과 콜백만 받는 채팅방 렌더링이다.
 - `GuideQuestionsOverlay` → `ChatGuideQuestions.kt`, `ChatBubble` → `ChatMessageBubble.kt`, `TypingIndicator` → `ChatTypingIndicator.kt`, `RetryButton` → `ChatRetryButton.kt`.
 - `RewardAdDialog` → `ChatRewardAdDialog.kt`, `AiServiceUnavailableDialog` → `ChatServiceUnavailableDialog.kt`.
-- 공개 Composable 이름·인자·문구·레이아웃은 유지한다. `ChatRoomListView.kt`의 `SessionItem`은 해당 목록의 단일 행 책임으로 같은 파일에 유지한다.
+- 공개 Composable 이름·인자·실행 콜백은 유지한다. `ChatRoomListView.kt`의 `SessionItem`은 해당 목록의 단일 행 책임으로 같은 파일에 유지한다.
+
+## 금융 UI 정리 (2026-09-08)
+
+- 세션 목록 상단에는 텍스트가 있는 `새 대화` 버튼을 둔다. 기존 `chat_sessions`/`chat_start` 코치마크 target과 서비스 상태 확인 진입을 유지한다.
+- 빈 목록은 소비 질문을 시작하는 목적을 짧게 설명하며, 세션 목록은 장식 테두리/그림자 없이 제목·갱신 시각·48dp 삭제 버튼으로 구성한다.
+- 가이드 질문은 도입부와 카테고리별 목록으로 구분한다. 기존 11개 질문과 클릭 즉시 실행/서비스 불가 시 비활성 조건을 유지하며, 장식 이모지를 제거한다.
+- 사용자 메시지는 약한 강조 배경, 응답은 기본 표면 배경으로 구분한다. 입력창/전송 버튼/AI 안내는 대비를 높이며, 선택 복사·굵은 글자 파싱·재시도·크레딧 및 광고 실행 경로는 그대로 유지한다.
+- 확인 항목: 새 대화·기존 세션·앱/시스템 뒤로가기, 질문 목록 스크롤, 키보드 입력과 지우기, 큰 글자/어두운 화면, 서비스 불가 및 광고 안내 조건. 화면 탐색만으로 Gemini 요청을 만들지 않는다.

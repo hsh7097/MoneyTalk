@@ -51,3 +51,7 @@ CategorySettingsScreen
 2. `CategoryAddDialog`는 공통 컴포넌트다. 필드나 validation UX를 바꾸면 다른 사용처가 있는지 확인한다.
 3. custom category 편집 기능은 현재 없다. 편집을 추가하면 add dialog state를 edit state와 분리할지 먼저 정한다.
 4. 화면 문구를 추가하면 `strings.xml` 계열 리소스를 사용한다.
+
+## 금융 앱 화면 정리 (2026-09-08)
+
+지출/수입/이체 선택은 공통 `SegmentedTabRowCompose`의 중립 탭을 사용한다. 기본/사용자 목록은 20dp 바깥 여백 안에서 64dp 이상 높이의 `surface` 행으로 표시한다. 삭제는 사용자 카테고리에만 위험 색으로 제공하고 기존 확인 dialog와 추가/삭제 동작을 유지한다. 새 카테고리 편집/정렬 기능을 추가한 것은 아니다.
