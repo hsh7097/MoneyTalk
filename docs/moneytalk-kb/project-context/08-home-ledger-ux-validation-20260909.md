@@ -129,3 +129,31 @@ Android 검사는 홈 비교·브리핑·고정 예상 순서, 정확한 주간 
 | `chart-inspection-light.png`, `chart-inspection-dark-large.png`, `history-scroll-*.png` | 자동 검증이 캡처한 차트 날짜 선택 및 가계부 접힘/큰 글자 화면 |
 
 설치 앱의 월 지출 62,500원·수입 2,600,000원은 이 실행에서 만든 합성 자료다. SMS 권한 없이 확인했으므로 기간 수집 부족 안내가 보이는 상태이며, 개인 거래를 복사하지 않았다. 마지막 검증 뒤 화면 크기 2076×2152, density 390, 글자 배율 1.0, 라이트 모드로 복원했다.
+
+## 알림 액션 후속 검증과 AI 연결 진단
+
+2026-09-09 `8890134`의 삭제·통계 제외 알림 액션을 기준으로 관련 저장 경로를 다시 검토했다. 아래 결과는 후속 수정이 반영된 앱 기준이며, 이전 색상 복원의 전체 화면 검증을 다시 수행했다는 뜻은 아니다.
+
+- 편집 중 알림에서 제외/삭제한 거래를 오래된 편집 입력으로 덮어쓰거나 다른 유형으로 재생성하는 경로를 막았다. 최신 행과 사용자의 변경 필드를 병합하며 유형 전환도 한 DB transaction으로 처리한다.
+- 화면이 기존 false 규칙의 일괄 적용 체크를 자동 해제하는 문제를 수정했다. 메모만 저장할 때 규칙을 보존하고, 사용자가 명시한 일괄 적용과 해제는 수행한다. 시간 선택은 시·분 한 쌍을 보존한다.
+- 정본 SMS로 교체·중복 생략된 앱 알림/환불 안내의 출처 연결을 보존해 삭제 후 다른 출처가 다시 들어오는 경로를 막았다. 별도 유지되는 두 환불은 연결하지 않는다. 자동 수입도 Room 쓰기 차례를 얻은 뒤 삭제 기록을 재확인한다.
+
+| 검증 | 최종 결과 | 로컬 근거 |
+|---|---|---|
+| Debug / Release / Android 테스트 APK 빌드 | 성공, Release 축소 및 lintVital 포함 | `final-build-validation.log` |
+| JVM | 424개 통과, 실패/오류/제외 0 | `app/build/test-results/testDebugUnitTest/TEST-*.xml` |
+| 알림 액션·편집 진입 | 17개 통과, 수동 알림 fixture 1개 조건부 제외 | `final-instrumentation.log` |
+| 편집과 알림 충돌 | 9개 최종 통과 | `final-instrumentation.log`, `final-rule-ui-test.log` |
+| 출처별 삭제 보존 | 8개 통과 | `final-instrumentation.log` |
+| 문자/환불 수집 | 37개 통과 | `final-instrumentation.log` |
+| 공용 수정/삭제 서비스 | 16개 통과 | `final-instrumentation.log` |
+
+계측은 합계 87개가 통과했다. 최초 편집 검사에서 발견한 화면의 자동 체크 해제는 앱 코드를 수정했다. 마지막 통합 실행에서는 실제 클릭 테스트가 같은 문구의 제목과 체크 행을 구분하지 못해 1개 실패했다. 앱 코드 변경 없이 선택자를 `hasText and hasClickAction`으로 고치고 테스트 APK 재빌드 후 해당 1개를 통과했다(`test-selector-build.log`, `final-rule-ui-test.log`). 다른 테스트는 이미 통과한 같은 앱 APK의 결과다.
+
+실행 대상은 `Codex_Fold_API_36` / `emulator-5554` / Android 16, 2076×2152, density 390, 글자 1.0이다. 합성 거래만 사용하고 각 계측 fixture를 정리했다. `final-home.png`에서 원래 그라데이션·흰색 금액과 지출 62,500원/수입 2,600,000원이 유지됨을 확인했다. 실기기 설치·실기기 재검증은 수행하지 않았다.
+
+AI는 `ai-result.png`와 비밀값을 제거한 로그에서 App Check 403 인증 실패를 재현했으며 `ai-local-result.png`의 로컬 지출 조회는 성공했다. API 키는 교체하지 않았다. 현재 기기 등록, 개인용 Release 서명/설치 경로와 인증 정책의 불일치, 원격 변경 승인 대기 및 남은 검증은 [채팅 연결 운영 진단](../chat/05-system-contract.md#ai-연결-운영-진단-2026-09-09)을 따른다. 실제 Gemini 응답 성공을 확인하지 못했으므로 AI 복구 완료로 판단하지 않는다.
+
+이 절의 로그·화면은 `artifacts/ai-notification-audit-20260909/`에 있다. 계측 통과는 프로세스 중단을 포함한 모든 동시성 순서의 보장을 의미하지 않으며, Room commit과 삭제 prefs 사이의 원자성 한계 및 이전 버전에서 소실된 출처 관계는 [수집 계약](../sms-parsing/06-ingestion-contract.md)에 남겼다.
+
+기능별 커밋은 `baa8ef8`(삭제한 출처 재수집 방지), `c20be7e`(편집 충돌·동일 거래처 적용)다. 원격 푸시는 하지 않았다.
