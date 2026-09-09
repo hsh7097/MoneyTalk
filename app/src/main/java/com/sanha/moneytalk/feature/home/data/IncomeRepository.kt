@@ -20,6 +20,8 @@ class IncomeRepository @Inject constructor(
 
     suspend fun insert(income: IncomeEntity): Long = incomeDao.insert(income)
 
+    suspend fun insertIngested(income: IncomeEntity): Long? = incomeDao.insertIngested(income)
+
     suspend fun update(income: IncomeEntity) = incomeDao.update(income)
 
     suspend fun delete(income: IncomeEntity) = incomeDao.delete(income)

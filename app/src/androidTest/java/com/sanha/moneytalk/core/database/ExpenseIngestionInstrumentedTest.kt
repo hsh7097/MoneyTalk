@@ -1,17 +1,22 @@
 package com.sanha.moneytalk.core.database
 
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.gson.Gson
 import com.sanha.moneytalk.core.database.dao.ExpenseIngestionResult
+import com.sanha.moneytalk.core.database.dao.IncomeDao
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
 import com.sanha.moneytalk.core.model.SmsAnalysisResult
+import com.sanha.moneytalk.core.model.CategoryProvider
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.firebase.PremiumManager
 import com.sanha.moneytalk.core.notification.SmsNotificationManager
 import com.sanha.moneytalk.core.sms.SmsChannelProbeCollector
+import com.sanha.moneytalk.core.sms.DeletedSmsTracker
 import com.sanha.moneytalk.core.sms.SmsEmbeddingService
 import com.sanha.moneytalk.core.sms.SmsIncomeFilter
 import com.sanha.moneytalk.core.sms.SmsInstantProcessor
@@ -25,10 +30,13 @@ import com.sanha.moneytalk.core.sms.SmsTemplateEngine
 import com.sanha.moneytalk.core.sms.SmsTransactionDateResolver
 import com.sanha.moneytalk.core.ui.ClassificationState
 import com.sanha.moneytalk.core.util.DateUtils
+import com.sanha.moneytalk.core.util.DataRefreshEvent
 import com.sanha.moneytalk.feature.home.data.CategoryClassifierService
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
 import com.sanha.moneytalk.feature.home.data.StoreRuleRepository
+import com.sanha.moneytalk.feature.transactionactions.data.TransactionQuickActionService
+import com.sanha.moneytalk.feature.transactionactions.model.TransactionTarget
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +44,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import java.util.UUID
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -51,9 +61,19 @@ class ExpenseIngestionInstrumentedTest {
     private lateinit var writer: SmsIngestionWriter
     private lateinit var classificationState: ClassificationState
     private val baseTime = 1_783_332_000_000L
+    private val preferenceName = "ingestion_test_${UUID.randomUUID()}"
+    private lateinit var trackerContext: Context
 
     @Before
     fun setUp() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        trackerContext = object : ContextWrapper(context) {
+            override fun getApplicationContext(): Context = this
+            override fun getSharedPreferences(name: String, mode: Int) =
+                super.getSharedPreferences(preferenceName, mode)
+        }
+        DeletedSmsTracker.init(trackerContext)
+        DeletedSmsTracker.clear()
         database = Room.inMemoryDatabaseBuilder(
             InstrumentationRegistry.getInstrumentation().targetContext,
             AppDatabase::class.java
@@ -73,6 +93,10 @@ class ExpenseIngestionInstrumentedTest {
     @After
     fun tearDown() {
         database.close()
+        DeletedSmsTracker.clear()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        DeletedSmsTracker.init(context)
+        context.deleteSharedPreferences(preferenceName)
     }
 
     @Test
@@ -535,6 +559,125 @@ class ExpenseIngestionInstrumentedTest {
     }
 
     @Test
+    fun writerRefundReplacementDeletionBlocksNoticeAndDepositAfterReload() = runBlocking(Dispatchers.IO) {
+        val notice = refundNotice()
+        database.incomeDao().insert(notice)
+        val noticeInput = SmsInput(requireNotNull(notice.smsId), requireNotNull(notice.originalSms), notice.senderAddress, baseTime)
+        writer.write(emptyList(), listOf(refundDeposit()), requireNotNull(classificationState.captureRegistrationEpoch()))
+        val stored = database.incomeDao().getAllIncomesOnce().single()
+        database.incomeDao().deleteById(stored.id)
+        DeletedSmsTracker.markDeleted(requireNotNull(stored.smsId))
+        DeletedSmsTracker.init(trackerContext)
+        writer.write(emptyList(), listOf(noticeInput, refundDeposit()), requireNotNull(classificationState.captureRegistrationEpoch()))
+        assertEquals(0, database.incomeDao().getIncomeCount())
+        assertTrue(DeletedSmsTracker.isDeleted(requireNotNull(notice.smsId)))
+    }
+
+    @Test
+    fun writerSkippedRefundNoticeIsAlsoBlockedAfterDepositDeletion() = runBlocking(Dispatchers.IO) {
+        writer.write(emptyList(), listOf(refundDeposit()), requireNotNull(classificationState.captureRegistrationEpoch()))
+        val notice = refundNotice()
+        val noticeInput = SmsInput(requireNotNull(notice.smsId), requireNotNull(notice.originalSms), notice.senderAddress, baseTime)
+        writer.write(emptyList(), listOf(noticeInput), requireNotNull(classificationState.captureRegistrationEpoch()))
+        val stored = database.incomeDao().getAllIncomesOnce().single()
+        assertEquals(refundDeposit().id, stored.smsId)
+        database.incomeDao().deleteById(stored.id)
+        DeletedSmsTracker.markDeleted(requireNotNull(stored.smsId))
+        writer.write(emptyList(), listOf(noticeInput), requireNotNull(classificationState.captureRegistrationEpoch()))
+        assertEquals(0, database.incomeDao().getIncomeCount())
+        assertTrue(DeletedSmsTracker.isDeleted(requireNotNull(notice.smsId)))
+    }
+
+    @Test
+    fun reprocessingOneOfTwoExistingRefundsDoesNotLinkTheirDeletion() = runBlocking(Dispatchers.IO) {
+        val first = refundNotice().copy(smsId = "first-refund")
+        val second = refundNotice().copy(smsId = "second-refund", dateTime = baseTime + 1_000L)
+        val firstId = database.incomeDao().insert(first)
+        val secondId = database.incomeDao().insert(second)
+        val input = SmsInput(requireNotNull(first.smsId), requireNotNull(first.originalSms), first.senderAddress, baseTime)
+        writer.write(emptyList(), listOf(input), requireNotNull(classificationState.captureRegistrationEpoch()))
+        assertEquals(2, database.incomeDao().getIncomeCount())
+        database.incomeDao().deleteById(firstId)
+        DeletedSmsTracker.markDeleted(requireNotNull(first.smsId))
+        DeletedSmsTracker.init(trackerContext)
+        assertFalse(DeletedSmsTracker.isDeleted(requireNotNull(second.smsId)))
+        assertEquals(secondId, database.incomeDao().getAllIncomesOnce().single().id)
+    }
+
+    @Test
+    fun instantRestoredRefundDoesNotLinkAnotherPreservedRefund() = runBlocking(Dispatchers.IO) {
+        val restored = refundNotice().copy(smsId = null)
+        val other = refundNotice().copy(smsId = "other-refund", dateTime = baseTime + 1_000L)
+        val restoredId = database.incomeDao().insert(restored)
+        val otherId = database.incomeDao().insert(other)
+        val body = requireNotNull(restored.originalSms)
+        val result = instantProcessor().processAndSave(restored.senderAddress, body, baseTime, showUserNotification = false)
+        assertTrue(result is SmsInstantProcessor.Result.Income)
+        assertEquals(2, database.incomeDao().getIncomeCount())
+        val saved = requireNotNull(database.incomeDao().getIncomeById(restoredId))
+        database.incomeDao().deleteById(restoredId)
+        DeletedSmsTracker.markDeleted(requireNotNull(saved.smsId))
+        assertFalse(DeletedSmsTracker.isDeleted(requireNotNull(other.smsId)))
+        assertEquals(otherId, database.incomeDao().getAllIncomesOnce().single().id)
+        SmsInstantProcessor.clearPendingReconciliationIds(listOf(requireNotNull(saved.smsId)))
+    }
+
+    @Test
+    fun instantIncomePausedBeforeFinalWriteCannotRestoreDeletedRefund() = runBlocking(Dispatchers.IO) {
+        val original = refundNotice()
+        val originalId = database.incomeDao().insert(original)
+        val atFinalWrite = CompletableDeferred<Unit>()
+        val resumeWrite = CompletableDeferred<Unit>()
+        val actualDao = database.incomeDao()
+        val controlledDao = object : IncomeDao by actualDao {
+            override suspend fun insertIngested(income: IncomeEntity): Long? {
+                atFinalWrite.complete(Unit)
+                resumeWrite.await()
+                return actualDao.insertIngested(income)
+            }
+        }
+        val processor = instantProcessor(controlledDao)
+        val input = refundDeposit()
+        val pending = async {
+            processor.processAndSave(input.address, input.body, input.date, showUserNotification = false)
+        }
+        try {
+            withTimeout(5_000) { atFinalWrite.await() }
+            val categories = CustomCategoryRepository(database.customCategoryDao())
+            val service = TransactionQuickActionService(database, repository, IncomeRepository(actualDao),
+                CategoryProvider(categories), categories, DataRefreshEvent())
+            assertTrue(service.delete(TransactionTarget.Income(originalId)))
+            resumeWrite.complete(Unit)
+            assertEquals(SmsInstantProcessor.Result.Skipped, withTimeout(5_000) { pending.await() })
+            assertEquals(0, database.incomeDao().getIncomeCount())
+        } finally {
+            resumeWrite.complete(Unit)
+            pending.cancel()
+        }
+    }
+
+    @Test
+    fun instantRefundDeletionBlocksBothProviderSources() = runBlocking(Dispatchers.IO) {
+        val notice = refundNotice()
+        val noticeBody = requireNotNull(notice.originalSms)
+        val noticeId = "${notice.senderAddress}_${baseTime}_${noticeBody.hashCode()}"
+        database.incomeDao().insert(notice.copy(smsId = noticeId))
+        val processor = instantProcessor()
+        val deposit = refundDeposit()
+        processor.processAndSave(deposit.address, deposit.body, deposit.date, showUserNotification = false)
+        val stored = database.incomeDao().getAllIncomesOnce().single()
+        database.incomeDao().deleteById(stored.id)
+        DeletedSmsTracker.markDeleted(requireNotNull(stored.smsId))
+        DeletedSmsTracker.init(trackerContext)
+        assertEquals(SmsInstantProcessor.Result.Skipped,
+            processor.processAndSave(notice.senderAddress, noticeBody, baseTime, showUserNotification = false))
+        assertEquals(SmsInstantProcessor.Result.Skipped,
+            processor.processAndSave(deposit.address, deposit.body, deposit.date, showUserNotification = false))
+        assertEquals(0, database.incomeDao().getIncomeCount())
+        SmsInstantProcessor.clearPendingReconciliationIds(listOf(requireNotNull(stored.smsId)))
+    }
+
+    @Test
     fun instantRestoredRefundReplacementNeverDeletesRetainedRow() = runBlocking(Dispatchers.IO) {
         // 복원 행 자체가 semantic duplicate로도 선택되는 경우 기존 코드는 갱신 직후 같은 ID를 삭제했다.
         val restored = refundNotice().copy(smsId = null)
@@ -643,7 +786,7 @@ class ExpenseIngestionInstrumentedTest {
         originalSms = refundDeposit().body, memo = "복원한 사용자 메모", createdAt = baseTime - 200_000
     )
 
-    private fun instantProcessor(): SmsInstantProcessor {
+    private fun instantProcessor(incomeDao: IncomeDao = database.incomeDao()): SmsInstantProcessor {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val settings = SettingsDataStore(context)
         val matcher = SmsRegexRuleMatcher(
@@ -654,7 +797,7 @@ class ExpenseIngestionInstrumentedTest {
         )
         return SmsInstantProcessor(
             SmsPreFilter(), SmsIncomeFilter(), matcher, repository,
-            IncomeRepository(database.incomeDao()), StoreRuleRepository(database.storeRuleDao()),
+            IncomeRepository(incomeDao), StoreRuleRepository(database.storeRuleDao()),
             SmsExclusionRepository(database.smsExclusionKeywordDao()), OwnedCardRepository(database.ownedCardDao()),
             SmsNotificationManager(context), settings
         )

@@ -701,11 +701,11 @@ class SmsIngestionWriter @Inject constructor(
             } else {
                 null
             }
-
             if (
                 semanticDuplicateIncome != null &&
                 shouldPreferCurrentRefundIncome(entity, semanticDuplicateIncome.income)
             ) {
+                DeletedSmsTracker.linkSameTransaction(smsId, semanticDuplicateIncome.income.smsId)
                 semanticDuplicateIncome.batchIndex?.let { duplicateIndex ->
                     skipInsertFlags[duplicateIndex] = true
                     if (isNewFlags[duplicateIndex]) {
@@ -737,9 +737,11 @@ class SmsIngestionWriter @Inject constructor(
                     if (semanticDuplicateIncome.batchIndex != null &&
                         existingIncome.id == semanticDuplicateIncome.income.id
                     ) {
+                        DeletedSmsTracker.linkSameTransaction(smsId, semanticDuplicateIncome.income.smsId)
                         skipInsertFlags[i] = true
                     }
                 } else {
+                    DeletedSmsTracker.linkSameTransaction(smsId, semanticDuplicateIncome.income.smsId)
                     reconciledCount++
                     skipInsertFlags[i] = true
                     MoneyTalkLogger.i(
@@ -783,13 +785,16 @@ class SmsIngestionWriter @Inject constructor(
         if (filteredBatch.isNotEmpty()) {
             database.withTransaction {
                 ensureWritable(registrationEpoch)
-                filteredBatch.mapNotNull { crossTypeExpenseIdsBySmsId[it.smsId] }
+                val writableBatch = filteredBatch.filterNot {
+                    it.smsId?.let(DeletedSmsTracker::isDeleted) == true
+                }
+                writableBatch.mapNotNull { crossTypeExpenseIdsBySmsId[it.smsId] }
                     .distinct().forEach { expenseRepository.deleteById(it) }
-                filteredBatch.mapNotNull { duplicateIncomeIdsBySmsId[it.smsId] }
+                writableBatch.mapNotNull { duplicateIncomeIdsBySmsId[it.smsId] }
                     .distinct()
-                    .filterNot { duplicateId -> filteredBatch.any { it.id == duplicateId } }
+                    .filterNot { duplicateId -> writableBatch.any { it.id == duplicateId } }
                     .forEach { incomeRepository.deleteById(it) }
-                for (chunk in filteredBatch.chunked(DB_BATCH_INSERT_SIZE)) {
+                for (chunk in writableBatch.chunked(DB_BATCH_INSERT_SIZE)) {
                     ensureWritable(registrationEpoch)
                     incomeRepository.insertAll(chunk)
                 }

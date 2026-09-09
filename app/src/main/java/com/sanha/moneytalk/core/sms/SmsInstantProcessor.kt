@@ -485,12 +485,15 @@ class SmsInstantProcessor @Inject constructor(
     ): Result {
         val restoredDuplicate = findRestoredIncomeDuplicate(entity)
         val duplicate = findSemanticDuplicateRefundIncome(entity)
+        if (DeletedSmsTracker.isDeleted(smsId)) return Result.Skipped
         val replacedRefundNotice = if (
             duplicate != null &&
             RefundIncomeSemanticDedupe.shouldPreferCandidate(entity, duplicate)
         ) {
+            DeletedSmsTracker.linkSameTransaction(smsId, duplicate.smsId)
             true
         } else if (duplicate != null && restoredDuplicate == null) {
+            DeletedSmsTracker.linkSameTransaction(smsId, duplicate.smsId)
             MoneyTalkLogger.i(
                 "[InstantSMS] 환불 수입 중복 스킵: " +
                     "${entity.amount}원 existing=${duplicate.id}"
@@ -511,7 +514,7 @@ class SmsInstantProcessor @Inject constructor(
             )
         } ?: entity
 
-        val savedIncomeId = incomeRepository.insert(entityToInsert)
+        val savedIncomeId = incomeRepository.insertIngested(entityToInsert) ?: return Result.Skipped
         if (replacedRefundNotice && duplicate != null &&
             duplicate.id > 0L && duplicate.id != savedIncomeId
         ) {

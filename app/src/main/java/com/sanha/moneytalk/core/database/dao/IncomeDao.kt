@@ -5,8 +5,10 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
+import com.sanha.moneytalk.core.sms.DeletedSmsTracker
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -28,6 +30,13 @@ interface IncomeDao {
     /** 단일 수입 삽입 */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(income: IncomeEntity): Long
+
+    /** 자동 수집은 DB 쓰기 차례를 얻은 뒤 삭제 기록을 다시 확인한다. 수동/복원 삽입과 분리한다. */
+    @Transaction
+    suspend fun insertIngested(income: IncomeEntity): Long? {
+        if (income.smsId?.let(DeletedSmsTracker::isDeleted) == true) return null
+        return insert(income)
+    }
 
     @Update
     suspend fun update(income: IncomeEntity)

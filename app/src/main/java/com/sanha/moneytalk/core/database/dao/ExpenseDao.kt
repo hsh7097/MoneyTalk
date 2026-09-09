@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
+import com.sanha.moneytalk.core.sms.DeletedSmsTracker
 import com.sanha.moneytalk.core.sms.TransactionSemanticDedupe
 import kotlinx.coroutines.flow.Flow
 
@@ -45,10 +46,12 @@ interface ExpenseDao {
         expense: ExpenseEntity,
         reconcileExisting: Boolean = false
     ): ExpenseIngestionResult {
+        if (DeletedSmsTracker.isDeleted(expense.smsId)) return ExpenseIngestionResult.Skipped
         val existing = getExpenseBySmsId(expense.smsId)
             ?: expense.id.takeIf { it > 0L }?.let { getExpenseById(it) }
         if (existing != null) {
             if (!reconcileExisting) return ExpenseIngestionResult.Skipped
+            if (DeletedSmsTracker.isDeleted(expense.smsId)) return ExpenseIngestionResult.Skipped
             insert(expense.copy(
                 id = existing.id,
                 memo = existing.memo,
@@ -63,7 +66,9 @@ interface ExpenseDao {
             maxOf(0L, expense.dateTime - window),
             expense.dateTime + window
         )
-        if (candidates.any { TransactionSemanticDedupe.isSameSmsRedelivery(expense, it) }) {
+        val redelivery = candidates.firstOrNull { TransactionSemanticDedupe.isSameSmsRedelivery(expense, it) }
+        if (redelivery != null) {
+            DeletedSmsTracker.linkSameTransaction(expense.smsId, redelivery.smsId)
             return ExpenseIngestionResult.Skipped
         }
         val duplicate = TransactionSemanticDedupe.findPotentialCrossSourceDuplicate(
@@ -71,6 +76,9 @@ interface ExpenseDao {
             candidates
         )
         if (duplicate != null) {
+            // 출처의 동일성만 보존한다. Room rollback이 이 연결을 사용자 삭제로 만들지는 않는다.
+            DeletedSmsTracker.linkSameTransaction(expense.smsId, duplicate.smsId)
+            if (DeletedSmsTracker.isDeleted(expense.smsId)) return ExpenseIngestionResult.Skipped
             if (TransactionSemanticDedupe.isAppGenerated(expense)) {
                 return ExpenseIngestionResult.Skipped
             }
@@ -85,6 +93,7 @@ interface ExpenseDao {
             return ExpenseIngestionResult.Updated(duplicate.id)
         }
 
+        if (DeletedSmsTracker.isDeleted(expense.smsId)) return ExpenseIngestionResult.Skipped
         return ExpenseIngestionResult.Inserted(insert(expense))
     }
 
