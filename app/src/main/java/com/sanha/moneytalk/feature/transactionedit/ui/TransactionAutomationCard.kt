@@ -15,7 +15,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,14 +39,7 @@ internal fun TransactionAutomationCard(
     val canShowStatsExclude = uiState.transactionType != TransactionType.INCOME
     val automationSameStoreChecked = uiState.applyFixedToAll || uiState.applyStatsExcludeToAll
     val automationSameStoreVisible = !uiState.isNew &&
-        (uiState.isFixed || (canShowStatsExclude && uiState.isExcludedFromStats))
-
-    LaunchedEffect(automationSameStoreVisible, automationSameStoreChecked) {
-        if (!automationSameStoreVisible && automationSameStoreChecked) {
-            onApplyFixedToAllChange(false)
-            onApplyStatsExcludeToAllChange(false)
-        }
-    }
+        (automationSameStoreChecked || uiState.isFixed || (canShowStatsExclude && uiState.isExcludedFromStats))
 
     TransactionSectionCard(
         title = stringResource(R.string.transaction_edit_auto_organize),
@@ -81,7 +73,7 @@ internal fun TransactionAutomationCard(
                 onSelectedChange = { checked ->
                     onFixedToggle(checked)
                     if (automationSameStoreChecked) {
-                        onApplyFixedToAllChange(checked)
+                        onApplyFixedToAllChange(true)
                     }
                 }
             )
@@ -95,7 +87,7 @@ internal fun TransactionAutomationCard(
                     onSelectedChange = { checked ->
                         onStatsExcludeToggle(checked)
                         if (automationSameStoreChecked) {
-                            onApplyStatsExcludeToAllChange(checked)
+                            onApplyStatsExcludeToAllChange(true)
                         }
                     }
                 )

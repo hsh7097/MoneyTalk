@@ -34,7 +34,7 @@ status: draft
 | 화면 | 핵심 요구 | 담당 KB |
 |---|---|---|
 | Category Detail | 홈 카테고리 행에서 진입, 월간 추이, 해당 카테고리 목록, 클릭 상세 편집·롱클릭 단건 수정/삭제 | [category-detail](../category-detail/README.md) |
-| Transaction Edit | 신규/기존 지출/수입 편집, 금액/가게/카테고리/메모/고정/통계 제외, 동일 거래처 적용 | [transaction-edit](../transaction-edit/README.md), [transaction-mutation](../transaction-mutation/README.md) |
+| Transaction Edit | 신규/기존 지출/수입 편집, 금액/가게/카테고리/메모/고정/통계 제외, 동일 거래처 적용. 기존 false 규칙도 보존·해제 가능하며 전체 적용 상태의 스위치 OFF는 false 값 적용 | [transaction-edit](../transaction-edit/README.md), [transaction-mutation](../transaction-mutation/README.md) |
 | Transaction Detail List | 날짜별 거래 목록, 그룹 헤더, 지출/수입 카드, 상세 편집·롱클릭 단건 수정/삭제 | [transaction-list](../transaction-list/README.md) |
 | SMS Settings | 제외 키워드, 차단 발신자, 신규 파싱 입력 제외 | [sms-settings](../sms-settings/README.md), [filtering](../filtering/README.md) |
 | AI Credit | 잔액, 최근 원장, 광고 충전 진입, feature gate | [ai-credit-screen](../ai-credit-screen/README.md), [budget-credit-monetization](../budget-credit-monetization/README.md) |

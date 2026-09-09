@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.core.database.AppDatabase
 import com.sanha.moneytalk.core.database.CustomCategoryRepository
 import com.sanha.moneytalk.core.database.entity.ExpenseEntity
 import com.sanha.moneytalk.core.database.entity.IncomeEntity
@@ -15,8 +17,9 @@ import com.sanha.moneytalk.core.model.CategoryType
 import com.sanha.moneytalk.core.model.TransferDirection
 import com.sanha.moneytalk.core.datastore.SettingsDataStore
 import com.sanha.moneytalk.core.ui.AppSnackbarBus
-import com.sanha.moneytalk.core.sms.DeletedSmsTracker
 import com.sanha.moneytalk.core.util.DataRefreshEvent
+import com.sanha.moneytalk.feature.transactionactions.data.TransactionQuickActionService
+import com.sanha.moneytalk.feature.transactionactions.model.TransactionTarget
 import com.sanha.moneytalk.feature.transactionedit.ui.model.TransactionType
 import com.sanha.moneytalk.feature.home.data.ExpenseRepository
 import com.sanha.moneytalk.feature.home.data.IncomeRepository
@@ -49,8 +52,10 @@ import javax.inject.Inject
 @HiltViewModel
 class TransactionEditViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
+    private val database: AppDatabase,
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
+    private val transactionQuickActionService: TransactionQuickActionService,
     private val dataRefreshEvent: DataRefreshEvent,
     private val snackbarBus: AppSnackbarBus,
     private val storeRuleRepository: StoreRuleRepository,
@@ -464,77 +469,84 @@ class TransactionEditViewModel @Inject constructor(
             return
         }
 
-        val dateTime = TransactionEditDateTimeMapper.buildDateTime(
-            state.dateMillis,
-            state.hour,
-            state.minute
-        )
-
         viewModelScope.launch {
             try {
                 var storeRuleSyncFailed = false
-                val txType = if (state.transactionType == TransactionType.TRANSFER) "TRANSFER" else "EXPENSE"
-                val txDirection = state.transferDirection?.dbValue ?: ""
-                val effectiveIsFixed = state.isFixed && supportsFixedExpense(state.transactionType)
+                val saved = database.withTransaction {
+                    val latestState = resolveSaveState(state) ?: return@withTransaction false
+                    val dateTime = resolveSaveDateTime(state, latestState)
+                    val state = latestState
+                    val amount = state.amount.replace(",", "").toInt()
+                    val txType = if (state.transactionType == TransactionType.TRANSFER) "TRANSFER" else "EXPENSE"
+                    val txDirection = state.transferDirection?.dbValue ?: ""
+                    val effectiveIsFixed = state.isFixed && supportsFixedExpense(state.transactionType)
 
-                // 수입 → 지출/이체 크로스 테이블 이동 (insert 먼저, delete 후 — 원자성 보장)
-                if (originalTransactionType == TransactionType.INCOME && !state.isNew) {
-                    val entity = ExpenseEntity(
-                        amount = amount,
-                        storeName = state.storeName.trim(),
-                        category = state.category,
-                        cardName = state.cardName.trim(),
-                        dateTime = dateTime,
-                        originalSms = state.originalSms,
-                        smsId = originalIncomeEntity?.smsId ?: "manual_${System.currentTimeMillis()}",
-                        senderAddress = originalIncomeEntity?.senderAddress ?: "",
-                        memo = state.memo.ifBlank { null },
-                        isFixed = effectiveIsFixed,
-                        isExcludedFromStats = state.isExcludedFromStats,
-                        transactionType = txType,
-                        transferDirection = txDirection
-                    )
-                    expenseRepository.insert(entity)
-                    if (incomeId > 0) {
-                        incomeRepository.deleteById(incomeId)
+                    // 수입 → 지출/이체 크로스 테이블 이동 (insert 먼저, delete 후 — 원자성 보장)
+                    if (originalTransactionType == TransactionType.INCOME && !state.isNew) {
+                        val entity = ExpenseEntity(
+                            amount = amount,
+                            storeName = state.storeName.trim(),
+                            category = state.category,
+                            cardName = state.cardName.trim(),
+                            dateTime = dateTime,
+                            originalSms = state.originalSms,
+                            smsId = originalIncomeEntity?.smsId ?: "manual_${System.currentTimeMillis()}",
+                            senderAddress = originalIncomeEntity?.senderAddress ?: "",
+                            memo = state.memo.ifBlank { null },
+                            isFixed = effectiveIsFixed,
+                            isExcludedFromStats = state.isExcludedFromStats,
+                            transactionType = txType,
+                            transferDirection = txDirection
+                        )
+                        expenseRepository.insert(entity)
+                        if (incomeId > 0) {
+                            incomeRepository.deleteById(incomeId)
+                        }
+                    } else if (state.isNew) {
+                        val entity = ExpenseEntity(
+                            amount = amount,
+                            storeName = state.storeName.trim(),
+                            category = state.category,
+                            cardName = state.cardName.trim(),
+                            dateTime = dateTime,
+                            originalSms = "",
+                            smsId = "manual_${System.currentTimeMillis()}",
+                            memo = state.memo.ifBlank { null },
+                            isFixed = effectiveIsFixed,
+                            isExcludedFromStats = state.isExcludedFromStats,
+                            transactionType = txType,
+                            transferDirection = txDirection
+                        )
+                        expenseRepository.insert(entity)
+                    } else {
+                        val orig = originalExpenseEntity ?: return@withTransaction false
+                        val updated = orig.copy(
+                            amount = amount,
+                            storeName = state.storeName.trim(),
+                            category = state.category,
+                            cardName = state.cardName.trim(),
+                            dateTime = dateTime,
+                            isFixed = effectiveIsFixed,
+                            isExcludedFromStats = state.isExcludedFromStats,
+                            memo = state.memo.ifBlank { null },
+                            transactionType = txType,
+                            transferDirection = txDirection
+                        )
+                        expenseRepository.update(updated)
                     }
-                } else if (state.isNew) {
-                    val entity = ExpenseEntity(
-                        amount = amount,
-                        storeName = state.storeName.trim(),
-                        category = state.category,
-                        cardName = state.cardName.trim(),
-                        dateTime = dateTime,
-                        originalSms = "",
-                        smsId = "manual_${System.currentTimeMillis()}",
-                        memo = state.memo.ifBlank { null },
-                        isFixed = effectiveIsFixed,
-                        isExcludedFromStats = state.isExcludedFromStats,
-                        transactionType = txType,
-                        transferDirection = txDirection
-                    )
-                    expenseRepository.insert(entity)
-                } else {
-                    val orig = originalExpenseEntity ?: return@launch
-                    val updated = orig.copy(
-                        amount = amount,
-                        storeName = state.storeName.trim(),
-                        category = state.category,
-                        cardName = state.cardName.trim(),
-                        dateTime = dateTime,
-                        isFixed = effectiveIsFixed,
-                        isExcludedFromStats = state.isExcludedFromStats,
-                        memo = state.memo.ifBlank { null },
-                        transactionType = txType,
-                        transferDirection = txDirection
-                    )
-                    expenseRepository.update(updated)
+
+                    true
                 }
+                if (!saved) {
+                    showMissingTransaction()
+                    return@launch
+                }
+                val effectiveIsFixed = state.isFixed && supportsFixedExpense(state.transactionType)
 
                 val trimmedStore = state.storeName.trim()
                 val ruleKeyword = state.ruleKeyword.trim().ifBlank { trimmedStore }
                 val supportsFixedRuleEditing = supportsFixedExpense(state.transactionType)
-                val shouldSyncStoreRule = !state.isNew &&
+                val shouldSyncStoreRule = !state.isNew && hasStoreRuleChanges(state) &&
                     ruleKeyword.isNotBlank() &&
                     (
                         state.applyCategoryToAll ||
@@ -574,6 +586,7 @@ class TransactionEditViewModel @Inject constructor(
                             null
                         }
 
+                        // 명시적인 일괄 변경은 규칙 값이 같아도 단건 예외에 다시 적용해야 한다.
                         storeRuleSyncService.applyRuleChange(
                             previousRule = previousRule,
                             newRule = newRule
@@ -612,62 +625,68 @@ class TransactionEditViewModel @Inject constructor(
             return
         }
 
-        val dateTime = TransactionEditDateTimeMapper.buildDateTime(
-            state.dateMillis,
-            state.hour,
-            state.minute
-        )
-
         viewModelScope.launch {
             try {
-                // 지출/이체 → 수입 크로스 테이블 이동 (insert 먼저, delete 후 — 원자성 보장)
-                if (originalTransactionType != TransactionType.INCOME && !state.isNew) {
-                    val entity = IncomeEntity(
-                        amount = amount,
-                        type = state.incomeType.trim().ifBlank {
-                            context.getString(R.string.income_type_default)
-                        },
-                        source = state.source.trim(),
-                        description = state.storeName.trim(),
-                        isRecurring = state.isFixed,
-                        dateTime = dateTime,
-                        originalSms = state.originalSms.ifBlank { null },
-                        smsId = originalExpenseEntity?.smsId,
-                        senderAddress = originalExpenseEntity?.senderAddress ?: "",
-                        memo = state.memo.ifBlank { null },
-                        category = state.category
-                    )
-                    incomeRepository.insert(entity)
-                    if (expenseId > 0) {
-                        expenseRepository.deleteById(expenseId)
+                val saved = database.withTransaction {
+                    val latestState = resolveSaveState(state) ?: return@withTransaction false
+                    val dateTime = resolveSaveDateTime(state, latestState)
+                    val state = latestState
+                    val amount = state.amount.replace(",", "").toInt()
+                    // 지출/이체 → 수입 크로스 테이블 이동 (insert 먼저, delete 후 — 원자성 보장)
+                    if (originalTransactionType != TransactionType.INCOME && !state.isNew) {
+                        val entity = IncomeEntity(
+                            amount = amount,
+                            type = state.incomeType.trim().ifBlank {
+                                context.getString(R.string.income_type_default)
+                            },
+                            source = state.source.trim(),
+                            description = state.storeName.trim(),
+                            isRecurring = state.isFixed,
+                            dateTime = dateTime,
+                            originalSms = state.originalSms.ifBlank { null },
+                            smsId = originalExpenseEntity?.smsId,
+                            senderAddress = originalExpenseEntity?.senderAddress ?: "",
+                            memo = state.memo.ifBlank { null },
+                            category = state.category
+                        )
+                        incomeRepository.insert(entity)
+                        if (expenseId > 0) {
+                            expenseRepository.deleteById(expenseId)
+                        }
+                    } else if (state.isNew) {
+                        val entity = IncomeEntity(
+                            amount = amount,
+                            type = state.incomeType.trim().ifBlank {
+                                context.getString(R.string.income_type_default)
+                            },
+                            source = state.source.trim(),
+                            description = state.storeName.trim(),
+                            isRecurring = state.isFixed,
+                            dateTime = dateTime,
+                            memo = state.memo.ifBlank { null },
+                            category = state.category
+                        )
+                        incomeRepository.insert(entity)
+                    } else {
+                        val orig = originalIncomeEntity ?: return@withTransaction false
+                        val updated = orig.copy(
+                            amount = amount,
+                            type = state.incomeType.trim().ifBlank { orig.type },
+                            source = state.source.trim(),
+                            description = state.storeName.trim(),
+                            isRecurring = state.isFixed,
+                            dateTime = dateTime,
+                            memo = state.memo.ifBlank { null },
+                            category = state.category
+                        )
+                        incomeRepository.update(updated)
                     }
-                } else if (state.isNew) {
-                    val entity = IncomeEntity(
-                        amount = amount,
-                        type = state.incomeType.trim().ifBlank {
-                            context.getString(R.string.income_type_default)
-                        },
-                        source = state.source.trim(),
-                        description = state.storeName.trim(),
-                        isRecurring = state.isFixed,
-                        dateTime = dateTime,
-                        memo = state.memo.ifBlank { null },
-                        category = state.category
-                    )
-                    incomeRepository.insert(entity)
-                } else {
-                    val orig = originalIncomeEntity ?: return@launch
-                    val updated = orig.copy(
-                        amount = amount,
-                        type = state.incomeType.trim().ifBlank { orig.type },
-                        source = state.source.trim(),
-                        description = state.storeName.trim(),
-                        isRecurring = state.isFixed,
-                        dateTime = dateTime,
-                        memo = state.memo.ifBlank { null },
-                        category = state.category
-                    )
-                    incomeRepository.update(updated)
+
+                    true
+                }
+                if (!saved) {
+                    showMissingTransaction()
+                    return@launch
                 }
 
                 val ruleKeyword = state.ruleKeyword.trim().ifBlank { state.storeName.trim() }
@@ -689,23 +708,127 @@ class TransactionEditViewModel @Inject constructor(
         }
     }
 
+    private fun hasStoreRuleChanges(state: TransactionEditUiState): Boolean {
+        val initial = initialSnapshot ?: return false
+        val keyword = state.ruleKeyword.trim().ifBlank { state.storeName.trim() }
+        val initialKeyword = initial.ruleKeyword.trim().ifBlank { initial.storeName.trim() }
+        return state.transactionType != initial.transactionType ||
+            keyword != initialKeyword ||
+            state.applyCategoryToAll != initial.applyCategoryToAll ||
+            state.applyFixedToAll != initial.applyFixedToAll ||
+            state.applyStatsExcludeToAll != initial.applyStatsExcludeToAll ||
+            (state.applyCategoryToAll && state.category != initial.category) ||
+            (state.applyFixedToAll && state.isFixed != initial.isFixed) ||
+            (state.applyStatsExcludeToAll && state.isExcludedFromStats != initial.isExcludedFromStats)
+    }
+
+    /** DB transaction 안에서 읽어야 원본 확인과 유형 전환 사이에 삭제가 끼어들지 않는다. */
+    private suspend fun resolveSaveState(state: TransactionEditUiState): TransactionEditUiState? {
+        if (state.isNew) return state
+        val initial = initialSnapshot ?: return null
+        val typeChanged = state.transactionType != initial.transactionType
+
+        // 편집자가 실제로 바꾼 필드만 덮어쓰고 알림/다른 화면에서 바뀐 값은 유지한다.
+        fun <T> merge(input: T, original: T, latest: T): T =
+            if (input != original) input else latest
+
+        val latestDateTime: Long
+        val merged = if (originalTransactionType == TransactionType.INCOME) {
+            val latest = incomeRepository.getIncomeById(incomeId) ?: return null
+            originalIncomeEntity = latest
+            latestDateTime = latest.dateTime
+            state.copy(
+                amount = merge(state.amount, initial.amount, latest.amount.toString()),
+                storeName = merge(state.storeName, initial.storeName, latest.description),
+                category = if (typeChanged) state.category else merge(state.category, initial.category, latest.category),
+                incomeType = merge(state.incomeType, initial.incomeType, latest.type),
+                source = merge(state.source, initial.source, latest.source),
+                memo = merge(state.memo, initial.memo, latest.memo.orEmpty()),
+                isFixed = merge(state.isFixed, initial.isFixed, latest.isRecurring),
+                originalSms = latest.originalSms.orEmpty()
+            )
+        } else {
+            val latest = expenseRepository.getExpenseById(expenseId) ?: return null
+            originalExpenseEntity = latest
+            latestDateTime = latest.dateTime
+            val latestType = if (latest.transactionType == "TRANSFER") {
+                TransactionType.TRANSFER
+            } else {
+                TransactionType.EXPENSE
+            }
+            state.copy(
+                transactionType = if (typeChanged) state.transactionType else latestType,
+                amount = merge(state.amount, initial.amount, latest.amount.toString()),
+                storeName = merge(state.storeName, initial.storeName, latest.storeName),
+                category = if (typeChanged) state.category else merge(state.category, initial.category, latest.category),
+                cardName = merge(state.cardName, initial.cardName, latest.cardName),
+                memo = merge(state.memo, initial.memo, latest.memo.orEmpty()),
+                isFixed = merge(state.isFixed, initial.isFixed, latest.isFixed),
+                isExcludedFromStats = if (state.transactionType == TransactionType.INCOME) {
+                    false
+                } else {
+                    merge(state.isExcludedFromStats, initial.isExcludedFromStats, latest.isExcludedFromStats)
+                },
+                transferDirection = if (typeChanged || state.transferDirection?.dbValue != initial.transferDirection) {
+                    state.transferDirection
+                } else {
+                    TransferDirection.fromDbValue(latest.transferDirection)
+                },
+                originalSms = latest.originalSms
+            )
+        }
+        val calendar = Calendar.getInstance().apply { timeInMillis = latestDateTime }
+        val timeChanged = state.hour != initial.hour || state.minute != initial.minute
+        return merged.copy(
+            dateMillis = merge(state.dateMillis, initial.dateMillis,
+                TransactionEditDateTimeMapper.toDatePickerMillis(latestDateTime)),
+            hour = if (timeChanged) state.hour else calendar.get(Calendar.HOUR_OF_DAY),
+            minute = if (timeChanged) state.minute else calendar.get(Calendar.MINUTE)
+        )
+    }
+
+    private fun resolveSaveDateTime(
+        input: TransactionEditUiState,
+        merged: TransactionEditUiState
+    ): Long {
+        val initial = initialSnapshot
+        if (!input.isNew && initial != null &&
+            input.dateMillis == initial.dateMillis && input.hour == initial.hour && input.minute == initial.minute
+        ) {
+            // 날짜/시간을 편집하지 않았다면 정본의 초·밀리초까지 그대로 보존한다.
+            val latest = if (originalTransactionType == TransactionType.INCOME) {
+                originalIncomeEntity?.dateTime
+            } else {
+                originalExpenseEntity?.dateTime
+            }
+            if (latest != null) return latest
+        }
+        return TransactionEditDateTimeMapper.buildDateTime(merged.dateMillis, merged.hour, merged.minute)
+    }
+
+    private fun showMissingTransaction() {
+        _uiState.update { it.copy(loadErrorResId = R.string.transaction_edit_not_found) }
+        snackbarBus.show(context.getString(R.string.transaction_edit_not_found))
+    }
+
     fun delete() {
         viewModelScope.launch {
             try {
                 // 원래 타입 기준으로 삭제 (전환 전 원본 삭제)
-                when (originalTransactionType) {
+                val target = when (originalTransactionType) {
                     TransactionType.INCOME -> {
                         if (incomeId <= 0) return@launch
-                        originalIncomeEntity?.smsId?.let { DeletedSmsTracker.markDeleted(it) }
-                        incomeRepository.deleteById(incomeId)
+                        TransactionTarget.Income(incomeId)
                     }
                     TransactionType.EXPENSE, TransactionType.TRANSFER -> {
                         if (expenseId <= 0) return@launch
-                        originalExpenseEntity?.let { DeletedSmsTracker.markDeleted(it.smsId) }
-                        expenseRepository.deleteById(expenseId)
+                        TransactionTarget.Expense(expenseId)
                     }
                 }
-                dataRefreshEvent.emit(DataRefreshEvent.RefreshType.TRANSACTION_ADDED)
+                if (!transactionQuickActionService.delete(target)) {
+                    showMissingTransaction()
+                    return@launch
+                }
                 snackbarBus.show(context.getString(R.string.transaction_edit_deleted))
                 _uiState.update { it.copy(isDeleted = true) }
             } catch (e: Exception) {

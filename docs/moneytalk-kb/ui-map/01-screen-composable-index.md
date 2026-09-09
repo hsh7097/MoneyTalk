@@ -146,7 +146,7 @@ status: draft
 | `feature/transactionedit/ui/TransactionEditChrome.kt` | `TransactionEditTopBar`, `TransactionEditBottomActions`, `TransactionEditSystemBars` | 상하단 액션과 시스템 바 |
 | `feature/transactionedit/ui/TransactionHeroCard.kt` | `TransactionHeroCard`, `EditableHeroText`, `EditableHeroAmount`, `TransactionTypeSegmentedControl`, `TransactionType.accentColor` | 거래명 행 아래 전체 폭의 금액 입력, 사용자 글자 배율과 실제 표시 폭으로 크기 조정. 유형 Composable 확장 함수가 테마의 의미 색상 반환 |
 | `feature/transactionedit/ui/TransactionBasicInfoCard.kt` | `TransactionBasicInfoCard`, `DetailActionRow`, `DetailStaticRow`, `DetailEditRow`, `DetailRowFrame`, `DetailLabel`, `CompactRuleCheckbox` | 기본 입력과 정보 행 |
-| `feature/transactionedit/ui/TransactionAutomationCard.kt` | `TransactionAutomationCard`, `AutomationOptionRow`, `SameStoreHeaderCheckbox`, `fixedShortLabel`, `fixedDescription` | 고정/통계 제외/일괄 적용 옵션 |
+| `feature/transactionedit/ui/TransactionAutomationCard.kt` | `TransactionAutomationCard`, `AutomationOptionRow`, `SameStoreHeaderCheckbox`, `fixedShortLabel`, `fixedDescription` | 고정/통계 제외 값과 일괄 적용 범위. 기존 false 규칙도 체크 영역을 유지하며 스위치 OFF는 false 값 적용, 체크 해제는 규칙 제거 |
 | `feature/transactionedit/ui/TransactionSameStoreRuleCard.kt` | `TransactionSameStoreRuleCard`, `RuleKeywordInput`, `KeywordGuideCard` | 동일 거래처 적용 키워드 |
 | `feature/transactionedit/ui/TransactionOriginalSmsCard.kt` | `TransactionOriginalSmsCard` | 원본 문자 표시 |
 | `feature/transactionedit/ui/TransactionEditComponents.kt` | `TransactionSectionCard`, `TransactionDivider` | 거래 편집 카드 공통 요소 |

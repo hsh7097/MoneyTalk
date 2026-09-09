@@ -50,7 +50,13 @@ status: draft
 | `TransactionOriginalSmsCard.kt` | 문자 원문 표시 |
 | `TransactionEditComponents.kt` | 여러 카드가 사용하는 section frame/divider/색상 |
 
-UI 상태, 데이터 저장, category/date picker, 알림 진입 처리에는 관여하지 않는다. 입력 remember, callback 순서, 자동화 옵션 LaunchedEffect, 최대 글자 배율의 2줄 값 정책과 시스템 바 처리는 그대로 보존한다.
+이 파일 분리 자체는 UI 상태, 데이터 저장, category/date picker, 알림 진입 처리를 바꾸지 않았다. 입력 remember, 최대 글자 배율의 2줄 값 정책과 시스템 바 처리는 유지한다. 자동화 옵션의 이후 상태 보정은 아래 계약을 따른다.
+
+## 자동 정리의 값과 적용 범위 (2026-09-09)
+
+- `TransactionAutomationCard`는 렌더링 시 일괄 적용 플래그를 변경하지 않는다. 기존 고정/통계 제외 규칙이 false여도 체크된 같은 거래처 적용 영역을 보여주며, 화면 진입이나 메모 저장만으로 규칙을 제거하지 않는다.
+- 같은 거래처 적용을 체크한 채 고정/통계 제외 스위치를 끄면 해당 apply 플래그를 유지하여 false 값을 같은 거래처에도 적용한다. 규칙을 제거하려면 같은 거래처 체크를 직접 해제한다. 단건 값과 적용 범위 선택을 분리한다.
+- `TransactionEditNotificationRaceTest`는 실제 Activity에서 통계 제외 행 OFF, false 규칙의 소급 적용, 같은 거래처 체크 해제·규칙 삭제를 검증한다.
 
 ## 금융 앱 화면 정리 (2026-09-08)
 
