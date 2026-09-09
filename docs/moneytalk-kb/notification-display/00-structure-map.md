@@ -28,6 +28,8 @@ SmsReceiver / NotificationTransactionService / MmsContentObserver / RcsContentOb
 | 파일 | 분류 | 책임 |
 |---|---|---|
 | `core/notification/SmsNotificationManager.kt` | display manager | 채널 생성, 지출/수입 알림 생성, active transaction notification 정리 |
+| `core/notification/TransactionNotificationIntents.kt` | intent factory | 본문 편집과 삭제/통계 제외 액션의 타입·Long ID별 식별, 액션 URI 검증 |
+| `core/notification/TransactionNotificationActionReceiver.kt` | private action receiver | 삭제/통계 제외 액션을 기존 단건 서비스와 알림 단건 취소에 연결 |
 | `core/sms/SmsInstantProcessor.kt` | decision point | 저장 성공 여부, 설정 toggle, 제외 카드, 중복 치환에 따라 알림 표시 호출 |
 | `MoneyTalkApplication.kt` | app startup | 앱 시작 시 알림 채널 생성 |
 | `MainActivity.kt` | app foreground | 앱 진입 시 MoneyTalk 거래 알림 취소 |

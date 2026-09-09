@@ -168,6 +168,11 @@
             android:theme="@style/Theme.MoneyTalk"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- 거래 알림 삭제/통계 제외 액션 -->
+        <receiver
+            android:name=".core.notification.TransactionNotificationActionReceiver"
+            android:exported="false" />
+
         <!-- SMS Receiver -->
         <receiver
             android:name=".receiver.SmsReceiver"

@@ -50,7 +50,7 @@ status: draft
 | 디자인 시스템 | 기존 팔레트의 Material 3 배경/표면, 의미 색상과 금액 위계, 공통 카드/탭/설정 row, 큰 글자 대응 | [ui-map](../ui-map/README.md), [금융 UI 기준](../project-context/05-finance-ui-design-system-20260908.md), [사용성 감사](../project-context/06-finance-ux-plan-20260908.md), [통합 검증](../project-context/07-finance-ui-validation-20260908.md) |
 | 데이터 새로고침 | 거래/카테고리/설정 변경 후 화면 refresh event | [data-refresh](../data-refresh/README.md) |
 | 전역 스낵바 | 장기 작업/실패/성공 피드백 | [app-shell](../app-shell/README.md) |
-| SMS 즉시 저장 + 앱 노티 표시 | 실시간 저장 후 MoneyTalk 거래 알림 표시/숨김 정책 | [notification-display](../notification-display/README.md), [filtering](../filtering/README.md) |
+| SMS 즉시 저장 + 앱 노티 표시 | 실시간 저장 후 거래 알림 표시/숨김, 본문 클릭 편집 진입, 지출은 통계 제외/삭제·수입은 삭제 액션으로 단건 처리 | [notification-display](../notification-display/README.md), [filtering](../filtering/README.md) |
 | SMS 파싱 파이프라인 | batch/instant SMS, regex/vector/LLM, coverage | [sms-parsing](../sms-parsing/README.md), [sms-pipeline](../sms-pipeline/README.md) |
 | 카테고리 분류 | 4-tier 자동 분류, 사용자 수정 학습 | [category-classification](../category-classification/README.md) |
 | Room DB | schema/migration, finance data repository | [finance-data](../finance-data/README.md) |

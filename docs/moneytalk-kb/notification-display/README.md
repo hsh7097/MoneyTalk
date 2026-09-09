@@ -31,6 +31,8 @@ Notification Display는 SMS/앱 알림/RCS 입력을 파싱해 거래를 저장�
 | 파일 | 역할 |
 |---|---|
 | `core/notification/SmsNotificationManager.kt` | 알림 채널 생성, 지출/수입 알림 표시, 앱 진입 시 거래 알림 정리 |
+| `core/notification/TransactionNotificationIntents.kt` | 본문 편집/삭제/통계 제외 버튼의 거래 유형·Long ID별 PendingIntent |
+| `core/notification/TransactionNotificationActionReceiver.kt` | 삭제/통계 제외 버튼에서 기존 단건 서비스 호출 후 해당 알림만 정리 |
 | `core/sms/SmsInstantProcessor.kt` | 거래 저장 성공 후 사용자 알림 표시 여부 결정 |
 | `MoneyTalkApplication.kt` | 앱 시작 시 알림 채널 생성 |
 | `MainActivity.kt` | 앱 진입 시 MoneyTalk 거래 알림 정리 |
@@ -43,3 +45,4 @@ Notification Display는 SMS/앱 알림/RCS 입력을 파싱해 거래를 저장�
 - 지출 알림은 설정의 거래 알림 toggle과 제외 카드 정책을 모두 통과해야 한다.
 - 수입 알림은 설정의 거래 알림 toggle을 통과해야 하며, 복원 중복/환불 중복 치환이면 표시하지 않는다.
 - listener 재연결에서 active notification을 재처리할 때는 `showUserNotification=false`로 저장만 보강한다.
+- 거래 알림 본문은 기존 편집 화면으로 이동한다. 지출 액션은 `통계에서 제외`, `삭제` 순서이며 수입은 `삭제`만 표시한다. 액션은 앱을 열지 않고 해당 거래 한 건에만 적용한다. 통계 제외는 기록을 유지하며, 알림을 쓸어 없애는 동작은 거래를 변경하지 않는다.

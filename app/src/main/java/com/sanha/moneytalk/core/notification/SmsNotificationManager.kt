@@ -10,6 +10,7 @@ import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import com.sanha.moneytalk.R
+import com.sanha.moneytalk.feature.transactionactions.model.TransactionTarget
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.text.NumberFormat
 import java.util.Locale
@@ -59,7 +60,9 @@ class SmsNotificationManager @Inject constructor(
         storeName: String
     ) {
         showNotification("expense:$expenseId", storeName, amount,
-            TransactionNotificationIntents.expense(context, expenseId))
+            TransactionNotificationIntents.expense(context, expenseId),
+            TransactionNotificationIntents.deleteExpense(context, expenseId),
+            TransactionNotificationIntents.excludeExpense(context, expenseId))
     }
 
     /** 수입 거래 알림 표시 */
@@ -71,7 +74,17 @@ class SmsNotificationManager @Inject constructor(
     ) {
         val title = if (source.isNotBlank()) "$source $incomeType" else context.getString(R.string.notification_income_title)
         showNotification("income:$incomeId", title, amount,
-            TransactionNotificationIntents.income(context, incomeId))
+            TransactionNotificationIntents.income(context, incomeId),
+            TransactionNotificationIntents.deleteIncome(context, incomeId))
+    }
+
+    /** 단건 액션이 완료됐거나 이미 없는 거래의 알림만 정리한다. */
+    fun cancelTransactionNotification(target: TransactionTarget) {
+        val tag = when (target) {
+            is TransactionTarget.Expense -> "expense:${target.id}"
+            is TransactionTarget.Income -> "income:${target.id}"
+        }
+        context.getSystemService(NotificationManager::class.java).cancel(tag, 0)
     }
 
     /** 앱 진입 시 MoneyTalk 거래 알림을 정리 */
@@ -88,7 +101,14 @@ class SmsNotificationManager @Inject constructor(
         manager.cancelAll()
     }
 
-    private fun showNotification(tag: String, title: String, amount: Int, pendingIntent: PendingIntent) {
+    private fun showNotification(
+        tag: String,
+        title: String,
+        amount: Int,
+        pendingIntent: PendingIntent,
+        deleteIntent: PendingIntent,
+        excludeIntent: PendingIntent? = null
+    ) {
         val body = context.getString(R.string.notification_transaction_amount,
             NumberFormat.getNumberInstance(Locale.KOREA).format(amount))
 
@@ -97,6 +117,23 @@ class SmsNotificationManager @Inject constructor(
             .setContentTitle(title)
             .setContentText(body)
             .setContentIntent(pendingIntent)
+            .apply {
+                if (excludeIntent != null) {
+                    addAction(
+                        NotificationCompat.Action.Builder(
+                            android.R.drawable.ic_menu_close_clear_cancel,
+                            context.getString(R.string.transaction_edit_exclude_from_stats), excludeIntent
+                        ).setAuthenticationRequired(true).build()
+                    )
+                }
+            }
+            .addAction(
+                NotificationCompat.Action.Builder(
+                    android.R.drawable.ic_menu_delete, context.getString(R.string.common_delete), deleteIntent
+                ).setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_DELETE)
+                    .setAuthenticationRequired(true)
+                    .build()
+            )
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()

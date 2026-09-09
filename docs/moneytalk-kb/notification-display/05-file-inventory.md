@@ -13,6 +13,9 @@ status: draft
 | 파일 | 역할 | 수정 시 같이 볼 문서 |
 |---|---|---|
 | `core/notification/SmsNotificationManager.kt` | 알림 채널 생성, 지출/수입 알림 표시, 거래 알림 취소 | `01-feature-flow.md` |
+| `core/notification/TransactionNotificationIntents.kt` | 본문/삭제/통계 제외 PendingIntent와 액션 요청 URI 검증 | `01-feature-flow.md` |
+| `core/notification/TransactionNotificationActionReceiver.kt` | 비공개 삭제/통계 제외 액션 수신, 성공/없는 거래의 알림 정리 | `01-feature-flow.md` |
+| `feature/transactionactions/data/TransactionQuickActionService.kt` | 단건 삭제/통계 제외, 기존 SMS 삭제 마킹, 화면 갱신 이벤트 | [../transaction-mutation/README.md](../transaction-mutation/README.md) |
 | `core/sms/SmsInstantProcessor.kt` | 저장 성공 후 알림 표시 여부 결정 | [../sms-pipeline/README.md](../sms-pipeline/README.md), [../filtering/README.md](../filtering/README.md) |
 | `MoneyTalkApplication.kt` | 앱 시작 시 알림 채널 생성 | [../app-shell/README.md](../app-shell/README.md) |
 | `MainActivity.kt` | 앱 진입 시 거래 알림 정리 | [../app-shell/README.md](../app-shell/README.md) |
