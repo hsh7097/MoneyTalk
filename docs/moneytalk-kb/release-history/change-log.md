@@ -4,7 +4,7 @@ title: Release History KB Change Log
 description: Release History KB 변경 이력
 tags: [moneytalk, kb, release, changelog]
 resource: docs/moneytalk-kb/release-history/
-timestamp: 2026-09-14T22:50:00+09:00
+timestamp: 2026-09-14T22:56:00+09:00
 status: draft
 ---
 
@@ -16,7 +16,8 @@ status: draft
 - 이미 반영된 작업 브랜치 정리와 미통합 실험의 태그·bundle 보존을 구분하고, 승인된 버전 변경·원격 통합·Play 제출의 실제 진행 상태를 기록했다.
 - Console의 개발자 등록 완료, 운영 22의 API 36 대응, API 35가 남은 Alpha·내부 테스트 트랙을 구분했다.
 - `4a69b6b`의 버전 23 최종 AAB/APK 해시, 업로드 인증서 일치, 운영 App Check·광고 설정, 네이티브 16KB 및 zipalign 검증 결과를 추가했다. 사전 검증용 22번 파일과 실제 제출할 23번 파일을 분리했다.
-- 파일 선택 도구 오류 후 실제 Console에서 내부 초안 `4`의 23번 번들·노트 저장과 기존 16번 제외를 확인한 상태로 정정했다. 도구 오류와 실제 업로드 상태를 구분하며, Play 제출·출시와 보호 브랜치 통합·원격 푸시는 미수행으로 명시했다.
+- 파일 선택 도구 오류와 실제 업로드 결과를 구분했다. 이후 내부 테스트 교체, 프로덕션·Alpha 전체 출시 심사 요청 접수, API 정책의 업데이트 검토 중 상태를 기록했다.
+- 기능별 커밋을 유지한 `develop`·`master` 통합과 atomic push, 소스 커밋을 가리키는 원격 `1.0.5` 태그를 확인했다. 심사 요청 접수와 운영 공개 완료를 구분했다.
 
 ## 2026-09-08
 
