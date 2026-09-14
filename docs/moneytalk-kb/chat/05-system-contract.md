@@ -123,7 +123,7 @@ ChatViewModel.sendMessage(message)
 | Rolling Summary / title | `GeminiModelConfig.summary` (기본 `gemini-3.5-flash`) | 0.3 | `prompt_summary_system`, `prompt_rolling_summary_*`, `prompt_chat_title_user` |
 
 프롬프트 본문은 `app/src/main/res/values/string_prompt.xml`에서 관리한다. 보조 라벨/상태 문자열은 `app/src/main/res/values/strings.xml`의 `ai_*` 또는 chat 관련 string을 확인한다.
-모델 객체는 `FirebaseAiModelFactory`에서 생성하며 release 요청은 Play Integrity App Check 검증을 통과해야 한다.
+모델 객체는 `FirebaseAiModelFactory`에서 생성하며 일반 배포용 release 요청은 Play Integrity App Check 검증을 통과해야 한다.
 
 ### 인증 실패 처리
 
@@ -135,7 +135,7 @@ ChatViewModel.sendMessage(message)
 
 `FirebaseAiRateLimitPolicyTest`는 감싸진 인증 실패, 일반 quota/JSON 파싱 실패 유지, App Check 문맥이 있는/없는 시도 제한 오류를 구분한다. 실제 채팅의 final 호출 생략과 안내·환불 표시는 통합 검증 대상이다.
 
-### AI 연결 운영 진단 (2026-09-09)
+### AI 연결 운영 진단 (2026-09-09 당시 상태)
 
 - 에뮬레이터의 `8890134` 빌드에서 `식비가 수입 대비 적절해?`를 실행하면 Debug App Check의 `403 App attestation failed` 뒤 `Firebase App Check token is invalid`로 실패했다. 같은 빌드의 `이번 달 총 지출 얼마야?`는 Local Fast Path로 정상 응답했다. 로컬 조회 성공을 Gemini 연결 성공으로 판단하지 않는다. 이후 알림/수집/편집 보완에서 AI 연결 코드는 변경하지 않았다.
 - Firebase CLI의 기존 로그인으로 SDK 설정, App Check와 RTDB 설정을 읽기 전용 확인했다. Firebase SDK 설정의 API 키는 로컬 `google-services.json`과 일치했고, RTDB의 서비스/무료 사용 플래그와 모델 설정도 활성 상태였다. `local.properties`의 별도 Gemini/Claude 키는 현재 Firebase AI Logic 채팅 경로가 사용하지 않는다. 이번 장애의 첫 실패 지점은 앱 인증이며 API 키 교체 근거는 확인되지 않았다.
@@ -146,6 +146,19 @@ ChatViewModel.sendMessage(message)
 개선 방향: 배포 점검에 실제 설치 경로의 AI 질문 1건을 포함한다. RTDB 활성 플래그나 로컬 조회 성공만으로 연결 상태를 판정하지 않는다. 개인용 배포도 등록된 서명과 설치 경로에 맞는 App Check 검증을 유지한다.
 
 공식 근거: [Android debug provider](https://firebase.google.com/docs/app-check/android/debug-provider), [Play Integrity 설정](https://firebase.google.com/docs/reference/appcheck/rest/v1/projects.apps.playIntegrityConfig). 당시 비밀값을 제거한 점검 결과와 화면은 로컬 `artifacts/ai-notification-audit-20260909/`에 보관한다.
+
+### 개인 설치본 AI 인증 복구 (2026-09-10)
+
+- 사용자가 Firebase 설정 수정을 요청한 뒤 기존 CLI 로그인으로 작업했다. API 키 교체 없이 아래 등록과 개인용 APK의 인증 제공자 조정으로 연결이 복구됐다.
+- Firebase Android 앱에 실제 개인 Release 서명에서 검증한 SHA-256을 추가했다. 기존 서명 등록은 보존했다. 이 등록만 적용한 기존 개인 Release에서는 실기기 인증 실패가 다시 확인되어 서명 등록과 설치 경로의 인증을 별도로 맞췄다.
+- 에뮬레이터의 기존 Debug App Check secret을 등록하고 토큰 교환 성공을 확인했다. 앱을 다시 실행해 `식비가 수입 대비 적절해?`의 실제 Gemini 답변까지 확인했다. Local Fast Path 성공으로 대체하지 않았다.
+- 실기기는 `f9f708f` 기준 개인용 Release APK에만 광고 제외와 Debug App Check 제공자를 적용했다. 기존 Firebase BoM이 관리하는 `firebase-appcheck-debug`를 일회성 빌드에만 포함했다. `DEBUG=false`, 동일 패키지·버전·서명, 기존 Activity 공개 범위를 확인했으며 debug 소스셋 전체를 포함하지 않았다.
+- 실기기에서 생성된 Debug secret을 별도로 등록하고 토큰 교환 성공을 확인했다. secret은 메모리에서만 처리하고 문서·소스·점검 출력·로컬 로그 파일에 저장하지 않았다. 이 secret은 등록된 테스트 설치본의 자격 증명이며 하드웨어에 강하게 결속된 기기 인증이라고 해석하지 않는다.
+- 실기기에 데이터 삭제 없이 업데이트 설치한 뒤 홈의 월 지출·수입 합계가 설치 전과 같음을 확인했다. 새 앱 실행에서 `Reply only CONNECTION_OK. Do not query transactions.`를 전송하고 AI의 별도 답변 말풍선 `CONNECTION_OK`를 화면/XML로 확인했다. 같은 프로세스의 알려진 App Check 오류와 크래시 로그는 없었다. 이는 채팅 연결 확인이며 DB 전체 무결성 검사나 모든 AI 기능의 회귀 테스트를 뜻하지 않는다.
+- Firebase AI Logic의 App Check enforcement는 `ENFORCED`를 유지했다. 일반 배포본의 Play Integrity 정책과 기존 debug 등록은 보존했다. `allowUnrecognizedVersion` 허용이나 API 키 갱신은 수행하지 않았다.
+- Debug/Release 빌드가 성공했고, 개인 APK 보관 후 임시 변경한 두 소스와 표준 APK·메타데이터를 원본으로 복원했다. 빌드·서명·난독화 설정 파일의 영구 변경은 없다. 개인용 APK와 비밀값을 제외한 검증 결과는 로컬 `artifacts/ai-auth-fix-20260910/`에 보관한다.
+
+후속 개인용 빌드에서는 광고 제외와 이번 인증 제공자 조합을 함께 유지한다. 일반 `assembleRelease` 결과는 원래 Play Integrity 제공자를 사용하므로 이번 개인용 설치본과 인증 경로가 다르다. 일반 배포본의 AI 동작은 실제 Play 설치 경로에서 별도로 검증한다.
 
 ## Rolling Summary
 

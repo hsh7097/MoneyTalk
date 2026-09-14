@@ -10,6 +10,13 @@ status: draft
 
 # Chat KB Change Log
 
+## 2026-09-10 - 에뮬레이터와 개인 설치본 AI 인증 복구 확인
+
+- Firebase 기존 로그인으로 개인 Release 서명과 에뮬레이터·실기기 Debug App Check 등록을 보완했다. API 키와 운영 Play Integrity 정책·AI enforcement는 유지했다.
+- 개인용 Release에만 광고 제외와 Debug App Check 제공자를 적용해 기존 서명으로 업데이트 설치했다. 원본 소스와 표준 APK 출력은 복원했다.
+- 에뮬레이터의 실제 상담 답변과 실기기의 `CONNECTION_OK` AI 답변을 확인했다. 실기기 홈의 월 지출·수입 합계가 유지됐으며 새 실행의 알려진 인증 오류와 크래시는 없었다.
+- `05-system-contract.md`에 복구 범위, 개인용 후속 빌드 조건, 일반 Play 배포본의 별도 검증 경계를 기록했다. 인증 비밀값은 기록하지 않았다.
+
 ## 2026-09-08 - 화면/계산/수정 책임 분리와 메시지 구독 정리
 
 - `ChatViewModel`의 18종 query, 13종 action, ANALYTICS를 `ChatQueryExecutor`, `ChatActionExecutor`, `ChatAnalyticsCalculator`로 분리하고 표시 모델을 `ChatUiState.kt`로 이동했다. MVVM과 기존 조회/저장/크레딧 계약을 유지한다.
