@@ -4,11 +4,19 @@ title: Release History KB Change Log
 description: Release History KB 변경 이력
 tags: [moneytalk, kb, release, changelog]
 resource: docs/moneytalk-kb/release-history/
-timestamp: 2026-07-13T01:11:00+09:00
+timestamp: 2026-09-14T22:50:00+09:00
 status: draft
 ---
 
 # Change Log
+
+## 2026-09-14
+
+- `04-release-1.0.5-readiness.md`에 최근 내부 변경과 Play 배포본의 차이, 수집·달력·월 경계 충돌 보완, 기능별 커밋과 검증 결과를 기록했다.
+- 이미 반영된 작업 브랜치 정리와 미통합 실험의 태그·bundle 보존을 구분하고, 승인된 버전 변경·원격 통합·Play 제출의 실제 진행 상태를 기록했다.
+- Console의 개발자 등록 완료, 운영 22의 API 36 대응, API 35가 남은 Alpha·내부 테스트 트랙을 구분했다.
+- `4a69b6b`의 버전 23 최종 AAB/APK 해시, 업로드 인증서 일치, 운영 App Check·광고 설정, 네이티브 16KB 및 zipalign 검증 결과를 추가했다. 사전 검증용 22번 파일과 실제 제출할 23번 파일을 분리했다.
+- 내부 초안 이름·노트 입력 이후 Chrome 파일 접근 오류로 업로드가 진행되지 않은 상태를 기록했다. 실제 Play 제출·출시와 보호 브랜치 통합·원격 푸시는 미수행으로 명시했다.
 
 ## 2026-09-08
 
