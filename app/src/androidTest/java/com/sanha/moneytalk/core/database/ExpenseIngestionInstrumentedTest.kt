@@ -379,6 +379,79 @@ class ExpenseIngestionInstrumentedTest {
     }
 
     @Test
+    fun filteredTimestampDriftStaysDeletedAfterTrackerReload() = runBlocking(Dispatchers.IO) {
+        val original = smsExpense(baseTime)
+        val provider = smsExpense(baseTime + 20_000L)
+        val id = repository.insert(original)
+        val input = parsedExpense(provider, baseTime + 20_000L).input
+        val snapshot = writer.buildExistingSmsSnapshot(listOf(input), baseTime to baseTime + 60_000L)
+
+        // Process restart loses pending reconciliation; the provider alias is filtered before the DAO.
+        assertTrue(writer.readAndFilterSms(listOf(input), emptyMap(), snapshot).isEmpty())
+        deleteTransaction(TransactionTarget.Expense(id))
+        DeletedSmsTracker.init(trackerContext)
+
+        val emptySnapshot = writer.buildExistingSmsSnapshot(listOf(input), baseTime to baseTime + 60_000L)
+        assertTrue(writer.readAndFilterSms(listOf(input), emptyMap(), emptySnapshot).isEmpty())
+        assertEquals(ExpenseIngestionResult.Skipped, repository.insertIngested(provider))
+        assertTrue(DeletedSmsTracker.isDeleted(original.smsId))
+        assertEquals(0, repository.getExpenseCount())
+    }
+
+    @Test
+    fun currentBatchTimestampDriftStaysDeletedAfterTrackerReload() = runBlocking(Dispatchers.IO) {
+        val original = smsExpense(baseTime)
+        val provider = smsExpense(baseTime + 20_000L)
+        val inputs = listOf(parsedExpense(original).input, parsedExpense(provider, baseTime + 20_000L).input)
+        val filtered = writer.readAndFilterSms(inputs, emptyMap(), SmsIngestionWriter.ExistingSmsSnapshot())
+        assertEquals(listOf(inputs.first()), filtered)
+        writer.write(listOf(parsedExpense(original)), emptyList(),
+            requireNotNull(classificationState.captureRegistrationEpoch()))
+        deleteTransaction(TransactionTarget.Expense(repository.getAllExpensesOnce().single().id))
+        DeletedSmsTracker.init(trackerContext)
+
+        assertEquals(ExpenseIngestionResult.Skipped, repository.insertIngested(provider))
+        assertEquals(0, repository.getExpenseCount())
+    }
+
+    @Test
+    fun reconciledExpenseTimestampDriftStaysDeletedFromBothSources() = runBlocking(Dispatchers.IO) {
+        val original = smsExpense(baseTime)
+        val provider = smsExpense(baseTime + 20_000L)
+        val id = repository.insert(original)
+        writer.write(listOf(parsedExpense(provider, baseTime + 20_000L)), emptyList(),
+            requireNotNull(classificationState.captureRegistrationEpoch()))
+        assertEquals(provider.smsId, repository.getAllExpensesOnce().single().smsId)
+        assertEquals(id, repository.getAllExpensesOnce().single().id)
+        deleteTransaction(TransactionTarget.Expense(id))
+        DeletedSmsTracker.init(trackerContext)
+
+        assertEquals(ExpenseIngestionResult.Skipped, repository.insertIngested(original))
+        assertEquals(ExpenseIngestionResult.Skipped, repository.insertIngested(provider))
+        assertEquals(0, repository.getExpenseCount())
+    }
+
+    @Test
+    fun reconciledIncomeTimestampDriftStaysDeletedFromBothSources() = runBlocking(Dispatchers.IO) {
+        val body = "[Web발신]\n[우리은행]\n입금 12,000원\n테스트회사 → 입출금통장(1234)\n잔액 50,000원"
+        val original = SmsInput("15889955_${baseTime}_${body.hashCode()}", body, "15889955", baseTime)
+        val provider = original.copy(id = "15889955_${baseTime + 20_000L}_${body.hashCode()}", date = baseTime + 20_000L)
+        val epoch = requireNotNull(classificationState.captureRegistrationEpoch())
+        writer.write(emptyList(), listOf(original), epoch)
+        val id = database.incomeDao().getAllIncomesOnce().single().id
+        writer.write(emptyList(), listOf(provider), epoch)
+        assertEquals(provider.id, database.incomeDao().getAllIncomesOnce().single().smsId)
+        assertEquals(id, database.incomeDao().getAllIncomesOnce().single().id)
+        deleteTransaction(TransactionTarget.Income(id))
+        DeletedSmsTracker.init(trackerContext)
+
+        writer.write(emptyList(), listOf(original, provider), epoch)
+        assertTrue(DeletedSmsTracker.isDeleted(original.id))
+        assertTrue(DeletedSmsTracker.isDeleted(provider.id))
+        assertEquals(0, database.incomeDao().getIncomeCount())
+    }
+
+    @Test
     fun writerKeepsPaymentAndItsCancellationInSeparateTables() = runBlocking(Dispatchers.IO) {
         val payment = expense("payment")
         val cancellation = SmsInput(
@@ -766,6 +839,13 @@ class ExpenseIngestionInstrumentedTest {
             failed = true
         }
         assertTrue("Expected injected SQLite write failure", failed)
+    }
+
+    private suspend fun deleteTransaction(target: TransactionTarget) {
+        val categories = CustomCategoryRepository(database.customCategoryDao())
+        val service = TransactionQuickActionService(database, repository, IncomeRepository(database.incomeDao()),
+            CategoryProvider(categories), categories, DataRefreshEvent())
+        assertTrue(service.delete(target))
     }
 
     private fun refundDeposit() = SmsInput(

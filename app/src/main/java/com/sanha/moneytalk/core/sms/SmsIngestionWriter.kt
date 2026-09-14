@@ -131,35 +131,41 @@ class SmsIngestionWriter @Inject constructor(
             if (DeletedSmsTracker.isDeleted(sms.id)) continue
 
             val contentKey = buildContentKey(sms.address, sms.body)
-            val existsInCurrentBatch = findClosestCandidate(
+            val currentBatchMatch = findClosestCandidate(
                 smsId = sms.id,
                 originalSms = sms.body,
                 contentKey = contentKey,
                 timestamp = sms.date,
                 candidateIndex = acceptedContentIndex
-            ) != null
+            )
             val existsInDbExact = sms.id in existingSnapshot.exactSmsIds
-            val existsInDbFuzzy = findClosestCandidate(
+            val dbMatch = findClosestCandidate(
                 smsId = sms.id,
                 originalSms = sms.body,
                 contentKey = contentKey,
                 timestamp = sms.date,
                 candidateIndex = existingSnapshot.contentIndex
-            ) != null
-            val existsInDb = existsInDbExact || existsInDbFuzzy
+            )
+            val existsInDb = existsInDbExact || dbMatch != null
 
-            val existsInPending = findClosestCandidate(
+            val pendingMatch = findClosestCandidate(
                 smsId = sms.id,
                 originalSms = sms.body,
                 contentKey = contentKey,
                 timestamp = sms.date,
                 candidateIndex = pendingContentIndex
-            ) != null
+            )
+
+            // DAO까지 도달하지 않는 중복도 출처를 연결해야 삭제 후 다른 수신시각 ID로 복원되지 않는다.
+            listOfNotNull(currentBatchMatch, dbMatch, pendingMatch).forEach { match ->
+                DeletedSmsTracker.linkSameTransaction(sms.id, match.smsId)
+            }
+            if (DeletedSmsTracker.isDeleted(sms.id)) continue
 
             val shouldProcess = when {
-                existsInCurrentBatch -> false
+                currentBatchMatch != null -> false
                 reprocessExisting -> true
-                existsInDb && existsInPending -> true
+                existsInDb && pendingMatch != null -> true
                 existsInDb -> false
                 else -> true
             }
@@ -552,6 +558,9 @@ class SmsIngestionWriter @Inject constructor(
                         if (existingExpense == null) {
                             existingIncome = existingSnapshot.incomesBySmsId[fuzzyId]
                         }
+                        if (existingExpense != null || existingIncome != null) {
+                            DeletedSmsTracker.linkSameTransaction(entity.smsId, fuzzyId)
+                        }
                     }
                 }
             }
@@ -687,6 +696,9 @@ class SmsIngestionWriter @Inject constructor(
                         existingIncome = existingSnapshot.incomesBySmsId[fuzzyId]
                         if (existingIncome == null) {
                             existingExpense = existingSnapshot.expensesBySmsId[fuzzyId]
+                        }
+                        if (existingIncome != null || existingExpense != null) {
+                            DeletedSmsTracker.linkSameTransaction(smsId, fuzzyId)
                         }
                     }
                 }
