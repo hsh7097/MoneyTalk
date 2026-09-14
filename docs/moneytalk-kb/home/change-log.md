@@ -10,6 +10,11 @@ status: draft
 
 # Home KB 변경 로그
 
+## 2026-09-14 - 월 경계 Pager 충돌 방지
+
+- 현재 시계를 직접 읽던 Pager 페이지 수를 `rememberMonthPagerPageCount`의 실효 월 state에서 계산한다. 같은 변경을 내역/카테고리 상세에 적용했다.
+- Foundation 1.7.5에서 시계처럼 관찰 불가능한 페이지 수를 3→4로 바꾼 뒤 드래그하면 Play의 `MutableIntervalList → extraPagesAfter`와 동일한 스택으로 재현됐다. 수정 후 API 36 에뮬레이터에서 `MonthPagerStateTest`의 월 증가·시계 후퇴·시작일 변경 회귀 3개가 통과했다.
+
 | 날짜 | 근거 | 변경 | 영향 문서 | 메모 |
 |---|---|---|---|---|
 | 2026-09-08 | `briefing/**`, `recurring/**`, Home 통합 코드 확인 | 무료 소비 브리핑·고정 지출 예상, 오늘 거래 롱클릭과 자동 AI 요청 제거 반영 | `README.md`, 구조/인벤토리, `package-reference/**` | 월/주간 미래 거래 범위, 오늘 포함 일수·DST·Long, 반복 근거와 실제 ID, 부분 기록 안내를 명시. 과거 AI 변경 이력은 유지하며 최종 테스트 결과는 제품 검토에서 확인. |

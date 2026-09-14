@@ -12,6 +12,7 @@ status: draft
 
 ## 2026-09-14
 
+- 홈·내역·카테고리 상세의 공용 월 Pager snapshot helper `rememberMonthPagerPageCount`를 선언 맵에 반영했다.
 - 달력의 다음 날 복귀 처리를 담당하는 `rememberCalendarToday` 선언과 오늘 날짜 캐시 갱신을 History 항목에 반영했다.
 
 ## 2026-09-08

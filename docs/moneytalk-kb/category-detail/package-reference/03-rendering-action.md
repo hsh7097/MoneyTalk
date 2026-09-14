@@ -47,6 +47,8 @@ CategoryDetailScreen
 
 ## 변경 시 주의
 
+월 Pager의 페이지 수는 홈·내역과 같은 `rememberMonthPagerPageCount`를 사용한다. 현재 날짜를 측정 중 직접 읽지 않고 복귀/설정 변경/재구성으로 갱신된 Compose state의 실효 월을 기준으로 계산한다.
+
 1. pager의 현재 월과 ViewModel의 `selectedYear/month`가 어긋나면 인접 월 preloading이 깨질 수 있다.
 2. `CategoryDetailPageContent`에 새 블록을 추가하면 loading/empty/error 상태에서 같은 블록이 보여야 하는지 먼저 정한다.
 3. 정렬 tab을 늘리면 `CategorySortOrder`, `setSortOrder()`, `CategoryTransactionListMapper.build()`를 동시에 갱신한다.

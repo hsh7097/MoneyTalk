@@ -54,6 +54,7 @@ import com.sanha.moneytalk.core.ui.coachmark.CoachMarkTargetRegistry
 import com.sanha.moneytalk.core.ui.coachmark.onboardingTarget
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
+import com.sanha.moneytalk.core.ui.component.rememberMonthPagerPageCount
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
@@ -118,9 +119,10 @@ fun HistoryScreen(
     val initialPage = remember {
         MonthPagerUtils.yearMonthToPage(uiState.selectedYear, uiState.selectedMonth)
     }
+    val pageCount = rememberMonthPagerPageCount(uiState.monthStartDay)
     val pagerState = rememberPagerState(
         initialPage = initialPage,
-        pageCount = { MonthPagerUtils.getPageCount(uiState.monthStartDay) }
+        pageCount = { pageCount }
     )
     val coroutineScope = rememberCoroutineScope()
 

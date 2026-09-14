@@ -39,6 +39,8 @@ status: draft
 
 ## Navigation/action
 
+- 홈·내역·카테고리 상세의 월 Pager는 `rememberMonthPagerPageCount`에서 계산한 동일한 페이지 수를 읽는다. 이 helper는 실효 현재 월을 Compose state로 보관하고 복귀/시작일 변경/재구성 때 갱신한다. 측정 중 시계를 직접 다시 읽지 않아 월 경계에서 Pager의 캐시와 측정 범위가 달라지는 충돌을 방지한다.
+- 전경에서 아무 재구성 없이 월 경계를 넘긴 경우에는 이전 허용 월을 유지하다 일반 UI 갱신 또는 화면 복귀 때 새 월을 연다. 그 사이 오늘 탭 재클릭이 새 월로 즉시 이동하는 것까지는 보장하지 않으며, 이번 수정에 주기적인 시계 확인이나 추가 refresh wrapper를 넣지 않았다.
 - 카테고리 클릭은 `CategoryDetailActivity.open()`으로 상세 화면을 연다.
 - 거래 클릭 또는 수정은 `TransactionEditActivity` 경로를 확인한다.
 - 오늘 거래 롱클릭은 `TransactionTarget.Expense/Income(id)`를 화면별 `TransactionQuickActionViewModel`에 전달한다. 모달에는 거래명·닫기·수정/삭제만 표시하며 닫기는 데이터를 바꾸지 않는다. 수정은 유형과 ID로 기존 상세 편집을 연다.

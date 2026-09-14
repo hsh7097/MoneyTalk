@@ -59,6 +59,7 @@ import com.sanha.moneytalk.feature.categorydetail.ui.model.CategoryTransactionIt
 import com.sanha.moneytalk.feature.transactionedit.ui.TransactionEditActivity
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
+import com.sanha.moneytalk.core.ui.component.rememberMonthPagerPageCount
 import com.sanha.moneytalk.core.ui.component.transaction.card.TransactionCardCompose
 import com.sanha.moneytalk.core.ui.component.transaction.header.TransactionGroupHeaderCompose
 import com.sanha.moneytalk.core.theme.moneyTalkColors
@@ -94,9 +95,10 @@ fun CategoryDetailScreen(
     val initialPage = remember {
         MonthPagerUtils.yearMonthToPage(uiState.selectedYear, uiState.selectedMonth)
     }
+    val pageCount = rememberMonthPagerPageCount(uiState.monthStartDay)
     val pagerState = rememberPagerState(
         initialPage = initialPage,
-        pageCount = { MonthPagerUtils.getPageCount(uiState.monthStartDay) }
+        pageCount = { pageCount }
     )
     val coroutineScope = rememberCoroutineScope()
 

@@ -27,6 +27,7 @@ HistoryScreen
 
 ## Action 흐름
 
+- 월 Pager의 페이지 수는 `rememberMonthPagerPageCount`의 실효 월 snapshot을 사용한다. 복귀/시작일 변경/재구성 시 갱신하며 Pager 측정 중 현재 날짜를 직접 다시 읽지 않는다. 월 증가뿐 아니라 시계 후퇴와 시작일 변경으로 마지막 페이지가 줄어드는 경계도 `MonthPagerStateTest`에서 확인한다.
 - 외부 카테고리 필터는 `HistoryScreen`의 `LaunchedEffect(filterCategory)`에서 한 번 소비된다.
 - 일반 거래 클릭은 상세 편집으로 이동한다. 롱클릭은 화면별 `TransactionQuickActionViewModel`의 수정/삭제 메뉴를 연다. 수정은 기존 `TransactionEditActivity`, 확인한 단건 삭제는 공용 `TransactionQuickActionService`가 처리한다. 기존 상세 dialog의 `HistoryIntent` 경로와 구분한다.
 - `+` 버튼 또는 수정 진입은 `TransactionEditActivity`를 확인한다.

@@ -54,6 +54,7 @@ status: draft
 | `SegmentedTabRowCompose` / `SegmentedTabInfo` | 아이콘 지원 탭, 최소 48dp 높이와 선택 상태 접근성 | History 및 CategorySettings의 `CategoryTypeTabRow`에서 재사용. 선택 색은 Info에서 전달 |
 | `SettingsItemCompose` / `SettingsSectionCompose` | 테마 표면의 설정 row/section | 최소 60dp 행, 부제가 있을 때만 추가 줄. 일반 아이콘 `primary`, 부제목 `onSurface` 60%, 화살표 30%, 위험 행 `error`. Settings menu map과 함께 갱신 |
 | `CategoryIcon` | 카테고리 icon/색상 | custom category fallback 확인 |
+| `rememberMonthPagerPageCount` (`core/ui/component/MonthPagerState.kt`) | 홈·내역·카테고리 상세의 실효 월과 페이지 수 snapshot | 복귀/시작일 변경/재구성 시 갱신. Pager callback에서 시계를 직접 읽지 않음 |
 | `CategorySelectDialog` / `CategoryGridItem` | 거래 편집, History filter, Store Rule의 공통 카테고리 picker | `fontScale >= 1.5`에서는 3열과 최대 두 줄 라벨을 유지해 이름 말줄임을 방지 |
 
 ## Coachmark

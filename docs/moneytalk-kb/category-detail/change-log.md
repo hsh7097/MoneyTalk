@@ -10,6 +10,10 @@ status: draft
 
 # Category Detail KB 변경 로그
 
+## 2026-09-14 - 월 Pager 페이지 수 일관성
+
+- 홈·내역과 동일하게 `rememberMonthPagerPageCount`의 실효 월 state로 페이지 수를 계산한다. 월 경계의 직접 시계 읽기를 제거하고 복귀/설정 변경/재구성 시 갱신한다.
+
 | 날짜 | 근거 | 변경 | 영향 문서 | 메모 |
 |---|---|---|---|---|
 | 2026-09-08 | `CategoryDetailScreen`의 `onExpenseLongClick` 확인 | 단건 수정/삭제 시트와 브리핑 카테고리 진입 반영 | `package-reference/03-rendering-action.md` | 카테고리 변경 후 현재 목록에서 제외, 주간 전용 목록이 아닌 선택 회계월 진입임을 명시. |

@@ -42,6 +42,7 @@ import com.sanha.moneytalk.core.ui.component.BannerAdCompose
 import com.sanha.moneytalk.core.ui.component.BannerAdIds
 import com.sanha.moneytalk.core.ui.component.MonthKey
 import com.sanha.moneytalk.core.ui.component.MonthPagerUtils
+import com.sanha.moneytalk.core.ui.component.rememberMonthPagerPageCount
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import com.sanha.moneytalk.core.ui.coachmark.CoachMarkOverlay
@@ -82,9 +83,10 @@ fun HomeScreen(
     val initialPage = remember {
         MonthPagerUtils.yearMonthToPage(uiState.selectedYear, uiState.selectedMonth)
     }
+    val pageCount = rememberMonthPagerPageCount(uiState.monthStartDay)
     val pagerState = rememberPagerState(
         initialPage = initialPage,
-        pageCount = { MonthPagerUtils.getPageCount(uiState.monthStartDay) }
+        pageCount = { pageCount }
     )
     val coroutineScope = rememberCoroutineScope()
 
