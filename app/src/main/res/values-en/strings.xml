@@ -70,6 +70,7 @@
     <string name="chat_delete">Delete</string>
     <string name="chat_no_sessions">No saved insights yet</string>
     <string name="chat_start_new">Start Insight Question</string>
+    <string name="chat_app_verification_failed">Unable to verify the app and generate an AI response. Please try again later. If the problem continues, check for app updates in the Play Store.</string>
     <string name="chat_default_session_title">New Insight</string>
     <string name="chat_previous_session_title">Previous Insight</string>
     <string name="chat_local_lookup_answer">Here is what I found.\n\n%1$s</string>
@@ -563,6 +564,7 @@
     <string name="transaction_edit_input_required">Please enter amount and store name</string>
     <string name="transaction_edit_save_failed">Failed to save</string>
     <string name="transaction_edit_delete_failed">Failed to delete</string>
+    <string name="transaction_edit_not_found">Transaction not found. It may have been deleted or its type may have changed.</string>
     <string name="income_type_default">Deposit</string>
     <string name="transaction_edit_income_type">Type</string>
     <string name="transaction_edit_source">Source</string>
@@ -655,6 +657,7 @@
     <string name="notification_channel_description">Transaction alerts on SMS received</string>
     <string name="notification_expense_title">Card Payment</string>
     <string name="notification_income_title">Deposit</string>
+    <string name="notification_transaction_amount">₩%1$s</string>
 
     <!-- Release lint sync -->
     <string name="chat_ai_disclaimer">AI can make mistakes. Please verify important information yourself.</string>
@@ -700,6 +703,7 @@
     <string name="budget_saved">Budget saved</string>
     <string name="budget_input_mode_amount">Amount</string>
     <string name="budget_input_mode_percent">%</string>
+    <string name="budget_input_invalid">Please check your budget amounts and percentages. Amounts can be up to ₩2,147,483,647.</string>
     <string name="budget_subtitle_total_and_category">Monthly %1$s won + %2$d categories</string>
     <string name="budget_subtitle_category_only">%d category budgets set</string>
     <string name="category_type_expense">Expense</string>
