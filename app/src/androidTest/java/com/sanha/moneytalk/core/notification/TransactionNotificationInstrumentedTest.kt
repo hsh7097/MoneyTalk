@@ -3,9 +3,11 @@ package com.sanha.moneytalk.core.notification
 import android.Manifest
 import android.app.Activity
 import android.app.ActivityOptions
+import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.os.Build
+import android.service.notification.StatusBarNotification
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
@@ -44,7 +46,7 @@ class TransactionNotificationInstrumentedTest {
     private val expenses = mutableListOf<Long>()
     private val incomes = mutableListOf<Long>()
 
-    @Before fun setUp() = runBlocking {
+    @Before fun setUp() = runBlocking<Unit> {
         check(Build.FINGERPRINT.contains("generic") || Build.MODEL.contains("sdk_gphone")) {
             "Notification fixtures must run on a disposable emulator"
         }
@@ -58,9 +60,10 @@ class TransactionNotificationInstrumentedTest {
         notifications = SmsNotificationManager(context)
         notifications.createNotificationChannel()
         notifications.clearTransactionNotifications()
+        awaitTransactionNotifications(emptyMap())
     }
 
-    @After fun tearDown() = runBlocking {
+    @After fun tearDown() = runBlocking<Unit> {
         if (!::database.isInitialized) return@runBlocking
         // 명시한 수동 QA 모드에서만 가짜 거래/알림을 남겨 실제 알림 창 탭을 검증한다.
         if (InstrumentationRegistry.getArguments().getString("notification_fixture") == "true") return@runBlocking
@@ -70,8 +73,12 @@ class TransactionNotificationInstrumentedTest {
                 .distinct().filterNot { it.isFinishing }.forEach(Activity::finish)
         }
         notifications.clearTransactionNotifications()
-        expenses.forEach { database.expenseDao().deleteById(it) }
-        incomes.forEach { database.incomeDao().deleteById(it) }
+        try {
+            awaitTransactionNotifications(emptyMap())
+        } finally {
+            expenses.forEach { database.expenseDao().deleteById(it) }
+            incomes.forEach { database.incomeDao().deleteById(it) }
+        }
     }
 
     @Test fun sameNumericExpenseAndIncomeIdsKeepSeparatePendingIntents() = runBlocking {
@@ -80,13 +87,19 @@ class TransactionNotificationInstrumentedTest {
         val income = income("Notification QA income", id = id)
         notifications.showExpenseNotification(expense, 12340, "Notification QA expense")
         notifications.showIncomeNotification(income, 56780, "Notification QA income", "입금")
-        val active = context.getSystemService(NotificationManager::class.java).activeNotifications
+        val active = awaitTransactionNotifications(mapOf(
+            "expense:$expense" to "Notification QA expense",
+            "income:$income" to "Notification QA income 입금"
+        ))
         val expenseNotification = active.single { it.tag == "expense:$expense" }
         val incomeNotification = active.single { it.tag == "income:$income" }
         assertNotEquals(expenseNotification.notification.contentIntent, incomeNotification.notification.contentIntent)
         // 새 manager 인스턴스에서도 같은 거래만 교체하고, 정리는 tag가 있는 알림까지 포함한다.
-        SmsNotificationManager(context).showExpenseNotification(expense, 12340, "Notification QA expense")
-        assertEquals(2, context.getSystemService(NotificationManager::class.java).activeNotifications.size)
+        SmsNotificationManager(context).showExpenseNotification(expense, 12340, "Notification QA expense updated")
+        assertEquals(2, awaitTransactionNotifications(mapOf(
+            "expense:$expense" to "Notification QA expense updated",
+            "income:$income" to "Notification QA income 입금"
+        )).size)
     }
 
     @Test fun olderExpenseNotificationStillOpensItsOwnPersistedRow() = runBlocking {
@@ -94,7 +107,10 @@ class TransactionNotificationInstrumentedTest {
         val second = expense("Notification QA second")
         notifications.showExpenseNotification(first, 12340, "Notification QA first")
         notifications.showExpenseNotification(second, 12340, "Notification QA second")
-        val pending = context.getSystemService(NotificationManager::class.java).activeNotifications
+        val pending = awaitTransactionNotifications(mapOf(
+            "expense:$first" to "Notification QA first",
+            "expense:$second" to "Notification QA second"
+        ))
             .single { it.tag == "expense:$first" }.notification.contentIntent
         val activity = open(pending)
         assertEquals(first, activity.intent.getLongExtra(TransactionEditArgs.EXPENSE_ID, -1))
@@ -184,6 +200,20 @@ class TransactionNotificationInstrumentedTest {
             assertEquals("changed", model.uiState.value.ruleKeyword)
             assertTrue(model.hasPendingChanges(model.uiState.value))
         }
+    }
+
+    private fun awaitTransactionNotifications(expectedTitles: Map<String, String>): List<StatusBarNotification> {
+        var active = emptyList<StatusBarNotification>()
+        compose.waitUntil(10_000) {
+            active = context.getSystemService(NotificationManager::class.java).activeNotifications
+                .filter { it.notification.channelId == SmsNotificationManager.CHANNEL_ID }
+            active.size == expectedTitles.size && expectedTitles.all { (tag, title) ->
+                active.any {
+                    it.tag == tag && it.notification.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() == title
+                }
+            }
+        }
+        return active
     }
 
     private fun open(pending: PendingIntent): TransactionEditActivity {
