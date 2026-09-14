@@ -111,7 +111,7 @@ status: draft
 | `feature/history/ui/HistoryScreen.kt` | `HistoryScreen`, `TransactionListView` | 월 pager, 현재 필터/검색/보기, 날짜별 거래 행과 롱클릭 메뉴 연결 |
 | `feature/history/ui/HistoryHeader.kt` | `SearchBar`, `HistoryTitleBar`, `PeriodSummaryCard`, `FilterTabRow`, `FilterActionButton` | 접히는 제목/월 요약과 고정 보기·필터 한 줄, 활성 조건명·별도 X 초기화 |
 | `feature/history/ui/HistoryScrollLayout.kt` | `HistoryScrollLayout` | 기존 월별 목록/달력의 nested scroll을 받아 요약만 접고 도구 행은 고정. 월/검색/탭 재클릭/FAB 복원 |
-| `feature/history/ui/HistoryCalendar.kt` | `BillingCycleCalendarView`, `CalendarDayCell`, `CalendarAmountText` | 큰 글자에 맞춘 셀 높이·월 세로 스크롤. 7열 금액의 실제 폭을 측정해 부호·만/억 단위와 정확한 원 단위 접근성 설명을 보존 |
+| `feature/history/ui/HistoryCalendar.kt` | `rememberCalendarToday`, `BillingCycleCalendarView`, `CalendarDayCell`, `CalendarAmountText` | 복귀 시 오늘 날짜 갱신. 큰 글자에 맞춘 셀 높이·월 세로 스크롤. 7열 금액의 실제 폭을 측정해 부호·만/억 단위와 정확한 원 단위 접근성 설명을 보존 |
 | `feature/history/ui/HistoryFilter.kt` | `FilterBottomSheet` | 임시 필터 상태와 시트 조합/적용 |
 | `feature/history/ui/HistoryFilterControls.kt` | `FilterTransactionTypeSelector`, `FilterTypeTile`, `FilterGuideCard`, `FilterNoticeCard`, `FilterOptionPillRow`, `FilterOptionPill`, `FilterCategoryChipGroup`, `CategoryChoiceChip`, `FilterCategorySummaryRow` | 유형/옵션/카테고리 선택 UI |
 | `feature/history/ui/HistoryFilterPickers.kt` | `CardFilterListBottomSheet`, `CategoryFilterListBottomSheet`, `CategoryFilterListRow` | 카드/카테고리 전체 목록 선택 |

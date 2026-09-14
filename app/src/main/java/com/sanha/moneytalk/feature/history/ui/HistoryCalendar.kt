@@ -26,7 +26,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,11 +45,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.sanha.moneytalk.R
 import com.sanha.moneytalk.core.theme.moneyTalkColors
 import com.sanha.moneytalk.core.util.toDpTextUnit
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
+import java.time.LocalDate
 import java.util.Calendar
 import java.util.Locale
 
@@ -62,6 +69,15 @@ data class CalendarDay(
     val isToday: Boolean
 )
 
+/** 백그라운드에 있는 동안 날짜가 바뀌어도 복귀한 달력은 오늘을 다시 계산한다. */
+@Composable
+internal fun rememberCalendarToday(currentDate: () -> LocalDate = LocalDate::now): LocalDate {
+    val readCurrentDate by rememberUpdatedState(currentDate)
+    var today by remember { mutableStateOf(currentDate()) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { today = readCurrentDate() }
+    return today
+}
+
 /**
  * 결제 기간 기준 달력 뷰
  * 무지출일 배너 + 요일 헤더 + 주간 합계 + 날짜별 지출 표시
@@ -73,20 +89,16 @@ fun BillingCycleCalendarView(
     monthStartDay: Int,
     dailyTotals: Map<String, Int>, // "yyyy-MM-dd" -> expense amount
     dailyIncomeTotals: Map<String, Int> = emptyMap(), // "yyyy-MM-dd" -> income amount
+    today: LocalDate = rememberCalendarToday(),
     onDateClick: (String) -> Unit
 ) {
     val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
     val compactNumberFormat = NumberFormat.getNumberInstance(Locale.KOREA).apply {
         maximumFractionDigits = 1
     }
-    val today = Calendar.getInstance()
-    val todayYear = today.get(Calendar.YEAR)
-    val todayMonth = today.get(Calendar.MONTH) + 1
-    val todayDay = today.get(Calendar.DAY_OF_MONTH)
-
     // 결제 기간에 해당하는 날짜 목록 생성
-    val calendarDays = remember(year, month, monthStartDay) {
-        generateBillingCycleDays(year, month, monthStartDay, todayYear, todayMonth, todayDay)
+    val calendarDays = remember(year, month, monthStartDay, today) {
+        generateBillingCycleDays(year, month, monthStartDay, today.year, today.monthValue, today.dayOfMonth)
     }
 
     // 주 단위로 그룹핑

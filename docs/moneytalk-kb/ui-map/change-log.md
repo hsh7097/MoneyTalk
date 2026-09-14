@@ -10,6 +10,10 @@ status: draft
 
 # Change Log
 
+## 2026-09-14
+
+- 달력의 다음 날 복귀 처리를 담당하는 `rememberCalendarToday` 선언과 오늘 날짜 캐시 갱신을 History 항목에 반영했다.
+
 ## 2026-09-08
 
 - 중앙 작업 메뉴를 최대 320dp·모서리 20dp·무톤 surface와 세로 아이콘 행으로 정리했다. `QuickTransactionMenuItem`을 선언 맵에 추가하고 행 전체 터치/버튼 의미와 삭제 색상 구분을 반영했다. 메뉴 정보와 수정·삭제 연결은 유지한다.
