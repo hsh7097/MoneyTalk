@@ -2,6 +2,8 @@
 
 SMS 카드 결제 문자를 자동으로 분석하여 지출을 관리하는 Android 앱입니다.
 
+개발 작업은 [현재 코드 기준 KB](docs/moneytalk-kb/project-context/current-baseline/README.md)에서 시작합니다. 주요 데이터 흐름, 코드 근거, 실제 빌드 설정과 검증 한계를 안내하며, 기존 상세 문서는 [MoneyTalk KB](docs/moneytalk-kb/README.md)에서 찾습니다.
+
 ## 주요 기능
 
 - **SMS 자동 파싱**: 카드 결제 문자를 자동으로 읽어 지출/수입 내역 추출

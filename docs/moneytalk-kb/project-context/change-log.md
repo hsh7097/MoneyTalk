@@ -10,6 +10,12 @@ status: draft
 
 # Change Log
 
+## 2026-09-30
+
+- MoneyTalk `95b419e8b98e374a991f3210a194a88959937ee8`, 공용 ClaudeGuide `2d2aa90c82a141e7440d3ee60b692911eb2ee5f1` 기준으로 [현재 기준 묶음](current-baseline/README.md)을 추가하고 기존 루트·라우팅·프로젝트 컨텍스트에 연결했다.
+- 주요 SMS/분류/거래 갱신·AI/크레딧/DB 경계와 실제 소스 근거, 개발 명령·설정 이름, 미검증 실행 범위를 기록했다. 과거 문서와 실행 이력은 보존했다.
+- 공용 검사·현재 묶음·구형 전체 KB의 결과는 [검증 기록](current-baseline/validation.md)에 분리했다. 앱 코드 변경과 원격 push/PR/deploy는 없다.
+
 ## 2026-09-08
 
 - 실제 코드와 공식 경쟁 제품 자료를 근거로 `04-product-improvements-20260908.md`를 추가하고 README/routing에 연결했다.
