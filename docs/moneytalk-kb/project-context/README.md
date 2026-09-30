@@ -2,10 +2,12 @@
 type: package
 title: Project Context KB
 description: MoneyTalk 전체 구조, 핵심 시스템, 임계값, AI/프롬프트 운영 경계를 요약한다.
-tags: [moneytalk, kb, project-context, architecture, threshold]
+tags: "moneytalk, kb, project-context, architecture, threshold"
 resource: docs/moneytalk-kb/project-context/
 timestamp: 2026-09-08T00:00:00+09:00
 status: draft
+last_checked: "2026-09-30"
+source_ref: "95b419e8b98e374a991f3210a194a88959937ee8"
 ---
 
 # Project Context KB
@@ -15,10 +17,19 @@ status: draft
 
 이 패키지는 프로젝트 전체 맥락을 빠르게 참조하도록 현재 코드의 구조·시스템 책임·임계값과 제품/UI 변경 판단을 관리한다. 구현 계약, 변경안, 실행 검증 범위를 문서별로 구분한다.
 
+## 범위
+
+현재 코드에서 새로 대조한 범위는 [current-baseline](current-baseline/README.md)이다. 기존 감사·계획·기기 검증 문서를 보존하며 이 인덱스의 최신 확인일을 기존 전체 문서의 재검증일로 사용하지 않는다. 구현 판단에는 각 문서의 코드 기준과 미검증 범위를 함께 확인한다.
+
+## 탐색
+
+전체 흐름·개발/검증 환경은 현재 기준 묶음에서 시작하고, 화면·임계값 상세가 필요하면 기존 목록으로 내려간다.
+
 ## 먼저 볼 파일
 
 | 문서 | 역할 | 언제 보는가 |
 |---|---|---|
+| [current-baseline/README.md](current-baseline/README.md) | 이번 SHA에서 확인한 구조·진입·데이터/AI 흐름·변경 위험·빌드/검증 기준 | 현재 구현과 과거 문서의 차이, 직접 코드 찾기, 실제 검증 범위 확인 |
 | [01-system-overview.md](01-system-overview.md) | 앱 정의, 패키지 책임, 핵심 시스템, DB/AI 운영 경계 | 작업 시작 시 전체 맥락을 복원할 때 |
 | [02-threshold-registry.md](02-threshold-registry.md) | SMS/가게명/카테고리 전파 유사도와 주요 파이프라인 상수 | 임계값 변경, 파싱/분류 정확도 조정 |
 | [03-screen-function-architecture-audit.md](03-screen-function-architecture-audit.md) | 13개 화면 도메인과 공통 기능의 책임 분리/유지 판단 및 검증 지점 | 화면별 클래스, MVVM/MVI, 가독성·패턴 정리 판단 |
@@ -35,3 +46,11 @@ status: draft
 - 화면별 진입점과 UI 요구사항은 `home`, `settings`, `history`, `transaction-*`, `category-*`, `chat` 등 각 화면 KB가 설명한다.
 - SMS 내부 파이프라인은 [../sms-pipeline/README.md](../sms-pipeline/README.md), end-to-end 저장 흐름은 [../sms-parsing/README.md](../sms-parsing/README.md)를 본다.
 - AI 채팅 실행 계약은 [../chat/README.md](../chat/README.md), App Functions는 [../app-functions/README.md](../app-functions/README.md)를 본다.
+
+## 근거
+
+이번 인덱스 추가 기준은 `source_ref`의 실제 프로젝트 checkout이다. 실제 소스·심볼과 공용 scaffold SHA는 [현재 기준의 근거](current-baseline/README.md#근거)에 남겼다. 기존 문서의 상세 내용을 이번 통합 작업에서 일괄 확정하지 않는다.
+
+## 검증
+
+추가한 진입 링크는 실제 존재하는 현재 기준 묶음으로 이어진다. 현재 묶음과 구형 KB 전체의 검사 결과는 [검증 기록](current-baseline/validation.md)을 따른다. 이번 변경 이유는 [변경 기록](change-log.md)에 남겼다.

@@ -2,16 +2,20 @@
 type: routing
 title: MoneyTalk Agent Routing
 description: 변경 파일 경로와 작업 키워드를 기준으로 AI가 읽을 KB 문서를 결정한다.
-tags: [moneytalk, kb, routing, android]
+tags: "moneytalk, kb, routing, android"
 resource: app/src/main/java/com/sanha/moneytalk/
 timestamp: 2026-09-08T00:00:00+09:00
 status: draft
+last_checked: "2026-09-30"
+source_ref: "95b419e8b98e374a991f3210a194a88959937ee8"
 ---
 
 # 에이전트 작업 라우팅
 
 이 문서는 MoneyTalk 작업에서 변경 파일 경로를 보고 읽을 KB 문서를 고르는 진입점이다.
 전체 KB를 매번 읽지 않는다.
+
+현재 코드·빌드/환경·주요 흐름을 재확인하려면 [현재 기준 묶음](project-context/current-baseline/README.md)에서 시작한다. 이 파일의 최신 확인일은 이 진입 링크 추가 범위이며 기존 라우팅 전체의 재검증일이 아니다.
 
 ## 기본 원칙
 

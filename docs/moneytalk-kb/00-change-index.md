@@ -2,10 +2,12 @@
 type: log
 title: MoneyTalk KB Change Index
 description: MoneyTalk KB의 루트 변경 이력 색인이다.
-tags: [moneytalk, kb, changelog, android]
+tags: "moneytalk, kb, changelog, android"
 resource: docs/moneytalk-kb/
 timestamp: 2026-09-08T00:00:00+09:00
 status: draft
+last_checked: "2026-09-30"
+source_ref: "95b419e8b98e374a991f3210a194a88959937ee8"
 ---
 
 # MoneyTalk KB Change Index
@@ -13,8 +15,11 @@ status: draft
 상세 설명은 각 패키지 `change-log.md`에 둔다.
 이 파일은 전체 KB에서 어떤 영역이 바뀌었는지 찾기 위한 짧은 색인이다.
 
+최신 확인일은 이번 색인 추가 기준이다. 이전 행의 코드·기기·서버 검증 결과를 재실행한 것으로 해석하지 않는다.
+
 | 날짜 | 기준 | 영향 영역 | 갱신 문서 | 요약 |
 |---|---|---|---|---|
+| 2026-09-30 | MoneyTalk `95b419e8b98e374a991f3210a194a88959937ee8`, ClaudeGuide `2d2aa90c82a141e7440d3ee60b692911eb2ee5f1` | 프로젝트 현재 기준·주요 데이터 흐름·개발 검증 | [현재 기준 묶음](project-context/current-baseline/README.md), [검증 기록](project-context/current-baseline/validation.md), [루트 변경 기록](change-log.md) 및 진입 링크 | 기존 KB 보존, 코드 근거/미검증 구분. 앱 코드·공용 스캐폴드·원격 게시 변경 없음. |
 | 2026-09-09 | 홈·가계부 후속 기능 통합 검증 | Home·History·Category Review·공통 차트/금액 | [후속 검증 기록](project-context/08-home-ledger-ux-validation-20260909.md), Home·History 계약·화면 요구·Composable 맵 | 주간 고정 제외·기간별 근거·다크 대비·수입 빨강/지출 파랑·고정 예상 하단 이동·접히는 요약/한 줄 필터·차트 날짜 선택을 검증하고 기능별로 커밋한다. |
 | 2026-09-09 | 소비 브리핑과 근거 범위 개선 | Home·Weekly Evidence | Home data/render/surface, 화면 요구·Composable 맵·라우팅 | 테두리·두 기간 강조, 주간 고정 제외와 동일한 두 7일 근거·편집을 연결한다. 월 전체·차트·예산은 유지한다. |
 | 2026-09-09 | 미분류 직접 정리 요청 | Settings·Category Review | 설정 rendering/menu map, 화면 요구·Composable 맵·라우팅 | 설정 건수와 목록에 동일한 숨김카드/SMS 필터를 적용하고 기존 편집·같은 거래처 적용으로 연결. 자동 분류는 별도 실행으로 유지. |

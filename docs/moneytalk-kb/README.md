@@ -2,10 +2,12 @@
 type: kb-root
 title: MoneyTalk KB
 description: MoneyTalk Android 코드 작업을 위한 AI용 라우팅 및 구조 지식 베이스다.
-tags: [moneytalk, kb, android, compose, room]
+tags: "moneytalk, kb, android, compose, room"
 resource: app/src/main/java/com/sanha/moneytalk/
 timestamp: 2026-09-08T00:00:00+09:00
 status: draft
+last_checked: "2026-09-30"
+source_ref: "95b419e8b98e374a991f3210a194a88959937ee8"
 ---
 
 # MoneyTalk KB
@@ -16,10 +18,19 @@ status: draft
 이 KB는 MoneyTalk Android 작업에서 AI가 필요한 문서만 골라 읽도록 돕는 코드 분석 문서다.
 전체 소스를 매번 읽지 않고, 변경 파일 경로를 기준으로 도메인 또는 서브모듈 문서로 내려가는 것을 목표로 한다.
 
+## 범위
+
+기존 도메인 KB와 이력을 보존한다. 2026-09-30에 재확인한 현재 코드·환경 범위는 [현재 기준 묶음](project-context/current-baseline/README.md)이다. 이 루트의 `last_checked`/`source_ref`는 이번 진입 링크·범위 대조 기준이며, 아래 기존 문서 전체의 구현이나 과거 실행 결과를 재검증했다는 뜻은 아니다. 루트 상태는 `draft`를 유지한다.
+
+## 탐색
+
+현재 코드·빌드 설정·주요 흐름을 찾을 때는 현재 기준 묶음부터 읽고, 특정 화면의 상세는 아래 기존 목록과 경로 라우팅에서 선택한다.
+
 ## 먼저 볼 파일
 
 | 문서 | 역할 | 언제 보는가 |
 |---|---|---|
+| [project-context/current-baseline/README.md](project-context/current-baseline/README.md) | 실제 SHA에서 확인한 앱 진입·SMS/분류/채팅·DB 경계와 개발/검증 기준 | 현재 코드·설정과 기존 설명이 다르거나 이번 검증 범위를 확인할 때 |
 | [00-agent-routing.md](00-agent-routing.md) | 변경 파일 경로를 KB 문서로 연결한다. | 작업 시작 또는 자동화 실행 시 가장 먼저 본다. |
 | [01-structure-map.md](01-structure-map.md) | 앱 전체 패키지 구조와 핵심 파일 위치를 정리한다. | 변경 파일이 어느 책임에 속하는지 판단할 때 본다. |
 | [project-context/03-screen-function-architecture-audit.md](project-context/03-screen-function-architecture-audit.md) | 13개 화면 도메인과 공통 기능의 책임 분리/유지 판단을 정리한다. | 화면별 클래스, MVVM/MVI, 전체 가독성/패턴 감사 시 본다. |
@@ -97,3 +108,11 @@ status: draft
 3. 패키지별 상세 변경은 해당 `change-log.md`에 남긴다.
 4. 루트 구조나 라우팅이 바뀌면 `00-change-index.md`에도 색인을 추가한다.
 5. 문서와 코드가 다르면 코드 확인 결과를 기준으로 문서를 갱신한다.
+
+## 근거
+
+이번 추가 근거는 [현재 기준 README의 근거](project-context/current-baseline/README.md#근거)와 실제 상대 소스 링크·심볼에 기록했다. 공용 작성 도구 기준은 ClaudeGuide `2d2aa90c82a141e7440d3ee60b692911eb2ee5f1`이며 앱 코드는 변경하지 않았다.
+
+## 검증
+
+실제 공용 검사·현재 묶음·전체 구형 KB 결과와 미실행 앱 검증은 [검증 기록](project-context/current-baseline/validation.md)에 분리했다. 과거 문서의 `verified` 표시를 이번 환경의 빌드/실행 성공으로 확대하지 않는다. 이번 통합 변경은 [루트 변경 기록](change-log.md)에서 확인한다.
